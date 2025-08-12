@@ -752,6 +752,17 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     )
 
     /**
+     * Indicates if the LNA (Local Network Access / Local Device Access) blocking is enabled
+     *
+     * This refers to whether or not we are blocking or allowing requests that originate from
+     * remote origins targeting either localhost addresses or local network addresses.
+     */
+    var isLnaBlockingEnabled by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_enable_lna_blocking_enabled),
+        default = false,
+    )
+
+    /**
      * Indicates if the user should start on the home screen, based on the user's preferences.
      */
     fun shouldStartOnHome(): Boolean {
@@ -1516,6 +1527,8 @@ class Settings(private val appContext: Context) : PreferencesHolder {
             persistentStorage = getSitePermissionsPhoneFeatureAction(PhoneFeature.PERSISTENT_STORAGE),
             crossOriginStorageAccess = getSitePermissionsPhoneFeatureAction(PhoneFeature.CROSS_ORIGIN_STORAGE_ACCESS),
             mediaKeySystemAccess = getSitePermissionsPhoneFeatureAction(PhoneFeature.MEDIA_KEY_SYSTEM_ACCESS),
+            localDeviceAccess = getSitePermissionsPhoneFeatureAction(PhoneFeature.LOCAL_DEVICE_ACCESS),
+            localNetworkAccess = getSitePermissionsPhoneFeatureAction(PhoneFeature.LOCAL_NETWORK_ACCESS),
         )
     }
 
@@ -1530,6 +1543,8 @@ class Settings(private val appContext: Context) : PreferencesHolder {
             PhoneFeature.PERSISTENT_STORAGE,
             PhoneFeature.CROSS_ORIGIN_STORAGE_ACCESS,
             PhoneFeature.MEDIA_KEY_SYSTEM_ACCESS,
+            PhoneFeature.LOCAL_DEVICE_ACCESS,
+            PhoneFeature.LOCAL_NETWORK_ACCESS,
         ).map { it.getPreferenceKey(appContext) }
 
         preferences.registerOnSharedPreferenceChangeListener(lifecycleOwner) { _, key ->

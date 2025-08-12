@@ -148,6 +148,8 @@
     <string name="pref_key_browser_feature_persistent_storage" translatable="false">pref_key_browser_feature_persistent_storage</string>
     <string name="pref_key_browser_feature_cross_origin_storage_access" translatable="false">pref_key_browser_feature_cross_origin_storage_access</string>
     <string name="pref_key_browser_feature_media_key_system_access" translatable="false">pref_key_browser_feature_media_key_system_access</string>
+    <string name="pref_key_browser_feature_local_device_access" translatable="false">pref_key_browser_feature_local_device_access</string>
+    <string name="pref_key_browser_feature_local_network_access" translatable="false">pref_key_browser_feature_local_network_access</string>
     <string name="pref_key_phone_feature_camera" translatable="false">pref_key_phone_feature_camera</string>
     <string name="pref_key_phone_feature_location" translatable="false">pref_key_phone_feature_location</string>
     <string name="pref_key_phone_feature_microphone" translatable="false">pref_key_phone_feature_microphone</string>
@@ -426,6 +428,7 @@
     <string name="pref_key_enable_composable_toolbar" translatable="false">pref_key_enable_composable_toolbar</string>"
     <string name="pref_key_enable_toolbar_redesign" translatable="false">pref_key_enable_toolbar_redesign</string>"
     <string name="pref_key_enable_address_sync" translatable="false">pref_key_enable_address_sync</string>"
+    <string name="pref_key_enable_lna_blocking_enabled" translatable="false">pref_key_enable_lna_blocking_enabled</string>
 
     <!-- Logins -->
     <string name="pref_key_enable_compose_logins" translatable="false">pref_key_enable_compose_logins</string>

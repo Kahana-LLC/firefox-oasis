@@ -9,6 +9,7 @@
 
 #include "CommandBuffer.h"
 #include "CommandEncoder.h"
+#include "ExternalTexture.h"
 #include "Utility.h"
 #include "ipc/WebGPUChild.h"
 #include "mozilla/Casting.h"
@@ -58,6 +59,24 @@ void Queue::Submit(
   nsTArray<RawId> list(aCommandBuffers.Length());
   for (uint32_t i = 0; i < aCommandBuffers.Length(); ++i) {
     auto idMaybe = aCommandBuffers[i]->Commit();
+
+    // Generate a validation error if any external texture used by any command
+    // buffer is expired. Technically this is a Device timeline step, but since
+    // the external texture's expired state is only set on the content timeline
+    // it is functionally equivalent to check here and raise any error on the
+    // device timeline. A compromised content process could skip this step, but
+    // equally it could skip setting the external texture's expired state even
+    // if this check were performed on the server side.
+    // https://www.w3.org/TR/webgpu/#dom-gpuqueue-submit
+    for (const auto& externalTexture :
+         aCommandBuffers[i]->GetExternalTextures()) {
+      if (externalTexture->IsExpired()) {
+        ffi::wgpu_report_validation_error(mBridge->GetClient(), mParent->mId,
+                                          "External texture is expired");
+        return;
+      }
+    }
+
     if (idMaybe) {
       list.AppendElement(*idMaybe);
     }
@@ -74,10 +93,7 @@ already_AddRefed<dom::Promise> Queue::OnSubmittedWorkDone(ErrorResult& aRv) {
 
   ffi::wgpu_client_on_submitted_work_done(mBridge->GetClient(), mId);
 
-  auto pending_promise =
-      WebGPUChild::PendingOnSubmittedWorkDonePromise{RefPtr(promise), mId};
-  mBridge->mPendingOnSubmittedWorkDonePromises.push_back(
-      std::move(pending_promise));
+  mBridge->mPendingOnSubmittedWorkDonePromises[mId].push_back(promise);
 
   return promise.forget();
 }

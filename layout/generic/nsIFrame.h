@@ -3200,6 +3200,13 @@ class nsIFrame : public nsQueryFrame {
    */
   virtual void UnionChildOverflow(mozilla::OverflowAreas& aOverflowAreas,
                                   bool aAsIfScrolled = false);
+  /**
+   * Computes the clipping rectangle for the given frame based on its 'overflow'
+   * properties. Returns true if the clip has a border radius.
+   */
+  bool ComputeOverflowClipRectRelativeToSelf(
+      const mozilla::PhysicalAxes aClipAxes, nsRect& aOutRect,
+      nscoord aOutRadii[8]) const;
 
   // Returns the applicable overflow-clip-margin values.
   nsSize OverflowClipMargin(mozilla::PhysicalAxes aClipAxes) const;
