@@ -229,7 +229,7 @@ newtab-section-header-recent-activity = Recent activity
 # Variables:
 #   $provider (string) - Name of the corresponding content provider.
 newtab-section-header-pocket = Recommended by { $provider }
-newtab-section-header-stories = Thought-provoking stories
+newtab-section-header-stories = Recommended for you
 # "picks" refers to recommended articles
 newtab-section-header-todays-picks = Today’s picks for you
 
