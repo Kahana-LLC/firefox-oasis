@@ -17104,13 +17104,25 @@ bool CodeGenerator::link(JSContext* cx) {
       return false;
     }
 
+    // Find the realmId. We do not do cross-realm inlining, so it should be the
+    // same for every inlined script.
+    uint64_t realmId = script->realm()->creationOptions().profilerRealmID();
+#ifdef DEBUG
+    for (const auto* scriptSnapshot : snapshot_->scripts()) {
+      JSScript* inlinedScript = scriptSnapshot->script();
+      MOZ_ASSERT(inlinedScript->realm()->creationOptions().profilerRealmID() ==
+                 realmId);
+    }
+#endif
+
     uint8_t* ionTableAddr =
         ((uint8_t*)nativeToBytecodeMap_.get()) + nativeToBytecodeTableOffset_;
     JitcodeIonTable* ionTable = (JitcodeIonTable*)ionTableAddr;
 
     // Construct the IonEntry that will go into the global table.
     auto entry = MakeJitcodeGlobalEntry<IonEntry>(
-        cx, code, code->raw(), code->rawEnd(), std::move(scriptList), ionTable);
+        cx, code, code->raw(), code->rawEnd(), std::move(scriptList), ionTable,
+        realmId);
     if (!entry) {
       return false;
     }
