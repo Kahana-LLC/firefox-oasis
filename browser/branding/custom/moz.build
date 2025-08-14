@@ -1,0 +1,22 @@
+# -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
+# vim: set filetype=python:
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+with Files("**"):
+    BUG_COMPONENT = ("Firefox", "General")
+
+with Files("moz.build"):
+    BUG_COMPONENT = ("Firefox Build System", "General")
+
+with Files("configure.sh"):
+    BUG_COMPONENT = ("Firefox Build System", "General")
+
+# Custom branding for Kahana Browser
+DIRS += ["content", "locales"]
+
+DIST_SUBDIR = "browser"
+
+include("../branding-common.mozbuild")
+FirefoxBranding()
