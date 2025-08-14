@@ -2207,6 +2207,14 @@
   value: false
   mirror: always
 
+# If true, we'll use the triggering principal rather than the loading principal
+# when doing CORS checks.  This might be needed for WebExtensions to load their
+# own resources from content that they inject into sites.
+- name: content.cors.use_triggering_principal
+  type: bool
+  value: false
+  mirror: always
+
 # Back off timer notification after count.
 # -1 means never.
 - name: content.notify.backoffcount
@@ -5538,6 +5546,12 @@
   value: false
 #endif
   mirror: always
+
+# Whether WebGPU's GPUExternalTexture API is enabled.
+- name: dom.webgpu.external-texture.enabled
+  type: bool
+  value: false
+  mirror: once
 
 # For testing purposes, crash if we don't get a hardware adapter.
 - name: dom.webgpu.testing.assert-hardware-adapter
@@ -16565,6 +16579,28 @@
 - name: security.allow_parent_unrestricted_js_loads
   type: RelaxedAtomicBool
   value: true
+  mirror: always
+
+# A temporary pref that will be removed when the dialog in 1979341 is removed
+# Needed for early enforcement of a user-initiated block action
+- name: security.block_parent_unrestricted_js_loads.temporary
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# A temporary pref that will be removed when the dialog in 1979341 is removed
+# Disables the notification bar and dialog
+- name: security.hide_parent_unrestricted_js_loads_warning.temporary
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# A pref needed for testing: xpinstall.signatures.required is disabled
+# for Marionette, which trips the JSHacks detection and disables our script
+# protections, so this pref skips the JSHacks check
+- name: security.parent_unrestricted_js_loads.skip_jshacks
+  type: RelaxedAtomicBool
+  value: false
   mirror: always
 
 # Don't enable this! This is only meant for legacy tests.

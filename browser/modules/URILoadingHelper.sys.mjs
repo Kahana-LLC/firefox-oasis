@@ -112,6 +112,12 @@ function openInWindow(url, params, sourceWindow) {
       params.hasValidUserGestureActivation
     );
   }
+  if (params.textDirectiveUserActivation !== undefined) {
+    extraOptions.setPropertyAsBool(
+      "textDirectiveUserActivation",
+      params.textDirectiveUserActivation
+    );
+  }
   if (forceAllowDataURI) {
     extraOptions.setPropertyAsBool("forceAllowDataURI", true);
   }
@@ -262,6 +268,7 @@ function openInCurrentTab(targetBrowser, url, uriObj, params) {
     postData,
     userContextId,
     hasValidUserGestureActivation,
+    textDirectiveUserActivation,
     globalHistoryOptions,
     triggeringRemoteType,
     schemelessInput,
@@ -275,6 +282,7 @@ function openInCurrentTab(targetBrowser, url, uriObj, params) {
     postData,
     userContextId,
     hasValidUserGestureActivation,
+    textDirectiveUserActivation,
     globalHistoryOptions,
     triggeringRemoteType,
     schemelessInput,
