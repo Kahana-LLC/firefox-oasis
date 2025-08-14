@@ -1,0 +1,121 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Linear gradient for the outer ring -->
+    <linearGradient id="outerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2ECC71"/>
+      <stop offset="50%" stop-color="#23B06B"/>
+      <stop offset="100%" stop-color="#1E88E5"/>
+    </linearGradient>
+
+    <!-- Subtle highlight gradient for segmented arcs -->
+    <linearGradient id="segmentLight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.00"/>
+    </linearGradient>
+
+    <!-- Inner circle clip -->
+    <clipPath id="innerClip">
+      <circle cx="256" cy="256" r="150"/>
+    </clipPath>
+
+    <!-- Mask for ring -->
+    <mask id="ringMask">
+      <rect x="0" y="0" width="512" height="512" fill="white"/>
+      <circle cx="256" cy="256" r="150" fill="black"/>
+    </mask>
+
+    <!-- Warm sky gradient (top to horizon) -->
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FDF3D9"/>   <!-- warm light -->
+      <stop offset="55%" stop-color="#FBE8BA"/>
+      <stop offset="85%" stop-color="#EAF4FF"/>  <!-- cooler near horizon -->
+      <stop offset="100%" stop-color="#EAF4FF"/>
+    </linearGradient>
+
+    <!-- Sun glow -->
+    <radialGradient id="sunGlow" cx="50%" cy="58%" r="35%">
+      <stop offset="0%" stop-color="#FFF6D5" stop-opacity="1"/>
+      <stop offset="60%" stop-color="#FFE7A1" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFE7A1" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Distant water tint near horizon -->
+    <linearGradient id="horizonWater" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#CFE9FF"/>
+      <stop offset="100%" stop-color="#A7D4FA"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="230" fill="url(#outerGrad)" mask="url(#ringMask)"/>
+
+  <!-- Segmented overlays -->
+  <g mask="url(#ringMask)">
+    <path d="M 120 168
+             A 240 240 0 0 1 392 120
+             A 230 230 0 0 1 408 160
+             A 270 270 0 0 0 104 208
+             A 230 230 0 0 1 120 168 Z"
+          fill="url(#segmentLight)"/>
+    <path d="M 96 304
+             A 260 260 0 0 0 416 280
+             A 220 220 0 0 1 392 344
+             A 260 260 0 0 1 128 368
+             A 220 220 0 0 0 96 304 Z"
+          fill="url(#segmentLight)" opacity="0.6"/>
+    <path d="M 200 440
+             A 250 250 0 0 0 460 300
+             A 210 210 0 0 1 420 404
+             A 250 250 0 0 1 256 460
+             A 210 210 0 0 0 200 440 Z"
+          fill="url(#segmentLight)" opacity="0.4"/>
+  </g>
+
+  <!-- Inner scene -->
+  <g clip-path="url(#innerClip)">
+    <!-- Sky -->
+    <rect x="0" y="100" width="512" height="200" fill="url(#skyGrad)"/>
+    <!-- Sun glow centered slightly above horizon -->
+    <ellipse cx="256" cy="248" rx="180" ry="120" fill="url(#sunGlow)"/>
+
+    <!-- Suggestion of a curved horizon -->
+    <path d="M -30 255 C 90 245, 190 255, 256 255 C 322 255, 422 245, 542 255 L 542 270 L -30 270 Z"
+          fill="url(#horizonWater)"/>
+
+    <!-- Wave layers (lighter near horizon, darker foreground) -->
+    <path d="M -40 270
+             C 40 260, 120 280, 200 270
+             C 280 260, 360 280, 440 270
+             L 440 512 L -40 512 Z"
+          fill="#8CC8F8"/>
+
+    <path d="M -40 295
+             C 40 280, 120 305, 200 295
+             C 280 285, 360 305, 440 295
+             L 440 512 L -40 512 Z"
+          fill="#64B5F6"/>
+
+    <path d="M -40 320
+             C 40 305, 120 330, 200 320
+             C 280 310, 360 330, 440 320
+             L 440 512 L -40 512 Z"
+          fill="#3E8EE6"/>
+
+    <path d="M -40 350
+             C 40 335, 120 360, 200 350
+             C 280 340, 360 360, 440 350
+             L 440 512 L -40 512 Z"
+          fill="#1E6FCC"/>
+
+    <!-- Subtle crest highlights -->
+    <path d="M -35 300
+             C 45 285, 125 308, 205 298
+             C 285 288, 365 308, 445 298" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="3" fill="none"/>
+    <path d="M -35 330
+             C 45 315, 125 338, 205 328
+             C 285 318, 365 338, 445 328" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3" fill="none"/>
+  </g>
+
+  <!-- Inner circle edge (keeps clean boundary) -->
+  <circle cx="256" cy="256" r="150" fill="none"/>
+</svg>
