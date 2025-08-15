@@ -459,7 +459,6 @@ pref("browser.urlbar.recentsearches.featureGate", true);
 
 // Enable Rich Entities.
 pref("browser.urlbar.richSuggestions.featureGate", true);
-pref("browser.search.param.search_rich_suggestions", "fen");
 
 // Feature gate pref for weather suggestions in the urlbar.
 pref("browser.urlbar.weather.featureGate", false);
@@ -2056,6 +2055,8 @@ pref("browser.newtabpage.resource-mapping.log", false);
 
 // Base URL for the newtab trainhop add-on version xpi downloads.
 pref("browser.newtabpage.trainhopAddon.xpiBaseURL", "https://archive.mozilla.org/pub/system-addons/newtab/");
+
+pref("browser.newtabpage.sponsor-protection.enabled", true);
 
 // Separate about welcome
 pref("browser.aboutwelcome.enabled", true);
