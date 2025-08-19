@@ -68,7 +68,6 @@ import org.mozilla.fenix.settings.registerOnSharedPreferenceChangeListener
 import org.mozilla.fenix.settings.sitepermissions.AUTOPLAY_BLOCK_ALL
 import org.mozilla.fenix.settings.sitepermissions.AUTOPLAY_BLOCK_AUDIBLE
 import org.mozilla.fenix.tabstray.DefaultTabManagementFeatureHelper
-import org.mozilla.fenix.tabstray.TabManagementFeatureHelper
 import org.mozilla.fenix.wallpapers.Wallpaper
 import java.security.InvalidParameterException
 import java.util.UUID
@@ -91,6 +90,7 @@ class Settings(private val appContext: Context) : PreferencesHolder {
         private const val ALLOWED_INT = 2
         private const val INACTIVE_TAB_MINIMUM_TO_SHOW_AUTO_CLOSE_DIALOG = 20
 
+        const val THIRTY_SECONDS_MS = 30 * 1000L
         const val FOUR_HOURS_MS = 60 * 60 * 4 * 1000L
         const val ONE_MINUTE_MS = 60 * 1000L
         const val ONE_HOUR_MS = 60 * ONE_MINUTE_MS
@@ -286,10 +286,28 @@ class Settings(private val appContext: Context) : PreferencesHolder {
         get() = FxNimbus.features.homescreen.value().sectionsEnabled
 
     /**
-     * Indicates if the homepage section settings should be visible.
+     * Indicates if the top sites homepage section settings should be visible
      */
-    val showHomepageSectionToggleSettings: Boolean
-        get() = !overrideUserSpecifiedHomepageSections
+    val showHomepageTopSitesSectionToggle: Boolean
+        get() = !overrideUserSpecifiedHomepageSections || enableHomepageSearchBar
+
+    /**
+     * Indicates if the recent tabs homepage section settings should be visible
+     */
+    val showHomepageRecentTabsSectionToggle: Boolean
+        get() = !overrideUserSpecifiedHomepageSections && !enableHomepageSearchBar
+
+    /**
+     * Indicates if the bookmarks homepage section settings should be visible
+     */
+    val showHomepageBookmarksSectionToggle: Boolean
+        get() = !overrideUserSpecifiedHomepageSections && !enableHomepageSearchBar
+
+    /**
+     * Indicates if the recently visited homepage section settings should be visible
+     */
+    val showHomepageRecentlyVisitedSectionToggle: Boolean
+        get() = !overrideUserSpecifiedHomepageSections && !enableHomepageSearchBar
 
     /**
      * Indicates if the user specified homepage section visibility should be ignored.
@@ -534,6 +552,7 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     var hasAcceptedTermsOfService by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_terms_accepted),
         default = false,
+        persistDefaultIfNotExists = true,
     )
 
     /**
@@ -551,6 +570,28 @@ class Settings(private val appContext: Context) : PreferencesHolder {
      */
     var hasPostponedAcceptingTermsOfUse by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_terms_postponed),
+        default = false,
+    )
+
+    var isDebugTermsOfServiceTriggerTimeEnabled by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_debug_terms_trigger_time),
+        default = false,
+        persistDefaultIfNotExists = true,
+    )
+
+    /**
+     * Used to determine users who have interacted with any links from the Terms of Use prompt.
+     */
+    var hasClickedTermOfUsePromptLink by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_terms_clicked_link),
+        default = false,
+    )
+
+    /**
+     * Used to determine users who clicked the "remind me later" action.
+     */
+    var hasClickedTermOfUsePromptRemindMeLater by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_terms_clicked_remind_me_later),
         default = false,
     )
 

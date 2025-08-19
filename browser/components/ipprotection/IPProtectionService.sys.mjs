@@ -2,14 +2,29 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  // eslint-disable-next-line mozilla/valid-lazy
+  GuardianClient: "resource:///modules/ipprotection/GuardianClient.sys.mjs",
+  // eslint-disable-next-line mozilla/valid-lazy
+  IPPChannelFilter: "resource:///modules/ipprotection/IPPChannelFilter.sys.mjs",
   UIState: "resource://services-sync/UIState.sys.mjs",
+  SpecialMessageActions:
+    "resource://messaging-system/lib/SpecialMessageActions.sys.mjs",
+  IPProtection: "resource:///modules/ipprotection/IPProtection.sys.mjs",
 });
+
+import { SIGNIN_DATA } from "chrome://browser/content/ipprotection/ipprotection-constants.mjs";
+
+const ENABLED_PREF = "browser.ipProtection.enabled";
 
 /**
  * A singleton service that manages proxy integration and backend functionality.
+ *
+ * It exposes init and uninit for app startup.
  *
  * @fires event:"IPProtectionService:Started"
  *  When the proxy has started and includes the timestamp of when
@@ -22,6 +37,9 @@ ChromeUtils.defineESModuleGetters(lazy, {
  *  When user signs out of their account
  */
 class IPProtectionServiceSingleton extends EventTarget {
+  static WIDGET_ID = "ipprotection-button";
+  static PANEL_ID = "PanelUI-ipprotection";
+
   isActive = false;
   activatedAt = null;
   deactivatedAt = null;
@@ -29,23 +47,41 @@ class IPProtectionServiceSingleton extends EventTarget {
   isSignedIn = false;
 
   #inited = false;
+  #hasWidget = false;
 
   constructor() {
     super();
+
+    this.updateEnabled = this.#updateEnabled.bind(this);
   }
 
+  /**
+   * Setups the IPProtectionService if enabled.
+   */
   init() {
-    if (this.#inited) {
+    if (this.#inited || !this.featureEnabled) {
       return;
     }
 
     this.updateSignInStatus();
     this.addSignInStateObserver();
 
+    if (!this.#hasWidget) {
+      lazy.IPProtection.init();
+      this.#hasWidget = true;
+    }
+
     this.#inited = true;
   }
 
+  /**
+   * Removes the IPProtectionService and IPProtection widget.
+   */
   uninit() {
+    if (this.#hasWidget) {
+      lazy.IPProtection.uninit();
+    }
+
     if (this.fxaObserver) {
       Services.obs.removeObserver(this.fxaObserver, lazy.UIState.ON_UPDATE);
       this.fxaObserver = null;
@@ -56,6 +92,7 @@ class IPProtectionServiceSingleton extends EventTarget {
 
     this.isSignedIn = false;
 
+    this.#hasWidget = false;
     this.#inited = false;
   }
 
@@ -118,6 +155,18 @@ class IPProtectionServiceSingleton extends EventTarget {
   }
 
   /**
+   * Checks whether the feature pref is enabled and
+   * will init or uninit the IPProtectionService instance.
+   */
+  #updateEnabled() {
+    if (this.featureEnabled) {
+      this.init();
+    } else {
+      this.uninit();
+    }
+  }
+
+  /**
    * Adds an observer for the FxA sign-in state.
    */
   addSignInStateObserver() {
@@ -162,8 +211,20 @@ class IPProtectionServiceSingleton extends EventTarget {
       );
     }
   }
+
+  async startLoginFlow(browser) {
+    return lazy.SpecialMessageActions.fxaSignInFlow(SIGNIN_DATA, browser);
+  }
 }
 
 const IPProtectionService = new IPProtectionServiceSingleton();
+
+XPCOMUtils.defineLazyPreferenceGetter(
+  IPProtectionService,
+  "featureEnabled",
+  ENABLED_PREF,
+  false,
+  IPProtectionService.updateEnabled
+);
 
 export { IPProtectionService };

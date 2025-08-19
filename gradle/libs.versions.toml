@@ -1,7 +1,7 @@
 [versions]
 # AGP
-android-gradle-plugin = "8.12.0" # Keep lint version in sync
-lint = "31.12.0"
+android-gradle-plugin = "8.12.1" # Keep lint version in sync
+lint = "31.12.1"
 
 python-envs-plugin = "0.0.31"
 maven-ant-tasks = "2.1.3"
@@ -22,19 +22,19 @@ biometric = "1.1.0"
 browser = "1.9.0"
 cardview = "1.0.0"
 collection = "1.5.0"
-compose-bom = "2025.06.01"
+compose-bom = "2025.08.00"
 concurrent = "1.3.0"
 constraintlayout = "2.2.1"
 constraintlayout-compose = "1.1.1"
 coordinatorlayout = "1.3.0"
-core = "1.16.0"
+core = "1.17.0"
 core-splashscreen = "1.0.1"
 datastore = "1.1.7"
 drawerlayout = "1.2.0"
-fragment = "1.8.8"
+fragment = "1.8.9"
 lifecycle = "2.9.2"
 localbroadcastmanager = "1.0.0"
-media = "1.7.0"
+media = "1.7.1"
 navigation = "2.9.3"
 paging = "3.3.6"
 palette = "1.0.0"
@@ -73,8 +73,8 @@ semanticdb-kotlinc = "0.6.0"
 
 # Kotlin versions
 coroutines = "1.10.2"
-kotlin = "2.2.0" # remember to change ksp-plugin
-ksp-plugin = "2.2.0-2.0.2"
+kotlin = "2.2.10" # remember to change ksp-plugin
+ksp-plugin = "2.2.10-2.0.2"
 serialization = "1.9.0"
 
 # Linter versions
@@ -91,12 +91,12 @@ androidx-test = "1.7.0"
 androidx-test-espresso = "3.7.0"
 androidx-test-ext = "1.3.0"
 androidx-test-monitor = "1.8.0"
-androidx-test-orchestrator = "1.6.0"
+androidx-test-orchestrator = "1.6.1"
 androidx-test-runner = "1.7.0"
 androidx-test-uiautomator = "2.3.0"
 junit4 = "4.13.2"
 junit5 = "5.13.4"
-mockito = "5.18.0"
+mockito = "5.19.0"
 mockk = "1.14.5"
 robolectric = "4.15.1"
 
@@ -164,9 +164,9 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-ui-text-android = { group = "androidx.compose.ui", name = "ui-text-android" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-ui-text-android = { group = "androidx.compose.ui", name = "ui-text-android"}
 androidx-concurrent = { group = "androidx.concurrent", name = "concurrent-futures-ktx", version.ref = "concurrent" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 androidx-constraintlayout-compose = { group = "androidx.constraintlayout", name = "constraintlayout-compose", version.ref = "constraintlayout-compose" }

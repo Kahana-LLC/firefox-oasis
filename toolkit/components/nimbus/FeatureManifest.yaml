@@ -268,31 +268,20 @@ urlbar:
       description: >-
         Feature gate that controls whether result deduplication in the urlbar
         is enabled.
+    # TODO Bug 1982966: Remove this after all experiments and rollouts using it
+    # finish.
     fakespotFeatureGate:
       type: boolean
       fallbackPref: browser.urlbar.fakespot.featureGate
       description: >-
         Feature gate that controls whether all aspects of the Fakespot suggestion
         feature are exposed to the user.
-    fakespotMinKeywordLength:
-      type: int
+    importantDatesFeatureGate:
+      type: boolean
+      fallbackPref: browser.urlbar.importantDates.featureGate
       description: >-
-        The minimum prefix length of a Fakespot keyword the user must type to
-        trigger the suggestion.
-    fakespotShowLessFrequentlyCap:
-      type: int
-      fallbackPref: browser.urlbar.fakespot.showLessFrequentlyCap
-      description: >-
-        If defined and non-zero, this is the maximum number of times the user
-        will be able to click the "Show less frequently" command for Fakespot
-        suggestions. If undefined or zero, the user will be able to click the
-        command without any limit.
-    fakespotSuggestedIndex:
-      type: int
-      fallbackPref: browser.urlbar.fakespot.suggestedIndex
-      description: >-
-        The index of Fakespot results within the Firefox Suggest section. A
-        negative index is relative to the end of the section.
+        Feature gate that controls whether all aspects of the important dates
+        suggestion feature are exposed to the user.
     keywordExposureResults:
       type: string
       setPref:
@@ -308,18 +297,12 @@ urlbar:
         setting the `quickSuggestExposureSuggestionTypes` variable. Keyword
         exposures are recorded in the `urlbar-keyword-exposure` ping. See that
         ping's description for more.
-    marketMinKeywordLength:
-      type: int
+    marketFeatureGate:
+      type: boolean
+      fallbackPref: browser.urlbar.market.featureGate
       description: >-
-        The minimum prefix length of a market keyword the user must type to
-        trigger the suggestion.
-    marketShowLessFrequentlyCap:
-      type: int
-      description: >-
-        If defined and non-zero, this is the maximum number of times the user
-        will be able to click the "Show less frequently" command for Market
-        suggestions. If undefined or zero, the user will be able to click the
-        command without any limit.
+        Feature gate that controls whether all aspects of the stock market
+        suggestions feature are exposed to the user.
     mdnFeatureGate:
       type: boolean
       setPref:
@@ -540,6 +523,18 @@ urlbar:
         * "Sponsored" label is shown as the group label.
         * Change the suggested index to 1.
         * Handle as top pick.
+    realtimeMinKeywordLength:
+      type: int
+      description: >-
+        The minimum prefix length of a realtime keyword the user must type to
+        trigger the suggestion.
+    realtimeShowLessFrequentlyCap:
+      type: int
+      description: >-
+        If defined and non-zero, this is the maximum number of times the user
+        will be able to click the "Show less frequently" command for realtime
+        suggestions. If undefined or zero, the user will be able to click the
+        command without any limit.
     recentSearchesFeatureGate:
       type: boolean
       setPref:
@@ -1013,7 +1008,7 @@ newtabAdSizingExperiment:
         Medium rectangle (MREC) ad size and UI.
 
 newtabPromoCard:
-  description: about:newtab reporting ads feature
+  description: the promo card that appears next to the ad banner
   owner: achurchwell@mozilla.com
   hasExposure: false
   variables:
@@ -1768,32 +1763,6 @@ pocketNewtab:
         browser.newtabpage.activity-stream.discoverystream.descLines
       description: >-
         Changes the maximum number of lines a description can be for Pocket cards on newtab.
-    onboardingExperience:
-      type: boolean
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.onboardingExperience.enabled
-      description: >-
-        Enables an onboarding experience for Pocket section on newtab.
-    essentialReadsHeader:
-      type: boolean
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.essentialReadsHeader.enabled
-      description: >-
-        Updates the Pocket section header and title to say "Today’s Essential Reads",
-        moves the "Recommended by Pocket" header to the right side.
-    editorsPicksHeader:
-      type: boolean
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.editorsPicksHeader.enabled
-      description: >-
-        Updates the Pocket section header and title to say "Editor’s Picks", if used with
-        essentialReadsHeader, creates a second section 2 rows down for editorsPicksHeader.
-    recentSavesEnabled:
-      type: boolean
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.recentSaves.enabled
-      description: >-
-        Updates the Pocket section with a new header and 1 row of recently saved Pocket stories.
     readTime:
       type: boolean
       fallbackPref: >-
@@ -2023,12 +1992,6 @@ saveToPocket:
         branch: user
         pref: extensions.pocket.refresh.emailButton.enabled
       description: Just for the new Pocket panels, enables the email signup button.
-    hideRecentSaves:
-      type: boolean
-      setPref:
-        branch: user
-        pref: extensions.pocket.refresh.hideRecentSaves.enabled
-      description: Hides the recently saved section in the home panel.
     bffRecentSaves:
       type: boolean
       setPref:
@@ -2985,6 +2948,18 @@ localNetworkAccess:
       setPref:
         branch: default
         pref: "network.lna.block_trackers"
+    lnaPromptsEnabled:
+      description: Whether we should prompt users for permission whenever we detect local network access.
+      type: boolean
+      setPref:
+        branch: default
+        pref: "network.lna.blocking"
+    lnaFeatureEnabled:
+      description: Blanket flag to enable/disable LNA sub-features.
+      type: boolean
+      setPref:
+        branch: default
+        pref: "network.lna.enabled"
 
 essentialFallbackDomains:
   description: "Whether to retry failing system requests with a backup domain"
@@ -3789,6 +3764,18 @@ mixedContentUpgrading:
       setPref:
         branch: default
         pref: security.mixed_content.upgrade_display_content
+
+unexpectedScriptLoadNotificationBar:
+  description: Pref to control whether we show the Unexpected Script Load Notification Bar
+  owner: tritter@mozilla.com
+  hasExposure: false
+  variables:
+    enabled:
+      description: True if we want to disable the notification bar
+      type: boolean
+      setPref:
+        branch: default
+        pref: security.hide_parent_unrestricted_js_loads_warning.temporary
 
 gc:
   description: Prefs that control gc heuristics.

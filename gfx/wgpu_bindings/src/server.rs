@@ -160,6 +160,7 @@ pub extern "C" fn wgpu_server_new(owner: WebGPUParentPtr) -> *mut Global {
                 },
                 dx12: wgt::Dx12BackendOptions {
                     shader_compiler: dx12_shader_compiler,
+                    ..Default::default()
                 },
                 noop: wgt::NoopBackendOptions { enable: false },
             },
@@ -259,45 +260,70 @@ fn support_use_shared_texture_in_swap_chain(
 
     #[cfg(target_os = "linux")]
     {
-        let support = if backend != wgt::Backend::Vulkan {
+        if backend != wgt::Backend::Vulkan {
             log::info!(concat!(
                 "WebGPU: disabling SharedTexture swapchain: \n",
                 "wgpu backend is not Vulkan"
             ));
-            false
-        } else {
-            unsafe {
-                match global.adapter_as_hal::<wgc::api::Vulkan>(self_id) {
-                    None => {
-                        emit_critical_invalid_note("Vulkan adapter");
-                        false
-                    }
-                    Some(hal_adapter) => {
-                        let capabilities = hal_adapter.physical_device_capabilities();
-                        static REQUIRED: &[&'static std::ffi::CStr] = &[
-                            khr::external_memory_fd::NAME,
-                            ash::ext::external_memory_dma_buf::NAME,
-                            ash::ext::image_drm_format_modifier::NAME,
-                            khr::external_semaphore_fd::NAME,
-                        ];
-                        REQUIRED.iter().all(|extension| {
-                            let supported = capabilities.supports_extension(extension);
-                            if !supported {
-                                log::info!(
-                                    concat!(
-                                        "WebGPU: disabling SharedTexture swapchain: \n",
-                                        "Vulkan extension not supported: {:?}",
-                                    ),
-                                    extension.to_string_lossy()
-                                );
-                            }
-                            supported
-                        })
-                    }
-                }
-            }
+            return false;
+        }
+
+        let Some(hal_adapter) = (unsafe { global.adapter_as_hal::<wgc::api::Vulkan>(self_id) })
+        else {
+            unreachable!("given adapter ID was actually for a different backend");
         };
-        return support;
+
+        let capabilities = hal_adapter.physical_device_capabilities();
+        static REQUIRED: &[&'static std::ffi::CStr] = &[
+            khr::external_memory_fd::NAME,
+            ash::ext::external_memory_dma_buf::NAME,
+            ash::ext::image_drm_format_modifier::NAME,
+            khr::external_semaphore_fd::NAME,
+        ];
+        let all_extensions_supported = REQUIRED.iter().all(|&extension| {
+            let supported = capabilities.supports_extension(extension);
+            if !supported {
+                log::info!(
+                    concat!(
+                        "WebGPU: disabling SharedTexture swapchain: \n",
+                        "Vulkan extension not supported: {:?}",
+                    ),
+                    extension.to_string_lossy()
+                );
+            }
+            supported
+        });
+        if !all_extensions_supported {
+            return false;
+        }
+
+        // We need to be able to export the semaphore that gets signalled
+        // when the GPU is done drawing on the ExternalTextureDMABuf.
+        let semaphore_info = vk::PhysicalDeviceExternalSemaphoreInfo::default()
+            .handle_type(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_FD);
+        let mut semaphore_props = vk::ExternalSemaphoreProperties::default();
+        unsafe {
+            hal_adapter
+                .shared_instance()
+                .raw_instance()
+                .get_physical_device_external_semaphore_properties(
+                    hal_adapter.raw_physical_device(),
+                    &semaphore_info,
+                    &mut semaphore_props,
+                );
+        }
+        if !semaphore_props
+            .external_semaphore_features
+            .contains(vk::ExternalSemaphoreFeatureFlags::EXPORTABLE)
+        {
+            log::info!(
+                "WebGPU: disabling ExternalTexture swapchain: \n\
+                        device can't export opaque file descriptor semaphores"
+            );
+            return false;
+        }
+
+        return true;
     }
 
     #[cfg(target_os = "macos")]
@@ -367,6 +393,16 @@ unsafe fn adapter_request_device(
             log::warn!("Failed to create directory {:?} for wgpu recording.", path);
         } else {
             desc.trace = wgt::Trace::Directory(path);
+        }
+    }
+
+    if wgpu_parent_is_external_texture_enabled() {
+        if global
+            .adapter_features(self_id)
+            .contains(wgt::Features::EXTERNAL_TEXTURE)
+        {
+            desc.required_features
+                .insert(wgt::Features::EXTERNAL_TEXTURE);
         }
     }
 
@@ -1259,6 +1295,7 @@ extern "C" {
     #[cfg(target_os = "macos")]
     fn wgpu_server_get_external_io_surface_id(parent: WebGPUParentPtr, id: id::TextureId) -> u32;
     fn wgpu_server_remove_shared_texture(parent: WebGPUParentPtr, id: id::TextureId);
+    fn wgpu_parent_is_external_texture_enabled() -> bool;
     fn wgpu_parent_external_texture_source_get_external_texture_descriptor<'a>(
         parent: WebGPUParentPtr,
         id: crate::ExternalTextureSourceId,
@@ -2824,6 +2861,7 @@ unsafe fn process_message(
             wgpu_server_remove_shared_texture(global.owner, id);
             global.texture_destroy(id)
         }
+        Message::DestroyExternalTexture(id) => global.external_texture_destroy(id),
         Message::DestroyExternalTextureSource(id) => {
             wgpu_parent_destroy_external_texture_source(global.owner, id)
         }

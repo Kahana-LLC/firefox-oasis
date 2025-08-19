@@ -7511,11 +7511,6 @@ void Document::TakeVideoFrameRequestCallbacks(
   mFrameRequestManager.Take(aVideoCallbacks);
 }
 
-void Document::TakeFrameRequestCallbacks(nsTArray<FrameRequest>& aCallbacks) {
-  MOZ_ASSERT(aCallbacks.IsEmpty());
-  mFrameRequestManager.Take(aCallbacks);
-}
-
 bool Document::ShouldThrottleFrameRequests() const {
   if (mStaticCloneCount > 0) {
     // Even if we're not visible, a static clone may be, so run at full speed.
@@ -14211,10 +14206,6 @@ void Document::CancelFrameRequestCallback(uint32_t aHandle) {
   mFrameRequestManager.Cancel(aHandle);
 }
 
-bool Document::IsCanceledFrameRequestCallback(uint32_t aHandle) const {
-  return mFrameRequestManager.IsCanceled(aHandle);
-}
-
 void Document::ScheduleVideoFrameCallbacks(HTMLVideoElement* aElement) {
   const bool wasEmpty = mFrameRequestManager.IsEmpty();
   mFrameRequestManager.Schedule(aElement);
@@ -19386,7 +19377,7 @@ already_AddRefed<mozilla::dom::Promise> Document::RequestStorageAccessForOrigin(
                 }
                 if (AntiTrackingUtils::CheckStoragePermission(
                         self->NodePrincipal(), type,
-                        self->IsInPrivateBrowsing(), nullptr, 0)) {
+                        self->IsInPrivateBrowsing())) {
                   return MozPromise<int, bool, true>::CreateAndResolve(
                       true, __func__);
                 }
@@ -19718,8 +19709,7 @@ already_AddRefed<Promise> Document::CompleteStorageAccessRequestFromSite(
                       false, __func__);
             }
             if (AntiTrackingUtils::CheckStoragePermission(
-                    self->NodePrincipal(), type, self->IsInPrivateBrowsing(),
-                    nullptr, 0)) {
+                    self->NodePrincipal(), type, self->IsInPrivateBrowsing())) {
               return StorageAccessAPIHelper::
                   StorageAccessPermissionGrantPromise::CreateAndResolve(
                       StorageAccessAPIHelper::eAllowAutoGrant, __func__);

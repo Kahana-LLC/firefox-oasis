@@ -86,10 +86,7 @@ const PREF_SHOW_SPONSORED_TOPSITES = "showSponsoredTopSites";
 const NIMBUS_VARIABLE_CONTILE_SOV_ENABLED = "topSitesContileSovEnabled";
 const PREF_SPOC_IMPRESSIONS = "discoverystream.spoc.impressions";
 const PREF_FLIGHT_BLOCKS = "discoverystream.flight.blocks";
-const PREF_COLLECTIONS_ENABLED =
-  "discoverystream.sponsored-collections.enabled";
 const PREF_POCKET_BUTTON = "extensions.pocket.enabled";
-const PREF_COLLECTION_DISMISSIBLE = "discoverystream.isCollectionDismissible";
 const PREF_SELECTED_TOPICS = "discoverystream.topicSelection.selectedTopics";
 const PREF_TOPIC_SELECTION_ENABLED = "discoverystream.topicSelection.enabled";
 const PREF_TOPIC_SELECTION_PREVIOUS_SELECTED =
@@ -382,7 +379,6 @@ export class DiscoveryStreamFeed {
       ac.AlsoToPreloaded({
         type: at.DISCOVERY_STREAM_PREFS_SETUP,
         data: {
-          recentSavesEnabled: nimbusConfig.recentSavesEnabled,
           pocketButtonEnabled,
           hideDescriptions,
           compactImages: nimbusConfig.compactImages,
@@ -400,19 +396,6 @@ export class DiscoveryStreamFeed {
 
     // sync redux store with PersistantCache personalization data
     this.configureFollowedSections(isStartup);
-
-    this.store.dispatch(
-      ac.BroadcastToContent({
-        type: at.DISCOVERY_STREAM_COLLECTION_DISMISSIBLE_TOGGLE,
-        data: {
-          value:
-            this.store.getState().Prefs.values[PREF_COLLECTION_DISMISSIBLE],
-        },
-        meta: {
-          isStartup,
-        },
-      })
-    );
   }
 
   async configureFollowedSections(isStartup = false) {
@@ -476,33 +459,6 @@ export class DiscoveryStreamFeed {
         isUserLoggedIn,
       },
     });
-
-    // If we're not logged in, don't bother fetching recent saves, we're done.
-    if (isUserLoggedIn) {
-      let recentSaves = await lazy.pktApi.getRecentSavesCache();
-      if (recentSaves) {
-        // We have cache, so we can use those.
-        dispatch({
-          type: at.DISCOVERY_STREAM_RECENT_SAVES,
-          data: {
-            recentSaves,
-          },
-        });
-      } else {
-        // We don't have cache, so fetch fresh stories.
-        lazy.pktApi.getRecentSaves({
-          success(data) {
-            dispatch({
-              type: at.DISCOVERY_STREAM_RECENT_SAVES,
-              data: {
-                recentSaves: data,
-              },
-            });
-          },
-          error() {},
-        });
-      }
-    }
   }
 
   uninitPrefs() {
@@ -797,16 +753,11 @@ export class DiscoveryStreamFeed {
       this.store.getState().Prefs.values[PREF_HARDCODED_BASIC_LAYOUT] ||
       this.store.getState().Prefs.values[PREF_REGION_BASIC_LAYOUT];
 
-    const sponsoredCollectionsEnabled =
-      this.store.getState().Prefs.values[PREF_COLLECTIONS_ENABLED];
-
     // TODO: Add all pref logic
     const widgetsEnabled =
       this.store.getState().Prefs.values[PREF_WIDGET_LISTS_ENABLED];
 
     const pocketConfig = this.store.getState().Prefs.values?.pocketConfig || {};
-    const onboardingExperience =
-      this.isBff && pocketConfig.onboardingExperience;
 
     // The Unified Ads API does not support the spoc topsite placement.
     const unifiedAdsEnabled =
@@ -909,7 +860,6 @@ export class DiscoveryStreamFeed {
       spocsUrl,
       feedUrl,
       items,
-      sponsoredCollectionsEnabled,
       spocPlacementData,
       spocTopsitesPlacementEnabled,
       spocTopsitesPlacementData,
@@ -930,12 +880,6 @@ export class DiscoveryStreamFeed {
       fourCardLayout: pocketConfig.fourCardLayout,
       newFooterSection: pocketConfig.newFooterSection,
       compactGrid: pocketConfig.compactGrid,
-      // For now essentialReadsHeader and editorsPicksHeader are English only.
-      essentialReadsHeader:
-        this.locale.startsWith("en-") && pocketConfig.essentialReadsHeader,
-      editorsPicksHeader:
-        this.locale.startsWith("en-") && pocketConfig.editorsPicksHeader,
-      onboardingExperience,
       // For now button variants are for experimentation and English only.
       ctaButtonSponsors: this.locale.startsWith("en-") ? ctaButtonSponsors : [],
       ctaButtonVariant: this.locale.startsWith("en-") ? ctaButtonVariant : "",
@@ -1193,18 +1137,6 @@ export class DiscoveryStreamFeed {
       sponsored_by_override,
       ...(flight_id ? { flight_id } : {}),
     };
-  }
-
-  updateSponsoredCollectionsPref(collectionEnabled = false) {
-    const currentState =
-      this.store.getState().Prefs.values[PREF_COLLECTIONS_ENABLED];
-
-    // If the current state does not match the new state, update the pref.
-    if (currentState !== collectionEnabled) {
-      this.store.dispatch(
-        ac.SetPref(PREF_COLLECTIONS_ENABLED, collectionEnabled)
-      );
-    }
   }
 
   // This returns ad placements that contain IAB content.
@@ -1486,9 +1418,6 @@ export class DiscoveryStreamFeed {
                   override: !spocsResponse.settings.feature_flags.spoc_v2,
                 },
               })
-            );
-            this.updateSponsoredCollectionsPref(
-              spocsResponse.settings.feature_flags.collections
             );
           }
 
@@ -2689,14 +2618,6 @@ export class DiscoveryStreamFeed {
     }
   }
 
-  onCollectionsChanged() {
-    // Update layout, and reload any off screen tabs.
-    // This does not change any existing open tabs.
-    // It also doesn't update any spoc or rec data, just the layout.
-    const dispatch = action => this.store.dispatch(ac.AlsoToPreloaded(action));
-    this.loadLayout(dispatch, false);
-  }
-
   async retreiveProfileAge() {
     let profileAccessor = await lazy.ProfileAge();
     let profileCreateTime = await profileAccessor.created;
@@ -2751,9 +2672,6 @@ export class DiscoveryStreamFeed {
       case PREF_USER_INFERRED_PERSONALIZATION:
       case PREF_SYSTEM_INFERRED_PERSONALIZATION:
         this._isContextualAds = undefined;
-        break;
-      case PREF_COLLECTIONS_ENABLED:
-        this.onCollectionsChanged();
         break;
       case PREF_SELECTED_TOPICS:
         this.store.dispatch(
@@ -3129,15 +3047,11 @@ export class DiscoveryStreamFeed {
      `spocPlacementData` Used to set the spoc content.
      `spocTopsitesPlacementEnabled` Tuns on and off the sponsored topsites placement.
      `spocTopsitesPlacementData` Used to set spoc content for topsites.
-     `sponsoredCollectionsEnabled` Tuns on and off the sponsored collection section.
      `hybridLayout` Changes cards to smaller more compact cards only for specific breakpoints.
      `hideCardBackground` Removes Pocket card background and borders.
      `fourCardLayout` Enable four Pocket cards per row.
      `newFooterSection` Changes the layout of the topics section.
      `compactGrid` Reduce the number of pixels between the Pocket cards.
-     `essentialReadsHeader` Updates the Pocket section header and title to say "Today’s Essential Reads", moves the "Recommended by Pocket" header to the right side.
-     `editorsPicksHeader` Updates the Pocket section header and title to say "Editor’s Picks", if used with essentialReadsHeader, creates a second section 2 rows down for editorsPicks.
-     `onboardingExperience` Show new users some UI explaining Pocket above the Pocket section.
      `ctaButtonSponsors` An array of sponsors we want to show a cta button on the card for.
      `ctaButtonVariant` Sets the variant for the cta sponsor button.
      `spocMessageVariant` Sets the variant for the sponsor message dialog.
@@ -3153,15 +3067,11 @@ getHardcodedLayout = ({
   spocTopsitesPlacementData = { ad_types: [3120], zone_ids: [280143] },
   widgetPositions = [],
   widgetData = [],
-  sponsoredCollectionsEnabled = false,
   hybridLayout = false,
   hideCardBackground = false,
   fourCardLayout = false,
   newFooterSection = false,
   compactGrid = false,
-  essentialReadsHeader = false,
-  editorsPicksHeader = false,
-  onboardingExperience = false,
   ctaButtonSponsors = [],
   ctaButtonVariant = "",
   spocMessageVariant = "",
@@ -3208,42 +3118,8 @@ getHardcodedLayout = ({
               },
             ]
           : []),
-        ...(sponsoredCollectionsEnabled
-          ? [
-              {
-                type: "CollectionCardGrid",
-                properties: {
-                  items: 3,
-                },
-                header: {
-                  title: "",
-                },
-                placement: {
-                  name: "sponsored-collection",
-                  ad_types: [3617],
-                  zone_ids: [217759, 218031],
-                },
-                spocs: {
-                  probability: 1,
-                  positions: [
-                    {
-                      index: 0,
-                    },
-                    {
-                      index: 1,
-                    },
-                    {
-                      index: 2,
-                    },
-                  ],
-                },
-              },
-            ]
-          : []),
         {
           type: "Message",
-          essentialReadsHeader,
-          editorsPicksHeader,
           header: {
             title: {
               id: pocketStoriesHeadlineId,
@@ -3270,9 +3146,6 @@ getHardcodedLayout = ({
             hideCardBackground,
             fourCardLayout,
             compactGrid,
-            essentialReadsHeader,
-            editorsPicksHeader,
-            onboardingExperience,
             ctaButtonSponsors,
             ctaButtonVariant,
             spocMessageVariant,

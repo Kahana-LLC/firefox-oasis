@@ -25,6 +25,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
   Spotlight: "resource:///modules/asrouter/Spotlight.sys.mjs",
+  // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
+  TaskbarTabs: "resource:///modules/taskbartabs/TaskbarTabs.sys.mjs",
   UIState: "resource://services-sync/UIState.sys.mjs",
   UITour: "moz-src:///browser/components/uitour/UITour.sys.mjs",
 });
@@ -522,9 +524,17 @@ export const SpecialMessageActions = {
 
   async handleMultiAction(actions, browser, orderedExecution) {
     if (orderedExecution) {
+      let hasFailed = false;
       for (const action of actions) {
         try {
-          await this.handleAction(action, browser);
+          // If action requires previous actions to succeed, check to see if a previous action has failed
+          if (action.requiresPrevious && hasFailed) {
+            continue; // Skip this action if previous actions did not succeed
+          }
+          let result = await this.handleAction(action, browser);
+          if (result === false) {
+            hasFailed = true;
+          }
         } catch (err) {
           console.error("Error in MULTI_ACTION event:", err);
           throw err;
@@ -775,6 +785,25 @@ export const SpecialMessageActions = {
       case "SUMMARIZE_PAGE":
         const entry = action.data ?? "message";
         await lazy.GenAI.summarizeCurrentPage(window, entry);
+        break;
+      case "OPEN_PANEL":
+        let { anchor_id, widget_id, panel_id, fallback_to_app_menu } =
+          action.data;
+        let anchor;
+        if (anchor_id) {
+          anchor = window.document.getElementById(anchor_id);
+        } else if (widget_id) {
+          let widget = lazy.CustomizableUI.getWidget(widget_id);
+          anchor = widget?.forWindow(window)?.anchor;
+        }
+        if (!anchor && fallback_to_app_menu) {
+          anchor = window.document.getElementById("PanelUI-menu-button");
+        }
+        await window.PanelUI.showSubView(panel_id, anchor);
+        break;
+      case "CREATE_TASKBAR_TAB":
+        let currentTab = window.gBrowser.selectedTab;
+        await lazy.TaskbarTabs.moveTabIntoTaskbarTab(currentTab);
         break;
     }
     return undefined;

@@ -125,7 +125,6 @@ class nsHttpChannel final : public HttpBaseChannel,
                                       nsProxyInfo* aProxyInfo,
                                       uint32_t aProxyResolveFlags,
                                       nsIURI* aProxyURI, uint64_t aChannelId,
-                                      ExtContentPolicyType aContentPolicyType,
                                       nsILoadInfo* aLoadInfo) override;
 
   static bool IsRedirectStatus(uint32_t status);
@@ -339,6 +338,7 @@ class nsHttpChannel final : public HttpBaseChannel,
   nsresult OnPermissionPromptResult(bool aGranted, const nsACString& aType);
   LNAPermission UpdateLocalNetworkAccessPermissions(
       const nsACString& aPermissionType);
+  void MaybeUpdateDocumentIPAddressSpaceFromCache();
   nsresult ProcessLNAActions();
 
  public:

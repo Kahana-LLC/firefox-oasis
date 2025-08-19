@@ -2684,10 +2684,10 @@ void nsFocusManager::Focus(
     // if the window isn't visible, for instance because it is a hidden tab,
     // update the current focus and scroll it into view but don't do anything
     // else
-    if (RefPtr elementToFocus = FlushAndCheckIfFocusable(aElement, aFlags)) {
-      aWindow->SetFocusedElement(elementToFocus, focusMethod);
+    if (aElement) {
+      aWindow->SetFocusedElement(aElement, focusMethod);
       if (aFocusChanged) {
-        ScrollIntoView(presShell, elementToFocus, aFlags);
+        ScrollIntoView(presShell, aElement, aFlags);
       }
     }
     return;
@@ -2725,11 +2725,11 @@ void nsFocusManager::Focus(
 
   if (aAdjustWidget && !sTestMode) {
     if (nsViewManager* vm = presShell->GetViewManager()) {
-      nsCOMPtr<nsIWidget> widget = vm->GetRootWidget();
-      if (widget)
+      if (nsCOMPtr<nsIWidget> widget = vm->GetRootWidget()) {
         widget->SetFocus(nsIWidget::Raise::No, aFlags & FLAG_NONSYSTEMCALLER
                                                    ? CallerType::NonSystem
                                                    : CallerType::System);
+      }
     }
   }
 
@@ -2762,17 +2762,15 @@ void nsFocusManager::Focus(
     }
   }
 
-  // check to ensure that the element is still focusable, and that nothing
-  // else was focused during the events above.
-  // Note that the focusing element may have already been moved to another
-  // document/window.  In that case, we should stop setting focus to it
-  // because setting focus to the new window would cause redirecting focus
-  // again and again.
-  RefPtr elementToFocus =
-      aElement && aElement->IsInComposedDoc() &&
-              aElement->GetComposedDoc() == aWindow->GetExtantDoc()
-          ? FlushAndCheckIfFocusable(aElement, aFlags)
-          : nullptr;
+  const RefPtr<Element> elementToFocus = [&]() -> Element* {
+    if (!aElement || !aElement->IsInComposedDoc() ||
+        aElement->GetComposedDoc() != aWindow->GetExtantDoc()) {
+      // Element moved documents, don't focus it to prevent redirecting focus to
+      // the wrong window.
+      return nullptr;
+    }
+    return aElement;
+  }();
   if (elementToFocus && !mFocusedElement &&
       GetFocusedBrowsingContext() == aWindow->GetBrowsingContext()) {
     mFocusedElement = elementToFocus;

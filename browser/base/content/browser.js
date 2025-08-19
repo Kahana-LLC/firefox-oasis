@@ -1066,7 +1066,6 @@ const gStoragePressureObserver = {
     }
     this._lastNotificationTime = Date.now();
 
-    MozXULElement.insertFTLIfNeeded("branding/brand.ftl");
     MozXULElement.insertFTLIfNeeded("browser/preferences/preferences.ftl");
 
     const BYTES_IN_GIGABYTE = 1073741824;
@@ -3302,8 +3301,7 @@ function GetDynamicShortcutTooltipText(nodeId) {
 }
 
 function UpdateDynamicShortcutTooltipText(aTooltip) {
-  let nodeId =
-    aTooltip.triggerNode.id || aTooltip.triggerNode.getAttribute("anonid");
+  let nodeId = aTooltip.triggerNode.id;
   aTooltip.setAttribute("label", GetDynamicShortcutTooltipText(nodeId));
 }
 

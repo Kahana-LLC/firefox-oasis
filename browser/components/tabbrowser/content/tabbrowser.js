@@ -108,6 +108,8 @@
         PictureInPicture: "resource://gre/modules/PictureInPicture.sys.mjs",
         SmartTabGroupingManager:
           "moz-src:///browser/components/tabbrowser/SmartTabGrouping.sys.mjs",
+        SponsorProtection:
+          "moz-src:///browser/components/newtab/SponsorProtection.sys.mjs",
         TabMetrics:
           "moz-src:///browser/components/tabbrowser/TabMetrics.sys.mjs",
         TabStateFlusher:
@@ -864,9 +866,13 @@
       }
 
       this.showTab(aTab);
-      this.#handleTabMove(aTab, () =>
-        this.pinnedTabsContainer.appendChild(aTab)
-      );
+      this.#handleTabMove(aTab, () => {
+        let periphery = document.getElementById(
+          "pinned-tabs-container-periphery"
+        );
+        // If periphery is null, append to end
+        this.pinnedTabsContainer.insertBefore(aTab, periphery);
+      });
 
       aTab.setAttribute("pinned", "true");
       this._updateTabBarForPinnedTabs();
@@ -2521,6 +2527,15 @@
         return false;
       }
 
+      // discarding a browser will dismiss any dialogs, so don't
+      // allow this unless we're forcing it.
+      if (
+        !aForceDiscard &&
+        this.getTabDialogBox(browser)._tabDialogManager._dialogs.length
+      ) {
+        return false;
+      }
+
       return true;
     }
 
@@ -2551,6 +2566,10 @@
         this.resetBrowserSharing(browser);
       }
       webrtcUI.forgetStreamsFromBrowserContext(browser.browsingContext);
+
+      // Abort any dialogs since the browser is about to be discarded.
+      let tabDialogBox = this.getTabDialogBox(browser);
+      tabDialogBox.abortAllDialogs();
 
       // Set browser parameters for when browser is restored.  Also remove
       // listeners and set up lazy restore data in SessionStore. This must
@@ -7116,6 +7135,10 @@
           debugStringArray.push("[A]");
         }
 
+        if (this.SponsorProtection.isProtectedBrowser(tab.linkedBrowser)) {
+          debugStringArray.push("[S]");
+        }
+
         if (debugStringArray.length) {
           labelArray.push(debugStringArray.join(" "));
         }
@@ -8639,6 +8662,10 @@
       { loadFlags, globalHistoryOptions }
     ) {
       if (globalHistoryOptions?.triggeringSponsoredURL) {
+        if (globalHistoryOptions.triggeringSource == "newtab") {
+          gBrowser.SponsorProtection.addProtectedBrowser(browser);
+        }
+
         try {
           // Browser may access URL after fixing it up, then store the URL into DB.
           // To match with it, fix the link up explicitly.
@@ -8654,7 +8681,13 @@
             globalHistoryOptions.triggeringSponsoredURLVisitTimeMS ||
             Date.now();
           browser.setAttribute("triggeringSponsoredURLVisitTimeMS", time);
+          browser.setAttribute(
+            "triggeringSource",
+            globalHistoryOptions.triggeringSource
+          );
         } catch (e) {}
+      } else {
+        gBrowser.SponsorProtection.removeProtectedBrowser(browser);
       }
 
       if (globalHistoryOptions?.triggeringSearchEngine) {

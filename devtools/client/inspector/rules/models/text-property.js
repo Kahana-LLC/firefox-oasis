@@ -34,24 +34,32 @@ loader.lazyRequireGetter(
  */
 class TextProperty {
   /**
-   * @param {Rule} rule
+   * @param {Object} options
+   * @param {Rule} options.rule
    *        The rule this TextProperty came from.
-   * @param {String} name
+   * @param {String} options.name
    *        The text property name (such as "background" or "border-top").
-   * @param {String} value
+   * @param {String} options.value
    *        The property's value (not including priority).
-   * @param {String} priority
+   * @param {String} options.priority
    *        The property's priority (either "important" or an empty string).
-   * @param {Boolean} enabled
+   * @param {Boolean} options.enabled
    *        Whether the property is enabled.
-   * @param {Boolean} invisible
+   * @param {Boolean} options.invisible
    *        Whether the property is invisible. In an inherited rule, only show
    *        the inherited declarations. The other declarations are considered
    *        invisible and does not show up in the UI. These are needed so that
    *        the index of a property in Rule.textProps is the same as the index
    *        coming from parseDeclarations.
    */
-  constructor(rule, name, value, priority, enabled = true, invisible = false) {
+  constructor({
+    rule,
+    name,
+    value,
+    priority,
+    enabled = true,
+    invisible = false,
+  }) {
     this.id = name + "_" + generateUUID().toString();
     this.rule = rule;
     this.name = name;
@@ -277,16 +285,30 @@ class TextProperty {
     return declaration.isValid;
   }
 
-  isUsed() {
+  /**
+   * Returns an object with properties explaining why the property is inactive, if it is.
+   * If it's not inactive, this returns undefined.
+   *
+   * @returns {Object|undefined}
+   */
+  getInactiveCssData() {
     const declaration = this.#getDomRuleDeclaration();
 
-    // StyleRuleActor's declarations may have a isUsed flag (if the server is the right
-    // version). Just return true if the information is missing.
-    if (!declaration?.isUsed) {
-      return { used: true };
+    if (!declaration) {
+      return undefined;
     }
 
-    return declaration.isUsed;
+    // @backward-compat { version 144 } When 144 reaches release, we can remove this
+    // whole if block.
+    if (!this.elementStyle.pageStyle.traits.newInactiveCssDataShape) {
+      if (!declaration.isUsed || declaration.isUsed?.used) {
+        return undefined;
+      }
+
+      return declaration.isUsed;
+    }
+
+    return declaration.inactiveCssData;
   }
 
   /**

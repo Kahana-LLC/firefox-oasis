@@ -133,18 +133,6 @@ newtab-menu-manage-sponsored-content = Manage sponsored content
 newtab-menu-our-sponsors-and-your-privacy = Our sponsors and your privacy
 newtab-menu-report-this-ad = Report this ad
 
-## Message displayed in a modal window to explain privacy and provide context for sponsored content.
-
-newtab-privacy-modal-button-done = Done
-newtab-privacy-modal-button-manage = Manage sponsored content settings
-newtab-privacy-modal-header = Your privacy matters.
-newtab-privacy-modal-paragraph-2 =
-    In addition to dishing up captivating stories, we also show you relevant,
-    highly-vetted content from select sponsors. Rest assured, <strong>your browsing
-    data never leaves your personal copy of { -brand-product-name }</strong> — we don’t see it, and our
-    sponsors don’t either.
-newtab-privacy-modal-link = Learn how privacy works on the new tab
-
 ##
 
 # Bookmark is a noun in this case, "Remove bookmark".
@@ -244,11 +232,6 @@ newtab-toast-dismiss-button =
     .title = Dismiss
     .aria-label = Dismiss
 
-## Pocket content onboarding experience dialog and modal for new users seeing the Pocket section for the first time, shown as the first item in the Pocket section.
-
-newtab-pocket-onboarding-discover = Discover the best of the web
-newtab-pocket-onboarding-cta = { -pocket-brand-name } explores a diverse range of publications to bring the most informative, inspirational, and trustworthy content right to your { -brand-product-name } browser.
-
 ## Error Fallback Content.
 ## This message and suggested action link are shown in each section of UI that fails to render.
 
@@ -270,8 +253,9 @@ newtab-custom-row-selector =
         }
 newtab-custom-stories-toggle =
   .label = Recommended stories
-  .description = Exceptional content curated by the { -vendor-short-name } family
-newtab-custom-pocket-show-recent-saves = Show recent saves
+
+  .description = Exceptional content curated by the { -brand-product-name } family
+
 newtab-custom-weather-toggle =
   .label = Weather
   .description = Today’s forecast at a glance
@@ -591,7 +575,8 @@ newtab-widget-lists-menu-delete = Delete this list
 newtab-widget-lists-menu-copy = Copy list to clipboard
 newtab-widget-lists-menu-hide = Hide all lists
 newtab-widget-lists-menu-learn-more = Learn more
-newtab-widget-lists-input-placeholder = Add an item
+newtab-widget-lists-input-add-an-item =
+    .placeholder = Add an item
 newtab-widget-lists-input-error = Please include text to add an item.
 newtab-widget-lists-input-menu-open-link = Open link
 newtab-widget-lists-input-menu-move-up = Move up
@@ -621,8 +606,14 @@ newtab-widget-timer-menu-notifications-on = Turn on notifications
 newtab-widget-timer-menu-hide = Hide timer
 newtab-widget-timer-menu-learn-more = Learn more
 
+# Message that appears when widgets are full-height. This reminds users that there is more New Tab content to see if they scroll
+newtab-widget-keep-scrolling = Scroll for more
+
 # Strings for the default promo card
 
 newtab-promo-card-title = Support { -vendor-short-name }
 newtab-promo-card-body = { -vendor-short-name } sponsors support our mission to build a better web
 newtab-promo-card-cta = Learn more
+newtab-promo-card-dismiss-button =
+    .title = Dismiss
+    .aria-label = Dismiss

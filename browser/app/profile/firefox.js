@@ -369,7 +369,11 @@ pref("browser.warnOnQuit", true);
 
 pref("browser.overlink-delay", 80);
 
-pref("browser.taskbarTabs.enabled", false);
+#if defined(XP_WIN)
+  pref("browser.taskbarTabs.enabled", true);
+#else
+  pref("browser.taskbarTabs.enabled", false);
+#endif
 
 #if defined(MOZ_WIDGET_GTK)
   pref("browser.theme.native-theme", true);
@@ -459,7 +463,6 @@ pref("browser.urlbar.recentsearches.featureGate", true);
 
 // Enable Rich Entities.
 pref("browser.urlbar.richSuggestions.featureGate", true);
-pref("browser.search.param.search_rich_suggestions", "fen");
 
 // Feature gate pref for weather suggestions in the urlbar.
 pref("browser.urlbar.weather.featureGate", false);
@@ -718,19 +721,9 @@ pref("browser.urlbar.yelp.serviceResultDistinction", false);
 pref("browser.urlbar.suggest.yelp", true);
 
 // Feature gate pref for Fakespot suggestions in the urlbar.
+// TODO Bug 1982966: Remove this after all experiments and rollouts using it
+// finish.
 pref("browser.urlbar.fakespot.featureGate", false);
-
-// The minimum prefix length of a Fakespot keyword the user must type to trigger
-// the suggestion. 0 means the min length should be taken from Nimbus.
-pref("browser.urlbar.fakespot.minKeywordLength", 4);
-
-// The index of Fakespot results within the Firefox Suggest section. A negative
-// index is relative to the end of the section.
-pref("browser.urlbar.fakespot.suggestedIndex", -1);
-
-// If `browser.urlbar.fakespot.featureGate` is true, this controls whether
-// Fakespot suggestions are turned on.
-pref("browser.urlbar.suggest.fakespot", true);
 
 // The minimum prefix length of addons keyword the user must type to trigger
 // the suggestion. 0 means the min length should be taken from Nimbus.
@@ -754,10 +747,23 @@ pref("browser.urlbar.suggest.wikipedia", true);
 // Enable creating and editing user defined search engines.
 pref("browser.urlbar.update2.engineAliasRefresh", true);
 
+// Controls whether realtime opt-in suggestions are turned on.
+pref("browser.urlbar.suggest.realtimeOptIn", true);
+
+// Feature gate pref for stock market suggestions in the urlbar.
+pref("browser.urlbar.market.featureGate", false);
+
 // The minimum prefix length of a market keyword the user must type to trigger
 // the suggestion. 0 means the min length should be taken from Nimbus or remote
 // settings.
 pref("browser.urlbar.market.minKeywordLength", 0);
+
+// Feature gate pref for important-dates suggestions in the urlbar.
+pref("browser.urlbar.importantDates.featureGate", false);
+
+// If `browser.urlbar.importantDates.featureGate` is true, this controls whether
+// important-dates suggestions are turned on.
+pref("browser.urlbar.suggest.importantDates", true);
 
 pref("browser.altClickSave", false);
 
@@ -1040,6 +1046,7 @@ pref("browser.tabs.groups.smart.searchTopicEnabled", true);
 pref("browser.tabs.groups.smart.userEnabled", true);
 
 pref("security.allow_parent_unrestricted_js_loads", false);
+pref("browser.unexpectedScriptLoad.logLevel", "Warn");
 
 // Unload tabs when available memory is running low
 #if defined(XP_MACOSX) || defined(XP_WIN)
@@ -1895,9 +1902,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.titleLines", 3);
 pref("browser.newtabpage.activity-stream.discoverystream.descLines", 3);
 pref("browser.newtabpage.activity-stream.discoverystream.readTime.enabled", true);
 pref("browser.newtabpage.activity-stream.discoverystream.newSponsoredLabel.enabled", false);
-pref("browser.newtabpage.activity-stream.discoverystream.essentialReadsHeader.enabled", false);
-pref("browser.newtabpage.activity-stream.discoverystream.recentSaves.enabled", false);
-pref("browser.newtabpage.activity-stream.discoverystream.editorsPicksHeader.enabled", false);
 pref("browser.newtabpage.activity-stream.discoverystream.spoc-positions", "2,4,8,13,17,20");
 
 // For both spoc and tiles, count corresponds to the matching placement. So the first placement in an array corresponds to the first count.
@@ -1917,7 +1921,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.contile-topsites-positi
 pref("browser.newtabpage.activity-stream.discoverystream.widget-positions", "");
 pref("browser.newtabpage.activity-stream.discoverystream.spocs-endpoint", "");
 pref("browser.newtabpage.activity-stream.discoverystream.spocs-endpoint-query", "");
-pref("browser.newtabpage.activity-stream.discoverystream.sponsored-collections.enabled", false);
 
 // Changes the spoc content.
 pref("browser.newtabpage.activity-stream.discoverystream.spocAdTypes", "");
@@ -2006,8 +2009,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.region-basic-config", "
 pref("browser.newtabpage.activity-stream.discoverystream.pocket-feed-parameters", "");
 pref("browser.newtabpage.activity-stream.discoverystream.merino-feed-experiment", false);
 
-// Allows Pocket story collections to be dismissed.
-pref("browser.newtabpage.activity-stream.discoverystream.isCollectionDismissible", true);
 pref("browser.newtabpage.activity-stream.discoverystream.personalization.enabled", true);
 pref("browser.newtabpage.activity-stream.discoverystream.personalization.override", false);
 // Configurable keys used by personalization.
@@ -2016,10 +2017,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.personalization.modelKe
 pref("browser.newtabpage.activity-stream.discoverystream.recs.personalized", false);
 // System pref to allow Pocket sponsored content personalization to be turned on/off.
 pref("browser.newtabpage.activity-stream.discoverystream.spocs.personalized", true);
-
-// Flip this once the user has dismissed the Pocket onboarding experience,
-pref("browser.newtabpage.activity-stream.discoverystream.onboardingExperience.dismissed", false);
-pref("browser.newtabpage.activity-stream.discoverystream.onboardingExperience.enabled", false);
 
 // List of locales that get thumbs up/down on recommended stories by default.
 pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.locale-thumbs-config", "en-US, en-GB, en-CA");
@@ -2070,6 +2067,8 @@ pref("browser.newtabpage.resource-mapping.log", false);
 
 // Base URL for the newtab trainhop add-on version xpi downloads.
 pref("browser.newtabpage.trainhopAddon.xpiBaseURL", "https://archive.mozilla.org/pub/system-addons/newtab/");
+
+pref("browser.newtabpage.sponsor-protection.enabled", true);
 
 // Separate about welcome
 pref("browser.aboutwelcome.enabled", true);
@@ -2143,8 +2142,6 @@ pref("pdfjs.handleOctetStream", true);
 // Is the sidebar positioned ahead of the content browser
 pref("sidebar.position_start", true);
 pref("sidebar.revamp", false);
-// Should the sidebar launcher default to visible or not with horizontal tabs
-pref("sidebar.revamp.defaultLauncherVisible", true);
 // This is nightly only for now, as we need to address bug 1933527 and bug 1934039.
 #ifdef NIGHTLY_BUILD
 pref("sidebar.revamp.round-content-area", true);
@@ -2202,7 +2199,7 @@ pref("browser.ml.linkPreview.noKeyPointsRegions", "AD,AT,BE,BG,CH,CY,CZ,DE,DK,EE
 pref("browser.ml.linkPreview.optin", false);
 pref("browser.ml.linkPreview.outputSentences", 3);
 pref("browser.ml.linkPreview.recentTypingMs", 1000);
-pref("browser.ml.linkPreview.shift", true);
+pref("browser.ml.linkPreview.shift", false);
 pref("browser.ml.linkPreview.shiftAlt", false);
 
 pref("browser.ml.pageAssist.enabled", false);
@@ -2715,8 +2712,6 @@ pref("extensions.pocket.loggedOutVariant", "control");
 
 // Just for the new Pocket panels, enables the email signup button.
 pref("extensions.pocket.refresh.emailButton.enabled", false);
-// Hides the recently saved section in the home panel.
-pref("extensions.pocket.refresh.hideRecentSaves.enabled", false);
 
 // "available"      - user can see feature offer.
 // "offered"        - we have offered feature to user and they have not yet made a decision.
@@ -3460,3 +3455,4 @@ pref("browser.contextual-services.contextId.rust-component.enabled", true);
 pref("browser.ipProtection.enabled", false);
 pref("browser.ipProtection.variant", "");
 
+pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");

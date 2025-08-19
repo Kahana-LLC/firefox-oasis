@@ -119,7 +119,6 @@ for (const type of [
   "DIALOG_CLOSE",
   "DIALOG_OPEN",
   "DISABLE_SEARCH",
-  "DISCOVERY_STREAM_COLLECTION_DISMISSIBLE_TOGGLE",
   "DISCOVERY_STREAM_CONFIG_CHANGE",
   "DISCOVERY_STREAM_CONFIG_RESET",
   "DISCOVERY_STREAM_CONFIG_RESET_DEFAULTS",
@@ -150,7 +149,6 @@ for (const type of [
   "DISCOVERY_STREAM_POCKET_STATE_INIT",
   "DISCOVERY_STREAM_POCKET_STATE_SET",
   "DISCOVERY_STREAM_PREFS_SETUP",
-  "DISCOVERY_STREAM_RECENT_SAVES",
   "DISCOVERY_STREAM_RETRY_FEED",
   "DISCOVERY_STREAM_SPOCS_CAPS",
   "DISCOVERY_STREAM_SPOCS_ENDPOINT",
@@ -168,7 +166,6 @@ for (const type of [
   "FOLLOW_SECTION",
   "HANDOFF_SEARCH_TO_AWESOMEBAR",
   "HIDE_PERSONALIZE",
-  "HIDE_PRIVACY_INFO",
   "HIDE_TOAST_MESSAGE",
   "INFERRED_PERSONALIZATION_MODEL_UPDATE",
   "INFERRED_PERSONALIZATION_REFRESH",
@@ -215,6 +212,9 @@ for (const type of [
   "PREVIEW_REQUEST",
   "PREVIEW_REQUEST_CANCEL",
   "PREVIEW_RESPONSE",
+  "PROMO_CARD_CLICK",
+  "PROMO_CARD_DISMISS",
+  "PROMO_CARD_IMPRESSION",
   "REMOVE_DOWNLOAD_FILE",
   "REPORT_AD_OPEN",
   "REPORT_AD_SUBMIT",
@@ -978,7 +978,7 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
       coarseInferredInterests,
       coarsePrivateInferredInterests
     } = this.props.state.InferredPersonalization;
-    return /*#__PURE__*/external_React_default().createElement("div", null, " ", "Inferred Intrests:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(inferredInterests, null, 2)), " Coarse Inferred Interests:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(coarseInferredInterests, null, 2)), " Coarse Inferred Interests With Differential Privacy:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(coarsePrivateInferredInterests, null, 2)));
+    return /*#__PURE__*/external_React_default().createElement("div", null, " ", "Inferred Interests:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(inferredInterests, null, 2)), " Coarse Inferred Interests:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(coarseInferredInterests, null, 2)), " Coarse Inferred Interests With Differential Privacy:", /*#__PURE__*/external_React_default().createElement("pre", null, JSON.stringify(coarsePrivateInferredInterests, null, 2)));
   }
   renderFeedData(url) {
     const {
@@ -1859,7 +1859,7 @@ const LinkMenuOptions = {
         referrer: site.referrer,
         typedBonus: site.typedBonus,
         url: site.url,
-        sponsored_tile_id: site.sponsored_tile_id,
+        is_sponsored: !!site.sponsored_tile_id,
         event_source: "CONTEXT_MENU",
         topic: site.topic,
         firstVisibleTimestamp: site.firstVisibleTimestamp,
@@ -3198,7 +3198,8 @@ class SafeAnchor extends (external_React_default()).PureComponent {
           },
           referrer: this.props.referrer || "https://getpocket.com/recommendations",
           // Use the anchor's url, which could have been cleaned up
-          url: event.currentTarget.href
+          url: event.currentTarget.href,
+          is_sponsored: this.props.isSponsored
         }
       }));
     }
@@ -3226,13 +3227,15 @@ class SafeAnchor extends (external_React_default()).PureComponent {
     const {
       url,
       className,
-      title
+      title,
+      isSponsored
     } = this.props;
     let anchor = /*#__PURE__*/external_React_default().createElement("a", SafeAnchor_extends({
       href: this.safeURI(url),
       title: title,
       className: className,
-      onClick: this.onClick
+      onClick: this.onClick,
+      "data-is-sponsored-link": !!isSponsored
     }, this.props.tabIndex === 0 || this.props.tabIndex ? {
       ref: this.props.setRef,
       tabIndex: this.props.tabIndex
@@ -4364,7 +4367,8 @@ class _DSCard extends (external_React_default()).PureComponent {
       dispatch: this.props.dispatch,
       onLinkClick: !this.props.placeholder ? this.onLinkClick : undefined,
       url: this.props.url,
-      title: this.props.title
+      title: this.props.title,
+      isSponsored: !!this.props.flightId
     }, this.props.showTopics && !this.props.mayHaveSectionsCards && this.props.topic && !isListCard && !refinedCardsLayout && /*#__PURE__*/external_React_default().createElement("span", {
       className: "ds-card-topic",
       "data-l10n-id": `newtab-topic-label-${this.props.topic}`
@@ -4456,7 +4460,7 @@ class _DSCard extends (external_React_default()).PureComponent {
       pocket_id: this.props.pocket_id,
       shim: this.props.shim,
       bookmarkGuid: this.props.bookmarkGuid,
-      flightId: !this.props.is_collection ? this.props.flightId : undefined,
+      flightId: this.props.flightId,
       showPrivacyInfo: !!this.props.flightId,
       onMenuUpdate: this.onMenuUpdate,
       onMenuShow: this.onMenuShow,
@@ -4579,54 +4583,6 @@ class DSEmptyState extends (external_React_default()).PureComponent {
     }, /*#__PURE__*/external_React_default().createElement("div", {
       className: "empty-state-message"
     }, this.renderState()));
-  }
-}
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSDismiss/DSDismiss.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-class DSDismiss extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.onDismissClick = this.onDismissClick.bind(this);
-    this.onHover = this.onHover.bind(this);
-    this.offHover = this.offHover.bind(this);
-    this.state = {
-      hovering: false
-    };
-  }
-  onDismissClick() {
-    if (this.props.onDismissClick) {
-      this.props.onDismissClick();
-    }
-  }
-  onHover() {
-    this.setState({
-      hovering: true
-    });
-  }
-  offHover() {
-    this.setState({
-      hovering: false
-    });
-  }
-  render() {
-    let className = `ds-dismiss
-      ${this.state.hovering ? ` hovering` : ``}
-      ${this.props.extraClasses ? ` ${this.props.extraClasses}` : ``}`;
-    return /*#__PURE__*/external_React_default().createElement("div", {
-      className: className
-    }, this.props.children, /*#__PURE__*/external_React_default().createElement("button", {
-      className: "ds-dismiss-button",
-      "data-l10n-id": "newtab-dismiss-button-tooltip",
-      onClick: this.onDismissClick,
-      onMouseEnter: this.onHover,
-      onMouseLeave: this.offHover
-    }, /*#__PURE__*/external_React_default().createElement("span", {
-      className: "icon icon-dismiss"
-    })));
   }
 }
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/TopicsWidget/TopicsWidget.jsx
@@ -5021,10 +4977,84 @@ function AdBannerContextMenu({
     source: type.toUpperCase()
   })));
 }
+;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/PromoCard/PromoCard.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+
+
+
+const PREF_PROMO_CARD_DISMISSED = "discoverystream.promoCard.visible";
+
+/**
+ * The PromoCard component displays a promotional message.
+ * It is used next to the AdBanner component in a four-column layout.
+ */
+
+const PromoCard = () => {
+  const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
+  const onCtaClick = (0,external_React_namespaceObject.useCallback)(() => {
+    dispatch(actionCreators.AlsoToMain({
+      type: actionTypes.PROMO_CARD_CLICK
+    }));
+  }, [dispatch]);
+  const onDismissClick = (0,external_React_namespaceObject.useCallback)(() => {
+    dispatch(actionCreators.AlsoToMain({
+      type: actionTypes.PROMO_CARD_DISMISS
+    }));
+    dispatch(actionCreators.SetPref(PREF_PROMO_CARD_DISMISSED, false));
+  }, [dispatch]);
+  const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
+    dispatch(actionCreators.AlsoToMain({
+      type: actionTypes.PROMO_CARD_IMPRESSION
+    }));
+  }, [dispatch]);
+  const ref = useIntersectionObserver(handleIntersection);
+  return /*#__PURE__*/external_React_default().createElement("div", {
+    className: "promo-card-wrapper",
+    ref: el => {
+      ref.current = [el];
+    }
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "promo-card-dismiss-button"
+  }, /*#__PURE__*/external_React_default().createElement("moz-button", {
+    type: "icon ghost",
+    size: "small",
+    "data-l10n-id": "newtab-promo-card-dismiss-button",
+    iconsrc: "chrome://global/skin/icons/close.svg",
+    onClick: onDismissClick,
+    onKeyDown: onDismissClick
+  })), /*#__PURE__*/external_React_default().createElement("div", {
+    className: "promo-card-inner"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "img-wrapper"
+  }, /*#__PURE__*/external_React_default().createElement("img", {
+    src: "chrome://newtab/content/data/content/assets/puzzle-fox.svg",
+    alt: ""
+  })), /*#__PURE__*/external_React_default().createElement("span", {
+    className: "promo-card-title",
+    "data-l10n-id": "newtab-promo-card-title"
+  }), /*#__PURE__*/external_React_default().createElement("span", {
+    className: "promo-card-body",
+    "data-l10n-id": "newtab-promo-card-body"
+  }), /*#__PURE__*/external_React_default().createElement("span", {
+    className: "promo-card-cta-wrapper"
+  }, /*#__PURE__*/external_React_default().createElement("a", {
+    href: "https://support.mozilla.org/kb/sponsor-privacy",
+    "data-l10n-id": "newtab-promo-card-cta",
+    target: "_blank",
+    rel: "noreferrer",
+    onClick: onCtaClick
+  }))));
+};
+
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/AdBanner/AdBanner.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 
 
 
@@ -5037,6 +5067,8 @@ const AdBanner_PREF_CONTEXTUAL_ADS = "discoverystream.sections.contextualAds.ena
 const PREF_USER_INFERRED_PERSONALIZATION = "discoverystream.sections.personalization.inferred.user.enabled";
 const PREF_SYSTEM_INFERRED_PERSONALIZATION = "discoverystream.sections.personalization.inferred.enabled";
 const PREF_REPORT_ADS_ENABLED = "discoverystream.reportAds.enabled";
+const PREF_PROMOCARD_ENABLED = "discoverystream.promoCard.enabled";
+const PREF_PROMOCARD_VISIBLE = "discoverystream.promoCard.visible";
 
 /**
  * A new banner ad that appears between rows of stories: leaderboard or billboard size.
@@ -5077,6 +5109,7 @@ const AdBanner = ({
       height: undefined
     };
   };
+  const promoCardEnabled = spoc.format === "billboard" && prefs[PREF_PROMOCARD_ENABLED] && prefs[PREF_PROMOCARD_VISIBLE];
   const sectionsEnabled = prefs[AdBanner_PREF_SECTIONS_ENABLED];
   const ohttpEnabled = prefs[AdBanner_PREF_OHTTP_UNIFIED_ADS];
   const contextualAds = prefs[AdBanner_PREF_CONTEXTUAL_ADS];
@@ -5084,7 +5117,7 @@ const AdBanner = ({
   const showAdReporting = prefs[PREF_REPORT_ADS_ENABLED];
   const ohttpImagesEnabled = prefs.ohttpImagesConfig?.enabled;
   const [menuActive, setMenuActive] = (0,external_React_namespaceObject.useState)(false);
-  const adBannerWrapperClassName = `ad-banner-wrapper ${menuActive ? "active" : ""}`;
+  const adBannerWrapperClassName = `ad-banner-wrapper ${menuActive ? "active" : ""} ${promoCardEnabled ? "promo-card" : ""}`;
   const {
     width: imgWidth,
     height: imgHeight
@@ -5141,7 +5174,8 @@ const AdBanner = ({
     url: spoc.url,
     title: spoc.title || spoc.sponsor || spoc.alt_text,
     onLinkClick: onLinkClick,
-    dispatch: dispatch
+    dispatch: dispatch,
+    isSponsored: true
   }, /*#__PURE__*/external_React_default().createElement(ImpressionStats_ImpressionStats, {
     flightId: spoc.flight_id,
     rows: [{
@@ -5179,62 +5213,8 @@ const AdBanner = ({
     type: type,
     showAdReporting: showAdReporting,
     toggleActive: toggleActive
-  }))));
+  }))), promoCardEnabled && /*#__PURE__*/external_React_default().createElement(PromoCard, null));
 };
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/PromoCard/PromoCard.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-
-
-const PREF_PROMO_CARD_DISMISSED = "discoverystream.promoCard.visible";
-
-/**
- * The PromoCard component displays a promotional message.
- * It is used next to the AdBanner component in a four-column layout.
- */
-
-const PromoCard = () => {
-  const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
-  const onDismissClick = (0,external_React_namespaceObject.useCallback)(() => {
-    dispatch(actionCreators.SetPref(PREF_PROMO_CARD_DISMISSED, false));
-  }, [dispatch]);
-  return /*#__PURE__*/external_React_default().createElement("div", {
-    className: "promo-card-wrapper"
-  }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: "promo-card-dismiss-button"
-  }, /*#__PURE__*/external_React_default().createElement("moz-button", {
-    type: "icon ghost",
-    size: "small",
-    "data-l10n-id": "promo-card-dismiss-button",
-    iconsrc: "chrome://global/skin/icons/close.svg",
-    onClick: onDismissClick,
-    onKeyDown: onDismissClick
-  })), /*#__PURE__*/external_React_default().createElement("div", {
-    className: "promo-card-inner"
-  }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: "img-wrapper"
-  }, /*#__PURE__*/external_React_default().createElement("img", {
-    src: "chrome://newtab/content/data/content/assets/puzzle-fox.svg",
-    alt: ""
-  })), /*#__PURE__*/external_React_default().createElement("span", {
-    className: "promo-card-title",
-    "data-l10n-id": "newtab-promo-card-title"
-  }), /*#__PURE__*/external_React_default().createElement("span", {
-    className: "promo-card-body",
-    "data-l10n-id": "newtab-promo-card-body"
-  }), /*#__PURE__*/external_React_default().createElement("span", {
-    className: "promo-card-cta-wrapper"
-  }, /*#__PURE__*/external_React_default().createElement("a", {
-    href: "https://support.mozilla.org/kb/sponsor-privacy",
-    "data-l10n-id": "newtab-promo-card-cta",
-    target: "_blank",
-    rel: "noreferrer"
-  }))));
-};
-
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/TrendingSearches/TrendingSearches.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -5476,11 +5456,6 @@ function TrendingSearches() {
 
 
 
-
-
-
-
-const PREF_ONBOARDING_EXPERIENCE_DISMISSED = "discoverystream.onboardingExperience.dismissed";
 const PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
 const PREF_THUMBS_UP_DOWN_ENABLED = "discoverystream.thumbsUpDown.enabled";
 const PREF_TOPICS_ENABLED = "discoverystream.topicLabels.enabled";
@@ -5492,17 +5467,12 @@ const PREF_LIST_FEED_SELECTED_FEED = "discoverystream.contextualContent.selected
 const PREF_FAKESPOT_ENABLED = "discoverystream.contextualContent.fakespot.enabled";
 const PREF_BILLBOARD_ENABLED = "newtabAdSize.billboard";
 const PREF_BILLBOARD_POSITION = "newtabAdSize.billboard.position";
-const PREF_PROMOCARD_ENABLED = "discoverystream.promoCard.enabled";
-const PREF_PROMOCARD_VISIBLE = "discoverystream.promoCard.visible";
 const PREF_LEADERBOARD_ENABLED = "newtabAdSize.leaderboard";
 const PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
 const PREF_TRENDING_SEARCH = "trendingSearch.enabled";
 const PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled";
 const PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
 const PREF_TRENDING_SEARCH_VARIANT = "trendingSearch.variant";
-const CardGrid_INTERSECTION_RATIO = 0.5;
-const CardGrid_VISIBLE = "visible";
-const CardGrid_VISIBILITY_CHANGE_EVENT = "visibilitychange";
 const WIDGET_IDS = {
   TOPICS: 1
 };
@@ -5514,95 +5484,6 @@ function DSSubHeader({
   }, /*#__PURE__*/external_React_default().createElement("h3", {
     className: "section-title-container"
   }, children));
-}
-function OnboardingExperience({
-  dispatch,
-  windowObj = globalThis
-}) {
-  const [dismissed, setDismissed] = (0,external_React_namespaceObject.useState)(false);
-  const [maxHeight, setMaxHeight] = (0,external_React_namespaceObject.useState)(null);
-  const heightElement = (0,external_React_namespaceObject.useRef)(null);
-  const onDismissClick = (0,external_React_namespaceObject.useCallback)(() => {
-    // We update this as state and redux.
-    // The state update is for this newtab,
-    // and the redux update is for other tabs, offscreen tabs, and future tabs.
-    // We need the state update for this tab to support the transition.
-    setDismissed(true);
-    dispatch(actionCreators.SetPref(PREF_ONBOARDING_EXPERIENCE_DISMISSED, true));
-    dispatch(actionCreators.DiscoveryStreamUserEvent({
-      event: "BLOCK",
-      source: "POCKET_ONBOARDING"
-    }));
-  }, [dispatch]);
-  (0,external_React_namespaceObject.useEffect)(() => {
-    const resizeObserver = new windowObj.ResizeObserver(() => {
-      if (heightElement.current) {
-        setMaxHeight(heightElement.current.offsetHeight);
-      }
-    });
-    const options = {
-      threshold: CardGrid_INTERSECTION_RATIO
-    };
-    const intersectionObserver = new windowObj.IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= CardGrid_INTERSECTION_RATIO)) {
-        dispatch(actionCreators.DiscoveryStreamUserEvent({
-          event: "IMPRESSION",
-          source: "POCKET_ONBOARDING"
-        }));
-        // Once we have observed an impression, we can stop for this instance of newtab.
-        intersectionObserver.unobserve(heightElement.current);
-      }
-    }, options);
-    const onVisibilityChange = () => {
-      intersectionObserver.observe(heightElement.current);
-      windowObj.document.removeEventListener(CardGrid_VISIBILITY_CHANGE_EVENT, onVisibilityChange);
-    };
-    if (heightElement.current) {
-      resizeObserver.observe(heightElement.current);
-      // Check visibility or setup a visibility event to make
-      // sure we don't fire this for off screen pre loaded tabs.
-      if (windowObj.document.visibilityState === CardGrid_VISIBLE) {
-        intersectionObserver.observe(heightElement.current);
-      } else {
-        windowObj.document.addEventListener(CardGrid_VISIBILITY_CHANGE_EVENT, onVisibilityChange);
-      }
-      setMaxHeight(heightElement.current.offsetHeight);
-    }
-
-    // Return unmount callback to clean up observers.
-    return () => {
-      resizeObserver?.disconnect();
-      intersectionObserver?.disconnect();
-      windowObj.document.removeEventListener(CardGrid_VISIBILITY_CHANGE_EVENT, onVisibilityChange);
-    };
-  }, [dispatch, windowObj]);
-  const style = {};
-  if (dismissed) {
-    style.maxHeight = "0";
-    style.opacity = "0";
-    style.transition = "max-height 0.26s ease, opacity 0.26s ease";
-  } else if (maxHeight) {
-    style.maxHeight = `${maxHeight}px`;
-  }
-  return /*#__PURE__*/external_React_default().createElement("div", {
-    style: style
-  }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: "ds-onboarding-ref",
-    ref: heightElement
-  }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: "ds-onboarding-container"
-  }, /*#__PURE__*/external_React_default().createElement(DSDismiss, {
-    onDismissClick: onDismissClick,
-    extraClasses: `ds-onboarding`
-  }, /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("header", null, /*#__PURE__*/external_React_default().createElement("span", {
-    className: "icon icon-pocket"
-  }), /*#__PURE__*/external_React_default().createElement("span", {
-    "data-l10n-id": "newtab-pocket-onboarding-discover"
-  })), /*#__PURE__*/external_React_default().createElement("p", {
-    "data-l10n-id": "newtab-pocket-onboarding-cta"
-  })), /*#__PURE__*/external_React_default().createElement("div", {
-    className: "ds-onboarding-graphic"
-  })))));
 }
 
 // eslint-disable-next-line no-shadow
@@ -5634,144 +5515,21 @@ function CardGrid_IntersectionObserver({
     ref: intersectionElement
   }, children);
 }
-function RecentSavesContainer({
-  gridClassName = "",
-  dispatch,
-  windowObj = window,
-  items = 3,
-  source = "CARDGRID_RECENT_SAVES"
-}) {
-  const {
-    recentSavesData,
-    isUserLoggedIn,
-    experimentData: {
-      utmCampaign,
-      utmContent,
-      utmSource
-    }
-  } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.DiscoveryStream);
-  const [visible, setVisible] = (0,external_React_namespaceObject.useState)(false);
-  const onIntersecting = (0,external_React_namespaceObject.useCallback)(() => setVisible(true), []);
-  (0,external_React_namespaceObject.useEffect)(() => {
-    if (visible) {
-      dispatch(actionCreators.AlsoToMain({
-        type: actionTypes.DISCOVERY_STREAM_POCKET_STATE_INIT
-      }));
-    }
-  }, [visible, dispatch]);
-
-  // The user has not yet scrolled to this section,
-  // so wait before potentially requesting Pocket data.
-  if (!visible) {
-    return /*#__PURE__*/external_React_default().createElement(CardGrid_IntersectionObserver, {
-      windowObj: windowObj,
-      onIntersecting: onIntersecting
-    });
-  }
-
-  // Intersection observer has finished, but we're not yet logged in.
-  if (visible && !isUserLoggedIn) {
-    return null;
-  }
-  let queryParams = `?utm_source=${utmSource}`;
-  // We really only need to add these params to urls we own.
-  if (utmCampaign && utmContent) {
-    queryParams += `&utm_content=${utmContent}&utm_campaign=${utmCampaign}`;
-  }
-  function renderCard(rec, index) {
-    const url = new URL(rec.url);
-    const urlSearchParams = new URLSearchParams(queryParams);
-    if (rec?.id && !url.href.match(/getpocket\.com\/read/)) {
-      url.href = `https://getpocket.com/read/${rec.id}`;
-    }
-    for (let [key, val] of urlSearchParams.entries()) {
-      url.searchParams.set(key, val);
-    }
-    return /*#__PURE__*/external_React_default().createElement(DSCard, {
-      key: `dscard-${rec?.id || index}`,
-      id: rec.id,
-      pos: index,
-      type: source,
-      image_src: rec.image_src,
-      raw_image_src: rec.raw_image_src,
-      icon_src: rec.icon_src,
-      word_count: rec.word_count,
-      time_to_read: rec.time_to_read,
-      title: rec.title,
-      excerpt: rec.excerpt,
-      url: url.href,
-      source: rec.domain,
-      isRecentSave: true,
-      dispatch: dispatch
-    });
-  }
-  function onMyListClicked() {
-    dispatch(actionCreators.DiscoveryStreamUserEvent({
-      event: "CLICK",
-      source: `${source}_VIEW_LIST`
-    }));
-  }
-  const recentSavesCards = [];
-  // We fill the cards with a for loop over an inline map because
-  // we want empty placeholders if there are not enough cards.
-  for (let index = 0; index < items; index++) {
-    const recentSave = recentSavesData[index];
-    if (!recentSave) {
-      recentSavesCards.push(/*#__PURE__*/external_React_default().createElement(PlaceholderDSCard, {
-        key: `dscard-${index}`
-      }));
-    } else {
-      recentSavesCards.push(renderCard({
-        id: recentSave.id,
-        image_src: recentSave.top_image_url,
-        raw_image_src: recentSave.top_image_url,
-        word_count: recentSave.word_count,
-        time_to_read: recentSave.time_to_read,
-        title: recentSave.resolved_title || recentSave.given_title,
-        url: recentSave.resolved_url || recentSave.given_url,
-        domain: recentSave.domain_metadata?.name,
-        excerpt: recentSave.excerpt
-      }, index));
-    }
-  }
-
-  // We are visible and logged in.
-  return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement(DSSubHeader, null, /*#__PURE__*/external_React_default().createElement("span", {
-    className: "section-title"
-  }, /*#__PURE__*/external_React_default().createElement(FluentOrText, {
-    message: "Recently Saved to your List"
-  })), /*#__PURE__*/external_React_default().createElement(SafeAnchor, {
-    onLinkClick: onMyListClicked,
-    className: "section-sub-link",
-    url: `https://getpocket.com/a${queryParams}`
-  }, /*#__PURE__*/external_React_default().createElement(FluentOrText, {
-    message: "View My List"
-  }))), /*#__PURE__*/external_React_default().createElement("div", {
-    className: `ds-card-grid-recent-saves ${gridClassName}`
-  }, recentSavesCards));
-}
 class _CardGrid extends (external_React_default()).PureComponent {
   // eslint-disable-next-line max-statements
   renderCards() {
     const prefs = this.props.Prefs.values;
     const {
       items,
-      fourCardLayout,
-      essentialReadsHeader,
-      editorsPicksHeader,
-      onboardingExperience,
       ctaButtonSponsors,
       ctaButtonVariant,
       spocMessageVariant,
       widgets,
-      recentSavesEnabled,
       DiscoveryStream
     } = this.props;
     const {
       topicsLoading
     } = DiscoveryStream;
-    const showRecentSaves = prefs.showRecentSaves && recentSavesEnabled;
-    const isOnboardingExperienceDismissed = prefs[PREF_ONBOARDING_EXPERIENCE_DISMISSED];
     const mayHaveSectionsCards = prefs[PREF_SECTIONS_CARDS_ENABLED];
     const mayHaveThumbsUpDown = prefs[PREF_THUMBS_UP_DOWN_ENABLED];
     const showTopics = prefs[PREF_TOPICS_ENABLED];
@@ -5781,7 +5539,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
     const listFeedEnabled = prefs[PREF_LIST_FEED_ENABLED];
     const listFeedSelectedFeed = prefs[PREF_LIST_FEED_SELECTED_FEED];
     const billboardEnabled = prefs[PREF_BILLBOARD_ENABLED];
-    const promoCardEnabled = prefs[PREF_PROMOCARD_ENABLED] && prefs[PREF_PROMOCARD_VISIBLE];
     const leaderboardEnabled = prefs[PREF_LEADERBOARD_ENABLED];
     const trendingEnabled = prefs[PREF_TRENDING_SEARCH] && prefs[PREF_TRENDING_SEARCH_SYSTEM] && prefs[PREF_SEARCH_ENGINE]?.toLowerCase() === "google";
     const trendingVariant = prefs[PREF_TRENDING_SEARCH_VARIANT];
@@ -5789,8 +5546,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
     // filter out recs that should be in ListFeed
     const recs = this.props.data.recommendations.filter(item => !item.feedName).slice(0, items);
     const cards = [];
-    let essentialReadsCards = [];
-    let editorsPicksCards = [];
     for (let index = 0; index < items; index++) {
       const rec = recs[index];
       cards.push(topicsLoading || !rec || rec.placeholder || rec.flight_id && !spocsStartupCacheEnabled && this.props.App.isForStartupCache.DiscoveryStream ? /*#__PURE__*/external_React_default().createElement(PlaceholderDSCard, {
@@ -5825,7 +5580,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
         pocket_id: rec.pocket_id,
         context_type: rec.context_type,
         bookmarkGuid: rec.bookmarkGuid,
-        is_collection: this.props.is_collection,
         ctaButtonSponsors: ctaButtonSponsors,
         ctaButtonVariant: ctaButtonVariant,
         spocMessageVariant: spocMessageVariant,
@@ -5927,9 +5681,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
             row: row,
             prefs: prefs
           }));
-          if (promoCardEnabled) {
-            cards.splice(bannerIndex + 1, 0, /*#__PURE__*/external_React_default().createElement(PromoCard, null));
-          }
         };
         const getBannerIndex = () => {
           // Calculate the index for where the AdBanner should be added, depending on number of cards per row on the grid
@@ -5940,44 +5691,10 @@ class _CardGrid extends (external_React_default()).PureComponent {
         injectAdBanner(getBannerIndex());
       }
     }
-    let moreRecsHeader = "";
-    // For now this is English only.
-    if (showRecentSaves || essentialReadsHeader && editorsPicksHeader) {
-      let spliceAt = 6;
-      // For 4 card row layouts, second row is 8 cards, and regular it is 6 cards.
-      if (fourCardLayout) {
-        spliceAt = 8;
-      }
-      // If we have a custom header, ensure the more recs section also has a header.
-      moreRecsHeader = "More Recommendations";
-      // Put the first 2 rows into essentialReadsCards.
-      essentialReadsCards = [...cards.splice(0, spliceAt)];
-      // Put the rest into editorsPicksCards.
-      if (essentialReadsHeader && editorsPicksHeader) {
-        editorsPicksCards = [...cards.splice(0, cards.length)];
-      }
-    }
     const gridClassName = this.renderGridClassName();
-    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, !isOnboardingExperienceDismissed && onboardingExperience && /*#__PURE__*/external_React_default().createElement(OnboardingExperience, {
-      dispatch: this.props.dispatch
-    }), essentialReadsCards?.length > 0 && /*#__PURE__*/external_React_default().createElement("div", {
+    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, cards?.length > 0 && /*#__PURE__*/external_React_default().createElement("div", {
       className: gridClassName
-    }, essentialReadsCards), showRecentSaves && /*#__PURE__*/external_React_default().createElement(RecentSavesContainer, {
-      gridClassName: gridClassName,
-      dispatch: this.props.dispatch
-    }), editorsPicksCards?.length > 0 && /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement(DSSubHeader, null, /*#__PURE__*/external_React_default().createElement("span", {
-      className: "section-title"
-    }, /*#__PURE__*/external_React_default().createElement(FluentOrText, {
-      message: "Editor\u2019s Picks"
-    }))), /*#__PURE__*/external_React_default().createElement("div", {
-      className: gridClassName
-    }, editorsPicksCards)), cards?.length > 0 && /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, moreRecsHeader && /*#__PURE__*/external_React_default().createElement(DSSubHeader, null, /*#__PURE__*/external_React_default().createElement("span", {
-      className: "section-title"
-    }, /*#__PURE__*/external_React_default().createElement(FluentOrText, {
-      message: moreRecsHeader
-    }))), /*#__PURE__*/external_React_default().createElement("div", {
-      className: gridClassName
-    }, cards)));
+    }, cards));
   }
   renderListFeed(recommendations, selectedFeed) {
     const recs = recommendations.filter(item => item.feedName === selectedFeed);
@@ -6050,145 +5767,6 @@ const CardGrid = (0,external_ReactRedux_namespaceObject.connect)(state => ({
   App: state.App,
   DiscoveryStream: state.DiscoveryStream
 }))(_CardGrid);
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/CollectionCardGrid/CollectionCardGrid.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-
-
-
-
-class CollectionCardGrid extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.onDismissClick = this.onDismissClick.bind(this);
-    this.state = {
-      dismissed: false
-    };
-  }
-  onDismissClick() {
-    const {
-      data
-    } = this.props;
-    if (this.props.dispatch && data && data.spocs && data.spocs.length) {
-      this.setState({
-        dismissed: true
-      });
-      const pos = 0;
-      const source = this.props.type.toUpperCase();
-      // Grab the available items in the array to dismiss.
-      // This fires a ping for all items available, even if below the fold.
-      const spocsData = data.spocs.map(item => ({
-        url: item.url,
-        guid: item.id,
-        shim: item.shim,
-        flight_id: item.flightId
-      }));
-      const blockUrlOption = LinkMenuOptions.BlockUrls(spocsData, pos, source);
-      const {
-        action,
-        impression,
-        userEvent
-      } = blockUrlOption;
-      this.props.dispatch(action);
-      this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-        event: userEvent,
-        source,
-        action_position: pos
-      }));
-      if (impression) {
-        this.props.dispatch(impression);
-      }
-    }
-  }
-  render() {
-    const {
-      data,
-      dismissible,
-      pocket_button_enabled
-    } = this.props;
-    if (this.state.dismissed || !data || !data.spocs || !data.spocs[0] ||
-    // We only display complete collections.
-    data.spocs.length < 3) {
-      return null;
-    }
-    const {
-      spocs,
-      placement,
-      feed
-    } = this.props;
-    // spocs.data is spocs state data, and not an array of spocs.
-    const {
-      title,
-      context,
-      sponsored_by_override,
-      sponsor
-    } = spocs.data[placement.name] || {};
-    // Just in case of bad data, don't display a broken collection.
-    if (!title) {
-      return null;
-    }
-    let sponsoredByMessage = "";
-
-    // If override is not false or an empty string.
-    if (sponsored_by_override || sponsored_by_override === "") {
-      // We specifically want to display nothing if the server returns an empty string.
-      // So the server can turn off the label.
-      // This is to support the use cases where the sponsored context is displayed elsewhere.
-      sponsoredByMessage = sponsored_by_override;
-    } else if (sponsor) {
-      sponsoredByMessage = {
-        id: `newtab-label-sponsored-by`,
-        values: {
-          sponsor
-        }
-      };
-    } else if (context) {
-      sponsoredByMessage = context;
-    }
-
-    // Generally a card grid displays recs with spocs already injected.
-    // Normally it doesn't care which rec is a spoc and which isn't,
-    // it just displays content in a grid.
-    // For collections, we're only displaying a list of spocs.
-    // We don't need to tell the card grid that our list of cards are spocs,
-    // it shouldn't need to care. So we just pass our spocs along as recs.
-    // Think of it as injecting all rec positions with spocs.
-    // Consider maybe making recommendations in CardGrid use a more generic name.
-    const recsData = {
-      recommendations: data.spocs
-    };
-
-    // All cards inside of a collection card grid have a slightly different type.
-    // For the case of interactions to the card grid, we use the type "COLLECTIONCARDGRID".
-    // Example, you dismiss the whole collection, we use the type "COLLECTIONCARDGRID".
-    // For interactions inside the card grid, example, you dismiss a single card in the collection,
-    // we use the type "COLLECTIONCARDGRID_CARD".
-    const type = `${this.props.type}_card`;
-    const collectionGrid = /*#__PURE__*/external_React_default().createElement("div", {
-      className: "ds-collection-card-grid"
-    }, /*#__PURE__*/external_React_default().createElement(CardGrid, {
-      pocket_button_enabled: pocket_button_enabled,
-      title: title,
-      context: sponsoredByMessage,
-      data: recsData,
-      feed: feed,
-      type: type,
-      is_collection: true,
-      dispatch: this.props.dispatch,
-      items: this.props.items
-    }));
-    if (dismissible) {
-      return /*#__PURE__*/external_React_default().createElement(DSDismiss, {
-        onDismissClick: this.onDismissClick,
-        extraClasses: `ds-dismiss-ds-collection`
-      }, collectionGrid);
-    }
-    return collectionGrid;
-  }
-}
 ;// CONCATENATED MODULE: ./content-src/components/A11yLinkButton/A11yLinkButton.jsx
 function A11yLinkButton_extends() { return A11yLinkButton_extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, A11yLinkButton_extends.apply(null, arguments); }
 /* This Source Code Form is subject to the terms of the Mozilla Public
@@ -6452,117 +6030,6 @@ class DSMessage extends (external_React_default()).PureComponent {
     }, /*#__PURE__*/external_React_default().createElement(FluentOrText, {
       message: this.props.link_text
     }))));
-  }
-}
-;// CONCATENATED MODULE: ./content-src/components/ModalOverlay/ModalOverlay.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-function ModalOverlayWrapper({
-  // eslint-disable-next-line no-shadow
-  document = globalThis.document,
-  unstyled,
-  innerClassName,
-  onClose,
-  children,
-  headerId,
-  id
-}) {
-  const modalRef = (0,external_React_namespaceObject.useRef)(null);
-  let className = unstyled ? "" : "modalOverlayInner active";
-  if (innerClassName) {
-    className += ` ${innerClassName}`;
-  }
-
-  // The intended behaviour is to listen for an escape key
-  // but not for a click; see Bug 1582242
-  const onKeyDown = (0,external_React_namespaceObject.useCallback)(event => {
-    if (event.key === "Escape") {
-      onClose(event);
-    }
-  }, [onClose]);
-  (0,external_React_namespaceObject.useEffect)(() => {
-    document.addEventListener("keydown", onKeyDown);
-    document.body.classList.add("modal-open");
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.classList.remove("modal-open");
-    };
-  }, [document, onKeyDown]);
-  return /*#__PURE__*/external_React_default().createElement("div", {
-    className: "modalOverlayOuter active",
-    onKeyDown: onKeyDown,
-    role: "presentation"
-  }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: className,
-    "aria-labelledby": headerId,
-    id: id,
-    role: "dialog",
-    ref: modalRef
-  }, children));
-}
-
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSPrivacyModal/DSPrivacyModal.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-
-
-class DSPrivacyModal extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.closeModal = this.closeModal.bind(this);
-    this.onLearnLinkClick = this.onLearnLinkClick.bind(this);
-    this.onManageLinkClick = this.onManageLinkClick.bind(this);
-  }
-  onLearnLinkClick() {
-    this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-      event: "CLICK_PRIVACY_INFO",
-      source: "DS_PRIVACY_MODAL"
-    }));
-  }
-  onManageLinkClick() {
-    this.props.dispatch(actionCreators.OnlyToMain({
-      type: actionTypes.SETTINGS_OPEN
-    }));
-  }
-  closeModal() {
-    this.props.dispatch({
-      type: `HIDE_PRIVACY_INFO`,
-      data: {}
-    });
-  }
-  render() {
-    return /*#__PURE__*/external_React_default().createElement(ModalOverlayWrapper, {
-      onClose: this.closeModal,
-      innerClassName: "ds-privacy-modal"
-    }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "privacy-notice"
-    }, /*#__PURE__*/external_React_default().createElement("h3", {
-      "data-l10n-id": "newtab-privacy-modal-header"
-    }), /*#__PURE__*/external_React_default().createElement("p", {
-      "data-l10n-id": "newtab-privacy-modal-paragraph-2"
-    }), /*#__PURE__*/external_React_default().createElement("a", {
-      className: "modal-link modal-link-privacy",
-      "data-l10n-id": "newtab-privacy-modal-link",
-      onClick: this.onLearnLinkClick,
-      href: "https://support.mozilla.org/kb/pocket-recommendations-firefox-new-tab"
-    }), /*#__PURE__*/external_React_default().createElement("button", {
-      className: "modal-link modal-link-manage",
-      "data-l10n-id": "newtab-privacy-modal-button-manage",
-      onClick: this.onManageLinkClick
-    })), /*#__PURE__*/external_React_default().createElement("section", {
-      className: "actions"
-    }, /*#__PURE__*/external_React_default().createElement("button", {
-      className: "done",
-      type: "submit",
-      onClick: this.closeModal,
-      "data-l10n-id": "newtab-privacy-modal-button-done"
-    })));
   }
 }
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/ReportContent/ReportContent.jsx
@@ -6907,6 +6374,54 @@ class DSSignup extends (external_React_default()).PureComponent {
 DSSignup.defaultProps = {
   windowObj: window // Added to support unit tests
 };
+;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSDismiss/DSDismiss.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+class DSDismiss extends (external_React_default()).PureComponent {
+  constructor(props) {
+    super(props);
+    this.onDismissClick = this.onDismissClick.bind(this);
+    this.onHover = this.onHover.bind(this);
+    this.offHover = this.offHover.bind(this);
+    this.state = {
+      hovering: false
+    };
+  }
+  onDismissClick() {
+    if (this.props.onDismissClick) {
+      this.props.onDismissClick();
+    }
+  }
+  onHover() {
+    this.setState({
+      hovering: true
+    });
+  }
+  offHover() {
+    this.setState({
+      hovering: false
+    });
+  }
+  render() {
+    let className = `ds-dismiss
+      ${this.state.hovering ? ` hovering` : ``}
+      ${this.props.extraClasses ? ` ${this.props.extraClasses}` : ``}`;
+    return /*#__PURE__*/external_React_default().createElement("div", {
+      className: className
+    }, this.props.children, /*#__PURE__*/external_React_default().createElement("button", {
+      className: "ds-dismiss-button",
+      "data-l10n-id": "newtab-dismiss-button-tooltip",
+      onClick: this.onDismissClick,
+      onMouseEnter: this.onHover,
+      onMouseLeave: this.offHover
+    }, /*#__PURE__*/external_React_default().createElement("span", {
+      className: "icon icon-dismiss"
+    })));
+  }
+}
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSTextPromo/DSTextPromo.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -7701,6 +7216,56 @@ class MoreRecommendations extends (external_React_default()).PureComponent {
     return null;
   }
 }
+;// CONCATENATED MODULE: ./content-src/components/ModalOverlay/ModalOverlay.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function ModalOverlayWrapper({
+  // eslint-disable-next-line no-shadow
+  document = globalThis.document,
+  unstyled,
+  innerClassName,
+  onClose,
+  children,
+  headerId,
+  id
+}) {
+  const modalRef = (0,external_React_namespaceObject.useRef)(null);
+  let className = unstyled ? "" : "modalOverlayInner active";
+  if (innerClassName) {
+    className += ` ${innerClassName}`;
+  }
+
+  // The intended behaviour is to listen for an escape key
+  // but not for a click; see Bug 1582242
+  const onKeyDown = (0,external_React_namespaceObject.useCallback)(event => {
+    if (event.key === "Escape") {
+      onClose(event);
+    }
+  }, [onClose]);
+  (0,external_React_namespaceObject.useEffect)(() => {
+    document.addEventListener("keydown", onKeyDown);
+    document.body.classList.add("modal-open");
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.classList.remove("modal-open");
+    };
+  }, [document, onKeyDown]);
+  return /*#__PURE__*/external_React_default().createElement("div", {
+    className: "modalOverlayOuter active",
+    onKeyDown: onKeyDown,
+    role: "presentation"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: className,
+    "aria-labelledby": headerId,
+    id: id,
+    role: "dialog",
+    ref: modalRef
+  }, children));
+}
+
 ;// CONCATENATED MODULE: ./content-src/components/TopSites/SearchShortcutsForm.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -7934,8 +7499,6 @@ const TOP_SITES_MAX_SITES_PER_ROW = 8;
 
 
 
-const PREF_COLLECTION_DISMISSIBLE = "discoverystream.isCollectionDismissible";
-
 const dedupe = new Dedupe(site => site && site.url);
 
 const INITIAL_STATE = {
@@ -7998,8 +7561,6 @@ const INITIAL_STATE = {
     // This is a JSON-parsed copy of the discoverystream.config pref value.
     config: { enabled: false },
     layout: [],
-    isPrivacyInfoModalVisible: false,
-    isCollectionDismissible: false,
     topicsLoading: false,
     feeds: {
       data: {
@@ -8030,9 +7591,7 @@ const INITIAL_STATE = {
       utmCampaign: undefined,
       utmContent: undefined,
     },
-    recentSavesData: [],
     isUserLoggedIn: false,
-    recentSavesEnabled: false,
     showTopicSelection: false,
     report: {
       visible: false,
@@ -8668,11 +8227,6 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         ...prevState,
         layout: action.data.layout || [],
       };
-    case actionTypes.DISCOVERY_STREAM_COLLECTION_DISMISSIBLE_TOGGLE:
-      return {
-        ...prevState,
-        isCollectionDismissible: action.data.value,
-      };
     case actionTypes.DISCOVERY_STREAM_TOPICS_LOADING:
       return {
         ...prevState,
@@ -8681,7 +8235,6 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
     case actionTypes.DISCOVERY_STREAM_PREFS_SETUP:
       return {
         ...prevState,
-        recentSavesEnabled: action.data.recentSavesEnabled,
         pocketButtonEnabled: action.data.pocketButtonEnabled,
         hideDescriptions: action.data.hideDescriptions,
         compactImages: action.data.compactImages,
@@ -8691,25 +8244,14 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         descLines: action.data.descLines,
         readTime: action.data.readTime,
       };
-    case actionTypes.DISCOVERY_STREAM_RECENT_SAVES:
-      return {
-        ...prevState,
-        recentSavesData: action.data.recentSaves,
-      };
     case actionTypes.DISCOVERY_STREAM_POCKET_STATE_SET:
       return {
         ...prevState,
         isUserLoggedIn: action.data.isUserLoggedIn,
       };
-    case actionTypes.HIDE_PRIVACY_INFO:
-      return {
-        ...prevState,
-        isPrivacyInfoModalVisible: false,
-      };
     case actionTypes.SHOW_PRIVACY_INFO:
       return {
         ...prevState,
-        isPrivacyInfoModalVisible: true,
       };
     case actionTypes.DISCOVERY_STREAM_LAYOUT_RESET:
       return { ...INITIAL_STATE.DiscoveryStream, config: prevState.config };
@@ -8839,14 +8381,6 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         ? prevState
         : nextState(items => items.map(removeBookmarkInfo));
     }
-    case actionTypes.PREF_CHANGED:
-      if (action.data.name === PREF_COLLECTION_DISMISSIBLE) {
-        return {
-          ...prevState,
-          isCollectionDismissible: action.data.value,
-        };
-      }
-      return prevState;
     case actionTypes.TOPIC_SELECTION_SPOTLIGHT_OPEN:
       return {
         ...prevState,
@@ -9995,7 +9529,8 @@ class TopSite extends (external_React_default()).PureComponent {
             ctrlKey,
             metaKey,
             shiftKey
-          }
+          },
+          is_sponsored: !!this.props.link.sponsored_tile_id
         })
       }));
       if (this.props.link.type === SPOC_TYPE) {
@@ -11426,7 +10961,6 @@ const selectLayoutRender = ({ state = {}, prefs = {} }) => {
     "Navigation",
     "Widgets",
     "CardGrid",
-    "CollectionCardGrid",
     "HorizontalRule",
     "PrivacyLink",
   ];
@@ -11992,7 +11526,7 @@ const PersonalizedCard = ({
   }, messageData.content.ctaText), /*#__PURE__*/external_React_default().createElement(SafeAnchor, {
     className: "personalized-card-link",
     dispatch: dispatch,
-    url: "https://www.mozilla.org/en-US/privacy/firefox/#notice",
+    url: messageData.content.linkUrl || "https://support.mozilla.org/",
     onLinkClick: () => {
       handleClick("link-click");
     }
@@ -12067,7 +11601,6 @@ function FollowSectionButtonHighlight({
 
 
 
-
 // Prefs
 const CardSections_PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
 const PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED = "discoverystream.sections.cards.thumbsUpDown.enabled";
@@ -12080,8 +11613,6 @@ const PREF_INTEREST_PICKER_ENABLED = "discoverystream.sections.interestPicker.en
 const CardSections_PREF_VISIBLE_SECTIONS = "discoverystream.sections.interestPicker.visibleSections";
 const CardSections_PREF_BILLBOARD_ENABLED = "newtabAdSize.billboard";
 const CardSections_PREF_BILLBOARD_POSITION = "newtabAdSize.billboard.position";
-const CardSections_PREF_PROMOCARD_ENABLED = "discoverystream.promoCard.enabled";
-const CardSections_PREF_PROMOCARD_VISIBLE = "discoverystream.promoCard.visible";
 const CardSections_PREF_LEADERBOARD_ENABLED = "newtabAdSize.leaderboard";
 const CardSections_PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
 const PREF_REFINED_CARDS_ENABLED = "discoverystream.refinedCardsLayout.enabled";
@@ -12165,7 +11696,6 @@ function CardSection({
   dispatch,
   type,
   firstVisibleTimestamp,
-  is_collection,
   spocMessageVariant,
   ctaButtonVariant,
   ctaButtonSponsors,
@@ -12374,7 +11904,6 @@ function CardSection({
       showTopics: shouldShowLabels,
       selectedTopics: selectedTopics,
       availableTopics: availableTopics,
-      is_collection: is_collection,
       ctaButtonSponsors: ctaButtonSponsors,
       ctaButtonVariant: ctaButtonVariant,
       spocMessageVariant: spocMessageVariant,
@@ -12396,7 +11925,6 @@ function CardSections({
   dispatch,
   type,
   firstVisibleTimestamp,
-  is_collection,
   spocMessageVariant,
   ctaButtonVariant,
   ctaButtonSponsors
@@ -12442,7 +11970,6 @@ function CardSections({
     dispatch: dispatch,
     type: type,
     firstVisibleTimestamp: firstVisibleTimestamp,
-    is_collection: is_collection,
     spocMessageVariant: spocMessageVariant,
     ctaButtonVariant: ctaButtonVariant,
     ctaButtonSponsors: ctaButtonSponsors,
@@ -12452,7 +11979,6 @@ function CardSections({
   // Add a billboard/leaderboard IAB ad to the sectionsToRender array (if enabled/possible).
   const billboardEnabled = prefs[CardSections_PREF_BILLBOARD_ENABLED];
   const leaderboardEnabled = prefs[CardSections_PREF_LEADERBOARD_ENABLED];
-  const promoCardEnabled = prefs[CardSections_PREF_PROMOCARD_ENABLED] && prefs[CardSections_PREF_PROMOCARD_VISIBLE];
   if ((billboardEnabled || leaderboardEnabled) && spocs?.data?.newtab_spocs?.items) {
     const spocToRender = spocs.data.newtab_spocs.items.find(({
       format
@@ -12463,9 +11989,7 @@ function CardSections({
       const row = spocToRender.format === "leaderboard" ? prefs[CardSections_PREF_LEADERBOARD_POSITION] : prefs[CardSections_PREF_BILLBOARD_POSITION];
       sectionsToRender.splice(
       // Math.min is used here to ensure the given row stays within the bounds of the sectionsToRender array.
-      Math.min(sectionsToRender.length - 1, row), 0, /*#__PURE__*/external_React_default().createElement("div", {
-        className: "ad-banner-container"
-      }, /*#__PURE__*/external_React_default().createElement(AdBanner, {
+      Math.min(sectionsToRender.length - 1, row), 0, /*#__PURE__*/external_React_default().createElement(AdBanner, {
         spoc: spocToRender,
         key: `dscard-${spocToRender.id}`,
         dispatch: dispatch,
@@ -12473,7 +11997,7 @@ function CardSections({
         firstVisibleTimestamp: firstVisibleTimestamp,
         row: row,
         prefs: prefs
-      }), promoCardEnabled && /*#__PURE__*/external_React_default().createElement(PromoCard, null)));
+      }));
     }
   }
 
@@ -12541,9 +12065,11 @@ const USER_ACTION_TYPES = {
   TASK_DELETE: "task_delete",
   TASK_COMPLETE: "task_complete"
 };
+const PREF_WIDGETS_LISTS_MAX_LISTS = "widgets.lists.maxLists";
 function Lists({
   dispatch
 }) {
+  const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
   const {
     selected,
     lists
@@ -12915,6 +12441,13 @@ function Lists({
       }
     }));
   }
+
+  // Reset baseline only when switching lists
+  (0,external_React_namespaceObject.useEffect)(() => {
+    prevCompletedCount.current = selectedList?.completed?.length || 0;
+    // intentionally leaving out selectedList from dependency array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
   (0,external_React_namespaceObject.useEffect)(() => {
     if (selectedList) {
       const doneCount = selectedList.completed?.length || 0;
@@ -12925,10 +12458,16 @@ function Lists({
       }
       prevCompletedCount.current = doneCount;
     }
-  }, [selectedList, fireConfetti]);
+  }, [selectedList, fireConfetti, selected]);
   if (!lists) {
     return null;
   }
+
+  // Enforce maximum count limits to lists
+  const currentListsCount = Object.keys(lists).length;
+  // Ensure a minimum of 1, but allow higher values from prefs
+  const maxListsCount = Math.max(1, prefs[PREF_WIDGETS_LISTS_MAX_LISTS]);
+  const isAtMaxListsLimit = currentListsCount >= maxListsCount;
   return /*#__PURE__*/external_React_default().createElement("article", {
     className: "lists",
     ref: el => {
@@ -12950,8 +12489,8 @@ function Lists({
     key: key,
     value: key,
     label: list.label
-  })))), /*#__PURE__*/external_React_default().createElement("moz-badge", {
-    "data-l10n-id": "newtab-widget-lists-label-beta"
+  })))), !isEditing && /*#__PURE__*/external_React_default().createElement("moz-badge", {
+    "data-l10n-id": "newtab-widget-lists-label-new"
   }), /*#__PURE__*/external_React_default().createElement("moz-button", {
     className: "lists-panel-button",
     iconSrc: "chrome://global/skin/icons/more.svg",
@@ -12962,10 +12501,13 @@ function Lists({
   }, /*#__PURE__*/external_React_default().createElement("panel-item", {
     "data-l10n-id": "newtab-widget-lists-menu-edit",
     onClick: () => setIsEditing(true)
-  }), /*#__PURE__*/external_React_default().createElement("panel-item", {
+  }), /*#__PURE__*/external_React_default().createElement("panel-item", Lists_extends({}, isAtMaxListsLimit ? {
+    disabled: true
+  } : {}, {
     "data-l10n-id": "newtab-widget-lists-menu-create",
-    onClick: () => handleCreateNewList()
-  }), /*#__PURE__*/external_React_default().createElement("panel-item", {
+    onClick: () => handleCreateNewList(),
+    className: "create-list"
+  })), /*#__PURE__*/external_React_default().createElement("panel-item", {
     "data-l10n-id": "newtab-widget-lists-menu-delete",
     onClick: () => handleDeleteList()
   }), /*#__PURE__*/external_React_default().createElement("hr", null), /*#__PURE__*/external_React_default().createElement("panel-item", {
@@ -12987,7 +12529,7 @@ function Lists({
     onBlur: () => saveTask(),
     onChange: e => setNewTask(e.target.value),
     value: newTask,
-    placeholder: "Add a task",
+    "data-l10n-id": "newtab-widget-lists-input-add-an-item",
     className: "add-task-input",
     onKeyDown: handleKeyDown,
     type: "text",
@@ -13271,12 +12813,12 @@ const FocusTimer = ({
   // calculated value for the progress circle; 1 = 100%
   const [progress, setProgress] = (0,external_React_namespaceObject.useState)(0);
   const [progressVisible, setProgressVisible] = (0,external_React_namespaceObject.useState)(false);
-  const timerType = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget.timerType);
   const activeMinutesRef = (0,external_React_namespaceObject.useRef)(null);
   const activeSecondsRef = (0,external_React_namespaceObject.useRef)(null);
   const idleMinutesRef = (0,external_React_namespaceObject.useRef)(null);
   const idleSecondsRef = (0,external_React_namespaceObject.useRef)(null);
   const arcRef = (0,external_React_namespaceObject.useRef)(null);
+  const timerType = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget.timerType);
   const timerData = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget);
   const {
     duration,
@@ -13698,7 +13240,10 @@ const FocusTimer = ({
     iconsrc: "chrome://newtab/content/data/content/assets/arrow-clockwise-16.svg",
     "data-l10n-id": "newtab-widget-timer-reset",
     onClick: resetTimer
-  })))) : null;
+  }))), !showSystemNotifications && !timerData[timerType].isRunning && !progressVisible && /*#__PURE__*/external_React_default().createElement("p", {
+    className: "timer-notification-status",
+    "data-l10n-id": "newtab-widget-timer-notification-warning"
+  })) : null;
 };
 function EditableTimerFields({
   minutesRef,
@@ -13741,26 +13286,38 @@ const PREF_WIDGETS_TIMER_ENABLED = "widgets.focusTimer.enabled";
 const PREF_WIDGETS_SYSTEM_TIMER_ENABLED = "widgets.system.focusTimer.enabled";
 function Widgets() {
   const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
+  const listsState = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.ListsWidget);
+  const timerState = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget);
+  const timerType = timerState?.timerType;
   const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
   const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
   const nimbusTimerEnabled = prefs.widgetsConfig?.timerEnabled;
   const listsEnabled = (nimbusListsEnabled || prefs[PREF_WIDGETS_SYSTEM_LISTS_ENABLED]) && prefs[PREF_WIDGETS_LISTS_ENABLED];
   const timerEnabled = (nimbusTimerEnabled || prefs[PREF_WIDGETS_SYSTEM_TIMER_ENABLED]) && prefs[PREF_WIDGETS_TIMER_ENABLED];
+  const tasksCount = listsEnabled && listsState?.lists && listsState?.selected ? listsState.lists[listsState.selected]?.tasks?.length ?? 0 : 0;
+  const manyTasks = tasksCount >= 4;
+  const isTimerRunning = timerState?.[timerType].isRunning;
+  const showScrollMessage = manyTasks || isTimerRunning;
   return /*#__PURE__*/external_React_default().createElement("div", {
+    className: "widgets-wrapper"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-container"
   }, listsEnabled && /*#__PURE__*/external_React_default().createElement(Lists, {
     dispatch: dispatch
   }), timerEnabled && /*#__PURE__*/external_React_default().createElement(FocusTimer, {
     dispatch: dispatch
-  }));
+  })), showScrollMessage && /*#__PURE__*/external_React_default().createElement("div", {
+    className: "widgets-scroll-message fade-in",
+    "aria-live": "polite"
+  }, /*#__PURE__*/external_React_default().createElement("p", {
+    "data-l10n-id": "newtab-widget-keep-scrolling"
+  })));
 }
 
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamBase/DiscoveryStreamBase.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
 
 
 
@@ -13878,9 +13435,7 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
           subtitle: component.header && component.header.subtitle,
           link_text: component.header && component.header.link_text,
           link_url: component.header && component.header.link_url,
-          icon: component.header && component.header.icon,
-          essentialReadsHeader: component.essentialReadsHeader,
-          editorsPicksHeader: component.editorsPicksHeader
+          icon: component.header && component.header.icon
         });
       case "SectionTitle":
         return /*#__PURE__*/external_React_default().createElement(SectionTitle, {
@@ -13898,22 +13453,6 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
           newFooterSection: component.newFooterSection,
           privacyNoticeURL: component.properties.privacyNoticeURL
         });
-      case "CollectionCardGrid":
-        {
-          const {
-            DiscoveryStream
-          } = this.props;
-          return /*#__PURE__*/external_React_default().createElement(CollectionCardGrid, {
-            data: component.data,
-            feed: component.feed,
-            spocs: DiscoveryStream.spocs,
-            placement: component.placement,
-            type: component.type,
-            items: component.properties.items,
-            dismissible: this.props.DiscoveryStream.isCollectionDismissible,
-            dispatch: this.props.dispatch
-          });
-        }
       case "CardGrid":
         {
           const sectionsEnabled = this.props.Prefs.values["discoverystream.sections.enabled"];
@@ -13924,7 +13463,6 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
               dispatch: this.props.dispatch,
               type: component.type,
               firstVisibleTimestamp: this.props.firstVisibleTimestamp,
-              is_collection: true,
               ctaButtonSponsors: component.properties.ctaButtonSponsors,
               ctaButtonVariant: component.properties.ctaButtonVariant,
               spocMessageVariant: component.properties.spocMessageVariant
@@ -13942,13 +13480,9 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
             hideCardBackground: component.properties.hideCardBackground,
             fourCardLayout: component.properties.fourCardLayout,
             compactGrid: component.properties.compactGrid,
-            essentialReadsHeader: component.properties.essentialReadsHeader,
-            onboardingExperience: component.properties.onboardingExperience,
             ctaButtonSponsors: component.properties.ctaButtonSponsors,
             ctaButtonVariant: component.properties.ctaButtonVariant,
             spocMessageVariant: component.properties.spocMessageVariant,
-            editorsPicksHeader: component.properties.editorsPicksHeader,
-            recentSavesEnabled: this.props.DiscoveryStream.recentSavesEnabled,
             hideDescriptions: this.props.DiscoveryStream.hideDescriptions,
             firstVisibleTimestamp: this.props.firstVisibleTimestamp,
             spocPositions: component.spocs?.positions
@@ -14042,7 +13576,6 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
     // Extract TopSites to render before the rest and Message to use for header
     const topSites = extractComponent("TopSites");
     const widgets = extractComponent("Widgets");
-    const sponsoredCollection = extractComponent("CollectionCardGrid");
     const message = extractComponent("Message") || {
       header: {
         link_text: topStories.learnMore.link.message,
@@ -14059,24 +13592,10 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
     };
     let sectionTitle = message.header.title;
     let subTitle = "";
-
-    // If we're in one of these experiments, override the default message.
-    // For now this is English only.
-    if (message.essentialReadsHeader || message.editorsPicksHeader) {
-      learnMore = null;
-      subTitle = "Recommended By Pocket";
-      if (message.essentialReadsHeader) {
-        sectionTitle = "Today’s Essential Reads";
-      } else if (message.editorsPicksHeader) {
-        sectionTitle = "Editor’s Picks";
-      }
-    }
     const {
       DiscoveryStream
     } = this.props;
-    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, this.props.DiscoveryStream.isPrivacyInfoModalVisible && /*#__PURE__*/external_React_default().createElement(DSPrivacyModal, {
-      dispatch: this.props.dispatch
-    }), (reportAdsEnabled && spocsEnabled || sectionsEnabled) && /*#__PURE__*/external_React_default().createElement(ReportContent, {
+    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, (reportAdsEnabled && spocsEnabled || sectionsEnabled) && /*#__PURE__*/external_React_default().createElement(ReportContent, {
       spocs: DiscoveryStream.spocs
     }), topSites && this.renderLayout([{
       width: 12,
@@ -14086,9 +13605,6 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
       width: 12,
       components: [widgets],
       sectionType: "widgets"
-    }]), sponsoredCollection && this.renderLayout([{
-      width: 12,
-      components: [sponsoredCollection]
     }]), !!layoutRender.length && /*#__PURE__*/external_React_default().createElement(CollapsibleSection, {
       className: "ds-layout",
       collapsed: topStories.pref.collapsed,
@@ -14990,7 +14506,6 @@ class ContentSection extends (external_React_default()).PureComponent {
       enabledWidgets,
       pocketRegion,
       mayHaveInferredPersonalization,
-      mayHaveRecentSaves,
       mayHaveWeather,
       mayHaveTrendingSearch,
       mayHaveWidgets,
@@ -15009,7 +14524,6 @@ class ContentSection extends (external_React_default()).PureComponent {
       weatherEnabled,
       trendingSearchEnabled,
       showInferredPersonalizationEnabled,
-      showRecentSavesEnabled,
       topSitesRowsCount
     } = enabledSections;
     const {
@@ -15155,7 +14669,7 @@ class ContentSection extends (external_React_default()).PureComponent {
       "data-l10n-id": "newtab-custom-stories-toggle"
     }, /*#__PURE__*/external_React_default().createElement("div", {
       slot: "nested"
-    }, (mayHaveRecentSaves || mayHaveInferredPersonalization || mayHaveTopicSections) && /*#__PURE__*/external_React_default().createElement("div", {
+    }, (mayHaveInferredPersonalization || mayHaveTopicSections) && /*#__PURE__*/external_React_default().createElement("div", {
       className: "more-info-pocket-wrapper"
     }, /*#__PURE__*/external_React_default().createElement("div", {
       className: "more-information",
@@ -15177,23 +14691,7 @@ class ContentSection extends (external_React_default()).PureComponent {
       htmlFor: "inferred-personalization"
     }, "Recommendations inferred from your activity with the feed")), mayHaveTopicSections && /*#__PURE__*/external_React_default().createElement(SectionsMgmtPanel, {
       exitEventFired: exitEventFired
-    }), mayHaveRecentSaves && /*#__PURE__*/external_React_default().createElement("div", {
-      className: "check-wrapper",
-      role: "presentation"
-    }, /*#__PURE__*/external_React_default().createElement("input", {
-      id: "recent-saves-pocket",
-      className: "customize-menu-checkbox",
-      disabled: !pocketEnabled,
-      checked: showRecentSavesEnabled,
-      type: "checkbox",
-      onChange: this.onPreferenceSelect,
-      "data-preference": "showRecentSaves",
-      "data-eventSource": "POCKET_RECENT_SAVES"
-    }), /*#__PURE__*/external_React_default().createElement("label", {
-      className: "customize-menu-checkbox-label",
-      htmlFor: "recent-saves-pocket",
-      "data-l10n-id": "newtab-custom-pocket-show-recent-saves"
-    })))))))), /*#__PURE__*/external_React_default().createElement("span", {
+    }))))))), /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
     }), /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("button", {
@@ -15290,7 +14788,6 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       pocketRegion: this.props.pocketRegion,
       mayHaveTopicSections: this.props.mayHaveTopicSections,
       mayHaveInferredPersonalization: this.props.mayHaveInferredPersonalization,
-      mayHaveRecentSaves: this.props.DiscoveryStream.recentSavesEnabled,
       mayHaveWeather: this.props.mayHaveWeather,
       mayHaveTrendingSearch: this.props.mayHaveTrendingSearch,
       mayHaveWidgets: this.props.mayHaveWidgets,
@@ -17005,7 +16502,6 @@ class BaseContent extends (external_React_default()).PureComponent {
       topSitesEnabled: prefs["feeds.topsites"],
       pocketEnabled: prefs["feeds.section.topstories"],
       showInferredPersonalizationEnabled: prefs[Base_PREF_INFERRED_PERSONALIZATION_USER],
-      showRecentSavesEnabled: prefs.showRecentSaves,
       topSitesRowsCount: prefs.topSitesRows,
       weatherEnabled: prefs.showWeather,
       trendingSearchEnabled: prefs["trendingSearch.enabled"]

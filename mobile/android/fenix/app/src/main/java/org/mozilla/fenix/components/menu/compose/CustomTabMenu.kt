@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -60,7 +59,6 @@ import org.mozilla.fenix.theme.Theme
  * @param onStopButtonClick Invoked when the user clicks on the stop button.
  * @param onShareButtonClick Invoked when the user clicks on the share button.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun CustomTabMenu(
@@ -118,7 +116,7 @@ internal fun CustomTabMenu(
                 menuItemState = if (isPdf) MenuItemState.DISABLED else MenuItemState.ACTIVE
             } else {
                 badgeText = stringResource(id = R.string.browser_feature_desktop_site_off)
-                badgeBackgroundColor = FirefoxTheme.colors.layerSearch
+                badgeBackgroundColor = FirefoxTheme.colors.layer2
                 menuItemState = if (isPdf) MenuItemState.DISABLED else MenuItemState.ENABLED
             }
 

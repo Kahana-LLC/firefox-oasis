@@ -528,12 +528,9 @@ void nsHttpChannel::ReleaseMainThreadOnlyReferences() {
 
 nsresult nsHttpChannel::Init(nsIURI* uri, uint32_t caps, nsProxyInfo* proxyInfo,
                              uint32_t proxyResolveFlags, nsIURI* proxyURI,
-                             uint64_t channelId,
-                             ExtContentPolicyType aContentPolicyType,
-                             nsILoadInfo* aLoadInfo) {
-  nsresult rv =
-      HttpBaseChannel::Init(uri, caps, proxyInfo, proxyResolveFlags, proxyURI,
-                            channelId, aContentPolicyType, aLoadInfo);
+                             uint64_t channelId, nsILoadInfo* aLoadInfo) {
+  nsresult rv = HttpBaseChannel::Init(uri, caps, proxyInfo, proxyResolveFlags,
+                                      proxyURI, channelId, aLoadInfo);
   if (NS_FAILED(rv)) return rv;
 
   LOG1(("nsHttpChannel::Init [this=%p]\n", this));
@@ -4527,6 +4524,12 @@ nsresult nsHttpChannel::OpenCacheEntryInternal(bool isHttps) {
   mCacheQueueSizeWhenOpen =
       CacheStorageService::CacheQueueSize(mCacheOpenWithPriority);
 
+  // If the browser is set to offline, or it doesn't have any active network
+  // interfaces then don't race, as it's unlikely the network would win :)
+  if (NS_IsOffline()) {
+    maybeRCWN = false;
+  }
+
   if ((mNetworkTriggerDelay || StaticPrefs::network_http_rcwn_enabled()) &&
       maybeRCWN && mAllowRCWN) {
     bool hasAltData = false;
@@ -8387,8 +8390,8 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
       mPeerAddr.ToAddrPortString(addrPort);
       nsILoadInfo::IPAddressSpace docAddressSpace =
           mPeerAddr.GetIpAddressSpace();
-      ExtContentPolicyType type = mLoadInfo->GetExternalContentPolicyType();
       mLoadInfo->SetIpAddressSpace(docAddressSpace);
+      ExtContentPolicyType type = mLoadInfo->GetExternalContentPolicyType();
       if (type == ExtContentPolicy::TYPE_DOCUMENT ||
           type == ExtContentPolicy::TYPE_SUBDOCUMENT) {
         RefPtr<mozilla::dom::BrowsingContext> bc;
@@ -8396,11 +8399,26 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
         if (bc) {
           bc->SetCurrentIPAddressSpace(docAddressSpace);
         }
+
+        if (mCacheEntry) {
+          // store the ipaddr information into the cache metadata entry
+          if (mPeerAddr.GetIpAddressSpace() !=
+              nsILoadInfo::IPAddressSpace::Unknown) {
+            uint16_t port;
+            mPeerAddr.GetPort(&port);
+            mCacheEntry->SetMetaDataElement("peer-ip-address",
+                                            mPeerAddr.ToString().get());
+            mCacheEntry->SetMetaDataElement("peer-port",
+                                            ToString(port).c_str());
+          }
+        }
       }
     }
 
     StoreResolvedByTRR(isTrr);
     StoreEchConfigUsed(echConfigUsed);
+  } else {  // !mTransaction
+    MaybeUpdateDocumentIPAddressSpaceFromCache();
   }
 
   if (!mCanceled && mTransaction &&
@@ -8488,6 +8506,39 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
 
   // No process change is needed, so continue on to ContinueOnStartRequest1.
   return ContinueOnStartRequest1(rv);
+}
+
+void nsHttpChannel::MaybeUpdateDocumentIPAddressSpaceFromCache() {
+  MOZ_ASSERT(mLoadInfo);
+  ExtContentPolicyType type = mLoadInfo->GetExternalContentPolicyType();
+
+  // Update the IPAddressSpace in the BrowsingContext only for main or sub
+  // document
+  if (type != ExtContentPolicy::TYPE_DOCUMENT &&
+      type != ExtContentPolicy::TYPE_SUBDOCUMENT) {
+    return;
+  }
+
+  RefPtr<mozilla::dom::BrowsingContext> bc;
+  mLoadInfo->GetTargetBrowsingContext(getter_AddRefs(bc));
+
+  if (!bc || !mCacheEntry) {
+    return;
+  }
+
+  nsAutoCString ipAddrStr, portStr;
+  mCacheEntry->GetMetaDataElement("peer-ip-address", getter_Copies(ipAddrStr));
+  mCacheEntry->GetMetaDataElement("peer-port", getter_Copies(portStr));
+
+  nsresult rv;
+  uint32_t port = portStr.ToInteger(&rv);
+
+  if (!ipAddrStr.IsEmpty() && NS_SUCCEEDED(rv)) {
+    NetAddr ipAddr;
+    rv = ipAddr.InitFromString(ipAddrStr, port);
+    NS_ENSURE_SUCCESS_VOID(rv);
+    bc->SetCurrentIPAddressSpace(ipAddr.GetIpAddressSpace());
+  }
 }
 
 nsresult nsHttpChannel::OnPermissionPromptResult(bool aGranted,
@@ -11545,14 +11596,12 @@ nsresult nsHttpChannel::RedirectToInterceptedChannel() {
       InterceptedHttpChannel::CreateForInterception(
           mChannelCreationTime, mChannelCreationTimestamp, mAsyncOpenTime);
 
-  ExtContentPolicyType type = mLoadInfo->GetExternalContentPolicyType();
-
   nsCOMPtr<nsILoadInfo> redirectLoadInfo =
       CloneLoadInfoForRedirect(mURI, nsIChannelEventSink::REDIRECT_INTERNAL);
 
   nsresult rv = intercepted->Init(
       mURI, mCaps, static_cast<nsProxyInfo*>(mProxyInfo.get()),
-      mProxyResolveFlags, mProxyURI, mChannelId, type, redirectLoadInfo);
+      mProxyResolveFlags, mProxyURI, mChannelId, redirectLoadInfo);
 
   rv = SetupReplacementChannel(mURI, intercepted, true,
                                nsIChannelEventSink::REDIRECT_INTERNAL);
