@@ -884,7 +884,7 @@ sync-signedout-account-signin3 =
 #
 # They can be moved within the sentence as needed to adapt
 # to your language, but should not be changed or translated.
-sync-mobile-promo = Download Firefox for <img data-l10n-name="android-icon"/> <a data-l10n-name="android-link">Android</a> or <img data-l10n-name="ios-icon"/> <a data-l10n-name="ios-link">iOS</a> to sync with your mobile device.
+sync-mobile-promo = Visit <a data-l10n-name="kahana-link">kahana.co</a> to learn more about mobile and AR/VR versions of Oasis coming soon.
 
 ## Firefox account - Signed in
 
@@ -935,7 +935,7 @@ prefs-sync-turn-on-syncing =
     .label = Turn on syncing…
     .accesskey = s
 
-prefs-sync-offer-setup-label2 = Synchronize your bookmarks, history, tabs, passwords, add-ons, and settings across all your devices.
+prefs-sync-offer-setup-label2 = Synchronize your bookmarks, history, tabs, passwords, add-ons, and settings across all your devices. Visit kahana.co to learn about mobile and AR/VR versions of Oasis coming soon.
 
 prefs-sync-now-button =
     .label = Sync Now
@@ -1001,7 +1001,7 @@ sync-engine-payment-methods2 =
 
 sync-engine-addons =
     .label = Add-ons
-    .tooltiptext = Extensions and themes for Firefox desktop
+    .tooltiptext = Extensions and themes for Oasis desktop
     .accesskey = A
 
 sync-engine-settings =
