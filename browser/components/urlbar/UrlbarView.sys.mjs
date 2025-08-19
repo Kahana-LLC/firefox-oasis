@@ -770,6 +770,16 @@ export class UrlbarView {
     if (!this.isOpen) {
       this.clear();
     }
+
+    // Set the actionmode atttribute if we are in actions search mode.
+    // We do this before updating the result rows so that there is no flicker
+    // after the actions are initially displayed.
+    if (
+      this.input.searchMode?.source == lazy.UrlbarUtils.RESULT_SOURCE.ACTIONS
+    ) {
+      this.#rows.toggleAttribute("actionmode", true);
+    }
+
     this.#queryUpdatedResults = true;
     this.#updateResults();
 
@@ -1582,7 +1592,7 @@ export class UrlbarView {
     return classes;
   }
 
-  #createRowContentForRichSuggestion(item) {
+  #createRowContentForRichSuggestion(item, result) {
     item._content.toggleAttribute("selectable", true);
 
     let favicon = this.#createElement("img");
@@ -1627,6 +1637,16 @@ export class UrlbarView {
     description.classList.add("urlbarView-row-body-description");
     body.appendChild(description);
     item._elements.set("description", description);
+
+    if (result.payload.descriptionLearnMoreTopic) {
+      let learnMoreLink = this.#createElement("a");
+      learnMoreLink.dataset.url = this.window.getHelpLinkURL(
+        result.payload.descriptionLearnMoreTopic
+      );
+      learnMoreLink.setAttribute("data-l10n-name", "learn-more-link");
+      learnMoreLink.toggleAttribute("selectable");
+      description.appendChild(learnMoreLink);
+    }
 
     let bottom = this.#createElement("div");
     bottom.className = "urlbarView-row-body-bottom";
@@ -1724,9 +1744,6 @@ export class UrlbarView {
       id: "urlbar-splitbutton-dropmarker",
     });
     dropmarker.setAttribute("role", "button");
-    let icon = this.#createElement("img");
-    icon.src = "chrome://global/skin/icons/arrow-down-12.svg";
-    dropmarker.appendChild(icon);
     container.appendChild(dropmarker);
 
     item._elements.get("buttons").appendChild(container);
@@ -1808,6 +1825,8 @@ export class UrlbarView {
           oldResult.payload.userContextId
         ) &&
         result.type != oldResultType) ||
+      !!result.payload.descriptionLearnMoreTopic !=
+        !!oldResult.payload.descriptionLearnMoreTopic ||
       result.testForceNewContent;
 
     if (needsNewContent) {
@@ -2332,11 +2351,6 @@ export class UrlbarView {
     } else {
       this.panel.setAttribute("noresults", "true");
     }
-
-    this.#rows.toggleAttribute(
-      "actionmode",
-      this.visibleResults[0]?.source == lazy.UrlbarUtils.RESULT_SOURCE.ACTIONS
-    );
   }
 
   /**
@@ -2556,6 +2570,20 @@ export class UrlbarView {
       row = next;
     }
     this.#updateIndices();
+
+    // Reset actionmode if we left the actions search mode.
+    // We do this after updating the result rows to ensure the attribute stays
+    // active the entire time the actions list is visible.
+
+    // this.input.searchMode updates early, so only checking it would cause a
+    // flicker, and the first visible result's source being an action doesn't
+    // necessarily imply we are in actions mode, therefore we should check both.
+    if (
+      this.input.searchMode?.source != lazy.UrlbarUtils.RESULT_SOURCE.ACTIONS &&
+      this.visibleResults[0]?.source != lazy.UrlbarUtils.RESULT_SOURCE.ACTIONS
+    ) {
+      this.#rows.toggleAttribute("actionmode", false);
+    }
 
     // Accept tentative exposures. This is analogous to unhiding the
     // hypothetical non-stale hidden rows of hidden-exposure results.

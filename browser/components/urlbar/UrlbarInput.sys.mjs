@@ -1108,13 +1108,8 @@ export class UrlbarInput {
       private: this.isPrivate,
     };
 
-    if (
-      resultUrl &&
-      result.type != lazy.UrlbarUtils.RESULT_TYPE.TIP &&
-      where == "current"
-    ) {
-      // Open non-tip help links in a new tab unless the user held a modifier.
-      // TODO (bug 1696232): Do this for tip help links, too.
+    if (resultUrl && where == "current") {
+      // Open help links in a new tab.
       where = "tab";
     }
 
@@ -3198,11 +3193,7 @@ export class UrlbarInput {
       result,
       element,
       searchString: this._lastSearchString,
-      selType:
-        element.dataset.command == "help" &&
-        result.type == lazy.UrlbarUtils.RESULT_TYPE.TIP
-          ? "tiphelp"
-          : element.dataset.command,
+      selType: element.dataset.command,
     });
 
     if (element.dataset.command == "manage") {
@@ -3221,9 +3212,8 @@ export class UrlbarInput {
     }
 
     let where = this._whereToOpen(event);
-    if (result.type != lazy.UrlbarUtils.RESULT_TYPE.TIP && where == "current") {
-      // Open non-tip help links in a new tab unless the user held a modifier.
-      // TODO (bug 1696232): Do this for tip help links, too.
+    if (element.dataset.command == "help" && where == "current") {
+      // Open help links in a new tab.
       where = "tab";
     }
 
@@ -4743,6 +4733,13 @@ export class UrlbarInput {
     this.controller.engagementEvent.handleBounceEventTrigger(
       event.target.linkedBrowser
     );
+
+    if (this.view.isOpen) {
+      // Refresh results when a tab is closed while the results view is open.
+      // This prevents switch-to-tab results from remaining in the results
+      // list after their tab is closed.
+      this.startQuery();
+    }
   }
 
   _on_beforeinput(event) {
@@ -5427,7 +5424,7 @@ class AddSearchEngineHelper {
     if (engine.icon) {
       elt.setAttribute("image", engine.icon);
     } else {
-      elt.removeAttribute("image", engine.icon);
+      elt.removeAttribute("image");
     }
     elt.addEventListener("command", this._onCommand.bind(this));
     return elt;
@@ -5443,7 +5440,7 @@ class AddSearchEngineHelper {
       "search-one-offs-add-engine-menu"
     );
     if (engine.icon) {
-      elt.setAttribute("image", engine.icon);
+      elt.setAttribute("image", encodeURI(engine.icon));
     }
     let popup = this.input.document.createXULElement("menupopup");
     elt.appendChild(popup);

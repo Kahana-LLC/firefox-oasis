@@ -379,7 +379,6 @@ export class DiscoveryStreamFeed {
       ac.AlsoToPreloaded({
         type: at.DISCOVERY_STREAM_PREFS_SETUP,
         data: {
-          recentSavesEnabled: nimbusConfig.recentSavesEnabled,
           pocketButtonEnabled,
           hideDescriptions,
           compactImages: nimbusConfig.compactImages,
@@ -460,33 +459,6 @@ export class DiscoveryStreamFeed {
         isUserLoggedIn,
       },
     });
-
-    // If we're not logged in, don't bother fetching recent saves, we're done.
-    if (isUserLoggedIn) {
-      let recentSaves = await lazy.pktApi.getRecentSavesCache();
-      if (recentSaves) {
-        // We have cache, so we can use those.
-        dispatch({
-          type: at.DISCOVERY_STREAM_RECENT_SAVES,
-          data: {
-            recentSaves,
-          },
-        });
-      } else {
-        // We don't have cache, so fetch fresh stories.
-        lazy.pktApi.getRecentSaves({
-          success(data) {
-            dispatch({
-              type: at.DISCOVERY_STREAM_RECENT_SAVES,
-              data: {
-                recentSaves: data,
-              },
-            });
-          },
-          error() {},
-        });
-      }
-    }
   }
 
   uninitPrefs() {
@@ -786,8 +758,6 @@ export class DiscoveryStreamFeed {
       this.store.getState().Prefs.values[PREF_WIDGET_LISTS_ENABLED];
 
     const pocketConfig = this.store.getState().Prefs.values?.pocketConfig || {};
-    const onboardingExperience =
-      this.isBff && pocketConfig.onboardingExperience;
 
     // The Unified Ads API does not support the spoc topsite placement.
     const unifiedAdsEnabled =
@@ -910,7 +880,6 @@ export class DiscoveryStreamFeed {
       fourCardLayout: pocketConfig.fourCardLayout,
       newFooterSection: pocketConfig.newFooterSection,
       compactGrid: pocketConfig.compactGrid,
-      onboardingExperience,
       // For now button variants are for experimentation and English only.
       ctaButtonSponsors: this.locale.startsWith("en-") ? ctaButtonSponsors : [],
       ctaButtonVariant: this.locale.startsWith("en-") ? ctaButtonVariant : "",
@@ -3083,7 +3052,6 @@ export class DiscoveryStreamFeed {
      `fourCardLayout` Enable four Pocket cards per row.
      `newFooterSection` Changes the layout of the topics section.
      `compactGrid` Reduce the number of pixels between the Pocket cards.
-     `onboardingExperience` Show new users some UI explaining Pocket above the Pocket section.
      `ctaButtonSponsors` An array of sponsors we want to show a cta button on the card for.
      `ctaButtonVariant` Sets the variant for the cta sponsor button.
      `spocMessageVariant` Sets the variant for the sponsor message dialog.
@@ -3104,7 +3072,6 @@ getHardcodedLayout = ({
   fourCardLayout = false,
   newFooterSection = false,
   compactGrid = false,
-  onboardingExperience = false,
   ctaButtonSponsors = [],
   ctaButtonVariant = "",
   spocMessageVariant = "",
@@ -3179,7 +3146,6 @@ getHardcodedLayout = ({
             hideCardBackground,
             fourCardLayout,
             compactGrid,
-            onboardingExperience,
             ctaButtonSponsors,
             ctaButtonVariant,
             spocMessageVariant,

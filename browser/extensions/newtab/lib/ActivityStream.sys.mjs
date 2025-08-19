@@ -1014,15 +1014,6 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
-    "discoverystream.onboardingExperience.dismissed",
-    {
-      title: "Allows the user to dismiss the new Pocket onboarding experience",
-      skipBroadcast: true,
-      alsoToPreloaded: true,
-      value: false,
-    },
-  ],
-  [
     "discoverystream.thumbsUpDown.enabled",
     {
       title: "Allow users to give thumbs up/down on recommended stories",
@@ -1164,13 +1155,6 @@ export const PREFS_CONFIG = new Map([
       title: "Enables topic labels for discovery stream",
       // pref is dynamic
       getValue: showTopicLabels,
-    },
-  ],
-  [
-    "showRecentSaves",
-    {
-      title: "Control whether a user wants recent saves visible on Newtab",
-      value: true,
     },
   ],
   [
