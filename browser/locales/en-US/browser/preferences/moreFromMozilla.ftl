@@ -4,40 +4,40 @@
 
 ## These strings are used in the about:preferences moreFromMozilla page
 
-more-from-moz-title = More from { -vendor-short-name }
+more-from-moz-title = Enterprise
 more-from-moz-category =
-  .tooltiptext =  More from { -vendor-short-name }
+  .tooltiptext =  Enterprise
 
-more-from-moz-subtitle = Check out other { -vendor-short-name } products that work to support a healthy internet.
+more-from-moz-subtitle = Explore enterprise solutions and upcoming Oasis products.
 
-more-from-moz-firefox-mobile-title = { -brand-product-name } Mobile
-more-from-moz-firefox-mobile-description = The mobile browser that puts your privacy first.
-more-from-moz-firefox-mobile-title-1 = { -brand-product-name } for Mobile
+more-from-moz-firefox-mobile-title = Oasis Mobile
+more-from-moz-firefox-mobile-description = Oasis mobile is coming soon. Visit the website to join the waitlist.
+more-from-moz-firefox-mobile-title-1 = Oasis Mobile
 
-more-from-moz-mozilla-vpn-title = { -mozilla-vpn-brand-name }
-more-from-moz-mozilla-vpn-description = Discover an added layer of anonymous browsing and protection.
+more-from-moz-mozilla-vpn-title = Contact Sales
+more-from-moz-mozilla-vpn-description = Connect with our sales team to learn about enterprise solutions.
 
-more-from-moz-qr-code-box-firefox-mobile-title = Download using your mobile device. Point your camera at the QR code. When a link appears, tap it.
-more-from-moz-qr-code-box-firefox-mobile-button = Send an email to your phone instead
+more-from-moz-qr-code-box-firefox-mobile-title = Oasis mobile is coming soon. Visit kahana.co to join the waitlist.
+more-from-moz-qr-code-box-firefox-mobile-button = Visit Website
 more-from-moz-qr-code-firefox-mobile-img =
-  .alt = QR code to download { -brand-product-name } Mobile
+  .alt = QR code to visit kahana.co for Oasis Mobile waitlist
 
-more-from-moz-button-mozilla-vpn-2 = Get VPN
+more-from-moz-button-mozilla-vpn-2 = Contact Sales
 
 more-from-moz-learn-more-link = Learn more
 
-## These strings are for the Firefox Relay card in about:preferences moreFromMozilla page
+## These strings are for the AR/VR Oasis card in about:preferences moreFromMozilla page
 
-more-from-moz-firefox-relay-title = { -relay-brand-name }
-more-from-moz-firefox-relay-description = Protect your inbox and your identity with free email masking.
-more-from-moz-firefox-relay-button = Get { -relay-brand-short-name }
+more-from-moz-firefox-relay-title = AR/VR Oasis
+more-from-moz-firefox-relay-description = AR/VR Oasis is coming soon. Visit the website for more information.
+more-from-moz-firefox-relay-button = Visit Website
 
-## These strings are for the Mozilla Monitor card in about:preferences moreFromMozilla page
+## These strings are for the Get a Demo card in about:preferences moreFromMozilla page
 
-more-from-moz-mozilla-monitor-title = { -mozmonitor-brand-name }
-more-from-moz-mozilla-monitor-us-description = Automatically take back your exposed personal info.
-more-from-moz-mozilla-monitor-global-description = Get alerts when your data has been in a breach.
-more-from-moz-mozilla-monitor-button = Get { -monitor-brand-short-name }
+more-from-moz-mozilla-monitor-title = Get a Demo
+more-from-moz-mozilla-monitor-us-description = Book a personalized demo to see how Oasis can transform your enterprise.
+more-from-moz-mozilla-monitor-global-description = Schedule a demo to see Oasis in action and learn how we'll help you deploy it securely across your organization.
+more-from-moz-mozilla-monitor-button = Schedule Demo
 
 ## These strings are for the Solo card in about:preferences moreFromMozilla page
 

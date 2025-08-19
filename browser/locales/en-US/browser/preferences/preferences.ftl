@@ -710,7 +710,7 @@ choose-bookmark =
     .label = Use Bookmark…
     .accesskey = B
 
-## Home Section - Firefox Home Content Customization
+## Home Section - Oasis Home Content Customization
 
 home-prefs-content-header2 = { -firefox-home-brand-name } Content
 home-prefs-content-description2 = Choose what content you want on your { -firefox-home-brand-name } screen.
@@ -725,7 +725,7 @@ home-prefs-shortcuts-by-option-sponsored =
 
 home-prefs-recommended-by-header-generic =
     .label = Recommended stories
-home-prefs-recommended-by-description-generic = Exceptional content curated by the { -brand-product-name } family
+home-prefs-recommended-by-description-generic = Exceptional content curated by the { -vendor-short-name } family
 
 ##
 
@@ -754,9 +754,9 @@ home-prefs-trending-search-description = Popular and frequently searched topics
 
 # "Support" here means to help sustain or contribute to something, especially through funding or sponsorship.
 home-prefs-support-firefox-header =
-    .label = Support { -brand-product-name }
+    .label = Support { -vendor-short-name }
 
-home-prefs-mission-message = Our sponsors support our mission to build a better web
+home-prefs-mission-message = { -vendor-short-name } sponsors support our mission to build a better web
 home-prefs-mission-message-learn-more-link = Find out how
 
 # Variables:
@@ -886,7 +886,7 @@ sync-signedout-account-signin3 =
 #
 # They can be moved within the sentence as needed to adapt
 # to your language, but should not be changed or translated.
-sync-mobile-promo = Download Firefox for <img data-l10n-name="android-icon"/> <a data-l10n-name="android-link">Android</a> or <img data-l10n-name="ios-icon"/> <a data-l10n-name="ios-link">iOS</a> to sync with your mobile device.
+sync-mobile-promo = Visit <a data-l10n-name="kahana-link">kahana.co</a> to learn more about mobile and AR/VR versions of Oasis coming soon.
 
 ## Firefox account - Signed in
 
@@ -937,7 +937,7 @@ prefs-sync-turn-on-syncing =
     .label = Turn on syncing…
     .accesskey = s
 
-prefs-sync-offer-setup-label2 = Synchronize your bookmarks, history, tabs, passwords, add-ons, and settings across all your devices.
+prefs-sync-offer-setup-label2 = Synchronize your bookmarks, history, tabs, passwords, add-ons, and settings across all your devices. Visit kahana.co to learn about mobile and AR/VR versions of Oasis coming soon.
 
 prefs-sync-now-button =
     .label = Sync Now
@@ -1003,7 +1003,7 @@ sync-engine-payment-methods2 =
 
 sync-engine-addons =
     .label = Add-ons
-    .tooltiptext = Extensions and themes for Firefox desktop
+    .tooltiptext = Extensions and themes for Oasis desktop
     .accesskey = A
 
 sync-engine-settings =
@@ -1510,29 +1510,29 @@ permissions-addon-exceptions =
 collection-header2 = { -brand-short-name } Data Collection and Use
     .searchkeywords = telemetry
 
-preferences-collection-description = We strive to provide you with choices and collect only the minimal data necessary to improve { -brand-product-name } for everyone.
+preferences-collection-description = We strive to provide you with choices and collect only the minimal data necessary to improve { -brand-short-name } for everyone.
 preferences-collection-privacy-notice = View Privacy Notice
-preferences-across-profiles = These settings apply to every { -brand-product-name } profile on this device.
+preferences-across-profiles = These settings apply to every { -brand-short-name } profile on this device.
 preferences-view-profiles = View all profiles
 
 collection-health-report-telemetry-disabled = You’re no longer allowing { -vendor-short-name } to capture technical and interaction data. All past data will be deleted within 30 days.
 collection-health-report-telemetry-disabled-link = Learn more
 
 collection-usage-ping =
-    .label = Send daily usage ping to { -vendor-short-name }
+    .label = Send daily usage ping to { -brand-short-name }
     .accesskey = u
-collection-usage-ping-description = This helps { -vendor-short-name } to estimate active users.
+collection-usage-ping-description = This helps { -brand-short-name } to estimate active users.
 
 collection-health-report2 =
-    .label = Send technical and interaction data to { -vendor-short-name }
+    .label = Send technical and interaction data to { -brand-short-name }
     .accesskey = r
 collection-health-report-link = Learn more
-collection-health-report-description = This helps us improve { -brand-product-name } features, performance, and stability.
+collection-health-report-description = This helps us improve { -brand-short-name } features, performance, and stability.
 
 collection-studies2 =
     .label = Install and run studies
 collection-studies-description = Try out features and ideas before they’re released to everyone.
-collection-studies-link = View { -brand-short-name } studies
+collection-studies-link = View Oasis studies
 
 addon-recommendations2 =
     .label = Allow personalized extension recommendations
@@ -1545,14 +1545,14 @@ collection-health-report-disabled2 = Data reporting is disabled for this build c
 collection-backlogged-crash-reports2 =
     .label = Automatically send crash reports
     .accesskey = c
-collection-backlogged-crash-reports-description = This helps { -vendor-short-name } diagnose and fix issues with the browser. Reports may include personal or sensitive data.
+collection-backlogged-crash-reports-description = This helps { -brand-short-name } diagnose and fix issues with the browser. Reports may include personal or sensitive data.
 
 privacy-segmentation-section-header = New features that enhance your browsing
 
 privacy-segmentation-section-description = When we offer features that use your data to give you a more personal experience:
 
 privacy-segmentation-radio-off =
-    .label = Use { -brand-product-name } recommendations
+    .label = Use { -brand-short-name } recommendations
 
 privacy-segmentation-radio-on =
     .label = Show detailed information

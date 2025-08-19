@@ -253,7 +253,9 @@ newtab-custom-row-selector =
         }
 newtab-custom-stories-toggle =
   .label = Recommended stories
+
   .description = Exceptional content curated by the { -brand-product-name } family
+
 newtab-custom-weather-toggle =
   .label = Weather
   .description = Today’s forecast at a glance
@@ -609,8 +611,8 @@ newtab-widget-keep-scrolling = Scroll for more
 
 # Strings for the default promo card
 
-newtab-promo-card-title = Support { -brand-product-name }
-newtab-promo-card-body = Our sponsors support our mission to build a better web
+newtab-promo-card-title = Support { -vendor-short-name }
+newtab-promo-card-body = { -vendor-short-name } sponsors support our mission to build a better web
 newtab-promo-card-cta = Learn more
 newtab-promo-card-dismiss-button =
     .title = Dismiss
