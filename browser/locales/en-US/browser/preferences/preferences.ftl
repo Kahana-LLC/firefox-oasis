@@ -721,7 +721,7 @@ home-prefs-shortcuts-by-option-sponsored =
 
 home-prefs-recommended-by-header-generic =
     .label = Recommended stories
-home-prefs-recommended-by-description-generic = Exceptional content curated by the { -brand-product-name } family
+home-prefs-recommended-by-description-generic = Exceptional content curated by the { -vendor-short-name } family
 
 ##
 
@@ -752,9 +752,9 @@ home-prefs-trending-search-description = Popular and frequently searched topics
 
 # "Support" here means to help sustain or contribute to something, especially through funding or sponsorship.
 home-prefs-support-firefox-header =
-    .label = Support { -brand-product-name }
+    .label = Support { -vendor-short-name }
 
-home-prefs-mission-message = Our sponsors support our mission to build a better web
+home-prefs-mission-message = { -vendor-short-name } sponsors support our mission to build a better web
 home-prefs-mission-message-learn-more-link = Find out how
 
 # Variables:
