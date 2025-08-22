@@ -11,6 +11,7 @@
 #include "InputData.h"
 #include "ScrollPositionUpdate.h"
 #include "mozilla/AlreadyAddRefed.h"
+#include "mozilla/RelativeTo.h"
 #include "mozilla/ScrollOrigin.h"
 #include "mozilla/layers/APZPublicUtils.h"
 #include "mozilla/layers/KeyboardScrollAction.h"
@@ -31,7 +32,7 @@ class SmoothScrollAnimation : public AsyncPanZoomAnimation {
   // The origin is ignored for SmoothMsd animations.
   static already_AddRefed<SmoothScrollAnimation> Create(
       AsyncPanZoomController& aApzc, ScrollAnimationKind aKind,
-      ScrollOrigin aOrigin);
+      ViewportType aViewportToScroll, ScrollOrigin aOrigin);
   // Create a SmoothScrollAnimation of kind Keyboard.
   static already_AddRefed<SmoothScrollAnimation> CreateForKeyboard(
       AsyncPanZoomController& aApzc, ScrollOrigin aOrigin);
@@ -50,6 +51,7 @@ class SmoothScrollAnimation : public AsyncPanZoomAnimation {
     return mTriggeredByScript == ScrollTriggeredByScript::Yes;
   }
   ScrollAnimationKind Kind() const { return mKind; }
+  ViewportType ViewportToScroll() const { return mViewportToScroll; }
   ScrollSnapTargetIds TakeSnapTargetIds() { return std::move(mSnapTargetIds); }
   ScrollOrigin GetScrollOrigin() const;
   static ScrollOrigin GetScrollOriginForAction(
@@ -70,16 +72,21 @@ class SmoothScrollAnimation : public AsyncPanZoomAnimation {
   }
 
   // If we need to perform an animation of the same kind and the specified
-  // origin, can we extend this existing animation?
-  bool CanExtend(ScrollOrigin aOrigin) const;
+  // parameters, can we extend this existing animation?
+  bool CanExtend(ViewportType aViewportToScroll, ScrollOrigin aOrigin) const;
 
  private:
   SmoothScrollAnimation(ScrollAnimationKind aKind,
-                        AsyncPanZoomController& aApzc, ScrollOrigin aOrigin);
+                        AsyncPanZoomController& aApzc,
+                        ViewportType aViewportToScroll, ScrollOrigin aOrigin);
 
   void Update(TimeStamp aTime, const nsSize& aCurrentVelocity);
+  CSSPoint GetViewportOffset(const FrameMetrics& aMetrics) const;
 
   ScrollAnimationKind mKind;
+  // Whether the animation is scroling the visual viewport or the layout
+  // viewport.
+  ViewportType mViewportToScroll;
   AsyncPanZoomController& mApzc;
   UniquePtr<ScrollAnimationPhysics> mAnimationPhysics;
   nsPoint mFinalDestination;
