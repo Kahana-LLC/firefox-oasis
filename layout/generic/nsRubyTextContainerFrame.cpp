@@ -162,7 +162,8 @@ void nsRubyTextContainerFrame::Reflow(nsPresContext* aPresContext,
   }
 }
 
-RubyMetrics nsRubyTextContainerFrame::RubyMetrics() const {
+RubyMetrics nsRubyTextContainerFrame::RubyMetrics(
+    float aRubyMetricsFactor) const {
   mozilla::RubyMetrics result;
   WritingMode containerWM = GetWritingMode();
   bool foundAnyFrames = false;
@@ -171,12 +172,18 @@ RubyMetrics nsRubyTextContainerFrame::RubyMetrics() const {
     if (wm.IsOrthogonalTo(containerWM) || f->IsPlaceholderFrame()) {
       continue;
     }
-    mozilla::RubyMetrics m = f->RubyMetrics();
+    mozilla::RubyMetrics m = f->RubyMetrics(aRubyMetricsFactor);
+    const LogicalMargin borderPadding = f->GetLogicalUsedBorderAndPadding(wm);
+    m.mAscent += borderPadding.BStart(wm);
+    m.mDescent += borderPadding.BEnd(wm);
+    const LogicalMargin margin = f->GetLogicalUsedMargin(wm);
+    m.mAscent += margin.BStart(wm);
+    m.mDescent += margin.BEnd(wm);
     result.CombineWith(m);
     foundAnyFrames = true;
   }
   if (!foundAnyFrames) {
-    result = nsIFrame::RubyMetrics();
+    result = nsIFrame::RubyMetrics(aRubyMetricsFactor);
   }
   return result;
 }

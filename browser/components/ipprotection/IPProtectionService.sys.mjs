@@ -11,6 +11,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
   GuardianClient: "resource:///modules/ipprotection/GuardianClient.sys.mjs",
   // eslint-disable-next-line mozilla/valid-lazy
   IPPChannelFilter: "resource:///modules/ipprotection/IPPChannelFilter.sys.mjs",
+  getDefaultLocation:
+    "resource:///modules/ipprotection/IPProtectionServerlist.sys.mjs",
+  selectServer:
+    "resource:///modules/ipprotection/IPProtectionServerlist.sys.mjs",
+  IPProtectionUsage:
+    "resource:///modules/ipprotection/IPProtectionUsage.sys.mjs",
   UIState: "resource://services-sync/UIState.sys.mjs",
   SpecialMessageActions:
     "resource://messaging-system/lib/SpecialMessageActions.sys.mjs",
@@ -18,10 +24,18 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
 });
 
+ChromeUtils.defineLazyGetter(lazy, "fxAccounts", () => {
+  return ChromeUtils.importESModule(
+    "resource://gre/modules/FxAccounts.sys.mjs"
+  ).getFxAccountsSingleton();
+});
+
 import { SIGNIN_DATA } from "chrome://browser/content/ipprotection/ipprotection-constants.mjs";
 
 const ENABLED_PREF = "browser.ipProtection.enabled";
 const VPN_ADDON_ID = "vpn@mozilla.com";
+
+const VPN_ID = "e6eb0d1e856335fc";
 
 /**
  * A singleton service that manages proxy integration and backend functionality.
@@ -37,6 +51,9 @@ const VPN_ADDON_ID = "vpn@mozilla.com";
  *  When user signs into their account
  * @fires event:"IPProtectionService:SignedOut"
  *  When user signs out of their account
+ * @fires event:"IPProtectionService:UpdateHasUpgraded"
+ *  When the hasUpgraded property is updated.
+ *  True if the user upgraded to a Mozilla VPN subscription.
  */
 class IPProtectionServiceSingleton extends EventTarget {
   static WIDGET_ID = "ipprotection-button";
@@ -47,16 +64,17 @@ class IPProtectionServiceSingleton extends EventTarget {
   deactivatedAt = null;
   sessionLength = 0;
   isSignedIn = null;
+  hasUpgraded = false;
   isEnrolled = null;
   isEligible = null;
   isEntitled = null;
   isSubscribed = null;
   hasProxyPass = null;
+  location = null;
 
   guardian = null;
   #entitlement = null;
   #pass = null;
-
   #inited = false;
   #hasWidget = false;
 
@@ -73,7 +91,7 @@ class IPProtectionServiceSingleton extends EventTarget {
   /**
    * Setups the IPProtectionService if enabled.
    */
-  init() {
+  async init() {
     if (this.#inited || !this.featureEnabled) {
       return;
     }
@@ -83,6 +101,7 @@ class IPProtectionServiceSingleton extends EventTarget {
     this.#addEligibilityListeners();
 
     this.#updateSignInStatus();
+    this.updateHasUpgradedStatus();
     this.#updateEligibility();
     this.#updateEnrollment();
 
@@ -103,6 +122,7 @@ class IPProtectionServiceSingleton extends EventTarget {
     if (this.isActive) {
       this.stop(false);
     }
+    this.usageObserver.stop();
 
     this.#removeEligibilityListeners();
 
@@ -145,8 +165,16 @@ class IPProtectionServiceSingleton extends EventTarget {
       this.hasProxyPass = true;
     }
 
+    this.location = await lazy.getDefaultLocation();
+    // eslint-disable-next-line no-unused-vars
+    const _server = await lazy.selectServer(this.location?.city);
+
     this.isActive = true;
     this.activatedAt = Cu.now();
+
+    this.usageObserver.start();
+    // TODO: call usageObeserver.addIsolationKey(connection.isolationKey);
+    // To make sure the proxied channels are tracked.
     this.dispatchEvent(
       new CustomEvent("IPProtectionService:Started", {
         bubbles: true,
@@ -247,6 +275,56 @@ class IPProtectionServiceSingleton extends EventTarget {
   }
 
   /**
+   * Updates the `hasUpgraded` property based on whether Mozilla VPN
+   * is linked to the user's Mozilla account or not.
+   *
+   * Dispatches "IPProtectionService:UpdateHasUpgraded".
+   *
+   * @param {boolean} useCached
+   *  True if we want our VPN link verification steps to use cached data.
+   * @param {boolean} skipCheck
+   *  True if we want to skip VPN link verification steps.
+   *
+   * @see {@link #checkIfVPNLinkedToAccount}
+   */
+  async updateHasUpgradedStatus(useCached = true, skipCheck = false) {
+    if (!skipCheck) {
+      this.hasUpgraded = await this.#checkIfVPNLinkedToAccount(useCached);
+    }
+
+    this.dispatchEvent(
+      new CustomEvent("IPProtectionService:UpdateHasUpgraded", {
+        bubbles: true,
+        composed: true,
+        detail: {
+          hasUpgraded: this.hasUpgraded,
+        },
+      })
+    );
+  }
+
+  /**
+   * Checks if the VPN ID is present in the list of OAuth clients attached to the current Mozilla account.
+   *
+   * @property {boolean} useCached
+   *  True if we want to use cached OAuth clients, or false for uncached OAuth clients.
+   *
+   * @returns {boolean}
+   *  True if the VPN ID was found.
+   * @see {@link fxAccounts.listAttachedOAuthClients}
+   */
+  async #checkIfVPNLinkedToAccount(useCached) {
+    const forceRefresh = !useCached;
+    let clients = await lazy.fxAccounts.listAttachedOAuthClients(forceRefresh);
+
+    if (clients.some(client => client.id === VPN_ID)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Adds an observer for the FxA sign-in state.
    */
   #addSignInStateObserver() {
@@ -330,6 +408,7 @@ class IPProtectionServiceSingleton extends EventTarget {
         })
       );
       await this.#updateEnrollment();
+      await this.updateHasUpgradedStatus();
     } else {
       this.dispatchEvent(
         new CustomEvent("IPProtectionService:SignedOut", {
@@ -338,6 +417,8 @@ class IPProtectionServiceSingleton extends EventTarget {
         })
       );
       this.isEnrolled = false;
+      this.hasUpgraded = false;
+      await this.updateHasUpgradedStatus(undefined, true /* skipCheck */);
     }
   }
 
@@ -472,6 +553,14 @@ class IPProtectionServiceSingleton extends EventTarget {
   async startLoginFlow(browser) {
     return lazy.SpecialMessageActions.fxaSignInFlow(SIGNIN_DATA, browser);
   }
+
+  get usageObserver() {
+    if (!this.#usageObserver) {
+      this.#usageObserver = new lazy.IPProtectionUsage();
+    }
+    return this.#usageObserver;
+  }
+  #usageObserver = null;
 }
 
 const IPProtectionService = new IPProtectionServiceSingleton();
