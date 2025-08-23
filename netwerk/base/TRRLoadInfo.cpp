@@ -199,16 +199,6 @@ TRRLoadInfo::SetIsThirdPartyContextToTopWindow(
 }
 
 NS_IMETHODIMP
-TRRLoadInfo::GetIsOn3PCBExceptionList(bool* aIsOn3PCBExceptionList) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsOn3PCBExceptionList(bool aIsOn3PCBExceptionList) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 TRRLoadInfo::GetCookiePolicy(uint32_t* aResult) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -310,32 +300,6 @@ TRRLoadInfo::GetLoadErrorPage(bool* aResult) {
 }
 
 NS_IMETHODIMP
-TRRLoadInfo::GetIsFormSubmission(bool* aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsFormSubmission(bool aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsGETRequest(bool* aResult) { return NS_ERROR_NOT_IMPLEMENTED; }
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsGETRequest(bool aValue) { return NS_ERROR_NOT_IMPLEMENTED; }
-
-NS_IMETHODIMP
-TRRLoadInfo::GetSendCSPViolationEvents(bool* aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetSendCSPViolationEvents(bool aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 TRRLoadInfo::GetExternalContentPolicyType(nsContentPolicyType* aResult) {
   // We have to use nsContentPolicyType because ExtContentPolicyType is not
   // visible from xpidl.
@@ -371,11 +335,6 @@ TRRLoadInfo::GetWorkerAssociatedBrowsingContextID(uint64_t* aResult) {
 
 NS_IMETHODIMP
 TRRLoadInfo::SetWorkerAssociatedBrowsingContextID(uint64_t aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetFrameBrowsingContextID(uint64_t* aResult) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 

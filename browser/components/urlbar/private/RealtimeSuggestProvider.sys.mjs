@@ -228,7 +228,7 @@ export class RealtimeSuggestProvider extends SuggestProvider {
       case "merino":
         return this.makeMerinoResult(queryContext, suggestion, searchString);
       case "rust":
-        return this.makeOptInResult(suggestion);
+        return this.makeOptInResult(queryContext, suggestion);
     }
     return null;
   }
@@ -260,7 +260,7 @@ export class RealtimeSuggestProvider extends SuggestProvider {
     );
   }
 
-  makeOptInResult(suggestion) {
+  makeOptInResult(queryContext, _suggestion) {
     let notNowTypes = lazy.UrlbarPrefs.get(
       "quicksuggest.realtimeOptIn.notNowTypes"
     );
@@ -280,15 +280,24 @@ export class RealtimeSuggestProvider extends SuggestProvider {
           },
         };
 
-    let result = { ...suggestion.data.result };
-    delete result.payload;
-
     return Object.assign(
       new lazy.UrlbarResult(
         lazy.UrlbarUtils.RESULT_TYPE.TIP,
         lazy.UrlbarUtils.RESULT_SOURCE.OTHER_LOCAL,
         {
-          ...suggestion.data.result.payload,
+          // This `type` is the tip type, required for `TIP` results.
+          type: "realtime_opt_in",
+          icon: "chrome://browser/skin/illustrations/market-opt-in.svg",
+          titleL10n: {
+            id: "urlbar-result-market-opt-in-title",
+            cacheable: true,
+          },
+          descriptionL10n: {
+            id: "urlbar-result-market-opt-in-description",
+            cacheable: true,
+            parseMarkup: true,
+          },
+          descriptionLearnMoreTopic: lazy.QuickSuggest.HELP_TOPIC,
           buttons: [
             {
               command: "opt_in",
@@ -296,6 +305,7 @@ export class RealtimeSuggestProvider extends SuggestProvider {
                 id: "urlbar-result-realtime-opt-in-allow",
                 cacheable: true,
               },
+              input: queryContext.searchString,
             },
             {
               ...splitButtonMain,
@@ -311,7 +321,10 @@ export class RealtimeSuggestProvider extends SuggestProvider {
           ],
         }
       ),
-      { ...result }
+      {
+        isBestMatch: true,
+        hideRowLabel: true,
+      }
     );
   }
 
@@ -380,13 +393,13 @@ export class RealtimeSuggestProvider extends SuggestProvider {
       case "manage": {
         // "help" and "manage" are handled by UrlbarInput, no need to do
         // anything here.
-        return;
+        break;
       }
       case "not_interested": {
         lazy.UrlbarPrefs.set(this.suggestPref, false);
         result.acknowledgeDismissalL10n = this.acknowledgeDismissalL10n;
         controller.removeResult(result);
-        return;
+        break;
       }
       case "show_less_frequently": {
         controller.view.acknowledgeFeedback(result);
@@ -398,16 +411,9 @@ export class RealtimeSuggestProvider extends SuggestProvider {
           this.minKeywordLengthPref,
           searchString.length + 1
         );
-        return;
+        break;
       }
     }
-
-    let query = details.element.getAttribute("query");
-    let [url] = lazy.UrlbarUtils.getSearchQueryUrl(
-      Services.search.defaultEngine,
-      query
-    );
-    controller.browserWindow.openTrustedLinkIn(url, "current");
   }
 
   onOptInEngagement(queryContext, controller, details, _searchString) {

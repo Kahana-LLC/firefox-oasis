@@ -24,18 +24,13 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
 });
 
-ChromeUtils.defineLazyGetter(lazy, "fxAccounts", () => {
-  return ChromeUtils.importESModule(
-    "resource://gre/modules/FxAccounts.sys.mjs"
-  ).getFxAccountsSingleton();
-});
-
-import { SIGNIN_DATA } from "chrome://browser/content/ipprotection/ipprotection-constants.mjs";
+import {
+  SIGNIN_DATA,
+  ERRORS,
+} from "chrome://browser/content/ipprotection/ipprotection-constants.mjs";
 
 const ENABLED_PREF = "browser.ipProtection.enabled";
 const VPN_ADDON_ID = "vpn@mozilla.com";
-
-const VPN_ID = "e6eb0d1e856335fc";
 
 /**
  * A singleton service that manages proxy integration and backend functionality.
@@ -54,6 +49,8 @@ const VPN_ID = "e6eb0d1e856335fc";
  * @fires event:"IPProtectionService:UpdateHasUpgraded"
  *  When the hasUpgraded property is updated.
  *  True if the user upgraded to a Mozilla VPN subscription.
+ * @fires event:"IPProtectionService:Error"
+ *  When there has been an error
  */
 class IPProtectionServiceSingleton extends EventTarget {
   static WIDGET_ID = "ipprotection-button";
@@ -64,19 +61,24 @@ class IPProtectionServiceSingleton extends EventTarget {
   deactivatedAt = null;
   sessionLength = 0;
   isSignedIn = null;
-  hasUpgraded = false;
   isEnrolled = null;
   isEligible = null;
   isEntitled = null;
-  isSubscribed = null;
+  hasUpgraded = null;
   hasProxyPass = null;
+  hasError = null;
+
   location = null;
+  /**@type {import("./IPPChannelFilter.sys.mjs").IPPChannelFilter | null} */
+  connection = null;
+  errors = [];
 
   guardian = null;
   #entitlement = null;
   #pass = null;
   #inited = false;
   #hasWidget = false;
+  #usageObserver = null;
 
   constructor() {
     super();
@@ -101,9 +103,8 @@ class IPProtectionServiceSingleton extends EventTarget {
     this.#addEligibilityListeners();
 
     this.#updateSignInStatus();
-    this.updateHasUpgradedStatus();
     this.#updateEligibility();
-    this.#updateEnrollment();
+    this.#updateEnrollment(true /* onlyCached */);
 
     this.#inited = true;
   }
@@ -130,11 +131,13 @@ class IPProtectionServiceSingleton extends EventTarget {
     this.isEnrolled = null;
     this.isEligible = null;
     this.isEntitled = null;
-    this.isSubscribed = null;
+    this.hasUpgraded = null;
     this.hasProxyPass = null;
+    this.hasError = null;
 
     this.#entitlement = null;
     this.#pass = null;
+    this.errors = [];
 
     this.#hasWidget = false;
     this.#inited = false;
@@ -143,17 +146,31 @@ class IPProtectionServiceSingleton extends EventTarget {
   /**
    * Start the proxy if the user is eligible.
    *
-   * TODO: Add logic to start the proxy connection.
-   *
    * @param {boolean} userAction
    * True if started by user action, false if system action
    */
   async start(userAction = true) {
-    let { isSignedIn, isEnrolled, isEntitled, isActive } = this;
+    // Retry enrollment if the previous attempt failed.
+    if (this.hasError && !this.isEnrolled) {
+      await this.#updateEnrollment();
+    }
 
-    if (!isSignedIn || !isEnrolled || !isEntitled || isActive) {
+    // Retry getting entitlement if the previous attempt failed.
+    if (this.hasError && !this.isEntitled) {
+      await this.#updateEntitlement();
+    }
+
+    if (
+      !this.isSignedIn ||
+      !this.isEnrolled ||
+      !this.isEntitled ||
+      this.isActive
+    ) {
+      this.#dispatchError(ERRORS.GENERIC);
       return;
     }
+    this.hasError = false;
+    this.errors = [];
 
     // If the current proxy pass is valid,
     // no need to re-authenticate.
@@ -166,15 +183,24 @@ class IPProtectionServiceSingleton extends EventTarget {
     }
 
     this.location = await lazy.getDefaultLocation();
-    // eslint-disable-next-line no-unused-vars
-    const _server = await lazy.selectServer(this.location?.city);
+    const server = await lazy.selectServer(this.location?.city);
+    if (this.connection?.active) {
+      this.connection.stop();
+    }
+
+    this.connection = lazy.IPPChannelFilter.create(
+      this.#pass.asBearerToken(),
+      server.hostname,
+      server.port
+    );
+    this.connection.start();
 
     this.isActive = true;
     this.activatedAt = Cu.now();
 
     this.usageObserver.start();
-    // TODO: call usageObeserver.addIsolationKey(connection.isolationKey);
-    // To make sure the proxied channels are tracked.
+    this.usageObserver.addIsolationKey(this.connection.isolationKey);
+
     this.dispatchEvent(
       new CustomEvent("IPProtectionService:Started", {
         bubbles: true,
@@ -188,12 +214,14 @@ class IPProtectionServiceSingleton extends EventTarget {
       userAction,
       enabled: true,
     });
+
+    if (userAction) {
+      this.reloadCurrentTab();
+    }
   }
 
   /**
    * Stops the proxy.
-   *
-   * TODO: Add logic to stop the proxy connection.
    *
    * @param {boolean} userAction
    * True if started by user action, false if system action
@@ -211,12 +239,28 @@ class IPProtectionServiceSingleton extends EventTarget {
     });
 
     this.activatedAt = null;
+    this.connection?.stop();
+    this.connection = null;
     this.dispatchEvent(
       new CustomEvent("IPProtectionService:Stopped", {
         bubbles: true,
         composed: true,
       })
     );
+
+    if (userAction) {
+      this.reloadCurrentTab();
+    }
+  }
+
+  /**
+   * Gets the current window and reloads the selected tab.
+   */
+  reloadCurrentTab() {
+    let win = Services.wm.getMostRecentBrowserWindow();
+    if (win) {
+      win.gBrowser.reloadTab(win.gBrowser.selectedTab);
+    }
   }
 
   /**
@@ -232,14 +276,20 @@ class IPProtectionServiceSingleton extends EventTarget {
   /**
    * Checks if the user has enrolled with FxA to use the proxy.
    *
+   * @param { boolean } onlyCached - if true only the cached clients will be checked.
    * @returns {Promise<boolean>}
    */
-  async #isEnrolled() {
+  async #isEnrolled(onlyCached) {
     if (!this.isSignedIn) {
       return false;
     }
 
-    let isEnrolled = await this.guardian.isLinkedToGuardian();
+    let isEnrolled;
+    try {
+      isEnrolled = await this.guardian.isLinkedToGuardian(onlyCached);
+    } catch (error) {
+      this.#dispatchError(error?.message);
+    }
 
     return isEnrolled;
   }
@@ -275,21 +325,20 @@ class IPProtectionServiceSingleton extends EventTarget {
   }
 
   /**
-   * Updates the `hasUpgraded` property based on whether Mozilla VPN
-   * is linked to the user's Mozilla account or not.
+   * Dispatches "IPProtectionService:UpdateHasUpgraded" to pass the
+   * `hasUpgraded` status. By default, pass the current value of
+   * `hasUpgraded`. Otherwise, if `refetchEntitlement` is true,
+   * get the most up to date entitlement status and set
+   * `hasUpgraded` based on whether the user's Mozilla account is
+   * linked to Mozilla VPN.
    *
-   * Dispatches "IPProtectionService:UpdateHasUpgraded".
-   *
-   * @param {boolean} useCached
-   *  True if we want our VPN link verification steps to use cached data.
-   * @param {boolean} skipCheck
-   *  True if we want to skip VPN link verification steps.
-   *
-   * @see {@link #checkIfVPNLinkedToAccount}
+   * @param {boolean} refetchEntitlement
+   *  True to refetch entitlement details.
+   *  Else use the current entitlement status.
    */
-  async updateHasUpgradedStatus(useCached = true, skipCheck = false) {
-    if (!skipCheck) {
-      this.hasUpgraded = await this.#checkIfVPNLinkedToAccount(useCached);
+  async updateHasUpgradedStatus(refetchEntitlement = false) {
+    if (refetchEntitlement) {
+      await this.#updateEntitlement();
     }
 
     this.dispatchEvent(
@@ -301,27 +350,6 @@ class IPProtectionServiceSingleton extends EventTarget {
         },
       })
     );
-  }
-
-  /**
-   * Checks if the VPN ID is present in the list of OAuth clients attached to the current Mozilla account.
-   *
-   * @property {boolean} useCached
-   *  True if we want to use cached OAuth clients, or false for uncached OAuth clients.
-   *
-   * @returns {boolean}
-   *  True if the VPN ID was found.
-   * @see {@link fxAccounts.listAttachedOAuthClients}
-   */
-  async #checkIfVPNLinkedToAccount(useCached) {
-    const forceRefresh = !useCached;
-    let clients = await lazy.fxAccounts.listAttachedOAuthClients(forceRefresh);
-
-    if (clients.some(client => client.id === VPN_ID)) {
-      return true;
-    }
-
-    return false;
   }
 
   /**
@@ -417,8 +445,11 @@ class IPProtectionServiceSingleton extends EventTarget {
         })
       );
       this.isEnrolled = false;
+      if (this.isActive) {
+        this.stop();
+      }
       this.hasUpgraded = false;
-      await this.updateHasUpgradedStatus(undefined, true /* skipCheck */);
+      this.updateHasUpgradedStatus();
     }
   }
 
@@ -457,10 +488,11 @@ class IPProtectionServiceSingleton extends EventTarget {
    * If the user is not enrolled but meets the other conditions to use
    * the VPN they will be enrolled now.
    *
+   * @param { boolean } onlyCached - if true only the cached clients will be checked.
    * @returns {Promise<void>}
    */
-  async #updateEnrollment() {
-    this.isEnrolled = await this.#isEnrolled();
+  async #updateEnrollment(onlyCached = false) {
+    this.isEnrolled = await this.#isEnrolled(onlyCached);
 
     if (this.isEnrolled && !this.#hasWidget) {
       lazy.IPProtection.init();
@@ -480,7 +512,7 @@ class IPProtectionServiceSingleton extends EventTarget {
       this.#entitlement = null;
       this.#pass = null;
       this.isEntitled = null;
-      this.isSubscribed = null;
+      this.hasUpgraded = null;
       this.hasProxyPass = null;
     }
   }
@@ -505,20 +537,29 @@ class IPProtectionServiceSingleton extends EventTarget {
       return null;
     }
 
-    let enrollment = await this.guardian.enroll();
+    let enrollment;
+    try {
+      enrollment = await this.guardian.enroll();
+    } catch (error) {
+      this.#dispatchError(error?.message);
+    }
+
     this.isEnrolled = enrollment?.ok;
+    if (enrollment?.error) {
+      this.#dispatchError(enrollment.error);
+    }
 
     return this.isEnrolled;
   }
 
   /**
-   * Update the entitlement and isEntitled + isSubscribed statues.
+   * Update the entitlement and hasUpgraded statues.
    */
   async #updateEntitlement() {
     this.#entitlement = await this.#getEntitlement();
     if (this.#entitlement) {
       this.isEntitled = !!this.#entitlement.uid;
-      this.isSubscribed = this.#entitlement.subscribed;
+      this.hasUpgraded = this.#entitlement.subscribed;
     }
   }
 
@@ -528,8 +569,9 @@ class IPProtectionServiceSingleton extends EventTarget {
    * @returns {Promise<Entitlement|null>} - The entitlement object or null if not entitled.
    */
   async #getEntitlement() {
-    let { error, status, entitlement } = await this.guardian.fetchUserInfo();
-    if (error || status != 200 || !entitlement) {
+    let { error, entitlement } = await this.guardian.fetchUserInfo();
+    if (error) {
+      this.#dispatchError(error);
       return null;
     }
 
@@ -544,6 +586,7 @@ class IPProtectionServiceSingleton extends EventTarget {
   async #getProxyPass() {
     let { error, status, pass } = await this.guardian.fetchProxyPass();
     if (error || !pass || status != 200) {
+      this.#dispatchError(ERRORS.GENERIC);
       return null;
     }
 
@@ -553,14 +596,31 @@ class IPProtectionServiceSingleton extends EventTarget {
   async startLoginFlow(browser) {
     return lazy.SpecialMessageActions.fxaSignInFlow(SIGNIN_DATA, browser);
   }
-
   get usageObserver() {
     if (!this.#usageObserver) {
       this.#usageObserver = new lazy.IPProtectionUsage();
     }
     return this.#usageObserver;
   }
-  #usageObserver = null;
+
+  /**
+   * Helper to dispatch error messages.
+   *
+   * @param {string} error - the error message to send.
+   */
+  #dispatchError(error = ERRORS.GENERIC) {
+    this.hasError = true;
+    this.errors.push(error);
+    this.dispatchEvent(
+      new CustomEvent("IPProtectionService:Error", {
+        bubbles: true,
+        composed: true,
+        detail: {
+          error,
+        },
+      })
+    );
+  }
 }
 
 const IPProtectionService = new IPProtectionServiceSingleton();

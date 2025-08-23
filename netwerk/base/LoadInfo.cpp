@@ -732,14 +732,9 @@ LoadInfo::LoadInfo(const LoadInfo& rhs)
 
           mWorkerAssociatedBrowsingContextID(
               rhs.mWorkerAssociatedBrowsingContextID),
-      mFrameBrowsingContextID(rhs.mFrameBrowsingContextID),
       mInitialSecurityCheckDone(rhs.mInitialSecurityCheckDone),
       mIsThirdPartyContext(rhs.mIsThirdPartyContext),
       mIsThirdPartyContextToTopWindow(rhs.mIsThirdPartyContextToTopWindow),
-      mIsOn3PCBExceptionList(rhs.mIsOn3PCBExceptionList),
-      mIsFormSubmission(rhs.mIsFormSubmission),
-      mIsGETRequest(rhs.mIsGETRequest),
-      mSendCSPViolationEvents(rhs.mSendCSPViolationEvents),
       mOriginAttributes(rhs.mOriginAttributes),
       mRedirectChainIncludingInternalRedirects(
           rhs.mRedirectChainIncludingInternalRedirects.Clone()),
@@ -812,11 +807,10 @@ LoadInfo::LoadInfo(
     LOADINFO_FOR_EACH_FIELD(DEFINE_PARAMETER, LOADINFO_DUMMY_SETTER)
 #undef DEFINE_PARAMETER
 
-        uint64_t aFrameBrowsingContextID,
-    bool aInitialSecurityCheckDone, bool aIsThirdPartyContext,
+        bool aInitialSecurityCheckDone,
+    bool aIsThirdPartyContext,
     const Maybe<bool>& aIsThirdPartyContextToTopWindow,
-    bool aIsOn3PCBExceptionList, bool aIsFormSubmission, bool aIsGETRequest,
-    bool aSendCSPViolationEvents, const OriginAttributes& aOriginAttributes,
+    const OriginAttributes& aOriginAttributes,
     RedirectHistoryArray&& aRedirectChainIncludingInternalRedirects,
     RedirectHistoryArray&& aRedirectChain,
     nsTArray<nsCOMPtr<nsIPrincipal>>&& aAncestorPrincipals,
@@ -876,14 +870,9 @@ LoadInfo::LoadInfo(
       LOADINFO_FOR_EACH_FIELD(DEFINE_INIT, LOADINFO_DUMMY_SETTER)
 #undef DEFINE_INIT
 
-          mFrameBrowsingContextID(aFrameBrowsingContextID),
-      mInitialSecurityCheckDone(aInitialSecurityCheckDone),
+          mInitialSecurityCheckDone(aInitialSecurityCheckDone),
       mIsThirdPartyContext(aIsThirdPartyContext),
       mIsThirdPartyContextToTopWindow(aIsThirdPartyContextToTopWindow),
-      mIsOn3PCBExceptionList(aIsOn3PCBExceptionList),
-      mIsFormSubmission(aIsFormSubmission),
-      mIsGETRequest(aIsGETRequest),
-      mSendCSPViolationEvents(aSendCSPViolationEvents),
       mOriginAttributes(aOriginAttributes),
       mRedirectChainIncludingInternalRedirects(
           std::move(aRedirectChainIncludingInternalRedirects)),
@@ -1249,18 +1238,6 @@ LoadInfo::SetIsThirdPartyContextToTopWindow(
   return NS_OK;
 }
 
-NS_IMETHODIMP
-LoadInfo::GetIsOn3PCBExceptionList(bool* aIsOn3PCBExceptionList) {
-  *aIsOn3PCBExceptionList = mIsOn3PCBExceptionList;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::SetIsOn3PCBExceptionList(bool aIsOn3PCBExceptionList) {
-  mIsOn3PCBExceptionList = aIsOn3PCBExceptionList;
-  return NS_OK;
-}
-
 static const uint32_t sCookiePolicyMask =
     nsILoadInfo::SEC_COOKIES_DEFAULT | nsILoadInfo::SEC_COOKIES_INCLUDE |
     nsILoadInfo::SEC_COOKIES_SAME_ORIGIN | nsILoadInfo::SEC_COOKIES_OMIT;
@@ -1478,42 +1455,6 @@ LoadInfo::GetLoadErrorPage(bool* aResult) {
 }
 
 NS_IMETHODIMP
-LoadInfo::GetIsFormSubmission(bool* aResult) {
-  *aResult = mIsFormSubmission;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::SetIsFormSubmission(bool aValue) {
-  mIsFormSubmission = aValue;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::GetIsGETRequest(bool* aResult) {
-  *aResult = mIsGETRequest;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::SetIsGETRequest(bool aValue) {
-  mIsGETRequest = aValue;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::GetSendCSPViolationEvents(bool* aResult) {
-  *aResult = mSendCSPViolationEvents;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::SetSendCSPViolationEvents(bool aValue) {
-  mSendCSPViolationEvents = aValue;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
 LoadInfo::GetExternalContentPolicyType(nsContentPolicyType* aResult) {
   // We have to use nsContentPolicyType because ExtContentPolicyType is not
   // visible from xpidl.
@@ -1553,12 +1494,6 @@ LoadInfo::GetWorkerAssociatedBrowsingContextID(uint64_t* aResult) {
 NS_IMETHODIMP
 LoadInfo::SetWorkerAssociatedBrowsingContextID(uint64_t aID) {
   mWorkerAssociatedBrowsingContextID = aID;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LoadInfo::GetFrameBrowsingContextID(uint64_t* aResult) {
-  *aResult = mFrameBrowsingContextID;
   return NS_OK;
 }
 

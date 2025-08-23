@@ -90,7 +90,21 @@ nsresult LoadInfoArgsToLoadInfo(const mozilla::net::LoadInfoArgs& aLoadInfoArgs,
                                                                                \
   GETTER(uint64_t, InnerWindowID, innerWindowID, 0)                            \
                                                                                \
-  GETTER(uint64_t, BrowsingContextID, browsingContextID, 0)
+  GETTER(uint64_t, BrowsingContextID, browsingContextID, 0)                    \
+                                                                               \
+  GETTER(uint64_t, FrameBrowsingContextID, frameBrowsingContextID, 0)          \
+                                                                               \
+  GETTER(bool, IsOn3PCBExceptionList, isOn3PCBExceptionList, false)            \
+  SETTER(bool, IsOn3PCBExceptionList)                                          \
+                                                                               \
+  GETTER(bool, IsFormSubmission, isFormSubmission, false)                      \
+  SETTER(bool, IsFormSubmission)                                               \
+                                                                               \
+  GETTER(bool, IsGETRequest, isGETRequest, true)                               \
+  SETTER(bool, IsGETRequest)                                                   \
+                                                                               \
+  GETTER(bool, SendCSPViolationEvents, sendCSPViolationEvents, true)           \
+  SETTER(bool, SendCSPViolationEvents)
 
 // Heads-up: LoadInfoToLoadInfoArgs still needs to be manually updated.
 
@@ -286,11 +300,9 @@ class LoadInfo final : public nsILoadInfo {
            LOADINFO_FOR_EACH_FIELD(DEFINE_PARAMETER, LOADINFO_DUMMY_SETTER)
 #undef DEFINE_PARAMETER
 
-               uint64_t aFrameBrowsingContextID,
-           bool aInitialSecurityCheckDone, bool aIsThirdPartyContext,
+               bool aInitialSecurityCheckDone,
+           bool aIsThirdPartyContext,
            const Maybe<bool>& aIsThirdPartyContextToTopWindow,
-           bool aIsOn3PCBExceptionList, bool aIsFormSubmission,
-           bool aIsGETRequest, bool aSendCSPViolationEvents,
            const OriginAttributes& aOriginAttributes,
            RedirectHistoryArray&& aRedirectChainIncludingInternalRedirects,
            RedirectHistoryArray&& aRedirectChain,
@@ -401,15 +413,10 @@ class LoadInfo final : public nsILoadInfo {
 #undef DEFINE_FIELD
 
   uint64_t mWorkerAssociatedBrowsingContextID = 0;
-  uint64_t mFrameBrowsingContextID = 0;
   bool mInitialSecurityCheckDone = false;
   // NB: TYPE_DOCUMENT implies !third-party.
   bool mIsThirdPartyContext = false;
   Maybe<bool> mIsThirdPartyContextToTopWindow;
-  bool mIsOn3PCBExceptionList = false;
-  bool mIsFormSubmission = false;
-  bool mIsGETRequest = true;
-  bool mSendCSPViolationEvents = true;
   OriginAttributes mOriginAttributes;
   RedirectHistoryArray mRedirectChainIncludingInternalRedirects;
   RedirectHistoryArray mRedirectChain;
