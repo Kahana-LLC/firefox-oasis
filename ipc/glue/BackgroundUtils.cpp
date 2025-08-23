@@ -880,25 +880,13 @@ nsresult LoadInfoArgsToLoadInfo(const LoadInfoArgs& loadInfoArgs,
       std::move(redirectChainIncludingInternalRedirects),
       std::move(redirectChain), std::move(ancestorPrincipals),
       ancestorBrowsingContextIDs, loadInfoArgs.corsUnsafeHeaders(),
-      loadInfoArgs.forcePreflight(), loadInfoArgs.isPreflight(),
-      loadInfoArgs.loadTriggeredFromExternal(),
-      loadInfoArgs.serviceWorkerTaintingSynthesized(),
-      loadInfoArgs.documentHasUserInteracted(),
-      loadInfoArgs.allowListFutureDocumentsCreatedFromThisRedirectChain(),
-      loadInfoArgs.needForCheckingAntiTrackingHeuristic(),
-      loadInfoArgs.cspNonce(), loadInfoArgs.integrityMetadata(),
-      loadInfoArgs.skipContentSniffing(), loadInfoArgs.httpsOnlyStatus(),
-      loadInfoArgs.hstsStatus(), loadInfoArgs.hasValidUserGestureActivation(),
-      loadInfoArgs.textDirectiveUserActivation(),
+      loadInfoArgs.loadTriggeredFromExternal(), loadInfoArgs.cspNonce(),
+      loadInfoArgs.integrityMetadata(),
       // This function is only called for moving LoadInfo across processes.
       // Same-document navigation won't cross process boundaries.
-      /* aIsSameDocumentNavigation */ false,
-      loadInfoArgs.allowDeprecatedSystemRequests(),
-      loadInfoArgs.isInDevToolsContext(), loadInfoArgs.parserCreatedScript(),
-      loadInfoArgs.requestMode(), loadInfoArgs.storagePermission(),
+      /* aIsSameDocumentNavigation */ false, loadInfoArgs.storagePermission(),
       loadInfoArgs.parentIPAddressSpace(), loadInfoArgs.ipAddressSpace(),
-      overriddenFingerprintingSettings, loadInfoArgs.isMetaRefresh(),
-      loadInfoArgs.requestBlockingReason(), loadingContext,
+      overriddenFingerprintingSettings, loadingContext,
       loadInfoArgs.loadingEmbedderPolicy(),
       loadInfoArgs.originTrialCoepCredentiallessEnabledForTopLevel(),
       loadInfoArgs.unstrippedURI(), interceptionInfo,
@@ -906,22 +894,6 @@ nsresult LoadInfoArgsToLoadInfo(const LoadInfoArgs& loadInfoArgs,
       loadInfoArgs.schemelessInput(), loadInfoArgs.httpsUpgradeTelemetry(),
       loadInfoArgs.isNewWindowTarget(),
       loadInfoArgs.userNavigationInvolvement());
-
-  if (loadInfoArgs.isFromProcessingFrameAttributes()) {
-    loadInfo->SetIsFromProcessingFrameAttributes();
-  }
-
-  if (loadInfoArgs.isMediaRequest()) {
-    loadInfo->SetIsMediaRequest(true);
-
-    if (loadInfoArgs.isMediaInitialRequest()) {
-      loadInfo->SetIsMediaInitialRequest(true);
-    }
-  }
-
-  if (loadInfoArgs.isFromObjectOrEmbed()) {
-    loadInfo->SetIsFromObjectOrEmbed(true);
-  }
 
   loadInfo.forget(outLoadInfo);
   return NS_OK;

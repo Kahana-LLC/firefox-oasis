@@ -254,14 +254,6 @@ const Maybe<RFPTargetSet>& TRRLoadInfo::GetOverriddenFingerprintingSettings() {
 void TRRLoadInfo::SetOverriddenFingerprintingSettings(RFPTargetSet aTargets) {}
 
 NS_IMETHODIMP
-TRRLoadInfo::GetIsMetaRefresh(bool* aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsMetaRefresh(bool aResult) { return NS_ERROR_NOT_IMPLEMENTED; }
-
-NS_IMETHODIMP
 TRRLoadInfo::GetForceInheritPrincipal(bool* aInheritPrincipal) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -447,28 +439,12 @@ const nsTArray<nsCString>& TRRLoadInfo::CorsUnsafeHeaders() {
 }
 
 NS_IMETHODIMP
-TRRLoadInfo::GetForcePreflight(bool* aForcePreflight) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsPreflight(bool* aIsPreflight) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 TRRLoadInfo::SetLoadTriggeredFromExternal(bool aLoadTriggeredFromExternal) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
 TRRLoadInfo::GetLoadTriggeredFromExternal(bool* aLoadTriggeredFromExternal) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetServiceWorkerTaintingSynthesized(
-    bool* aServiceWorkerTaintingSynthesized) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -483,38 +459,6 @@ TRRLoadInfo::MaybeIncreaseTainting(uint32_t aTainting) {
 }
 
 void TRRLoadInfo::SynthesizeServiceWorkerTainting(LoadTainting aTainting) {}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetDocumentHasUserInteracted(bool* aDocumentHasUserInteracted) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetDocumentHasUserInteracted(bool aDocumentHasUserInteracted) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetAllowListFutureDocumentsCreatedFromThisRedirectChain(
-    bool* aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetAllowListFutureDocumentsCreatedFromThisRedirectChain(
-    bool aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetNeedForCheckingAntiTrackingHeuristic(bool* aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetNeedForCheckingAntiTrackingHeuristic(bool aValue) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
 
 NS_IMETHODIMP
 TRRLoadInfo::GetCspNonce(nsAString& aCspNonce) {
@@ -537,53 +481,7 @@ TRRLoadInfo::SetIntegrityMetadata(const nsAString& aIntegrityMetadata) {
 }
 
 NS_IMETHODIMP
-TRRLoadInfo::GetSkipContentSniffing(bool* aSkipContentSniffing) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetSkipContentSniffing(bool aSkipContentSniffing) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 TRRLoadInfo::GetIsTopLevelLoad(bool* aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsFromProcessingFrameAttributes(
-    bool* aIsFromProcessingFrameAttributes) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsMediaRequest(bool aIsMediaRequest) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsMediaRequest(bool* aIsMediaRequest) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsMediaInitialRequest(bool aIsMediaInitialRequest) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsMediaInitialRequest(bool* aIsMediaInitialRequest) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsFromObjectOrEmbed(bool aIsFromObjectOrEmbed) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsFromObjectOrEmbed(bool* aIsFromObjectOrEmbed) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -607,15 +505,6 @@ TRRLoadInfo::GetChannelCreationOriginalURI(nsIURI** aURI) {
 
 NS_IMETHODIMP
 TRRLoadInfo::SetChannelCreationOriginalURI(nsIURI* aURI) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetRequestBlockingReason(uint32_t aReason) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-NS_IMETHODIMP
-TRRLoadInfo::GetRequestBlockingReason(uint32_t* aReason) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -690,49 +579,6 @@ void TRRLoadInfo::SetContainerFeaturePolicyInfo(
     const FeaturePolicyInfo& aContainerFeaturePolicyInfo) {}
 
 NS_IMETHODIMP
-TRRLoadInfo::GetHttpsOnlyStatus(uint32_t* aHttpsOnlyStatus) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetHttpsOnlyStatus(uint32_t aHttpsOnlyStatus) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetHstsStatus(bool* aHstsStatus) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetHstsStatus(bool aHstsStatus) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetHasValidUserGestureActivation(
-    bool* aHasValidUserGestureActivation) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetHasValidUserGestureActivation(
-    bool aHasValidUserGestureActivation) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetTextDirectiveUserActivation(
-    bool* aTextDirectiveUserActivation) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetTextDirectiveUserActivation(bool aTextDirectiveUserActivation) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 TRRLoadInfo::GetIsSameDocumentNavigation(bool* aTextDirectiveUserActivation) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -747,19 +593,6 @@ TRRLoadInfo::GetInternalContentPolicyType(nsContentPolicyType* aResult) {
   *aResult = mInternalContentPolicyType;
   return NS_OK;
 }
-
-NS_IMETHODIMP
-TRRLoadInfo::GetAllowDeprecatedSystemRequests(
-    bool* aAllowDeprecatedSystemRequests) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetAllowDeprecatedSystemRequests(
-    bool aAllowDeprecatedSystemRequests) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
 NS_IMETHODIMP
 TRRLoadInfo::GetIsUserTriggeredSave(bool* aIsUserTriggeredSave) {
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -767,36 +600,6 @@ TRRLoadInfo::GetIsUserTriggeredSave(bool* aIsUserTriggeredSave) {
 
 NS_IMETHODIMP
 TRRLoadInfo::SetIsUserTriggeredSave(bool aIsUserTriggeredSave) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetIsInDevToolsContext(bool* aIsInDevToolsContext) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetIsInDevToolsContext(bool aIsInDevToolsContext) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetParserCreatedScript(bool* aParserCreatedScript) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetParserCreatedScript(bool aParserCreatedScript) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::GetRequestMode(Maybe<RequestMode>* aRequestMode) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-TRRLoadInfo::SetRequestMode(Maybe<RequestMode> aRequestMode) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
