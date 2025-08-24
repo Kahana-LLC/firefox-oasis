@@ -1,0 +1,13 @@
+# Working release build configuration for Oasis Browser
+# Based on successful development build + minimal release modifications
+
+# Use custom branding (this works from our dev build)
+ac_add_options --with-branding=browser/branding/custom
+
+# Release optimizations (minimal set)
+ac_add_options --enable-release
+ac_add_options --disable-debug
+ac_add_options --enable-optimize
+
+# This should help prevent the "repo dir" crash for distribution
+export MOZ_INCLUDE_SOURCE_INFO=
