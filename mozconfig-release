@@ -10,16 +10,12 @@ ac_add_options --enable-release
 ac_add_options --disable-debug
 ac_add_options --enable-optimize
 
-# Packaging and distribution settings
-ac_add_options --enable-package
-ac_add_options --enable-install-strip
+# Distribution settings
 ac_add_options --disable-crashreporter
-ac_add_options --disable-source-paths
 ac_add_options --enable-update-channel=release
 
 # Prevent development path dependencies
 export MOZ_INCLUDE_SOURCE_INFO=
 export MOZ_DISABLE_SOURCE_INFO=1
 
-# Ensure proper component packaging
-ac_add_options --enable-component-package
+# Note: Use 'mach package' after build to create proper distribution package
