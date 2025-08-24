@@ -1673,23 +1673,7 @@ class nsIFrame : public nsQueryFrame {
   static bool ComputeBorderRadii(const mozilla::BorderRadius&,
                                  const nsSize& aFrameSize,
                                  const nsSize& aBorderArea, Sides aSkipSides,
-                                 nscoord aRadii[8]);
-
-  /*
-   * Given a set of border radii for one box (e.g., border box), convert
-   * it to the equivalent set of radii for another box (e.g., in to
-   * padding box, out to outline box) by reducing radii or increasing
-   * nonzero radii as appropriate.
-   *
-   * Indices into aRadii are the enum HalfCorner constants in gfx/2d/Types.h
-   *
-   * Note that insetting the radii is lossy, since it can turn nonzero radii
-   * into zero, and re-adjusting does not inflate zero radii.
-   *
-   * Therefore, callers should always adjust directly from the original value
-   * coming from style.
-   */
-  static void AdjustBorderRadii(nscoord aRadii[8], const nsMargin& aOffsets);
+                                 nsRectCornerRadii&);
 
   /**
    * Fill in border radii for this frame.  Return whether any are nonzero.
@@ -1703,13 +1687,12 @@ class nsIFrame : public nsQueryFrame {
    */
   virtual bool GetBorderRadii(const nsSize& aFrameSize,
                               const nsSize& aBorderArea, Sides aSkipSides,
-                              nscoord aRadii[8]) const;
-  bool GetBorderRadii(nscoord aRadii[8]) const;
-  bool GetMarginBoxBorderRadii(nscoord aRadii[8]) const;
-  bool GetPaddingBoxBorderRadii(nscoord aRadii[8]) const;
-  bool GetContentBoxBorderRadii(nscoord aRadii[8]) const;
-  bool GetBoxBorderRadii(nscoord aRadii[8], const nsMargin& aOffset) const;
-  bool GetShapeBoxBorderRadii(nscoord aRadii[8]) const;
+                              nsRectCornerRadii&) const;
+  bool GetBorderRadii(nsRectCornerRadii&) const;
+  bool GetMarginBoxBorderRadii(nsRectCornerRadii&) const;
+  bool GetPaddingBoxBorderRadii(nsRectCornerRadii&) const;
+  bool GetContentBoxBorderRadii(nsRectCornerRadii&) const;
+  bool GetShapeBoxBorderRadii(nsRectCornerRadii&) const;
 
   /**
    * Returns one em unit, adjusted for font inflation if needed, in app units.
@@ -3231,7 +3214,7 @@ class nsIFrame : public nsQueryFrame {
    */
   bool ComputeOverflowClipRectRelativeToSelf(
       const mozilla::PhysicalAxes aClipAxes, nsRect& aOutRect,
-      nscoord aOutRadii[8]) const;
+      nsRectCornerRadii& aOutRadii) const;
 
   // Returns the applicable overflow-clip-margin values.
   nsSize OverflowClipMargin(mozilla::PhysicalAxes aClipAxes) const;
