@@ -7,21 +7,29 @@ package org.mozilla.fenix.tabstray.ui
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.UiThread
 import androidx.annotation.VisibleForTesting
 import androidx.biometric.BiometricManager
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.setFragmentResultListener
+import androidx.fragment.compose.content
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import mozilla.appservices.places.BookmarkRoot
 import mozilla.components.browser.state.selector.normalTabs
 import mozilla.components.browser.state.selector.privateTabs
@@ -40,10 +48,6 @@ import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.NavGraphDirections
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.StoreProvider
-import org.mozilla.fenix.compose.ComposeFragment
-import org.mozilla.fenix.compose.core.Action
-import org.mozilla.fenix.compose.snackbar.Snackbar
-import org.mozilla.fenix.compose.snackbar.SnackbarState
 import org.mozilla.fenix.ext.actualInactiveTabs
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.hideToolbar
@@ -85,14 +89,13 @@ import org.mozilla.fenix.tabstray.ui.theme.getTabManagerTheme
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.theme.ThemeManager
 import org.mozilla.fenix.utils.Settings
-import org.mozilla.fenix.utils.allowUndo
 import kotlin.math.abs
 
 /**
  * The fullscreen fragment for displaying the tabs management UI.
  */
 @Suppress("TooManyFunctions", "LargeClass")
-class TabManagementFragment : ComposeFragment() {
+class TabManagementFragment : Fragment() {
 
     private lateinit var tabManagerInteractor: TabManagerInteractor
     private lateinit var tabManagerController: TabManagerController
@@ -109,6 +112,7 @@ class TabManagementFragment : ComposeFragment() {
     private val secureTabManagerBinding = ViewBoundFeatureWrapper<SecureTabManagerBinding>()
     private val tabsFeature = ViewBoundFeatureWrapper<TabsFeature>()
     private val syncedTabsIntegration = ViewBoundFeatureWrapper<SyncedTabsIntegration>()
+    private lateinit var snackbarHostState: SnackbarHostState
 
     @Suppress("LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,9 +202,13 @@ class TabManagementFragment : ComposeFragment() {
     }
 
     @Suppress("LongMethod")
-    @Composable
-    override fun UI() {
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View? = content {
         val page by tabsTrayStore.observeAsState(tabsTrayStore.state.selectedPage) { it.selectedPage }
+        snackbarHostState = remember { SnackbarHostState() }
 
         BackHandler {
             if (tabsTrayStore.state.mode is TabsTrayState.Mode.Select) {
@@ -226,6 +234,7 @@ class TabManagementFragment : ComposeFragment() {
                     privateLockEnabled = requireContext().settings().privateBrowsingModeLocked,
                     shouldShowBanner = shouldShowBanner(requireContext().settings()),
                 ),
+                snackbarHostState = snackbarHostState,
                 isSignedIn = requireContext().settings().signedInFxaAccount,
                 shouldShowInactiveTabsAutoCloseDialog =
                     requireContext().settings()::shouldShowInactiveTabsAutoCloseDialog,
@@ -283,17 +292,6 @@ class TabManagementFragment : ComposeFragment() {
                 onSignInClick = tabManagerInteractor::onSignInClicked,
                 onSaveToCollectionClick = tabManagerInteractor::onAddSelectedTabsToCollectionClicked,
                 onShareSelectedTabsClick = tabManagerInteractor::onShareSelectedTabs,
-                onShareAllTabsClick = {
-                    if (tabsTrayStore.state.selectedPage == Page.NormalTabs) {
-                        tabsTrayStore.dispatch(TabsTrayAction.ShareAllNormalTabs)
-                    } else if (tabsTrayStore.state.selectedPage == Page.PrivateTabs) {
-                        tabsTrayStore.dispatch(TabsTrayAction.ShareAllPrivateTabs)
-                    }
-
-                    navigationInteractor.onShareTabsOfTypeClicked(
-                        private = tabsTrayStore.state.selectedPage == Page.PrivateTabs,
-                    )
-                },
                 onTabSettingsClick = navigationInteractor::onTabSettingsClicked,
                 onRecentlyClosedClick = navigationInteractor::onOpenRecentlyClosedClicked,
                 onAccountSettingsClick = navigationInteractor::onAccountSettingsClicked,
@@ -486,13 +484,16 @@ class TabManagementFragment : ComposeFragment() {
 
     @UiThread
     internal fun showUndoSnackbarForSyncedTab(closeOperation: CloseTabsUseCases.UndoableOperation) {
-        requireActivity().lifecycleScope.allowUndo(
-            view = requireView(),
-            message = getString(R.string.snackbar_tab_closed),
-            undoActionTitle = getString(R.string.snackbar_deleted_undo),
-            onCancel = closeOperation::undo,
-            operation = { },
-        )
+        lifecycleScope.launch {
+            val snackbarResult = snackbarHostState.showSnackbar(
+                message = getString(R.string.snackbar_tab_closed),
+                actionLabel = getString(R.string.snackbar_deleted_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (snackbarResult == SnackbarResult.ActionPerformed) {
+                closeOperation.undo()
+            }
+        }
     }
 
     private fun showUndoSnackbarForTab(isPrivate: Boolean) {
@@ -504,18 +505,19 @@ class TabManagementFragment : ComposeFragment() {
         val page = if (isPrivate) Page.PrivateTabs else Page.NormalTabs
         val undoUseCases = requireComponents.useCases.tabsUseCases.undo
 
-        requireActivity().lifecycleScope.allowUndo(
-            view = requireView(),
-            message = snackbarMessage,
-            undoActionTitle = getString(R.string.snackbar_deleted_undo),
-            onCancel = {
+        lifecycleScope.launch {
+            val snackbarResult = snackbarHostState.showSnackbar(
+                message = snackbarMessage,
+                actionLabel = getString(R.string.snackbar_deleted_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (snackbarResult == SnackbarResult.ActionPerformed) {
                 undoUseCases.invoke()
                 runIfFragmentIsAttached {
                     tabsTrayStore.dispatch(TabsTrayAction.PageSelected(page))
                 }
-            },
-            operation = { },
-        )
+            }
+        }
     }
 
     private fun showUndoSnackbarForInactiveTab(numClosed: Int) {
@@ -525,16 +527,17 @@ class TabManagementFragment : ComposeFragment() {
                 false -> getString(R.string.snackbar_num_tabs_closed, numClosed.toString())
             }
 
-        requireActivity().lifecycleScope.allowUndo(
-            view = requireView(),
-            message = snackbarMessage,
-            undoActionTitle = getString(R.string.snackbar_deleted_undo),
-            onCancel = {
+        lifecycleScope.launch {
+            val snackbarResult = snackbarHostState.showSnackbar(
+                message = snackbarMessage,
+                actionLabel = getString(R.string.snackbar_deleted_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (snackbarResult == SnackbarResult.ActionPerformed) {
                 requireComponents.useCases.tabsUseCases.undo.invoke()
                 tabsTrayStore.dispatch(TabsTrayAction.PageSelected(Page.NormalTabs))
-            },
-            operation = { },
-        )
+            }
+        }
     }
 
     internal val homeViewModel: HomeScreenViewModel by activityViewModels()
@@ -591,13 +594,10 @@ class TabManagementFragment : ComposeFragment() {
             tabSize == 1 -> R.string.create_collection_tab_saved
             else -> return // Don't show snackbar for multiple tabs
         }
-
-        runIfFragmentIsAttached {
-            showSnackbar(
-                snackbarState = SnackbarState(
-                    message = getString(messageResId),
-                    duration = SnackbarState.Duration.Preset.Long,
-                ),
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(
+                message = getString(messageResId),
+                duration = SnackbarDuration.Long,
             )
         }
     }
@@ -615,21 +615,19 @@ class TabManagementFragment : ComposeFragment() {
                 R.string.bookmark_saved_in_folder_snackbar
             }
         }
-
-        showSnackbar(
-            snackbarState = SnackbarState(
+        lifecycleScope.launch {
+            val result = snackbarHostState.showSnackbar(
                 message = getString(displayResId, displayFolderTitle),
-                duration = SnackbarState.Duration.Preset.Long,
-                action = Action(
-                    label = getString(R.string.create_collection_view),
-                    onClick = {
-                        findNavController().navigate(
-                            TabManagementFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id),
-                        )
-                    },
-                ),
-            ),
-        )
+                actionLabel = getString(R.string.create_collection_view),
+                duration = SnackbarDuration.Long,
+            )
+
+            if (result == SnackbarResult.ActionPerformed) {
+                findNavController().navigate(
+                    TabManagementFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id),
+                )
+            }
+        }
     }
 
     private fun findPreviousDialogFragment(): DownloadCancelDialogFragment? {
@@ -638,21 +636,12 @@ class TabManagementFragment : ComposeFragment() {
     }
 
     private fun showInactiveTabsAutoCloseConfirmationSnackbar() {
-        showSnackbar(
-            snackbarState = SnackbarState(
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(
                 message = getString(R.string.inactive_tabs_auto_close_message_snackbar),
-                duration = SnackbarState.Duration.Preset.Long,
-            ),
-        )
-    }
-
-    private fun showSnackbar(
-        snackbarState: SnackbarState,
-    ) {
-        Snackbar.make(
-            snackBarParentView = requireView(),
-            snackbarState = snackbarState,
-        ).show()
+                duration = SnackbarDuration.Long,
+            )
+        }
     }
 
     /**

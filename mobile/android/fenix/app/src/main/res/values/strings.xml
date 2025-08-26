@@ -186,7 +186,7 @@
     <!-- Browser menu group that contains additional settings in collapsed state-->
     <string name="browser_menu_more_settings">More</string>
     <!-- Browser menu group that contains additional settings in expanded state-->
-    <string name="browser_menu_less_settings">Less</string>
+    <string name="browser_menu_less_settings" moz:removedIn="144" tools:ignore="UnusedResources">Less</string>
     <!-- Content description (not visible, for screen readers etc.): Label for plus icon used to add extension.
       %1$s is the name of the extension (for example: ClearURLs). -->
     <string name="browser_menu_extension_plus_icon_content_description_2">Add %1$s</string>
@@ -821,9 +821,9 @@
     <!-- Content description for various wallpapers. %1$s is the name of the wallpaper. -->
     <string name="wallpapers_item_name_content_description">Wallpaper Item: %1$s</string>
     <!-- Snackbar message for when wallpaper is selected -->
-    <string name="wallpaper_updated_snackbar_message">Wallpaper updated!</string>
+    <string name="wallpaper_updated_snackbar_message" tools:ignore="UnusedResources" moz:removedIn="144">Wallpaper updated!</string>
     <!-- Snackbar label for action to view selected wallpaper -->
-    <string name="wallpaper_updated_snackbar_action">View</string>
+    <string name="wallpaper_updated_snackbar_action" tools:ignore="UnusedResources" moz:removedIn="144">View</string>
     <!-- Snackbar message for when wallpaper couldn't be downloaded -->
     <string name="wallpaper_download_error_snackbar_message">Couldn’t download wallpaper</string>
     <!-- Snackbar label for action to retry downloading the wallpaper -->
@@ -1259,8 +1259,16 @@
     <string name="tab_tray_menu_item_close">Close all tabs</string>
     <!-- Text shown in the multiselect menu for bookmarking selected tabs. -->
     <string name="tab_tray_multiselect_menu_item_bookmark">Bookmark</string>
+    <!-- Content description (not visible, for screen readers etc.): Bookmarks selected tabs. -->
+    <string name="tab_manager_multiselect_menu_item_bookmark_content_description">Bookmark selected tabs</string>
     <!-- Text shown in the multiselect menu for closing selected tabs. -->
     <string name="tab_tray_multiselect_menu_item_close">Close</string>
+    <!-- Content description (not visible, for screen readers etc.): Closes selected tabs. -->
+    <string name="tab_manager_multiselect_menu_item_close_content_description">Close selected tabs</string>
+    <!-- Text shown in the multiselect menu for sharing selected tabs. -->
+    <string name="tab_manager_multiselect_menu_item_share">Share</string>
+    <!-- Text shown in the multiselect menu for adding selected tabs to collections. -->
+    <string name="tab_manager_multiselect_menu_item_add_to_collection">Add to collection</string>
     <!-- Content description for tabs tray multiselect share button -->
     <string name="tab_tray_multiselect_share_content_description">Share selected tabs</string>
     <!-- Content description for tabs tray multiselect menu -->
@@ -1573,6 +1581,8 @@
     <string name="bookmark_menu_delete_button">Delete</string>
     <!--Bookmark overflow menu save button -->
     <string name="bookmark_menu_save_button" tools:ignore="UnusedResources" moz:removedIn="143">Save</string>
+    <!-- Accessibility label for sorting options -->
+    <string name="bookmark_sort_menu_content_desc">Sorting options</string>
     <!-- Label for button to sort bookmarks by user-defined sort order in the bookmark sorting overflow menu. -->
     <string name="bookmark_sort_menu_custom">Sort by custom order</string>
     <!-- Label for button to sort bookmarks by newest in the bookmark sorting overflow menu. -->
@@ -1639,6 +1649,8 @@
     <string name="bookmark_search_button_content_description">Search bookmarks</string>
     <!-- Content description for the overflow menu for a bookmark item. %s is a folder name or bookmark title. -->
     <string name="bookmark_item_menu_button_content_description">Item Menu for %s</string>
+    <!-- Content description for the "close" button in bookmarks screen. -->
+    <string name="bookmark_close_button_content_description">Close bookmarks</string>
     <!-- Title for the bookmark list empty state-->
     <string name="bookmark_empty_list_title">No bookmarks yet</string>
     <!-- Description for the bookmark list empty state when you're not signed into sync. -->
@@ -1912,7 +1924,7 @@
     <!-- Text shown in snackbar to undo deleting a tab, top site or collection -->
     <string name="snackbar_deleted_undo">UNDO</string>
     <!-- Text shown in snackbar when user removes a top site -->
-    <string name="snackbar_top_site_removed">Site removed</string>
+    <string name="snackbar_top_site_removed" moz:removedIn="144" tools:ignore="UnusedResources">Site removed</string>
     <!-- QR code scanner prompt which appears after scanning a code, but before navigating to it
         %1$s is the name of the app (for example "Firefox"), %2$s is the URL or text scanned-->
     <string name="qr_scanner_confirmation_dialog_message">Allow %1$s to open %2$s</string>
@@ -2761,6 +2773,11 @@
     <!-- Pocket recommended stories -->
     <!-- Header text for a section on the home screen. -->
     <string name="pocket_stories_header_2">Stories</string>
+    <!-- Context description text for the "Discover more" button in the stories home screen section
+        which navigates the user to a screen displaying more stories. -->
+    <string name="stories_discover_more_content_description">Discover more stories</string>
+    <!-- Content description for the "Navigate back" button on the top app bar of the Stories screen. -->
+    <string name="stories_back_button_content_description">Navigate back</string>
     <!-- Text indicating that the Pocket story that also displays this text is a sponsored story by other 3rd party entity. -->
     <string name="pocket_stories_sponsor_indication">Sponsored</string>
 
@@ -3040,6 +3057,8 @@
     <string name="protection_panel_num_trackers_blocked">Trackers blocked: %d</string>
     <!-- Text for when no trackers have been blocked. -->
     <string name="protection_panel_no_trackers_blocked">No trackers found</string>
+    <!-- Text for when tracking protection is disabled and no trackers are blocked. -->
+    <string name="protection_panel_etp_disabled_no_trackers_blocked">Trackers aren’t blocked</string>
     <!-- Link text to navigate to privacy and security settings from the protection panel. -->
     <string name="protection_panel_privacy_and_security_settings" moz:removedIn="142" tools:ignore="UnusedResources">Privacy and security settings</string>
     <!-- Link text to navigate to privacy and security settings from the protection panel. -->

@@ -38,22 +38,6 @@ inline void ImplCycleCollectionUnlink(dom::GPUCanvasConfiguration& aField) {
   aField.UnlinkForCC();
 }
 
-// -
-
-template <class T>
-inline void ImplCycleCollectionTraverse(
-    nsCycleCollectionTraversalCallback& aCallback,
-    const std::unique_ptr<T>& aField, const char* aName, uint32_t aFlags) {
-  if (aField) {
-    ImplCycleCollectionTraverse(aCallback, *aField, aName, aFlags);
-  }
-}
-
-template <class T>
-inline void ImplCycleCollectionUnlink(std::unique_ptr<T>& aField) {
-  aField = nullptr;
-}
-
 }  // namespace mozilla
 
 // -
@@ -124,7 +108,7 @@ void CanvasContext::Configure(const dom::GPUCanvasConfiguration& aConfig,
     case dom::GPUTextureFormat::Rgba16float:
       aRv.ThrowTypeError(
           "Canvas texture format `rgba16float` is not yet supported. "
-          "Subscribe to <https://bugzilla.mozilla.org/show_bug.cgi?id=1967329>"
+          "Subscribe to <https://bugzilla.mozilla.org/show_bug.cgi?id=1834395>"
           " for updates on its development in Firefox.");
       return;
     default:

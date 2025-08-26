@@ -36,14 +36,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -87,6 +90,9 @@ import mozilla.components.browser.state.action.AwesomeBarAction
 import mozilla.components.browser.state.search.SearchEngine
 import mozilla.components.compose.base.Divider
 import mozilla.components.compose.base.annotation.FlexibleWindowLightDarkPreview
+import mozilla.components.compose.base.button.FloatingActionButton
+import mozilla.components.compose.base.button.PrimaryButton
+import mozilla.components.compose.base.button.TextButton
 import mozilla.components.compose.base.textfield.TextField
 import mozilla.components.compose.base.textfield.TextFieldColors
 import mozilla.components.compose.base.theme.AcornTheme
@@ -110,14 +116,9 @@ import org.mozilla.fenix.components.components
 import org.mozilla.fenix.compose.ContextualMenu
 import org.mozilla.fenix.compose.Favicon
 import org.mozilla.fenix.compose.MenuItem
-import org.mozilla.fenix.compose.button.FloatingActionButton
-import org.mozilla.fenix.compose.core.Action
 import org.mozilla.fenix.compose.list.IconListItem
 import org.mozilla.fenix.compose.list.SelectableFaviconListItem
 import org.mozilla.fenix.compose.list.SelectableIconListItem
-import org.mozilla.fenix.compose.snackbar.AcornSnackbarHostState
-import org.mozilla.fenix.compose.snackbar.SnackbarHost
-import org.mozilla.fenix.compose.snackbar.SnackbarState
 import org.mozilla.fenix.search.SearchFragmentAction.SuggestionClicked
 import org.mozilla.fenix.search.SearchFragmentAction.SuggestionSelected
 import org.mozilla.fenix.search.SearchFragmentState
@@ -238,7 +239,7 @@ private fun BookmarksList(
         }
     }
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { AcornSnackbarHostState() }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
@@ -257,38 +258,29 @@ private fun BookmarksList(
         is BookmarksSnackbarState.UndoDeletion -> stringResource(R.string.bookmark_undo_deletion)
         else -> null
     }
-    val action: Action? = snackbarActionLabel?.let {
-        Action(
-            label = snackbarActionLabel,
-            onClick = {
-                store.dispatch(SnackbarAction.Undo)
-            },
-        )
-    }
 
     LaunchedEffect(state.bookmarksSnackbarState) {
         when (state.bookmarksSnackbarState) {
             BookmarksSnackbarState.None -> return@LaunchedEffect
             is BookmarksSnackbarState.UndoDeletion -> scope.launch {
-                snackbarHostState.showSnackbar(
-                    snackbarState = SnackbarState(
-                        message = snackbarMessage,
-                        action = action,
-                        onDismiss = {
-                            store.dispatch(SnackbarAction.Dismissed)
-                        },
-                    ),
+                val result = snackbarHostState.showSnackbar(
+                    message = snackbarMessage,
+                    actionLabel = snackbarActionLabel,
+                    duration = SnackbarDuration.Short,
                 )
+                if (result == SnackbarResult.Dismissed) {
+                    store.dispatch(SnackbarAction.Dismissed)
+                } else if (result == SnackbarResult.ActionPerformed) {
+                    store.dispatch(SnackbarAction.Undo)
+                }
             }
             BookmarksSnackbarState.CantEditDesktopFolders -> scope.launch {
-                snackbarHostState.showSnackbar(
-                    snackbarState = SnackbarState(
-                        message = snackbarMessage,
-                        onDismiss = {
-                            store.dispatch(SnackbarAction.Dismissed)
-                        },
-                    ),
+                val result = snackbarHostState.showSnackbar(
+                    message = snackbarMessage,
                 )
+                if (result == SnackbarResult.Dismissed) {
+                    store.dispatch(SnackbarAction.Dismissed)
+                }
             }
         }
     }
@@ -300,10 +292,12 @@ private fun BookmarksList(
 
         when (state.isSearching) {
             true -> {
-                bookmarksSearchEngine?.let {
-                    appStore.dispatch(AppAction.SearchAction.SearchEngineSelected(it, false))
+                if (!appStore.state.searchState.isSearchActive) {
+                    bookmarksSearchEngine?.let {
+                        appStore.dispatch(AppAction.SearchAction.SearchEngineSelected(it, false))
+                    }
+                    appStore.dispatch(AppAction.SearchAction.SearchStarted())
                 }
-                appStore.dispatch(AppAction.SearchAction.SearchStarted())
             }
             false -> {
                 appStore.dispatch(AppAction.SearchAction.SearchEnded)
@@ -333,8 +327,8 @@ private fun BookmarksList(
         snackbarHost = {
             Box(modifier = Modifier.fillMaxWidth()) {
                 SnackbarHost(
+                    hostState = snackbarHostState,
                     modifier = Modifier.align(Alignment.BottomCenter),
-                    snackbarHostState = snackbarHostState,
                 )
             }
         },
@@ -622,7 +616,7 @@ private fun BookmarksListTopBar(
                                 Icon(
                                     painter = painterResource(R.drawable.mozac_ic_filter),
                                     contentDescription = stringResource(
-                                        R.string.content_description_menu,
+                                        R.string.bookmark_sort_menu_content_desc,
                                     ),
                                     tint = iconColor,
                                 )
@@ -656,7 +650,7 @@ private fun BookmarksListTopBar(
                                 Icon(
                                     painter = painterResource(R.drawable.mozac_ic_cross_24),
                                     contentDescription = stringResource(
-                                        R.string.content_description_close_button,
+                                        R.string.bookmark_close_button_content_description,
                                     ),
                                     tint = FirefoxTheme.colors.iconPrimary,
                                 )
@@ -751,21 +745,15 @@ private fun WarnDialog(
             onDismissRequest = { store.dispatch(OpenTabsConfirmationDialogAction.CancelTapped) },
             confirmButton = {
                 TextButton(
+                    text = stringResource(R.string.open_all_warning_confirm),
                     onClick = { store.dispatch(OpenTabsConfirmationDialogAction.ConfirmTapped) },
-                ) {
-                    Text(
-                        text = stringResource(R.string.open_all_warning_confirm),
-                    )
-                }
+                )
             },
             dismissButton = {
                 TextButton(
+                    text = stringResource(R.string.open_all_warning_cancel),
                     onClick = { store.dispatch(OpenTabsConfirmationDialogAction.CancelTapped) },
-                ) {
-                    Text(
-                        text = stringResource(R.string.open_all_warning_cancel),
-                    )
-                }
+                )
             },
         )
     }
@@ -785,21 +773,15 @@ private fun AlertDialogDeletionWarning(
         onDismissRequest = onCancelTapped,
         confirmButton = {
             TextButton(
+                text = stringResource(R.string.bookmark_menu_delete_button),
                 onClick = onDeleteTapped,
-            ) {
-                Text(
-                    text = stringResource(R.string.bookmark_menu_delete_button).uppercase(),
-                )
-            }
+            )
         },
         dismissButton = {
             TextButton(
+                text = stringResource(R.string.bookmark_delete_negative),
                 onClick = onCancelTapped,
-            ) {
-                Text(
-                    text = stringResource(R.string.bookmark_delete_negative).uppercase(),
-                )
-            }
+            )
         },
     )
 }
@@ -990,21 +972,18 @@ private fun EmptyList(
                 textAlign = TextAlign.Center,
             )
             if (state is EmptyListState.NotAuthenticated) {
-                TextButton(
+                PrimaryButton(
+                    text = stringResource(R.string.bookmark_empty_list_guest_cta),
                     onClick = { dispatcher(SignIntoSyncClicked) },
-                    colors = ButtonDefaults.buttonColors(containerColor = FirefoxTheme.colors.actionPrimary),
-                    shape = RoundedCornerShape(4.dp),
+                    textColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier
                         .heightIn(36.dp)
-                        .fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.bookmark_empty_list_guest_cta),
-                        color = FirefoxTheme.colors.textOnColorPrimary,
-                        style = FirefoxTheme.typography.button,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(4.dp),
+                        ),
+                )
             }
         }
     }

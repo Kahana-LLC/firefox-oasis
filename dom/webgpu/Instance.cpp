@@ -53,12 +53,9 @@ static inline nsDependentCString ToCString(const std::string_view s) {
   return true;
 }
 
-/* static */ bool Instance::ExternalTextureEnabled(JSContext* aCx,
-                                                   JSObject* aObj) {
-  // Some tests won't have initialized gfxPlatform by the time the bindings are
-  // generated, but these shouldn't exercise WebGPU, so we can safely return the
-  // default in this case.
-  return gfx::gfxVars::GetAllowWebGPUExternalTextureOrDefault();
+/* static */ bool Instance::ExternalTexturePrefEnabled(JSContext* aCx,
+                                                       JSObject* aObj) {
+  return StaticPrefs::dom_webgpu_external_texture_enabled_AtStartup();
 }
 
 /*static*/
@@ -154,6 +151,14 @@ already_AddRefed<dom::Promise> Instance::RequestAdapter(
            "build configuration");
 #  endif
 #endif
+
+  // Check if WebGPU is blocked for this global's domain.
+  {
+    const auto prefLock = mozilla::StaticPrefs::dom_webgpu_blocked_domains();
+    rejectIf(nsContentUtils::IsURIInList(mOwner->GetBaseURI(), *prefLock),
+             "WebGPU is blocked for this domain by the "
+             "`dom.webgpu.blocked-domains` pref.");
+  }
 
   if (rejectionMessage) {
     promise->MaybeRejectWithNotSupportedError(ToCString(*rejectionMessage));

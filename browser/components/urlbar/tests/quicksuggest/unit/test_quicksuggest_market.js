@@ -27,7 +27,21 @@ const TEST_MERINO_SINGLE = [
   },
 ];
 
+const TEST_MERINO_EMPTY_POLYGON_VALUES = [
+  {
+    provider: "polygon",
+    score: 0,
+    custom_details: {
+      polygon: {
+        values: [],
+      },
+    },
+  },
+];
+
 add_setup(async function init() {
+  await Services.search.init();
+
   // Disable search suggestions so we don't hit the network.
   Services.prefs.setBoolPref("browser.search.suggest.enabled", false);
 
@@ -167,6 +181,19 @@ add_task(async function showLessFrequently() {
   UrlbarPrefs.clear("market.minKeywordLength");
 });
 
+// Tests in case of that the polygon values is empty.
+add_task(async function empty_polygon_values() {
+  MerinoTestUtils.server.response.body.suggestions =
+    TEST_MERINO_EMPTY_POLYGON_VALUES;
+  await check_results({
+    context: createContext("stock", {
+      providers: [UrlbarProviderQuickSuggest.name],
+      isPrivate: false,
+    }),
+    matches: [],
+  });
+});
+
 function marketResult() {
   return {
     type: UrlbarUtils.RESULT_TYPE.DYNAMIC,
@@ -181,6 +208,7 @@ function marketResult() {
       provider: "polygon",
       telemetryType: "market",
       isSponsored: false,
+      engine: Services.search.defaultEngine.name,
       polygon: {
         values: [
           {

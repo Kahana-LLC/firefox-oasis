@@ -22,6 +22,9 @@ const Preferences = (window.Preferences = (function () {
   const lazy = {};
   ChromeUtils.defineESModuleGetters(lazy, {
     DeferredTask: "resource://gre/modules/DeferredTask.sys.mjs",
+    ExtensionSettingsStore:
+      "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
+    AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
   });
 
   function getElementsByAttribute(name, value) {
@@ -710,6 +713,27 @@ const Preferences = (window.Preferences = (function () {
      */
     _deps;
 
+    async _checkForControllingExtension() {
+      await lazy.ExtensionSettingsStore.initialize();
+      let info = lazy.ExtensionSettingsStore.getSetting(
+        "prefs",
+        this.config.controllingExtensionInfo?.storeId
+      );
+      if (info && info.id) {
+        let addon = await lazy.AddonManager.getAddonByID(info.id);
+        if (addon) {
+          this.controllingExtensionInfo.name = addon.name;
+          this.controllingExtensionInfo.id = info.id;
+          this.emit("change");
+          return;
+        }
+      }
+      this._clearControllingExtensionInfo();
+    }
+    _clearControllingExtensionInfo() {
+      delete this.controllingExtensionInfo.id;
+      delete this.controllingExtensionInfo.name;
+    }
     constructor(id, config) {
       super();
       this.id = id;
@@ -720,14 +744,19 @@ const Preferences = (window.Preferences = (function () {
         setting.on("change", this.onChange);
       }
 
+      this.controllingExtensionInfo = {
+        ...this.config.controllingExtensionInfo,
+      };
       if (this.pref) {
         this.pref.on("change", this.onChange);
       }
+      if (this.config.controllingExtensionInfo?.storeId) {
+        this._checkForControllingExtension();
+      }
       if (typeof this.config.setup === "function") {
-        this._teardown = this.config.setup(this.onChange);
+        this._teardown = this.config.setup(this.onChange, this.deps, this);
       }
     }
-
     onChange = () => {
       this.emit("change");
     };
@@ -761,13 +790,15 @@ const Preferences = (window.Preferences = (function () {
     get value() {
       let prefVal = this.pref?.value;
       if (this.config.get) {
-        return this.config.get(prefVal);
+        return this.config.get(prefVal, this.deps, this);
       }
       return prefVal;
     }
 
     set value(val) {
-      let newVal = this.config.set ? this.config.set(val) : val;
+      let newVal = this.config.set
+        ? this.config.set(val, this.deps, this)
+        : val;
       if (this.pref) {
         this.pref.value = newVal;
       }
@@ -778,16 +809,18 @@ const Preferences = (window.Preferences = (function () {
     }
 
     get visible() {
-      return this.config.visible ? this.config.visible(this.deps) : true;
+      return this.config.visible ? this.config.visible(this.deps, this) : true;
     }
 
     get disabled() {
-      return this.config.disabled ? this.config.disabled(this.deps) : false;
+      return this.config.disabled
+        ? this.config.disabled(this.deps, this)
+        : false;
     }
 
     getControlConfig(config) {
       if (this.config.getControlConfig) {
-        return this.config.getControlConfig(config);
+        return this.config.getControlConfig(config, this.deps, this);
       }
       return config;
     }
@@ -795,7 +828,7 @@ const Preferences = (window.Preferences = (function () {
     userChange(val) {
       this.value = val;
       if (this.config.onUserChange) {
-        this.config.onUserChange(val);
+        this.config.onUserChange(val, this.deps, this);
       }
     }
 

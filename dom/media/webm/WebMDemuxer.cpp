@@ -53,26 +53,15 @@ LazyLogModule gNesteggLog("Nestegg");
 
 // Functions for reading and seeking using WebMDemuxer required for
 // nestegg_io. The 'user data' passed to these functions is the
-// demuxer.
+// demuxer's context.
 static int webmdemux_read(void* aBuffer, size_t aLength, void* aUserData) {
   MOZ_ASSERT(aUserData);
   MOZ_ASSERT(aLength < UINT32_MAX);
   WebMDemuxer::NestEggContext* context =
       reinterpret_cast<WebMDemuxer::NestEggContext*>(aUserData);
-  uint32_t count = aLength;
-  if (context->IsMediaSource()) {
-    int64_t length = context->GetEndDataOffset();
-    int64_t position = context->GetResource()->Tell();
-    MOZ_ASSERT(position <= context->GetResource()->GetLength());
-    MOZ_ASSERT(position <= length);
-    if (length >= 0 && count + position > length) {
-      count = length - position;
-    }
-    MOZ_ASSERT(count <= aLength);
-  }
   uint32_t bytes = 0;
-  nsresult rv =
-      context->GetResource()->Read(static_cast<char*>(aBuffer), count, &bytes);
+  nsresult rv = context->GetResource()->Read(static_cast<char*>(aBuffer),
+                                             aLength, &bytes);
   bool eof = bytes < aLength;
   return NS_FAILED(rv) ? -1 : eof ? 0 : 1;
 }
@@ -145,9 +134,6 @@ int WebMDemuxer::NestEggContext::Init() {
   io.tell = webmdemux_tell;
   io.userdata = this;
 
-  // While reading the metadata, we do not really care about which nestegg
-  // context is being used so long that they are both initialised.
-  // For reading the metadata however, we will use mVideoContext.
   return nestegg_init(&mContext, io, &webmdemux_log,
                       mParent->IsMediaSource() ? mResource.GetLength() : -1);
 }
@@ -170,7 +156,6 @@ WebMDemuxer::WebMDemuxer(
       mHasVideo(false),
       mHasAudio(false),
       mNeedReIndex(true),
-      mLastWebMBlockOffset(-1),
       mIsMediaSource(aIsMediaSource) {
   DDLINKCHILD("resource", aResource);
   // Audio/video contexts hold a MediaResourceIndex.
@@ -297,7 +282,7 @@ nsresult WebMDemuxer::ReadMetadata() {
     return NS_ERROR_FAILURE;
   }
 
-  // For reading the metadata we can only use the video resource/context.
+  // Both contexts have the metadata; the video context is used here.
   MediaResourceIndex& resource = Resource(TrackInfo::kVideoTrack);
   nestegg* context = Context(TrackInfo::kVideoTrack);
 
@@ -555,12 +540,6 @@ void WebMDemuxer::EnsureUpToDateIndex() {
   mBufferedState->UpdateIndex(byteRanges, resource);
 
   mNeedReIndex = false;
-
-  if (!mIsMediaSource) {
-    return;
-  }
-  mLastWebMBlockOffset = mBufferedState->GetLastBlockOffset();
-  MOZ_ASSERT(mLastWebMBlockOffset <= resource->GetLength());
 }
 
 void WebMDemuxer::NotifyDataArrived() {
@@ -615,11 +594,6 @@ CryptoTrack WebMDemuxer::GetTrackCrypto(TrackInfo::TrackType aType,
 
 nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
                                     MediaRawDataQueue* aSamples) {
-  if (mIsMediaSource) {
-    // To ensure mLastWebMBlockOffset is properly up to date.
-    EnsureUpToDateIndex();
-  }
-
   RefPtr<NesteggPacketHolder> holder;
   nsresult rv = NextPacket(aType, holder);
 

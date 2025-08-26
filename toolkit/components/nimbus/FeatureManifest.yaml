@@ -1399,6 +1399,11 @@ newtabInferredPersonalization:
       type: int
       description: >-
         Time to refresh interest vector in hours
+    iv_unary_dp_in_request:
+      type: boolean
+      description: >-
+        Whether to use Unary encoding with differential privacy in the interest vector. If false or not set, we default to laplace noise with real values
+
 
 newtabSmartShortcuts:
   description: about:newtab personalized shortcuts
@@ -1429,14 +1434,30 @@ newtabSmartShortcuts:
       type: int
       description: >-
         Percentage weight of frecency
+    hour_weight:
+      type: int
+      description: >-
+        Percentage weight of hourly seasonality
+    daily_weight:
+      type: int
+      description: >-
+        Percentage weight of daily seasonality
     bias_weight:
       type: int
       description: >-
         Percentage weight for bias for computing final ranking
+    fset:
+      type: int
+      description: >-
+        Key for smartshortcuts feature set
     eta:
       type: int
       description: >-
         Learning rate for shortcut ranking weights, will divide by 10000
+    click_bonus:
+      type: int
+      description: >-
+        bonus multiplier for clicks, will divide by 10
 
 newtabSpocsCache:
   description: The about:newtab sponsored content cache.
@@ -1870,26 +1891,11 @@ pocketNewtab:
       type: string
       fallbackPref: >-
         browser.newtabpage.activity-stream.discoverystream.ctaButtonVariant
-    spocMessageVariant:
-      description: Adds some message dialogs explainging sponsored content to the user
-      type: string
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.spocMessageVariant
     regionStoriesConfig:
       description: A comma-separated list of region to get stories for.
       type: string
       fallbackPref: >-
         browser.newtabpage.activity-stream.discoverystream.region-stories-config
-    regionBffConfig:
-      type: string
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.region-bff-config
-      description: A comma-separated list of regions to get stories from the recommendations BFF. Also requires region-stories-config.
-    merinoProviderEnabled:
-      type: boolean
-      fallbackPref: >-
-        browser.newtabpage.activity-stream.discoverystream.merino-provider.enabled
-      description: Sets the recommendations provider service to Merino.
     merinoProviderEndpoint:
       type: string
       fallbackPref: >-
@@ -4045,6 +4051,18 @@ jitHintsCache:
         branch: user
         pref: "javascript.options.jithints"
 
+asmjs:
+  description: Pref to toggle support for asm.js.
+  owner: dpalmeiro@mozilla.com
+  hasExposure: false
+  variables:
+    enabled:
+      description: True to enable the asm.js feature.
+      type: boolean
+      setPref:
+        branch: user
+        pref: "javascript.options.asmjs"
+
 raceCacheWithNetwork:
   description: Prefs to toggle the race cache with network.
   owner: dpalmeiro@mozilla.com, acreskey@mozilla.com
@@ -5054,18 +5072,6 @@ css-masonry:
         branch: user
         pref: "layout.css.grid-template-masonry-value.enabled"
 
-contextual-password-manager:
-  description: Enabling the contextual password manager feature
-  owner: issozi@mozilla.com
-  hasExposure: false
-  variables:
-    enabled:
-      type: boolean
-      setPref:
-        branch: user
-        pref: browser.contextual-password-manager.enabled
-      description: If true, we will allow user to add the contextual password manager feature to the sidebar.
-
 windowsUIAutomation:
   description: Support for the Windows UI Automation API
   owner: jteh@mozilla.com
@@ -5142,7 +5148,7 @@ ipProtection:
     enabled:
       type: boolean
       setPref:
-        branch: default
+        branch: user
         pref: browser.ipProtection.enabled
       description: >-
         Enables the IP Protection feature.

@@ -8,7 +8,7 @@
  */
 
 /**
- * @typedef {import("UrlbarProvidersManager.sys.mjs").Query} Query
+ * @import {Query, ProvidersManager} from "UrlbarProvidersManager.sys.mjs"
  */
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
@@ -609,19 +609,32 @@ export var UrlbarUtils = {
    *
    * @param {UrlbarResult} result
    *   The result to extract from.
+   * @param {object} options
+   *   Options object.
+   * @param {Element} [options.element]
+   *   The element associated with the result that was selected or picked, if
+   *   available. For results that have multiple selectable children, the URL
+   *   may be taken from a child element rather than the result.
    * @returns {object}
    *   An object: `{ url, postData }`
    *   `url` will be null if the result doesn't have a URL. `postData` will be
    *   null if the result doesn't have post data.
    */
-  getUrlFromResult(result) {
-    if (result.type == this.RESULT_TYPE.SEARCH && result.payload.engine) {
-      const engine = Services.search.getEngineByName(result.payload.engine);
-      let [url, postData] = this.getSearchQueryUrl(
-        engine,
-        result.payload.suggestion || result.payload.query
-      );
-      return { url, postData };
+  getUrlFromResult(result, { element = null } = {}) {
+    if (
+      result.payload.engine &&
+      (result.type == this.RESULT_TYPE.SEARCH ||
+        result.type == this.RESULT_TYPE.DYNAMIC)
+    ) {
+      let query =
+        element?.dataset.query ||
+        result.payload.suggestion ||
+        result.payload.query;
+      if (query) {
+        const engine = Services.search.getEngineByName(result.payload.engine);
+        let [url, postData] = this.getSearchQueryUrl(engine, query);
+        return { url, postData };
+      }
     }
 
     return {
@@ -1928,6 +1941,7 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
       description: {
         type: "string",
       },
+      descriptionL10n: L10N_SCHEMA,
       displayUrl: {
         type: "string",
       },
@@ -1944,6 +1958,9 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "boolean",
       },
       isBlockable: {
+        type: "boolean",
+      },
+      isManageable: {
         type: "boolean",
       },
       isPinned: {
@@ -2205,6 +2222,9 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
             command: {
               type: "string",
             },
+            input: {
+              type: "string",
+            },
             menu: {
               type: "array",
               items: {
@@ -2375,7 +2395,7 @@ export class UrlbarQueryContext {
     }
 
     /**
-     * @type {[string, (any) => boolean, any?][]}
+     * @type {[string, (v: any) => boolean, any?][]}
      */
     const optionalProperties = [
       ["currentPage", v => typeof v == "string" && !!v.length],
@@ -2423,6 +2443,12 @@ export class UrlbarQueryContext {
    *   Whether or not to allow providers to include autofill results.
    */
   allowAutofill;
+
+  /**
+   * @type {boolean}
+   *   Whether or not the query has been cancelled.
+   */
+  canceled = false;
 
   /**
    * @type {string}
@@ -2678,12 +2704,12 @@ export class UrlbarProvider {
 
   /**
    * Unique name for the provider, used by the context to filter on providers.
+   * By default, it will use the class name but it can also be overridden to
+   * use a different name.
    * Not using a unique name will cause the newest registration to win.
-   *
-   * @abstract
    */
   get name() {
-    return "UrlbarProviderBase";
+    return this.constructor.name;
   }
 
   /**
@@ -2737,9 +2763,9 @@ export class UrlbarProvider {
    * If this method returns false, the providers manager won't start a query
    * with this provider, to save on resources.
    *
-   * @param {UrlbarQueryContext} _queryContext
+   * @param {UrlbarQueryContext} [_queryContext]
    *   The query context object
-   * @param {UrlbarController} _controller
+   * @param {UrlbarController} [_controller]
    *   The current controller.
    * @returns {Promise<boolean>}
    *   Whether this provider should be invoked for the search.
@@ -2978,6 +3004,13 @@ export class UrlbarProvider {
    *     A mapping from attribute names to values.  Each name-value pair results
    *     in an attribute being added to the element.  The `id` attribute is
    *     reserved and cannot be set by the provider.
+   *   {Array} [classList]
+   *     An array of CSS classes to set on the element. If this is defined, the
+   *     element's previous classes will be cleared first!
+   *   {object} [dataset]
+   *     Maps element dataset keys to values. Values should be strings with the
+   *     following exceptions: `undefined` is ignored, and `null` causes the key
+   *     to be removed from the dataset.
    *   {object} [style]
    *     A plain object that can be used to add inline styles to the element,
    *     like `display: none`.   `element.style` is updated for each name-value
@@ -3000,22 +3033,7 @@ export class UrlbarProvider {
    *
    * @param {UrlbarResult} _result
    *   The menu will be shown for this result.
-   * @returns {Array}
-   *   If the result doesn't have any commands, this should return null.
-   *   Otherwise it should return an array of command objects that look like:
-   *   `{ name, l10n, children}`
-   *
-   *   {string} name
-   *     The name of the command. Must be specified unless `children` is
-   *     present. When a command is picked, its name will be passed as
-   *     `details.selType` to `onEngagement()`. The special name "separator"
-   *     will create a menu separator.
-   *   {object} l10n
-   *     An l10n object for the command's label: `{ id, args }`
-   *     Must be specified unless `name` is "separator".
-   *   {array} children
-   *     If specified, a submenu will be created with the given child commands.
-   *     Each object in the array must be a command object.
+   * @returns {?UrlbarResultCommand[]}
    */
   getResultCommands(_result) {
     return null;

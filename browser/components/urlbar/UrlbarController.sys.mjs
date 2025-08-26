@@ -4,14 +4,18 @@
 
 import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
+/**
+ * @import {ProvidersManager} from "resource:///modules/UrlbarProvidersManager.sys.mjs"
+ */
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
   Interactions: "moz-src:///browser/components/places/Interactions.sys.mjs",
-  ProviderSemanticHistorySearch:
-    "resource:///modules/UrlbarProviderSemanticHistorySearch.sys.mjs",
   UrlbarPrefs: "resource:///modules/UrlbarPrefs.sys.mjs",
+  UrlbarProviderSemanticHistorySearch:
+    "resource:///modules/UrlbarProviderSemanticHistorySearch.sys.mjs",
   UrlbarProvidersManager: "resource:///modules/UrlbarProvidersManager.sys.mjs",
   UrlbarTokenizer: "resource:///modules/UrlbarTokenizer.sys.mjs",
   UrlbarUtils: "resource:///modules/UrlbarUtils.sys.mjs",
@@ -79,6 +83,9 @@ export class UrlbarController {
     this.input = options.input;
     this.browserWindow = options.input.window;
 
+    /**
+     * @type {ProvidersManager}
+     */
     this.manager = options.manager || lazy.UrlbarProvidersManager;
 
     this._listeners = new Set();
@@ -831,7 +838,7 @@ class TelemetryEvent {
     }
 
     this._startEventInfo = {
-      timeStamp: event.timeStamp || Cu.now(),
+      timeStamp: event.timeStamp || ChromeUtils.now(),
       interactionType: this._getStartInteractionType(event, searchString),
       searchString,
     };
@@ -1177,7 +1184,8 @@ class TelemetryEvent {
     let sources = [];
     try {
       if (
-        lazy.ProviderSemanticHistorySearch.semanticManager.canUseSemanticSearch
+        lazy.UrlbarProviderSemanticHistorySearch.semanticManager
+          .canUseSemanticSearch
       ) {
         sources.push("history");
       }
@@ -1672,7 +1680,7 @@ class TelemetryEvent {
   }
 
   getCurrentTime() {
-    return Cu.now();
+    return ChromeUtils.now();
   }
 
   /**

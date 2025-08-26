@@ -71,7 +71,6 @@ class TabbedBrowsingTest : TestSetup() {
             verifyNormalTabsList()
         }.openThreeDotMenu {
             verifyCloseAllTabsButton()
-            verifyShareAllTabsButton()
             verifySelectTabsButton()
         }.closeAllTabs {
             verifyTabCounter("0")
@@ -107,6 +106,31 @@ class TabbedBrowsingTest : TestSetup() {
         }
         browserScreen {
             verifyTabCounter("1")
+        }
+    }
+
+    @Test
+    fun closingAndUndoCloseTabTest() {
+        val url1 = TestAssetHelper.getGenericAsset(mockWebServer, 1)
+        val url2 = TestAssetHelper.getGenericAsset(mockWebServer, 2)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(url1.url) {
+            waitForPageToLoad()
+        }.goToHomescreen(composeTestRule) {
+        }.openNavigationToolbar {
+        }.enterURLAndEnterToBrowser(url2.url) {
+            waitForPageToLoad()
+        }.openTabDrawer(composeTestRule) {
+            verifyExistingOpenTabs("Test_Page_1", "Test_Page_2")
+            swipeTabLeft("Test_Page_2")
+            verifySnackBarText("Tab closed")
+            clickSnackbarButton(composeTestRule, "UNDO")
+            verifyExistingOpenTabs("Test_Page_1", "Test_Page_2")
+
+            swipeTabLeft("Test_Page_2")
+            verifySnackBarText("Tab closed")
+            verifyExistingOpenTabs("Test_Page_1")
         }
     }
 
@@ -434,8 +458,13 @@ class TabbedBrowsingTest : TestSetup() {
             verifyExistingOpenTabs("Test_Page_1")
             verifyExistingOpenTabs("Test_Page_2")
         }.openThreeDotMenu {
-            verifyShareAllTabsButton()
-        }.clickShareAllTabsButton {
+            verifySelectTabsButton()
+        }.clickSelectTabsButton {
+            selectTab("Test_Page_1", 1)
+            selectTab("Test_Page_2", 2)
+        }.openThreeDotMenu {
+            verifyShareTabsButton()
+        }.clickShareTabsButton {
             verifyShareTabsOverlay(firstWebsiteTitle, secondWebsiteTitle)
             verifySharingWithSelectedApp(
                 sharingApp,

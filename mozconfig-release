@@ -1,0 +1,21 @@
+# Fixed release build configuration for Oasis Browser v1.1.0
+# Addresses critical XPCOM and component packaging issues
+
+# Essential application configuration
+ac_add_options --enable-application=browser
+ac_add_options --with-branding=browser/branding/custom
+
+# Release optimizations
+ac_add_options --enable-release
+ac_add_options --disable-debug
+ac_add_options --enable-optimize
+
+# Distribution settings
+ac_add_options --disable-crashreporter
+ac_add_options --enable-update-channel=release
+
+# Prevent development path dependencies
+export MOZ_INCLUDE_SOURCE_INFO=
+export MOZ_DISABLE_SOURCE_INFO=1
+
+# Note: Use 'mach package' after build to create proper distribution package
