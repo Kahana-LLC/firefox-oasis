@@ -8,7 +8,7 @@
  */
 
 /**
- * @typedef {import("UrlbarProvidersManager.sys.mjs").Query} Query
+ * @import {Query, ProvidersManager} from "UrlbarProvidersManager.sys.mjs"
  */
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
@@ -1941,6 +1941,7 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
       description: {
         type: "string",
       },
+      descriptionL10n: L10N_SCHEMA,
       displayUrl: {
         type: "string",
       },
@@ -1957,6 +1958,9 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "boolean",
       },
       isBlockable: {
+        type: "boolean",
+      },
+      isManageable: {
         type: "boolean",
       },
       isPinned: {
@@ -2391,7 +2395,7 @@ export class UrlbarQueryContext {
     }
 
     /**
-     * @type {[string, (any) => boolean, any?][]}
+     * @type {[string, (v: any) => boolean, any?][]}
      */
     const optionalProperties = [
       ["currentPage", v => typeof v == "string" && !!v.length],
@@ -2439,6 +2443,12 @@ export class UrlbarQueryContext {
    *   Whether or not to allow providers to include autofill results.
    */
   allowAutofill;
+
+  /**
+   * @type {boolean}
+   *   Whether or not the query has been cancelled.
+   */
+  canceled = false;
 
   /**
    * @type {string}
@@ -2694,12 +2704,12 @@ export class UrlbarProvider {
 
   /**
    * Unique name for the provider, used by the context to filter on providers.
+   * By default, it will use the class name but it can also be overridden to
+   * use a different name.
    * Not using a unique name will cause the newest registration to win.
-   *
-   * @abstract
    */
   get name() {
-    return "UrlbarProviderBase";
+    return this.constructor.name;
   }
 
   /**
@@ -2753,9 +2763,9 @@ export class UrlbarProvider {
    * If this method returns false, the providers manager won't start a query
    * with this provider, to save on resources.
    *
-   * @param {UrlbarQueryContext} _queryContext
+   * @param {UrlbarQueryContext} [_queryContext]
    *   The query context object
-   * @param {UrlbarController} _controller
+   * @param {UrlbarController} [_controller]
    *   The current controller.
    * @returns {Promise<boolean>}
    *   Whether this provider should be invoked for the search.
