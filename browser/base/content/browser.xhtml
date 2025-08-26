@@ -141,6 +141,74 @@
 #include fullscreen-and-pointerlock.inc.xhtml
 
   <html:div id="a11y-announcement" role="alert"/>
+  <!-- BEGIN OASIS ASSISTANT -->
+  <html:style>
+    /* Floating Action Button (bottom-right) */
+    #oasis-assistant-fab {
+      position: fixed;
+      bottom: 14px;
+      right: 14px;              /* bottom-right */
+      z-index: 9999;
+      width: 40px; height: 40px;
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--toolbar-bgcolor, #2b2a33);
+      color: var(--toolbar-color, #fff);
+      border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      user-select: none;
+    }
+    #oasis-assistant-fab:hover {
+      background: color-mix(in srgb, currentColor 15%, #2b2a33);
+    }
+
+    /* Slide-up panel just above the FAB, aligned to right */
+    #oasis-assistant-sheet[hidden] { display: none; }
+    #oasis-assistant-sheet {
+      position: fixed;
+      right: 10px;              /* align to right */
+      bottom: 60px;
+      width: min(560px, calc(100vw - 20px));
+      height: min(70vh, 720px);
+      z-index: 9998;
+      background: var(--toolbar-bgcolor, #1c1b22);
+      color: var(--toolbar-color, #fff);
+      border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    #oasis-assistant-header {
+      height: 40px; display:flex; align-items:center; justify-content:space-between;
+      padding: 0 8px; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+      font: menu;
+    }
+    #oasis-assistant-frame { width: 100%; height: calc(100% - 40px); border: none; }
+  </html:style>
+
+  <!-- Floating button (bottom-right) -->
+  <html:div id="oasis-assistant-fab"
+            title="Assistant"
+            role="button"
+            tabindex="0"
+            aria-label="Assistant">✦</html:div>
+
+  <!-- Slide-up panel -->
+  <html:div id="oasis-assistant-sheet" hidden="hidden">
+    <html:div id="oasis-assistant-header">
+      <html:span>Assistant</html:span>
+      <html:button id="oasis-assistant-close">Close</html:button>
+    </html:div>
+    <html:iframe id="oasis-assistant-frame"
+                src="chrome://browser/content/assistant/assistant.xhtml"/>
+  </html:div>
+
+  <!-- Helper that defines window.gOasisAssistant -->
+  <script type="application/javascript"
+          src="chrome://browser/content/assistant/bootstrap.js"></script>
+  <!-- END OASIS ASSISTANT -->
+
 
   <!-- Put it at the very end to make sure it's not covered by anything. -->
   <html:div id="fullscr-toggler" hidden="hidden"/>
