@@ -3454,5 +3454,11 @@ pref("browser.ipProtection.variant", "");
 pref("browser.ipProtection.log", false);
 pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");
 
-// Pref to enable aboug:glean redesign.
+
+// Oasis Assistant defaults
+pref("oasis.assistant.anthropic_api_key", "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");
+pref("oasis.assistant.model", "claude-3-5-sonnet-20240620");
+pref("oasis.assistant.temperature", "0.3");
+pref("oasis.assistant.maxTokens", "200");
 pref("about.glean.redesign.enabled", false);
+

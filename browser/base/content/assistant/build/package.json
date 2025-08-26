@@ -1,0 +1,19 @@
+{
+  "name": "assistant-bundle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.1",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.26",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.6",
+    "zod": "^3.25.76"
+  }
+}
