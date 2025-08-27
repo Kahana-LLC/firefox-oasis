@@ -73,14 +73,7 @@ bool MoofParser::RebuildFragmentedIndex(BoxContext& aContext) {
                 &mLastDecodeTime, mIsAudio, mTracksEndCts);
 
       if (!moof.IsValid()) {
-        if (!box.Next().IsAvailable()) {
-          // Abort search for now, without advancing mOffset so that parsing
-          // can be attempted again when more of the resource is available.
-          LOG_WARN(Moof, "Invalid moof. moof may not be complete yet.");
-          break;
-        }
-        // moof is complete but invalid.  Skip to next box.
-        continue;
+        continue;  // Skip to next box.
       }
 
       if (!mMoofs.IsEmpty()) {
@@ -591,7 +584,7 @@ bool Moof::GetAuxInfo(AtomType aType,
       LOG_ERROR(Moof, "OOM");
       return false;
     }
-    uint64_t offset = mRange.mStart + saio->mOffsets[0];
+    uint64_t offset = mTfhd.mBaseDataOffset + saio->mOffsets[0];
     for (size_t i = 0; i < saiz->mSampleInfoSize.Length(); i++) {
       if (!aByteRanges->AppendElement(
               MediaByteRange(offset, offset + saiz->mSampleInfoSize[i]),

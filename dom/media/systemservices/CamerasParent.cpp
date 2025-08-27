@@ -6,6 +6,7 @@
 
 #include "CamerasParent.h"
 
+#include <algorithm>
 #include <atomic>
 
 #include "CamerasTypes.h"
@@ -370,6 +371,12 @@ ShmemBuffer CamerasParent::GetBuffer(size_t aSize) {
   return mShmemPool.GetIfAvailable(aSize);
 }
 
+void CallbackHelper::SetConfiguration(
+    const webrtc::VideoCaptureCapability& aCapability) {
+  auto c = mConfiguration.Lock();
+  c.ref() = aCapability;
+}
+
 void CallbackHelper::OnCaptureEnded() {
   nsIEventTarget* target = mParent->GetBackgroundEventTarget();
 
@@ -378,6 +385,23 @@ void CallbackHelper::OnCaptureEnded() {
 }
 
 void CallbackHelper::OnFrame(const webrtc::VideoFrame& aVideoFrame) {
+  {
+    // Proactively drop frames that would not get processed anyway.
+    auto c = mConfiguration.Lock();
+    const double maxFramerate = std::clamp(
+        static_cast<double>(c->maxFPS > 0 ? c->maxFPS : 120), 0.01, 120.);
+    // Allow 5% higher fps than configured as frame time sampling is timing
+    // dependent.
+    const auto minInterval =
+        media::TimeUnit(1000, static_cast<int64_t>(1050 * maxFramerate));
+    const auto frameTime =
+        media::TimeUnit::FromMicroseconds(aVideoFrame.timestamp_us());
+    const auto frameInterval = frameTime - mLastFrameTime;
+    if (frameInterval < minInterval) {
+      return;
+    }
+    mLastFrameTime = frameTime;
+  }
   LOG_VERBOSE("CamerasParent(%p)::%s", mParent, __func__);
   if (profiler_thread_is_being_profiled_for_markers()) {
     PROFILER_MARKER_UNTYPED(
@@ -1036,36 +1060,40 @@ ipc::IPCResult CamerasParent::RecvStartCapture(
                 }
               }
 
-              bool cbhExists = false;
-              CallbackHelper** cbh = nullptr;
-              for (auto* cb : mCallbacks) {
+              CallbackHelper* cbh = nullptr;
+              for (auto& cb : mCallbacks) {
                 if (cb->mCapEngine == aCapEngine &&
                     cb->mStreamId == (uint32_t)aCaptureId) {
-                  cbhExists = true;
+                  cbh = cb.get();
                   break;
                 }
               }
-              if (!cbhExists) {
-                cbh = mCallbacks.AppendElement(new CallbackHelper(
-                    static_cast<CaptureEngine>(aCapEngine), aCaptureId, this));
+              bool cbhCreated = !cbh;
+              if (!cbh) {
+                cbh = mCallbacks
+                          .AppendElement(MakeUnique<CallbackHelper>(
+                              static_cast<CaptureEngine>(aCapEngine),
+                              aCaptureId, this))
+                          ->get();
                 cap.VideoCapture()->SetTrackingId(
-                    (*cbh)->mTrackingId.mUniqueInProcId);
+                    cbh->mTrackingId.mUniqueInProcId);
               }
 
+              cbh->SetConfiguration(capability);
               error = cap.VideoCapture()->StartCapture(capability);
 
               if (!error) {
-                if (cbh) {
+                if (cbhCreated) {
                   cap.VideoCapture()->RegisterCaptureDataCallback(
                       static_cast<
                           webrtc::VideoSinkInterface<webrtc::VideoFrame>*>(
-                          *cbh));
+                          cbh));
                   if (auto* event = cap.CaptureEndedEvent();
-                      event && !(*cbh)->mConnectedToCaptureEnded) {
-                    (*cbh)->mCaptureEndedListener =
-                        event->Connect(mVideoCaptureThread, (*cbh),
+                      event && !cbh->mConnectedToCaptureEnded) {
+                    cbh->mCaptureEndedListener =
+                        event->Connect(mVideoCaptureThread, cbh,
                                        &CallbackHelper::OnCaptureEnded);
-                    (*cbh)->mConnectedToCaptureEnded = true;
+                    cbh->mConnectedToCaptureEnded = true;
                   }
                 }
               } else {
@@ -1148,7 +1176,7 @@ void CamerasParent::StopCapture(const CaptureEngine& aCapEngine,
     for (size_t i = mCallbacks.Length(); i > 0; i--) {
       if (mCallbacks[i - 1]->mCapEngine == aCapEngine &&
           mCallbacks[i - 1]->mStreamId == (uint32_t)aCaptureId) {
-        CallbackHelper* cbh = mCallbacks[i - 1];
+        CallbackHelper* cbh = mCallbacks[i - 1].get();
         engine->WithEntry(aCaptureId, [cbh, &aCaptureId](
                                           VideoEngine::CaptureEntry& cap) {
           if (cap.VideoCapture()) {
@@ -1162,7 +1190,6 @@ void CamerasParent::StopCapture(const CaptureEngine& aCapEngine,
           }
         });
         cbh->mCaptureEndedListener.DisconnectIfExists();
-        delete mCallbacks[i - 1];
         mCallbacks.RemoveElementAt(i - 1);
         break;
       }
