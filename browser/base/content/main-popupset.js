@@ -520,6 +520,7 @@ document.addEventListener(
         case "bhTooltip":
           BookmarksEventHandler.fillInBHTooltip(event.target, event);
           break;
+
       }
     });
 

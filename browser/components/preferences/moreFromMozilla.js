@@ -91,9 +91,7 @@ var gMoreFromMozillaPane = {
           id: "fxMobile",
           type: "link",
           label_string_id: "more-from-moz-learn-more-link",
-          actionURL: BrowserUtils.isChinaRepack()
-            ? "https://www.firefox.com.cn/browsers/mobile/"
-            : "https://www.mozilla.org/firefox/browsers/mobile/",
+          actionURL: "https://kahana.co/oasis-mobile",
         },
         qrcode: {
           title: {
@@ -106,9 +104,7 @@ var gMoreFromMozillaPane = {
             label: {
               string_id: "more-from-moz-qr-code-box-firefox-mobile-button",
             },
-            actionURL: BrowserUtils.isChinaRepack()
-              ? "https://www.firefox.com.cn/mobile/get-app/"
-              : "https://www.mozilla.org/firefox/mobile/get-app/?v=mfm",
+            actionURL: "https://kahana.co/oasis-mobile",
           },
         },
       },
@@ -122,7 +118,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "mozillaMonitor",
           label_string_id: "more-from-moz-mozilla-monitor-button",
-          actionURL: "https://monitor.mozilla.org/",
+          actionURL: "https://kahana.co/schedule-demo",
         },
       },
     ];
@@ -136,7 +132,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "mozillaVPN",
           label_string_id: "more-from-moz-button-mozilla-vpn-2",
-          actionURL: "https://www.mozilla.org/products/vpn/",
+          actionURL: "https://kahana.co/sales",
         },
       };
       products.push(vpn);
@@ -151,7 +147,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "firefoxRelay",
           label_string_id: "more-from-moz-firefox-relay-button",
-          actionURL: "https://relay.firefox.com/",
+          actionURL: "https://kahana.co/oasis-augmented-reality",
         },
       };
       products.push(relay);
@@ -165,7 +161,7 @@ var gMoreFromMozillaPane = {
       button: {
         id: "soloAI",
         label_string_id: "more-from-moz-solo-button",
-        actionURL: "https://soloist.ai/?utm_type=more_from_mozilla",
+        actionURL: "https://kahana.co/community",
       },
     });
 
@@ -177,7 +173,7 @@ var gMoreFromMozillaPane = {
       button: {
         id: "mdn",
         label_string_id: "more-from-moz-mdn-button",
-        actionURL: "https://developer.mozilla.org/docs/Learn_web_development",
+        actionURL: "https://kahana.co/products/enterprise-browser",
       },
     });
 
