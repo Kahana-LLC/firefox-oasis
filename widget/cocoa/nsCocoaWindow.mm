@@ -163,6 +163,7 @@ static void RollUpPopups(nsIRollupListener::AllowAnimations aAllowAnimations =
 
 extern nsIArray* gDraggedTransferables;
 extern bool gCreatedFileForFileURL;
+extern bool gCreatedFileForFilePromise;
 ChildView* ChildViewMouseTracker::sLastMouseEventView = nil;
 NSEvent* ChildViewMouseTracker::sLastMouseMoveEvent = nil;
 NSWindow* ChildViewMouseTracker::sWindowUnderMouse = nil;
@@ -3800,7 +3801,7 @@ static gfx::IntPoint GetIntegerDeltaForEvent(NSEvent* aEvent) {
   NS_OBJC_END_TRY_IGNORE_BLOCK;
 }
 
-static NSURL* GetPasteLocation(NSPasteboard* aPasteboard) {
+static NSURL* GetPasteLocation(NSPasteboard* aPasteboard, bool aUseFallback) {
   // First, try to get the paste location from the low level pasteboard.
   PasteboardRef pboardRef = nullptr;
   PasteboardCreate((CFStringRef)[aPasteboard name], &pboardRef);
@@ -3814,6 +3815,10 @@ static NSURL* GetPasteLocation(NSPasteboard* aPasteboard) {
   CFRelease(pboardRef);
   if (urlRef) {
     return [(NSURL*)urlRef autorelease];
+  }
+
+  if (aUseFallback) {
+    return nil;
   }
 
   // If no paste location was present on the pasteboard, fall back to a temp
@@ -3880,12 +3885,18 @@ static NSURL* GetPasteLocation(NSPasteboard* aPasteboard) {
                                           stringFromPboardType:
                                               (NSString*)kUTTypeFileURL]] &&
                   !gCreatedFileForFileURL) ||
-                 [curType
-                     isEqualToString:
-                         [UTIHelper
-                             stringFromPboardType:
-                                 (NSString*)kPasteboardTypeFileURLPromise]]) {
-        NSURL* url = GetPasteLocation(aPasteboard);
+                 ([curType
+                      isEqualToString:
+                          [UTIHelper
+                              stringFromPboardType:
+                                  (NSString*)kPasteboardTypeFileURLPromise]] &&
+                  !gCreatedFileForFilePromise)) {
+        NSURL* url = GetPasteLocation(
+            aPasteboard,
+            [curType
+                isEqualToString:[UTIHelper
+                                    stringFromPboardType:(NSString*)
+                                                             kUTTypeFileURL]]);
         nsCOMPtr<nsILocalFileMac> macLocalFile;
         if (NS_FAILED(NS_NewLocalFileWithCFURL((__bridge CFURLRef)url,
                                                getter_AddRefs(macLocalFile)))) {
@@ -3938,6 +3949,8 @@ static NSURL* GetPasteLocation(NSPasteboard* aPasteboard) {
                 setString:[[NSURL fileURLWithPath:filePath] absoluteString]
                   forType:curType];
             gCreatedFileForFileURL = true;
+          } else {
+            gCreatedFileForFilePromise = true;
           }
         }
       } else if ([curType isEqualToString:[UTIHelper
@@ -6423,7 +6436,7 @@ nsresult nsCocoaWindow::SetTitle(const nsAString& aTitle) {
   const unichar* uniTitle = reinterpret_cast<const unichar*>(strTitle.get());
   NSString* title = [NSString stringWithCharacters:uniTitle
                                             length:strTitle.Length()];
-  if (mWindow.drawsContentsIntoWindowFrame && !mWindow.wantsTitleDrawn) {
+  if (mWindow.drawsContentsIntoWindowFrame) {
     // Don't cause invalidations when the title isn't displayed.
     [mWindow disableSetNeedsDisplay];
     [mWindow setTitle:title];
@@ -6888,21 +6901,27 @@ void nsCocoaWindow::SetWindowAnimationType(
   mAnimationType = aType;
 }
 
-void nsCocoaWindow::SetDrawsTitle(bool aDrawTitle) {
+void nsCocoaWindow::SetHideTitlebarSeparator(bool aHide) {
   NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
 
-  // If we don't draw into the window frame, we always want to display window
-  // titles.
-  mWindow.wantsTitleDrawn = aDrawTitle || !mWindow.drawsContentsIntoWindowFrame;
+  if (@available(macOS 11.0, *)) {
+    mWindow.titlebarSeparatorStyle = aHide ? NSTitlebarSeparatorStyleNone
+                                           : NSTitlebarSeparatorStyleAutomatic;
+  }
 
   NS_OBJC_END_TRY_IGNORE_BLOCK;
+}
+
+bool nsCocoaWindow::IsMacTitlebarDirectionRTL() {
+  return mWindow && mWindow.windowTitlebarLayoutDirection ==
+                        NSUserInterfaceLayoutDirectionRightToLeft;
 }
 
 void nsCocoaWindow::SetCustomTitlebar(bool aState) {
   NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
 
   if (mWindow) {
-    [mWindow setDrawsContentsIntoWindowFrame:aState];
+    mWindow.drawsContentsIntoWindowFrame = aState;
   }
 
   NS_OBJC_END_TRY_IGNORE_BLOCK;
@@ -7394,7 +7413,7 @@ void nsCocoaWindow::CocoaWindowDidResize() {
     return self.FrameView__closeButtonOrigin;
   }
   auto* win = static_cast<ToolbarWindow*>(self.window);
-  if (win.drawsContentsIntoWindowFrame && !win.wantsTitleDrawn &&
+  if (win.drawsContentsIntoWindowFrame &&
       !(win.styleMask & NSWindowStyleMaskFullScreen) &&
       (win.styleMask & NSWindowStyleMaskTitled)) {
     const NSRect buttonsRect = win.windowButtonsRect;
@@ -7520,7 +7539,6 @@ static NSMutableSet* gSwizzledFrameViewClasses = nil;
   mViewWithTrackingArea = nil;
   mDirtyRect = NSZeroRect;
   mBeingShown = NO;
-  mDrawTitle = NO;
   mTouchBar = nil;
   mIsAnimationSuppressed = NO;
 
@@ -7627,7 +7645,6 @@ static const NSString* kStateDrawsContentsIntoWindowFrameKey =
     @"drawsContentsIntoWindowFrame";
 static const NSString* kStateShowsToolbarButton = @"showsToolbarButton";
 static const NSString* kStateCollectionBehavior = @"collectionBehavior";
-static const NSString* kStateWantsTitleDrawn = @"wantsTitleDrawn";
 
 - (void)importState:(NSDictionary*)aState {
   if (NSString* title = [aState objectForKey:kStateTitleKey]) {
@@ -7640,8 +7657,6 @@ static const NSString* kStateWantsTitleDrawn = @"wantsTitleDrawn";
                                   boolValue]];
   [self setCollectionBehavior:[[aState objectForKey:kStateCollectionBehavior]
                                   unsignedIntValue]];
-  [self setWantsTitleDrawn:[[aState objectForKey:kStateWantsTitleDrawn]
-                               boolValue]];
 }
 
 - (NSMutableDictionary*)exportState {
@@ -7655,8 +7670,6 @@ static const NSString* kStateWantsTitleDrawn = @"wantsTitleDrawn";
             forKey:kStateShowsToolbarButton];
   [state setObject:[NSNumber numberWithUnsignedInt:self.collectionBehavior]
             forKey:kStateCollectionBehavior];
-  [state setObject:[NSNumber numberWithBool:self.wantsTitleDrawn]
-            forKey:kStateWantsTitleDrawn];
   return state;
 }
 
@@ -7710,16 +7723,6 @@ static const NSString* kStateWantsTitleDrawn = @"wantsTitleDrawn";
   }
 
   return [super animationResizeTime:newFrame];
-}
-
-- (void)setWantsTitleDrawn:(BOOL)aDrawTitle {
-  mDrawTitle = aDrawTitle;
-  [self setTitleVisibility:mDrawTitle ? NSWindowTitleVisible
-                                      : NSWindowTitleHidden];
-}
-
-- (BOOL)wantsTitleDrawn {
-  return mDrawTitle;
 }
 
 - (NSView*)trackingAreaView {
@@ -8046,6 +8049,20 @@ static bool ShouldShiftByMenubarHeightInFullscreen(nsCocoaWindow* aWindow) {
              integerForKey:@"AppleMenuBarVisibleInFullscreen"];
 }
 
+static CGFloat DefaultTitlebarHeight() {
+  static CGFloat sDefaultHeight = [] {
+    NSWindow* window =
+        [[NSWindow alloc] initWithContentRect:NSZeroRect
+                                    styleMask:NSWindowStyleMaskTitled
+                                      backing:NSBackingStoreBuffered
+                                        defer:NO];
+    CGFloat height = window.frame.size.height;
+    [window release];
+    return height;
+  }();
+  return sDefaultHeight;
+}
+
 - (void)updateTitlebarShownAmount:(CGFloat)aShownAmount {
   if (!(self.styleMask & NSWindowStyleMaskFullScreen)) {
     // We are not interested in the size of the titlebar unless we are in
@@ -8071,9 +8088,7 @@ static bool ShouldShiftByMenubarHeightInFullscreen(nsCocoaWindow* aWindow) {
     if (nsIWidgetListener* listener = geckoWindow->GetWidgetListener()) {
       // titlebarHeight returns 0 when we're in fullscreen, return the default
       // titlebar height.
-      CGFloat shiftByPixels =
-          LookAndFeel::GetInt(LookAndFeel::IntID::MacTitlebarHeight) *
-          aShownAmount;
+      CGFloat shiftByPixels = DefaultTitlebarHeight() * aShownAmount;
       if (ShouldShiftByMenubarHeightInFullscreen(geckoWindow)) {
         shiftByPixels += mMenuBarHeight * aShownAmount;
       }
@@ -8109,7 +8124,8 @@ static bool ShouldShiftByMenubarHeightInFullscreen(nsCocoaWindow* aWindow) {
   [super setDrawsContentsIntoWindowFrame:aState];
   if (stateChanged && [self.delegate isKindOfClass:[WindowDelegate class]]) {
     // Hide the titlebar if we are drawing into it
-    self.titlebarAppearsTransparent = self.drawsContentsIntoWindowFrame;
+    self.titlebarAppearsTransparent = aState;
+    self.titleVisibility = aState ? NSWindowTitleHidden : NSWindowTitleVisible;
 
     // Here we extend / shrink our mainChildView.
     [self updateChildViewFrameRect];

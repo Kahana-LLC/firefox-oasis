@@ -170,6 +170,7 @@
                    removable="false"
                    overflows="false"/>
       <toolbaritem id="urlbar-container"
+                   class="urlbar-container"
                    removable="false"
                    overflows="false">
         <toolbartabstop/>
@@ -601,7 +602,7 @@
       </hbox>
     </toolbaritem>
   </toolbar>
-  <toolbar id="notifications-toolbar" class="browser-toolbar" nowindowdrag="">
+  <toolbar id="notifications-toolbar" class="browser-toolbar" nowindowdrag="" fullscreentoolbar="true">
     <!-- NOTE: This gets instantiated in-place -->
     <html:template id="tab-notification-deck-template">
       <html:named-deck id="tab-notification-deck"></html:named-deck>
@@ -699,7 +700,7 @@
     </toolbarbutton>
 
     <toolbaritem id="search-container"
-                 class="chromeclass-toolbar-additional"
+                 class="chromeclass-toolbar-additional urlbar-container"
                  data-l10n-id="navbar-search"
                  align="center"
                  persist="width">

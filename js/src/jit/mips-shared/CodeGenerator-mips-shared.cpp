@@ -827,15 +827,16 @@ void CodeGenerator::visitShiftI(LShiftI* ins) {
         MOZ_CRASH("Unexpected shift op");
     }
   } else {
+    Register shift = ToRegister(rhs);
     switch (ins->bitop()) {
       case JSOp::Lsh:
-        masm.ma_sll(dest, lhs, dest);
+        masm.ma_sll(dest, lhs, shift);
         break;
       case JSOp::Rsh:
-        masm.ma_sra(dest, lhs, dest);
+        masm.ma_sra(dest, lhs, shift);
         break;
       case JSOp::Ursh:
-        masm.ma_srl(dest, lhs, dest);
+        masm.ma_srl(dest, lhs, shift);
         if (ins->mir()->toUrsh()->fallible()) {
           // x >>> 0 can overflow.
           bailoutCmp32(Assembler::LessThan, dest, Imm32(0), ins->snapshot());
@@ -2072,10 +2073,6 @@ void CodeGenerator::visitWasmAtomicBinopI64(LWasmAtomicBinopI64* lir) {
   masm.wasmAtomicFetchOp64(lir->mir()->access(), lir->mir()->operation(), value,
                            addr, temp, output);
 }
-
-void CodeGenerator::visitNearbyInt(LNearbyInt*) { MOZ_CRASH("NYI"); }
-
-void CodeGenerator::visitNearbyIntF(LNearbyIntF*) { MOZ_CRASH("NYI"); }
 
 void CodeGenerator::visitSimd128(LSimd128* ins) { MOZ_CRASH("No SIMD"); }
 

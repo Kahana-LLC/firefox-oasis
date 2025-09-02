@@ -45,13 +45,13 @@ import mozilla.components.compose.base.annotation.FlexibleWindowLightDarkPreview
 import mozilla.components.compose.base.button.IconButton
 import mozilla.components.compose.base.menu.DropdownMenu
 import mozilla.components.compose.base.menu.MenuItem
+import mozilla.components.compose.base.snackbar.displaySnackbar
 import mozilla.components.compose.base.textfield.TextField
 import mozilla.components.compose.base.textfield.TextFieldColors
 import mozilla.components.compose.base.textfield.TextFieldStyle
 import mozilla.components.compose.base.theme.AcornTheme
 import mozilla.components.lib.state.ext.observeAsState
 import org.mozilla.fenix.R
-import org.mozilla.fenix.compose.list.TextListItem
 import org.mozilla.fenix.theme.FirefoxTheme
 
 @Composable
@@ -220,15 +220,33 @@ private fun LoginDetailsUrl(store: LoginsStore, url: String) {
             .width(FirefoxTheme.layout.size.containerMaxWidth),
     )
 
-    TextListItem(
-        label = url,
+    TextField(
+        value = url,
+        onValueChange = {},
+        isEnabled = false,
+        placeholder = "",
+        errorText = "",
         modifier = Modifier
-            .padding(start = 16.dp)
+            .padding(horizontal = FirefoxTheme.layout.space.static200)
             .wrapContentHeight()
             .width(FirefoxTheme.layout.size.containerMaxWidth),
-        iconPainter = painterResource(R.drawable.ic_open_in_new),
-        iconDescription = stringResource(R.string.saved_login_open_site),
-        onIconClick = { store.dispatch(DetailLoginAction.GoToSiteClicked(url)) },
+        trailingIcons = {
+            IconButton(
+                modifier = Modifier
+                    .padding(horizontal = FirefoxTheme.layout.space.static50)
+                    .size(48.dp),
+                onClick = {
+                    store.dispatch(DetailLoginAction.GoToSiteClicked(url))
+                },
+                contentDescription = stringResource(R.string.saved_login_open_site),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_open_in_new),
+                    contentDescription = null,
+                    tint = AcornTheme.colors.textPrimary,
+                )
+            }
+        },
     )
 }
 
@@ -246,25 +264,41 @@ private fun LoginDetailsUsername(
         style = TextFieldStyle.default().labelStyle,
         color = TextFieldColors.default().labelColor,
         modifier = Modifier
-            .padding(start = 16.dp)
+            .padding(horizontal = FirefoxTheme.layout.space.static200)
             .width(FirefoxTheme.layout.size.containerMaxWidth),
     )
 
-    TextListItem(
-        label = username,
+    TextField(
+        value = username,
+        onValueChange = {},
+        isEnabled = false,
+        placeholder = "",
+        errorText = "",
         modifier = Modifier
-            .padding(start = 16.dp)
+            .padding(horizontal = FirefoxTheme.layout.space.static200)
             .wrapContentHeight()
             .width(FirefoxTheme.layout.size.containerMaxWidth),
-        iconPainter = painterResource(R.drawable.ic_copy),
-        iconDescription = stringResource(R.string.saved_login_copy_username),
-        onIconClick = {
-            store.dispatch(DetailLoginAction.CopyUsernameClicked(username))
-            showTextCopiedSnackbar(
-                message = usernameSnackbarText,
-                coroutineScope = coroutineScope,
-                snackbarHostState = snackbarHostState,
-            )
+        trailingIcons = {
+            IconButton(
+                modifier = Modifier
+                    .padding(horizontal = FirefoxTheme.layout.space.static50)
+                    .size(48.dp),
+                onClick = {
+                    store.dispatch(DetailLoginAction.CopyUsernameClicked(username))
+                    showTextCopiedSnackbar(
+                        message = usernameSnackbarText,
+                        coroutineScope = coroutineScope,
+                        snackbarHostState = snackbarHostState,
+                    )
+                },
+                contentDescription = stringResource(R.string.saved_login_copy_username),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_copy),
+                    contentDescription = null,
+                    tint = AcornTheme.colors.textPrimary,
+                )
+            }
         },
     )
 }
@@ -284,7 +318,7 @@ private fun LoginDetailsPassword(
         style = TextFieldStyle.default().labelStyle,
         color = TextFieldColors.default().labelColor,
         modifier = Modifier
-            .padding(start = 16.dp)
+            .padding(horizontal = FirefoxTheme.layout.space.static200)
             .width(FirefoxTheme.layout.size.containerMaxWidth),
     )
     TextField(
@@ -294,7 +328,8 @@ private fun LoginDetailsPassword(
         placeholder = "",
         errorText = "",
         modifier = Modifier
-            .padding(start = 32.dp)
+            .padding(horizontal = FirefoxTheme.layout.space.static200)
+            .wrapContentHeight()
             .width(FirefoxTheme.layout.size.containerMaxWidth),
         trailingIcons = {
             EyePasswordIconButton(
@@ -371,7 +406,7 @@ private fun showTextCopiedSnackbar(
     snackbarHostState: SnackbarHostState,
 ) {
     coroutineScope.launch {
-        snackbarHostState.showSnackbar(
+        snackbarHostState.displaySnackbar(
             message = message,
         )
     }

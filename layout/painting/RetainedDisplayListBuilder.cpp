@@ -305,8 +305,14 @@ bool RetainedDisplayListBuilder::PreProcessDisplayList(
         !item->GetActiveScrolledRoot()) {
       agrFrame = aAsyncAncestor;
     } else {
-      agrFrame = item->GetActiveScrolledRoot()
-                     ->mScrollContainerFrame->GetScrolledFrame();
+      auto* scrollContainerFrame =
+          item->GetActiveScrolledRoot()->mScrollContainerFrame;
+      if (MOZ_UNLIKELY(!scrollContainerFrame)) {
+        MOZ_DIAGNOSTIC_ASSERT(false);
+        gfxCriticalNoteOnce << "Found null mScrollContainerFrame in asr";
+        return false;
+      }
+      agrFrame = scrollContainerFrame->GetScrolledFrame();
     }
 
     if (aAGR && agrFrame != aAGR) {
@@ -378,18 +384,19 @@ static Maybe<const ActiveScrolledRoot*> SelectContainerASR(
 
 static void UpdateASR(nsDisplayItem* aItem,
                       Maybe<const ActiveScrolledRoot*>& aContainerASR) {
+  const Maybe<const ActiveScrolledRoot*> frameASR =
+      aItem->GetBaseASRForAncestorOfContainedASR();
+  if (!frameASR) {
+    return;
+  }
+
   if (!aContainerASR) {
+    aItem->SetActiveScrolledRoot(*frameASR);
     return;
   }
 
-  nsDisplayWrapList* wrapList = aItem->AsDisplayWrapList();
-  if (!wrapList) {
-    aItem->SetActiveScrolledRoot(*aContainerASR);
-    return;
-  }
-
-  wrapList->SetActiveScrolledRoot(ActiveScrolledRoot::PickAncestor(
-      wrapList->GetFrameActiveScrolledRoot(), *aContainerASR));
+  aItem->SetActiveScrolledRoot(
+      ActiveScrolledRoot::PickAncestor(*frameASR, *aContainerASR));
 }
 
 static void CopyASR(nsDisplayItem* aOld, nsDisplayItem* aNew) {

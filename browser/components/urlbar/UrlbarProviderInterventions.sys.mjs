@@ -468,15 +468,6 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
   }
 
   /**
-   * Unique name for the provider, used by the context to filter on providers.
-   *
-   * @returns {string}
-   */
-  get name() {
-    return "UrlbarProviderInterventions";
-  }
-
-  /**
    * @returns {Values<typeof UrlbarUtils.PROVIDER_TYPE>}
    */
   get type() {
@@ -530,7 +521,11 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
     if (topDocIDs.has("update")) {
       this._setCurrentTipFromAppUpdaterStatus();
     } else if (topDocIDs.has("clear")) {
-      let window = lazy.BrowserWindowTracker.getTopWindow();
+      // bug 1983835 - should this only look for windows on the current
+      // workspace?
+      let window = lazy.BrowserWindowTracker.getTopWindow({
+        allowFromInactiveWorkspace: true,
+      });
       if (!lazy.PrivateBrowsingUtils.isWindowPrivate(window)) {
         this.currentTip = TIPS.CLEAR;
       }

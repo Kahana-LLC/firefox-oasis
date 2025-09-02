@@ -861,7 +861,7 @@ pref("browser.search.visualSearch.featureGate", false);
 pref("browser.spin_cursor_while_busy", false);
 
 // Enable display of contextual-password-manager option in browser sidebar
-pref("browser.contextual-password-manager.enabled", true);
+pref("browser.contextual-password-manager.enabled", false);
 
 // Whether the user has opted-in to recommended settings for data features.
 pref("browser.dataFeatureRecommendations.enabled", false);
@@ -1337,6 +1337,7 @@ pref("browser.send_pings", false);
 
 pref("browser.geolocation.warning.infoURL", "https://www.mozilla.org/%LOCALE%/firefox/geolocation/");
 pref("browser.xr.warning.infoURL", "https://www.mozilla.org/%LOCALE%/firefox/xr/");
+pref("browser.lna.warning.infoURL", "https://support.mozilla.org/%LOCALE%/kb/control-personal-device-local-network-permissions-firefox");
 
 pref("browser.sessionstore.resume_from_crash", true);
 pref("browser.sessionstore.resume_session_once", false);
@@ -1807,7 +1808,7 @@ pref("browser.newtabpage.activity-stream.mobileDownloadModal.variant-b", false);
 pref("browser.newtabpage.activity-stream.mobileDownloadModal.variant-c", false);
 
 // Show refined card layout on newtab
-pref("browser.newtabpage.activity-stream.discoverystream.refinedCardsLayout.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.refinedCardsLayout.enabled", true);
 
 // Mozilla Ad Routing Service (MARS) unified ads service
 pref("browser.newtabpage.activity-stream.unifiedAds.tiles.enabled", true);
@@ -1931,7 +1932,7 @@ pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonSponsors", "")
 pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonVariant", "");
 
 // Pref enabling content reporting
-pref("browser.newtabpage.activity-stream.discoverystream.reportAds.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.reportAds.enabled", true);
 
 // List of regions that do not get stories, regardless of locale-list-config.
 pref("browser.newtabpage.activity-stream.discoverystream.region-stories-block", "");
@@ -2038,7 +2039,7 @@ pref("browser.newtabpage.activity-stream.telemetry.surfaceId", "");
 pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.searchTopsitesCompact", true);
 
 // Displays publisher favicons on recommended stories of New Tab page
-pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", true);
 
 // User pref to show stories on newtab (feeds.system.topstories has to be set to true as well)
 pref("browser.newtabpage.activity-stream.feeds.section.topstories", true);

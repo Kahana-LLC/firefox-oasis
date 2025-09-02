@@ -1782,8 +1782,10 @@ bool nsWindow::WaylandPopupConfigure() {
     mPopupContextMenu = WaylandPopupIsContextMenu();
   }
 
-  LOG("nsWindow::WaylandPopupConfigure tracked %d anchored %d hint %d\n",
-      mPopupTrackInHierarchy, mPopupAnchored, int(mPopupType));
+  LOG("nsWindow::WaylandPopupConfigure tracked %d anchored %d hint %d "
+      "permanent %d\n",
+      mPopupTrackInHierarchy, mPopupAnchored, int(mPopupType),
+      WaylandPopupIsPermanent());
 
   // Permanent state changed and popup is mapped.
   // We need to switch popup type but that's done when popup is mapped
@@ -2216,16 +2218,12 @@ void nsWindow::WaylandPopupSetDirectPosition() {
   if (popupWidth > parentWidth) {
     mPopupPosition.x = -(parentWidth - popupWidth) / 2 + x;
   } else {
-    if (IsPopupDirectionRTL()) {
-      // Stick with right window edge
-      if (mPopupPosition.x < x) {
-        mPopupPosition.x = x;
-      }
-    } else {
-      // Stick with left window edge
-      if (mPopupPosition.x + popupWidth > parentWidth + x) {
-        mPopupPosition.x = parentWidth + x - popupWidth;
-      }
+    if (mPopupPosition.x < x) {
+      // Stick with left window edge if it's placed too left
+      mPopupPosition.x = x;
+    } else if (mPopupPosition.x + popupWidth > parentWidth + x) {
+      // Stick with right window edge otherwise
+      mPopupPosition.x = parentWidth + x - popupWidth;
     }
   }
 
@@ -7063,20 +7061,25 @@ void nsWindow::UpdateOpaqueRegionInternal() {
         cairo_rectangle_int_t rect = {gdkRect.x + offset.x,
                                       gdkRect.y + offset.y, gdkRect.width,
                                       gdkRect.height};
+        LOG("nsWindow::UpdateOpaqueRegionInternal() set opaque region [%d,%d] "
+            "-> [%d x %d]",
+            gdkRect.x, gdkRect.y, gdkRect.width, gdkRect.height);
         cairo_region_union_rectangle(region, &rect);
       }
+    } else {
+      LOG("nsWindow::UpdateOpaqueRegionInternal() window is transparent");
     }
     gdk_window_set_opaque_region(window, region);
     if (region) {
       cairo_region_destroy(region);
     }
-  }
 
 #ifdef MOZ_WAYLAND
-  if (GdkIsWaylandDisplay()) {
-    moz_container_wayland_update_opaque_region(mContainer);
-  }
+    if (GdkIsWaylandDisplay()) {
+      mSurface->SetOpaqueRegion(mOpaqueRegion.ToUnknownRegion());
+    }
 #endif
+  }
 }
 
 bool nsWindow::IsChromeWindowTitlebar() {

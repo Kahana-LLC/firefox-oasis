@@ -1421,13 +1421,13 @@ void CodeGenerator::visitShiftI(LShiftI* ins) {
   } else {
     switch (ins->bitop()) {
       case JSOp::Lsh:
-        masm.sllw(dest, lhs, dest);
+        masm.sllw(dest, lhs, ToRegister(rhs));
         break;
       case JSOp::Rsh:
-        masm.sraw(dest, lhs, dest);
+        masm.sraw(dest, lhs, ToRegister(rhs));
         break;
       case JSOp::Ursh:
-        masm.srlw(dest, lhs, dest);
+        masm.srlw(dest, lhs, ToRegister(rhs));
         if (ins->mir()->toUrsh()->fallible()) {
           // x >>> 0 can overflow.
           bailoutCmp32(Assembler::LessThan, dest, Imm32(0), ins->snapshot());
@@ -2475,10 +2475,6 @@ void CodeGenerator::visitWasmAtomicBinopI64(LWasmAtomicBinopI64* lir) {
   masm.wasmAtomicFetchOp64(lir->mir()->access(), lir->mir()->operation(), value,
                            addr, temp, output);
 }
-
-void CodeGenerator::visitNearbyInt(LNearbyInt*) { MOZ_CRASH("NYI"); }
-
-void CodeGenerator::visitNearbyIntF(LNearbyIntF*) { MOZ_CRASH("NYI"); }
 
 void CodeGenerator::visitSimd128(LSimd128* ins) { MOZ_CRASH("No SIMD"); }
 

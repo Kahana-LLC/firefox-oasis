@@ -367,6 +367,7 @@ ChromeUtils.defineLazyGetter(this, "gNavToolbox", () => {
 ChromeUtils.defineLazyGetter(this, "gURLBar", () => {
   let urlbar = new UrlbarInput({
     textbox: document.getElementById("urlbar"),
+    isAddressbar: true,
     eventTelemetryCategory: "urlbar",
   });
 
@@ -1605,7 +1606,10 @@ function FillHistoryMenu(event) {
       if (j != index) {
         // Use --menuitem-icon rather than the image attribute in order to
         // allow CSS to override this.
-        item.style.setProperty("--menuitem-icon", `url(page-icon:${uri})`);
+        item.style.setProperty(
+          "--menuitem-icon",
+          `url(page-icon:${CSS.escape(uri)})`
+        );
       }
 
       if (j < index) {

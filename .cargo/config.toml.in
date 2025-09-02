@@ -15,11 +15,6 @@ git = "https://github.com/FirefoxGraphics/wpf-gpu-raster"
 rev = "99979da091fd58fba8477e7fcdf5ec0727102916"
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/Gankra/thin-vec?rev=3b4d5c838eacf5e2156d89bfdb559b6377bd6c39"]
-git = "https://github.com/Gankra/thin-vec"
-rev = "3b4d5c838eacf5e2156d89bfdb559b6377bd6c39"
-replace-with = "vendored-sources"
-
 [source."git+https://github.com/beurdouche/mls-platform-api?rev=5d88241b9765cae3669aba21f0946bd3700f7db1"]
 git = "https://github.com/beurdouche/mls-platform-api"
 rev = "5d88241b9765cae3669aba21f0946bd3700f7db1"
@@ -40,9 +35,9 @@ git = "https://github.com/franziskuskiefer/cose-rust"
 rev = "43c22248d136c8b38fe42ea709d08da6355cf04b"
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/gfx-rs/wgpu?rev=54be6a2b5b780e356976ef7e30d00244f2bad651"]
+[source."git+https://github.com/gfx-rs/wgpu?rev=1301f80688cca5add83d9d12af00c9d5510a9d24"]
 git = "https://github.com/gfx-rs/wgpu"
-rev = "54be6a2b5b780e356976ef7e30d00244f2bad651"
+rev = "1301f80688cca5add83d9d12af00c9d5510a9d24"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/glandium/rust-objc?rev=4de89f5aa9851ceca4d40e7ac1e2759410c04324"]
@@ -100,9 +95,14 @@ git = "https://github.com/mozilla/mp4parse-rust"
 rev = "f955be5d2a04a631c0f1777d6f35370ea1a99e2d"
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/mozilla/neqo?tag=v0.14.1"]
+[source."git+https://github.com/mozilla/neqo?tag=v0.15.0"]
 git = "https://github.com/mozilla/neqo"
-tag = "v0.14.1"
+tag = "v0.15.0"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rust-lang/rust-bindgen?rev=9366e0af8da529c958b4cd4fcbe492d951c86f5c"]
+git = "https://github.com/rust-lang/rust-bindgen"
+rev = "9366e0af8da529c958b4cd4fcbe492d951c86f5c"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/servo/rust-cssparser?rev=958a3f098acb92ddacdce18a7ef2c4a87ac3326f"]

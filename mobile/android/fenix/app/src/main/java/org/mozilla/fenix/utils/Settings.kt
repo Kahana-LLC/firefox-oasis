@@ -2075,6 +2075,15 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     var onboardingFeatureEnabled = FeatureFlags.onboardingFeatureEnabled
 
     /**
+     * Indicates if the onboarding redesign should be used.
+     */
+    var useOnboardingRedesign by lazyFeatureFlagPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_use_onboarding_redesign),
+        featureFlag = true,
+        default = { FxNimbus.features.junoOnboarding.value().useOnboardingRedesign },
+    )
+
+    /**
      * Indicates if the marketing onboarding card should be shown to the user.
      */
     var shouldShowMarketingOnboarding by booleanPreference(
@@ -2085,7 +2094,7 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     var shouldUseComposableToolbar by lazyFeatureFlagPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_composable_toolbar),
         default = { FxNimbus.features.composableToolbar.value().enabled },
-        featureFlag = true,
+        featureFlag = FeatureFlags.composableToolbar,
     )
 
     /**

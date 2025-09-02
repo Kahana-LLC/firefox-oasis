@@ -163,9 +163,12 @@ class WindowGlobalParent final : public WindowContext,
   void PermitUnload(std::function<void(bool)>&& aResolver);
 
   void PermitUnloadTraversable(const SessionHistoryInfo& aInfo,
+                               nsIDocumentViewer::PermitUnloadAction aAction,
                                std::function<void(bool)>&& aResolver);
 
-  void PermitUnloadChildNavigables(std::function<void(bool)>&& aResolver);
+  void PermitUnloadChildNavigables(
+      nsIDocumentViewer::PermitUnloadAction aAction,
+      std::function<void(bool)>&& aResolverm);
 
   already_AddRefed<mozilla::dom::Promise> DrawSnapshot(
       const DOMRect* aRect, double aScale, const nsACString& aBackgroundColor,
@@ -278,8 +281,9 @@ class WindowGlobalParent final : public WindowContext,
       const IPCClientInfo& aIPCClientInfo);
   mozilla::ipc::IPCResult RecvDestroy();
   mozilla::ipc::IPCResult RecvRawMessage(
-      const JSActorMessageMeta& aMeta, const Maybe<ClonedMessageData>& aData,
-      const Maybe<ClonedMessageData>& aStack);
+      const JSActorMessageMeta& aMeta,
+      const UniquePtr<ClonedMessageData>& aData,
+      const UniquePtr<ClonedMessageData>& aStack);
 
   mozilla::ipc::IPCResult RecvGetContentBlockingEvents(
       GetContentBlockingEventsResolver&& aResolver);
