@@ -22,11 +22,11 @@
       <image id="trackingProtectionShield"/>
       <description class="description-with-side-element" flex="1">
         <html:span id="contentBlockingDescription" data-l10n-id="content-blocking-section-top-level-description"></html:span>
-        <html:a is="moz-support-link"
+        <html:a href="https://kahana.co/docs/enhanced-tracking-protection"
                 id="contentBlockingLearnMore"
                 class="learnMore"
                 data-l10n-id="content-blocking-learn-more"
-                support-page="enhanced-tracking-protection"
+                target="_blank"
         />
       </description>
       <button id="trackingProtectionExceptions"
@@ -50,9 +50,9 @@
       <vbox flex="1">
         <description>
           <html:span data-l10n-id="content-blocking-rfp-incompatibility-warning"/>
-          <html:a is="moz-support-link"
+          <html:a href="https://kahana.co/docs/resist-fingerprinting"
                   class="learnMore"
-                  support-page="resist-fingerprinting"
+                  target="_blank"
           />
         </description>
       </vbox>
@@ -129,11 +129,11 @@
                 <label class="content-blocking-warning-title" data-l10n-id="content-blocking-etp-standard-tcp-title"/>
                 <description>
                   <html:span data-l10n-id="content-blocking-etp-standard-tcp-rollout-description"></html:span>
-                  <html:a is="moz-support-link"
+                  <html:a href="https://kahana.co/docs/total-cookie-protection"
                           id="tcp-learn-more-link"
                           class="learnMore"
                           data-l10n-id="content-blocking-etp-standard-tcp-rollout-learn-more"
-                          support-page="total-cookie-protection"
+                          target="_blank"
                   />
                 </description>
               </vbox>
@@ -242,7 +242,7 @@
                   <html:a is="moz-support-link"
                           class="learnMore"
                           data-l10n-id="content-blocking-warning-learn-how"
-                          support-page="turn-off-etp-desktop"
+                          href="https://kahana.co/docs/enhanced-tracking-protection" target="_blank"
                   />
                 </description>
               </vbox>
@@ -370,7 +370,7 @@
                   <html:a is="moz-support-link"
                           class="learnMore"
                           data-l10n-id="content-blocking-warning-learn-how"
-                          support-page="turn-off-etp-desktop"
+                          href="https://kahana.co/docs/enhanced-tracking-protection" target="_blank"
                   />
                 </description>
               </vbox>
@@ -394,10 +394,10 @@
     <vbox flex="1">
       <description class="description-with-side-element description-deemphasized" flex="1">
         <html:span id="totalSiteDataSize"></html:span>
-        <html:a is="moz-support-link"
+        <html:a href="https://kahana.co/docs/storage-permissions"
                 id="siteDataLearnMoreLink"
                 data-l10n-id="sitedata-learn-more"
-                support-page="storage-permissions"
+                target="_blank"
         />
       </description>
       <hbox flex="1" id="deleteOnCloseNote" class="info-box-container smaller-font-size">
@@ -536,10 +536,10 @@
                 class="tail-with-learn-more"
                 data-l10n-id="forms-breach-alerts"
                 preference="signon.management.page.breach-alerts.enabled"/>
-      <html:a is="moz-support-link"
+      <html:a href="https://kahana.co/docs/lockwise-alerts"
               id="breachAlertsLearnMoreLink"
               data-l10n-id="forms-breach-alerts-learn-more-link"
-              support-page="lockwise-alerts"
+              target="_blank"
       />
     </hbox>
   </vbox>
@@ -554,10 +554,10 @@
       <checkbox id="useMasterPassword"
                 data-l10n-id="forms-primary-pw-use"
                 class="tail-with-learn-more"/>
-      <html:a is="moz-support-link"
+      <html:a href="https://kahana.co/docs/primary-password"
               id="primaryPasswordLearnMoreLink"
               data-l10n-id="forms-primary-pw-learn-more-link"
-              support-page="primary-password-stored-logins"
+              target="_blank"
       />
       <spacer flex="1"/>
       <button id="changeMasterPassword"
@@ -840,11 +840,11 @@
         <label id="notificationPermissionsLabel"
                class="tail-with-learn-more"
                data-l10n-id="permissions-notification"/>
-        <html:a is="moz-support-link"
+        <html:a href="https://kahana.co/docs/notifications"
                 id="notificationPermissionsLearnMore"
                 class="learnMore"
                 data-l10n-id="permissions-notification-link"
-                support-page="push"
+                target="_blank"
         />
       </hbox>
       <hbox pack="end">
@@ -982,10 +982,10 @@
     <description>
       <html:span id="telemetryDisabledDescription"
                  data-l10n-id="collection-health-report-telemetry-disabled"/>
-      <html:a is="moz-support-link"
-              support-page="telemetry-clientid"
+      <html:a href="https://kahana.co/docs/technical-and-interaction-data"
               class="learnMore"
-              data-l10n-id="collection-health-report-telemetry-disabled-link"/>
+              data-l10n-id="collection-health-report-telemetry-disabled-link"
+              target="_blank"/>
     </description>
   </hbox>
 
@@ -999,10 +999,10 @@
       <html:span data-l10n-id="collection-health-report-disabled2"/>
 #endif # MOZ_TELEMETRY_REPORTING
       <html:a id="FHRLearnMore"
-              is="moz-support-link"
-              support-page="technical-and-interaction-data"
+              href="https://kahana.co/docs/technical-and-interaction-data"
               class="learnMore"
-              data-l10n-id="collection-health-report-link"/>
+              data-l10n-id="collection-health-report-link"
+              target="_blank"/>
     </description>
 
     <vbox class="indent">
@@ -1010,10 +1010,10 @@
                 data-l10n-id="addon-recommendations2"/>
       <description class="indent tip-caption">
         <html:span data-l10n-id="addon-recommendations-description"/>
-        <html:a is="moz-support-link"
+        <html:a href="https://kahana.co/docs/extension-recommendations"
                 id="addonRecommendationLearnMore"
                 class="learnMore"
-                support-page="personalized-addons"/>
+                target="_blank"/>
       </description>
 
 #ifdef MOZ_NORMANDY
@@ -1036,9 +1036,9 @@
     <description class="indent tip-caption">
       <html:span data-l10n-id="collection-usage-ping-description"/>
       <html:a id="submitUsagePingLearnMore"
-              is="moz-support-link"
+              href="https://kahana.co/docs/usage-ping-settings"
               class="learnMore"
-              support-page="usage-ping-settings"/>
+              target="_blank"/>
     </description>
 
 #ifdef MOZ_CRASHREPORTER
@@ -1047,9 +1047,9 @@
               preference="browser.crashReports.unsubmittedCheck.autoSubmit2"/>
     <description class="indent tip-caption">
       <html:span data-l10n-id="collection-backlogged-crash-reports-description"/>
-      <html:a is="moz-support-link"
+      <html:a href="https://kahana.co/docs/crash-report"
               class="learnMore"
-              support-page="crash-reports"
+              target="_blank"
               id="crashReporterLearnMore"/>
     </description>
 #endif # MOZ_CRASHREPORTER
@@ -1060,7 +1060,7 @@
                    preference="browser.urlbar.quicksuggest.dataCollection.enabled"
                    data-l10n-id="addressbar-firefox-suggest-data-collection"
                    data-l10n-attrs="label, description"
-                   support-page="firefox-suggest#w_what-setting-is-opt-in"
+                   support-page="kahana-improve-oasis-suggest"
   />
   <vbox id="privacySegmentationSection" data-subcategory="privacy-segmentation" hidden="true">
     <label>
@@ -1227,10 +1227,10 @@
   <vbox id="dohStatusSection" class="privacy-detailedoption info-box-container">
     <hbox>
       <label id="dohStatus" class="doh-status-label tail-with-learn-more"/>
-      <html:a is="moz-support-link"
+      <html:a href="https://kahana.co/docs/dns-over-https"
             id="dohStatusLearnMore"
             class="learnMore"
-            support-page="doh-status"
+            target="_blank"
             hidden="true"/>
     </hbox>
     <label class="doh-status-label" id="dohResolver"/>
@@ -1288,10 +1288,10 @@
                 </hbox>
                 <hbox class="extra-information-label">
                   <label class="doh-label tail-with-learn-more" data-l10n-id="preferences-doh-default-detailed-desc-5"/>
-                  <html:a is="moz-support-link"
+                  <html:a href="https://kahana.co/docs/default-protection"
                           id="default-desc-5-learn-more"
                           class="learnMore"
-                          support-page="firefox-turn-off-secure-dns"
+                          target="_blank"
                   />
                 </hbox>
               </vbox>

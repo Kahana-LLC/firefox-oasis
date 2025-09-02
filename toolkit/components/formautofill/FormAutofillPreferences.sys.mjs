@@ -107,9 +107,7 @@ FormAutofillPreferences.prototype = {
       let addressAutofill = document.createXULElement("hbox");
       let addressAutofillCheckboxGroup = document.createXULElement("hbox");
       let addressAutofillCheckbox = document.createXULElement("checkbox");
-      let addressAutofillLearnMore = document.createElement("a", {
-        is: "moz-support-link",
-      });
+      let addressAutofillLearnMore = document.createElement("a");
       let savedAddressesBtn = document.createXULElement("button", {
         is: "highlightable-button",
       });
@@ -134,8 +132,12 @@ FormAutofillPreferences.prototype = {
       savedAddressesBtnWrapper.setAttribute("align", "start");
 
       addressAutofillLearnMore.setAttribute(
-        "support-page",
-        "autofill-card-address"
+        "href",
+        "https://kahana.co/docs/autofill"
+      );
+      addressAutofillLearnMore.setAttribute(
+        "target",
+        "_blank"
       );
 
       // Add preferences search support
@@ -172,9 +174,7 @@ FormAutofillPreferences.prototype = {
       let creditCardAutofill = document.createXULElement("hbox");
       let creditCardAutofillCheckboxGroup = document.createXULElement("hbox");
       let creditCardAutofillCheckbox = document.createXULElement("checkbox");
-      let creditCardAutofillLearnMore = document.createElement("a", {
-        is: "moz-support-link",
-      });
+      let creditCardAutofillLearnMore = document.createElement("a");
       let savedCreditCardsBtn = document.createXULElement("button", {
         is: "highlightable-button",
       });
@@ -202,8 +202,12 @@ FormAutofillPreferences.prototype = {
       savedCreditCardsBtnWrapper.setAttribute("align", "start");
 
       creditCardAutofillLearnMore.setAttribute(
-        "support-page",
-        "credit-card-autofill"
+        "href",
+        "https://kahana.co/docs/payment-methods"
+      );
+      creditCardAutofillLearnMore.setAttribute(
+        "target",
+        "_blank"
       );
 
       let creditCardsAutofillDescription =
@@ -252,9 +256,7 @@ FormAutofillPreferences.prototype = {
         let reauth = document.createXULElement("hbox");
         let reauthCheckboxGroup = document.createXULElement("hbox");
         let reauthCheckbox = document.createXULElement("checkbox");
-        let reauthLearnMore = document.createElement("a", {
-          is: "moz-support-link",
-        });
+        let reauthLearnMore = document.createElement("a");
 
         reauthCheckboxGroup.classList.add("indent");
         reauthCheckbox.classList.add("tail-with-learn-more");
@@ -277,8 +279,12 @@ FormAutofillPreferences.prototype = {
         );
 
         reauthLearnMore.setAttribute(
-          "support-page",
-          "credit-card-autofill#w_require-authentication-for-autofill"
+          "href",
+          "https://kahana.co/docs/autofill"
+        );
+        reauthLearnMore.setAttribute(
+          "target",
+          "_blank"
         );
 
         reauthCheckboxGroup.setAttribute("align", "center");

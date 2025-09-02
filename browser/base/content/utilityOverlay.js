@@ -497,7 +497,7 @@ function openTroubleshootingPage() {
  * Opens the feedback page for this version of the application.
  */
 function openFeedbackPage() {
-  var url = Services.urlFormatter.formatURLPref("app.feedback.baseURL");
+  var url = "https://kahana.co/oasis-feedback-survey";
   openTrustedLinkIn(url, "tab");
 }
 

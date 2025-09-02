@@ -15401,9 +15401,9 @@ class _Weather extends (external_React_default()).PureComponent {
       onUpdate: this.onUpdate,
       options: contextOpts,
       site: {
-        url: "https://support.mozilla.org/kb/customize-items-on-firefox-new-tab-page"
+        url: "https://kahana.co/docs/weather-customization"
       },
-      link: "https://support.mozilla.org/kb/customize-items-on-firefox-new-tab-page",
+      link: "https://kahana.co/docs/weather-customization",
       shouldSendImpressionStats: false
     }) : null));
     if (Weather.searchActive) {
