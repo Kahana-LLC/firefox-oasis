@@ -27,12 +27,12 @@ class SampleIterator {
   ~SampleIterator();
   bool HasNext();
   already_AddRefed<mozilla::MediaRawData> GetNextHeader();
-  already_AddRefed<mozilla::MediaRawData> GetNext();
+  Result<already_AddRefed<mozilla::MediaRawData>, MediaResult> GetNext();
   void Seek(const media::TimeUnit& aTime);
   media::TimeUnit GetNextKeyframeTime();
 
  private:
-  Sample* Get();
+  Result<Sample*, nsresult> Get();
 
   // Gets the sample description entry for the current moof, or nullptr if
   // called without a valid current moof.

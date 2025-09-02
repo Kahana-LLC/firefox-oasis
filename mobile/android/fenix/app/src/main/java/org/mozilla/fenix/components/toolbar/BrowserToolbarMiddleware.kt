@@ -635,6 +635,7 @@ class BrowserToolbarMiddleware(
                                 sessionId = tab.id,
                                 url = tab.content.url,
                                 title = tab.content.title,
+                                isLocalPdf = tab.content.url.isContentUrl(),
                                 isSecured = tab.content.securityInfo.secure,
                                 sitePermissions = sitePermissions,
                                 certificateName = tab.content.securityInfo.issuer,
@@ -690,7 +691,9 @@ class BrowserToolbarMiddleware(
 
     private fun buildStartPageActions(): List<Action> {
         return listOf(
-            ToolbarActionConfig(ToolbarAction.SiteInfo),
+            ToolbarActionConfig(ToolbarAction.SiteInfo) {
+                !browserScreenStore.state.readerModeStatus.isActive
+            },
         ).filter { config ->
             config.isVisible()
         }.map { config ->
@@ -794,10 +797,14 @@ class BrowserToolbarMiddleware(
     }
 
     private suspend fun updateNavigationActions(context: MiddlewareContext<BrowserToolbarState, BrowserToolbarAction>) {
-        val isBookmarked =
-            browserStore.state.selectedTab?.content?.url?.let {
-                bookmarksStorage.getBookmarksWithUrl(it).isNotEmpty()
-            } == true
+        val url = browserStore.state.selectedTab?.content?.url
+        val isBookmarked = if (url != null) {
+            withContext(Dispatchers.IO) {
+                bookmarksStorage.getBookmarksWithUrl(url).isNotEmpty()
+            }
+        } else {
+            false
+        }
 
         context.dispatch(
             NavigationActionsUpdated(
@@ -956,6 +963,7 @@ class BrowserToolbarMiddleware(
         browserScreenStore.observeWhileActive {
             distinctUntilChangedBy { it.readerModeStatus }
                 .collect {
+                    updateStartPageActions(context)
                     updateEndPageActions(context)
                 }
         }

@@ -55,7 +55,7 @@ IonCacheIRCompiler::IonCacheIRCompiler(JSContext* cx, TempAllocator& alloc,
       ionScript_(ionScript),
       savedLiveRegs_(false),
       localTracingSlots_(0),
-      perfSpewer_(ic->pc()) {
+      perfSpewer_(ic->script(), ic->pc()) {
   MOZ_ASSERT(ic_);
   MOZ_ASSERT(ionScript_);
 }
@@ -267,7 +267,7 @@ void IonCacheIRCompiler::enterStubFrame(MacroAssembler& masm,
                                         const AutoSaveLiveRegisters&) {
   MOZ_ASSERT(!enteredStubFrame_);
   pushStubCodePointer();
-  masm.PushFrameDescriptor(FrameType::IonJS);
+  masm.Push(FrameDescriptor(FrameType::IonJS));
   masm.Push(ImmPtr(GetReturnAddressToIonCode(cx_)));
 
   masm.Push(FramePointer);
@@ -592,6 +592,8 @@ JitCode* IonCacheIRCompiler::compile(IonICStub* stub) {
 
   allocator.fixupAliasedInputs(masm);
 
+  perfSpewer_.startRecording();
+
   CacheIRReader reader(writer_);
   do {
     CacheOp op = reader.readOp();
@@ -613,6 +615,8 @@ JitCode* IonCacheIRCompiler::compile(IonICStub* stub) {
   masm.assumeUnreachable("Should have returned from IC");
 
   // Done emitting the main IC code. Now emit the failure paths.
+  perfSpewer_.recordOffset(masm, "FailurePath");
+
   for (size_t i = 0; i < failurePaths.length(); i++) {
     if (!emitFailurePath(i)) {
       return nullptr;
@@ -624,6 +628,8 @@ JitCode* IonCacheIRCompiler::compile(IonICStub* stub) {
       return nullptr;
     }
   }
+
+  perfSpewer_.endRecording();
 
   Linker linker(masm);
   Rooted<JitCode*> newStubCode(cx_, linker.newCode(cx_, CodeKind::Ion));
@@ -966,7 +972,7 @@ bool IonCacheIRCompiler::emitCallScriptedGetterResult(
   }
 
   masm.Push(callee);
-  masm.PushFrameDescriptorForJitCall(FrameType::IonICCall, /* argc = */ 0);
+  masm.Push(FrameDescriptor(FrameType::IonICCall, /* argc = */ 0));
 
   // Check stack alignment. Add 2 * sizeof(uintptr_t) for the return address and
   // frame pointer pushed by the call/callee.
@@ -1059,7 +1065,7 @@ bool IonCacheIRCompiler::emitCallScriptedProxyGetShared(
   masm.Push(scratchVal);
 
   masm.Push(callee);
-  masm.PushFrameDescriptorForJitCall(FrameType::IonICCall, /* argc = */ 3);
+  masm.Push(FrameDescriptor(FrameType::IonICCall, /* argc = */ 3));
 
   // Check stack alignment. Add 2 * sizeof(uintptr_t) for the return address and
   // frame pointer pushed by the call/callee.
@@ -1733,7 +1739,7 @@ bool IonCacheIRCompiler::emitCallScriptedSetter(ObjOperandId receiverId,
   }
 
   masm.Push(callee);
-  masm.PushFrameDescriptorForJitCall(FrameType::IonICCall, /* argc = */ 1);
+  masm.Push(FrameDescriptor(FrameType::IonICCall, /* argc = */ 1));
 
   // Check stack alignment. Add 2 * sizeof(uintptr_t) for the return address and
   // frame pointer pushed by the call/callee.
@@ -2115,7 +2121,7 @@ bool IonCacheIRCompiler::emitCloseIterScriptedResult(ObjOperandId iterId,
   masm.Push(TypedOrValueRegister(MIRType::Object, AnyRegister(iter)));
 
   masm.Push(callee);
-  masm.PushFrameDescriptorForJitCall(FrameType::IonICCall, /* argc = */ 0);
+  masm.Push(FrameDescriptor(FrameType::IonICCall, /* argc = */ 0));
 
   masm.loadJitCodeRaw(callee, callee);
   masm.callJit(callee);

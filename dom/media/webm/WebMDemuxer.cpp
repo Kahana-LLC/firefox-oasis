@@ -134,8 +134,16 @@ int WebMDemuxer::NestEggContext::Init() {
   io.tell = webmdemux_tell;
   io.userdata = this;
 
-  return nestegg_init(&mContext, io, &webmdemux_log,
-                      mParent->IsMediaSource() ? mResource.GetLength() : -1);
+  return nestegg_init(
+      &mContext, io, &webmdemux_log,
+      // nestegg_init() would return an error, from ne_parse(), if a resource
+      // read were to fail.
+      // For MediaSource, TrackBuffersManager::InitializationSegmentReceived()
+      // calls WebMDemuxer::Init() while the resource has cached only the
+      // bytes of the initialization segment.  max_offset is passed so that no
+      // read will fail.
+      mParent->IsMediaSource() ? mResource.GetResource()->GetCachedDataEnd(0)
+                               : -1);
 }
 
 WebMDemuxer::WebMDemuxer(MediaResource* aResource)
@@ -619,8 +627,14 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
   // Attempt to fetch the timestamp of the next packet for this track.
   result = NextPacket(aType);
   if (result.isErr()) {
-    nsresult rv = result.unwrapErr();
-    if (rv != NS_ERROR_DOM_MEDIA_END_OF_STREAM) {
+    nsresult rv = result.inspectErr();
+    if (rv != NS_ERROR_DOM_MEDIA_END_OF_STREAM &&
+        // Gecko has historically estimated a duration for the last frame
+        // available in a SourceBuffer, if possible, even though this might
+        // result in a different frame duration from that which would be
+        // calculated if the frame were not parsed until the next frame
+        // becomes available.
+        rv != NS_ERROR_DOM_MEDIA_WAITING_FOR_DATA) {
       WEBM_DEBUG("NextPacket: error");
       return rv;
     }
@@ -682,7 +696,7 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
 
   if (mIsMediaSource && next_tstamp == INT64_MIN) {
     WEBM_DEBUG("WebM is a media source, and next timestamp computation filed.");
-    return NS_ERROR_DOM_MEDIA_END_OF_STREAM;
+    return result.unwrapErr();
   }
 
   int64_t discardPadding = 0;
@@ -795,19 +809,31 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
         sample->mDuration = TimeUnit::Invalid();
       } else {
         TimeUnit padding = TimeUnit::FromNanoseconds(discardPadding);
-        size_t samples = opus_packet_get_nb_samples(
+        const int samples = opus_packet_get_nb_samples(
             sample->Data(), AssertedCast<int32_t>(sample->Size()),
             AssertedCast<int32_t>(mInfo.mAudio.mRate));
-        TimeUnit packetDuration = TimeUnit(samples, mInfo.mAudio.mRate);
-        if (padding > packetDuration || mProcessedDiscardPadding) {
+        if (samples <= 0) {
           WEBM_DEBUG(
-              "Padding frames larger than packet size, flagging the packet for "
-              "error (padding: %s, duration: %s, already processed: %s)",
-              padding.ToString().get(), packetDuration.ToString().get(),
-              mProcessedDiscardPadding ? "true" : "false");
+              "Invalid number of samples, flagging packet for error (padding: "
+              "%s, samples: %d, already processed: %s, error: %s)",
+              padding.ToString().get(), samples,
+              mProcessedDiscardPadding ? "true" : "false",
+              (samples == OPUS_BAD_ARG)          ? "OPUS_BAD_ARG"
+              : (samples == OPUS_INVALID_PACKET) ? "OPUS_INVALID_PACKET"
+                                                 : "Undefined Error");
           sample->mDuration = TimeUnit::Invalid();
         } else {
-          sample->mDuration = packetDuration - padding;
+          TimeUnit packetDuration = TimeUnit(samples, mInfo.mAudio.mRate);
+          if (padding > packetDuration || mProcessedDiscardPadding) {
+            WEBM_DEBUG(
+                "Padding frames larger than packet size, flagging packet for "
+                "error (padding: %s, duration: %s, already processed: %s)",
+                padding.ToString().get(), packetDuration.ToString().get(),
+                mProcessedDiscardPadding ? "true" : "false");
+            sample->mDuration = TimeUnit::Invalid();
+          } else {
+            sample->mDuration = packetDuration - padding;
+          }
         }
       }
       mProcessedDiscardPadding = true;
@@ -1226,12 +1252,15 @@ RefPtr<WebMTrackDemuxer::SamplesPromise> WebMTrackDemuxer::GetSamples(
   RefPtr<SamplesHolder> samples = new SamplesHolder;
   MOZ_ASSERT(aNumSamples);
 
-  nsresult rv = NS_ERROR_DOM_MEDIA_END_OF_STREAM;
-
   while (aNumSamples) {
     RefPtr<MediaRawData> sample;
-    rv = NextSample(sample);
+    nsresult rv = NextSample(sample);
     if (NS_FAILED(rv)) {
+      if ((rv != NS_ERROR_DOM_MEDIA_END_OF_STREAM &&
+           rv != NS_ERROR_DOM_MEDIA_WAITING_FOR_DATA) ||
+          samples->GetSamples().IsEmpty()) {
+        return SamplesPromise::CreateAndReject(rv, __func__);
+      }
       break;
     }
     // Ignore empty samples.
@@ -1252,12 +1281,8 @@ RefPtr<WebMTrackDemuxer::SamplesPromise> WebMTrackDemuxer::GetSamples(
     aNumSamples--;
   }
 
-  if (samples->GetSamples().IsEmpty()) {
-    return SamplesPromise::CreateAndReject(rv, __func__);
-  } else {
-    UpdateSamples(samples->GetSamples());
-    return SamplesPromise::CreateAndResolve(samples, __func__);
-  }
+  UpdateSamples(samples->GetSamples());
+  return SamplesPromise::CreateAndResolve(samples, __func__);
 }
 
 void WebMTrackDemuxer::SetNextKeyFrameTime() {

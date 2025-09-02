@@ -2305,6 +2305,13 @@ void MNearbyInt::trySpecializeFloat32(TempAllocator& alloc) {
   }
 }
 
+void MRoundToDouble::trySpecializeFloat32(TempAllocator& alloc) {
+  if (EnsureFloatConsumersAndInputOrConvert(this, alloc)) {
+    specialization_ = MIRType::Float32;
+    setResultType(MIRType::Float32);
+  }
+}
+
 MGoto* MGoto::New(TempAllocator& alloc, MBasicBlock* target) {
   return new (alloc) MGoto(target);
 }
@@ -6011,6 +6018,67 @@ void MCompare::trySpecializeFloat32(TempAllocator& alloc) {
   } else {
     ConvertOperandsToDouble(this, alloc);
   }
+}
+
+MDefinition* MStrictConstantCompareInt32::foldsTo(TempAllocator& alloc) {
+  if (!value()->isBox()) {
+    return this;
+  }
+  MDefinition* unboxed = value()->toBox()->input();
+
+  if (unboxed->type() == MIRType::Int32) {
+    if (unboxed->isConstant()) {
+      bool result =
+          FoldComparison(jsop(), unboxed->toConstant()->toInt32(), constant());
+      return MConstant::NewBoolean(alloc, result);
+    }
+
+    auto* cst = MConstant::NewInt32(alloc, constant());
+    block()->insertBefore(this, cst);
+
+    return MCompare::New(alloc, unboxed, cst, jsop(), MCompare::Compare_Int32);
+  }
+
+  if (unboxed->type() == MIRType::Double) {
+    if (unboxed->isConstant()) {
+      bool result = FoldComparison(jsop(), unboxed->toConstant()->toDouble(),
+                                   double(constant()));
+      return MConstant::NewBoolean(alloc, result);
+    }
+
+    auto* cst = MConstant::NewDouble(alloc, constant());
+    block()->insertBefore(this, cst);
+
+    return MCompare::New(alloc, unboxed, cst, jsop(), MCompare::Compare_Double);
+  }
+
+  MOZ_ASSERT(!IsNumberType(unboxed->type()));
+  return MConstant::NewBoolean(alloc, jsop() == JSOp::StrictNe);
+}
+
+MDefinition* MStrictConstantCompareBoolean::foldsTo(TempAllocator& alloc) {
+  if (!value()->isBox()) {
+    return this;
+  }
+  MDefinition* unboxed = value()->toBox()->input();
+
+  if (unboxed->type() == MIRType::Boolean) {
+    if (unboxed->isConstant()) {
+      bool result = (jsop() == JSOp::StrictEq) ==
+                    (unboxed->toConstant()->toBoolean() == constant());
+      return MConstant::NewBoolean(alloc, result);
+    }
+
+    auto* inputI32 = MBooleanToInt32::New(alloc, unboxed);
+    block()->insertBefore(this, inputI32);
+
+    auto* cst = MConstant::NewInt32(alloc, int32_t(constant()));
+    block()->insertBefore(this, cst);
+
+    return MCompare::New(alloc, inputI32, cst, jsop(), MCompare::Compare_Int32);
+  }
+
+  return MConstant::NewBoolean(alloc, jsop() == JSOp::StrictNe);
 }
 
 MDefinition* MSameValue::foldsTo(TempAllocator& alloc) {

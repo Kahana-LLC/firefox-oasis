@@ -552,16 +552,16 @@ IPCResult WindowGlobalParent::RecvDestroy() {
 }
 
 IPCResult WindowGlobalParent::RecvRawMessage(
-    const JSActorMessageMeta& aMeta, const Maybe<ClonedMessageData>& aData,
-    const Maybe<ClonedMessageData>& aStack) {
-  Maybe<StructuredCloneData> data;
+    const JSActorMessageMeta& aMeta, const UniquePtr<ClonedMessageData>& aData,
+    const UniquePtr<ClonedMessageData>& aStack) {
+  UniquePtr<StructuredCloneData> data;
   if (aData) {
-    data.emplace();
+    data = MakeUnique<StructuredCloneData>();
     data->BorrowFromClonedMessageData(*aData);
   }
-  Maybe<StructuredCloneData> stack;
+  UniquePtr<StructuredCloneData> stack;
   if (aStack) {
-    stack.emplace();
+    stack = MakeUnique<StructuredCloneData>();
     stack->BorrowFromClonedMessageData(*aStack);
   }
   MMPrinter::Print("WindowGlobalParent::RecvRawMessage", aMeta.actorName(),
@@ -1026,21 +1026,24 @@ void WindowGlobalParent::PermitUnload(std::function<void(bool)>&& aResolver) {
 }
 
 void WindowGlobalParent::PermitUnloadTraversable(
-    const SessionHistoryInfo& aInfo, std::function<void(bool)>&& aResolver) {
+    const SessionHistoryInfo& aInfo,
+    nsIDocumentViewer::PermitUnloadAction aAction,
+    std::function<void(bool)>&& aResolver) {
   MOZ_DIAGNOSTIC_ASSERT(BrowsingContext()->IsTop());
   RefPtr<CheckPermitUnloadRequest> request =
-      MakeRefPtr<CheckPermitUnloadRequest>(
-          this, /* aHasInProcessBlocker */ false,
-          nsIDocumentViewer::PermitUnloadAction::ePrompt, std::move(aResolver));
+      MakeRefPtr<CheckPermitUnloadRequest>(this,
+                                           /* aHasInProcessBlocker */ false,
+                                           aAction, std::move(aResolver));
   request->RunTraversable(aInfo);
 }
 
 void WindowGlobalParent::PermitUnloadChildNavigables(
+    nsIDocumentViewer::PermitUnloadAction aAction,
     std::function<void(bool)>&& aResolver) {
   RefPtr<CheckPermitUnloadRequest> request =
-      MakeRefPtr<CheckPermitUnloadRequest>(
-          this, /* aHasInProcessBlocker */ false,
-          nsIDocumentViewer::PermitUnloadAction::ePrompt, std::move(aResolver));
+      MakeRefPtr<CheckPermitUnloadRequest>(this,
+                                           /* aHasInProcessBlocker */ false,
+                                           aAction, std::move(aResolver));
   request->RunChildNavigables();
 }
 
