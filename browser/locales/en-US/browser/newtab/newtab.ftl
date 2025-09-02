@@ -253,7 +253,9 @@ newtab-custom-row-selector =
         }
 newtab-custom-stories-toggle =
   .label = Recommended stories
+
   .description = Exceptional content curated by the { -brand-product-name } family
+
 
 newtab-custom-stories-personalized-toggle =
   .label = Stories
