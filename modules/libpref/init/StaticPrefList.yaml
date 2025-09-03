@@ -5552,7 +5552,7 @@
 # Whether WebGPU's GPUExternalTexture API is enabled.
 - name: dom.webgpu.external-texture.enabled
   type: bool
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_MACOSX)
   value: true
 #else
   value: false
@@ -7799,7 +7799,7 @@
     mirror: always
 -   name: gfx.webrender.swap-chain-allow-tearing
     type: bool
-    value: true
+    value: false
     mirror: once
 #endif
 
@@ -16371,12 +16371,6 @@
 - name: privacy.dynamic_firstparty.use_site
   type: RelaxedAtomicBool
   value: true
-  mirror: always
-
-# Controls whether or not the dFPI partition key includes non-standard ports
-- name: privacy.dynamic_firstparty.use_site.include_port
-  type: RelaxedAtomicBool
-  value: false
   mirror: always
 
 - name: privacy.partition.network_state

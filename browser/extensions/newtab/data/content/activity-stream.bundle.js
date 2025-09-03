@@ -3526,9 +3526,6 @@ function DSThumbsUpDownButtons({
 const READING_WPM = 220;
 const PREF_OHTTP_MERINO = "discoverystream.merino-provider.ohttp.enabled";
 const PREF_OHTTP_UNIFIED_ADS = "unifiedAds.ohttp.enabled";
-const PREF_CONTEXTUAL_ADS = "discoverystream.sections.contextualAds.enabled";
-const PREF_INFERRED_PERSONALIZATION_SYSTEM = "discoverystream.sections.personalization.inferred.enabled";
-const PREF_INFERRED_PERSONALIZATION_USER = "discoverystream.sections.personalization.inferred.user.enabled";
 const DSCard_PREF_SECTIONS_ENABLED = "discoverystream.sections.enabled";
 const PREF_FAVICONS_ENABLED = "discoverystream.publisherFavicon.enabled";
 
@@ -4083,19 +4080,15 @@ class _DSCard extends (external_React_default()).PureComponent {
     } = this.props;
     let ohttpEnabled = false;
     if (flightId) {
-      ohttpEnabled = Prefs.values[PREF_CONTEXTUAL_ADS] && Prefs.values[PREF_OHTTP_UNIFIED_ADS];
+      ohttpEnabled = Prefs.values[PREF_OHTTP_UNIFIED_ADS];
     } else {
       ohttpEnabled = Prefs.values[PREF_OHTTP_MERINO];
     }
-    const inferredPersonalizationUser = Prefs.values[PREF_INFERRED_PERSONALIZATION_USER];
-    const inferredPersonalizationSystem = Prefs.values[PREF_INFERRED_PERSONALIZATION_SYSTEM];
-    const inferredPersonalization = inferredPersonalizationSystem && inferredPersonalizationUser;
     const ohttpImagesEnabled = Prefs.values.ohttpImagesConfig?.enabled;
     const includeTopStoriesSection = Prefs.values.ohttpImagesConfig?.includeTopStoriesSection;
-    const sectionsEnabled = Prefs.values[DSCard_PREF_SECTIONS_ENABLED];
     const nonPersonalizedSections = ["top_stories_section"];
     const sectionPersonalized = !nonPersonalizedSections.includes(this.props.section) || includeTopStoriesSection;
-    const secureImage = sectionsEnabled && ohttpImagesEnabled && ohttpEnabled && sectionPersonalized && inferredPersonalization;
+    const secureImage = ohttpImagesEnabled && ohttpEnabled && sectionPersonalized;
     return secureImage;
   }
   renderImage({
@@ -4935,9 +4928,6 @@ const PromoCard = () => {
 
 const AdBanner_PREF_SECTIONS_ENABLED = "discoverystream.sections.enabled";
 const AdBanner_PREF_OHTTP_UNIFIED_ADS = "unifiedAds.ohttp.enabled";
-const AdBanner_PREF_CONTEXTUAL_ADS = "discoverystream.sections.contextualAds.enabled";
-const PREF_USER_INFERRED_PERSONALIZATION = "discoverystream.sections.personalization.inferred.user.enabled";
-const PREF_SYSTEM_INFERRED_PERSONALIZATION = "discoverystream.sections.personalization.inferred.enabled";
 const PREF_REPORT_ADS_ENABLED = "discoverystream.reportAds.enabled";
 const PREF_PROMOCARD_ENABLED = "discoverystream.promoCard.enabled";
 const PREF_PROMOCARD_VISIBLE = "discoverystream.promoCard.visible";
@@ -4984,8 +4974,6 @@ const AdBanner = ({
   const promoCardEnabled = spoc.format === "billboard" && prefs[PREF_PROMOCARD_ENABLED] && prefs[PREF_PROMOCARD_VISIBLE];
   const sectionsEnabled = prefs[AdBanner_PREF_SECTIONS_ENABLED];
   const ohttpEnabled = prefs[AdBanner_PREF_OHTTP_UNIFIED_ADS];
-  const contextualAds = prefs[AdBanner_PREF_CONTEXTUAL_ADS];
-  const inferredPersonalization = prefs[PREF_USER_INFERRED_PERSONALIZATION] && prefs[PREF_SYSTEM_INFERRED_PERSONALIZATION];
   const showAdReporting = prefs[PREF_REPORT_ADS_ENABLED];
   const ohttpImagesEnabled = prefs.ohttpImagesConfig?.enabled;
   const [menuActive, setMenuActive] = (0,external_React_namespaceObject.useState)(false);
@@ -5023,7 +5011,7 @@ const AdBanner = ({
   // in the default card grid 1 would come before the 1st row of cards and 9 comes after the last row
   // using clamp to make sure its between valid values (1-9)
   const clampedRow = Math.max(1, Math.min(9, row));
-  const secureImage = ohttpImagesEnabled && ohttpEnabled && contextualAds && inferredPersonalization && sectionsEnabled;
+  const secureImage = ohttpImagesEnabled && ohttpEnabled;
   let rawImageSrc = spoc.raw_image_src;
 
   // Wraps the image URL with the moz-cached-ohttp:// protocol.
@@ -11559,7 +11547,7 @@ const CardSections_PREF_BILLBOARD_POSITION = "newtabAdSize.billboard.position";
 const CardSections_PREF_LEADERBOARD_ENABLED = "newtabAdSize.leaderboard";
 const CardSections_PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
 const PREF_REFINED_CARDS_ENABLED = "discoverystream.refinedCardsLayout.enabled";
-const CardSections_PREF_INFERRED_PERSONALIZATION_USER = "discoverystream.sections.personalization.inferred.user.enabled";
+const PREF_INFERRED_PERSONALIZATION_USER = "discoverystream.sections.personalization.inferred.user.enabled";
 const CardSections_PREF_TRENDING_SEARCH = "trendingSearch.enabled";
 const CardSections_PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled";
 const CardSections_PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
@@ -11957,7 +11945,7 @@ function CardSections({
   }
   function displayP13nCard() {
     if (messageData && Object.keys(messageData).length >= 1) {
-      if (shouldShowOMCHighlight(messageData, "PersonalizedCard") && prefs[CardSections_PREF_INFERRED_PERSONALIZATION_USER]) {
+      if (shouldShowOMCHighlight(messageData, "PersonalizedCard") && prefs[PREF_INFERRED_PERSONALIZATION_USER]) {
         const row = messageData.content.position;
         sectionsToRender.splice(row, 0, /*#__PURE__*/external_React_default().createElement(MessageWrapper, {
           dispatch: dispatch,
@@ -13942,6 +13930,7 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     this.handleChange = this.handleChange.bind(this);
     this.handleReset = this.handleReset.bind(this);
     this.handleCategory = this.handleCategory.bind(this);
+    this.focusCategory = this.focusCategory.bind(this);
     this.handleUpload = this.handleUpload.bind(this);
     this.handleBack = this.handleBack.bind(this);
     this.getRGBColors = this.getRGBColors.bind(this);
@@ -13957,7 +13946,8 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       showColorPicker: false,
       inputType: "radio",
       activeId: null,
-      customWallpaperErrorType: null
+      customWallpaperErrorType: null,
+      focusedCategoryIndex: 0
     };
   }
   componentDidMount() {
@@ -14021,6 +14011,15 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       had_uploaded_previously: !!uploadedPreviously
     });
   }
+  focusCategory(focusIndex) {
+    if (!this.categoryRef) {
+      return;
+    }
+    const el = this.categoryRef[focusIndex];
+    if (el) {
+      el.focus();
+    }
+  }
 
   // function implementing arrow navigation for wallpaper category selection
   handleCategoryKeyDown(event, category) {
@@ -14041,7 +14040,9 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     } else if (eventKey === "ArrowLeft") {
       nextIndex = getIndex - 1 >= 0 ? getIndex - 1 : getIndex;
     }
-    this.categoryRef[nextIndex].focus();
+    this.setState({
+      focusedCategoryIndex: nextIndex
+    }, () => this.focusCategory(nextIndex));
   }
 
   // function implementing arrow navigation for wallpaper selection
@@ -14200,8 +14201,12 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
   handleBack() {
     this.setState({
       activeCategory: null
+    }, () => {
+      // Wait for the category grid to be back in the DOM
+      requestAnimationFrame(() => {
+        this.focusCategory(this.state.focusedCategoryIndex);
+      });
     });
-    this.categoryRef[0]?.focus();
   }
 
   // Record user interaction when changing wallpaper and reseting wallpaper to default
@@ -14329,6 +14334,8 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     }, categories.map((category, index) => {
       const filteredList = wallpaperList.filter(wallpaper => wallpaper.category === category);
       const activeWallpaperObj = activeWallpaper && filteredList.find(wp => wp.title === activeWallpaper);
+      // Detect custom solid color
+      const isCustomSolidColor = category === "solid-colors" && activeWallpaper.startsWith("solid-color-picker");
       const thumbnail = activeWallpaperObj || filteredList[0];
       let fluent_id;
       switch (category) {
@@ -14353,6 +14360,12 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       } else {
         style.backgroundColor = thumbnail?.solid_color || "";
       }
+      // If custom solid color is active, override the thumbnail to the chosen hex
+      if (isCustomSolidColor) {
+        const hex = activeWallpaper.split("solid-color-picker-")[1] || "";
+        style.backgroundColor = hex;
+      }
+      const isCategorySelected = activeWallpaperObj || isCustomSolidColor;
       return /*#__PURE__*/external_React_default().createElement("div", {
         key: category
       }, /*#__PURE__*/external_React_default().createElement("button", WallpaperCategories_extends({
@@ -14366,9 +14379,20 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
         onKeyDown: e => this.handleCategoryKeyDown(e, category)
         // Add overrides for custom wallpaper upload UI
         ,
-        onClick: category !== "custom-wallpaper" ? this.handleCategory : this.handleUpload,
-        className: category !== "custom-wallpaper" ? `wallpaper-input` : `wallpaper-input theme-custom-wallpaper`,
-        tabIndex: index === 0 ? 0 : -1
+        onClick: event => {
+          this.setState({
+            focusedCategoryIndex: index
+          });
+          if (category !== "custom-wallpaper") {
+            this.handleCategory(event);
+          } else {
+            this.handleUpload();
+          }
+        },
+        className: `wallpaper-input
+                      ${category === "custom-wallpaper" ? "theme-custom-wallpaper" : ""}
+                      ${isCategorySelected ? "selected" : ""}`,
+        tabIndex: this.state.focusedCategoryIndex === index ? 0 : -1
       }, category === "custom-wallpaper" ? {
         "aria-errormessage": "customWallpaperError"
       } : {})), /*#__PURE__*/external_React_default().createElement("label", {
@@ -16070,7 +16094,7 @@ function Base_extends() { return Base_extends = Object.assign ? Object.assign.bi
 
 const Base_VISIBLE = "visible";
 const Base_VISIBILITY_CHANGE_EVENT = "visibilitychange";
-const Base_PREF_INFERRED_PERSONALIZATION_SYSTEM = "discoverystream.sections.personalization.inferred.enabled";
+const PREF_INFERRED_PERSONALIZATION_SYSTEM = "discoverystream.sections.personalization.inferred.enabled";
 const Base_PREF_INFERRED_PERSONALIZATION_USER = "discoverystream.sections.personalization.inferred.user.enabled";
 
 // Returns a function will not be continuously triggered when called. The
@@ -16540,7 +16564,7 @@ class BaseContent extends (external_React_default()).PureComponent {
       trendingSearchEnabled: prefs["trendingSearch.enabled"]
     };
     const pocketRegion = prefs["feeds.system.topstories"];
-    const mayHaveInferredPersonalization = prefs[Base_PREF_INFERRED_PERSONALIZATION_SYSTEM];
+    const mayHaveInferredPersonalization = prefs[PREF_INFERRED_PERSONALIZATION_SYSTEM];
     const mayHaveWeather = prefs["system.showWeather"];
     const supportUrl = prefs["support.url"];
 
