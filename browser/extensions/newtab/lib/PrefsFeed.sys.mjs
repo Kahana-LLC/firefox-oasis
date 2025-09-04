@@ -316,7 +316,7 @@ export class PrefsFeed {
       lazy.NimbusFeatures.newtabSmartShortcuts.getAllVariables() || {};
     values.widgetsConfig =
       lazy.NimbusFeatures.newtabWidgets.getAllVariables() || {};
-    this._setBoolPref(values, "logowordmark.alwaysVisible", false);
+    this._setBoolPref(values, "logowordmark.alwaysVisible", true);
     this._setBoolPref(values, "feeds.section.topstories", false);
     this._setBoolPref(values, "discoverystream.enabled", false);
     this._setBoolPref(values, "discoverystream.hardcoded-basic-layout", false);
