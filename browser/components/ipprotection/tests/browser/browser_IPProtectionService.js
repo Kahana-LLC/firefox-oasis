@@ -75,7 +75,7 @@ add_task(async function test_IPProtectionService_updateEnrollment() {
 });
 
 /**
- * Tests a user in the experiment can enroll with Guardian on sign-in.
+ * Tests a user in the experiment can enroll with Guardian on opening the panel.
  */
 add_task(async function test_IPProtectionService_enroll() {
   setupService({
@@ -92,6 +92,8 @@ add_task(async function test_IPProtectionService_enroll() {
   });
 
   await IPProtectionService.updateSignInStatus();
+  await openPanel();
+  await IPProtectionService.enrolling;
 
   Assert.ok(IPProtectionService.isEnrolled, "User should now be enrolled");
 
@@ -118,7 +120,8 @@ add_task(
 
     await waitForWidgetAdded();
 
-    await IPProtectionService.updateSignInStatus();
+    await openPanel();
+    await IPProtectionService.enrolling;
 
     Assert.ok(IPProtectionService.isEnrolled, "User should now be enrolled");
 
@@ -146,6 +149,9 @@ add_task(
     await waitForWidgetAdded();
 
     await IPProtectionService.updateSignInStatus();
+
+    await openPanel();
+    await IPProtectionService.enrolling;
 
     Assert.equal(
       IPProtectionService.isEntitled,
@@ -196,10 +202,10 @@ add_task(async function test_IPProtectionService_proxyPass() {
   IPProtectionService.isSignedIn = false;
   await IPProtectionService.updateSignInStatus();
 
+  let content = await openPanel();
+
   Assert.ok(IPProtectionService.isEnrolled, "User should be enrolled");
   Assert.equal(IPProtectionService.isEntitled, true, "User should be entitled");
-
-  let content = await openPanel();
 
   Assert.ok(
     BrowserTestUtils.isVisible(content),
@@ -298,6 +304,10 @@ add_task(async function test_IPProtectionService_pass_errors() {
 
   Assert.equal(content.state.error, "", "Should have no error");
 
+  // Reset the errors
+  IPProtectionService.hasError = false;
+  IPProtectionService.errors = [];
+
   await cleanupAlpha();
   cleanupService();
 });
@@ -308,7 +318,7 @@ add_task(async function test_IPProtectionService_pass_errors() {
 add_task(async function test_IPProtectionService_retry_errors() {
   setupService({
     isSignedIn: true,
-    isEnrolled: false,
+    isEnrolled: true,
     canEnroll: true,
   });
   let cleanupAlpha = await setupExperiment({ enabled: true, variant: "alpha" });
@@ -418,10 +428,10 @@ add_task(async function test_IPProtectionService_reload() {
   IPProtectionService.isSignedIn = false;
   await IPProtectionService.updateSignInStatus();
 
+  let content = await openPanel();
+
   Assert.ok(IPProtectionService.isEnrolled, "User should be enrolled");
   Assert.equal(IPProtectionService.isEntitled, true, "User should be entitled");
-
-  let content = await openPanel();
 
   Assert.ok(
     BrowserTestUtils.isVisible(content),
@@ -517,4 +527,113 @@ add_task(async function test_IPProtectionService_addon() {
   );
 
   await extension2.unload();
+});
+
+add_task(async function test_IPProtectionService_handleProxyErrorEvent() {
+  setupService({
+    isSignedIn: true,
+    canEnroll: true,
+  });
+  let cleanupAlpha = await setupExperiment({ enabled: true, variant: "alpha" });
+
+  await openPanel();
+
+  await IPProtectionService.start();
+
+  const cases = [
+    {
+      name: "Non-401 HTTP status - should not rotate",
+      httpStatus: 500,
+      level: "error",
+      shouldRotate: false,
+    },
+    {
+      name: "Different isolation key - should not rotate",
+      httpStatus: 401,
+      level: "error",
+      isolationKey: "different-key",
+      shouldRotate: false,
+    },
+    {
+      name: "401 with warning level - accepts whatever shouldRotate returns",
+      httpStatus: 401,
+      level: "warning",
+      shouldRotate: false, // This will depend on the actual shouldRotate implementation
+    },
+    {
+      name: "401 with error level - should rotate",
+      httpStatus: 401,
+      level: "error",
+      shouldRotate: true,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const originalIsolationKey = IPProtectionService.connection?.isolationKey;
+    // Create the error event
+    const errorEvent = new CustomEvent("proxy-http-error", {
+      detail: {
+        isolationKey: testCase.isolationKey || originalIsolationKey,
+        level: testCase.level,
+        httpStatus: testCase.httpStatus,
+      },
+    });
+
+    console.log(`Testing: ${testCase.name}`);
+
+    const result = IPProtectionService.handleProxyErrorEvent(errorEvent);
+
+    if (testCase.shouldRotate) {
+      Assert.ok(
+        result,
+        `${testCase.name}: Should return a promise when rotation is triggered`
+      );
+
+      await result;
+
+      const newIsolationKey = IPProtectionService.connection?.isolationKey;
+      Assert.notEqual(
+        originalIsolationKey,
+        newIsolationKey,
+        `${testCase.name}: Isolation key should change after token rotation`
+      );
+    } else {
+      Assert.equal(
+        result,
+        undefined,
+        `${testCase.name}: Should not return a promise when rotation is not triggered`
+      );
+
+      const unchangedIsolationKey =
+        IPProtectionService.connection?.isolationKey;
+      Assert.equal(
+        originalIsolationKey,
+        unchangedIsolationKey,
+        `${testCase.name}: Isolation key should not change when rotation is not triggered`
+      );
+    }
+  }
+
+  // Test inactive connection
+  const isolationKeyBeforeStop = IPProtectionService.connection?.isolationKey;
+  IPProtectionService.connection.stop();
+
+  const inactiveErrorEvent = new CustomEvent("proxy-http-error", {
+    detail: {
+      isolationKey: isolationKeyBeforeStop,
+      level: "error",
+      httpStatus: 401,
+    },
+  });
+
+  const inactiveResult =
+    IPProtectionService.handleProxyErrorEvent(inactiveErrorEvent);
+  Assert.equal(
+    inactiveResult,
+    undefined,
+    "Should not return a promise when connection is inactive"
+  );
+
+  await cleanupAlpha();
+  cleanupService();
 });

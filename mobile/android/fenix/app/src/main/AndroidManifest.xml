@@ -359,22 +359,6 @@
         </activity-alias>
 
         <activity-alias
-            android:name="${applicationId}.AppRetro2017"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_retro_2017"
-            android:roundIcon="@mipmap/ic_launcher_retro_2017"
-            android:targetActivity="HomeActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
-        </activity-alias>
-
-        <activity-alias
             android:name="${applicationId}.AppPixelated"
             android:enabled="false"
             android:exported="true"
@@ -391,11 +375,11 @@
         </activity-alias>
 
         <activity-alias
-            android:name="${applicationId}.AppMinimal"
+            android:name="${applicationId}.AppCuddling"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_minimal"
-            android:roundIcon="@mipmap/ic_launcher_minimal"
+            android:icon="@mipmap/ic_launcher_cuddling"
+            android:roundIcon="@mipmap/ic_launcher_cuddling"
             android:targetActivity="HomeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -423,11 +407,27 @@
         </activity-alias>
 
         <activity-alias
-            android:name="${applicationId}.AppCute"
+            android:name="${applicationId}.AppFlaming"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_cute"
-            android:roundIcon="@mipmap/ic_launcher_cute"
+            android:icon="@mipmap/ic_launcher_flaming"
+            android:roundIcon="@mipmap/ic_launcher_flaming"
+            android:targetActivity="HomeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name="${applicationId}.AppMinimal"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_minimal"
+            android:roundIcon="@mipmap/ic_launcher_minimal"
             android:targetActivity="HomeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -444,6 +444,21 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher_momo"
             android:roundIcon="@mipmap/ic_launcher_momo"
+            android:targetActivity="HomeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name="${applicationId}.AppCool"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_cool"
+            android:roundIcon="@mipmap/ic_launcher_cool"
             android:targetActivity="HomeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

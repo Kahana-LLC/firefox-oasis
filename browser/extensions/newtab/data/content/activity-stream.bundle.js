@@ -11998,7 +11998,8 @@ const USER_ACTION_TYPES = {
 const PREF_WIDGETS_LISTS_MAX_LISTS = "widgets.lists.maxLists";
 const PREF_WIDGETS_LISTS_MAX_LISTITEMS = "widgets.lists.maxListItems";
 function Lists({
-  dispatch
+  dispatch,
+  handleUserInteraction
 }) {
   const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
   const {
@@ -12014,6 +12015,7 @@ function Lists({
   const selectRef = (0,external_React_namespaceObject.useRef)(null);
   const reorderListRef = (0,external_React_namespaceObject.useRef)(null);
   const [canvasRef, fireConfetti] = useConfetti();
+  const handleListInteraction = (0,external_React_namespaceObject.useCallback)(() => handleUserInteraction("lists"), [handleUserInteraction]);
 
   // store selectedList with useMemo so it isnt re-calculated on every re-render
   const isValidUrl = (0,external_React_namespaceObject.useCallback)(str => URL.canParse(str), []);
@@ -12052,7 +12054,8 @@ function Lists({
         lists: updatedLists
       }
     }));
-  }, [lists, selected, selectedList, dispatch]);
+    handleListInteraction();
+  }, [lists, selected, selectedList, dispatch, handleListInteraction]);
   const moveTask = (0,external_React_namespaceObject.useCallback)((task, direction) => {
     const index = selectedList.tasks.findIndex(({
       id
@@ -12080,6 +12083,7 @@ function Lists({
         type: actionTypes.WIDGETS_LISTS_CHANGE_SELECTED,
         data: e.target.value
       }));
+      handleListInteraction();
     }
     function handleReorder(e) {
       const {
@@ -12095,7 +12099,7 @@ function Lists({
       selectNode.removeEventListener("change", handleSelectChange);
       reorderNode.removeEventListener("reorder", handleReorder);
     };
-  }, [dispatch, isEditing, reorderLists]);
+  }, [dispatch, isEditing, reorderLists, handleListInteraction]);
 
   // effect that enables editing new list name only after store has been hydrated
   (0,external_React_namespaceObject.useEffect)(() => {
@@ -12137,6 +12141,7 @@ function Lists({
         }));
       });
       setNewTask("");
+      handleListInteraction();
     }
   }
   function updateTask(updatedTask, type) {
@@ -12196,6 +12201,7 @@ function Lists({
         }));
       }
     });
+    handleListInteraction();
   }
   function deleteTask(task, type) {
     const selectedTasks = lists[selected][type];
@@ -12223,6 +12229,7 @@ function Lists({
         }
       }));
     });
+    handleListInteraction();
   }
   function handleKeyDown(e) {
     if (e.key === "Enter" && document.activeElement === inputRef.current) {
@@ -12257,6 +12264,7 @@ function Lists({
         }));
       });
       setIsEditing(false);
+      handleListInteraction();
     }
   }
   function handleCreateNewList() {
@@ -12288,6 +12296,7 @@ function Lists({
       }));
     });
     setPendingNewList(id);
+    handleListInteraction();
   }
   function handleDeleteList() {
     let updatedLists = {
@@ -12327,6 +12336,7 @@ function Lists({
         }));
       });
     }
+    handleListInteraction();
   }
   function handleHideLists() {
     dispatch(actionCreators.OnlyToMain({
@@ -12336,6 +12346,7 @@ function Lists({
         value: false
       }
     }));
+    handleListInteraction();
   }
   function handleCopyListToClipboard() {
     const currentList = lists[selected];
@@ -12363,6 +12374,7 @@ function Lists({
         userAction: USER_ACTION_TYPES.LIST_COPY
       }
     }));
+    handleListInteraction();
   }
   function handleLearnMore() {
     dispatch(actionCreators.OnlyToMain({
@@ -12371,6 +12383,7 @@ function Lists({
         url: "https://support.mozilla.org/kb/firefox-new-tab-widgets"
       }
     }));
+    handleListInteraction();
   }
 
   // Reset baseline only when switching lists
@@ -12766,7 +12779,8 @@ const getClipPath = progress => {
   return `polygon(${points.join(", ")})`;
 };
 const FocusTimer = ({
-  dispatch
+  dispatch,
+  handleUserInteraction
 }) => {
   const [timeLeft, setTimeLeft] = (0,external_React_namespaceObject.useState)(0);
   // calculated value for the progress circle; 1 = 100%
@@ -12786,6 +12800,7 @@ const FocusTimer = ({
     isRunning
   } = timerData[timerType];
   const initialTimerDuration = timerData[timerType].initialDuration;
+  const handleTimerInteraction = (0,external_React_namespaceObject.useCallback)(() => handleUserInteraction("focusTimer"), [handleUserInteraction]);
   const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
     dispatch(actionCreators.AlsoToMain({
       type: actionTypes.WIDGETS_TIMER_USER_IMPRESSION
@@ -12798,7 +12813,8 @@ const FocusTimer = ({
       arcRef.current.style.webkitClipPath = "polygon(50% 50%)";
     }
     setProgress(0);
-  }, [arcRef]);
+    handleTimerInteraction();
+  }, [arcRef, handleTimerInteraction]);
   const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
   const showSystemNotifications = prefs["widgets.focusTimer.showSystemNotifications"];
 
@@ -12917,6 +12933,7 @@ const FocusTimer = ({
         }));
       });
     }
+    handleTimerInteraction();
   };
 
   // Pause timer function
@@ -12956,6 +12973,7 @@ const FocusTimer = ({
         }));
       });
     }
+    handleTimerInteraction();
   };
 
   // reset timer function
@@ -12984,6 +13002,7 @@ const FocusTimer = ({
     if (progressVisible) {
       setProgressVisible(false);
     }
+    handleTimerInteraction();
   };
 
   // Toggles between "focus" and "break" timer types
@@ -13019,14 +13038,17 @@ const FocusTimer = ({
         }
       }));
     });
+    handleTimerInteraction();
   };
   const handleKeyDown = e => {
     if (e.key === "Enter") {
       e.preventDefault();
       setTimerDuration(e);
+      handleTimerInteraction();
     }
     if (e.key === "Tab") {
       setTimerDuration(e);
+      handleTimerInteraction();
     }
   };
   const handleBeforeInput = e => {
@@ -13099,6 +13121,7 @@ const FocusTimer = ({
         url: "https://support.mozilla.org/kb/firefox-new-tab-widgets"
       }
     }));
+    handleTimerInteraction();
   }
   function handlePrefUpdate(prefName, prefValue) {
     dispatch(actionCreators.OnlyToMain({
@@ -13108,6 +13131,7 @@ const FocusTimer = ({
         value: prefValue
       }
     }));
+    handleTimerInteraction();
   }
   return timerData ? /*#__PURE__*/external_React_default().createElement("article", {
     className: "focus-timer",
@@ -13282,6 +13306,7 @@ function WidgetsFeatureHighlight({
 
 
 
+
 const PREF_WIDGETS_LISTS_ENABLED = "widgets.lists.enabled";
 const PREF_WIDGETS_SYSTEM_LISTS_ENABLED = "widgets.system.lists.enabled";
 const PREF_WIDGETS_TIMER_ENABLED = "widgets.focusTimer.enabled";
@@ -13303,14 +13328,24 @@ function Widgets() {
   const manyTasks = tasksCount >= 4;
   const isTimerRunning = timerState?.[timerType].isRunning;
   const showScrollMessage = manyTasks || isTimerRunning;
+  function handleUserInteraction(widgetName) {
+    const prefName = `widgets.${widgetName}.interaction`;
+    const hasInteracted = prefs[prefName];
+    // we want to make sure that the value is a strict false (and that the property exists)
+    if (hasInteracted === false) {
+      dispatch(actionCreators.SetPref(prefName, true));
+    }
+  }
   return /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-wrapper"
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-container"
   }, listsEnabled && /*#__PURE__*/external_React_default().createElement(Lists, {
-    dispatch: dispatch
+    dispatch: dispatch,
+    handleUserInteraction: handleUserInteraction
   }), timerEnabled && /*#__PURE__*/external_React_default().createElement(FocusTimer, {
-    dispatch: dispatch
+    dispatch: dispatch,
+    handleUserInteraction: handleUserInteraction
   })), showScrollMessage && /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-scroll-message fade-in",
     "aria-live": "polite"
@@ -14180,7 +14215,9 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
         }
         this.props.dispatch(actionCreators.OnlyToMain({
           type: actionTypes.WALLPAPER_UPLOAD,
-          data: file
+          data: {
+            file
+          }
         }));
 
         // Set active wallpaper ID to "custom"
@@ -16123,19 +16160,6 @@ class _Base extends (external_React_default()).PureComponent {
   notifyContent(state) {
     this.setState(state);
   }
-  componentWillUnmount() {
-    this.updateTheme();
-  }
-  componentWillUpdate() {
-    this.updateTheme();
-  }
-  updateTheme() {
-    const bodyClassName = ["activity-stream",
-    // If we skipped the about:welcome overlay and removed the CSS classes
-    // we don't want to add them back to the Activity Stream view
-    document.body.classList.contains("inline-onboarding") ? "inline-onboarding" : ""].filter(v => v).join(" ");
-    globalThis.document.body.className = bodyClassName;
-  }
   render() {
     const {
       props
@@ -16172,6 +16196,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     this.shouldDisplayTopicSelectionModal = this.shouldDisplayTopicSelectionModal.bind(this);
     this.toggleDownloadHighlight = this.toggleDownloadHighlight.bind(this);
     this.handleDismissDownloadHighlight = this.handleDismissDownloadHighlight.bind(this);
+    this.applyBodyClasses = this.applyBodyClasses.bind(this);
     this.state = {
       fixedSearch: false,
       firstVisibleTimestamp: null,
@@ -16189,6 +16214,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     }
   }
   componentDidMount() {
+    this.applyBodyClasses();
     __webpack_require__.g.addEventListener("scroll", this.onWindowScroll);
     __webpack_require__.g.addEventListener("keydown", this.handleOnKeyDown);
     const prefs = this.props.Prefs.values;
@@ -16216,6 +16242,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     }
   }
   componentDidUpdate(prevProps) {
+    this.applyBodyClasses();
     const prefs = this.props.Prefs.values;
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     if (wallpapersEnabled) {
@@ -16238,6 +16265,8 @@ class BaseContent extends (external_React_default()).PureComponent {
       } = prevProps;
       const selectedWallpaper = prefs["newtabWallpapers.wallpaper"];
       const prevSelectedWallpaper = prevPrefs["newtabWallpapers.wallpaper"];
+      const uploadedWallpaperTheme = prefs["newtabWallpapers.customWallpaper.theme"];
+      const prevUploadedWallpaperTheme = prevPrefs["newtabWallpapers.customWallpaper.theme"];
 
       // don't update wallpaper unless the wallpaper is being changed.
       if (selectedWallpaper !== prevSelectedWallpaper ||
@@ -16246,17 +16275,21 @@ class BaseContent extends (external_React_default()).PureComponent {
       // uploading a new wallpaper
       wallpaperList !== prevWallpaperList ||
       // remote settings wallpaper list updates
-      this.props.App.isForStartupCache.Wallpaper !== prevProps.App.isForStartupCache.Wallpaper // Startup cached page wallpaper is updating
-      ) {
+      this.props.App.isForStartupCache.Wallpaper !== prevProps.App.isForStartupCache.Wallpaper ||
+      // Startup cached page wallpaper is updating
+      uploadedWallpaperTheme !== prevUploadedWallpaperTheme) {
         this.updateWallpaper();
       }
     }
   }
   handleColorModeChange() {
     const colorMode = this.prefersDarkQuery?.matches ? "dark" : "light";
-    this.setState({
-      colorMode
-    });
+    if (colorMode !== this.state.colorMode) {
+      this.setState({
+        colorMode
+      });
+      this.updateWallpaper();
+    }
   }
   componentWillUnmount() {
     this.prefersDarkQuery?.removeEventListener("change", this.handleColorModeChange);
@@ -16361,6 +16394,17 @@ class BaseContent extends (external_React_default()).PureComponent {
   setPref(pref, value) {
     this.props.dispatch(actionCreators.SetPref(pref, value));
   }
+  applyBodyClasses() {
+    const {
+      body
+    } = this.props.document;
+    if (!body) {
+      return;
+    }
+    if (!body.classList.contains("activity-stream")) {
+      body.classList.add("activity-stream");
+    }
+  }
   renderWallpaperAttribution() {
     const {
       wallpaperList
@@ -16403,65 +16447,45 @@ class BaseContent extends (external_React_default()).PureComponent {
       wallpaperList,
       uploadedWallpaper: uploadedWallpaperUrl
     } = this.props.Wallpapers;
-    let lightWallpaper = {};
-    let darkWallpaper = {};
+    const uploadedWallpaperTheme = prefs["newtabWallpapers.customWallpaper.theme"];
+    // Uuse this.prefersDarkQuery since this.state.colorMode can be undefined when this is called
+    const colorMode = this.prefersDarkQuery?.matches ? "dark" : "light";
+    let url = "";
+    let color = "transparent";
+    let newTheme = colorMode;
+
+    // uploaded wallpaper
     if (selectedWallpaper === "custom" && uploadedWallpaperUrl) {
-      try {
-        __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper", `url(${uploadedWallpaperUrl})`);
-        __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-color", "transparent");
-
-        // Based on the current colorMode, add the corresponding dark/light CSS classes
-        if (this.state.colorMode) {
-          this.setState(prevState => ({
-            wallpaperTheme: prevState.colorMode
-          }));
-        }
-      } catch (e) {}
-      return;
-    }
-    if (wallpaperList) {
-      let wallpaper = wallpaperList.find(wp => wp.title === selectedWallpaper);
-      if (selectedWallpaper && wallpaper) {
-        // if selectedWallpaper exists - we override what light and dark prefs are to match that
-        lightWallpaper = wallpaper;
-        darkWallpaper = wallpaper;
-      }
-
-      // solid-color-picker-#00d100
-      const regexRGB = /#([a-fA-F0-9]{6})/;
-
-      // Override Remote Settings to set custom HEX bg color
+      url = uploadedWallpaperUrl;
+      color = "transparent";
+      newTheme = uploadedWallpaperTheme || colorMode;
+    } else if (wallpaperList) {
+      const wallpaper = wallpaperList.find(wp => wp.title === selectedWallpaper);
+      // solid color picker
       if (selectedWallpaper.includes("solid-color-picker")) {
-        wallpaper = {
-          theme: wallpaper?.theme || "light",
-          title: "solid-color-picker",
-          category: "solid-colors",
-          solid_color: selectedWallpaper.match(regexRGB)?.[0]
-        };
-      }
-      const wallpaperColor = wallpaper?.solid_color || "";
-      __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper", `url(${wallpaper?.wallpaperUrl || ""})`);
-      __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-color", wallpaperColor || "transparent");
-      let wallpaperTheme = "";
-
-      // If we have a solid colour set, let's see how dark it is.
-      if (wallpaperColor) {
-        const rgbColors = this.getRGBColors(wallpaperColor);
-        const isColorDark = this.isWallpaperColorDark(rgbColors);
-        wallpaperTheme = isColorDark ? "dark" : "light";
-      } else {
-        // Grab the contrast of the currently displayed wallpaper.
-        const {
-          theme
-        } = this.state.colorMode === "light" ? lightWallpaper : darkWallpaper;
-        if (theme) {
-          wallpaperTheme = theme;
+        const regexRGB = /#([a-fA-F0-9]{6})/;
+        const hex = selectedWallpaper.match(regexRGB)?.[0];
+        url = "";
+        color = hex;
+        const rgbColors = this.getRGBColors(hex);
+        newTheme = this.isWallpaperColorDark(rgbColors) ? "dark" : "light";
+        // standard wallpaper & solid colors
+      } else if (selectedWallpaper) {
+        url = wallpaper?.wallpaperUrl || "";
+        color = wallpaper?.solid_color || "transparent";
+        newTheme = wallpaper?.theme || colorMode;
+        // if a solid color, determine if dark or light
+        if (wallpaper?.solid_color) {
+          const rgbColors = this.getRGBColors(wallpaper.solid_color);
+          const isColorDark = this.isWallpaperColorDark(rgbColors);
+          newTheme = isColorDark ? "dark" : "light";
         }
       }
-      this.setState({
-        wallpaperTheme
-      });
     }
+    __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper", `url(${url})`);
+    __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-color", color || "transparent");
+    __webpack_require__.g.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
+    __webpack_require__.g.document?.body.classList.add(newTheme === "dark" ? "darkWallpaper" : "lightWallpaper");
   }
   shouldShowOMCHighlight(componentId) {
     const messageData = this.props.Messages?.messageData;
@@ -16612,17 +16636,6 @@ class BaseContent extends (external_React_default()).PureComponent {
     // layoutsVariantBEnabled ? "layout-variant-b" : "", // Layout experiment variant B
     pocketEnabled ? "has-recommended-stories" : "no-recommended-stories", sectionsEnabled ? "has-sections-grid" : ""].filter(v => v).join(" ");
     const outerClassName = ["outer-wrapper", isDiscoveryStream && pocketEnabled && "ds-outer-wrapper-search-alignment", isDiscoveryStream && "ds-outer-wrapper-breakpoint-override", prefs.showSearch && this.state.fixedSearch && !noSectionsEnabled && "fixed-search", prefs.showSearch && noSectionsEnabled && "only-search", prefs["feeds.topsites"] && !pocketEnabled && !prefs.showSearch && "only-topsites", noSectionsEnabled && "no-sections", prefs["logowordmark.alwaysVisible"] && "visible-logo", hasThumbsUpDownLayout && hasThumbsUpDown && "thumbs-ui-compact"].filter(v => v).join(" ");
-    if (wallpapersEnabled) {
-      // Add helper class to body if user has a wallpaper selected
-      if (this.state.wallpaperTheme === "light") {
-        __webpack_require__.g.document?.body.classList.add("lightWallpaper");
-        __webpack_require__.g.document?.body.classList.remove("darkWallpaper");
-      }
-      if (this.state.wallpaperTheme === "dark") {
-        __webpack_require__.g.document?.body.classList.add("darkWallpaper");
-        __webpack_require__.g.document?.body.classList.remove("lightWallpaper");
-      }
-    }
 
     // If state.showDownloadHighlightOverride has value, let it override the logic
     // Otherwise, defer to OMC message display logic

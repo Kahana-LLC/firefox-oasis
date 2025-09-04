@@ -44,7 +44,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   TopSitesFeed: "resource://newtab/lib/TopSitesFeed.sys.mjs",
   TopStoriesFeed: "resource://newtab/lib/TopStoriesFeed.sys.mjs",
   TrendingSearchFeed: "resource://newtab/lib/TrendingSearchFeed.sys.mjs",
-  WallpaperFeed: "resource://newtab/lib/WallpaperFeed.sys.mjs",
+  WallpaperFeed: "resource://newtab/lib/Wallpapers/WallpaperFeed.sys.mjs",
   WeatherFeed: "resource://newtab/lib/WeatherFeed.sys.mjs",
 });
 
@@ -556,6 +556,13 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "newtabWallpapers.customWallpaper.theme",
+    {
+      title: "theme ('light' | 'dark') of user uploaded wallpaper",
+      value: "",
+    },
+  ],
+  [
     "newtabAdSize.leaderboard",
     {
       title: "Boolean flag to turn the leaderboard ad size on and off",
@@ -899,6 +906,14 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "widgets.lists.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the lists widget",
+      value: false,
+    },
+  ],
+  [
     "widgets.focusTimer.enabled",
     {
       title: "Enables the focus timer widget",
@@ -909,6 +924,14 @@ export const PREFS_CONFIG = new Map([
     "widgets.system.focusTimer.enabled",
     {
       title: "Enables the focus timer widget experiment in Nimbus",
+      value: false,
+    },
+  ],
+  [
+    "widgets.focusTimer.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the timer widget",
       value: false,
     },
   ],
