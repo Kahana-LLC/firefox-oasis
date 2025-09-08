@@ -925,9 +925,7 @@ class MDefinition : public MNode {
 #endif
 
   MDefinition* dependency() const {
-    if (getAliasSet().isStore()) {
-      return nullptr;
-    }
+    MOZ_ASSERT_IF(getAliasSet().isStore(), !loadDependency_);
     return loadDependency_;
   }
   void setDependency(MDefinition* dependency) {
@@ -7744,6 +7742,9 @@ class MLoadFixedSlot : public MUnaryInstruction,
   NAMED_OPERANDS((0, object))
 
   size_t slot() const { return slot_; }
+
+  HashNumber valueHash() const override;
+
   bool congruentTo(const MDefinition* ins) const override {
     if (!ins->isLoadFixedSlot()) {
       return false;

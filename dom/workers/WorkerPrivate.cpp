@@ -78,6 +78,7 @@
 #include "mozilla/dom/ServiceWorkerManager.h"
 #include "mozilla/dom/SimpleGlobalObject.h"
 #include "mozilla/dom/TimeoutHandler.h"
+#include "mozilla/dom/TimeoutManager.h"
 #include "mozilla/dom/UseCounterMetrics.h"
 #include "mozilla/dom/WebTaskScheduler.h"
 #include "mozilla/dom/WindowContext.h"
@@ -6764,7 +6765,9 @@ Maybe<FontVisibility> WorkerPrivate::MaybeInheritFontVisibility() const {
   }
 
   dom::Document* doc = GetDocument();
-  NS_ENSURE_TRUE(doc, Nothing());
+  if (!doc) {
+    return Nothing();
+  }
 
   nsPresContext* presContext = doc->GetPresContext();
   NS_ENSURE_TRUE(presContext, Nothing());

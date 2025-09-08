@@ -794,10 +794,6 @@ pref("dom.disable_window_move_resize",      false);
 
 pref("dom.allow_scripts_to_close_windows",          false);
 
-// List of urls for which mutation events are enabled even if mutation events
-// in general are disabled. See nsContentUtils::IsURIInPrefList.
-pref("dom.mutation_events.forceEnable", "");
-
 pref("dom.popup_allowed_events", "change click dblclick auxclick mousedown mouseup pointerdown pointerup notificationclick reset submit touchend contextmenu");
 
 pref("dom.storage.shadow_writes", false);
@@ -3407,6 +3403,12 @@ pref("browser.safebrowsing.provider.google4.advisoryURL", "https://developers.go
 pref("browser.safebrowsing.provider.google4.advisoryName", "Google Safe Browsing");
 pref("browser.safebrowsing.provider.google4.dataSharingURL", "https://safebrowsing.googleapis.com/v4/threatHits?$ct=application/x-protobuf&key=%GOOGLE_SAFEBROWSING_API_KEY%&$httpMethod=POST");
 pref("browser.safebrowsing.provider.google4.dataSharing.enabled", false);
+
+// Google Safe Browsing V5 prefs.
+pref("browser.safebrowsing.provider.google5.enabled", false);
+pref("browser.safebrowsing.provider.google5.updateURL", "https://safebrowsing.googleapis.com/v5/hashLists:batchGet?key=%GOOGLE_SAFEBROWSING_API_KEY%");
+pref("browser.safebrowsing.provider.google5.gethashURL", "https://safebrowsing.googleapis.com/v5/hashes:search?key=%GOOGLE_SAFEBROWSING_API_KEY%");
+pref("browser.safebrowsing.provider.google5.lists", "");
 
 #endif // ifndef MOZ_WIDGET_ANDROID
 

@@ -2105,6 +2105,9 @@ main section {
   margin-inline-end: var(--space-large);
   display: block;
 }
+.customize-menu *:focus-visible {
+  outline: var(--focus-outline);
+}
 
 .grid-skip {
   display: contents;
@@ -2211,7 +2214,6 @@ main section {
 .home-section .section .more-info-top-wrapper,
 .home-section .section .more-info-pocket-wrapper {
   margin-inline-start: calc(var(--space-xxsmall) * -1);
-  overflow: hidden;
 }
 .home-section .section .more-info-top-wrapper .more-information,
 .home-section .section .more-info-pocket-wrapper .more-information {
@@ -2541,7 +2543,6 @@ main section {
   background-image: url("chrome://newtab/content/data/content/assets/wallpapers/light-sky.avif");
 }
 .wallpaper-input:focus-visible {
-  outline-color: var(--focus-outline-color);
   outline-offset: var(--focus-outline-offset);
 }
 .wallpaper-input:hover {
@@ -2687,6 +2688,9 @@ main section {
 .wallpapers-reset:hover {
   text-decoration: none;
 }
+.wallpapers-reset:focus-visible {
+  outline-offset: -2px;
+}
 
 .custom-wallpaper-error {
   padding-block-start: var(--space-xlarge);
@@ -2725,6 +2729,13 @@ main section {
   .weather {
     inset-inline-end: var(--space-xxlarge);
   }
+}
+.weather.section-weather {
+  position: initial;
+  margin-inline-start: var(--space-medium);
+}
+.weather.section-weather .weatherInfoLink {
+  max-width: unset;
 }
 .no-search .weather {
   position: absolute;
@@ -5030,6 +5041,11 @@ main section {
   justify-content: space-between;
   align-items: center;
   margin-block: var(--space-small) var(--space-medium);
+}
+.ds-section-wrapper .ds-section .section-heading .section-heading-inline-start {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
 }
 .ds-section-wrapper .ds-section .section-title {
   font-weight: var(--font-weight-bold);

@@ -256,7 +256,7 @@ class IPProtectionServiceSingleton extends EventTarget {
     this.isActive = false;
 
     let deactivatedAt = ChromeUtils.now();
-    let sessionLength = this.activatedAt - deactivatedAt;
+    let sessionLength = deactivatedAt - this.activatedAt;
 
     Glean.ipprotection.toggled.record({
       userAction,
@@ -364,6 +364,10 @@ class IPProtectionServiceSingleton extends EventTarget {
   #isEligible() {
     let inExperiment = lazy.NimbusFeatures.ipProtection.getEnrollmentMetadata();
     let isEligible = inExperiment?.branch && inExperiment.branch !== "control";
+
+    if (inExperiment) {
+      lazy.NimbusFeatures.ipProtection.recordExposureEvent();
+    }
 
     if (isEligible) {
       lazy.logConsole.info("Device: Eligible");

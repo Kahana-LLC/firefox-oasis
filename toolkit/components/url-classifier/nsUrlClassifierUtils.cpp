@@ -342,8 +342,8 @@ static const struct {
   const char* mLocalListName;
   const char* mServerListName;
 } THREAT_NAME_CONV_TABLE_V5[] = {
-    {"mw-4b", "goog-malware-proto"},
-    {"se-4b", "googpub-phish-proto"},
+    {"goog-malware-proto", "mw-4b"},
+    {"googpub-phish-proto", "se-4b"},
     {"goog-unwanted-proto", "uws-4b"},
     {"goog-harmful-proto", "pha-4b"},
 };
@@ -511,7 +511,7 @@ nsUrlClassifierUtils::MakeUpdateRequestV5(
     return NS_ERROR_INVALID_ARG;
   }
 
-  BatchGetHashListsRequest req;
+  nsTArray<nsCString> serverListNames;
 
   // Fill the request with list names and states.
   for (uint32_t i = 0; i < aListNames.Length(); i++) {
@@ -522,33 +522,26 @@ nsUrlClassifierUtils::MakeUpdateRequestV5(
       continue;
     }
 
-    req.add_names(serverListName.get());
-
-    nsAutoCString statesBase64(aStatesBase64[i]);
-
-    // Only set non-empty state.
-    if (!statesBase64.IsEmpty()) {
-      nsAutoCString stateBinary;
-      nsresult rv = Base64Decode(statesBase64, stateBinary);
-      if (NS_SUCCEEDED(rv)) {
-        req.add_version(stateBinary.get(), stateBinary.Length());
-      }
-    }
+    serverListNames.AppendElement(serverListName);
   }
 
   // We omit the size_constraints to indicates that there is no size constraints
   // for the request.
 
-  // Then serialize.
-  std::string s;
-  req.SerializeToString(&s);
+  // Then serialize into query parameters.
+  nsAutoCString query;
 
-  nsCString out;
-  nsresult rv = Base64URLEncode(s.size(), (const uint8_t*)s.c_str(),
-                                Base64URLEncodePaddingPolicy::Include, out);
-  NS_ENSURE_SUCCESS(rv, rv);
+  for (const auto& listName : serverListNames) {
+    query.Append("&names=");
+    query.Append(listName);
+  }
 
-  aRequest = out;
+  for (const auto& stateBase64 : aStatesBase64) {
+    query.Append("&version=");
+    query.Append(stateBase64);
+  }
+
+  aRequest = query;
 
   return NS_OK;
 }
@@ -1000,8 +993,17 @@ nsresult nsUrlClassifierUtils::ReadProvidersFromPrefs(ProviderDictType& aDict) {
     // Build the dictionary for the owning list and the current provider.
     nsTArray<nsCString> tables;
     Classifier::SplitTables(owningLists, tables);
+    nsAutoCString providerToUse(provider);
     for (auto tableName : tables) {
-      aDict.InsertOrUpdate(tableName, MakeUnique<nsCString>(provider));
+      // If the Safe Browsing V5 is disabled, we will use V4 instead. This means
+      // that we will put the V5 lists to the V4 provider to instruct using
+      // Safe Browsing V4 for those tables.
+      if (!mozilla::Preferences::GetBool(
+              "browser.safebrowsing.provider.google5.enabled") &&
+          providerToUse.EqualsLiteral("google5")) {
+        providerToUse.AssignLiteral("google4");
+      }
+      aDict.InsertOrUpdate(tableName, MakeUnique<nsCString>(providerToUse));
     }
   }
 

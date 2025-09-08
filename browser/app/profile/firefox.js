@@ -443,6 +443,8 @@ pref("browser.urlbar.suggest.calculator",           true);
 pref("browser.urlbar.suggest.recentsearches",       true);
 pref("browser.urlbar.suggest.quickactions",         true);
 
+pref("browser.urlbar.allowSearchSuggestionsForSimpleOrigins", true);
+
 pref("browser.urlbar.deduplication.enabled", true);
 pref("browser.urlbar.deduplication.thresholdDays", 0);
 
@@ -764,6 +766,18 @@ pref("browser.urlbar.importantDates.featureGate", false);
 // If `browser.urlbar.importantDates.featureGate` is true, this controls whether
 // important-dates suggestions are turned on.
 pref("browser.urlbar.suggest.importantDates", true);
+
+// Feature gate pref for Yelp realtime suggestions in the urlbar.
+pref("browser.urlbar.yelpRealtime.featureGate", false);
+
+// If `browser.urlbar.yelpRealtime.featureGate` is true, this controls whether
+// Yelp realtime suggestions are turned on.
+pref("browser.urlbar.suggest.yelpRealtime", true);
+
+// The minimum prefix length of a Yelp keyword the user must type to trigger
+// the suggestion. 0 means the min length should be taken from Nimbus or remote
+// settings.
+pref("browser.urlbar.yelpRealtime.minKeywordLength", 0);
 
 pref("browser.altClickSave", false);
 
@@ -1973,12 +1987,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.sections.personalizatio
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config", "en-US,en-GB,en-CA");
 
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.user.enabled", true);
-
-// List of regions that use shortcuts personalization.
-pref("browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.region-config", "");
-// List of locales that use shortcuts personalization.
-pref("browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.locale-config", "en-US,en-GB,en-CA");
-
 
 // Override inferred personalization model JSON string that typically comes from rec API. Or "TEST" for a test model.
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.model.override", "");

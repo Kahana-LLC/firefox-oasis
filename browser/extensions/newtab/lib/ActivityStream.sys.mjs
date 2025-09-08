@@ -60,11 +60,6 @@ const REGION_INFERRED_PERSONALIZATION_CONFIG =
 const LOCALE_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config";
 
-const REGION_SHORTCUTS_PERSONALIZATION_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.region-config";
-const LOCALE_SHORTCUTS_PERSONALIZATION_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.locale-config";
-
 const REGION_WEATHER_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.region-weather-config";
 const LOCALE_WEATHER_CONFIG =
@@ -122,13 +117,6 @@ function useInferredPersonalization({ geo, locale }) {
   return (
     csvPrefHasValue(REGION_INFERRED_PERSONALIZATION_CONFIG, geo) &&
     csvPrefHasValue(LOCALE_INFERRED_PERSONALIZATION_CONFIG, locale)
-  );
-}
-
-function useShortcutsPersonalization({ geo, locale }) {
-  return (
-    csvPrefHasValue(REGION_SHORTCUTS_PERSONALIZATION_CONFIG, geo) &&
-    csvPrefHasValue(LOCALE_SHORTCUTS_PERSONALIZATION_CONFIG, locale)
   );
 }
 
@@ -372,6 +360,14 @@ export const PREFS_CONFIG = new Map([
       title:
         "Toggle the weather widget to include a text summary of the current conditions",
       value: "simple",
+    },
+  ],
+  [
+    "weather.placement",
+    {
+      title:
+        "weather widget can be rendered in a variety of positions. Either in `header` or `sections`",
+      value: "header",
     },
   ],
   [
@@ -660,11 +656,32 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "discoverystream.dailyBrief.enabled",
+    {
+      title: "Boolean flag to enable the daily brief section",
+      value: false,
+    },
+  ],
+  [
+    "discoverystream.dailyBrief.sectionId",
+    {
+      title: "sectionId for the Daily brief section",
+      value: "top_stories_section",
+    },
+  ],
+  [
     "discoverystream.shortcuts.personalization.enabled",
     {
-      title: "Boolean flag to enable inferred personalizaton",
-      // pref is dynamic
-      getValue: useShortcutsPersonalization,
+      title: "Boolean flag to enable shortcuts personalization",
+      value: false,
+    },
+  ],
+  [
+    "discoverystream.shortcuts.force_log.enabled",
+    {
+      title:
+        "Boolean flag to enable logging shortcuts interactions even if enabled is off",
+      value: false,
     },
   ],
   [
