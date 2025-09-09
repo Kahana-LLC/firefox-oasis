@@ -69,6 +69,7 @@
     <string name="pref_key_install_pwa_visits" translatable="false">pref_key_install_pwa_visits</string>
     <string name="pref_key_times_app_opened" translatable="false">pref_key_times_app_opened</string>
     <string name="pref_key_last_review_prompt_shown_time" translatable="false">pref_key_last_review_prompt_shown_time</string>
+    <string name="pref_key_custom_review_prompt_enabled" translatable="false">pref_key_custom_review_prompt_enabled</string>
     <string name="pref_key_last_browse_activity_time" translatable="false">pref_key_last_browse_activity_time</string>
     <string name="pref_key_last_cfr_shown_time" translatable="false">pref_key_last_cfr_shown_time</string>
     <string name="pref_key_re_engagement_notification_shown" translatable="false">pref_key_re_engagement_notification_shown</string>
@@ -276,7 +277,6 @@
     <string name="pref_key_open_links_in_apps_always" translatable="false">pref_key_open_links_in_apps_always</string>
     <string name="pref_key_open_links_in_apps_ask" translatable="false">pref_key_open_links_in_apps_ask</string>
     <string name="pref_key_open_links_in_apps_never" translatable="false">pref_key_open_links_in_apps_never</string>
-    <string name="pref_key_allow_screenshots_in_private_mode" translatable="false">pref_key_allow_screenshots_in_private_mode</string>
     <!-- This preference controls behaviour that corresponds to the private browsing mode lock feature being enabled. -->
     <string name="pref_key_private_browsing_locked_enabled" translatable="false">pref_key_private_browsing_locked_enabled</string>
     <string name="pref_key_private_browsing_locked" translatable="false">pref_key_private_browsing_locked</string>
