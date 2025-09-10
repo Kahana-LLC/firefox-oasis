@@ -382,6 +382,14 @@ function Lists({ dispatch, handleUserInteraction }) {
     handleListInteraction();
   }
 
+  function handleCancelNewList() {
+    // If current list is new and has no label/tasks, remove it
+    if (!selectedList?.label && selectedList?.tasks?.length === 0) {
+      const updatedLists = { ...lists };
+      delete updatedLists[selected];
+    }
+  }
+
   function handleDeleteList() {
     let updatedLists = { ...lists };
     if (updatedLists[selected]) {
@@ -569,6 +577,7 @@ function Lists({ dispatch, handleUserInteraction }) {
           onSave={handleListNameSave}
           isEditing={isEditing}
           setIsEditing={setIsEditing}
+          onCancel={handleCancelNewList}
           type="list"
           maxLength={30}
           dataL10nId={listNamePlaceholder}
@@ -797,13 +806,14 @@ function ListItem({
       {task.value}
     </a>
   ) : (
-    <span
+    <label
       className="task-label"
       title={task.value}
+      htmlFor={`task-${task.id}`}
       onClick={() => setIsEditing(true)}
     >
       {task.value}
-    </span>
+    </label>
   );
 
   return (
@@ -818,6 +828,7 @@ function ListItem({
           type="checkbox"
           onChange={handleCheckboxChange}
           checked={task.completed || exiting}
+          id={`task-${task.id}`}
         />
         {isCompleted ? (
           taskLabel
@@ -879,6 +890,7 @@ function EditableText({
   isEditing,
   setIsEditing,
   onSave,
+  onCancel,
   children,
   type,
   dataL10nId = null,
@@ -905,6 +917,7 @@ function EditableText({
     } else if (e.key === "Escape") {
       setIsEditing(false);
       setTempValue(value);
+      onCancel?.();
     }
   }
 

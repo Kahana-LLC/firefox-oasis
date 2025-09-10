@@ -11418,6 +11418,8 @@ function InterestPicker({
       checked: checked,
       "aria-checked": checked,
       onChange: e => handleChange(e, index),
+      key: `${interest.sectionId}-${checked}` // Force remount to sync DOM state with React state
+      ,
       tabIndex: index === focusedIndex ? 0 : -1,
       onFocus: () => {
         onItemFocus(index);
@@ -12734,6 +12736,15 @@ function Lists({
     setPendingNewList(id);
     handleListInteraction();
   }
+  function handleCancelNewList() {
+    // If current list is new and has no label/tasks, remove it
+    if (!selectedList?.label && selectedList?.tasks?.length === 0) {
+      const updatedLists = {
+        ...lists
+      };
+      delete updatedLists[selected];
+    }
+  }
   function handleDeleteList() {
     let updatedLists = {
       ...lists
@@ -12881,6 +12892,7 @@ function Lists({
     onSave: handleListNameSave,
     isEditing: isEditing,
     setIsEditing: setIsEditing,
+    onCancel: handleCancelNewList,
     type: "list",
     maxLength: 30,
     dataL10nId: listNamePlaceholder
@@ -13060,9 +13072,10 @@ function ListItem({
     target: "_blank",
     className: "task-label",
     title: task.value
-  }, task.value) : /*#__PURE__*/external_React_default().createElement("span", {
+  }, task.value) : /*#__PURE__*/external_React_default().createElement("label", {
     className: "task-label",
     title: task.value,
+    htmlFor: `task-${task.id}`,
     onClick: () => setIsEditing(true)
   }, task.value);
   return /*#__PURE__*/external_React_default().createElement("div", {
@@ -13075,7 +13088,8 @@ function ListItem({
   }, /*#__PURE__*/external_React_default().createElement("input", {
     type: "checkbox",
     onChange: handleCheckboxChange,
-    checked: task.completed || exiting
+    checked: task.completed || exiting,
+    id: `task-${task.id}`
   }), isCompleted ? taskLabel : /*#__PURE__*/external_React_default().createElement(EditableText, {
     isEditing: isEditing,
     setIsEditing: setIsEditing,
@@ -13116,6 +13130,7 @@ function EditableText({
   isEditing,
   setIsEditing,
   onSave,
+  onCancel,
   children,
   type,
   dataL10nId = null,
@@ -13140,6 +13155,7 @@ function EditableText({
     } else if (e.key === "Escape") {
       setIsEditing(false);
       setTempValue(value);
+      onCancel?.();
     }
   }
   function handleOnBlur() {

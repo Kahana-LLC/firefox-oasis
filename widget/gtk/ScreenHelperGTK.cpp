@@ -685,13 +685,20 @@ gint ScreenHelperGTK::GetGTKMonitorScaleFactor(gint aMonitor) {
 }
 
 float ScreenHelperGTK::GetGTKMonitorFractionalScaleFactor(gint aMonitor) {
-  auto& screens = widget::ScreenManager::GetSingleton().CurrentScreenList();
-  auto scale = (size_t)aMonitor < screens.Length()
-                   ? screens[aMonitor]->GetContentsScaleFactor()
-                   : 1.0f;
-  LOG_SCREEN("ScreenHelperGTK::GetGTKMonitorFractionalScaleFactor(%d) scale %f",
-             aMonitor, scale);
-  return scale;
+#ifdef MOZ_WAYLAND
+  if (GdkIsWaylandDisplay()) {
+    auto& screens = widget::ScreenManager::GetSingleton().CurrentScreenList();
+    auto scale = (size_t)aMonitor < screens.Length()
+                     ? screens[aMonitor]->GetContentsScaleFactor()
+                     : 1.0f;
+    LOG_SCREEN(
+        "ScreenHelperGTK::GetGTKMonitorFractionalScaleFactor(%d) scale %f",
+        aMonitor, scale);
+    return scale;
+  }
+#endif
+  // Fractional scale is not supported on X11, fallback to ceiled one.
+  return GetGTKMonitorScaleFactor(aMonitor);
 }
 
 static void monitors_changed(GdkScreen* aScreen, gpointer unused) {
@@ -730,6 +737,7 @@ static GdkFilterReturn root_window_event_filter(GdkXEvent* aGdkXEvent,
   return GDK_FILTER_CONTINUE;
 }
 
+#ifdef MOZ_WAYLAND
 /* static */
 void ScreenHelperGTK::ScreensPrefChanged(const char* aPrefIgnored,
                                          void* aDataIgnored) {
@@ -737,6 +745,7 @@ void ScreenHelperGTK::ScreensPrefChanged(const char* aPrefIgnored,
   MOZ_RELEASE_ASSERT(XRE_IsParentProcess());
   ScreenHelperGTK::RequestRefreshScreens();
 }
+#endif
 
 ScreenHelperGTK::ScreenHelperGTK() {
   LOG_SCREEN("ScreenHelperGTK::ScreenHelperGTK() created");
@@ -780,11 +789,11 @@ ScreenHelperGTK::ScreenHelperGTK() {
     LOG_SCREEN("ScreenHelperGTK() query HDR Wayland display");
     RequestRefreshScreens(/* aInitialRefresh */ true);
   }
-#endif
   Preferences::RegisterCallback(
       ScreenHelperGTK::ScreensPrefChanged,
       nsDependentCString(
           StaticPrefs::GetPrefName_widget_wayland_fractional_scale_enabled()));
+#endif
 }
 
 int ScreenHelperGTK::GetMonitorCount() {
