@@ -4570,14 +4570,37 @@ main section {
 
 .focus-timer-tabs-buttons {
   display: flex;
-  gap: var(--space-small);
+  gap: var(--space-xxsmall);
   justify-content: center;
   flex-grow: 1;
-  margin-inline-start: calc(var(--space-xlarge) + var(--space-small));
+}
+.focus-timer-tabs-buttons moz-button {
+  flex-grow: 1;
+}
+.focus-timer-tabs-buttons moz-button::part(button) {
+  min-height: 24px;
+}
+.focus-timer-tabs-buttons moz-button:first-of-type::part(button) {
+  border-end-end-radius: 0;
+  border-start-end-radius: 0;
+}
+.focus-timer-tabs-buttons moz-button:last-of-type::part(button) {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
 }
 
-.focus-timer-context-menu {
-  margin-inline-end: auto;
+.newtab-widget-timer-notification-title-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding-inline: var(--space-large);
+  margin-block-end: var(--space-medium);
+}
+.newtab-widget-timer-notification-title-wrapper h3 {
+  font-size: var(--button-font-size);
+  font-weight: var(--font-weight-bold);
+  margin-block: 0;
 }
 
 .focus-timer-context-menu-wrapper {
@@ -4594,28 +4617,29 @@ main section {
   /* Colours for the main timer */
   --timer-red: var(--color-red-50);
   --timer-orange: var(--color-orange-30);
-  --timer-yellow: var(--color-yellow-20);
   /* Colours for the break timer */
   --timer-blue: var(--color-blue-20);
   --timer-violet: var(--color-violet-20);
-  --timer-violet-light: var(--color-violet-0);
   /* Complete timer */
   --timer-green: var(--color-green-20);
-  min-height: 0;
-  opacity: 0;
+  min-height: 120px;
   position: relative;
-  width: 162px;
+  width: 120px;
   overflow: hidden;
-  transition: min-height 0.8s ease, opacity 0.8s ease;
+  margin-block-end: var(--space-small);
   /* main timer colours */
   /* break timer colours */
   /* timer turns green when complete */
 }
-.progress-circle-wrapper.visible {
-  opacity: 1;
-  min-height: 162px;
+.progress-circle-wrapper.is-small {
+  min-height: 114px;
+  width: 114px;
+}
+.progress-circle-wrapper.is-small .progress-circle-label {
+  font-size: var(--font-size-xxlarge);
 }
 .progress-circle-wrapper .progress-circle-background,
+.progress-circle-wrapper .progress-circle-background-break,
 .progress-circle-wrapper .progress-circle,
 .progress-circle-wrapper .progress-circle-complete {
   --thickness: var(--space-small);
@@ -4624,32 +4648,15 @@ main section {
   mask: radial-gradient(farthest-side, transparent calc(100% - var(--thickness)), black calc(100% - var(--thickness)));
   position: absolute;
 }
-.progress-circle-wrapper .progress-circle-background {
-  background-color: var(--border-color-interactive);
-}
 .progress-circle-wrapper .progress-circle,
 .progress-circle-wrapper .progress-circle-complete {
-  background: conic-gradient(rgba(232, 57, 92, 0) 0deg, #e8395c 30deg, var(--timer-red) 60deg, var(--timer-orange) 180deg, var(--timer-yellow) 360deg);
+  background-color: var(--border-color-interactive);
 }
-.progress-circle-wrapper .focus-hidden {
-  opacity: 0;
-  pointer-events: none;
+.progress-circle-wrapper .progress-circle-background {
+  background: conic-gradient(var(--timer-orange) 0deg, var(--timer-red) 150deg, var(--timer-red) 210deg, var(--timer-orange) 360deg);
 }
-.progress-circle-wrapper .focus-visible {
-  opacity: 1;
-  transition: opacity 0.3s ease;
-}
-.progress-circle-wrapper .progress-circle-break {
-  clip-path: polygon(50% 50%);
-  background: conic-gradient(rgba(159, 201, 255, 0) 0deg, #9fc9ff 30deg, var(--timer-blue) 60deg, var(--timer-violet) 180deg, var(--timer-violet-light) 360deg);
-}
-.progress-circle-wrapper .break-hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-.progress-circle-wrapper .break-visible {
-  opacity: 1;
-  transition: opacity 0.3s ease;
+.progress-circle-wrapper .progress-circle-background-break {
+  background: conic-gradient(var(--timer-violet) 0deg, var(--timer-blue) 150deg, var(--timer-blue) 210deg, var(--timer-violet) 360deg);
 }
 .progress-circle-wrapper .progress-circle-complete {
   background: var(--timer-green);
@@ -4660,11 +4667,27 @@ main section {
 .progress-circle-wrapper .progress-circle-complete.visible {
   opacity: 1;
 }
+.progress-circle-wrapper .focus-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.progress-circle-wrapper .focus-visible {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.progress-circle-wrapper .break-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.progress-circle-wrapper .break-visible {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
 .progress-circle-wrapper .progress-circle-label {
   align-items: center;
   color: var(--text-color);
   display: flex;
-  font-size: calc(2 * var(--font-size-xlarge));
+  font-size: var(--size-item-large);
   font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
   height: 100%;
@@ -4681,38 +4704,11 @@ main section {
   outline: var(--focus-outline);
 }
 
-.set-timer-controls-wrapper {
-  display: flex;
-}
-.set-timer-controls-wrapper .set-timer-countdown {
-  font-size: calc(2 * var(--font-size-xlarge));
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-  height: 100%;
-  margin-inline-end: var(--space-xlarge);
-  opacity: 1;
-  width: 125px;
-  transition: opacity 0.8s ease, width 0.8s ease;
-}
-.set-timer-controls-wrapper .set-timer-countdown.hidden {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
-}
-.set-timer-controls-wrapper .focus-timer-controls {
+.focus-timer-controls {
   display: flex;
   flex-direction: row;
   align-items: center;
-}
-.set-timer-controls-wrapper .focus-timer-controls.timer-running {
-  margin-block-start: var(--space-medium);
-}
-.set-timer-controls-wrapper .focus-timer-controls > moz-button:last-child {
-  margin-inline-start: var(--space-medium);
-}
-.set-timer-controls-wrapper .focus-timer-controls > moz-button::part(button) {
-  border-radius: var(--border-radius-circle);
-  padding: calc(var(--space-large) + 0.5 * var(--space-xxsmall));
+  gap: var(--space-medium);
 }
 
 .timer-notification-status {
