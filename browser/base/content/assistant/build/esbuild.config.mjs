@@ -6,10 +6,10 @@ import path from "node:path";
 const here = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(here, ".env") });
 
-const KEY  = (process.env.ANTHROPIC_API_KEY || "").trim();
+const KEY  = (process.env.GOOGLE_API_KEY || "").trim();
 
 if (!KEY) {
-  console.error("[assistant] Missing ANTHROPIC_API_KEY (set it in build/.env)");
+  console.error("[assistant] Missing GOOGLE_API_KEY (set it in build/.env)");
   process.exit(1);
 }
 
@@ -23,6 +23,6 @@ await esbuild.build({
   sourcemap: false,
   logLevel: "warning",
   define: {
-    "process.env.ANTHROPIC_API_KEY": JSON.stringify(KEY),
+    "process.env.GOOGLE_API_KEY": JSON.stringify(KEY),
   },
 });

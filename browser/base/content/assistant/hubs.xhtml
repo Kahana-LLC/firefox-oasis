@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Security-Policy" content="script-src chrome: resource: 'unsafe-inline';" />
+  <link rel="stylesheet" href="chrome://browser/content/assistant/hubs.css"/>
+  <title>Hubs</title>
+</head>
+<body>
+  <header class="oasis-hubs-header">
+    <h1>Hubs</h1>
+    <div class="actions">
+      <input id="newHubName" type="text" placeholder="New hub name"/>
+      <button id="createHub">Create</button>
+    </div>
+  </header>
+
+  <main id="grid" class="oasis-hubs-grid" aria-live="polite"></main>
+
+  <script type="module" src="chrome://browser/content/assistant/hubs.page.js"></script>
+</body>
+</html>
