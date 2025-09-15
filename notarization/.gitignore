@@ -1,0 +1,37 @@
+# Notarization .gitignore
+# This file controls what gets committed to version control
+
+# NEVER COMMIT - Security Sensitive Files
+developer_id.p12
+*.p12
+*.pem
+*.cer
+*.key
+*.mobileprovision
+
+# NEVER COMMIT - Large Binary Outputs
+outputs/
+*.app
+*.dmg
+*.zip
+*.ipa
+
+# NEVER COMMIT - Logs and Temporary Files
+logs/
+*.log
+*.tmp
+*.temp
+
+# NEVER COMMIT - Personal Information
+*password*
+*secret*
+*private*
+*personal*
+
+# OK TO COMMIT - Documentation and Scripts
+docs/
+scripts/
+*.md
+*.plist
+README.md
+.gitignore
