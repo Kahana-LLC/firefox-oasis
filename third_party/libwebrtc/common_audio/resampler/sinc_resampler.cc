@@ -82,20 +82,17 @@
 // Note: we're glossing over how the sub-sample handling works with
 // `virtual_source_idx_`, etc.
 
-// MSVC++ requires this to be set before any other includes to get M_PI.
-#define _USE_MATH_DEFINES
-
 #include "common_audio/resampler/sinc_resampler.h"
 
-#include <math.h>
-#include <stdint.h>
-#include <string.h>
-
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 
 #include "rtc_base/checks.h"
+#include "rtc_base/cpu_info.h"
+#include "rtc_base/memory/aligned_malloc.h"
 #include "rtc_base/system/arch.h"
-#include "system_wrappers/include/cpu_features_wrapper.h"  // kSSE2, WebRtc_G...
 
 namespace webrtc {
 
@@ -127,9 +124,10 @@ void SincResampler::InitializeCPUSpecificFeatures() {
   convolve_proc_ = Convolve_NEON;
 #elif defined(WEBRTC_ARCH_X86_FAMILY)
   // Using AVX2 instead of SSE2 when AVX2/FMA3 supported.
-  if (GetCPUInfo(kAVX2) && GetCPUInfo(kFMA3))
+  if (cpu_info::Supports(cpu_info::ISA::kAVX2) &&
+      cpu_info::Supports(cpu_info::ISA::kFMA3))
     convolve_proc_ = Convolve_AVX2;
-  else if (GetCPUInfo(kSSE2))
+  else if (cpu_info::Supports(cpu_info::ISA::kSSE2))
     convolve_proc_ = Convolve_SSE;
   else
     convolve_proc_ = Convolve_C;

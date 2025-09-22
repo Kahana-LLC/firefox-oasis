@@ -62,9 +62,10 @@ export class UrlbarProviderRestrictKeywords extends UrlbarProvider {
         mode => mode.restrict == token
       )?.icon;
 
-      let result = new lazy.UrlbarResult(
-        UrlbarUtils.RESULT_TYPE.RESTRICT,
-        UrlbarUtils.RESULT_SOURCE.OTHER_LOCAL,
+      let result = new lazy.UrlbarResult({
+        type: UrlbarUtils.RESULT_TYPE.RESTRICT,
+        source: UrlbarUtils.RESULT_SOURCE.OTHER_LOCAL,
+        hideRowLabel: true,
         ...lazy.UrlbarResult.payloadAndSimpleHighlights(queryContext.tokens, {
           icon,
           keyword: token,
@@ -73,8 +74,8 @@ export class UrlbarProviderRestrictKeywords extends UrlbarProvider {
             UrlbarUtils.HIGHLIGHT.TYPED,
           ],
           providesSearchMode: true,
-        })
-      );
+        }),
+      });
       addCallback(this, result);
     }
   }

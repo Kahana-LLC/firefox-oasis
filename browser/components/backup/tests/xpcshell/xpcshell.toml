@@ -1,4 +1,5 @@
 [DEFAULT]
+run-if = ["os != 'android'"]
 head = "head.js"
 firefox-appdir = "browser"
 prefs = [
@@ -72,3 +73,5 @@ run-sequentially = "Mock Windows registry interferes with normal operations"
 ["test_PreferencesBackupResource_searchEngines.js"]
 
 ["test_SessionStoreBackupResource.js"]
+
+["test_backupService_findBackupsInWellKnownLocations.js"]

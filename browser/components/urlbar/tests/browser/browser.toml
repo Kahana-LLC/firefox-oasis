@@ -210,6 +210,12 @@ support-files = [
 ["browser_content_opener.js"]
 
 ["browser_contextualsearch.js"]
+skip-if = [
+  "os == 'linux' && os_version == '24.04' && processor == 'x86_64'", # Bug 1932516
+  "os == 'mac' && os_version == '10.15' && processor == 'x86_64'", # Bug 1932516
+  "os == 'win' && os_version == '11.26100' && processor == 'x86_64' && opt", # Bug 1932516
+]
+
 
 ["browser_contextualsearch_install.js"]
 
@@ -719,6 +725,8 @@ https_first_disabled = true
 ["browser_urlbar_annotation.js"]
 https_first_disabled = true
 support-files = ["redirect_to.sjs"]
+
+["browser_urlbar_modifiedClick.js"]
 
 ["browser_urlbar_selection.js"]
 skip-if = [

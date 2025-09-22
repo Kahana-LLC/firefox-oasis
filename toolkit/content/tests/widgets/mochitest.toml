@@ -68,6 +68,8 @@ support-files = [
 
 ["test_ua_widget_sandbox.html"]
 
+["test_ua_widget_trusted_types.html"]
+
 ["test_ua_widget_unbind.html"]
 
 ["test_videocontrols.html"]
@@ -102,6 +104,8 @@ skip-if = [
   "os == 'android'", # Bug 1366957
   "os == 'linux' && os_version == '24.04' && processor == 'x86_64' && display == 'x11' && debug", # Bug 1948193
 ]
+
+["test_videocontrols_l10n_trusted_types.html"]
 
 ["test_videocontrols_scrubber_position.html"]
 

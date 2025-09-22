@@ -6,18 +6,24 @@
 
 #include "mozilla/dom/StylePropertyMapReadOnly.h"
 
+#include "CSSUnsupportedValue.h"
 #include "mozilla/Assertions.h"
+#include "mozilla/DeclarationBlock.h"
 #include "mozilla/ErrorResult.h"
+#include "mozilla/RefPtr.h"
+#include "mozilla/ServoStyleConsts.h"
 #include "mozilla/dom/CSSStyleValue.h"
+#include "mozilla/dom/Element.h"
 #include "mozilla/dom/StylePropertyMapReadOnlyBinding.h"
 #include "nsCycleCollectionParticipant.h"
+#include "nsQueryObject.h"
 #include "nsReadableUtils.h"
 
 namespace mozilla::dom {
 
 StylePropertyMapReadOnly::StylePropertyMapReadOnly(
-    nsCOMPtr<nsISupports> aParent)
-    : mParent(std::move(aParent)) {
+    nsCOMPtr<nsISupports> aParent, bool aComputed)
+    : mParent(std::move(aParent)), mComputed(aComputed) {
   MOZ_ASSERT(mParent);
 }
 
@@ -41,16 +47,73 @@ JSObject* StylePropertyMapReadOnly::WrapObject(
 
 // start of StylePropertyMapReadOnly Web IDL implementation
 
+// XXX This is not yet fully implemented and optimized!
 void StylePropertyMapReadOnly::Get(const nsACString& aProperty,
                                    OwningUndefinedOrCSSStyleValue& aRetVal,
                                    ErrorResult& aRv) const {
+  if (mComputed) {
+    aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+    return;
+  }
+
+  // Step 3.
+
+  RefPtr<Element> element = do_QueryObject(mParent);
+  if (!element) {
+    aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+    return;
+  }
+
+  DeclarationBlock* declarations = element->GetInlineStyleDeclaration();
+  if (!declarations) {
+    aRetVal.SetUndefined();
+    return;
+  }
+
+  auto propTypedValue = StylePropertyTypedValue::None();
+  bool result = declarations->GetPropertyTypedValue(aProperty, propTypedValue);
+  if (!result) {
+    aRv.ThrowTypeError("Invalid CSS property");
+    return;
+  }
+
+  if (propTypedValue.IsNone()) {
+    aRetVal.SetUndefined();
+    return;
+  }
+
+  // Step 4.
+
+  if (propTypedValue.IsUnsupported()) {
+    RefPtr<DeclarationBlock> clonedDeclarations = declarations->Clone();
+
+    auto unsupportedValue = MakeRefPtr<CSSUnsupportedValue>(
+        mParent, aProperty, std::move(clonedDeclarations));
+
+    aRetVal.SetAsCSSStyleValue() = std::move(unsupportedValue);
+    return;
+  }
+
+  MOZ_ASSERT(propTypedValue.IsTyped());
+
   aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
 }
 
+// XXX This is not yet fully implemented and optimized!
 void StylePropertyMapReadOnly::GetAll(const nsACString& aProperty,
                                       nsTArray<RefPtr<CSSStyleValue>>& aRetVal,
                                       ErrorResult& aRv) const {
-  aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+  OwningUndefinedOrCSSStyleValue retVal;
+
+  Get(aProperty, retVal, aRv);
+  if (aRv.Failed()) {
+    return;
+  }
+
+  if (retVal.IsCSSStyleValue()) {
+    auto styleValue = retVal.GetAsCSSStyleValue();
+    aRetVal.AppendElement(styleValue);
+  }
 }
 
 bool StylePropertyMapReadOnly::Has(const nsACString& aProperty,

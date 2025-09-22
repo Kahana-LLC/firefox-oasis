@@ -116,6 +116,7 @@ function getControlInstance(control = "moz-checkbox") {
 const KNOWN_OPTIONS = new Map([
   ["moz-radio-group", literal`moz-radio`],
   ["moz-select", literal`moz-option`],
+  ["moz-visual-picker", literal`moz-visual-picker-item`],
 ]);
 
 /**
@@ -253,6 +254,8 @@ export class SettingControl extends MozLitElement {
   controlValue(el) {
     if (el.constructor.activatedProperty && el.localName != "moz-radio") {
       return el[el.constructor.activatedProperty];
+    } else if (el.localName == "moz-input-folder") {
+      return el.folder;
     }
     return el.value;
   }

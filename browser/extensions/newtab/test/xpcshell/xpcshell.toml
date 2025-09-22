@@ -1,4 +1,5 @@
 [DEFAULT]
+run-if = ["os != 'android'"]
 firefox-appdir = "browser"
 head = "head.js"
 prefs = [
@@ -19,6 +20,8 @@ support-files = ["topstories.json"]
 ["test_InferredFeatureModel.js"]
 
 ["test_ListsFeed.js"]
+
+["test_LocalInferredRanking.js"]
 
 ["test_NewTabContentPing.js"]
 

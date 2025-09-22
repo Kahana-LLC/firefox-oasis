@@ -1,4 +1,5 @@
 [DEFAULT]
+run-if = ["os != 'android'"]
 head = "../../unit/head.js head.js"
 firefox-appdir = "browser"
 prefs = [
@@ -38,6 +39,8 @@ skip-if = ["true"] # Bug 1880214
 ["test_quicksuggest_migrate_v1.js"]
 
 ["test_quicksuggest_migrate_v2.js"]
+
+["test_quicksuggest_migrate_v3.js"]
 
 ["test_quicksuggest_offlineDefault.js"]
 

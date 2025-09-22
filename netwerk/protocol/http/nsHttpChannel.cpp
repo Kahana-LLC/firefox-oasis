@@ -3747,8 +3747,9 @@ nsresult nsHttpChannel::RedirectToNewChannelForAuthRetry() {
     if (mTransaction->Http3Disabled()) {
       httpChannelImpl->mCaps |= NS_HTTP_DISALLOW_HTTP3;
     }
-    httpChannelImpl->mCaps |= NS_HTTP_STICKY_CONNECTION;
   }
+  // always set sticky connection flag
+  httpChannelImpl->mCaps |= NS_HTTP_STICKY_CONNECTION;
 
   if (LoadAuthConnectionRestartable()) {
     httpChannelImpl->mCaps |= NS_HTTP_CONNECTION_RESTARTABLE;
@@ -11867,6 +11868,13 @@ NS_IMETHODIMP nsHttpChannel::SetResponseOverride(
     nsIReplacedHttpResponse* aReplacedHttpResponse) {
   mOverrideResponse = new nsMainThreadPtrHolder<nsIReplacedHttpResponse>(
       "nsIReplacedHttpResponse", aReplacedHttpResponse);
+
+  if (LoadRequireCORSPreflight()) {
+    // Bug 1986615, Bug 1940738, responses provided via setResponseOverride will
+    // be handled before the preflight can be sent, flag it as done.
+    StoreIsCorsPreflightDone(true);
+  }
+
   return NS_OK;
 }
 
