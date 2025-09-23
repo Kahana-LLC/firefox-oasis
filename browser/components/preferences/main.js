@@ -2,6 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/**@import { SettingGroup } from "./widgets/setting-group/setting-group.mjs" */
+/** @import { PreferencesSettingsConfig } from "chrome://global/content/preferences/Preferences.mjs" */
+
 /* import-globals-from extensionControlled.js */
 /* import-globals-from preferences.js */
 /* import-globals-from /toolkit/mozapps/preferences/fontbuilder.js */
@@ -655,6 +658,9 @@ Preferences.addSetting({
   },
 });
 
+/**
+ * @type {Record<string, PreferencesSettingsConfig>} SettingConfig
+ */
 let SETTINGS_CONFIG = {
   zoom: {
     // This section is marked as in progress for testing purposes
@@ -819,6 +825,63 @@ let SETTINGS_CONFIG = {
       },
     ],
   },
+  httpsOnly: {
+    items: [
+      {
+        id: "httpsOnlyRadioGroup",
+        control: "moz-radio-group",
+        l10nId: "httpsonly-label",
+        supportPage: "https-only-prefs",
+        options: [
+          {
+            id: "httpsOnlyRadioEnabled",
+            value: "enabled",
+            l10nId: "httpsonly-radio-enabled",
+          },
+          {
+            id: "httpsOnlyRadioEnabledPBM",
+            value: "privateOnly",
+            l10nId: "httpsonly-radio-enabled-pbm",
+          },
+          {
+            id: "httpsOnlyRadioDisabled",
+            value: "disabled",
+            l10nId: "httpsonly-radio-disabled3",
+            supportPage: "connection-upgrades",
+          },
+        ],
+      },
+      {
+        id: "httpsOnlyExceptionButton",
+        l10nId: "sitedata-cookies-exceptions",
+        control: "moz-box-button",
+        controlAttrs: {
+          "search-l10n-ids":
+            "permissions-address,permissions-allow.label,permissions-remove.label,permissions-remove-all.label,permissions-exceptions-https-only-desc2",
+        },
+      },
+    ],
+  },
+  browsingProtection: {
+    items: [
+      {
+        id: "enableSafeBrowsing",
+        l10nId: "security-enable-safe-browsing",
+        supportPage: "phishing-malware",
+        control: "moz-checkbox",
+        items: [
+          {
+            id: "blockDownloads",
+            l10nId: "security-block-downloads",
+          },
+          {
+            id: "blockUncommonUnwanted",
+            l10nId: "security-block-uncommon-software",
+          },
+        ],
+      },
+    ],
+  },
   nonTechnicalPrivacy: {
     l10nId: "non-technical-privacy-label",
     items: [
@@ -855,9 +918,13 @@ let SETTINGS_CONFIG = {
   },
 };
 
+/**
+ * @param {string} id - ID of {@link SettingGroup} custom element.
+ */
 function initSettingGroup(id) {
+  /** @type {SettingGroup} */
   let group = document.querySelector(`setting-group[groupid=${id}]`);
-  let config = SETTINGS_CONFIG[id];
+  const config = SETTINGS_CONFIG[id];
   if (group && config) {
     if (config.inProgress && !srdSectionEnabled(id)) {
       group.remove();

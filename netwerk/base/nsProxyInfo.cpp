@@ -30,12 +30,16 @@ nsProxyInfo::nsProxyInfo(const nsACString& aType, const nsACString& aHost,
                          const nsACString& aPassword, uint32_t aFlags,
                          uint32_t aTimeout, uint32_t aResolveFlags,
                          const nsACString& aProxyAuthorizationHeader,
-                         const nsACString& aConnectionIsolationKey)
+                         const nsACString& aConnectionIsolationKey,
+                         const nsACString& aPathTemplate,
+                         const nsACString& aAlpn)
     : mHost(aHost),
       mUsername(aUsername),
       mPassword(aPassword),
       mProxyAuthorizationHeader(aProxyAuthorizationHeader),
       mConnectionIsolationKey(aConnectionIsolationKey),
+      mPathTemplate(aPathTemplate),
+      mAlpn(aAlpn),
       mPort(aPort),
       mFlags(aFlags),
       mResolveFlags(aResolveFlags),
@@ -145,6 +149,30 @@ nsProxyInfo::SetSourceId(const nsACString& sourceId) {
   return NS_OK;
 }
 
+NS_IMETHODIMP
+nsProxyInfo::SetPathTemplate(const nsACString& aPathTemplate) {
+  mPathTemplate = aPathTemplate;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsProxyInfo::GetPathTemplate(nsACString& aPathTemplate) {
+  aPathTemplate = mPathTemplate;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsProxyInfo::SetAlpn(const nsACString& aAlpn) {
+  mAlpn = aAlpn;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsProxyInfo::GetAlpn(nsACString& aAlpn) {
+  aAlpn = mAlpn;
+  return NS_OK;
+}
+
 bool nsProxyInfo::IsDirect() {
   if (!mType) return true;
   return mType == kProxyType_DIRECT;
@@ -159,6 +187,8 @@ bool nsProxyInfo::IsSOCKS() {
          mType == kProxyType_SOCKS5;
 }
 
+bool nsProxyInfo::IsHttp3Proxy() { return mAlpn.Equals("h3"_ns); }
+
 /* static */
 void nsProxyInfo::SerializeProxyInfo(nsProxyInfo* aProxyInfo,
                                      nsTArray<ProxyInfoCloneArgs>& aResult) {
@@ -167,6 +197,8 @@ void nsProxyInfo::SerializeProxyInfo(nsProxyInfo* aProxyInfo,
     arg->type() = nsCString(iter->Type());
     arg->host() = iter->Host();
     arg->port() = iter->Port();
+    arg->pathTemplate() = iter->PathTemplate();
+    arg->alpn() = iter->Alpn();
     arg->username() = iter->Username();
     arg->password() = iter->Password();
     arg->proxyAuthorizationHeader() = iter->ProxyAuthorizationHeader();
@@ -185,7 +217,8 @@ nsProxyInfo* nsProxyInfo::DeserializeProxyInfo(
     pi = new nsProxyInfo(info.type(), info.host(), info.port(), info.username(),
                          info.password(), info.flags(), info.timeout(),
                          info.resolveFlags(), info.proxyAuthorizationHeader(),
-                         info.connectionIsolationKey());
+                         info.connectionIsolationKey(), info.pathTemplate(),
+                         info.alpn());
     if (last) {
       last->mNext = pi;
       // |mNext| will be released in |last|'s destructor.
@@ -206,6 +239,20 @@ already_AddRefed<nsProxyInfo> nsProxyInfo::CloneProxyInfoWithNewResolveFlags(
 
   for (auto& arg : args) {
     arg.resolveFlags() = aResolveFlags;
+  }
+
+  RefPtr<nsProxyInfo> result = DeserializeProxyInfo(args);
+  return result.forget();
+}
+
+already_AddRefed<nsProxyInfo> nsProxyInfo::CreateFallbackProxyInfo() {
+  nsTArray<ProxyInfoCloneArgs> args;
+  SerializeProxyInfo(this, args);
+
+  for (auto& arg : args) {
+    if (arg.alpn().Equals("h3"_ns)) {
+      arg.alpn().Truncate();
+    }
   }
 
   RefPtr<nsProxyInfo> result = DeserializeProxyInfo(args);

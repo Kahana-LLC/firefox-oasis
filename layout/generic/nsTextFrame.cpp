@@ -4107,9 +4107,9 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           // End of a cluster, not in a ligature: put letter-spacing after it
           aSpacing[runOffsetInSubstring + i].mAfter += after;
         }
-        if (IsCSSWordSpacingSpace(mCharacterDataBuffer,
-                                  i + run.GetOriginalOffset(), mFrame,
-                                  mTextStyle)) {
+        if (mWordSpacing && IsCSSWordSpacingSpace(mCharacterDataBuffer,
+                                                  i + run.GetOriginalOffset(),
+                                                  mFrame, mTextStyle)) {
           // It kinda sucks, but space characters can be part of clusters,
           // and even still be whitespace (I think!)
           iter.SetSkippedOffset(run.GetSkippedOffset() + i);
@@ -4118,8 +4118,12 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
         }
-        // Add text-autospace spacing.
+        // Add text-autospace spacing only at cluster starts. Always check
+        // 2-byte text; for 1-byte, check only at the frame start (a preceding
+        // content might be an ideograph requiring autospacing).
         if (mTextAutospace &&
+            (mCharacterDataBuffer.Is2b() ||
+             run.GetOriginalOffset() + i == mFrame->GetContentOffset()) &&
             mTextRun->IsClusterStart(run.GetSkippedOffset() + i)) {
           const char32_t currScalar =
               mCharacterDataBuffer.ScalarValueAt(run.GetOriginalOffset() + i);
@@ -4133,7 +4137,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
             // current class is `Other`, which never participates in spacing.
             if (!atStart && currClass != CharClass::Other &&
                 mTextAutospace->ShouldApplySpacing(
-                    prevClass.valueOr(findPrecedingClass()), currClass)) {
+                    prevClass.valueOrFrom(findPrecedingClass), currClass)) {
               aSpacing[runOffsetInSubstring + i].mBefore +=
                   mTextAutospace->InterScriptSpacing();
             }

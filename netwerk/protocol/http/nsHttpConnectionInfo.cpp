@@ -109,12 +109,19 @@ void nsHttpConnectionInfo::Init(const nsACString& host, int32_t port,
   mUsingHttpProxy = mUsingHttpsProxy || (proxyInfo && proxyInfo->IsHTTP());
 
   if (mUsingHttpProxy) {
-    mUsingConnect = mEndToEndSSL;  // SSL always uses CONNECT
-    uint32_t resolveFlags = 0;
-    if (NS_SUCCEEDED(mProxyInfo->GetResolveFlags(&resolveFlags)) &&
-        resolveFlags & nsIProtocolProxyService::RESOLVE_ALWAYS_TUNNEL) {
-      mUsingConnect = true;
+    mUsingConnect = mEndToEndSSL || proxyInfo->IsHttp3Proxy();
+    if (!mUsingConnect) {
+      uint32_t resolveFlags = 0;
+      if (NS_SUCCEEDED(mProxyInfo->GetResolveFlags(&resolveFlags)) &&
+          resolveFlags & nsIProtocolProxyService::RESOLVE_ALWAYS_TUNNEL) {
+        mUsingConnect = true;
+      }
     }
+  }
+
+  if (mUsingHttpsProxy) {
+    mProxyNPNToken = proxyInfo->Alpn();
+    mIsHttp3ProxyConnection = mProxyNPNToken.Equals("h3"_ns);
   }
 
   SetOriginServer(host, port);
@@ -486,13 +493,15 @@ nsHttpConnectionInfo::DeserializeHttpConnectionInfoCloneArgs(
   return cinfo.forget();
 }
 
-void nsHttpConnectionInfo::CloneAsDirectRoute(nsHttpConnectionInfo** outCI) {
+void nsHttpConnectionInfo::CloneAsDirectRoute(nsHttpConnectionInfo** outCI,
+                                              nsProxyInfo* aProxyInfo) {
   // Explicitly use an empty npnToken when |mIsHttp3| is true, since we want to
   // create a non-http3 connection info.
   RefPtr<nsHttpConnectionInfo> clone = new nsHttpConnectionInfo(
       mOrigin, mOriginPort,
       (mRoutedHost.IsEmpty() && !mIsHttp3) ? mNPNToken : ""_ns, mUsername,
-      mProxyInfo, mOriginAttributes, mEndToEndSSL, false, mWebTransport);
+      aProxyInfo ? aProxyInfo : mProxyInfo.get(), mOriginAttributes,
+      mEndToEndSSL, false, mWebTransport);
   // Make sure the anonymous, insecure-scheme, and private flags are transferred
   clone->SetAnonymous(GetAnonymous());
   clone->SetPrivate(GetPrivate());
@@ -512,6 +521,18 @@ void nsHttpConnectionInfo::CloneAsDirectRoute(nsHttpConnectionInfo** outCI) {
   clone.forget(outCI);
 }
 
+already_AddRefed<nsHttpConnectionInfo>
+nsHttpConnectionInfo::CreateConnectUDPFallbackConnInfo() {
+  if (!mProxyInfo || !mProxyInfo->IsHttp3Proxy()) {
+    return nullptr;
+  }
+
+  RefPtr<nsProxyInfo> proxyInfo = mProxyInfo->CreateFallbackProxyInfo();
+  RefPtr<nsHttpConnectionInfo> clone;
+  CloneAsDirectRoute(getter_AddRefs(clone), proxyInfo);
+  return clone.forget();
+}
+
 nsresult nsHttpConnectionInfo::CreateWildCard(nsHttpConnectionInfo** outParam) {
   // T???mozilla.org:443 (https:proxy.ducksong.com:3128) [specifc form]
   // TS??*:0 (https:proxy.ducksong.com:3128)   [wildcard form]
@@ -528,6 +549,7 @@ nsresult nsHttpConnectionInfo::CreateWildCard(nsHttpConnectionInfo** outParam) {
   // Make sure the anonymous and private flags are transferred!
   clone->SetAnonymous(GetAnonymous());
   clone->SetPrivate(GetPrivate());
+  clone->SetFallbackConnection(GetFallbackConnection());
   clone.forget(outParam);
   return NS_OK;
 }

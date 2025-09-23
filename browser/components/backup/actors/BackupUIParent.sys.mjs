@@ -234,11 +234,6 @@ export class BackupUIParent extends JSWindowActorParent {
        * this time with the new password.
        */
       return { success: true };
-    } else if (message.name == "FindIfABackupFileExists") {
-      this.#bs.findIfABackupFileExists({
-        validateFile: true,
-        multipleFiles: true,
-      });
     } else if (message.name == "ShowBackupLocation") {
       this.#bs.showBackupLocation();
     } else if (message.name == "EditBackupLocation") {

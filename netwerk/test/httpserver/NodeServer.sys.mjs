@@ -487,6 +487,34 @@ export class NodeProxyFilter {
   }
 }
 
+export class Http3ProxyFilter {
+  constructor(host, port, flags, pathTemplate, auth) {
+    this._host = host;
+    this._port = port;
+    this._flags = flags;
+    this._pathTemplate = pathTemplate;
+    this._auth = auth;
+    this.QueryInterface = ChromeUtils.generateQI(["nsIProtocolProxyFilter"]);
+  }
+  applyFilter(uri, pi, cb) {
+    const pps =
+      Cc["@mozilla.org/network/protocol-proxy-service;1"].getService();
+    cb.onProxyFilterResult(
+      pps.newMASQUEProxyInfo(
+        this._host,
+        this._port,
+        this._pathTemplate,
+        "h3",
+        this._auth,
+        "",
+        this._flags,
+        1000,
+        null
+      )
+    );
+  }
+}
+
 class HTTPProxyCode {
   static async startServer(port) {
     const http = require("http");
@@ -718,6 +746,11 @@ export class NodeHTTP2ProxyServer extends BaseHTTPProxy {
   /// @port - default 0
   ///    when provided, will attempt to listen on that port.
   async start(port = 0, auth, maxConcurrentStreams = 100) {
+    await this.startWithoutProxyFilter(port, auth, maxConcurrentStreams);
+    this.registerFilter();
+  }
+
+  async startWithoutProxyFilter(port = 0, auth, maxConcurrentStreams = 100) {
     if (!this._skipCert) {
       await BaseNodeServer.installCert("proxy-ca.pem");
     }
@@ -730,8 +763,6 @@ export class NodeHTTP2ProxyServer extends BaseHTTPProxy {
     this._port = await this.execute(
       `HTTP2ProxyCode.startServer(${port}, ${auth}, ${maxConcurrentStreams})`
     );
-
-    this.registerFilter();
   }
 
   async socketCount(port) {
