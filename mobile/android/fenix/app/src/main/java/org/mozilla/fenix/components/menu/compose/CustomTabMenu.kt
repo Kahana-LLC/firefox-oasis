@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,18 +31,20 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import mozilla.components.browser.state.state.CustomTabMenuItem
+import mozilla.components.compose.base.Divider
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.menu.MenuDialogTestTag.DESKTOP_SITE_OFF
 import org.mozilla.fenix.components.menu.MenuDialogTestTag.DESKTOP_SITE_ON
-import org.mozilla.fenix.components.menu.compose.header.MenuNavHeader
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.theme.Theme
+import mozilla.components.ui.icons.R as iconsR
 
 /**
  * Wrapper column containing the main menu items.
  *
  * @param canGoBack Whether or not the back button is enabled.
  * @param canGoForward Whether or not the forward button is enabled.
+ * @param isBottomToolbar Whether or not the browser toolbar is at the bottom.
  * @param isSiteLoading Whether or not the custom tab is currently loading.
  * @param isPdf Whether or not the current custom tab is a PDF.
  * @param isDesktopMode Whether or not the current site is in desktop mode.
@@ -59,11 +62,12 @@ import org.mozilla.fenix.theme.Theme
  * @param onStopButtonClick Invoked when the user clicks on the stop button.
  * @param onShareButtonClick Invoked when the user clicks on the share button.
  */
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun CustomTabMenu(
     canGoBack: Boolean,
     canGoForward: Boolean,
+    isBottomToolbar: Boolean,
     isSiteLoading: Boolean,
     isPdf: Boolean,
     isDesktopMode: Boolean,
@@ -81,30 +85,59 @@ internal fun CustomTabMenu(
     onShareButtonClick: () -> Unit,
 ) {
     MenuFrame(
-        header = {
-            MenuNavHeader(
-                isSiteLoading = isSiteLoading,
-                goBackState = if (canGoBack) {
-                    MenuItemState.ENABLED
-                } else {
-                    MenuItemState.DISABLED
-                },
-                goForwardState = if (canGoForward) {
-                    MenuItemState.ENABLED
-                } else {
-                    MenuItemState.DISABLED
-                },
-                onBackButtonClick = onBackButtonClick,
-                onForwardButtonClick = onForwardButtonClick,
-                onRefreshButtonClick = onRefreshButtonClick,
-                onStopButtonClick = onStopButtonClick,
-                onShareButtonClick = onShareButtonClick,
-                isExtensionsExpanded = false,
-                isMoreMenuExpanded = false,
-            )
-        },
+        contentModifier = Modifier
+            .padding(
+                start = 8.dp,
+                top = if (isBottomToolbar) 0.dp else 8.dp,
+                end = 8.dp,
+                bottom = if (isBottomToolbar) 84.dp else 16.dp,
+            ),
         scrollState = scrollState,
+        header = {
+            if (!isBottomToolbar) {
+                MenuNavigation(
+                    isSiteLoading = isSiteLoading,
+                    goBackState = if (canGoBack) MenuItemState.ENABLED else MenuItemState.DISABLED,
+                    goForwardState = if (canGoForward) MenuItemState.ENABLED else MenuItemState.DISABLED,
+                    onBackButtonClick = onBackButtonClick,
+                    onForwardButtonClick = onForwardButtonClick,
+                    onRefreshButtonClick = onRefreshButtonClick,
+                    onStopButtonClick = onStopButtonClick,
+                    onShareButtonClick = onShareButtonClick,
+                    isExtensionsExpanded = false,
+                    isMoreMenuExpanded = false,
+                )
+                if (scrollState.value != 0) {
+                    Divider(color = FirefoxTheme.colors.borderPrimary)
+                }
+            }
+        },
+        footer = {
+            if (isBottomToolbar) {
+                if (scrollState.value != 0) {
+                    Divider(color = FirefoxTheme.colors.borderPrimary)
+                }
+                MenuNavigation(
+                    isSiteLoading = isSiteLoading,
+                    goBackState = if (canGoBack) MenuItemState.ENABLED else MenuItemState.DISABLED,
+                    goForwardState = if (canGoForward) MenuItemState.ENABLED else MenuItemState.DISABLED,
+                    onBackButtonClick = onBackButtonClick,
+                    onForwardButtonClick = onForwardButtonClick,
+                    onRefreshButtonClick = onRefreshButtonClick,
+                    onStopButtonClick = onStopButtonClick,
+                    onShareButtonClick = onShareButtonClick,
+                    isExtensionsExpanded = false,
+                    isMoreMenuExpanded = false,
+                )
+            }
+        },
     ) {
+        if (isBottomToolbar) {
+            PoweredByFirefoxItem(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            )
+        }
+
         MenuGroup {
             val badgeText: String
             val menuItemState: MenuItemState
@@ -125,7 +158,7 @@ internal fun CustomTabMenu(
                     id = R.string.browser_menu_open_in_fenix,
                     stringResource(id = R.string.app_name),
                 ),
-                beforeIconPainter = painterResource(id = R.drawable.mozac_ic_open_in),
+                beforeIconPainter = painterResource(id = iconsR.drawable.mozac_ic_open_in),
                 onClick = onOpenInFirefoxMenuClick,
                 state = if (isSandboxCustomTab) {
                     MenuItemState.DISABLED
@@ -136,7 +169,7 @@ internal fun CustomTabMenu(
 
             MenuItem(
                 label = stringResource(id = R.string.browser_menu_find_in_page),
-                beforeIconPainter = painterResource(id = R.drawable.mozac_ic_search_24),
+                beforeIconPainter = painterResource(id = iconsR.drawable.mozac_ic_search_24),
                 onClick = onFindInPageMenuClick,
             )
 
@@ -149,7 +182,7 @@ internal fun CustomTabMenu(
                     }
                 },
                 label = stringResource(id = R.string.browser_menu_desktop_site),
-                beforeIconPainter = painterResource(id = R.drawable.mozac_ic_device_mobile_24),
+                beforeIconPainter = painterResource(id = iconsR.drawable.mozac_ic_device_mobile_24),
                 state = menuItemState,
                 onClick = onSwitchToDesktopSiteMenuClick,
             ) {
@@ -176,7 +209,11 @@ internal fun CustomTabMenu(
             }
         }
 
-        PoweredByFirefoxItem()
+        if (!isBottomToolbar) {
+            PoweredByFirefoxItem(
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 
@@ -223,6 +260,7 @@ private fun CustomTabMenuPreview() {
             CustomTabMenu(
                 canGoBack = true,
                 canGoForward = true,
+                isBottomToolbar = false,
                 isSiteLoading = true,
                 isPdf = false,
                 isDesktopMode = false,
@@ -254,6 +292,7 @@ private fun CustomTabMenuPrivatePreview() {
             CustomTabMenu(
                 canGoBack = false,
                 canGoForward = false,
+                isBottomToolbar = true,
                 isSiteLoading = false,
                 isPdf = true,
                 isDesktopMode = false,

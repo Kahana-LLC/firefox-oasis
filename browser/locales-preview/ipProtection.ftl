@@ -7,9 +7,17 @@
 # before exposing it to localization
 -firefox-vpn-brand-name = Firefox VPN
 
+## Toolbar button tooltip reflects VPN state
+
 ipprotection-button =
   .label = { -firefox-vpn-brand-name }
   .tooltiptext = { -firefox-vpn-brand-name }
+
+ipprotection-button-error =
+  .label = Turn { -firefox-vpn-brand-name } on
+  .tooltiptext = Turn { -firefox-vpn-brand-name } on
+
+##
 
 # The word "Beta" is intended to be uppercase in the experiment label.
 ipprotection-experiment-badge =
@@ -61,10 +69,6 @@ upgrade-vpn-button = Upgrade
 signed-out-vpn-title = Sign in to boost your browser’s privacy with free { -firefox-vpn-brand-name }
 signed-out-vpn-message = You’ve been selected for early access to our new, <a data-l10n-name="learn-more-vpn-signed-out">built-in VPN</a>. Enhance your browser’s protection by hiding your location and encrypting your traffic.
 sign-in-vpn = Next
-
-active-subscription-vpn-title = Finish setting up { -mozilla-vpn-brand-name }
-active-subscription-vpn-message = Download it and install the extension to unlock your upgrade.
-get-vpn-button = Download
 
 ## Messages and errors
 

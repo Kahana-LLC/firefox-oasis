@@ -45,6 +45,7 @@
 #include "mozilla/dom/RemoteWorkerChild.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/ShadowRealmGlobalScope.h"
+#include "mozilla/dom/TimeoutHandler.h"
 #include "mozilla/dom/TrustedTypeUtils.h"
 #include "mozilla/dom/WorkerBinding.h"
 #include "mozilla/extensions/WebExtensionPolicy.h"
@@ -55,6 +56,7 @@
 #include "nsContentUtils.h"
 #include "nsCycleCollector.h"
 #include "nsDOMJSUtils.h"
+#include "nsGlobalWindowInner.h"
 #include "nsIContentSecurityPolicy.h"
 #include "nsIObserverService.h"
 #include "nsIScriptContext.h"
@@ -1723,7 +1725,7 @@ void RuntimeService::Cleanup() {
           getter_AddRefs(timer),
           [self](nsITimer*) { self->DumpRunningWorkers(); },
           TimeDuration::FromSeconds(1), nsITimer::TYPE_ONE_SHOT,
-          "RuntimeService::WorkerShutdownDump");
+          "RuntimeService::WorkerShutdownDump"_ns);
       Unused << NS_WARN_IF(NS_FAILED(rv));
 
       // And make sure all their final messages have run and all their threads
@@ -1983,13 +1985,18 @@ void RuntimeService::MemoryPressureAllWorkers() {
   BroadcastAllWorkers([](auto& worker) { worker.MemoryPressure(); });
 }
 
-uint32_t RuntimeService::ClampedHardwareConcurrency(
-    bool aShouldResistFingerprinting) const {
-  // The Firefox Hardware Report says 70% of Firefox users have exactly 2 cores.
+uint32_t RuntimeService::ClampedHardwareConcurrency(bool aRFPHardcoded,
+                                                    bool aRFPTiered) const {
+  // The Firefox Hardware Report says 34% of Firefox users have exactly 4 cores.
   // When the resistFingerprinting pref is set, we want to blend into the crowd
-  // so spoof navigator.hardwareConcurrency = 2 to reduce user uniqueness.
-  if (MOZ_UNLIKELY(aShouldResistFingerprinting)) {
-    return 2;
+  // so spoof navigator.hardwareConcurrency = 4 to reduce user uniqueness. On
+  // OSX, the majority of Macs have 8 cores.
+  if (MOZ_UNLIKELY(aRFPHardcoded)) {
+#ifdef XP_MACOSX
+    return 8;
+#else
+    return 4;
+#endif
   }
 
   // This needs to be atomic, because multiple workers, and even mainthread,
@@ -2015,6 +2022,13 @@ uint32_t RuntimeService::ClampedHardwareConcurrency(
     }
     Unused << unclampedHardwareConcurrency.compareExchange(0,
                                                            numberOfProcessors);
+  }
+
+  if (MOZ_UNLIKELY(aRFPTiered)) {
+    if (unclampedHardwareConcurrency >= 8) {
+      return 8;
+    }
+    return 4;
   }
 
   return std::min(uint32_t(unclampedHardwareConcurrency),

@@ -1252,7 +1252,7 @@ TEST(TArray, test_swap)
 
     a.SwapElements(b);
 
-    CHECK_NOT_USING_AUTO(a);
+    CHECK_IS_USING_AUTO(a);
     CHECK_NOT_USING_AUTO(b);
     CHECK_ARRAY(b, data1);
     CHECK_EQ_INT(a.Length(), size_t(0));
@@ -1513,6 +1513,34 @@ TEST(TArray, test_AutoTArray_SwapElements)
 
   ASSERT_EQ(oneArray[0].size[10], 0u);
   ASSERT_EQ(another[0].size[10], 1u);
+}
+
+TEST(TArray, test_TArray_Move_EmptyWithCapacity)
+{
+  nsTArray<void*> oneArray;
+  nsTArray<void*> otherArray;
+
+  oneArray.SetCapacity(50);
+  auto cap = oneArray.Capacity();
+  ASSERT_TRUE(cap >= 50);
+
+  otherArray = std::move(oneArray);
+  ASSERT_EQ(otherArray.Capacity(), cap);
+  ASSERT_EQ(oneArray.Capacity(), 0u);
+}
+
+TEST(TArray, test_TArray_SwapElements_EmptyWithCapacity)
+{
+  nsTArray<void*> oneArray;
+  nsTArray<void*> otherArray;
+
+  oneArray.SetCapacity(50);
+  auto cap = oneArray.Capacity();
+  ASSERT_TRUE(cap >= 50);
+
+  otherArray.SwapElements(oneArray);
+  ASSERT_EQ(otherArray.Capacity(), cap);
+  ASSERT_EQ(oneArray.Capacity(), 0u);
 }
 
 }  // namespace TestTArray

@@ -269,23 +269,28 @@ struct nsTArrayInfallibleAllocator : nsTArrayInfallibleAllocatorBase {
 struct nsTArrayHeader {
   uint32_t mLength;
   uint32_t mCapacity : 31;
-  uint32_t mIsAutoBuffer : 1;
+  uint32_t mIsAutoArray : 1;
 };
+
+// Given an nsTArray which is an AutoTArray, this is the offset from the `this`
+// pointer to the `mAutoBuf` member. We guarantee this by forcing mAutoBuf to be
+// 8-byte aligned, which makes the location independent of the alignment of T
+// (since we don't support over-aligned values in nsTArray).
+constexpr static size_t kAutoTArrayHeaderOffset = 8;
 
 extern "C" {
 extern const nsTArrayHeader sEmptyTArrayHeader;
 }
 
+template <class T>
+class nsCOMPtr;
+
+namespace mozilla {
+template <class T>
+class OwningNonNull;
+}  // namespace mozilla
+
 namespace detail {
-// nsTArray_CopyDisabler disables copy operations.
-class nsTArray_CopyDisabler {
- public:
-  nsTArray_CopyDisabler() = default;
-
-  nsTArray_CopyDisabler(const nsTArray_CopyDisabler&) = delete;
-  nsTArray_CopyDisabler& operator=(const nsTArray_CopyDisabler&) = delete;
-};
-
 template <typename Iter, typename Comparator>
 void AssertStrictWeakOrder(Iter aBegin, Iter aEnd, const Comparator& aCmp) {
   // This check is present in newer libc++ versions, and it is a useful check,
@@ -327,113 +332,44 @@ void AssertStrictWeakOrder(Iter aBegin, Iter aEnd, const Comparator& aCmp) {
 #endif
 }
 
+template <typename T>
+struct SafeElementAtPointerValue;
+
+template <typename T>
+struct SafeElementAtPointerValue<T*> {
+  using type = T*;
+};
+template <typename T>
+struct SafeElementAtPointerValue<nsCOMPtr<T>> {
+  using type = T*;
+};
+template <typename T>
+struct SafeElementAtPointerValue<RefPtr<T>> {
+  using type = T*;
+};
+template <typename T>
+struct SafeElementAtPointerValue<mozilla::OwningNonNull<T>> {
+  using type = T*;
+};
 }  // namespace detail
-
-// This class provides a SafeElementAt method to nsTArray<E*> which does
-// not take a second default value parameter.
-template <class E, class Derived>
-struct nsTArray_SafeElementAtHelper : public ::detail::nsTArray_CopyDisabler {
-  typedef E* elem_type;
-  typedef size_t index_type;
-
-  // No implementation is provided for these two methods, and that is on
-  // purpose, since we don't support these functions on non-pointer type
-  // instantiations.
-  elem_type& SafeElementAt(index_type aIndex);
-  const elem_type& SafeElementAt(index_type aIndex) const;
-};
-
-template <class E, class Derived>
-struct nsTArray_SafeElementAtHelper<E*, Derived>
-    : public ::detail::nsTArray_CopyDisabler {
-  typedef E* elem_type;
-  // typedef const E* const_elem_type;   XXX: see below
-  typedef size_t index_type;
-
-  elem_type SafeElementAt(index_type aIndex) {
-    return static_cast<Derived*>(this)->SafeElementAt(aIndex, nullptr);
-  }
-
-  // XXX: Probably should return const_elem_type, but callsites must be fixed.
-  // Also, the use of const_elem_type for nsTArray<xpcGCCallback> in
-  // xpcprivate.h causes build failures on Windows because xpcGCCallback is a
-  // function pointer and MSVC doesn't like qualifying it with |const|.
-  elem_type SafeElementAt(index_type aIndex) const {
-    return static_cast<const Derived*>(this)->SafeElementAt(aIndex, nullptr);
-  }
-};
-
-// E is a smart pointer type; the
-// smart pointer can act as its element_type*.
-template <class E, class Derived>
-struct nsTArray_SafeElementAtSmartPtrHelper
-    : public ::detail::nsTArray_CopyDisabler {
-  typedef typename E::element_type* elem_type;
-  typedef const typename E::element_type* const_elem_type;
-  typedef size_t index_type;
-
-  elem_type SafeElementAt(index_type aIndex) {
-    auto* derived = static_cast<Derived*>(this);
-    if (aIndex < derived->Length()) {
-      return derived->Elements()[aIndex];
-    }
-    return nullptr;
-  }
-
-  // XXX: Probably should return const_elem_type, but callsites must be fixed.
-  elem_type SafeElementAt(index_type aIndex) const {
-    auto* derived = static_cast<const Derived*>(this);
-    if (aIndex < derived->Length()) {
-      return derived->Elements()[aIndex];
-    }
-    return nullptr;
-  }
-};
-
-template <class T>
-class nsCOMPtr;
-
-template <class E, class Derived>
-struct nsTArray_SafeElementAtHelper<nsCOMPtr<E>, Derived>
-    : public nsTArray_SafeElementAtSmartPtrHelper<nsCOMPtr<E>, Derived> {};
-
-template <class E, class Derived>
-struct nsTArray_SafeElementAtHelper<RefPtr<E>, Derived>
-    : public nsTArray_SafeElementAtSmartPtrHelper<RefPtr<E>, Derived> {};
-
-namespace mozilla {
-template <class T>
-class OwningNonNull;
-}  // namespace mozilla
-
-template <class E, class Derived>
-struct nsTArray_SafeElementAtHelper<mozilla::OwningNonNull<E>, Derived>
-    : public nsTArray_SafeElementAtSmartPtrHelper<mozilla::OwningNonNull<E>,
-                                                  Derived> {};
 
 // This class serves as a base class for nsTArray.  It shouldn't be used
 // directly.  It holds common implementation code that does not depend on the
 // element type of the nsTArray.
 //
-template <class Alloc, class RelocationStrategy>
+template <typename RelocationStrategy>
 class nsTArray_base {
-  // Allow swapping elements with |nsTArray_base|s created using a
-  // different allocator.  This is kosher because all allocators use
-  // the same free().
-  template <class XAlloc, class XRelocationStrategy>
-  friend class nsTArray_base;
-
   // Needed for AppendElements from an array with a different allocator, which
   // calls ShiftData.
-  template <class E, class XAlloc>
+  template <typename E, typename Alloc>
   friend class nsTArray_Impl;
 
  protected:
-  typedef nsTArrayHeader Header;
+  using Header = nsTArrayHeader;
 
  public:
-  typedef size_t size_type;
-  typedef size_t index_type;
+  using size_type = size_t;
+  using index_type = size_t;
 
   // @return The number of elements in the array.
   size_type Length() const { return mHdr->mLength; }
@@ -450,33 +386,32 @@ class nsTArray_base {
   void* DebugGetHeader() const { return mHdr; }
 #endif
 
+  nsTArray_base(const nsTArray_base&) = delete;
+  nsTArray_base& operator=(const nsTArray_base&) = delete;
+
  protected:
-  nsTArray_base();
-
+  nsTArray_base() = default;
   ~nsTArray_base();
-
-  nsTArray_base(const nsTArray_base&);
-  nsTArray_base& operator=(const nsTArray_base&);
 
   // Resize the storage if necessary to achieve the requested capacity.
   // @param aCapacity The requested number of array elements.
   // @param aElemSize The size of an array element.
   // @return False if insufficient memory is available; true otherwise.
-  template <typename ActualAlloc>
-  typename ActualAlloc::ResultTypeProxy EnsureCapacity(size_type aCapacity,
-                                                       size_type aElemSize) {
+  template <typename Alloc>
+  typename Alloc::ResultTypeProxy EnsureCapacity(size_type aCapacity,
+                                                 size_type aElemSize) {
     // Do this check here so that our callers can inline it.
     if (aCapacity <= mHdr->mCapacity) {
-      return ActualAlloc::SuccessResult();
+      return Alloc::SuccessResult();
     }
-    return EnsureCapacityImpl<ActualAlloc>(aCapacity, aElemSize);
+    return EnsureCapacityImpl<Alloc>(aCapacity, aElemSize);
   }
 
   // The rest of EnsureCapacity. Should only be called if aCapacity >
   // mHdr->mCapacity.
-  template <typename ActualAlloc>
-  typename ActualAlloc::ResultTypeProxy EnsureCapacityImpl(size_type aCapacity,
-                                                           size_type aElemSize);
+  template <typename Alloc>
+  typename Alloc::ResultTypeProxy EnsureCapacityImpl(size_type aCapacity,
+                                                     size_type aElemSize);
 
   // Extend the storage to accommodate aCount extra elements.
   // @param aLength The current size of the array.
@@ -484,10 +419,10 @@ class nsTArray_base {
   // @param aElemSize The size of an array element.
   // @return False if insufficient memory is available or the new length
   //   would overflow; true otherwise.
-  template <typename ActualAlloc>
-  typename ActualAlloc::ResultTypeProxy ExtendCapacity(size_type aLength,
-                                                       size_type aCount,
-                                                       size_type aElemSize);
+  template <typename Alloc>
+  typename Alloc::ResultTypeProxy ExtendCapacity(size_type aLength,
+                                                 size_type aCount,
+                                                 size_type aElemSize);
 
   // Tries to resize the storage to the minimum required amount. If this fails,
   // the array is left as-is.
@@ -496,8 +431,7 @@ class nsTArray_base {
 
   // Resizes the storage to 0. This may only be called when Length() is already
   // 0.
-  // @param aElemSize  The size of an array element.
-  void ShrinkCapacityToZero(size_type aElemSize);
+  void ShrinkCapacityToZero();
 
   // This method may be called to resize a "gap" in the array by shifting
   // elements around.  It updates mLength appropriately.  If the resulting
@@ -506,7 +440,7 @@ class nsTArray_base {
   // @param aOldLen    The current length of the gap.
   // @param aNewLen    The desired length of the gap.
   // @param aElemSize  The size of an array element.
-  template <typename ActualAlloc>
+  template <typename Alloc>
   void ShiftData(index_type aStart, size_type aOldLen, size_type aNewLen,
                  size_type aElemSize);
 
@@ -516,7 +450,7 @@ class nsTArray_base {
   // @param aStart     The starting index of the gap.
   // @param aCount     The length of the gap.
   // @param aElemSize  The size of an array element.
-  template <typename ActualAlloc>
+  template <typename Alloc>
   void SwapFromEnd(index_type aStart, size_type aCount, size_type aElemSize);
 
   // This method increments the length member of the array's header.
@@ -539,38 +473,40 @@ class nsTArray_base {
   //               greater than the current length of the array.
   // @param aCount the number of slots to insert
   // @param aElementSize the size of an array element.
-  template <typename ActualAlloc>
-  typename ActualAlloc::ResultTypeProxy InsertSlotsAt(index_type aIndex,
-                                                      size_type aCount,
-                                                      size_type aElementSize);
+  template <typename Alloc>
+  typename Alloc::ResultTypeProxy InsertSlotsAt(index_type aIndex,
+                                                size_type aCount,
+                                                size_type aElementSize);
 
-  template <typename ActualAlloc, class Allocator>
-  typename ActualAlloc::ResultTypeProxy SwapArrayElements(
-      nsTArray_base<Allocator, RelocationStrategy>& aOther,
-      size_type aElemSize);
+  template <typename Alloc>
+  typename Alloc::ResultTypeProxy SwapArrayElements(
+      nsTArray_base<RelocationStrategy>& aOther, size_type aElemSize);
 
-  template <class Allocator>
-  void MoveConstructNonAutoArray(
-      nsTArray_base<Allocator, RelocationStrategy>& aOther,
-      size_type aElemSize);
+  void MoveConstructNonAutoArray(nsTArray_base<RelocationStrategy>& aOther,
+                                 size_type aElemSize);
 
-  template <class Allocator>
-  void MoveInit(nsTArray_base<Allocator, RelocationStrategy>& aOther,
-                size_type aElemSize);
+  void MoveInit(nsTArray_base<RelocationStrategy>& aOther, size_type aElemSize);
 
   // Helper function for move construction and SwapArrayElements.
   // Takes the storage from the nsTArray as a non-auto Header pointer.
   // If the array is holding a reference to an AutoTArray buffer,
   // it will be moved to the heap before being returned.
-  template <typename ActualAlloc>
+  template <typename Alloc>
   Header* TakeHeaderForMove(size_type aElemSize);
 
   // Returns whether we're using our auto-array inline buffer.
-  bool UsesAutoArrayBuffer() const { return mHdr->mIsAutoBuffer; }
+  bool UsesAutoArrayBuffer() const { return mHdr == GetAutoArrayHeader(); }
+  Header* GetAutoArrayHeader() const {
+    if (!mHdr->mIsAutoArray) {
+      return nullptr;
+    }
+    return const_cast<Header*>(reinterpret_cast<const Header*>(
+        reinterpret_cast<const uint8_t*>(this) + kAutoTArrayHeaderOffset));
+  }
 
   // The array's elements (prefixed with a Header).  This pointer is never
   // null.  If the array is empty, then this will point to sEmptyTArrayHeader.
-  Header* mHdr;
+  Header* mHdr{EmptyHdr()};
 
   Header* Hdr() const MOZ_NONNULL_RETURN { return mHdr; }
   Header** PtrToHdr() MOZ_NONNULL_RETURN { return &mHdr; }
@@ -825,41 +761,6 @@ MOZ_DECLARE_RELOCATE_USING_MOVE_CONSTRUCTOR(mozilla::dom::MessageData)
 MOZ_DECLARE_RELOCATE_USING_MOVE_CONSTRUCTOR(mozilla::dom::RefMessageData)
 MOZ_DECLARE_RELOCATE_USING_MOVE_CONSTRUCTOR(mozilla::SourceBufferTask)
 
-//
-// Base class for nsTArray_Impl that is templated on element type and derived
-// nsTArray_Impl class, to allow extra conversions to be added for specific
-// types.
-//
-template <class E, class Derived>
-struct nsTArray_TypedBase : public nsTArray_SafeElementAtHelper<E, Derived> {};
-
-//
-// Specialization of nsTArray_TypedBase for arrays containing JS::Heap<E>
-// elements.
-//
-// These conversions are safe because JS::Heap<E> and E share the same
-// representation, and since the result of the conversions are const references
-// we won't miss any barriers.
-//
-// The static_cast is necessary to obtain the correct address for the derived
-// class since we are a base class used in multiple inheritance.
-//
-template <class E, class Derived>
-struct nsTArray_TypedBase<JS::Heap<E>, Derived>
-    : public nsTArray_SafeElementAtHelper<JS::Heap<E>, Derived> {
-  operator const nsTArray<E>&() {
-    static_assert(sizeof(E) == sizeof(JS::Heap<E>),
-                  "JS::Heap<E> must be binary compatible with E.");
-    Derived* self = static_cast<Derived*>(this);
-    return *reinterpret_cast<nsTArray<E>*>(self);
-  }
-
-  operator const FallibleTArray<E>&() {
-    Derived* self = static_cast<Derived*>(this);
-    return *reinterpret_cast<FallibleTArray<E>*>(self);
-  }
-};
-
 namespace detail {
 
 // These helpers allow us to differentiate between tri-state comparator
@@ -969,9 +870,7 @@ struct CompareWrapper<T, U, false> {
 //
 template <class E, class Alloc>
 class nsTArray_Impl
-    : public nsTArray_base<Alloc,
-                           typename nsTArray_RelocationStrategy<E>::Type>,
-      public nsTArray_TypedBase<E, nsTArray_Impl<E, Alloc>> {
+    : public nsTArray_base<typename nsTArray_RelocationStrategy<E>::Type> {
  private:
   friend class nsTArray<E>;
 
@@ -980,20 +879,18 @@ class nsTArray_Impl
 
  public:
   typedef typename nsTArray_RelocationStrategy<E>::Type relocation_type;
-  typedef nsTArray_base<Alloc, relocation_type> base_type;
+  typedef nsTArray_base<relocation_type> base_type;
   typedef typename base_type::size_type size_type;
   typedef typename base_type::index_type index_type;
   typedef E value_type;
   typedef nsTArray_Impl<E, Alloc> self_type;
   typedef nsTArrayElementTraits<E> elem_traits;
-  typedef nsTArray_SafeElementAtHelper<E, self_type> safeelementat_helper_type;
   typedef mozilla::ArrayIterator<value_type&, self_type> iterator;
   typedef mozilla::ArrayIterator<const value_type&, self_type> const_iterator;
   typedef std::reverse_iterator<iterator> reverse_iterator;
   typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
   using base_type::EmptyHdr;
-  using safeelementat_helper_type::SafeElementAt;
 
   // A special value that is used to indicate an invalid or unknown index
   // into the array.
@@ -1202,6 +1099,16 @@ class nsTArray_Impl
   [[nodiscard]] const value_type& SafeElementAt(index_type aIndex,
                                                 const value_type& aDef) const {
     return aIndex < Length() ? Elements()[aIndex] : aDef;
+  }
+
+  [[nodiscard]] auto SafeElementAt(index_type aIndex) const {
+    typename ::detail::SafeElementAtPointerValue<E>::type result;
+    if (aIndex < Length()) {
+      result = Elements()[aIndex];
+    } else {
+      result = nullptr;
+    }
+    return result;
   }
 
   // Shorthand for ElementAt(aIndex)
@@ -1914,7 +1821,7 @@ class nsTArray_Impl
 
   void Clear() {
     ClearAndRetainStorage();
-    base_type::ShrinkCapacityToZero(sizeof(value_type));
+    base_type::ShrinkCapacityToZero();
   }
 
   // This method removes elements based on the return value of the
@@ -2628,15 +2535,15 @@ auto nsTArray_Impl<E, Alloc>::AppendElementsInternal(
   if constexpr (std::is_same_v<Alloc, Allocator>) {
     MOZ_ASSERT(&aArray != this, "argument must be different aArray");
   }
-  if (Length() == 0) {
+  index_type len = Length();
+  if (len == 0) {
     // XXX This might still be optimized. If aArray uses auto-storage but we
     // won't, we might better retain our storage if it's sufficiently large.
-    this->ShrinkCapacityToZero(sizeof(value_type));
+    this->ShrinkCapacityToZero();
     this->MoveInit(aArray, sizeof(value_type));
     return Elements();
   }
 
-  index_type len = Length();
   index_type otherLen = aArray.Length();
   if (!ActualAlloc::Successful(this->template ExtendCapacity<ActualAlloc>(
           len, otherLen, sizeof(value_type)))) {
@@ -3006,30 +2913,30 @@ class MOZ_NON_MEMMOVABLE MOZ_GSL_OWNER AutoTArray : public nsTArray<E> {
   typedef typename base_type::Header Header;
   typedef typename base_type::value_type value_type;
 
-  AutoTArray() : mAlign() { Init(); }
-
-  AutoTArray(self_type&& aOther) : nsTArray<E>() {
-    Init();
-    this->MoveInit(aOther, sizeof(value_type));
-    MOZ_ASSERT(!this->HasEmptyHeader());
-    if (aOther.HasEmptyHeader()) {
-      aOther.Init();
-    }
+  AutoTArray() {
+    static_assert(alignof(value_type) <= 8,
+                  "can't handle alignments greater than 8, "
+                  "see nsTArray_base::UsesAutoArrayBuffer()");
+    static_assert(offsetof(AutoTArray, mAutoBuf) == kAutoTArrayHeaderOffset);
+    this->mHdr = &mAutoBuf.mHdr;
   }
 
-  explicit AutoTArray(base_type&& aOther) : mAlign() {
-    Init();
+  AutoTArray(self_type&& aOther) : AutoTArray() {
+    this->MoveInit(aOther, sizeof(value_type));
+    MOZ_ASSERT(!this->HasEmptyHeader());
+  }
+
+  explicit AutoTArray(base_type&& aOther) : AutoTArray() {
     this->MoveInit(aOther, sizeof(value_type));
   }
 
   template <typename Allocator>
-  explicit AutoTArray(nsTArray_Impl<value_type, Allocator>&& aOther) {
-    Init();
+  explicit AutoTArray(nsTArray_Impl<value_type, Allocator>&& aOther)
+      : AutoTArray() {
     this->MoveInit(aOther, sizeof(value_type));
   }
 
-  MOZ_IMPLICIT AutoTArray(std::initializer_list<E> aIL) : mAlign() {
-    Init();
+  MOZ_IMPLICIT AutoTArray(std::initializer_list<E> aIL) : AutoTArray() {
     this->AppendElements(aIL.begin(), aIL.size());
   }
 
@@ -3052,62 +2959,23 @@ class MOZ_NON_MEMMOVABLE MOZ_GSL_OWNER AutoTArray : public nsTArray<E> {
     return result;
   }
 
-  // Clears ourself, and ensures that we end up pointer to our auto-buffer
-  // again.
-  void Clear() {
-    base_type::Clear();
-    Init();
-  }
-
-  void Compact() {
-    if (this->HasEmptyHeader() || this->UsesAutoArrayBuffer()) {
-      return;
-    }
-    auto length = base_type::Length();
-    if (N >= length) {
-      // Switch back to our auto-buffer.
-      auto* header = reinterpret_cast<Header*>(&mAutoBuf);
-      base_type::relocation_type::RelocateNonOverlappingRegionWithHeader(
-          header, this->mHdr, length, sizeof(value_type));
-      header->mCapacity = N;
-      header->mIsAutoBuffer = true;
-      nsTArrayFallibleAllocator::Free(this->mHdr);
-      this->mHdr = header;
-      return;
-    }
-    base_type::Compact();
-  }
-
  private:
-  // nsTArray_base casts itself as an nsAutoArrayBase in order to get a pointer
-  // to mAutoBuf.
-  template <class Allocator, class RelocationStrategy>
-  friend class nsTArray_base;
-
-  void Init() {
-    static_assert(alignof(value_type) <= 8,
-                  "can't handle alignments greater than 8, "
-                  "see nsTArray_base::UsesAutoArrayBuffer()");
-    // Temporary work around for VS2012 RC compiler crash
-    Header** phdr = base_type::PtrToHdr();
-    *phdr = reinterpret_cast<Header*>(&mAutoBuf);
-    (*phdr)->mLength = 0;
-    (*phdr)->mCapacity = N;
-    (*phdr)->mIsAutoBuffer = true;
-  }
-
-  // Declare mAutoBuf aligned to the maximum of the header's alignment and
-  // value_type's alignment.  We need to use a union rather than
-  // MOZ_ALIGNED_DECL because GCC is picky about what goes into
-  // __attribute__((aligned(foo))).
-  union {
-    char mAutoBuf[sizeof(nsTArrayHeader) + N * sizeof(value_type)];
-    // Do the max operation inline to ensure that it is a compile-time constant.
-    mozilla::AlignedElem<(alignof(Header) > alignof(value_type))
-                             ? alignof(Header)
-                             : alignof(value_type)>
-        mAlign;
-  };
+  // Declare mAutoBuf aligned to 8 bytes so we have a constant offset to get
+  // from the nsTArray to the buffer. This can create 4 otherwise-unnecessary
+  // bytes of padding on 32-bit builds if value_type is not 8-byte aligned, but
+  // that seems acceptable.
+  struct alignas(8) AutoBuffer {
+    nsTArrayHeader mHdr;
+    union alignas(value_type) {
+      // FIXME: Conceptually `value_type mElements[N]`, but that upsets the
+      // hazard analysis, see bug 1880185.
+      char mStorage[sizeof(value_type) * N];
+    };
+    AutoBuffer() : mHdr{.mLength = 0, .mCapacity = N, .mIsAutoArray = true} {}
+    ~AutoBuffer() {}
+  } mAutoBuf;
+  static_assert(offsetof(AutoBuffer, mStorage) == sizeof(nsTArrayHeader),
+                "Shouldn't have padding");
 };
 
 //
@@ -3179,6 +3047,542 @@ class CopyableAutoTArray : public AutoTArray<E, N> {
   CopyableAutoTArray(CopyableAutoTArray&&) = default;
   CopyableAutoTArray& operator=(CopyableAutoTArray&&) = default;
 };
+
+// NOTE: We don't use MOZ_COUNT_CTOR/MOZ_COUNT_DTOR to perform leak checking of
+// nsTArray_base objects intentionally for the following reasons:
+// * The leak logging isn't as useful as other types of logging, as
+//   nsTArray_base is frequently relocated without invoking a constructor, such
+//   as when stored within another nsTArray. This means that
+//   XPCOM_MEM_LOG_CLASSES cannot be used to identify specific leaks of nsTArray
+//   objects.
+// * The nsTArray type is layout compatible with the ThinVec crate with the
+//   correct flags, and ThinVec does not currently perform leak logging.
+//   This means that if a large number of arrays are transferred between Rust
+//   and C++ code using ThinVec, for example within another ThinVec, they
+//   will not be logged correctly and might appear as e.g. negative leaks.
+// * Leaks which have been found thanks to the leak logging added by this
+//   type have often not been significant, and/or have needed to be
+//   circumvented using some other mechanism. Most leaks found with this type
+//   in them also include other types which will continue to be tracked.
+
+template <typename RelocationStrategy>
+nsTArray_base<RelocationStrategy>::~nsTArray_base() {
+  if (!HasEmptyHeader() && !UsesAutoArrayBuffer()) {
+    nsTArrayInfallibleAllocator::Free(mHdr);
+  }
+}
+
+// defined in nsTArray.cpp
+bool IsTwiceTheRequiredBytesRepresentableAsUint32(size_t aCapacity,
+                                                  size_t aElemSize);
+
+template <typename RelocationStrategy>
+template <typename Alloc>
+typename Alloc::ResultTypeProxy
+nsTArray_base<RelocationStrategy>::ExtendCapacity(size_type aLength,
+                                                  size_type aCount,
+                                                  size_type aElemSize) {
+  mozilla::CheckedInt<size_type> newLength = aLength;
+  newLength += aCount;
+
+  if (!newLength.isValid()) {
+    return Alloc::FailureResult();
+  }
+
+  return this->EnsureCapacity<Alloc>(newLength.value(), aElemSize);
+}
+
+template <class RelocationStrategy>
+template <typename Alloc>
+typename Alloc::ResultTypeProxy
+nsTArray_base<RelocationStrategy>::EnsureCapacityImpl(size_type aCapacity,
+                                                      size_type aElemSize) {
+  MOZ_ASSERT(aCapacity > mHdr->mCapacity,
+             "Should have been checked by caller (EnsureCapacity)");
+
+  // If the requested memory allocation exceeds size_type(-1)/2, then
+  // our doubling algorithm may not be able to allocate it.
+  // Additionally, if it exceeds uint32_t(-1) then we couldn't fit in the
+  // Header::mCapacity member. Just bail out in cases like that.  We don't want
+  // to be allocating 2 GB+ arrays anyway.
+  if (!IsTwiceTheRequiredBytesRepresentableAsUint32(aCapacity, aElemSize)) {
+    Alloc::SizeTooBig((size_t)aCapacity * aElemSize);
+    return Alloc::FailureResult();
+  }
+
+  size_t reqSize = sizeof(Header) + aCapacity * aElemSize;
+
+  if (HasEmptyHeader()) {
+    // Malloc() new data
+    Header* header = static_cast<Header*>(Alloc::Malloc(reqSize));
+    if (!header) {
+      return Alloc::FailureResult();
+    }
+    header->mLength = 0;
+    header->mCapacity = aCapacity;
+    header->mIsAutoArray = false;
+    mHdr = header;
+
+    return Alloc::SuccessResult();
+  }
+
+  // We increase our capacity so that the allocated buffer grows exponentially,
+  // which gives us amortized O(1) appending. Below the threshold, we use
+  // powers-of-two. Above the threshold, we grow by at least 1.125, rounding up
+  // to the nearest MiB.
+  const size_t slowGrowthThreshold = 8 * 1024 * 1024;
+
+  size_t bytesToAlloc;
+  if (reqSize >= slowGrowthThreshold) {
+    size_t currSize = sizeof(Header) + Capacity() * aElemSize;
+    size_t minNewSize = currSize + (currSize >> 3);  // multiply by 1.125
+    bytesToAlloc = reqSize > minNewSize ? reqSize : minNewSize;
+
+    // Round up to the next multiple of MiB.
+    const size_t MiB = 1 << 20;
+    bytesToAlloc = MiB * ((bytesToAlloc + MiB - 1) / MiB);
+  } else {
+    // Round up to the next power of two.
+    bytesToAlloc = mozilla::RoundUpPow2(reqSize);
+  }
+
+  Header* header;
+  if (UsesAutoArrayBuffer() || !RelocationStrategy::allowRealloc) {
+    // Malloc() and copy
+    header = static_cast<Header*>(Alloc::Malloc(bytesToAlloc));
+    if (!header) {
+      return Alloc::FailureResult();
+    }
+
+    RelocationStrategy::RelocateNonOverlappingRegionWithHeader(
+        header, mHdr, Length(), aElemSize);
+
+    if (!UsesAutoArrayBuffer()) {
+      Alloc::Free(mHdr);
+    }
+  } else {
+    // Realloc() existing data
+    header = static_cast<Header*>(Alloc::Realloc(mHdr, bytesToAlloc));
+    if (!header) {
+      return Alloc::FailureResult();
+    }
+  }
+
+  // How many elements can we fit in bytesToAlloc?
+  size_t newCapacity = (bytesToAlloc - sizeof(Header)) / aElemSize;
+  MOZ_ASSERT(newCapacity >= aCapacity, "Didn't enlarge the array enough!");
+  header->mCapacity = newCapacity;
+
+  mHdr = header;
+
+  return Alloc::SuccessResult();
+}
+
+// We don't need use Alloc template parameter specified here because failure to
+// shrink the capacity will leave the array unchanged.
+template <typename RelocationStrategy>
+void nsTArray_base<RelocationStrategy>::ShrinkCapacity(size_type aElemSize) {
+  if (HasEmptyHeader()) {
+    return;
+  }
+
+  size_type length = Length();
+  // Try to switch to our auto-buffer if possible.
+  if (auto* autoHdr = GetAutoArrayHeader()) {
+    if (mHdr == autoHdr) {
+      return;
+    }
+    if (autoHdr->mCapacity >= length) {
+      RelocationStrategy::RelocateNonOverlappingRegion(autoHdr + 1, mHdr + 1,
+                                                       length, aElemSize);
+      autoHdr->mLength = length;
+      nsTArrayFallibleAllocator::Free(mHdr);
+      mHdr = autoHdr;
+      return;
+    }
+  }
+
+  if (length == 0) {
+    MOZ_ASSERT(!mHdr->mIsAutoArray, "Should've been dealt with above.");
+    nsTArrayFallibleAllocator::Free(mHdr);
+    mHdr = EmptyHdr();
+    return;
+  }
+
+  if (length >= mHdr->mCapacity) {  // should never be greater than...
+    return;
+  }
+
+  size_type newSize = sizeof(Header) + length * aElemSize;
+
+  Header* newHeader;
+  if (!RelocationStrategy::allowRealloc) {
+    // Malloc() and copy.
+    newHeader =
+        static_cast<Header*>(nsTArrayFallibleAllocator::Malloc(newSize));
+    if (!newHeader) {
+      return;
+    }
+
+    RelocationStrategy::RelocateNonOverlappingRegionWithHeader(
+        newHeader, mHdr, Length(), aElemSize);
+
+    nsTArrayFallibleAllocator::Free(mHdr);
+  } else {
+    // Realloc() existing data.
+    newHeader =
+        static_cast<Header*>(nsTArrayFallibleAllocator::Realloc(mHdr, newSize));
+    if (!newHeader) {
+      return;
+    }
+  }
+
+  mHdr = newHeader;
+  mHdr->mCapacity = length;
+}
+
+template <typename RelocationStrategy>
+void nsTArray_base<RelocationStrategy>::ShrinkCapacityToZero() {
+  MOZ_ASSERT(mHdr->mLength == 0);
+
+  if (HasEmptyHeader()) {
+    return;
+  }
+
+  Header* newHdr = EmptyHdr();
+  if (auto* autoBuf = GetAutoArrayHeader()) {
+    if (mHdr == autoBuf) {
+      return;
+    }
+    newHdr = autoBuf;
+    newHdr->mLength = 0;
+  }
+
+  nsTArrayFallibleAllocator::Free(mHdr);
+  mHdr = newHdr;
+}
+
+template <typename RelocationStrategy>
+template <typename Alloc>
+void nsTArray_base<RelocationStrategy>::ShiftData(index_type aStart,
+                                                  size_type aOldLen,
+                                                  size_type aNewLen,
+                                                  size_type aElemSize) {
+  if (aOldLen == aNewLen) {
+    return;
+  }
+
+  // Determine how many elements need to be shifted
+  size_type num = mHdr->mLength - (aStart + aOldLen);
+
+  // Compute the resulting length of the array
+  mHdr->mLength += aNewLen - aOldLen;
+  if (mHdr->mLength == 0) {
+    ShrinkCapacityToZero();
+    return;
+  }
+  // Maybe nothing needs to be shifted
+  if (num == 0) {
+    return;
+  }
+  // Perform shift (change units to bytes first)
+  aStart *= aElemSize;
+  aNewLen *= aElemSize;
+  aOldLen *= aElemSize;
+  char* baseAddr = reinterpret_cast<char*>(mHdr + 1) + aStart;
+  RelocationStrategy::RelocateOverlappingRegion(
+      baseAddr + aNewLen, baseAddr + aOldLen, num, aElemSize);
+}
+
+template <typename RelocationStrategy>
+template <typename Alloc>
+void nsTArray_base<RelocationStrategy>::SwapFromEnd(index_type aStart,
+                                                    size_type aCount,
+                                                    size_type aElemSize) {
+  // This method is part of the implementation of
+  // nsTArray::SwapRemoveElement{s,}At. For more information, read the
+  // documentation on that method.
+  if (aCount == 0) {
+    return;
+  }
+
+  // We are going to be removing aCount elements. Update our length to point to
+  // the new end of the array.
+  size_type oldLength = mHdr->mLength;
+  mHdr->mLength -= aCount;
+
+  if (mHdr->mLength == 0) {
+    // If we have no elements remaining in the array, we can free our buffer.
+    ShrinkCapacityToZero();
+    return;
+  }
+
+  // Determine how many elements we need to move from the end of the array into
+  // the now-removed section. This will either be the number of elements which
+  // were removed (if there are more elements in the tail of the array), or the
+  // entire tail of the array, whichever is smaller.
+  size_type relocCount = std::min(aCount, mHdr->mLength - aStart);
+  if (relocCount == 0) {
+    return;
+  }
+
+  // Move the elements which are now stranded after the end of the array back
+  // into the now-vacated memory.
+  index_type sourceBytes = (oldLength - relocCount) * aElemSize;
+  index_type destBytes = aStart * aElemSize;
+
+  // Perform the final copy. This is guaranteed to be a non-overlapping copy
+  // as our source contains only still-valid entries, and the destination
+  // contains only invalid entries which need to be overwritten.
+  MOZ_ASSERT(sourceBytes >= destBytes,
+             "The source should be after the destination.");
+  MOZ_ASSERT(sourceBytes - destBytes >= relocCount * aElemSize,
+             "The range should be nonoverlapping");
+
+  char* baseAddr = reinterpret_cast<char*>(mHdr + 1);
+  RelocationStrategy::RelocateNonOverlappingRegion(
+      baseAddr + destBytes, baseAddr + sourceBytes, relocCount, aElemSize);
+}
+
+template <typename RelocationStrategy>
+template <typename Alloc>
+typename Alloc::ResultTypeProxy
+nsTArray_base<RelocationStrategy>::InsertSlotsAt(index_type aIndex,
+                                                 size_type aCount,
+                                                 size_type aElemSize) {
+  if (MOZ_UNLIKELY(aIndex > Length())) {
+    mozilla::detail::InvalidArrayIndex_CRASH(aIndex, Length());
+  }
+
+  if (!Alloc::Successful(
+          this->ExtendCapacity<Alloc>(Length(), aCount, aElemSize))) {
+    return Alloc::FailureResult();
+  }
+
+  // Move the existing elements as needed.  Note that this will
+  // change our mLength, so no need to call IncrementLength.
+  ShiftData<Alloc>(aIndex, 0, aCount, aElemSize);
+
+  return Alloc::SuccessResult();
+}
+
+template <class RelocationStrategy>
+template <typename Alloc>
+typename Alloc::ResultTypeProxy
+nsTArray_base<RelocationStrategy>::SwapArrayElements(
+    nsTArray_base<RelocationStrategy>& aOther, size_type aElemSize) {
+  // If neither array uses an auto buffer which is big enough to store the
+  // other array's elements, then ensure that both arrays use malloc'ed storage
+  // and swap their mHdr pointers.
+  if ((!UsesAutoArrayBuffer() || Capacity() < aOther.Length()) &&
+      (!aOther.UsesAutoArrayBuffer() || aOther.Capacity() < Length())) {
+    auto* thisHdr = TakeHeaderForMove<Alloc>(aElemSize);
+    if (MOZ_UNLIKELY(!thisHdr)) {
+      return Alloc::FailureResult();
+    }
+    auto* otherHdr = aOther.template TakeHeaderForMove<Alloc>(aElemSize);
+    if (MOZ_UNLIKELY(!otherHdr)) {
+      // Ensure thisHdr and the elements inside it are safely
+      // cleaned up in this error case, by returning it to
+      // being owned by this.
+      MOZ_ASSERT(UsesAutoArrayBuffer() || HasEmptyHeader());
+      thisHdr->mIsAutoArray = mHdr->mIsAutoArray;
+      mHdr = thisHdr;
+      return Alloc::FailureResult();
+    }
+    // Avoid replacing the potentially auto-buffer with the empty header if
+    // we're empty.
+    if (otherHdr != EmptyHdr()) {
+      otherHdr->mIsAutoArray = mHdr->mIsAutoArray;
+      mHdr = otherHdr;
+    }
+    if (thisHdr != EmptyHdr()) {
+      thisHdr->mIsAutoArray = aOther.mHdr->mIsAutoArray;
+      aOther.mHdr = thisHdr;
+    }
+    return Alloc::SuccessResult();
+  }
+
+  // Swap the two arrays by copying, since at least one is using an auto
+  // buffer which is large enough to hold all of the aOther's elements.  We'll
+  // copy the shorter array into temporary storage.
+  //
+  // (We could do better than this in some circumstances.  Suppose we're
+  // swapping arrays X and Y.  X has space for 2 elements in its auto buffer,
+  // but currently has length 4, so it's using malloc'ed storage.  Y has length
+  // 2.  When we swap X and Y, we don't need to use a temporary buffer; we can
+  // write Y straight into X's auto buffer, write X's malloc'ed buffer on top
+  // of Y, and then switch X to using its auto buffer.)
+
+  if (!Alloc::Successful(EnsureCapacity<Alloc>(aOther.Length(), aElemSize)) ||
+      !Alloc::Successful(
+          aOther.template EnsureCapacity<Alloc>(Length(), aElemSize))) {
+    return Alloc::FailureResult();
+  }
+
+  // The EnsureCapacity calls above shouldn't have caused *both* arrays to
+  // switch from their auto buffers to malloc'ed space.
+  MOZ_ASSERT(UsesAutoArrayBuffer() || aOther.UsesAutoArrayBuffer(),
+             "One of the arrays should be using its auto buffer.");
+
+  size_type smallerLength = XPCOM_MIN(Length(), aOther.Length());
+  size_type largerLength = XPCOM_MAX(Length(), aOther.Length());
+  void* smallerElements;
+  void* largerElements;
+  if (Length() <= aOther.Length()) {
+    smallerElements = Hdr() + 1;
+    largerElements = aOther.Hdr() + 1;
+  } else {
+    smallerElements = aOther.Hdr() + 1;
+    largerElements = Hdr() + 1;
+  }
+
+  // Allocate temporary storage for the smaller of the two arrays.  We want to
+  // allocate this space on the stack, if it's not too large.  Sounds like a
+  // job for AutoTArray!  (One of the two arrays we're swapping is using an
+  // auto buffer, so we're likely not allocating a lot of space here.  But one
+  // could, in theory, allocate a huge AutoTArray on the heap.)
+  AutoTArray<uint8_t, 64 * sizeof(void*)> temp;
+  if (!Alloc::Successful(temp.template EnsureCapacity<Alloc>(
+          smallerLength * aElemSize, sizeof(uint8_t)))) {
+    return Alloc::FailureResult();
+  }
+
+  RelocationStrategy::RelocateNonOverlappingRegion(
+      temp.Elements(), smallerElements, smallerLength, aElemSize);
+  RelocationStrategy::RelocateNonOverlappingRegion(
+      smallerElements, largerElements, largerLength, aElemSize);
+  RelocationStrategy::RelocateNonOverlappingRegion(
+      largerElements, temp.Elements(), smallerLength, aElemSize);
+
+  // Swap the arrays' lengths.
+  MOZ_ASSERT((aOther.Length() == 0 || !HasEmptyHeader()) &&
+                 (Length() == 0 || !aOther.HasEmptyHeader()),
+             "Don't set sEmptyTArrayHeader's length.");
+  size_type tempLength = Length();
+
+  // Avoid writing to EmptyHdr, since it can trigger false
+  // positives with TSan.
+  if (!HasEmptyHeader()) {
+    mHdr->mLength = aOther.Length();
+  }
+  if (!aOther.HasEmptyHeader()) {
+    aOther.mHdr->mLength = tempLength;
+  }
+
+  return Alloc::SuccessResult();
+}
+
+template <class RelocationStrategy>
+void nsTArray_base<RelocationStrategy>::MoveInit(
+    nsTArray_base<RelocationStrategy>& aOther, size_type aElemSize) {
+  // This method is similar to SwapArrayElements, but specialized for the case
+  // where the target array is empty with no allocated heap storage. It is
+  // provided and used to simplify template instantiation and enable better code
+  // generation.
+
+  MOZ_ASSERT(Length() == 0);
+  MOZ_ASSERT(Capacity() == 0 || UsesAutoArrayBuffer());
+
+  const auto newLength = aOther.Length();
+  if (aOther.HasEmptyHeader()) {
+    return;
+  }
+
+  // If this array doesn't use an auto buffer which is big enough to store the
+  // other array's elements, and the other array is using malloc'ed storage,
+  // take their mHdr pointer.
+  if (!aOther.UsesAutoArrayBuffer() &&
+      (!mHdr->mIsAutoArray || Capacity() < newLength)) {
+    const bool thisIsAuto = mHdr->mIsAutoArray;
+    Header* otherAutoHeader = aOther.GetAutoArrayHeader();
+    mHdr = aOther.mHdr;
+    mHdr->mIsAutoArray = thisIsAuto;
+    if (otherAutoHeader) {
+      aOther.mHdr = otherAutoHeader;
+      otherAutoHeader->mLength = 0;
+    } else {
+      aOther.mHdr = EmptyHdr();
+    }
+    return;
+  }
+
+  if (newLength) {
+    // Move the data by copying, since at least one has an auto
+    // buffer which is large enough to hold all of the aOther's elements.
+    EnsureCapacity<nsTArrayInfallibleAllocator>(newLength, aElemSize);
+
+    // The EnsureCapacity calls above shouldn't have caused *both* arrays to
+    // switch from their auto buffers to malloc'ed space.
+    MOZ_ASSERT(UsesAutoArrayBuffer() || aOther.UsesAutoArrayBuffer(),
+               "One of the arrays should be using its auto buffer.");
+
+    RelocationStrategy::RelocateNonOverlappingRegion(
+        Hdr() + 1, aOther.Hdr() + 1, newLength, aElemSize);
+
+    // Swap the arrays' lengths.
+    MOZ_ASSERT(!HasEmptyHeader() && !aOther.HasEmptyHeader(),
+               "Both arrays should have capacity");
+
+    // Update our buffer's length, and reduce the other buffer's length.
+    mHdr->mLength = newLength;
+    aOther.mHdr->mLength = 0;
+  }
+  aOther.ShrinkCapacityToZero();
+}
+
+template <typename RelocationStrategy>
+void nsTArray_base<RelocationStrategy>::MoveConstructNonAutoArray(
+    nsTArray_base<RelocationStrategy>& aOther, size_type aElemSize) {
+  // We know that we are not an (Copyable)AutoTArray and we know that we are
+  // empty, so don't use SwapArrayElements which doesn't know either of these
+  // facts and is very complex. Use nsTArrayInfallibleAllocator regardless of
+  // Alloc because this is called from a move constructor, which cannot report
+  // an error to the caller.
+  mHdr =
+      aOther.template TakeHeaderForMove<nsTArrayInfallibleAllocator>(aElemSize);
+  MOZ_ASSERT(!mHdr->mIsAutoArray);
+}
+
+template <class RelocationStrategy>
+template <typename Alloc>
+auto nsTArray_base<RelocationStrategy>::TakeHeaderForMove(size_type aElemSize)
+    -> Header* {
+  auto* autoHdr = GetAutoArrayHeader();
+  if (!autoHdr) {
+    return std::exchange(mHdr, EmptyHdr());
+  }
+
+  if (mHdr != autoHdr) {
+    MOZ_ASSERT(mHdr->mIsAutoArray);
+    MOZ_ASSERT(autoHdr->mIsAutoArray);
+    autoHdr->mLength = 0;
+    mHdr->mIsAutoArray = false;
+    return std::exchange(mHdr, autoHdr);
+  }
+
+  const auto length = Length();
+  if (!length) {
+    return EmptyHdr();
+  }
+
+  size_type size = sizeof(Header) + length * aElemSize;
+  Header* header = static_cast<Header*>(Alloc::Malloc(size));
+  if (!header) {
+    return nullptr;
+  }
+
+  RelocationStrategy::RelocateNonOverlappingRegionWithHeader(header, mHdr,
+                                                             length, aElemSize);
+  header->mCapacity = length;
+  // This will be set by our caller if needed.
+  header->mIsAutoArray = false;
+
+  mHdr->mLength = 0;
+  MOZ_ASSERT(UsesAutoArrayBuffer());
+  MOZ_ASSERT(IsEmpty());
+  return header;
+}
 
 namespace mozilla {
 template <typename E, typename ArrayT>
@@ -3333,26 +3737,5 @@ std::ostream& operator<<(std::ostream& aOut,
                          const nsTArray_Impl<E, Alloc>& aTArray) {
   return aOut << mozilla::Span(aTArray);
 }
-
-// Assert that AutoTArray doesn't have any extra padding inside.
-//
-// It's important that the data stored in this auto array takes up a multiple of
-// 8 bytes; e.g. AutoTArray<uint32_t, 1> wouldn't work.  Since AutoTArray
-// contains a pointer, its size must be a multiple of alignof(void*).  (This is
-// because any type may be placed into an array, and there's no padding between
-// elements of an array.)  The compiler pads the end of the structure to
-// enforce this rule.
-//
-// If we used AutoTArray<uint32_t, 1> below, this assertion would fail on a
-// 64-bit system, where the compiler inserts 4 bytes of padding at the end of
-// the auto array to make its size a multiple of alignof(void*) == 8 bytes.
-
-static_assert(sizeof(AutoTArray<uint32_t, 2>) ==
-                  sizeof(void*) + sizeof(nsTArrayHeader) + sizeof(uint32_t) * 2,
-              "AutoTArray shouldn't contain any extra padding, "
-              "see the comment");
-
-// Definitions of nsTArray_Impl methods
-#include "nsTArray-inl.h"
 
 #endif  // nsTArray_h__

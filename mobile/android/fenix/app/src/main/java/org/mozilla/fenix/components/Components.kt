@@ -4,7 +4,6 @@
 
 package org.mozilla.fenix.components
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.Composable
@@ -220,7 +219,6 @@ class Components(private val context: Context) {
         )
     }
 
-    @delegate:SuppressLint("NewApi")
     val autofillConfiguration by lazyMonitored {
         AutofillConfiguration(
             storage = core.passwordsStorage,
@@ -289,9 +287,13 @@ class Components(private val context: Context) {
                 SetupChecklistPreferencesMiddleware(DefaultSetupChecklistRepository(context)),
                 SetupChecklistTelemetryMiddleware(),
                 ReviewPromptMiddleware(
-                    settings = settings,
+                    isReviewPromptFeatureEnabled = { settings.customReviewPromptFeatureEnabled },
+                    isTelemetryEnabled = { settings.isTelemetryEnabled },
                     createJexlHelper = nimbus::createJexlHelper,
-                ),
+                    nimbusEventStore = nimbus.events,
+                ).also {
+                    settings.migrateLastReviewPromptTimePrefIfNeeded(nimbus.events)
+                },
                 AppVisualCompletenessMiddleware(performance.visualCompletenessQueue),
             ),
         ).also {

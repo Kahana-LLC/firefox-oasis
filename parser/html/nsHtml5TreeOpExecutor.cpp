@@ -452,7 +452,7 @@ void nsHtml5TreeOpExecutor::ContinueInterruptedParsingAsync() {
     // Now we set up a repetitive idle scheduler for flushing background list.
     gBackgroundFlushRunner = IdleTaskRunner::Create(
         &BackgroundFlushCallback,
-        "nsHtml5TreeOpExecutor::BackgroundFlushCallback",
+        "nsHtml5TreeOpExecutor::BackgroundFlushCallback"_ns,
         0,  // Start looking for idle time immediately.
         TimeDuration::FromMilliseconds(250),  // The hard deadline.
         TimeDuration::FromMicroseconds(
@@ -905,6 +905,9 @@ void nsHtml5TreeOpExecutor::RunScript(nsIContent* aScriptElement,
   sele->SetCreatorParser(GetParser());
 
   if (!aMayDocumentWriteOrBlock) {
+    MOZ_ASSERT(sele->GetScriptDeferred() || sele->GetScriptAsync() ||
+               sele->GetScriptIsModule() || sele->GetScriptIsImportMap() ||
+               aScriptElement->AsElement()->HasAttr(nsGkAtoms::nomodule));
     DebugOnly<bool> block = sele->AttemptToExecute();
     MOZ_ASSERT(!block,
                "Defer, async, module, importmap, or nomodule tried to block.");

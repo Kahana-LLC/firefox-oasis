@@ -1782,8 +1782,10 @@ bool nsWindow::WaylandPopupConfigure() {
     mPopupContextMenu = WaylandPopupIsContextMenu();
   }
 
-  LOG("nsWindow::WaylandPopupConfigure tracked %d anchored %d hint %d\n",
-      mPopupTrackInHierarchy, mPopupAnchored, int(mPopupType));
+  LOG("nsWindow::WaylandPopupConfigure tracked %d anchored %d hint %d "
+      "permanent %d\n",
+      mPopupTrackInHierarchy, mPopupAnchored, int(mPopupType),
+      WaylandPopupIsPermanent());
 
   // Permanent state changed and popup is mapped.
   // We need to switch popup type but that's done when popup is mapped
@@ -2216,16 +2218,12 @@ void nsWindow::WaylandPopupSetDirectPosition() {
   if (popupWidth > parentWidth) {
     mPopupPosition.x = -(parentWidth - popupWidth) / 2 + x;
   } else {
-    if (IsPopupDirectionRTL()) {
-      // Stick with right window edge
-      if (mPopupPosition.x < x) {
-        mPopupPosition.x = x;
-      }
-    } else {
-      // Stick with left window edge
-      if (mPopupPosition.x + popupWidth > parentWidth + x) {
-        mPopupPosition.x = parentWidth + x - popupWidth;
-      }
+    if (mPopupPosition.x < x) {
+      // Stick with left window edge if it's placed too left
+      mPopupPosition.x = x;
+    } else if (mPopupPosition.x + popupWidth > parentWidth + x) {
+      // Stick with right window edge otherwise
+      mPopupPosition.x = parentWidth + x - popupWidth;
     }
   }
 
@@ -5562,7 +5560,7 @@ void nsWindow::OnScaleEvent() {
   RefreshScale(/* aRefreshScreen */ true);
 }
 
-void nsWindow::RefreshScale(bool aRefreshScreen) {
+void nsWindow::RefreshScale(bool aRefreshScreen, bool aForceRefresh) {
   if (!IsTopLevelWidget()) {
     return;
   }
@@ -5572,8 +5570,8 @@ void nsWindow::RefreshScale(bool aRefreshScreen) {
 
   MOZ_DIAGNOSTIC_ASSERT(mIsMapped && mGdkWindow);
   int ceiledScale = gdk_window_get_scale_factor(mGdkWindow);
-  const bool scaleChanged = GdkCeiledScaleFactor() != ceiledScale;
-
+  const bool scaleChanged =
+      aForceRefresh || GdkCeiledScaleFactor() != ceiledScale;
 #ifdef MOZ_WAYLAND
   if (GdkIsWaylandDisplay()) {
     WaylandSurfaceLock lock(mSurface);
@@ -7063,20 +7061,25 @@ void nsWindow::UpdateOpaqueRegionInternal() {
         cairo_rectangle_int_t rect = {gdkRect.x + offset.x,
                                       gdkRect.y + offset.y, gdkRect.width,
                                       gdkRect.height};
+        LOG("nsWindow::UpdateOpaqueRegionInternal() set opaque region [%d,%d] "
+            "-> [%d x %d]",
+            gdkRect.x, gdkRect.y, gdkRect.width, gdkRect.height);
         cairo_region_union_rectangle(region, &rect);
       }
+    } else {
+      LOG("nsWindow::UpdateOpaqueRegionInternal() window is transparent");
     }
     gdk_window_set_opaque_region(window, region);
     if (region) {
       cairo_region_destroy(region);
     }
-  }
 
 #ifdef MOZ_WAYLAND
-  if (GdkIsWaylandDisplay()) {
-    moz_container_wayland_update_opaque_region(mContainer);
-  }
+    if (GdkIsWaylandDisplay()) {
+      mSurface->SetOpaqueRegion(mOpaqueRegion.ToUnknownRegion());
+    }
 #endif
+  }
 }
 
 bool nsWindow::IsChromeWindowTitlebar() {
@@ -7525,14 +7528,7 @@ MOZ_CAN_RUN_SCRIPT static void WaylandDragWorkaround(nsWindow* aWindow,
   NS_WARNING(
       "Quit unfinished Wayland Drag and Drop operation. Buggy Wayland "
       "compositor?");
-#if defined(NIGHTLY_BUILD)
-  // Terminate as drag failed in Nightly. That led to rather critical
-  // Bug 1955112 before, let's try again after workaround update
-  // at Bug 1979719 but definitely not test on release/beta.
-  currentDragSession->EndDragSession(false, 0);
-#else
   currentDragSession->EndDragSession(true, 0);
-#endif
 }
 
 static nsWindow* get_window_for_gtk_widget(GtkWidget* widget) {
@@ -9043,7 +9039,7 @@ double nsWindow::FractionalScaleFactor() {
     }
   }
 #endif
-  return GdkCeiledScaleFactor();
+  return ScreenHelperGTK::GetGTKMonitorFractionalScaleFactor();
 }
 
 gint nsWindow::DevicePixelsToGdkCoordRoundUp(int aPixels) {

@@ -44,7 +44,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   TopSitesFeed: "resource://newtab/lib/TopSitesFeed.sys.mjs",
   TopStoriesFeed: "resource://newtab/lib/TopStoriesFeed.sys.mjs",
   TrendingSearchFeed: "resource://newtab/lib/TrendingSearchFeed.sys.mjs",
-  WallpaperFeed: "resource://newtab/lib/WallpaperFeed.sys.mjs",
+  WallpaperFeed: "resource://newtab/lib/Wallpapers/WallpaperFeed.sys.mjs",
   WeatherFeed: "resource://newtab/lib/WeatherFeed.sys.mjs",
 });
 
@@ -59,11 +59,6 @@ const REGION_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.region-config";
 const LOCALE_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config";
-
-const REGION_SHORTCUTS_PERSONALIZATION_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.region-config";
-const LOCALE_SHORTCUTS_PERSONALIZATION_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.locale-config";
 
 const REGION_WEATHER_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.region-weather-config";
@@ -122,13 +117,6 @@ function useInferredPersonalization({ geo, locale }) {
   return (
     csvPrefHasValue(REGION_INFERRED_PERSONALIZATION_CONFIG, geo) &&
     csvPrefHasValue(LOCALE_INFERRED_PERSONALIZATION_CONFIG, locale)
-  );
-}
-
-function useShortcutsPersonalization({ geo, locale }) {
-  return (
-    csvPrefHasValue(REGION_SHORTCUTS_PERSONALIZATION_CONFIG, geo) &&
-    csvPrefHasValue(LOCALE_SHORTCUTS_PERSONALIZATION_CONFIG, locale)
   );
 }
 
@@ -199,31 +187,6 @@ export const PREFS_CONFIG = new Map([
         "Comma-separated list of default top sites to fill in behind visited sites",
       getValue: ({ geo }) =>
         lazy.DEFAULT_SITES.get(lazy.DEFAULT_SITES.has(geo) ? geo : ""),
-    },
-  ],
-  [
-    "feeds.section.topstories.options",
-    {
-      title: "Configuration options for top stories feed",
-      // This is a dynamic pref as it depends on the feed being shown or not
-      getValue: args =>
-        JSON.stringify({
-          api_key_pref: "extensions.pocket.oAuthConsumerKey",
-          // Use the opposite value as what default value the feed would have used
-          hidden: !PREFS_CONFIG.get("feeds.system.topstories").getValue(args),
-          provider_icon: "chrome://global/skin/icons/help.svg",
-          provider_name: "Pocket",
-          read_more_endpoint:
-            "https://getpocket.com/explore/trending?src=fx_new_tab",
-          stories_endpoint: `https://getpocket.cdn.mozilla.net/v3/firefox/global-recs?version=3&consumer_key=$apiKey&locale_lang=${
-            args.locale
-          }&feed_variant=${
-            showSpocs(args) ? "default_spocs_on" : "default_spocs_off"
-          }`,
-          stories_referrer: "https://getpocket.com/recommendations",
-          topics_endpoint: `https://getpocket.cdn.mozilla.net/v3/firefox/trending-topics?version=2&consumer_key=$apiKey&locale_lang=${args.locale}`,
-          show_spocs: showSpocs(args),
-        }),
     },
   ],
   [
@@ -397,6 +360,14 @@ export const PREFS_CONFIG = new Map([
       title:
         "Toggle the weather widget to include a text summary of the current conditions",
       value: "simple",
+    },
+  ],
+  [
+    "weather.placement",
+    {
+      title:
+        "weather widget can be rendered in a variety of positions. Either in `header` or `sections`",
+      value: "header",
     },
   ],
   [
@@ -581,6 +552,13 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "newtabWallpapers.customWallpaper.theme",
+    {
+      title: "theme ('light' | 'dark') of user uploaded wallpaper",
+      value: "",
+    },
+  ],
+  [
     "newtabAdSize.leaderboard",
     {
       title: "Boolean flag to turn the leaderboard ad size on and off",
@@ -678,11 +656,32 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "discoverystream.dailyBrief.enabled",
+    {
+      title: "Boolean flag to enable the daily brief section",
+      value: false,
+    },
+  ],
+  [
+    "discoverystream.dailyBrief.sectionId",
+    {
+      title: "sectionId for the Daily brief section",
+      value: "top_stories_section",
+    },
+  ],
+  [
     "discoverystream.shortcuts.personalization.enabled",
     {
-      title: "Boolean flag to enable inferred personalizaton",
-      // pref is dynamic
-      getValue: useShortcutsPersonalization,
+      title: "Boolean flag to enable shortcuts personalization",
+      value: false,
+    },
+  ],
+  [
+    "discoverystream.shortcuts.force_log.enabled",
+    {
+      title:
+        "Boolean flag to enable logging shortcuts interactions even if enabled is off",
+      value: false,
     },
   ],
   [
@@ -909,10 +908,40 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "widgets.lists.maxListItems",
+    {
+      title:
+        "Maximum number of items that can be created on an individual list",
+      value: 100,
+    },
+  ],
+  [
     "widgets.system.lists.enabled",
     {
       title: "Enables the to-do lists widget experiment in Nimbus",
       value: false,
+    },
+  ],
+  [
+    "widgets.lists.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the lists widget",
+      value: false,
+    },
+  ],
+  [
+    "widgets.lists.badge.enabled",
+    {
+      title: "Show badge on lists widget to indicate new/beta feature",
+      value: false,
+    },
+  ],
+  [
+    "widgets.lists.badge.label",
+    {
+      title: "Label type for lists widget badge (New or Beta)",
+      value: "",
     },
   ],
   [
@@ -926,6 +955,14 @@ export const PREFS_CONFIG = new Map([
     "widgets.system.focusTimer.enabled",
     {
       title: "Enables the focus timer widget experiment in Nimbus",
+      value: false,
+    },
+  ],
+  [
+    "widgets.focusTimer.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the timer widget",
       value: false,
     },
   ],
@@ -997,7 +1034,6 @@ export const PREFS_CONFIG = new Map([
       title: "Configuration for the new pocket new tab",
       getValue: () => {
         return JSON.stringify({
-          api_key_pref: "extensions.pocket.oAuthConsumerKey",
           collapsible: true,
           enabled: true,
         });
@@ -1518,25 +1554,6 @@ export class ActivityStream {
     // In some cases, BROWSER_URLBAR_PLACEHOLDERNAME is read before it's been set,
     // so we also observe it and update our mirrored value when it changes initially.
     Services.prefs.addObserver(BROWSER_URLBAR_PLACEHOLDERNAME, this);
-
-    // Look for outdated user pref values that might have been accidentally
-    // persisted when restoring the original pref value at the end of an
-    // experiment across versions with a different default value.
-    const DS_CONFIG =
-      "browser.newtabpage.activity-stream.discoverystream.config";
-    if (
-      Services.prefs.prefHasUserValue(DS_CONFIG) &&
-      [
-        // Firefox 66
-        `{"api_key_pref":"extensions.pocket.oAuthConsumerKey","enabled":false,"show_spocs":true,"layout_endpoint":"https://getpocket.com/v3/newtab/layout?version=1&consumer_key=$apiKey&layout_variant=basic"}`,
-        // Firefox 67
-        `{"api_key_pref":"extensions.pocket.oAuthConsumerKey","enabled":false,"show_spocs":true,"layout_endpoint":"https://getpocket.cdn.mozilla.net/v3/newtab/layout?version=1&consumer_key=$apiKey&layout_variant=basic"}`,
-        // Firefox 68
-        `{"api_key_pref":"extensions.pocket.oAuthConsumerKey","collapsible":true,"enabled":false,"show_spocs":true,"hardcoded_layout":true,"personalized":false,"layout_endpoint":"https://getpocket.cdn.mozilla.net/v3/newtab/layout?version=1&consumer_key=$apiKey&layout_variant=basic"}`,
-      ].includes(Services.prefs.getStringPref(DS_CONFIG))
-    ) {
-      Services.prefs.clearUserPref(DS_CONFIG);
-    }
 
     // Hook up the store and let all feeds and pages initialize
     this.store.init(

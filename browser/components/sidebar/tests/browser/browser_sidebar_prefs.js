@@ -37,20 +37,17 @@ add_task(async function test_tools_prefs() {
     "The bookmarks input is checked initially as Bookmarks is a default tool."
   );
   for (const toolInput of customizeComponent.toolInputs) {
-    let toolDisabledInitialState = !toolInput.checked;
-    if (toolInput.id == "viewBookmarksSidebar") {
+    // deselect all tools that are selected in the Customize Sidebar panel except bookmarks
+    if (toolInput.id == "viewBookmarksSidebar" || !toolInput.checked) {
       continue;
     }
     toolInput.click();
-    await BrowserTestUtils.waitForCondition(
-      () => {
-        let toggledTool = win.SidebarController.toolsAndExtensions.get(
-          toolInput.id
-        );
-        return toggledTool.disabled === !toolDisabledInitialState;
-      },
-      `The entrypoint for ${toolInput.name} has been ${toolDisabledInitialState ? "enabled" : "disabled"} in the sidebar.`
-    );
+    await BrowserTestUtils.waitForCondition(() => {
+      let toggledTool = win.SidebarController.toolsAndExtensions.get(
+        toolInput.id
+      );
+      return toggledTool.disabled === !toolInput.checked;
+    }, `The entrypoint for ${toolInput.name} has been disabled in the sidebar.`);
     toolEntrypointsCount = sidebar.toolButtons.length;
     checkedInputs = Array.from(customizeComponent.toolInputs).filter(
       input => input.checked
@@ -58,9 +55,7 @@ add_task(async function test_tools_prefs() {
     is(
       toolEntrypointsCount,
       checkedInputs.length,
-      `The button for the ${toolInput.name} entrypoint has been ${
-        toolDisabledInitialState ? "added" : "removed"
-      }.`
+      `The button for the ${toolInput.name} entrypoint has been removed.`
     );
   }
 
@@ -75,18 +70,17 @@ add_task(async function test_tools_prefs() {
 
   //   Open a new window to check that it uses the pref
   const newWin = await BrowserTestUtils.openNewBrowserWindow();
+  await newWin.SidebarController.waitUntilStable();
   const newSidebar = newWin.document.querySelector("sidebar-main");
-  ok(newSidebar, "New Window sidebar is shown.");
-  await newSidebar.updateComplete;
+
+  // toggle open the sidebar launcher to check which tools are visible
+  await ensureSidebarLauncherIsVisible(newWin);
+
   info("Waiting for customize button to be present");
   await BrowserTestUtils.waitForMutationCondition(
     newSidebar,
     { childList: true, subTree: true },
     () => !!newSidebar.customizeButton
-  );
-  ok(
-    BrowserTestUtils.isVisible(newSidebar.customizeButton),
-    "The sidebar-main component has fully rendered, and the customize button is present."
   );
 
   // TO DO: opening the customize category can be removed once bug 1898613 is resolved.

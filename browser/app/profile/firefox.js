@@ -443,6 +443,8 @@ pref("browser.urlbar.suggest.calculator",           true);
 pref("browser.urlbar.suggest.recentsearches",       true);
 pref("browser.urlbar.suggest.quickactions",         true);
 
+pref("browser.urlbar.allowSearchSuggestionsForSimpleOrigins", true);
+
 pref("browser.urlbar.deduplication.enabled", true);
 pref("browser.urlbar.deduplication.thresholdDays", 0);
 
@@ -765,6 +767,18 @@ pref("browser.urlbar.importantDates.featureGate", false);
 // important-dates suggestions are turned on.
 pref("browser.urlbar.suggest.importantDates", true);
 
+// Feature gate pref for Yelp realtime suggestions in the urlbar.
+pref("browser.urlbar.yelpRealtime.featureGate", false);
+
+// If `browser.urlbar.yelpRealtime.featureGate` is true, this controls whether
+// Yelp realtime suggestions are turned on.
+pref("browser.urlbar.suggest.yelpRealtime", true);
+
+// The minimum prefix length of a Yelp keyword the user must type to trigger
+// the suggestion. 0 means the min length should be taken from Nimbus or remote
+// settings.
+pref("browser.urlbar.yelpRealtime.minKeywordLength", 0);
+
 pref("browser.altClickSave", false);
 
 // Enable logging downloads operations to the Console.
@@ -857,14 +871,14 @@ pref("browser.search.totalSearches", 0);
 // Feature gate for visual search.
 pref("browser.search.visualSearch.featureGate", false);
 
+// Feature gate for ohttp based suggestions.
+pref("browser.search.suggest.ohttp.featureGate", false);
+
 // Spin the cursor while the page is loading
 pref("browser.spin_cursor_while_busy", false);
 
 // Enable display of contextual-password-manager option in browser sidebar
 pref("browser.contextual-password-manager.enabled", false);
-
-// Enables the display of the Mozilla VPN banner in private browsing windows
-pref("browser.privatebrowsing.vpnpromourl", "https://vpn.mozilla.org/?utm_source=firefox-browser&utm_medium=firefox-%CHANNEL%-browser&utm_campaign=private-browsing-vpn-link");
 
 // Whether the user has opted-in to recommended settings for data features.
 pref("browser.dataFeatureRecommendations.enabled", false);
@@ -1340,6 +1354,7 @@ pref("browser.send_pings", false);
 
 pref("browser.geolocation.warning.infoURL", "https://www.mozilla.org/%LOCALE%/firefox/geolocation/");
 pref("browser.xr.warning.infoURL", "https://www.mozilla.org/%LOCALE%/firefox/xr/");
+pref("browser.lna.warning.infoURL", "https://support.mozilla.org/%LOCALE%/kb/control-personal-device-local-network-permissions-firefox");
 
 pref("browser.sessionstore.resume_from_crash", true);
 pref("browser.sessionstore.resume_session_once", false);
@@ -1494,7 +1509,7 @@ pref("toolkit.datacollection.infoURL",
 pref("app.support.baseURL", "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/");
 
 // base url for web-based feedback pages
-pref("app.feedback.baseURL", "https://ideas.mozilla.org/");
+pref("app.feedback.baseURL", "https://kahana.co/oasis-feedback-survey");
 
 pref("security.certerrors.permanentOverride", true);
 pref("security.certerrors.mitm.priming.enabled", true);
@@ -1625,6 +1640,7 @@ pref("services.sync.prefs.sync.browser.discovery.enabled", true);
 pref("services.sync.prefs.sync.browser.download.useDownloadDir", true);
 pref("services.sync.prefs.sync.browser.firefox-view.feature-tour", true);
 pref("services.sync.prefs.sync.browser.formfill.enable", true);
+pref("services.sync.prefs.sync.browser.ipProtection.enabled", true);
 pref("services.sync.prefs.sync.browser.link.open_newwindow", true);
 pref("services.sync.prefs.sync.browser.menu.showViewImageInfo", true);
 pref("services.sync.prefs.sync.browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", true);
@@ -1809,7 +1825,7 @@ pref("browser.newtabpage.activity-stream.mobileDownloadModal.variant-b", false);
 pref("browser.newtabpage.activity-stream.mobileDownloadModal.variant-c", false);
 
 // Show refined card layout on newtab
-pref("browser.newtabpage.activity-stream.discoverystream.refinedCardsLayout.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.refinedCardsLayout.enabled", true);
 
 // Mozilla Ad Routing Service (MARS) unified ads service
 pref("browser.newtabpage.activity-stream.unifiedAds.tiles.enabled", true);
@@ -1846,6 +1862,7 @@ pref("browser.newtabpage.activity-stream.newtabWallpapers.customWallpaper.enable
 pref("browser.newtabpage.activity-stream.newtabWallpapers.customWallpaper.uuid", "");
 pref("browser.newtabpage.activity-stream.newtabWallpapers.customWallpaper.fileSize", 0);
 pref("browser.newtabpage.activity-stream.newtabWallpapers.customWallpaper.fileSize.enabled", false);
+pref("browser.newtabpage.activity-stream.newtabWallpapers.customWallpaper.theme", "");
 
 // Current new tab page background images.
 pref("browser.newtabpage.activity-stream.newtabWallpapers.wallpaper", "");
@@ -1931,10 +1948,9 @@ pref("browser.newtabpage.activity-stream.discoverystream.spocTopsitesPlacement.e
 pref("browser.newtabpage.activity-stream.discoverystream.spocSiteId", "");
 pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonSponsors", "");
 pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonVariant", "");
-pref("browser.newtabpage.activity-stream.discoverystream.spocMessageVariant", "");
 
 // Pref enabling content reporting
-pref("browser.newtabpage.activity-stream.discoverystream.reportAds.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.reportAds.enabled", true);
 
 // List of regions that do not get stories, regardless of locale-list-config.
 pref("browser.newtabpage.activity-stream.discoverystream.region-stories-block", "");
@@ -1946,9 +1962,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.region-stories-block", 
 #endif
 // List of regions that get stories by default.
 pref("browser.newtabpage.activity-stream.discoverystream.region-stories-config", "US,DE,CA,GB,IE,CH,AT,BE,IN,FR,IT,ES");
-// List of regions that support the new recommendations BFF, also requires region-stories-config
-pref("browser.newtabpage.activity-stream.discoverystream.region-bff-config", "US,DE,CA,GB,IE,CH,AT,BE,IN,FR,IT,ES");
-pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.enabled", true);
 
 // List of regions that get topics selection by default.
 pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.region-topics-config", "");
@@ -1977,12 +1990,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.sections.personalizatio
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config", "en-US,en-GB,en-CA");
 
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.user.enabled", true);
-
-// List of regions that use shortcuts personalization.
-pref("browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.region-config", "");
-// List of locales that use shortcuts personalization.
-pref("browser.newtabpage.activity-stream.discoverystream.shortcuts.personalization.locale-config", "en-US,en-GB,en-CA");
-
 
 // Override inferred personalization model JSON string that typically comes from rec API. Or "TEST" for a test model.
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.model.override", "");
@@ -2044,7 +2051,7 @@ pref("browser.newtabpage.activity-stream.telemetry.surfaceId", "");
 pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.searchTopsitesCompact", true);
 
 // Displays publisher favicons on recommended stories of New Tab page
-pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", true);
 
 // User pref to show stories on newtab (feeds.system.topstories has to be set to true as well)
 pref("browser.newtabpage.activity-stream.feeds.section.topstories", true);
@@ -2174,7 +2181,7 @@ pref("browser.ml.chat.enabled", true);
 pref("browser.ml.chat.hideLocalhost", true);
 pref("browser.ml.chat.maxLength", 7000);
 pref("browser.ml.chat.menu", true);
-pref("browser.ml.chat.page", false);
+pref("browser.ml.chat.page", true);
 pref("browser.ml.chat.page.footerBadge", true);
 pref("browser.ml.chat.page.menuBadge", true);
 pref("browser.ml.chat.prompt.prefix", '{"l10nId":"genai-prompt-prefix-selection"}');
@@ -3029,6 +3036,9 @@ pref("devtools.netmonitor.features.requestBlocking", true);
 // Enable the Application panel
 pref("devtools.application.enabled", true);
 
+// The internal Anti tracking debugging panel
+pref("devtools.anti-tracking.enabled", false);
+
 // Enable the custom formatters feature
 // This preference represents the user's choice to enable the custom formatters feature.
 // While the preference above will be removed once the feature is stable, this one is menat to stay.
@@ -3415,7 +3425,7 @@ pref("browser.backup.sqlite.pages_per_step", 50);
 // The delay between SQLite database backup steps in milliseconds.
 pref("browser.backup.sqlite.step_delay_ms", 50);
 pref("browser.backup.scheduled.idle-threshold-seconds", 15);
-pref("browser.backup.scheduled.minimum-time-between-backups-seconds", 3600);
+pref("browser.backup.scheduled.minimum-time-between-backups-seconds", 86400);
 pref("browser.backup.template.fallback-download.release", "https://www.mozilla.org/firefox/download/thanks/?s=direct&utm_medium=firefox-desktop&utm_source=backup&utm_campaign=firefox-backup-2024&utm_content=control");
 pref("browser.backup.template.fallback-download.beta", "https://www.mozilla.org/firefox/channel/desktop/?utm_medium=firefox-desktop&utm_source=backup&utm_campaign=firefox-backup-2024&utm_content=control#beta");
 pref("browser.backup.template.fallback-download.aurora", "https://www.mozilla.org/firefox/channel/desktop/?utm_medium=firefox-desktop&utm_source=backup&utm_campaign=firefox-backup-2024&utm_content=control#developer");
@@ -3448,11 +3458,11 @@ pref("toolkit.contentRelevancy.log", false);
 
 // The number of days after which to rotate the context ID. 0 means to disable
 // rotation altogether.
-pref("browser.contextual-services.contextId.rotation-in-days", 30);
+pref("browser.contextual-services.contextId.rotation-in-days", 15);
 pref("browser.contextual-services.contextId.rust-component.enabled", true);
 
 // Pref to enable the IP protection feature
 pref("browser.ipProtection.enabled", false);
 pref("browser.ipProtection.variant", "");
-
+pref("browser.ipProtection.log", false);
 pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");

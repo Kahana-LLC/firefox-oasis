@@ -28,7 +28,7 @@ export class ContentSection extends React.PureComponent {
   }
 
   onPreferenceSelect(e) {
-    // eventSource: WEATHER | TOP_SITES | TOP_STORIES
+    // eventSource: WEATHER | TOP_SITES | TOP_STORIES | WIDGET_LISTS | WIDGET_TIMER | TRENDING_SEARCH
     const { preference, eventSource } = e.target.dataset;
     let value;
     if (e.target.nodeName === "SELECT") {
@@ -82,7 +82,7 @@ export class ContentSection extends React.PureComponent {
         parseFloat(window.getComputedStyle(drawerRef)?.height) || 0;
 
       if (isOpen) {
-        drawerRef.style.marginTop = "var(--space-large)";
+        drawerRef.style.marginTop = "var(--space-small)";
       } else {
         drawerRef.style.marginTop = `-${drawerHeight + 3}px`;
       }
@@ -289,7 +289,14 @@ export class ContentSection extends React.PureComponent {
                 aria-describedby="custom-pocket-subtitle"
                 data-preference="feeds.section.topstories"
                 data-eventSource="TOP_STORIES"
-                data-l10n-id="newtab-custom-stories-toggle"
+                {...(mayHaveInferredPersonalization
+                  ? {
+                      "data-l10n-id":
+                        "newtab-custom-stories-personalized-toggle",
+                    }
+                  : {
+                      "data-l10n-id": "newtab-custom-stories-toggle",
+                    })}
               >
                 <div slot="nested">
                   {(mayHaveInferredPersonalization || mayHaveTopicSections) && (
@@ -313,10 +320,8 @@ export class ContentSection extends React.PureComponent {
                             <label
                               className="customize-menu-checkbox-label"
                               htmlFor="inferred-personalization"
-                            >
-                              Recommendations inferred from your activity with
-                              the feed
-                            </label>
+                              data-l10n-id="newtab-custom-stories-personalized-checkbox-label"
+                            />
                           </div>
                         )}
                         {mayHaveTopicSections && (

@@ -30,8 +30,11 @@ const USER_ACTION_TYPES = {
 };
 
 const PREF_WIDGETS_LISTS_MAX_LISTS = "widgets.lists.maxLists";
+const PREF_WIDGETS_LISTS_MAX_LISTITEMS = "widgets.lists.maxListItems";
+const PREF_WIDGETS_LISTS_BADGE_ENABLED = "widgets.lists.badge.enabled";
+const PREF_WIDGETS_LISTS_BADGE_LABEL = "widgets.lists.badge.label";
 
-function Lists({ dispatch }) {
+function Lists({ dispatch, handleUserInteraction }) {
   const prefs = useSelector(state => state.Prefs.values);
   const { selected, lists } = useSelector(state => state.ListsWidget);
   const [newTask, setNewTask] = useState("");
@@ -44,6 +47,11 @@ function Lists({ dispatch }) {
   const selectRef = useRef(null);
   const reorderListRef = useRef(null);
   const [canvasRef, fireConfetti] = useConfetti();
+
+  const handleListInteraction = useCallback(
+    () => handleUserInteraction("lists"),
+    [handleUserInteraction]
+  );
 
   // store selectedList with useMemo so it isnt re-calculated on every re-render
   const isValidUrl = useCallback(str => URL.canParse(str), []);
@@ -100,8 +108,9 @@ function Lists({ dispatch }) {
           data: { lists: updatedLists },
         })
       );
+      handleListInteraction();
     },
-    [lists, selected, selectedList, dispatch]
+    [lists, selected, selectedList, dispatch, handleListInteraction]
   );
 
   const moveTask = useCallback(
@@ -139,6 +148,7 @@ function Lists({ dispatch }) {
           data: e.target.value,
         })
       );
+      handleListInteraction();
     }
 
     function handleReorder(e) {
@@ -153,7 +163,7 @@ function Lists({ dispatch }) {
       selectNode.removeEventListener("change", handleSelectChange);
       reorderNode.removeEventListener("reorder", handleReorder);
     };
-  }, [dispatch, isEditing, reorderLists]);
+  }, [dispatch, isEditing, reorderLists, handleListInteraction]);
 
   // effect that enables editing new list name only after store has been hydrated
   useEffect(() => {
@@ -196,6 +206,7 @@ function Lists({ dispatch }) {
         );
       });
       setNewTask("");
+      handleListInteraction();
     }
   }
 
@@ -264,6 +275,7 @@ function Lists({ dispatch }) {
         );
       }
     });
+    handleListInteraction();
   }
 
   function deleteTask(task, type) {
@@ -291,6 +303,7 @@ function Lists({ dispatch }) {
         })
       );
     });
+    handleListInteraction();
   }
 
   function handleKeyDown(e) {
@@ -330,6 +343,7 @@ function Lists({ dispatch }) {
         );
       });
       setIsEditing(false);
+      handleListInteraction();
     }
   }
 
@@ -338,7 +352,7 @@ function Lists({ dispatch }) {
     const newLists = {
       ...lists,
       [id]: {
-        label: "New list",
+        label: "",
         tasks: [],
         completed: [],
       },
@@ -365,6 +379,15 @@ function Lists({ dispatch }) {
       );
     });
     setPendingNewList(id);
+    handleListInteraction();
+  }
+
+  function handleCancelNewList() {
+    // If current list is new and has no label/tasks, remove it
+    if (!selectedList?.label && selectedList?.tasks?.length === 0) {
+      const updatedLists = { ...lists };
+      delete updatedLists[selected];
+    }
   }
 
   function handleDeleteList() {
@@ -376,7 +399,7 @@ function Lists({ dispatch }) {
       if (Object.keys(updatedLists)?.length === 0) {
         updatedLists = {
           [crypto.randomUUID()]: {
-            label: "New list",
+            label: "",
             tasks: [],
             completed: [],
           },
@@ -405,6 +428,7 @@ function Lists({ dispatch }) {
         );
       });
     }
+    handleListInteraction();
   }
 
   function handleHideLists() {
@@ -417,6 +441,7 @@ function Lists({ dispatch }) {
         },
       })
     );
+    handleListInteraction();
   }
 
   function handleCopyListToClipboard() {
@@ -452,6 +477,7 @@ function Lists({ dispatch }) {
         data: { userAction: USER_ACTION_TYPES.LIST_COPY },
       })
     );
+    handleListInteraction();
   }
 
   function handleLearnMore() {
@@ -463,6 +489,7 @@ function Lists({ dispatch }) {
         },
       })
     );
+    handleListInteraction();
   }
 
   // Reset baseline only when switching lists
@@ -495,6 +522,48 @@ function Lists({ dispatch }) {
   const maxListsCount = Math.max(1, prefs[PREF_WIDGETS_LISTS_MAX_LISTS]);
   const isAtMaxListsLimit = currentListsCount >= maxListsCount;
 
+  // Enforce maximum count limits to list items
+  // The maximum applies to the total number of items (both incomplete and completed items)
+  const currentSelectedListItemsCount =
+    selectedList?.tasks.length + selectedList?.completed.length;
+
+  // Ensure a minimum of 1, but allow higher values from prefs
+  const maxListItemsCount = Math.max(
+    1,
+    prefs[PREF_WIDGETS_LISTS_MAX_LISTITEMS]
+  );
+
+  const isAtMaxListItemsLimit =
+    currentSelectedListItemsCount >= maxListItemsCount;
+
+  // Figure out if the selected list is the first (default) or a new one.
+  // Index 0 → use "Task list"; any later index → use "New list".
+  // Fallback to 0 if the selected id isn’t found.
+  const listKeys = Object.keys(lists);
+  const selectedIndex = Math.max(0, listKeys.indexOf(selected));
+
+  const listNamePlaceholder =
+    currentListsCount > 1 && selectedIndex !== 0
+      ? "newtab-widget-lists-name-placeholder-new"
+      : "newtab-widget-lists-name-placeholder-default";
+
+  const nimbusBadgeEnabled = prefs.widgetsConfig?.listsBadgeEnabled;
+  const nimbusBadgeLabel = prefs.widgetsConfig?.listsBadgeLabel;
+  const nimbusBadgeTrainhopEnabled =
+    prefs.trainhopConfig?.widgets?.listsBadgeEnabled;
+  const nimbusBadgeTrainhopLabel =
+    prefs.trainhopConfig?.widgets?.listsBadgeLabel;
+
+  const badgeEnabled =
+    (nimbusBadgeEnabled || nimbusBadgeTrainhopEnabled) ??
+    prefs[PREF_WIDGETS_LISTS_BADGE_ENABLED] ??
+    false;
+
+  const badgeLabel =
+    (nimbusBadgeLabel || nimbusBadgeTrainhopLabel) ??
+    prefs[PREF_WIDGETS_LISTS_BADGE_LABEL] ??
+    "";
+
   return (
     <article
       className="lists"
@@ -508,18 +577,39 @@ function Lists({ dispatch }) {
           onSave={handleListNameSave}
           isEditing={isEditing}
           setIsEditing={setIsEditing}
+          onCancel={handleCancelNewList}
           type="list"
           maxLength={30}
+          dataL10nId={listNamePlaceholder}
         >
           <moz-select ref={selectRef} value={selected}>
             {Object.entries(lists).map(([key, list]) => (
-              <moz-option key={key} value={key} label={list.label} />
+              <moz-option
+                key={key}
+                value={key}
+                // On the first/initial list, use default name
+                {...(list.label
+                  ? { label: list.label }
+                  : {
+                      "data-l10n-id": "newtab-widget-lists-name-label-default",
+                    })}
+              />
             ))}
           </moz-select>
         </EditableText>
         {/* Hide the badge when user is editing task list title */}
-        {!isEditing && (
-          <moz-badge data-l10n-id="newtab-widget-lists-label-new"></moz-badge>
+        {!isEditing && badgeEnabled && badgeLabel && (
+          <moz-badge
+            data-l10n-id={(() => {
+              if (badgeLabel === "New") {
+                return "newtab-widget-lists-label-new";
+              }
+              if (badgeLabel === "Beta") {
+                return "newtab-widget-lists-label-beta";
+              }
+              return "";
+            })()}
+          ></moz-badge>
         )}
         <moz-button
           className="lists-panel-button"
@@ -559,7 +649,9 @@ function Lists({ dispatch }) {
         </panel-list>
       </div>
       <div className="add-task-container">
-        <span className="icon icon-add" />
+        <span
+          className={`icon icon-add ${isAtMaxListItemsLimit ? "icon-disabled" : ""}`}
+        />
         <input
           ref={inputRef}
           onBlur={() => saveTask()}
@@ -570,6 +662,7 @@ function Lists({ dispatch }) {
           onKeyDown={handleKeyDown}
           type="text"
           maxLength={100}
+          disabled={isAtMaxListItemsLimit}
         />
       </div>
       <div className="task-list-wrapper">
@@ -579,7 +672,8 @@ function Lists({ dispatch }) {
           dragSelector=".checkbox-wrapper"
         >
           <fieldset>
-            {selectedList?.tasks.length >= 1 ? (
+            {/* Incomplete List  */}
+            {selectedList?.tasks.length >= 1 &&
               selectedList.tasks.map((task, index) => (
                 <ListItem
                   type={TASK_TYPE.IN_PROGRESS}
@@ -592,15 +686,13 @@ function Lists({ dispatch }) {
                   isFirst={index === 0}
                   isLast={index === selectedList.tasks.length - 1}
                 />
-              ))
-            ) : (
-              <p
-                className="empty-list-text"
-                data-l10n-id="newtab-widget-lists-empty-cta"
-              ></p>
-            )}
+              ))}
+            {/* Completed List */}
             {selectedList?.completed.length >= 1 && (
-              <details className="completed-task-wrapper">
+              <details
+                className="completed-task-wrapper"
+                open={selectedList?.tasks.length < 1}
+              >
                 <summary>
                   <span
                     data-l10n-id="newtab-widget-lists-completed-list"
@@ -623,6 +715,27 @@ function Lists({ dispatch }) {
             )}
           </fieldset>
         </moz-reorderable-list>
+        {/* Empty State */}
+        {selectedList?.tasks.length < 1 &&
+          selectedList?.completed.length < 1 && (
+            <div className="empty-list">
+              <picture>
+                <source
+                  srcSet="chrome://newtab/content/data/content/assets/lists-empty-state-dark.svg"
+                  media="(prefers-color-scheme: dark)"
+                />
+                <source
+                  srcSet="chrome://newtab/content/data/content/assets/lists-empty-state-light.svg"
+                  media="(prefers-color-scheme: light)"
+                />
+                <img width="100" height="100" alt="" />
+              </picture>
+              <p
+                className="empty-list-text"
+                data-l10n-id="newtab-widget-lists-empty-cta"
+              ></p>
+            </div>
+          )}
       </div>
       <canvas className="confetti-canvas" ref={canvasRef} />
     </article>
@@ -693,13 +806,14 @@ function ListItem({
       {task.value}
     </a>
   ) : (
-    <span
+    <label
       className="task-label"
       title={task.value}
+      htmlFor={`task-${task.id}`}
       onClick={() => setIsEditing(true)}
     >
       {task.value}
-    </span>
+    </label>
   );
 
   return (
@@ -714,6 +828,7 @@ function ListItem({
           type="checkbox"
           onChange={handleCheckboxChange}
           checked={task.completed || exiting}
+          id={`task-${task.id}`}
         />
         {isCompleted ? (
           taskLabel
@@ -775,12 +890,17 @@ function EditableText({
   isEditing,
   setIsEditing,
   onSave,
+  onCancel,
   children,
   type,
+  dataL10nId = null,
   maxLength = 100,
 }) {
   const [tempValue, setTempValue] = useState(value);
   const inputRef = useRef(null);
+
+  // True if tempValue is empty, null/undefined, or only whitespace
+  const showPlaceholder = (tempValue ?? "").trim() === "";
 
   useEffect(() => {
     if (isEditing) {
@@ -797,6 +917,7 @@ function EditableText({
     } else if (e.key === "Escape") {
       setIsEditing(false);
       setTempValue(value);
+      onCancel?.();
     }
   }
 
@@ -815,6 +936,8 @@ function EditableText({
       onChange={event => setTempValue(event.target.value)}
       onBlur={handleOnBlur}
       onKeyDown={handleKeyDown}
+      // Note that if a user has a custom name set, it will override the placeholder
+      {...(showPlaceholder && dataL10nId ? { "data-l10n-id": dataL10nId } : {})}
     />
   ) : (
     [children]

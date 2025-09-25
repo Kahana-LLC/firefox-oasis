@@ -8,7 +8,7 @@
  */
 
 /**
- * @typedef {import("UrlbarProvidersManager.sys.mjs").Query} Query
+ * @import {Query} from "UrlbarProvidersManager.sys.mjs"
  */
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
@@ -29,7 +29,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   UrlbarProviderInterventions:
     "resource:///modules/UrlbarProviderInterventions.sys.mjs",
   UrlbarProviderOpenTabs: "resource:///modules/UrlbarProviderOpenTabs.sys.mjs",
-  UrlbarProvidersManager: "resource:///modules/UrlbarProvidersManager.sys.mjs",
   UrlbarProviderSearchTips:
     "resource:///modules/UrlbarProviderSearchTips.sys.mjs",
   UrlbarSearchUtils: "resource:///modules/UrlbarSearchUtils.sys.mjs",
@@ -535,24 +534,24 @@ export var UrlbarUtils = {
     }
     if (result.heuristic) {
       switch (result.providerName) {
-        case "AliasEngines":
+        case "UrlbarProviderAliasEngines":
           return this.RESULT_GROUP.HEURISTIC_ENGINE_ALIAS;
-        case "Autofill":
+        case "UrlbarProviderAutofill":
           return this.RESULT_GROUP.HEURISTIC_AUTOFILL;
-        case "BookmarkKeywords":
+        case "UrlbarProviderBookmarkKeywords":
           return this.RESULT_GROUP.HEURISTIC_BOOKMARK_KEYWORD;
-        case "HeuristicFallback":
+        case "UrlbarProviderHeuristicFallback":
           return this.RESULT_GROUP.HEURISTIC_FALLBACK;
-        case "Omnibox":
+        case "UrlbarProviderHistoryUrlHeuristic":
+          return this.RESULT_GROUP.HEURISTIC_HISTORY_URL;
+        case "UrlbarProviderOmnibox":
           return this.RESULT_GROUP.HEURISTIC_OMNIBOX;
-        case "RestrictKeywordsAutofill":
+        case "UrlbarProviderRestrictKeywordsAutofill":
           return this.RESULT_GROUP.HEURISTIC_RESTRICT_KEYWORD_AUTOFILL;
-        case "TokenAliasEngines":
+        case "UrlbarProviderTokenAliasEngines":
           return this.RESULT_GROUP.HEURISTIC_TOKEN_ALIAS_ENGINE;
         case "UrlbarProviderSearchTips":
           return this.RESULT_GROUP.HEURISTIC_SEARCH_TIP;
-        case "HistoryUrlHeuristic":
-          return this.RESULT_GROUP.HEURISTIC_HISTORY_URL;
         default:
           if (result.providerName.startsWith("TestProvider")) {
             return this.RESULT_GROUP.HEURISTIC_TEST;
@@ -570,9 +569,9 @@ export var UrlbarUtils = {
     }
 
     switch (result.providerName) {
-      case "AboutPages":
+      case "UrlbarProviderAboutPages":
         return this.RESULT_GROUP.ABOUT_PAGES;
-      case "InputHistory":
+      case "UrlbarProviderInputHistory":
         return this.RESULT_GROUP.INPUT_HISTORY;
       case "UrlbarProviderQuickSuggest":
         return this.RESULT_GROUP.GENERAL_PARENT;
@@ -583,7 +582,7 @@ export var UrlbarUtils = {
     switch (result.type) {
       case this.RESULT_TYPE.SEARCH:
         if (result.source == this.RESULT_SOURCE.HISTORY) {
-          return result.providerName == "RecentSearches"
+          return result.providerName == "UrlbarProviderRecentSearches"
             ? this.RESULT_GROUP.RECENT_SEARCH
             : this.RESULT_GROUP.FORM_HISTORY;
         }
@@ -609,19 +608,32 @@ export var UrlbarUtils = {
    *
    * @param {UrlbarResult} result
    *   The result to extract from.
+   * @param {object} options
+   *   Options object.
+   * @param {HTMLElement} [options.element]
+   *   The element associated with the result that was selected or picked, if
+   *   available. For results that have multiple selectable children, the URL
+   *   may be taken from a child element rather than the result.
    * @returns {object}
    *   An object: `{ url, postData }`
    *   `url` will be null if the result doesn't have a URL. `postData` will be
    *   null if the result doesn't have post data.
    */
-  getUrlFromResult(result) {
-    if (result.type == this.RESULT_TYPE.SEARCH && result.payload.engine) {
-      const engine = Services.search.getEngineByName(result.payload.engine);
-      let [url, postData] = this.getSearchQueryUrl(
-        engine,
-        result.payload.suggestion || result.payload.query
-      );
-      return { url, postData };
+  getUrlFromResult(result, { element = null } = {}) {
+    if (
+      result.payload.engine &&
+      (result.type == this.RESULT_TYPE.SEARCH ||
+        result.type == this.RESULT_TYPE.DYNAMIC)
+    ) {
+      let query =
+        element?.dataset.query ||
+        result.payload.suggestion ||
+        result.payload.query;
+      if (query) {
+        const engine = Services.search.getEngineByName(result.payload.engine);
+        let [url, postData] = this.getSearchQueryUrl(engine, query);
+        return { url, postData };
+      }
     }
 
     return {
@@ -1066,35 +1078,40 @@ export var UrlbarUtils = {
    * Runs a search for the given string, and returns the heuristic result.
    *
    * @param {string} searchString The string to search for.
-   * @param {nsIDOMWindow} window The window requesting it.
+   * @param {UrlbarInput} urlbarInput The input requesting it.
    * @returns {Promise<UrlbarResult>} an heuristic result.
    */
-  async getHeuristicResultFor(searchString, window) {
+  async getHeuristicResultFor(searchString, urlbarInput) {
     if (!searchString) {
       throw new Error("Must pass a non-null search string");
     }
 
+    let gBrowser = urlbarInput.window.gBrowser;
     let options = {
       allowAutofill: false,
-      isPrivate: lazy.PrivateBrowsingUtils.isWindowPrivate(window),
+      isPrivate: urlbarInput.isPrivate,
       maxResults: 1,
       searchString,
       userContextId: parseInt(
-        window.gBrowser.selectedBrowser.getAttribute("usercontextid") || 0
+        gBrowser.selectedBrowser.getAttribute("usercontextid") || 0
       ),
-      tabGroup: window.gBrowser.selectedTab.group?.id ?? null,
+      tabGroup: gBrowser.selectedTab.group?.id ?? null,
       prohibitRemoteResults: true,
-      providers: ["AliasEngines", "BookmarkKeywords", "HeuristicFallback"],
+      providers: [
+        "UrlbarProviderAliasEngines",
+        "UrlbarProviderBookmarkKeywords",
+        "UrlbarProviderHeuristicFallback",
+      ],
     };
-    if (window.gURLBar.searchMode) {
-      let searchMode = window.gURLBar.searchMode;
+    if (urlbarInput.searchMode) {
+      let searchMode = urlbarInput.searchMode;
       options.searchMode = searchMode;
       if (searchMode.source) {
         options.sources = [searchMode.source];
       }
     }
     let context = new UrlbarQueryContext(options);
-    await lazy.UrlbarProvidersManager.startQuery(context);
+    await urlbarInput.controller.manager.startQuery(context);
     if (!context.heuristicResult) {
       throw new Error("There should always be an heuristic result");
     }
@@ -1258,13 +1275,13 @@ export var UrlbarUtils = {
       case this.RESULT_TYPE.TAB_SWITCH:
         return "switchtab";
       case this.RESULT_TYPE.SEARCH:
-        if (result.providerName == "RecentSearches") {
+        if (result.providerName == "UrlbarProviderRecentSearches") {
           return "recent_search";
         }
         if (result.source == this.RESULT_SOURCE.HISTORY) {
           return "formhistory";
         }
-        if (result.providerName == "TabToSearch") {
+        if (result.providerName == "UrlbarProviderTabToSearch") {
           return "tabtosearch";
         }
         if (result.payload.suggestion) {
@@ -1305,7 +1322,7 @@ export var UrlbarUtils = {
             result.source == this.RESULT_SOURCE.BOOKMARKS
               ? "bookmark"
               : "history";
-          if (result.providerName == "InputHistory") {
+          if (result.providerName == "UrlbarProviderInputHistory") {
             return type + "adaptive";
           }
           return type;
@@ -1319,7 +1336,7 @@ export var UrlbarUtils = {
       case this.RESULT_TYPE.TIP:
         return "tip";
       case this.RESULT_TYPE.DYNAMIC:
-        if (result.providerName == "TabToSearch") {
+        if (result.providerName == "UrlbarProviderTabToSearch") {
           // This is the onboarding result.
           return "tabtosearch";
         }
@@ -1498,14 +1515,18 @@ export var UrlbarUtils = {
     // for testing purposes.
     if (
       result.providerType === this.PROVIDER_TYPE.EXTENSION &&
-      result.providerName != "Omnibox"
+      result.providerName != "UrlbarProviderOmnibox"
     ) {
       return "experimental_addon";
     }
 
+    if (result.providerName == "UrlbarProviderQuickSuggest") {
+      return this._getQuickSuggestTelemetryType(result);
+    }
+
     // Appends subtype to certain result types.
     function checkForSubType(type, res) {
-      if (res.providerName == "SemanticHistorySearch") {
+      if (res.providerName == "UrlbarProviderSemanticHistorySearch") {
         type += "_semantic";
       }
       if (
@@ -1522,14 +1543,12 @@ export var UrlbarUtils = {
     switch (result.type) {
       case this.RESULT_TYPE.DYNAMIC:
         switch (result.providerName) {
-          case "calculator":
+          case "UrlbarProviderCalculator":
             return "calc";
-          case "TabToSearch":
+          case "UrlbarProviderTabToSearch":
             return "tab_to_search";
-          case "UnitConversion":
+          case "UrlbarProviderUnitConversion":
             return "unit";
-          case "UrlbarProviderQuickSuggest":
-            return this._getQuickSuggestTelemetryType(result);
           case "UrlbarProviderQuickSuggestContextualOptIn":
             return "fxsuggest_data_sharing_opt_in";
           case "UrlbarProviderGlobalActions":
@@ -1544,11 +1563,11 @@ export var UrlbarUtils = {
       case this.RESULT_TYPE.REMOTE_TAB:
         return "remote_tab";
       case this.RESULT_TYPE.SEARCH:
-        if (result.providerName === "TabToSearch") {
+        if (result.providerName === "UrlbarProviderTabToSearch") {
           return "tab_to_search";
         }
         if (result.source == this.RESULT_SOURCE.HISTORY) {
-          return result.providerName == "RecentSearches"
+          return result.providerName == "UrlbarProviderRecentSearches"
             ? "recent_search"
             : "search_history";
         }
@@ -1581,11 +1600,6 @@ export var UrlbarUtils = {
               return "intervention_unknown";
           }
         }
-
-        if (result.providerName === "UrlbarProviderQuickSuggest") {
-          return this._getQuickSuggestTelemetryType(result);
-        }
-
         switch (result.payload.type) {
           case lazy.UrlbarProviderSearchTips.TIP_TYPE.ONBOARD:
             return "tip_onboard";
@@ -1605,9 +1619,6 @@ export var UrlbarUtils = {
         }
         if (result.autofill) {
           return `autofill_${result.autofill.type ?? "unknown"}`;
-        }
-        if (result.providerName === "UrlbarProviderQuickSuggest") {
-          return this._getQuickSuggestTelemetryType(result);
         }
         if (result.providerName === "UrlbarProviderTopSites") {
           return "top_site";
@@ -1928,6 +1939,7 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
       description: {
         type: "string",
       },
+      descriptionL10n: L10N_SCHEMA,
       displayUrl: {
         type: "string",
       },
@@ -1944,6 +1956,9 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "boolean",
       },
       isBlockable: {
+        type: "boolean",
+      },
+      isManageable: {
         type: "boolean",
       },
       isPinned: {
@@ -2205,6 +2220,17 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
             command: {
               type: "string",
             },
+            input: {
+              type: "string",
+            },
+            attributes: {
+              type: "object",
+              properties: {
+                primary: {
+                  type: "string",
+                },
+              },
+            },
             menu: {
               type: "array",
               items: {
@@ -2375,7 +2401,7 @@ export class UrlbarQueryContext {
     }
 
     /**
-     * @type {[string, (any) => boolean, any?][]}
+     * @type {[string, (v: any) => boolean, any?][]}
      */
     const optionalProperties = [
       ["currentPage", v => typeof v == "string" && !!v.length],
@@ -2423,6 +2449,12 @@ export class UrlbarQueryContext {
    *   Whether or not to allow providers to include autofill results.
    */
   allowAutofill;
+
+  /**
+   * @type {boolean}
+   *   Whether or not the query has been cancelled.
+   */
+  canceled = false;
 
   /**
    * @type {string}
@@ -2614,14 +2646,16 @@ export class UrlbarQueryContext {
       return false;
     }
 
-    // Disallow remote results if only an origin is typed to avoid disclosing
-    // sites the user visits. This also catches partially typed origins, like
-    // mozilla.o, because the fixup check below can't validate them.
-    if (
-      this.tokens.length == 1 &&
-      this.tokens[0].type == lazy.UrlbarTokenizer.TYPE.POSSIBLE_ORIGIN
-    ) {
-      return false;
+    // Prohibit remote results if the search string is likely an origin to avoid
+    // disclosing sites the user visits. If the search string may or may not be
+    // an origin but we've determined a search is allowed, then allow it.
+    if (this.tokens.length == 1) {
+      switch (this.tokens[0].type) {
+        case lazy.UrlbarTokenizer.TYPE.POSSIBLE_ORIGIN:
+          return false;
+        case lazy.UrlbarTokenizer.TYPE.POSSIBLE_ORIGIN_BUT_SEARCH_ALLOWED:
+          return true;
+      }
     }
 
     // Disallow remote results for strings containing tokens that look like URIs
@@ -2678,12 +2712,12 @@ export class UrlbarProvider {
 
   /**
    * Unique name for the provider, used by the context to filter on providers.
+   * By default, it will use the class name but it can also be overridden to
+   * use a different name.
    * Not using a unique name will cause the newest registration to win.
-   *
-   * @abstract
    */
   get name() {
-    return "UrlbarProviderBase";
+    return this.constructor.name;
   }
 
   /**
@@ -2737,9 +2771,9 @@ export class UrlbarProvider {
    * If this method returns false, the providers manager won't start a query
    * with this provider, to save on resources.
    *
-   * @param {UrlbarQueryContext} _queryContext
+   * @param {UrlbarQueryContext} [_queryContext]
    *   The query context object
-   * @param {UrlbarController} _controller
+   * @param {UrlbarController} [_controller]
    *   The current controller.
    * @returns {Promise<boolean>}
    *   Whether this provider should be invoked for the search.
@@ -2978,6 +3012,13 @@ export class UrlbarProvider {
    *     A mapping from attribute names to values.  Each name-value pair results
    *     in an attribute being added to the element.  The `id` attribute is
    *     reserved and cannot be set by the provider.
+   *   {Array} [classList]
+   *     An array of CSS classes to set on the element. If this is defined, the
+   *     element's previous classes will be cleared first!
+   *   {object} [dataset]
+   *     Maps element dataset keys to values. Values should be strings with the
+   *     following exceptions: `undefined` is ignored, and `null` causes the key
+   *     to be removed from the dataset.
    *   {object} [style]
    *     A plain object that can be used to add inline styles to the element,
    *     like `display: none`.   `element.style` is updated for each name-value
@@ -3000,22 +3041,7 @@ export class UrlbarProvider {
    *
    * @param {UrlbarResult} _result
    *   The menu will be shown for this result.
-   * @returns {Array}
-   *   If the result doesn't have any commands, this should return null.
-   *   Otherwise it should return an array of command objects that look like:
-   *   `{ name, l10n, children}`
-   *
-   *   {string} name
-   *     The name of the command. Must be specified unless `children` is
-   *     present. When a command is picked, its name will be passed as
-   *     `details.selType` to `onEngagement()`. The special name "separator"
-   *     will create a menu separator.
-   *   {object} l10n
-   *     An l10n object for the command's label: `{ id, args }`
-   *     Must be specified unless `name` is "separator".
-   *   {array} children
-   *     If specified, a submenu will be created with the given child commands.
-   *     Each object in the array must be a command object.
+   * @returns {?UrlbarResultCommand[]}
    */
   getResultCommands(_result) {
     return null;

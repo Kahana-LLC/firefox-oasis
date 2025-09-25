@@ -176,7 +176,6 @@ export class _DiscoveryStreamBase extends React.PureComponent {
               firstVisibleTimestamp={this.props.firstVisibleTimestamp}
               ctaButtonSponsors={component.properties.ctaButtonSponsors}
               ctaButtonVariant={component.properties.ctaButtonVariant}
-              spocMessageVariant={component.properties.spocMessageVariant}
             />
           );
         }
@@ -195,7 +194,6 @@ export class _DiscoveryStreamBase extends React.PureComponent {
             compactGrid={component.properties.compactGrid}
             ctaButtonSponsors={component.properties.ctaButtonSponsors}
             ctaButtonVariant={component.properties.ctaButtonVariant}
-            spocMessageVariant={component.properties.spocMessageVariant}
             hideDescriptions={this.props.DiscoveryStream.hideDescriptions}
             firstVisibleTimestamp={this.props.firstVisibleTimestamp}
             spocPositions={component.spocs?.positions}
@@ -206,18 +204,8 @@ export class _DiscoveryStreamBase extends React.PureComponent {
         return <HorizontalRule />;
       case "PrivacyLink":
         return <PrivacyLink properties={component.properties} />;
-      case "Widgets": {
-        // Nimbus experiment override
-        const nimbusWidgetsEnabled =
-          this.props.Prefs.values.widgetsConfig?.enabled;
-
-        const widgetsEnabled =
-          this.props.Prefs.values["widgets.system.enabled"];
-        if (widgetsEnabled || nimbusWidgetsEnabled) {
-          return <Widgets />;
-        }
-        return null;
-      }
+      case "Widgets":
+        return <Widgets />;
       default:
         return <div>{component.type}</div>;
     }
@@ -231,7 +219,7 @@ export class _DiscoveryStreamBase extends React.PureComponent {
   }
 
   render() {
-    const { locale, mayHaveSponsoredStories } = this.props;
+    const { locale } = this.props;
     // Bug 1980459 - Note that selectLayoutRender acts as a selector that transforms layout data based on current
     // preferences and experiment flags. It runs after Redux state is populated but before render.
     // Components removed in selectLayoutRender (e.g., Widgets or TopSites) will not appear in the
@@ -284,7 +272,15 @@ export class _DiscoveryStreamBase extends React.PureComponent {
 
     // Extract TopSites to render before the rest and Message to use for header
     const topSites = extractComponent("TopSites");
-    const widgets = extractComponent("Widgets");
+
+    // There are two ways to enable widgets:
+    // Via `widgets.system.*` prefs or Nimbus experiment
+    const widgetsNimbusEnabled = this.props.Prefs.values.widgetsConfig?.enabled;
+    const widgetsSystemPrefsEnabled =
+      this.props.Prefs.values["widgets.system.enabled"];
+
+    const widgets = widgetsNimbusEnabled || widgetsSystemPrefsEnabled;
+
     const message = extractComponent("Message") || {
       header: {
         link_text: topStories.learnMore.link.message,
@@ -324,7 +320,7 @@ export class _DiscoveryStreamBase extends React.PureComponent {
           this.renderLayout([
             {
               width: 12,
-              components: [widgets],
+              components: [{ type: "Widgets" }],
               sectionType: "widgets",
             },
           ])}
@@ -340,10 +336,8 @@ export class _DiscoveryStreamBase extends React.PureComponent {
             showPrefName={topStories.pref.feed}
             title={sectionTitle}
             subTitle={subTitle}
-            mayHaveSponsoredStories={mayHaveSponsoredStories}
             mayHaveTopicsSelection={topicSelectionEnabled}
             sectionsEnabled={sectionsEnabled}
-            spocMessageVariant={message?.properties?.spocMessageVariant}
             eventSource="CARDGRID"
           >
             {this.renderLayout(layoutRender)}

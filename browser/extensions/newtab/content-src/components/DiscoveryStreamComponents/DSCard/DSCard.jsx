@@ -19,14 +19,8 @@ import { FluentOrText } from "../../FluentOrText/FluentOrText.jsx";
 import { connect } from "react-redux";
 import { LinkMenuOptions } from "content-src/lib/link-menu-options";
 const READING_WPM = 220;
-
 const PREF_OHTTP_MERINO = "discoverystream.merino-provider.ohttp.enabled";
 const PREF_OHTTP_UNIFIED_ADS = "unifiedAds.ohttp.enabled";
-const PREF_CONTEXTUAL_ADS = "discoverystream.sections.contextualAds.enabled";
-const PREF_INFERRED_PERSONALIZATION_SYSTEM =
-  "discoverystream.sections.personalization.inferred.enabled";
-const PREF_INFERRED_PERSONALIZATION_USER =
-  "discoverystream.sections.personalization.inferred.user.enabled";
 const PREF_SECTIONS_ENABLED = "discoverystream.sections.enabled";
 const PREF_FAVICONS_ENABLED = "discoverystream.publisherFavicon.enabled";
 
@@ -107,7 +101,6 @@ export const DefaultMeta = ({
   sponsored_by_override,
   ctaButtonVariant,
   dispatch,
-  spocMessageVariant,
   mayHaveSectionsCards,
   mayHaveThumbsUpDown,
   onThumbsUpClick,
@@ -212,7 +205,6 @@ export const DefaultMeta = ({
           cta_button_variant={ctaButtonVariant}
           source={source}
           dispatch={dispatch}
-          spocMessageVariant={spocMessageVariant}
           mayHaveSectionsCards={mayHaveSectionsCards}
         />
       )}
@@ -391,6 +383,7 @@ export class _DSCard extends React.PureComponent {
                     section: this.props.section,
                     section_position: this.props.sectionPosition,
                     is_section_followed: this.props.sectionFollowed,
+                    layout_name: this.props.sectionLayoutName,
                   }
                 : {}),
             },
@@ -716,35 +709,22 @@ export class _DSCard extends React.PureComponent {
 
     let ohttpEnabled = false;
     if (flightId) {
-      ohttpEnabled =
-        Prefs.values[PREF_CONTEXTUAL_ADS] &&
-        Prefs.values[PREF_OHTTP_UNIFIED_ADS];
+      ohttpEnabled = Prefs.values[PREF_OHTTP_UNIFIED_ADS];
     } else {
       ohttpEnabled = Prefs.values[PREF_OHTTP_MERINO];
     }
 
-    const inferredPersonalizationUser =
-      Prefs.values[PREF_INFERRED_PERSONALIZATION_USER];
-    const inferredPersonalizationSystem =
-      Prefs.values[PREF_INFERRED_PERSONALIZATION_SYSTEM];
-    const inferredPersonalization =
-      inferredPersonalizationSystem && inferredPersonalizationUser;
     const ohttpImagesEnabled = Prefs.values.ohttpImagesConfig?.enabled;
     const includeTopStoriesSection =
       Prefs.values.ohttpImagesConfig?.includeTopStoriesSection;
 
-    const sectionsEnabled = Prefs.values[PREF_SECTIONS_ENABLED];
     const nonPersonalizedSections = ["top_stories_section"];
     const sectionPersonalized =
       !nonPersonalizedSections.includes(this.props.section) ||
       includeTopStoriesSection;
 
     const secureImage =
-      sectionsEnabled &&
-      ohttpImagesEnabled &&
-      ohttpEnabled &&
-      sectionPersonalized &&
-      inferredPersonalization;
+      ohttpImagesEnabled && ohttpEnabled && sectionPersonalized;
 
     return secureImage;
   }
@@ -954,6 +934,7 @@ export class _DSCard extends React.PureComponent {
                       section: this.props.section,
                       section_position: this.props.sectionPosition,
                       is_section_followed: this.props.sectionFollowed,
+                      sectionLayoutName: this.props.sectionLayoutName,
                     }
                   : {}),
                 ...(!format && this.props.section
@@ -990,7 +971,6 @@ export class _DSCard extends React.PureComponent {
               sponsored_by_override={this.props.sponsored_by_override}
               ctaButtonVariant={ctaButtonVariant}
               dispatch={this.props.dispatch}
-              spocMessageVariant={this.props.spocMessageVariant}
               mayHaveThumbsUpDown={this.props.mayHaveThumbsUpDown}
               mayHaveSectionsCards={this.props.mayHaveSectionsCards}
               onThumbsUpClick={this.onThumbsUpClick}

@@ -12,7 +12,10 @@ use cssparser::{
 use dom::{DocumentState, ElementState};
 use malloc_size_of::MallocSizeOfOps;
 use nsstring::{nsCString, nsString};
-use selectors::matching::{ElementSelectorFlags, MatchingForInvalidation, SelectorCaches};
+use selectors::context::{MatchingContext, MatchingMode, NeedsSelectorFlags};
+use selectors::matching::{
+    matches_selector_list, ElementSelectorFlags, MatchingForInvalidation, SelectorCaches,
+};
 use selectors::parser::PseudoElement as PseudoElementTrait;
 use selectors::{Element, OpaqueElement};
 use servo_arc::{Arc, ArcBorrow};
@@ -23,14 +26,14 @@ use std::iter;
 use std::os::raw::c_void;
 use std::ptr;
 use style::color::mix::ColorInterpolationMethod;
-use style::color::{AbsoluteColor, ColorSpace};
+use style::color::{AbsoluteColor, ColorComponents, ColorSpace};
 use style::computed_value_flags::ComputedValueFlags;
 use style::context::ThreadLocalStyleContext;
 use style::context::{CascadeInputs, QuirksMode, SharedStyleContext, StyleContext};
 use style::counter_style;
 use style::custom_properties::DeferFontRelativeCustomPropertyResolution;
 use style::data::{self, ElementStyles};
-use style::dom::{ShowSubtreeData, TDocument, TElement, TNode};
+use style::dom::{ShowSubtreeData, TDocument, TElement, TNode, TShadowRoot};
 use style::driver;
 use style::error_reporting::{ParseErrorReporter, SelectorWarningKind};
 use style::font_face::{self, FontFaceSourceFormat, FontFaceSourceListComponent, Source};
@@ -155,14 +158,15 @@ use style::values::computed::effects::Filter;
 use style::values::computed::font::{
     FamilyName, FontFamily, FontFamilyList, FontStretch, FontStyle, FontWeight, GenericFontFamily,
 };
-use style::values::computed::length::AnchorSizeFunction;
-use style::values::computed::length_percentage::AllowAnchorPosResolutionInCalcPercentage;
+use style::values::computed::length_percentage::{
+    AllowAnchorPosResolutionInCalcPercentage, Unpacked,
+};
 use style::values::computed::position::AnchorFunction;
 use style::values::computed::{self, ContentVisibility, Context, ToComputedValue};
-use style::values::distance::ComputeSquaredDistance;
+use style::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use style::values::generics::color::ColorMixFlags;
 use style::values::generics::easing::BeforeFlag;
-use style::values::generics::Optional;
+use style::values::generics::length::GenericAnchorSizeFunction;
 use style::values::resolved;
 use style::values::specified::intersection_observer::IntersectionObserverMargin;
 use style::values::specified::source_size_list::SourceSizeList;
@@ -2998,6 +3002,75 @@ pub unsafe extern "C" fn Servo_SelectorList_QueryAll(
         &mut result,
         may_use_invalidation,
     );
+
+    if !result.is_empty() {
+        // NOTE(emilio): This relies on a slice of GeckoElement having the same
+        // memory representation than a slice of element pointers.
+        bindings::Gecko_ContentList_AppendAll(
+            content_list,
+            result.as_ptr() as *mut *const _,
+            result.len(),
+        )
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Servo_SelectorList_QueryAllWithScope(
+    node: &RawGeckoNode,
+    rules: &nsTArray<&LockedStyleRule>,
+    scope_rules: &nsTArray<ScopeRuleData>,
+    content_list: *mut structs::nsSimpleContentList,
+) {
+    let root = GeckoNode(node);
+    let quirks_mode = root.owner_doc().quirks_mode();
+    let (selectors, scopes) = desugared_selector_list_with_scope(quirks_mode, rules, scope_rules);
+    // This replicates the slow path of `querySelectorAll`.
+    // TODO(dshin): A tigher integration could be nicer - but it'd be for
+    // a very specific (DevTools-only) use case, since normal `querySelectorAll`
+    // JS calls can't use @scope.
+    let mut selector_caches = SelectorCaches::default();
+    let mut ctx = MatchingContext::new(
+        MatchingMode::Normal,
+        /* bloom_filter = */ None,
+        &mut selector_caches,
+        quirks_mode,
+        NeedsSelectorFlags::No,
+        MatchingForInvalidation::No,
+    );
+    let root_element = root.as_element();
+    ctx.current_host = match root_element {
+        Some(root) => root.containing_shadow_host().map(|host| host.opaque()),
+        None => root.as_shadow_root().map(|root| root.host().opaque()),
+    };
+    let mut result: SmallVec<[GeckoElement; 128]> = Default::default();
+    let may_match_shadow_host_for_part = selectors.slice().iter().any(|s| s.is_part());
+    for node in root.dom_descendants() {
+        let Some(element) = node.as_element() else {
+            continue;
+        };
+        let matches = match scopes.as_ref() {
+            None => matches_selector_list(&selectors, &element, &mut ctx),
+            Some(s) => {
+                let id = ScopeConditionId::new((s.conditions.len() - 1) as u16);
+                let candidates = scope_root_candidates(
+                    &s.conditions,
+                    id,
+                    &element,
+                    may_match_shadow_host_for_part,
+                    &s.subject_map,
+                    &mut ctx,
+                );
+                candidates.candidates.iter().any(|candidate| {
+                    ctx.nest_for_scope(Some(candidate.root), |ctx| {
+                        matches_selector_list(&selectors, &element, ctx)
+                    })
+                })
+            },
+        };
+        if matches {
+            result.push(element);
+        }
+    }
 
     if !result.is_empty() {
         // NOTE(emilio): This relies on a slice of GeckoElement having the same
@@ -9561,6 +9634,43 @@ pub extern "C" fn Servo_SlowRgbToColorName(r: u8, g: u8, b: u8, result: &mut nsA
 }
 
 #[no_mangle]
+pub extern "C" fn Servo_SlowRgbToNearestColorName(
+    r: f32,
+    g: f32,
+    b: f32,
+    color_space: ColorSpace,
+    result: &mut nsACString,
+) -> bool {
+    let absolute = |r, g, b, color_space| AbsoluteColor {
+        components: ColorComponents(r, g, b),
+        alpha: 1.0,
+        color_space,
+        flags: Default::default(),
+    };
+
+    let input = absolute(r, g, b, color_space).to_color_space(ColorSpace::Oklab);
+
+    let mut nearest = (SquaredDistance::from_sqrt(f64::INFINITY), "black");
+    for (name, color) in cssparser::color::all_named_colors() {
+        let color = absolute(
+            color.0 as f32 / 255.0,
+            color.1 as f32 / 255.0,
+            color.2 as f32 / 255.0,
+            ColorSpace::Srgb,
+        )
+        .to_color_space(ColorSpace::Oklab);
+
+        let distance = input.compute_squared_distance(&color).unwrap();
+        if distance < nearest.0 {
+            // DevTools expect the first alphabetically.
+            nearest = (distance, name);
+        }
+    }
+    result.assign(nearest.1);
+    return nearest.0 == SquaredDistance::from_sqrt(0.0);
+}
+
+#[no_mangle]
 pub extern "C" fn Servo_ColorNameToRgb(name: &nsACString, out: &mut structs::nscolor) -> bool {
     match cssparser::color::parse_named_color(unsafe { name.as_str_unchecked() }) {
         Ok((r, g, b)) => {
@@ -10195,14 +10305,58 @@ pub enum AnchorPositioningFunctionResolution {
     Resolved(computed::LengthPercentage),
 }
 
-fn resolve_anchor_fallback(
-    fallback: &Optional<computed::LengthPercentage>,
+fn resolve_anchor_function(
+    func: &AnchorFunction,
+    params: &AnchorPosOffsetResolutionParams,
+    prop_side: PhysicalSide,
 ) -> AnchorPositioningFunctionResolution {
-    fallback
-        .as_ref()
-        .map_or(AnchorPositioningFunctionResolution::Invalid, |fb| {
-            AnchorPositioningFunctionResolution::ResolvedReference(fb as *const _)
-        })
+    if !func.valid_for(prop_side, params.mBaseParams.mPosition) {
+        return resolve_inset_fallback(func.fallback.as_ref(), params, prop_side);
+    }
+    let result = AnchorFunction::resolve(&func.target_element, &func.side, prop_side, params);
+    match result {
+        Ok(l) => {
+            AnchorPositioningFunctionResolution::Resolved(computed::LengthPercentage::new_length(l))
+        },
+        Err(()) => resolve_inset_fallback(func.fallback.as_ref(), params, prop_side),
+    }
+}
+
+fn resolve_inset_fallback(
+    fallback: Option<&computed::Inset>,
+    params: &AnchorPosOffsetResolutionParams,
+    prop_side: PhysicalSide,
+) -> AnchorPositioningFunctionResolution {
+    use style::values::computed::length_percentage::Unpacked;
+    let Some(fallback) = fallback else {
+        return AnchorPositioningFunctionResolution::Invalid;
+    };
+    match fallback {
+        computed::Inset::Auto => AnchorPositioningFunctionResolution::Invalid,
+        computed::Inset::LengthPercentage(lp) => {
+            AnchorPositioningFunctionResolution::ResolvedReference(lp as *const _)
+        },
+        computed::Inset::AnchorSizeFunction(f) => do_resolve_anchor_size(
+            f,
+            params,
+            AllowAnchorPosResolutionInCalcPercentage::Both(prop_side),
+        ),
+        computed::Inset::AnchorFunction(f) => resolve_anchor_function(f, params, prop_side),
+        computed::Inset::AnchorContainingCalcFunction(clp) => {
+            let Unpacked::Calc(clp) = clp.unpack() else {
+                unreachable!();
+            };
+            match clp.resolve_anchor(
+                AllowAnchorPosResolutionInCalcPercentage::Both(prop_side),
+                params,
+            ) {
+                Ok((node, clamping_mode)) => AnchorPositioningFunctionResolution::Resolved(
+                    computed::LengthPercentage::new_calc(node, clamping_mode),
+                ),
+                Err(_) => AnchorPositioningFunctionResolution::Invalid,
+            }
+        },
+    }
 }
 
 #[no_mangle]
@@ -10212,35 +10366,250 @@ pub extern "C" fn Servo_ResolveAnchorFunction(
     prop_side: PhysicalSide,
     out: &mut AnchorPositioningFunctionResolution,
 ) {
-    if !func.valid_for(prop_side, params.mBaseParams.mPosition) {
-        *out = resolve_anchor_fallback(&func.fallback);
-        return;
+    *out = resolve_anchor_function(func, params, prop_side);
+}
+
+trait AnchorSizeFallbackResolver {
+    fn resolve_fallback(
+        fallback: Option<&Self>,
+        params: &AnchorPosOffsetResolutionParams,
+        allowed: AllowAnchorPosResolutionInCalcPercentage,
+    ) -> AnchorPositioningFunctionResolution;
+}
+
+impl AnchorSizeFallbackResolver for computed::Inset {
+    fn resolve_fallback(
+        fallback: Option<&Self>,
+        params: &AnchorPosOffsetResolutionParams,
+        allowed: AllowAnchorPosResolutionInCalcPercentage,
+    ) -> AnchorPositioningFunctionResolution {
+        let Some(fallback) = fallback else {
+            return AnchorPositioningFunctionResolution::Invalid;
+        };
+        match fallback {
+            computed::Inset::Auto => AnchorPositioningFunctionResolution::Invalid,
+            computed::Inset::LengthPercentage(lp) => {
+                AnchorPositioningFunctionResolution::ResolvedReference(lp as *const _)
+            },
+            computed::Inset::AnchorFunction(f) => {
+                let side = match allowed {
+                    AllowAnchorPosResolutionInCalcPercentage::Both(s) => s,
+                    AllowAnchorPosResolutionInCalcPercentage::AnchorSizeOnly(_) => {
+                        return AnchorPositioningFunctionResolution::Invalid
+                    },
+                };
+                resolve_anchor_function(f, params, side)
+            },
+            computed::Inset::AnchorSizeFunction(f) => do_resolve_anchor_size(f, params, allowed),
+            computed::Inset::AnchorContainingCalcFunction(clp) => {
+                let Unpacked::Calc(clp) = clp.unpack() else {
+                    unreachable!();
+                };
+                match clp.resolve_anchor(allowed, &params) {
+                    Ok((node, clamping_mode)) => AnchorPositioningFunctionResolution::Resolved(
+                        computed::LengthPercentage::new_calc(node, clamping_mode),
+                    ),
+                    Err(_) => AnchorPositioningFunctionResolution::Invalid,
+                }
+            },
+        }
     }
-    let result = AnchorFunction::resolve(&func.target_element, &func.side, prop_side, params);
-    *out = match result {
+}
+
+impl AnchorSizeFallbackResolver for computed::Margin {
+    fn resolve_fallback(
+        fallback: Option<&Self>,
+        params: &AnchorPosOffsetResolutionParams,
+        allowed: AllowAnchorPosResolutionInCalcPercentage,
+    ) -> AnchorPositioningFunctionResolution {
+        let Some(fallback) = fallback else {
+            return AnchorPositioningFunctionResolution::Invalid;
+        };
+        match fallback {
+            computed::Margin::Auto => AnchorPositioningFunctionResolution::Invalid,
+            computed::Margin::LengthPercentage(lp) => {
+                AnchorPositioningFunctionResolution::ResolvedReference(lp as *const _)
+            },
+            computed::Margin::AnchorSizeFunction(f) => do_resolve_anchor_size(f, params, allowed),
+            computed::Margin::AnchorContainingCalcFunction(clp) => {
+                let Unpacked::Calc(clp) = clp.unpack() else {
+                    unreachable!();
+                };
+                match clp.resolve_anchor(allowed, &params) {
+                    Ok((node, clamping_mode)) => AnchorPositioningFunctionResolution::Resolved(
+                        computed::LengthPercentage::new_calc(node, clamping_mode),
+                    ),
+                    Err(_) => AnchorPositioningFunctionResolution::Invalid,
+                }
+            },
+        }
+    }
+}
+
+impl AnchorSizeFallbackResolver for computed::Size {
+    fn resolve_fallback(
+        fallback: Option<&Self>,
+        params: &AnchorPosOffsetResolutionParams,
+        allowed: AllowAnchorPosResolutionInCalcPercentage,
+    ) -> AnchorPositioningFunctionResolution {
+        let Some(fallback) = fallback else {
+            return AnchorPositioningFunctionResolution::Invalid;
+        };
+        match fallback {
+            computed::Size::Auto
+            | computed::Size::MaxContent
+            | computed::Size::MinContent
+            | computed::Size::FitContent
+            | computed::Size::MozAvailable
+            | computed::Size::WebkitFillAvailable
+            | computed::Size::Stretch
+            | computed::Size::FitContentFunction(_) => AnchorPositioningFunctionResolution::Invalid,
+            computed::Size::LengthPercentage(lp) => {
+                AnchorPositioningFunctionResolution::ResolvedReference(&lp.0 as *const _)
+            },
+            computed::Size::AnchorSizeFunction(f) => do_resolve_anchor_size(f, params, allowed),
+            computed::Size::AnchorContainingCalcFunction(clp) => {
+                let Unpacked::Calc(clp) = clp.0.unpack() else {
+                    unreachable!();
+                };
+                match clp.resolve_anchor(allowed, &params) {
+                    Ok((node, clamping_mode)) => AnchorPositioningFunctionResolution::Resolved(
+                        computed::LengthPercentage::new_calc(node, clamping_mode),
+                    ),
+                    Err(_) => AnchorPositioningFunctionResolution::Invalid,
+                }
+            },
+        }
+    }
+}
+
+impl AnchorSizeFallbackResolver for computed::MaxSize {
+    fn resolve_fallback(
+        fallback: Option<&Self>,
+        params: &AnchorPosOffsetResolutionParams,
+        allowed: AllowAnchorPosResolutionInCalcPercentage,
+    ) -> AnchorPositioningFunctionResolution {
+        let Some(fallback) = fallback else {
+            return AnchorPositioningFunctionResolution::Invalid;
+        };
+        match fallback {
+            computed::MaxSize::None
+            | computed::MaxSize::MaxContent
+            | computed::MaxSize::MinContent
+            | computed::MaxSize::FitContent
+            | computed::MaxSize::MozAvailable
+            | computed::MaxSize::WebkitFillAvailable
+            | computed::MaxSize::Stretch
+            | computed::MaxSize::FitContentFunction(_) => {
+                AnchorPositioningFunctionResolution::Invalid
+            },
+            computed::MaxSize::LengthPercentage(lp) => {
+                AnchorPositioningFunctionResolution::ResolvedReference(&lp.0 as *const _)
+            },
+            computed::MaxSize::AnchorSizeFunction(f) => do_resolve_anchor_size(f, params, allowed),
+            computed::MaxSize::AnchorContainingCalcFunction(clp) => {
+                let Unpacked::Calc(clp) = clp.0.unpack() else {
+                    unreachable!();
+                };
+                match clp.resolve_anchor(allowed, &params) {
+                    Ok((node, clamping_mode)) => AnchorPositioningFunctionResolution::Resolved(
+                        computed::LengthPercentage::new_calc(node, clamping_mode),
+                    ),
+                    Err(_) => AnchorPositioningFunctionResolution::Invalid,
+                }
+            },
+        }
+    }
+}
+
+fn do_resolve_anchor_size<Value: AnchorSizeFallbackResolver>(
+    func: &GenericAnchorSizeFunction<Value>,
+    params: &AnchorPosOffsetResolutionParams,
+    allowed: AllowAnchorPosResolutionInCalcPercentage,
+) -> AnchorPositioningFunctionResolution {
+    use style::values::computed::length::resolve_anchor_size;
+    if !func.valid_for(params.mBaseParams.mPosition) {
+        return Value::resolve_fallback(func.fallback.as_ref(), params, allowed);
+    }
+    let result = resolve_anchor_size(
+        &func.target_element,
+        allowed.to_axis(),
+        func.size,
+        &params.mBaseParams,
+    );
+    match result {
         Ok(l) => {
             AnchorPositioningFunctionResolution::Resolved(computed::LengthPercentage::new_length(l))
         },
-        Err(()) => resolve_anchor_fallback(&func.fallback),
-    };
+        Err(()) => return Value::resolve_fallback(func.fallback.as_ref(), params, allowed),
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn Servo_ResolveAnchorSizeFunction(
-    func: &AnchorSizeFunction,
+pub extern "C" fn Servo_ResolveAnchorSizeFunctionForInset(
+    func: &GenericAnchorSizeFunction<computed::Inset>,
+    params: &AnchorPosOffsetResolutionParams,
+    prop_axis: PhysicalAxis,
+    out: &mut AnchorPositioningFunctionResolution,
+) {
+    *out = do_resolve_anchor_size(
+        func,
+        params,
+        AllowAnchorPosResolutionInCalcPercentage::AnchorSizeOnly(prop_axis),
+    );
+}
+
+fn offset_params_from_base_params(
+    params: &AnchorPosResolutionParams,
+) -> AnchorPosOffsetResolutionParams {
+    AnchorPosOffsetResolutionParams {
+        mCBSize: ptr::null(),
+        mBaseParams: AnchorPosResolutionParams {
+            mFrame: params.mFrame,
+            mPosition: params.mPosition,
+            mReferencedAnchors: params.mReferencedAnchors,
+        },
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn Servo_ResolveAnchorSizeFunctionForMargin(
+    func: &GenericAnchorSizeFunction<computed::Margin>,
     params: &AnchorPosResolutionParams,
     prop_axis: PhysicalAxis,
     out: &mut AnchorPositioningFunctionResolution,
 ) {
-    if !func.valid_for(params.mPosition) {
-        *out = resolve_anchor_fallback(&func.fallback);
-        return;
-    }
-    let result = AnchorSizeFunction::resolve(&func.target_element, prop_axis, func.size, params);
-    *out = match result {
-        Ok(l) => {
-            AnchorPositioningFunctionResolution::Resolved(computed::LengthPercentage::new_length(l))
-        },
-        Err(()) => resolve_anchor_fallback(&func.fallback),
-    };
+    *out = do_resolve_anchor_size(
+        func,
+        &offset_params_from_base_params(params),
+        AllowAnchorPosResolutionInCalcPercentage::AnchorSizeOnly(prop_axis),
+    );
+}
+
+#[no_mangle]
+pub extern "C" fn Servo_ResolveAnchorSizeFunctionForSize(
+    func: &GenericAnchorSizeFunction<computed::Size>,
+    params: &AnchorPosResolutionParams,
+    prop_axis: PhysicalAxis,
+    out: &mut AnchorPositioningFunctionResolution,
+) {
+    *out = do_resolve_anchor_size(
+        func,
+        &offset_params_from_base_params(params),
+        AllowAnchorPosResolutionInCalcPercentage::AnchorSizeOnly(prop_axis),
+    );
+}
+
+#[no_mangle]
+pub extern "C" fn Servo_ResolveAnchorSizeFunctionForMaxSize(
+    func: &GenericAnchorSizeFunction<computed::MaxSize>,
+    params: &AnchorPosResolutionParams,
+    prop_axis: PhysicalAxis,
+    out: &mut AnchorPositioningFunctionResolution,
+) {
+    *out = do_resolve_anchor_size(
+        func,
+        &offset_params_from_base_params(params),
+        AllowAnchorPosResolutionInCalcPercentage::AnchorSizeOnly(prop_axis),
+    );
 }

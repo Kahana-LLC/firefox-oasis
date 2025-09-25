@@ -34,7 +34,9 @@
 
 #include "harfbuzz/hb.h"
 
+#define StandardFonts
 #include "StandardFonts-win10.inc"
+#undef StandardFonts
 
 using namespace mozilla;
 using namespace mozilla::gfx;
@@ -1158,6 +1160,9 @@ FontVisibility gfxDWriteFontList::GetVisibilityForFamily(
   if (FamilyInList(aName, kLangPackFonts)) {
     return FontVisibility::LangPack;
   }
+  if (nsRFPService::FontIsAllowedByLocale(aName)) {
+    return FontVisibility::LangPack;
+  }
   return FontVisibility::User;
 }
 
@@ -1581,7 +1586,7 @@ void gfxDWriteFontList::InitSharedFontListForPlatform() {
   mHardcodedSubstitutions.Clear();
   mNonExistingFonts.Clear();
 
-  RefPtr<IDWriteFactory> factory = Factory::GetDWriteFactory();
+  RefPtr<IDWriteFactory> factory = Factory::EnsureDWriteFactory();
   HRESULT hr = factory->GetGdiInterop(getter_AddRefs(mGDIInterop));
   if (FAILED(hr)) {
     glean::fontlist::dwritefont_init_problem.AccumulateSingleSample(

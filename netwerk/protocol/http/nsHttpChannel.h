@@ -309,6 +309,9 @@ class nsHttpChannel final : public HttpBaseChannel,
   // end server host name.
   ProxyDNSStrategy GetProxyDNSStrategy();
 
+  // Add Sec-Fetch-Storage-Access headers based on cookie partitioning
+  void AddStorageAccessHeadersToRequest();
+
   // We might synchronously or asynchronously call BeginConnect,
   // which includes DNS prefetch and speculative connection, according to
   // whether an async tracker lookup is required. If the tracker lookup
@@ -863,6 +866,10 @@ class nsHttpChannel final : public HttpBaseChannel,
 
   // Permissions for the request to make local network access
   LNAPerms mLNAPermission{};
+
+  // Track if we are waiting for OnPermissionPromptResult callback
+  // Used to handle cancellation while suspended waiting for LNA permission
+  bool mWaitingForLNAPermission{false};
 
  protected:
   virtual void DoNotifyListenerCleanup() override;

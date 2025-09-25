@@ -45,7 +45,7 @@ object DataGenerationHelper {
         val appContext = InstrumentationRegistry.getInstrumentation()
             .targetContext
             .applicationContext
-        val pendingIntent = PendingIntent.getActivity(appContext, 0, Intent(), IntentUtils.defaultIntentPendingFlags)
+        val pendingIntent = PendingIntent.getActivity(appContext, 0, Intent(), IntentUtils.DEFAULT_PENDING_INTENT_FLAGS)
         val customTabsIntent = CustomTabsIntent.Builder()
             .addMenuItem(customMenuItemLabel, pendingIntent)
             .setShareState(CustomTabsIntent.SHARE_STATE_ON)
@@ -180,6 +180,7 @@ object DataGenerationHelper {
     fun getAvailableSearchEngines(): List<SearchEngine> {
         Log.i(TAG, "getAvailableSearchEngines: Trying to get the alternative search engines based on the region of the user")
         val searchEnginesList = TestHelper.appContext.components.core.store.state.search.availableSearchEngines
+        Assert.assertTrue("$TAG: Search engines list returned nothing", searchEnginesList.isNotEmpty())
         Log.i(TAG, "getAvailableSearchEngines: Got $searchEnginesList based on the region of the user")
         return searchEnginesList
     }

@@ -60,6 +60,7 @@ Please note that some targeting attributes require stricter controls on the tele
 * [memoryMB](#memorymb)
 * [messageImpressions](#messageimpressions)
 * [needsUpdate](#needsupdate)
+* [newtabAddonVersion](#newtabaddonversion)
 * [newtabSettings](#newtabsettings)
 * [packageFamilyName](#packagefamilyname)
 * [pinnedSites](#pinnedsites)
@@ -505,7 +506,8 @@ declare const region: string;
 
 ### `searchEngines`
 
-Information about the current and available search engines.
+Information about the current and available search engines. If the user's engine
+is a third party engine, then the value will be ``null``.
 
 #### Examples
 * Is the current default search engine set to google?
@@ -521,7 +523,7 @@ interface SearchEnginesResponse: {
   current: SearchEngineId;
   installed: Array<SearchEngineId>;
 }
-// This is an identifier for a search engine such as "google" or "amazondotcom"
+// This is an identifier for a search engine such as "google" or "ddg"
 type SearchEngineId = string;
 ```
 
@@ -553,9 +555,9 @@ Information about the browser's top 25 frecent sites.
 
 
 #### Examples
-* Is mozilla.com in the user's top frecent sites with a frececy greater than 400?
+* Is `mozilla.com` in the user's top frecent sites and with a last visit date greater than April 4th, 2018(UNIX Epoch timestamp 1522843725924)?
 ```java
-"mozilla.com" in topFrecentSites[.frecency >= 400]|mapToProperty("host")
+"mozilla.com" in topFrecentSites[.lastVisitDate > 1522843725924]|mapToProperty("host")
 ```
 
 #### Definition
@@ -566,6 +568,7 @@ interface TopSite {
   url: string;
   // e.g. foo.mozilla.com
   host: string;
+  // Deprecated property unsupported in Firefox 145+, refer to bug 1987415 for guidance on future options.
   frecency: number;
   lastVisitDate: UnixEpochNumber;
 }
@@ -954,6 +957,17 @@ Object {
     { url: "moz-extension://123dsa43213acklncd/home.html", host: "" }
   ],
 }
+```
+
+### `newtabAddonVersion`
+
+The full version string of the built-in New Tab add-on that is actively in use.
+Comparisons should be done with the `versionCompare` filter expression.
+
+#### Definition
+
+```ts
+declare const newtabAddonVersion: string;
 ```
 
 ### `newtabSettings`

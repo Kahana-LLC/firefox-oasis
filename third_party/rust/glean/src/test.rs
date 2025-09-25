@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::RecvTimeoutError;
 use flate2::read::GzDecoder;
-use glean_core::{glean_test_get_experimentation_id, DynamicLabelType};
+use glean_core::{glean_test_get_experimentation_id, DynamicLabelType, LabeledCounter};
 use serde_json::Value as JsonValue;
 
 use crate::private::PingType;
@@ -1285,6 +1285,39 @@ fn test_boolean_get_num_errors() {
 }
 
 #[test]
+fn test_labeled_counter_metric() {
+    let _lock = lock_test();
+
+    let _t = new_glean(None, false);
+
+    let metric = LabeledCounter::new(
+        LabeledMetricData::Common {
+            cmd: CommonMetricData {
+                name: "labeled_counter".into(),
+                category: "telemetry".into(),
+                send_in_pings: vec!["store1".into()],
+                disabled: false,
+                lifetime: Lifetime::Ping,
+                ..Default::default()
+            },
+        },
+        Some(vec!["key1".into()]),
+    );
+
+    metric.get("key1").add(1);
+    metric.get("key2").add(2);
+
+    // Check that the value was recorded
+    let value = metric.test_get_value(Some("store1".into())).unwrap();
+    assert_eq!(value["key1"], 1);
+    assert_eq!(value["key2"], 2);
+
+    // Check for an invalid label
+    let result = metric.test_get_num_recorded_errors(ErrorType::InvalidLabel);
+    assert_eq!(result, 0);
+}
+
+#[test]
 fn test_dual_labeled_counter_metric() {
     let _lock = lock_test();
 
@@ -1533,6 +1566,62 @@ fn pings_ride_along_builtin_pings() {
 
     // We expect a ride-along ping to ride along.
     let url = r.recv().unwrap();
+    assert!(url.contains("ride-along"));
+}
+
+#[test]
+fn pings_get_submitted_on_disabled_ping_schedule() {
+    let _lock = lock_test();
+
+    // Define a fake uploader that reports back the submission headers
+    // using a crossbeam channel.
+    let (s, r) = crossbeam_channel::bounded::<String>(3);
+
+    #[derive(Debug)]
+    pub struct FakeUploader {
+        sender: crossbeam_channel::Sender<String>,
+    }
+    impl net::PingUploader for FakeUploader {
+        fn upload(&self, upload_request: net::CapablePingUploadRequest) -> net::UploadResult {
+            let upload_request = upload_request.capable(|_| true).unwrap();
+            self.sender.send(upload_request.url).unwrap();
+            net::UploadResult::http_status(200)
+        }
+    }
+
+    // Create a custom configuration to use a fake uploader.
+    let dir = tempfile::tempdir().unwrap();
+    let tmpname = dir.path().to_path_buf();
+
+    let ping_schedule = HashMap::from([("baseline".to_string(), vec!["ride-along".to_string()])]);
+
+    let cfg = ConfigurationBuilder::new(false, tmpname, GLOBAL_APPLICATION_ID)
+        .with_server_endpoint("invalid-test-host")
+        .with_uploader(FakeUploader { sender: s })
+        .with_ping_schedule(ping_schedule)
+        .build();
+
+    let _t = new_glean(Some(cfg), true);
+
+    let ride_along_ping = PingType::new(
+        "ride-along",
+        true,
+        true,
+        true,
+        true,
+        true,
+        vec![],
+        vec![],
+        false,
+        vec![],
+    );
+    ride_along_ping.set_enabled(true);
+
+    // Simulate becoming active.
+    handle_client_active();
+
+    // We expect a ride-along ping to ride along.
+    let url = r.recv_timeout(Duration::from_millis(100)).unwrap();
     assert!(url.contains("ride-along"));
 }
 

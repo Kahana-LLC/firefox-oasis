@@ -1806,6 +1806,11 @@ class AddonInstall {
             this._callInstallListeners("onInstallFailed");
           } else {
             logger.info(`Install of ${this.addon.id} cancelled by user`);
+            if (err) {
+              // promptHandler is expected to reject() without value to cancel.
+              // A non-void error is unexpected, so log it for visibility.
+              Cu.reportError(err);
+            }
             this.state = AddonManager.STATE_CANCELLED;
             this._cleanup();
             this._callInstallListeners(
@@ -2426,7 +2431,7 @@ var DownloadAddonInstall = class extends AddonInstall {
    * Starts downloading the add-on's XPI file.
    */
   startDownload() {
-    this.downloadStartedAt = Cu.now();
+    this.downloadStartedAt = ChromeUtils.now();
 
     this.state = AddonManager.STATE_DOWNLOADING;
     if (!this._callInstallListeners("onDownloadStarted")) {

@@ -2242,6 +2242,7 @@ addUiaTask(
 <textarea id="textarea">ab
 
 </textarea>
+<input id="empty">
   `,
   async function testTextRangeGetBoundingRectanglesCaret(browser, docAcc) {
     info("Focusing editable");
@@ -2386,6 +2387,29 @@ addUiaTask(
     );
     is(uiaRects[0], prevX, "x == prevX");
     Assert.greater(uiaRects[1], prevY, "y > prevY");
+
+    info("Focusing empty");
+    const empty = findAccessibleChildByID(docAcc, "empty", [nsIAccessibleText]);
+    moved = waitForEvent(EVENT_TEXT_CARET_MOVED, empty);
+    empty.takeFocus();
+    await moved;
+    await runPython(`
+      global text
+      empty = findUiaByDomId(doc, "empty")
+      text = getUiaPattern(empty, "Text")
+    `);
+    uiaRects = await runPython(
+      `text.GetSelection().GetElement(0).GetBoundingRectangles()`
+    );
+    const caretX = {};
+    const caretY = {};
+    const caretW = {};
+    const caretH = {};
+    empty.getCaretRect(caretX, caretY, caretW, caretH);
+    is(uiaRects[0], caretX.value, "x == caretX");
+    is(uiaRects[1], caretY.value, "y == caretY");
+    is(uiaRects[2], caretW.value, "w == caretW");
+    is(uiaRects[3], caretH.value, "h == caretH");
   },
   // The IA2 -> UIA proxy doesn't support this.
   { uiaEnabled: true, uiaDisabled: false }
@@ -2904,8 +2928,12 @@ line7</textarea>
  * Test the TextRange pattern's FindText method.
  */
 addUiaTask(
-  `<div id="container"><b>abc</b>TEST<div id="inner">def</div>TEST<p>ghi</p></div>`,
-  async function testTextRangeFromChild() {
+  `
+<div id="container"><b>abc</b>TEST<div id="inner">def</div>TEST<p>ghi</p></div>
+<textarea id="textarea">This is a test.</textarea>
+  `,
+  async function testTextRangeFindText() {
+    info("container tests");
     await runPython(`
       global doc, docText, container, range
       doc = getDocUia()
@@ -2978,6 +3006,50 @@ addUiaTask(
       subrange = range.FindText("test", False, True)
       `);
     is(await runPython(`subrange.GetText(-1)`), "TEST", "range text correct");
+
+    info("textarea tests");
+    await runPython(`
+      global range
+      textarea = findUiaByDomId(doc, "textarea")
+      range = docText.RangeFromChild(textarea)
+    `);
+    is(
+      await runPython(`range.GetText(-1)`),
+      "This is a test.",
+      "doc returned correct range for textarea"
+    );
+
+    info("Finding 'is', searching from the start");
+    await runPython(`
+      global subrange
+      subrange = range.FindText("is", False, False)
+      `);
+    is(await runPython(`subrange.GetText(-1)`), "is", "range text correct");
+    info("Expanding to word");
+    await runPython(`subrange.ExpandToEnclosingUnit(TextUnit_Word)`);
+    is(await runPython(`subrange.GetText(-1)`), "This ", "range text correct");
+
+    info("Creating range for 'is a test.'");
+    await runPython(`
+      global partRange
+      partRange = range.Clone()
+      partRange.MoveEndpointByRange(TextPatternRangeEndpoint_Start, subrange, TextPatternRangeEndpoint_End)
+    `);
+    is(
+      await runPython(`partRange.GetText(-1)`),
+      "is a test.",
+      "range text correct"
+    );
+
+    info("Finding 'is', searching forward in 'is a test.'");
+    await runPython(`
+      global subrange
+      subrange = partRange.FindText("is", False, False)
+    `);
+    is(await runPython(`subrange.GetText(-1)`), "is", "range text correct");
+    info("Expanding to word");
+    await runPython(`subrange.ExpandToEnclosingUnit(TextUnit_Word)`);
+    is(await runPython(`subrange.GetText(-1)`), "is ", "range text correct");
   },
   { uiaEnabled: true, uiaDisabled: true }
 );

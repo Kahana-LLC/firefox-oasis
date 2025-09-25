@@ -91,7 +91,6 @@
 #include "mozilla/HangAnnotations.h"
 #include "mozilla/IMEStateManager.h"
 #include "mozilla/InputEventOptions.h"
-#include "mozilla/InternalMutationEvent.h"
 #include "mozilla/Latin1.h"
 #include "mozilla/Likely.h"
 #include "mozilla/LoadInfo.h"
@@ -182,6 +181,7 @@
 #include "mozilla/dom/FormData.h"
 #include "mozilla/dom/FragmentOrElement.h"
 #include "mozilla/dom/FromParser.h"
+#include "mozilla/dom/FunctionBinding.h"
 #include "mozilla/dom/HTMLElement.h"
 #include "mozilla/dom/HTMLFormElement.h"
 #include "mozilla/dom/HTMLImageElement.h"
@@ -195,6 +195,7 @@
 #include "mozilla/dom/MessagePort.h"
 #include "mozilla/dom/MimeType.h"
 #include "mozilla/dom/MouseEventBinding.h"
+#include "mozilla/dom/MutationObservers.h"
 #include "mozilla/dom/NameSpaceConstants.h"
 #include "mozilla/dom/NodeBinding.h"
 #include "mozilla/dom/NodeInfo.h"
@@ -3140,7 +3141,7 @@ bool nsContentUtils::ContentIsFlattenedTreeDescendantOfForStyle(
 }
 
 // static
-nsINode* nsContentUtils::Retarget(nsINode* aTargetA, nsINode* aTargetB) {
+nsINode* nsContentUtils::Retarget(nsINode* aTargetA, const nsINode* aTargetB) {
   while (true && aTargetA) {
     // If A's root is not a shadow root...
     nsINode* root = aTargetA->SubtreeRoot();
@@ -5749,82 +5750,16 @@ bool nsContentUtils::HasNonEmptyAttr(const nsIContent* aContent,
              AttrArray::ATTR_VALUE_NO_MATCH;
 }
 
-/* static */
-bool nsContentUtils::WantMutationEvents(nsINode* aNode, uint32_t aType,
-                                        nsINode* aTargetForSubtreeModified) {
-  Document* doc = aNode->OwnerDoc();
-  if (!doc->MutationEventsEnabled()) {
-    return false;
-  }
-
-  if (!doc->FireMutationEvents()) {
-    return false;
-  }
-
-  // global object will be null for documents that don't have windows.
-  nsPIDOMWindowInner* window = doc->GetInnerWindow();
-  // This relies on EventListenerManager::AddEventListener, which sets
-  // all mutation bits when there is a listener for DOMSubtreeModified event.
-  if (window && !window->HasMutationListeners(aType)) {
-    return false;
-  }
-
-  if (aNode->ChromeOnlyAccess() || aNode->IsInShadowTree()) {
-    return false;
-  }
-
-  doc->MayDispatchMutationEvent(aTargetForSubtreeModified);
-
-  // If we have a window, we can check it for mutation listeners now.
-  if (aNode->IsInUncomposedDoc()) {
-    nsCOMPtr<EventTarget> piTarget(do_QueryInterface(window));
-    if (piTarget) {
-      EventListenerManager* manager = piTarget->GetExistingListenerManager();
-      if (manager && manager->HasMutationListeners()) {
-        return true;
-      }
-    }
-  }
-
-  // If we have a window, we know a mutation listener is registered, but it
-  // might not be in our chain.  If we don't have a window, we might have a
-  // mutation listener.  Check quickly to see.
-  while (aNode) {
-    EventListenerManager* manager = aNode->GetExistingListenerManager();
-    if (manager && manager->HasMutationListeners()) {
-      return true;
-    }
-
-    aNode = aNode->GetParentNode();
-  }
-
-  return false;
-}
-
-/* static */
-bool nsContentUtils::HasMutationListeners(Document* aDocument, uint32_t aType) {
-  nsPIDOMWindowInner* window =
-      aDocument ? aDocument->GetInnerWindow() : nullptr;
-
-  // This relies on EventListenerManager::AddEventListener, which sets
-  // all mutation bits when there is a listener for DOMSubtreeModified event.
-  return !window || window->HasMutationListeners(aType);
-}
-
-void nsContentUtils::MaybeFireNodeRemoved(nsINode* aChild, nsINode* aParent) {
-  MOZ_ASSERT(aChild, "Missing child");
-  MOZ_ASSERT(aChild->GetParentNode() == aParent, "Wrong parent");
-  MOZ_ASSERT(aChild->OwnerDoc() == aParent->OwnerDoc(), "Wrong owner-doc");
-
+void nsContentUtils::NotifyDevToolsOfNodeRemoval(nsINode& aRemovingNode) {
   // Having an explicit check here since it's an easy mistake to fall into,
   // and there might be existing code with problems. We'd rather be safe
-  // than fire DOMNodeRemoved in all corner cases. We also rely on it for
+  // than fire a chrome only event in all corner cases. We also rely on it for
   // nsAutoScriptBlockerSuppressNodeRemoved.
   if (!IsSafeToRunScript()) {
     // This checks that IsSafeToRunScript is true since we don't want to fire
     // events when that is false. We can't rely on EventDispatcher to assert
-    // this in this situation since most of the time there are no mutation
-    // event listeners, in which case we won't even attempt to dispatch events.
+    // this in this situation since most of the time DevTools is not observing
+    // the mutations, in which case we won't even attempt to dispatch events.
     // However this also allows for two exceptions. First off, we don't assert
     // if the mutation happens to native anonymous content since we never fire
     // mutation events on such content anyway.
@@ -5832,29 +5767,19 @@ void nsContentUtils::MaybeFireNodeRemoved(nsINode* aChild, nsINode* aParent) {
     // that is a know case when we'd normally fire a mutation event, but can't
     // make that safe and so we suppress it at this time. Ideally this should
     // go away eventually.
-    if (!aChild->IsInNativeAnonymousSubtree() &&
+    if (!aRemovingNode.IsInNativeAnonymousSubtree() &&
         !sDOMNodeRemovedSuppressCount) {
-      NS_ERROR("Want to fire DOMNodeRemoved event, but it's not safe");
-      WarnScriptWasIgnored(aChild->OwnerDoc());
+      NS_ERROR(
+          "Want to fire \"devtoolschildremoved\" event, but it's not safe");
+      WarnScriptWasIgnored(aRemovingNode.OwnerDoc());
     }
     return;
   }
 
-  {
-    Document* doc = aParent->OwnerDoc();
-    if (MOZ_UNLIKELY(doc->DevToolsWatchingDOMMutations()) &&
-        aChild->IsInComposedDoc() && !aChild->ChromeOnlyAccess()) {
-      DispatchChromeEvent(doc, aChild, u"devtoolschildremoved"_ns,
-                          CanBubble::eNo, Cancelable::eNo);
-    }
-  }
-
-  if (WantMutationEvents(aChild, NS_EVENT_BITS_MUTATION_NODEREMOVED, aParent)) {
-    InternalMutationEvent mutation(true, eLegacyNodeRemoved);
-    mutation.mRelatedNode = aParent;
-
-    mozAutoSubtreeModified subtree(aParent->OwnerDoc(), aParent);
-    EventDispatcher::Dispatch(aChild, nullptr, &mutation);
+  if (MOZ_UNLIKELY(aRemovingNode.DevToolsShouldBeNotifiedOfThisRemoval())) {
+    const RefPtr<Document> doc = aRemovingNode.OwnerDoc();
+    DispatchChromeEvent(doc, &aRemovingNode, u"devtoolschildremoved"_ns,
+                        CanBubble::eNo, Cancelable::eNo);
   }
 }
 
@@ -6154,7 +6079,7 @@ static void SetAndFilterHTML(
     FragmentOrElement* aTarget, Element* aContext, const nsAString& aHTML,
     const OwningSanitizerOrSanitizerConfigOrSanitizerPresets& aSanitizerOptions,
     const bool aSafe, ErrorResult& aError) {
-  RefPtr<Document> doc = aTarget->OwnerDoc();
+  const RefPtr<Document> doc = aTarget->OwnerDoc();
 
   // Step 1. If safe and contextElement’s local name is "script" and
   // contextElement’s namespace is the HTML namespace or the SVG namespace, then
@@ -6180,10 +6105,7 @@ static void SetAndFilterHTML(
     return;
   }
 
-  // Batch possible DOMSubtreeModified events.
-  mozAutoSubtreeModified subtree(doc, nullptr);
-
-  aTarget->FireNodeRemovedForChildren();
+  aTarget->NotifyDevToolsOfRemovalsOfChildren();
 
   // Needed when innerHTML is used in combination with contenteditable
   mozAutoDocUpdate updateBatch(doc, true);
@@ -6226,8 +6148,6 @@ static void SetAndFilterHTML(
   // mutation listeners on the fragment that comes from the parser.
   nsAutoScriptBlockerSuppressNodeRemoved scriptBlocker;
 
-  int32_t oldChildCount = static_cast<int32_t>(aTarget->GetChildCount());
-
   // Step 6. Run sanitize on fragment using sanitizer and safe.
   sanitizer->Sanitize(fragment, aSafe, aError);
   if (aError.Failed()) {
@@ -6241,8 +6161,6 @@ static void SetAndFilterHTML(
   }
 
   mb.NodesAdded();
-  nsContentUtils::FireMutationEventsForDirectParsing(doc, aTarget,
-                                                     oldChildCount);
 }
 
 /* static */
@@ -6558,37 +6476,25 @@ already_AddRefed<Document> nsContentUtils::CreateInertHTMLDocument(
 }
 
 /* static */
-nsresult nsContentUtils::SetNodeTextContent(nsIContent* aContent,
-                                            const nsAString& aValue,
-                                            bool aTryReuse) {
-  // Fire DOMNodeRemoved mutation events before we do anything else.
-  nsCOMPtr<nsIContent> owningContent;
-
-  // Batch possible DOMSubtreeModified events.
-  mozAutoSubtreeModified subtree(nullptr, nullptr);
-
-  // Scope firing mutation events so that we don't carry any state that
-  // might be stale
-  {
-    // We're relying on mozAutoSubtreeModified to keep a strong reference if
-    // needed.
-    Document* doc = aContent->OwnerDoc();
-
-    // Optimize the common case of there being no observers
-    if (HasMutationListeners(doc, NS_EVENT_BITS_MUTATION_NODEREMOVED)) {
-      subtree.UpdateTarget(doc, nullptr);
-      owningContent = aContent;
-      nsCOMPtr<nsINode> child;
-      bool skipFirst = aTryReuse;
-      for (child = aContent->GetFirstChild();
+nsresult nsContentUtils::SetNodeTextContent(
+    nsIContent* aContent, const nsAString& aValue, bool aTryReuse,
+    MutationEffectOnScript aMutationEffectOnScript) {
+  // Optimize the common case of there being no observers
+  if (MOZ_UNLIKELY(
+          aContent->MaybeNeedsToNotifyDevToolsOfNodeRemovalsInOwnerDoc())) {
+    if (aTryReuse) {
+      bool skipFirstText = true;
+      for (nsCOMPtr<nsINode> child = aContent->GetFirstChild();
            child && child->GetParentNode() == aContent;
            child = child->GetNextSibling()) {
-        if (skipFirst && child->IsText()) {
-          skipFirst = false;
+        if (skipFirstText && child->IsText()) {
+          skipFirstText = false;
           continue;
         }
-        nsContentUtils::MaybeFireNodeRemoved(child, aContent);
+        nsContentUtils::NotifyDevToolsOfNodeRemoval(*child);
       }
+    } else {
+      aContent->NotifyDevToolsOfRemovalsOfChildren();
     }
   }
 
@@ -6604,7 +6510,8 @@ nsresult nsContentUtils::SetNodeTextContent(nsIContent* aContent,
       if (child->IsText()) {
         break;
       }
-      aContent->RemoveChildNode(child, true);
+      aContent->RemoveChildNode(child, true, nullptr, nullptr,
+                                aMutationEffectOnScript);
     }
 
     // If we have a node, it must be a eTEXT and we reuse it.
@@ -6618,7 +6525,8 @@ nsresult nsContentUtils::SetNodeTextContent(nsIContent* aContent,
         if (lastChild == child) {
           break;
         }
-        aContent->RemoveChildNode(lastChild, true);
+        aContent->RemoveChildNode(lastChild, true, nullptr, nullptr,
+                                  aMutationEffectOnScript);
       }
     }
 
@@ -6641,7 +6549,7 @@ nsresult nsContentUtils::SetNodeTextContent(nsIContent* aContent,
   textContent->SetText(aValue, true);
 
   ErrorResult rv;
-  aContent->AppendChildTo(textContent, true, rv);
+  aContent->AppendChildTo(textContent, true, rv, aMutationEffectOnScript);
   mb.NodesAdded();
   return rv.StealNSResult();
 }
@@ -8181,25 +8089,6 @@ bool nsContentUtils::HaveEqualPrincipals(Document* aDoc1, Document* aDoc2) {
 }
 
 /* static */
-void nsContentUtils::FireMutationEventsForDirectParsing(
-    Document* aDoc, nsIContent* aDest, int32_t aOldChildCount) {
-  // Fire mutation events. Optimize for the case when there are no listeners
-  int32_t newChildCount = aDest->GetChildCount();
-  if (newChildCount && nsContentUtils::HasMutationListeners(
-                           aDoc, NS_EVENT_BITS_MUTATION_NODEINSERTED)) {
-    AutoTArray<nsCOMPtr<nsIContent>, 50> childNodes;
-    NS_ASSERTION(newChildCount - aOldChildCount >= 0,
-                 "What, some unexpected dom mutation has happened?");
-    childNodes.SetCapacity(newChildCount - aOldChildCount);
-    for (nsIContent* child = aDest->GetFirstChild(); child;
-         child = child->GetNextSibling()) {
-      childNodes.AppendElement(child);
-    }
-    FragmentOrElement::FireNodeInserted(aDoc, aDest, childNodes);
-  }
-}
-
-/* static */
 const Document* nsContentUtils::GetInProcessSubtreeRootDocument(
     const Document* aDoc) {
   if (!aDoc) {
@@ -9565,14 +9454,70 @@ nsView* nsContentUtils::GetViewToDispatchEvent(nsPresContext* aPresContext,
   return viewManager->GetRootView();
 }
 
+namespace {
+
+class SynthesizedMouseEventCallback final : public nsISynthesizedEventCallback {
+  NS_DECL_ISUPPORTS
+
+ public:
+  explicit SynthesizedMouseEventCallback(VoidFunction& aCallback)
+      : mCallback(&aCallback) {}
+
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHOD OnCompleteDispatch() override {
+    MOZ_ASSERT(mCallback, "How can we have a null mCallback here?");
+
+    ErrorResult rv;
+    MOZ_KnownLive(mCallback)->Call(rv);
+    if (MOZ_UNLIKELY(rv.Failed())) {
+      return rv.StealNSResult();
+    }
+
+    return NS_OK;
+  }
+
+ private:
+  virtual ~SynthesizedMouseEventCallback() = default;
+
+  const RefPtr<VoidFunction> mCallback;
+};
+
+NS_IMPL_ISUPPORTS(SynthesizedMouseEventCallback, nsISynthesizedEventCallback)
+
+}  // namespace
+
 Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
     mozilla::PresShell* aPresShell, nsIWidget* aWidget, const nsAString& aType,
     LayoutDeviceIntPoint& aRefPoint,
     const SynthesizeMouseEventData& aMouseEventData,
-    const SynthesizeMouseEventOptions& aOptions) {
+    const SynthesizeMouseEventOptions& aOptions,
+    const Optional<OwningNonNull<VoidFunction>>& aCallback) {
   MOZ_ASSERT(aPresShell);
   MOZ_ASSERT(aWidget);
   AUTO_PROFILER_LABEL("nsContentUtils::SynthesizeMouseEvent", OTHER);
+
+  if (aCallback.WasPassed()) {
+    if (!XRE_IsParentProcess()) {
+      // TODO(edgar): There is currently no real use case for synthesizing a
+      // mouse event with a callback from the content process. For now, throw an
+      // error in this case. We can add support later if a valid use case
+      // arises.
+      NS_WARNING(
+          "nsContentUtils::SynthesizeMouseEvent() does not support being "
+          "called in the content process with a callback");
+      return Err(NS_ERROR_FAILURE);
+    }
+
+    if (!aOptions.mIsDOMEventSynthesized) {
+      // TODO(edgar): There is currently no real use case for synthesizing a
+      // mouse event with a callback that could be coalesced. For now, throw an
+      // error. We can add support later if a need arises.
+      NS_WARNING(
+          "nsContentUtils::SynthesizeMouseEvent() does not support being "
+          "called in the parent process with isDOMEventSynthesized=false, due "
+          "to the callback doesn't not support on coalesced events");
+      return Err(NS_ERROR_FAILURE);
+    }
+  }
 
   EventMessage msg;
   Maybe<WidgetMouseEvent::ExitFrom> exitFrom;
@@ -9628,6 +9573,14 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
                        contextMenuKey ? WidgetMouseEvent::eContextMenuKey
                                       : WidgetMouseEvent::eNormal);
   }
+
+  nsCOMPtr<nsISynthesizedEventCallback> callback;
+  if (aCallback.WasPassed()) {
+    callback = MakeAndAddRef<SynthesizedMouseEventCallback>(aCallback.Value());
+  }
+
+  mozilla::widget::AutoSynthesizedEventCallbackNotifier notifier(callback);
+
   WidgetMouseEvent& mouseOrPointerEvent =
       pointerEvent.isSome() ? pointerEvent.ref() : mouseEvent.ref();
   mouseOrPointerEvent.pointerId = aMouseEventData.mIdentifier;
@@ -9649,6 +9602,7 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
   mouseOrPointerEvent.mFlags.mIsSynthesizedForTests =
       aOptions.mIsDOMEventSynthesized;
   mouseOrPointerEvent.mExitFrom = exitFrom;
+  mouseOrPointerEvent.mCallbackId = notifier.SaveCallback();
 
   nsPresContext* presContext = aPresShell->GetPresContext();
   if (!presContext) {
@@ -9671,7 +9625,8 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
     if (NS_FAILED(rv)) {
       return Err(rv);
     }
-  } else if (StaticPrefs::test_events_async_enabled()) {
+  } else if (aOptions.mIsAsyncEnabled ||
+             StaticPrefs::test_events_async_enabled()) {
     status = aWidget->DispatchInputEvent(&mouseOrPointerEvent).mContentStatus;
   } else {
     nsresult rv = aWidget->DispatchEvent(&mouseOrPointerEvent, status);
@@ -9679,6 +9634,15 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
       return Err(rv);
     }
   }
+
+  // The callback ID may be cleared when the event also needs to be dispatched
+  // to a content process. In such cases, the callback will be notified after
+  // the event has been dispatched in the target content process.
+  if (mouseOrPointerEvent.mCallbackId.isSome()) {
+    mozilla::widget::AutoSynthesizedEventCallbackNotifier::NotifySavedCallback(
+        mouseOrPointerEvent.mCallbackId.ref());
+  }
+
   return status == nsEventStatus_eConsumeNoDefault;
 }
 
@@ -11816,10 +11780,14 @@ static Result<Ok, nsresult> ExtractExceptionValuesImpl(
   RefPtr<T> exn;
   MOZ_TRY((UnwrapObject<PrototypeID, NativeType>(aObj, exn, nullptr)));
 
-  exn->GetFilename(aCx, aFilename);
-  if (!aFilename.IsEmpty()) {
-    *aLineOut = exn->LineNumber(aCx);
-    *aColumnOut = exn->ColumnNumber();
+  if (nsCOMPtr<nsIStackFrame> location = exn->GetLocation()) {
+    location->GetFilename(aCx, aFilename);
+    *aLineOut = location->GetLineNumber(aCx);
+    *aColumnOut = location->GetColumnNumber(aCx);
+  } else {
+    aFilename.Truncate();
+    *aLineOut = 0;
+    *aColumnOut = 0;
   }
 
   exn->GetName(aMessageOut);
@@ -12496,11 +12464,10 @@ int32_t nsContentUtils::CompareTreePosition(const nsINode* aNode1,
   return static_cast<int32_t>(static_cast<int64_t>(*index1) - *index2);
 }
 
-nsIContent* nsContentUtils::AttachDeclarativeShadowRoot(nsIContent* aHost,
-                                                        ShadowRootMode aMode,
-                                                        bool aIsClonable,
-                                                        bool aIsSerializable,
-                                                        bool aDelegatesFocus) {
+nsIContent* nsContentUtils::AttachDeclarativeShadowRoot(
+    nsIContent* aHost, ShadowRootMode aMode, bool aIsClonable,
+    bool aIsSerializable, bool aDelegatesFocus,
+    const nsAString& aReferenceTarget) {
   RefPtr<Element> host = mozilla::dom::Element::FromNodeOrNull(aHost);
   if (!host || host->GetShadowRoot()) {
     // https://html.spec.whatwg.org/#parsing-main-inhead:shadow-host
@@ -12520,6 +12487,7 @@ nsIContent* nsContentUtils::AttachDeclarativeShadowRoot(nsIContent* aHost,
         nsGenericHTMLFormControlElement::ShadowRootDeclarative::Yes);
     // https://html.spec.whatwg.org/#parsing-main-inhead:available-to-element-internals
     shadowRoot->SetAvailableToElementInternals();
+    shadowRoot->SetReferenceTarget(aReferenceTarget);
   }
   return shadowRoot;
 }

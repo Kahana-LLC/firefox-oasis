@@ -16,7 +16,7 @@ const { IPProtectionService } = ChromeUtils.importESModule(
 class FakeIPProtectionPanelElement {
   constructor() {
     this.state = {
-      isSignedIn: false,
+      isSignedOut: true,
       isProtectionEnabled: false,
       protectionEnabledSince: null,
     };
@@ -33,6 +33,18 @@ class FakeIPProtectionPanelElement {
     };
   }
 }
+
+add_setup(async function () {
+  // FxAccountsStorage.sys.mjs requires a profile directory.
+  do_get_profile();
+  await putServerInRemoteSettings();
+
+  IPProtectionService.init();
+
+  registerCleanupFunction(async () => {
+    IPProtectionService.uninit();
+  });
+});
 
 /**
  * Tests that we can set a state and pass it to a fake element.
@@ -119,6 +131,16 @@ add_task(async function test_IPProtectionPanel_signedIn() {
   sandbox.stub(UIState, "get").returns({
     status: UIState.STATUS_SIGNED_IN,
   });
+  sandbox
+    .stub(IPProtectionService.guardian, "isLinkedToGuardian")
+    .returns(false);
+  sandbox.stub(IPProtectionService.guardian, "fetchProxyPass").returns({
+    status: 200,
+    error: undefined,
+    pass: {
+      isValid: () => true,
+    },
+  });
 
   let ipProtectionPanel = new IPProtectionPanel();
   let fakeElement = new FakeIPProtectionPanelElement();
@@ -135,15 +157,15 @@ add_task(async function test_IPProtectionPanel_signedIn() {
   await signedInEventPromise;
 
   Assert.equal(
-    ipProtectionPanel.state.isSignedIn,
-    true,
-    "isSignedIn should be true in the IPProtectionPanel state"
+    ipProtectionPanel.state.isSignedOut,
+    false,
+    "isSignedOut should be false in the IPProtectionPanel state"
   );
 
   Assert.equal(
-    fakeElement.state.isSignedIn,
-    true,
-    "isSignedIn should be true in the fake elements state"
+    fakeElement.state.isSignedOut,
+    false,
+    "isSignedOut should be false in the fake elements state"
   );
 
   sandbox.restore();
@@ -165,7 +187,7 @@ add_task(async function test_IPProtectionPanel_signedOut() {
 
   IPProtectionService.isSignedIn = true;
   ipProtectionPanel.setState({
-    isSignedIn: true,
+    isSignedOut: false,
   });
   ipProtectionPanel.updateState();
 
@@ -179,15 +201,15 @@ add_task(async function test_IPProtectionPanel_signedOut() {
   await signedOutEventPromise;
 
   Assert.equal(
-    ipProtectionPanel.state.isSignedIn,
-    false,
-    "isSignedIn should be true in the IPProtectionPanel state"
+    ipProtectionPanel.state.isSignedOut,
+    true,
+    "isSignedOut should be true in the IPProtectionPanel state"
   );
 
   Assert.equal(
-    fakeElement.state.isSignedIn,
-    false,
-    "isSignedIn should be true in the fake elements state"
+    fakeElement.state.isSignedOut,
+    true,
+    "isSignedOut should be true in the fake elements state"
   );
 
   sandbox.restore();
@@ -202,10 +224,19 @@ add_task(async function test_IPProtectionPanel_started_stopped() {
   ipProtectionPanel.panel = fakeElement;
   fakeElement.isConnected = true;
 
+  let sandbox = sinon.createSandbox();
+  sandbox.stub(IPProtectionService.guardian, "fetchProxyPass").returns({
+    status: 200,
+    error: undefined,
+    pass: {
+      isValid: () => true,
+      asBearerToken: () => "Bearer helloworld",
+    },
+  });
+
   // Set to signed in
-  IPProtectionService.isSignedIn = true;
   ipProtectionPanel.setState({
-    isSignedIn: true,
+    isSignedOut: false,
   });
   ipProtectionPanel.updateState();
 
@@ -213,6 +244,10 @@ add_task(async function test_IPProtectionPanel_started_stopped() {
     IPProtectionService,
     "IPProtectionService:Started"
   );
+
+  IPProtectionService.isSignedIn = true;
+  IPProtectionService.isEnrolled = true;
+  IPProtectionService.isEntitled = true;
 
   IPProtectionService.start();
 
@@ -250,6 +285,7 @@ add_task(async function test_IPProtectionPanel_started_stopped() {
     false,
     "isProtectionEnabled should be false in the fake elements state"
   );
+  sandbox.restore();
 });
 
 /**

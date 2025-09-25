@@ -75,7 +75,7 @@ XPCOMUtils.defineLazyPreferenceGetter(
   lazy,
   "chatProviders",
   "browser.ml.chat.providers",
-  "claude,chatgpt,gemini,lechat",
+  "claude,chatgpt,copilot,gemini,lechat",
   reorderChatProviders
 );
 XPCOMUtils.defineLazyPreferenceGetter(
@@ -162,7 +162,7 @@ export const GenAI = {
       },
     ],
     [
-      "https://copilot.microsoft.com",
+      "https://copilot.microsoft.com/?form=MOZCMC",
       {
         choiceIds: [
           "genai-onboarding-copilot-generate",
@@ -394,14 +394,14 @@ export const GenAI = {
   async addAskChatItems(browser, extraContext, itemAdder, entry, cleanup) {
     // Prepare context used for both targeting and handling prompts
     const window = browser.ownerGlobal;
-    const tab = window.gBrowser.getTabForBrowser(browser);
+    const tab = window?.gBrowser?.getTabForBrowser(browser);
     const uri = browser.currentURI;
     const context = {
       ...extraContext,
       entry,
       provider: lazy.chatProvider,
       tabTitle: (tab?._labelIsContentTitle && tab?.label) || "",
-      url: uri.asciiHost + uri.filePath,
+      url: uri?.asciiHost + uri?.filePath,
       window,
     };
 
@@ -712,6 +712,13 @@ export const GenAI = {
     } = contextMenu;
 
     showItem(menu, false);
+
+    // DO NOT show menu when inside an extension panel
+    const uri = browser.browsingContext.currentURI.spec;
+    if (uri.startsWith("moz-extension:")) {
+      return;
+    }
+
     // Page feature can be shown without provider unless disabled via menu
     // or revamp sidebar excludes chatbot
     const isPageFeatureAllowed =
@@ -1094,9 +1101,6 @@ export const GenAI = {
       source: context.entry,
     });
 
-    await this.prepareChatPromptPrefix();
-    const prompt = this.buildChatPrompt(promptObj, context);
-
     // If no provider is configured, open sidebar and wait once for onboarding
     const { SidebarController } = context.window;
 
@@ -1107,6 +1111,10 @@ export const GenAI = {
         return;
       }
     }
+
+    // Build prompt after provider is confirmed to use correct length limits
+    await this.prepareChatPromptPrefix();
+    const prompt = this.buildChatPrompt(promptObj, context);
 
     // Pass the prompt via GET url ?q= param or request header
     const { header, queryParam = "q" } =

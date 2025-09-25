@@ -26,6 +26,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
 export class RealtimeSuggestProvider extends SuggestProvider {
   // The following methods must be overridden.
 
+  /**
+   * The type of the realtime suggestion provider.
+   *
+   * @type {string}
+   */
   get realtimeType() {
     throw new Error("Trying to access the base class, must be overridden");
   }
@@ -41,19 +46,30 @@ export class RealtimeSuggestProvider extends SuggestProvider {
   // The following getters depend on `realtimeType` and should be overridden as
   // necessary.
 
+  /**
+   * @returns {string[]}
+   *   The opt-in suggestion is a dynamic Rust suggestion. `suggestion_type` in
+   *   the RS record is `${this.realtimeType}_opt_in` by default.
+   */
   get dynamicRustSuggestionTypes() {
-    // The realtime type's opt-in suggestion is a dynamic Rust suggestion whose
-    // `suggestion_type` is `this.realtimeType` in the RS record.
-    return [this.realtimeType];
+    return [this.realtimeType + "_opt_in"];
   }
 
+  /**
+   * @returns {string}
+   *   The online suggestions are served by Merino. The Merino provider is
+   *   `this.realtimeType` by default.
+   */
   get merinoProvider() {
-    // The realtime type's online suggestions are served by Merino.
     return this.realtimeType;
   }
 
-  get telemetryType() {
+  get baseTelemetryType() {
     return this.realtimeType;
+  }
+
+  get realtimeTypeForFtl() {
+    return this.realtimeType.replace(/([A-Z])/g, "-$1").toLowerCase();
   }
 
   get featureGatePref() {
@@ -72,15 +88,34 @@ export class RealtimeSuggestProvider extends SuggestProvider {
     return this.realtimeType + ".showLessFrequentlyCount";
   }
 
+  get optInIcon() {
+    return `chrome://browser/skin/illustrations/${this.realtimeType}-opt-in.svg`;
+  }
+
+  get optInTitleL10n() {
+    return {
+      id: `urlbar-result-${this.realtimeTypeForFtl}-opt-in-title`,
+      cacheable: true,
+    };
+  }
+
+  get optInDescriptionL10n() {
+    return {
+      id: `urlbar-result-${this.realtimeTypeForFtl}-opt-in-description`,
+      cacheable: true,
+      parseMarkup: true,
+    };
+  }
+
   get notInterestedCommandL10n() {
     return {
-      id: "urlbar-result-menu-dont-show-" + this.realtimeType,
+      id: "urlbar-result-menu-dont-show-" + this.realtimeTypeForFtl,
     };
   }
 
   get acknowledgeDismissalL10n() {
     return {
-      id: "urlbar-result-dismissal-acknowledgment-" + this.realtimeType,
+      id: "urlbar-result-dismissal-acknowledgment-" + this.realtimeTypeForFtl,
     };
   }
 
@@ -181,6 +216,25 @@ export class RealtimeSuggestProvider extends SuggestProvider {
     return this.isSponsored;
   }
 
+  /**
+   * The telemetry type for a suggestion from this provider. (This string does
+   * not include the `${source}_` prefix, e.g., "rust_".)
+   *
+   * Since realtime providers serve two types of suggestions, the opt-in and the
+   * online suggestion, this will return two possible telemetry types depending
+   * on the passed-in suggestion. Telemetry types for each are:
+   *
+   *   Opt-in suggestion: `${this.baseTelemetryType}_opt_in`
+   *   Online suggestion: this.baseTelemetryType
+   *
+   * Individual suggestions can override these telemetry types, but that's
+   * expected to be uncommon.
+   *
+   * @param {object} suggestion
+   *   A suggestion from this provider.
+   * @returns {string}
+   *   The suggestion's telemetry type.
+   */
   getSuggestionTelemetryType(suggestion) {
     switch (suggestion.source) {
       case "merino":
@@ -192,9 +246,9 @@ export class RealtimeSuggestProvider extends SuggestProvider {
         if (suggestion.data?.result?.payload?.hasOwnProperty("telemetryType")) {
           return suggestion.data.result.payload.telemetryType;
         }
-        break;
+        return this.baseTelemetryType + "_opt_in";
     }
-    return this.telemetryType;
+    return this.baseTelemetryType;
   }
 
   filterSuggestions(suggestions) {
@@ -223,7 +277,7 @@ export class RealtimeSuggestProvider extends SuggestProvider {
       case "merino":
         return this.makeMerinoResult(queryContext, suggestion, searchString);
       case "rust":
-        return this.makeOptInResult(suggestion);
+        return this.makeOptInResult(queryContext, suggestion);
     }
     return null;
   }
@@ -255,33 +309,48 @@ export class RealtimeSuggestProvider extends SuggestProvider {
     );
   }
 
-  makeOptInResult(suggestion) {
+  makeOptInResult(queryContext, _suggestion) {
     let notNowTypes = lazy.UrlbarPrefs.get(
       "quicksuggest.realtimeOptIn.notNowTypes"
     );
     let splitButtonMain = notNowTypes.has(this.realtimeType)
       ? {
           command: "dismiss",
-          l10n: { id: "urlbar-result-realtime-opt-in-dismiss" },
+          l10n: {
+            id: "urlbar-result-realtime-opt-in-dismiss",
+            cacheable: true,
+          },
         }
       : {
           command: "not_now",
-          l10n: { id: "urlbar-result-realtime-opt-in-not-now" },
+          l10n: {
+            id: "urlbar-result-realtime-opt-in-not-now",
+            cacheable: true,
+          },
         };
-
-    let result = { ...suggestion.data.result };
-    delete result.payload;
 
     return Object.assign(
       new lazy.UrlbarResult(
         lazy.UrlbarUtils.RESULT_TYPE.TIP,
         lazy.UrlbarUtils.RESULT_SOURCE.OTHER_LOCAL,
         {
-          ...suggestion.data.result.payload,
+          // This `type` is the tip type, required for `TIP` results.
+          type: "realtime_opt_in",
+          icon: this.optInIcon,
+          titleL10n: this.optInTitleL10n,
+          descriptionL10n: this.optInDescriptionL10n,
+          descriptionLearnMoreTopic: lazy.QuickSuggest.HELP_TOPIC,
           buttons: [
             {
               command: "opt_in",
-              l10n: { id: "urlbar-result-realtime-opt-in-allow" },
+              l10n: {
+                id: "urlbar-result-realtime-opt-in-allow",
+                cacheable: true,
+              },
+              input: queryContext.searchString,
+              attributes: {
+                primary: "",
+              },
             },
             {
               ...splitButtonMain,
@@ -297,7 +366,10 @@ export class RealtimeSuggestProvider extends SuggestProvider {
           ],
         }
       ),
-      { ...result }
+      {
+        isBestMatch: true,
+        hideRowLabel: true,
+      }
     );
   }
 
@@ -307,6 +379,7 @@ export class RealtimeSuggestProvider extends SuggestProvider {
       return null;
     }
 
+    /** @type {UrlbarResultCommand[]} */
     let commands = [
       {
         name: "not_interested",
@@ -365,13 +438,13 @@ export class RealtimeSuggestProvider extends SuggestProvider {
       case "manage": {
         // "help" and "manage" are handled by UrlbarInput, no need to do
         // anything here.
-        return;
+        break;
       }
       case "not_interested": {
         lazy.UrlbarPrefs.set(this.suggestPref, false);
         result.acknowledgeDismissalL10n = this.acknowledgeDismissalL10n;
         controller.removeResult(result);
-        return;
+        break;
       }
       case "show_less_frequently": {
         controller.view.acknowledgeFeedback(result);
@@ -383,16 +456,9 @@ export class RealtimeSuggestProvider extends SuggestProvider {
           this.minKeywordLengthPref,
           searchString.length + 1
         );
-        return;
+        break;
       }
     }
-
-    let query = details.element.getAttribute("query");
-    let [url] = lazy.UrlbarUtils.getSearchQueryUrl(
-      Services.search.defaultEngine,
-      query
-    );
-    controller.browserWindow.openTrustedLinkIn(url, "current");
   }
 
   onOptInEngagement(queryContext, controller, details, _searchString) {

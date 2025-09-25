@@ -414,6 +414,9 @@ dictionary SynthesizeMouseEventData {
 dictionary SynthesizeMouseEventOptions {
   // Indicates whether the event should ignore viewport bounds during dispatch.
   boolean ignoreRootScrollFrame = false;
+  // If true the event is dispatched to the parent process through APZ,
+  // without being injected into the OS event queue.
+  boolean isAsyncEnabled = false;
   // Controls Event.isSynthesized value that helps identifying test related events.
   boolean isDOMEventSynthesized = true;
   // Controls WidgetMouseEvent.mReason value.
@@ -552,12 +555,14 @@ partial interface Window {
   boolean shouldReportForServiceWorkerScope(USVString aScope);
 
   /**
-   * InstallTrigger is used for extension installs.  Ideally it would
-   * be something like a WebIDL namespace, but we don't support
-   * JS-implemented static things yet.  See bug 863952.
+   * InstallTrigger was an interface for installing extensions. It was disabled
+   * in bug 1772901 and the implementation was removed in bug 1776426.
+   *
+   * We maintain this stub to avoid breaking websites that do
+   * "typeof InstallTrigger !== 'undefined" to detect Firefox
    */
   [Replaceable, Deprecated="InstallTriggerDeprecated", Pref="extensions.InstallTrigger.enabled"]
-  readonly attribute InstallTriggerImpl? InstallTrigger;
+  readonly attribute object? InstallTrigger;
 
   /**
    * Get the nsIDOMWindowUtils for this window.
@@ -596,13 +601,23 @@ partial interface Window {
    * @param mouseEventData  A SynthesizeMouseEventData dictionary containing mouse event data.
    * @param options         A SynthesizeMouseEventOptions dictionary containing options
    *                        for the event dispatching.
+   * @param callback        A function to call when the synthesized mouse event
+   *                        has been dispatched.
+   *                        XXX: This is currently not supported in the content
+   *                        process, simply because we don't have a use case for
+   *                        it yet. The same applies when the synthesized event
+   *                        might be coalesced, such as when
+   *                        `isDOMEventSynthesized = false`.
+   *                        In such cases, passing callback will throw an
+   *                        exception.
    *
    * @return true if someone called prevent default on this event.
    */
   [ChromeOnly, Throws]
   boolean synthesizeMouseEvent(DOMString type, float offsetX, float offsetY,
                                optional SynthesizeMouseEventData mouseEventData = {},
-                               optional SynthesizeMouseEventOptions options = {});
+                               optional SynthesizeMouseEventOptions options = {},
+                               optional VoidFunction callback);
 
   [Pure, ChromeOnly]
   readonly attribute WindowGlobalChild? windowGlobalChild;
@@ -666,6 +681,16 @@ partial interface Window {
 
   [Func="nsGlobalWindowInner::IsPrivilegedChromeWindow"]
   readonly attribute boolean isFullyOccluded;
+
+  /**
+   * On Windows, returns whether the window is cloaked, presumably
+   * because it is on another virtual desktop. Per Microsoft, we
+   * should not automatically switch to this window if we are looking
+   * for an existing window to focus, and instead open a new window.
+   * On non-Windows platforms, this is always false.
+   */
+  [Func="nsGlobalWindowInner::IsPrivilegedChromeWindow"]
+  readonly attribute boolean isCloaked;
 
   /**
    * browserDOMWindow provides access to yet another layer of

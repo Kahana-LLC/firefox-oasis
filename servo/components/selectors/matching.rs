@@ -249,7 +249,7 @@ impl From<SelectorMatchingResult> for KleeneValue {
 /// partial selectors (indexed from the right). We use this API design, rather
 /// than having the callers pass a SelectorIter, because creating a SelectorIter
 /// requires dereferencing the selector to get the length, which adds an
-/// unncessary cache miss for cases when we can fast-reject with AncestorHashes
+/// unnecessary cache miss for cases when we can fast-reject with AncestorHashes
 /// (which the caller can store inline with the selector pointer).
 #[inline(always)]
 pub fn matches_selector<E>(
@@ -1282,10 +1282,24 @@ where
         Component::Host(ref selector) => {
             return matches_host(element, selector.as_ref(), &mut context.shared, rightmost);
         },
-        Component::ParentSelector | Component::Scope | Component::ImplicitScope => {
+        Component::ParentSelector => {
             match context.shared.scope_element {
                 Some(ref scope_element) => element.opaque() == *scope_element,
                 None => element.is_root(),
+            }
+        },
+        Component::Scope | Component::ImplicitScope =>{
+            if let Some(may_return_unknown) = context.shared.matching_for_invalidation_comparison() {
+                return if may_return_unknown {
+                    KleeneValue::Unknown
+                } else {
+                    KleeneValue::from(!context.shared.in_negation())
+                };
+            }else{
+                match context.shared.scope_element {
+                    Some(ref scope_element) => element.opaque() == *scope_element,
+                    None => element.is_root(),
+                }
             }
         },
         Component::Nth(ref nth_data) => {

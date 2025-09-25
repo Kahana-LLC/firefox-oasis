@@ -11,6 +11,8 @@ menu-view-contextual-password-manager =
 sidebar-options-menu-button =
   .title = Open menu
 
+
+
 ## Labels for sidebar history panel
 
 # Variables:

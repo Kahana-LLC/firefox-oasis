@@ -61,6 +61,8 @@ const EN_LOCALES = ["en-CA", "en-GB", "en-US", "en-ZA"];
  */
 const SUGGEST_PREFS = Object.freeze({
   // Prefs related to Suggest overall
+  //
+  // Please update `test_quicksuggest_offlineDefault.js` when you change these.
   "quicksuggest.dataCollection.enabled": {
     nimbusVariableIfExposedInUi: "quickSuggestDataCollectionEnabled",
   },
@@ -104,6 +106,8 @@ const SUGGEST_PREFS = Object.freeze({
   },
 
   // Prefs related to individual features
+  //
+  // Please update `test_quicksuggest_offlineDefault.js` when you change these.
   "addons.featureGate": {
     defaultValues: {
       US: [EN_LOCALES, true],
@@ -112,6 +116,15 @@ const SUGGEST_PREFS = Object.freeze({
   "amp.featureGate": {
     defaultValues: {
       GB: [EN_LOCALES, true],
+      US: [EN_LOCALES, true],
+    },
+  },
+  "importantDates.featureGate": {
+    defaultValues: {
+      DE: [["de"], true],
+      FR: [["fr"], true],
+      GB: [EN_LOCALES, true],
+      IT: [["it"], true],
       US: [EN_LOCALES, true],
     },
   },
@@ -166,6 +179,8 @@ const FEATURES = {
     "resource:///modules/urlbar/private/WeatherSuggestions.sys.mjs",
   WikipediaSuggestions:
     "resource:///modules/urlbar/private/WikipediaSuggestions.sys.mjs",
+  YelpRealtimeSuggestions:
+    "resource:///modules/urlbar/private/YelpRealtimeSuggestions.sys.mjs",
   YelpSuggestions: "resource:///modules/urlbar/private/YelpSuggestions.sys.mjs",
 };
 
@@ -192,8 +207,16 @@ class _QuickSuggest {
   get HELP_URL() {
     return (
       Services.urlFormatter.formatURLPref("app.support.baseURL") +
-      "firefox-suggest"
+      this.HELP_TOPIC
     );
+  }
+
+  /**
+   * @returns {string}
+   *   The help URL topic for Suggest.
+   */
+  get HELP_TOPIC() {
+    return "firefox-suggest";
   }
 
   /**

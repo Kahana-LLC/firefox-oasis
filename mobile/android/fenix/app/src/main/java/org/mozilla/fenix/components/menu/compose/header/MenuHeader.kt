@@ -31,6 +31,7 @@ import mozilla.components.service.fxa.store.Account
 import org.mozilla.fenix.R
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.theme.Theme
+import mozilla.components.ui.icons.R as iconsR
 
 @Composable
 internal fun MenuHeader(
@@ -47,10 +48,11 @@ internal fun MenuHeader(
             .verticalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MozillaAccountMenuButton(
+        MozillaAccountMenuItem(
             account = account,
             accountState = accountState,
             onClick = onMozillaAccountButtonClick,
+            isPrivate = false,
             modifier = Modifier.weight(1f),
         )
 
@@ -64,7 +66,7 @@ internal fun MenuHeader(
             onClick = onHelpButtonClick,
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.mozac_ic_help_circle_24),
+                painter = painterResource(id = iconsR.drawable.mozac_ic_help_circle_24),
                 contentDescription = stringResource(
                     id = R.string.browser_main_menu_content_description_help_button,
                 ),
@@ -76,7 +78,7 @@ internal fun MenuHeader(
             onClick = onSettingsButtonClick,
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.mozac_ic_settings_24),
+                painter = painterResource(id = iconsR.drawable.mozac_ic_settings_24),
                 contentDescription = stringResource(
                     id = R.string.browser_main_menu_content_description_settings_button,
                 ),

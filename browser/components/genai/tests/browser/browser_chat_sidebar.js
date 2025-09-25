@@ -17,7 +17,10 @@ registerCleanupFunction(() => {
  */
 add_task(async function test_sidebar_render() {
   await SpecialPowers.pushPrefEnv({
-    set: [["browser.ml.chat.provider", TEST_CHAT_PROVIDER_URL]],
+    set: [
+      ["browser.ml.chat.provider", TEST_CHAT_PROVIDER_URL],
+      ["browser.ml.chat.page", false],
+    ],
   });
 
   await SidebarController.show("viewGenaiChatSidebar");
@@ -73,7 +76,7 @@ add_task(async function test_sidebar_providers() {
   await SidebarController.show("viewGenaiChatSidebar");
 
   const origCount = countVisible();
-  Assert.equal(origCount, 4, "Rendered expected number of provider options");
+  Assert.equal(origCount, 5, "Rendered expected number of provider options");
 
   SidebarController.hide();
   await SpecialPowers.pushPrefEnv({

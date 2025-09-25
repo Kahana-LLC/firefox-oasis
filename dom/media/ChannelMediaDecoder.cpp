@@ -114,7 +114,7 @@ void ChannelMediaDecoder::ResourceCallback::NotifyDataArrived() {
   mTimerArmed = true;
   mTimer->InitWithNamedFuncCallback(
       TimerCallback, this, sDelay, nsITimer::TYPE_ONE_SHOT,
-      "ChannelMediaDecoder::ResourceCallback::TimerCallback");
+      "ChannelMediaDecoder::ResourceCallback::TimerCallback"_ns);
 }
 
 void ChannelMediaDecoder::ResourceCallback::NotifyDataEnded(nsresult aStatus) {
@@ -222,6 +222,9 @@ MediaDecoderStateMachineBase* ChannelMediaDecoder::CreateStateMachine(
                            sTrackingIdCounter++,
                            TrackingId::TrackAcrossProcesses::Yes);
   mReader = DecoderTraits::CreateReader(ContainerType(), init);
+  if (NS_WARN_IF(!mReader)) {
+    return nullptr;
+  }
 
 #ifdef MOZ_WMF_MEDIA_ENGINE
   // This state machine is mainly used for the encrypted playback. However, for

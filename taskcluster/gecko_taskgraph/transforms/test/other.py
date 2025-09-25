@@ -706,19 +706,6 @@ def handle_tier(config, tasks):
                 "linux2404-64-devedition/opt",
                 "linux2404-64-asan/opt",
                 "linux2404-64-tsan/opt",
-                "windows10-64/debug",
-                "windows10-64/opt",
-                "windows10-64-shippable/opt",
-                "windows10-64-devedition/opt",
-                "windows10-64-qr/opt",
-                "windows10-64-qr/debug",
-                "windows10-64-shippable-qr/opt",
-                "windows10-64-devedition-qr/opt",
-                "windows10-64-2004-qr/opt",
-                "windows10-64-2004-qr/debug",
-                "windows10-64-2004-shippable-qr/opt",
-                "windows10-64-2004-devedition-qr/opt",
-                "windows10-64-2004-asan-qr/opt",
                 "windows11-32-24h2/debug",
                 "windows11-32-24h2/opt",
                 "windows11-32-24h2-shippable/opt",
@@ -1168,5 +1155,22 @@ def enable_parallel_marking_in_tsan_tests(config, tasks):
                 extra_options.append(
                     "--setpref=javascript.options.mem.gc_parallel_marking=true"
                 )
+
+        yield task
+
+
+@transforms.add
+def set_webgpu_ignore_blocklist(config, tasks):
+    """
+    Ignore the WebGPU blocklist on Linux because CI's Mesa is old
+
+    See <https://bugzilla.mozilla.org/show_bug.cgi?id=1985348>
+    """
+    for task in tasks:
+        if "web-platform-tests-webgpu" in task["test-name"] and task[
+            "test-platform"
+        ].startswith("linux"):
+            extra_options = task["mozharness"].setdefault("extra-options", [])
+            extra_options.append("--setpref=gfx.webgpu.ignore-blocklist=true")
 
         yield task

@@ -27,7 +27,7 @@ use crate::invalidation::element::state_and_attributes::{
 use crate::selector_parser::SnapshotMap as ServoElementSnapshotTable;
 use crate::stylist::{CascadeData, Stylist};
 use dom::ElementState;
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use selectors::matching::{
     matches_selector, ElementSelectorFlags, IncludeStartingStyle, MatchingContext,
     MatchingForInvalidation, MatchingMode, NeedsSelectorFlags, QuirksMode, SelectorCaches,
@@ -365,7 +365,7 @@ fn invalidation_can_collapse(
     // e.g. :has(.item .item).
 
     // If they trigger different invalidations, they shouldn't be collapsed.
-    if a.invalidation_kind() != b.invalidation_kind() {
+    if a.relative_invalidation_kind() != b.relative_invalidation_kind() {
         return false;
     }
 
@@ -474,7 +474,7 @@ where
     ) {
         match dependency.invalidation_kind() {
             DependencyInvalidationKind::FullSelector => unreachable!(),
-            DependencyInvalidationKind::Normal(..) => {
+            DependencyInvalidationKind::Normal(..) | DependencyInvalidationKind::Scope(..) => {
                 self.dependencies
                     .entry(element)
                     .and_modify(|v| v.push((host, dependency)))
@@ -507,9 +507,8 @@ where
         for invalidation in self.invalidations {
             match invalidation.dependency.invalidation_kind() {
                 DependencyInvalidationKind::FullSelector => unreachable!(),
-                DependencyInvalidationKind::Normal(_) => {
-                    unreachable!("Inner selector in invalidation?")
-                },
+                DependencyInvalidationKind::Normal(_) | DependencyInvalidationKind::Scope(_) =>
+                    unreachable!("Inner selector in invalidation?"),
                 DependencyInvalidationKind::Relative(kind) => {
                     if let Some(context) = self.optimization_context.as_ref() {
                         if context.can_be_ignored(
@@ -1004,7 +1003,8 @@ where
         debug_assert!(
             matches!(
                 outer_dependency.invalidation_kind(),
-                DependencyInvalidationKind::Normal(_)
+                DependencyInvalidationKind::Normal(_) |
+                DependencyInvalidationKind::Scope(_)
             ),
             "Outer selector of relative selector is relative?"
         );
@@ -1048,7 +1048,7 @@ where
         true
     }
 
-    fn check_outer_dependency(&mut self, _dependency: &Dependency, _element: E) -> bool {
+    fn check_outer_dependency(&mut self, _dependency: &Dependency, _element: E, _: Option<OpaqueElement>) -> bool {
         // At this point, we know a relative selector invalidated, and are ignoring them.
         true
     }
@@ -1084,7 +1084,9 @@ where
             let mut d = self.dependency;
             loop {
                 debug_assert!(
-                    matches!(d.invalidation_kind(), DependencyInvalidationKind::Normal(_)),
+                    matches!(d.invalidation_kind(),
+                        DependencyInvalidationKind::Normal(_) |
+                        DependencyInvalidationKind::Scope(_)),
                     "Unexpected dependency kind"
                 );
                 if !dependency_may_be_relevant(d, &element, false) {
@@ -1099,8 +1101,10 @@ where
                 ) {
                     break false;
                 }
-                let invalidation_kind = d.normal_invalidation_kind();
-                if matches!(invalidation_kind, NormalDependencyInvalidationKind::Element) {
+                let invalidation_kind = d.invalidation_kind();
+                if matches!(invalidation_kind,
+                    DependencyInvalidationKind::Normal(NormalDependencyInvalidationKind::Element) |
+                    DependencyInvalidationKind::Scope(_)){
                     if let Some(ref deps) = d.next {
                         d = &deps.as_ref().slice()[0];
                         continue;
@@ -1109,10 +1113,10 @@ where
                 }
                 debug_assert_ne!(d.selector_offset, 0);
                 debug_assert_ne!(d.selector_offset, d.selector.len());
-                let invalidation = Invalidation::new(&d, self.host);
+                let invalidation = Invalidation::new(&d, self.host, None);
                 break push_invalidation(
                     invalidation,
-                    invalidation_kind,
+                    d.invalidation_kind(),
                     descendant_invalidations,
                     sibling_invalidations,
                 );
@@ -1205,14 +1209,14 @@ where
     fn note_dependency(
         &mut self,
         element: E,
-        scope: Option<OpaqueElement>,
+        host: Option<OpaqueElement>,
         dependency: &'a Dependency,
         descendant_invalidations: &mut DescendantInvalidationLists<'a>,
         sibling_invalidations: &mut InvalidationVector<'a>,
     ) {
         match dependency.invalidation_kind() {
             DependencyInvalidationKind::FullSelector => unreachable!(),
-            DependencyInvalidationKind::Normal(_) => (),
+            DependencyInvalidationKind::Normal(_) | DependencyInvalidationKind::Scope(_) => (),
             DependencyInvalidationKind::Relative(kind) => {
                 self.found_relative_selector_invalidation(element, kind, dependency);
                 return;
@@ -1230,7 +1234,7 @@ where
             if let Some(next) = dependency.next.as_ref() {
                 self.note_dependency(
                     element,
-                    scope,
+                    host,
                     &next.as_ref().slice()[0],
                     descendant_invalidations,
                     sibling_invalidations,
@@ -1238,7 +1242,7 @@ where
             }
             return;
         }
-        let invalidation = Invalidation::new(&dependency, scope);
+        let invalidation = Invalidation::new(&dependency, None, None);
         match dependency.normal_invalidation_kind() {
             NormalDependencyInvalidationKind::Descendants => {
                 // Descendant invalidations are simplified due to pseudo-elements not being available within the relative selector.
@@ -1264,10 +1268,10 @@ impl<'a, 'b, 'c, E> InvalidationProcessor<'a, 'b, E>
 where
     E: TElement + 'a,
 {
-    fn check_outer_dependency(&mut self, dependency: &Dependency, element: E) -> bool {
+    fn check_outer_dependency(&mut self, dependency: &Dependency, element: E, _: Option<OpaqueElement>) -> bool {
         if let Some(snapshot_table) = self.snapshot_table {
             let wrapper = ElementWrapper::new(element, snapshot_table);
-            return check_dependency(dependency, &element, &wrapper, &mut self.matching_context);
+            return check_dependency(dependency, &element, &wrapper, &mut self.matching_context, None);
         }
         // Just invalidate if we don't have a snapshot.
         true

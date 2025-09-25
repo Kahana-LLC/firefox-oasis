@@ -6,12 +6,17 @@ package mozilla.components.compose.base.snackbar
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarDefaults
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -54,6 +59,7 @@ fun Snackbar(
     modifier: Modifier = Modifier,
     actionOnNewLine: Boolean = false,
 ) {
+    val dismissState = rememberSwipeToDismissBoxState()
     val actionLabel = snackbarData.visuals.actionLabel
     val actionComposable: (@Composable () -> Unit)? =
         actionLabel?.let {
@@ -67,31 +73,46 @@ fun Snackbar(
             null
         }
 
-    M3Snackbar(
-        modifier = modifier
-            .padding(SnackbarPadding)
-            .semantics { testTagsAsResourceId = true }
-            .testTag(SNACKBAR_TEST_TAG),
-        action = actionComposable,
-        dismissAction = dismissActionComposable,
-        actionOnNewLine = actionOnNewLine,
-    ) {
-        Column {
-            val visuals = snackbarData.visuals as? SnackbarVisuals
-            Text(
-                text = snackbarData.visuals.message,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 2,
-                style = AcornTheme.typography.body2,
-            )
+    LaunchedEffect(dismissState.currentValue) {
+        val value = dismissState.currentValue
+        when (value) {
+            SwipeToDismissBoxValue.StartToEnd, SwipeToDismissBoxValue.EndToStart -> {
+                snackbarData.dismiss()
+            }
+            SwipeToDismissBoxValue.Settled -> {} // no-op
+        }
+    }
 
-            visuals?.subMessage?.let {
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {},
+    ) {
+        M3Snackbar(
+            modifier = modifier
+                .padding(SnackbarPadding)
+                .semantics { testTagsAsResourceId = true }
+                .testTag(SNACKBAR_TEST_TAG),
+            action = actionComposable,
+            dismissAction = dismissActionComposable,
+            actionOnNewLine = actionOnNewLine,
+        ) {
+            Column {
+                val visuals = snackbarData.visuals as? SnackbarVisuals
                 Text(
-                    text = it,
-                    overflow = visuals.subMessageTextOverflow,
-                    maxLines = 1,
+                    text = snackbarData.visuals.message,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                     style = AcornTheme.typography.body2,
                 )
+
+                visuals?.subMessage?.let {
+                    Text(
+                        text = it,
+                        overflow = visuals.subMessageTextOverflow,
+                        maxLines = 1,
+                        style = AcornTheme.typography.body2,
+                    )
+                }
             }
         }
     }
@@ -103,8 +124,9 @@ private fun SnackbarAction(actionLabel: String, onClick: () -> Unit) {
         text = actionLabel,
         onClick = onClick,
         modifier = Modifier.testTag(SNACKBAR_BUTTON_TEST_TAG),
-        textColor = SnackbarDefaults.actionColor,
-        upperCaseText = false,
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = SnackbarDefaults.actionColor,
+        ),
     )
 }
 
@@ -148,10 +170,10 @@ class SnackbarData(
  *
  * @param message The primary text content of the Snackbar.
  * @param subMessage Optional secondary text displayed below the main message.
+ * @param subMessageTextOverflow How visual overflow for the subMessage should be handled.
  * @param actionLabel Optional label for the action button.
  * @param withDismissAction Whether to show a dismiss icon alongside the Snackbar.
  * @param duration The amount of time the Snackbar will be shown.
- * @param subMessageTextOverflow How visual overflow for the subMessage should be handled.
  */
 open class SnackbarVisuals(
     override val message: String,
@@ -160,7 +182,35 @@ open class SnackbarVisuals(
     override val actionLabel: String? = null,
     override val withDismissAction: Boolean = false,
     override val duration: SnackbarDuration = SnackbarDuration.Short,
-) : M3SnackbarVisuals
+) : M3SnackbarVisuals {
+
+    /**
+     * Creates a copy of this [SnackbarVisuals] with the option to override any of the existing values.
+     *
+     * @param message The updated primary text content.
+     * @param subMessage The updated sub-message.
+     * @param subMessageTextOverflow The updated overflow behavior for the sub-message.
+     * @param actionLabel The updated label for the action button.
+     * @param withDismissAction Whether to show a dismiss icon alongside the Snackbar.
+     * @param duration The updated display duration for the Snackbar.
+     * @return A new [SnackbarVisuals] instance with the provided values.
+     */
+    open fun copy(
+        message: String = this.message,
+        subMessage: String? = this.subMessage,
+        subMessageTextOverflow: TextOverflow = this.subMessageTextOverflow,
+        actionLabel: String? = this.actionLabel,
+        withDismissAction: Boolean = this.withDismissAction,
+        duration: SnackbarDuration = this.duration,
+    ): SnackbarVisuals = SnackbarVisuals(
+        message = message,
+        subMessage = subMessage,
+        subMessageTextOverflow = subMessageTextOverflow,
+        actionLabel = actionLabel,
+        withDismissAction = withDismissAction,
+        duration = duration,
+    )
+}
 
 private data class SnackbarPreviewState(
     override val message: String,

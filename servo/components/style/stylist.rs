@@ -14,8 +14,7 @@ use crate::dom::TElement;
 #[cfg(feature = "gecko")]
 use crate::gecko_bindings::structs::{ServoStyleSetSizes, StyleRuleInclusion};
 use crate::invalidation::element::invalidation_map::{
-    note_selector_for_invalidation, AdditionalRelativeSelectorInvalidationMap, Dependency,
-    InvalidationMap,
+    note_selector_for_invalidation, AdditionalRelativeSelectorInvalidationMap, Dependency, DependencyInvalidationKind, InvalidationMap, ScopeDependencyInvalidationKind
 };
 use crate::invalidation::media_queries::{
     EffectiveMediaQueryResults, MediaListKey, ToMediaListKey,
@@ -59,7 +58,7 @@ use crate::values::{computed, AtomIdent};
 use crate::AllocErr;
 use crate::{Atom, LocalName, Namespace, ShrinkIfNeeded, WeakAtom};
 use dom::{DocumentState, ElementState};
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 #[cfg(feature = "gecko")]
 use malloc_size_of::MallocUnconditionalShallowSizeOf;
 use malloc_size_of::{MallocShallowSizeOf, MallocSizeOf, MallocSizeOfOps};
@@ -3434,13 +3433,63 @@ impl CascadeData {
             }
 
             if rebuild_kind.should_rebuild_invalidation() {
+                let innermost_dependency = note_selector_for_invalidation(
+                    &rule.selector,
+                    quirks_mode,
+                    &mut self.invalidation_map,
+                    &mut self.relative_selector_invalidation_map,
+                    &mut self.additional_relative_selector_invalidation_map,
+                    None,
+                )?;
+                let mut needs_revalidation = false;
+                let mut visitor = StylistSelectorVisitor {
+                    needs_revalidation: &mut needs_revalidation,
+                    passed_rightmost_selector: false,
+                    in_selector_list_of: SelectorListKind::default(),
+                    mapped_ids: &mut self.mapped_ids,
+                    nth_of_mapped_ids: &mut self.nth_of_mapped_ids,
+                    attribute_dependencies: &mut self.attribute_dependencies,
+                    nth_of_class_dependencies: &mut self.nth_of_class_dependencies,
+                    nth_of_attribute_dependencies: &mut self.nth_of_attribute_dependencies,
+                    nth_of_custom_state_dependencies: &mut self.nth_of_custom_state_dependencies,
+                    state_dependencies: &mut self.state_dependencies,
+                    nth_of_state_dependencies: &mut self.nth_of_state_dependencies,
+                    document_state_dependencies: &mut self.document_state_dependencies,
+                };
+                rule.selector.visit(&mut visitor);
+
+                if needs_revalidation {
+                    self.selectors_for_cache_revalidation.insert(
+                        RevalidationSelectorAndHashes::new(
+                            rule.selector.clone(),
+                            rule.hashes.clone(),
+                        ),
+                        quirks_mode,
+                    )?;
+                }
+
                 let mut scope_idx = containing_rule_state.scope_condition_id;
-                let mut inner_scope_dependencies: Option<ThinArc<(), Dependency>> = None;
+                let mut inner_scope_dependencies: Option<ThinArc<(), Dependency>> =
+                    innermost_dependency.map(|dep_vec| {
+                        ThinArc::from_header_and_iter((), dep_vec.into_iter())
+                    });
+
                 while scope_idx != ScopeConditionId::none() {
                     let cur_scope = &self.scope_conditions[scope_idx.0 as usize];
 
                     if let Some(cond) = cur_scope.condition.as_ref() {
                         let mut dependency_vector: Vec<Dependency> = Vec::new();
+
+                        if cond.start.is_none(){
+                            dependency_vector.push(Dependency::new(
+                                IMPLICIT_SCOPE.slice()[0].clone(),
+                                0,
+                                inner_scope_dependencies.clone(),
+                                DependencyInvalidationKind::Scope(
+                                    ScopeDependencyInvalidationKind::ImplicitScope
+                                ),
+                            ));
+                        }
 
                         for s in cond.iter_selectors() {
                             let mut new_inner_dependencies = note_selector_for_invalidation(
@@ -3481,41 +3530,6 @@ impl CascadeData {
                         ));
                     }
                     scope_idx = cur_scope.parent;
-                }
-
-                note_selector_for_invalidation(
-                    &rule.selector,
-                    quirks_mode,
-                    &mut self.invalidation_map,
-                    &mut self.relative_selector_invalidation_map,
-                    &mut self.additional_relative_selector_invalidation_map,
-                    None,
-                )?;
-                let mut needs_revalidation = false;
-                let mut visitor = StylistSelectorVisitor {
-                    needs_revalidation: &mut needs_revalidation,
-                    passed_rightmost_selector: false,
-                    in_selector_list_of: SelectorListKind::default(),
-                    mapped_ids: &mut self.mapped_ids,
-                    nth_of_mapped_ids: &mut self.nth_of_mapped_ids,
-                    attribute_dependencies: &mut self.attribute_dependencies,
-                    nth_of_class_dependencies: &mut self.nth_of_class_dependencies,
-                    nth_of_attribute_dependencies: &mut self.nth_of_attribute_dependencies,
-                    nth_of_custom_state_dependencies: &mut self.nth_of_custom_state_dependencies,
-                    state_dependencies: &mut self.state_dependencies,
-                    nth_of_state_dependencies: &mut self.nth_of_state_dependencies,
-                    document_state_dependencies: &mut self.document_state_dependencies,
-                };
-                rule.selector.visit(&mut visitor);
-
-                if needs_revalidation {
-                    self.selectors_for_cache_revalidation.insert(
-                        RevalidationSelectorAndHashes::new(
-                            rule.selector.clone(),
-                            rule.hashes.clone(),
-                        ),
-                        quirks_mode,
-                    )?;
                 }
             }
 

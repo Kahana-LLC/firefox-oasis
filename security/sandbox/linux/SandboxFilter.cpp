@@ -6,7 +6,8 @@
 
 #include "SandboxFilter.h"
 
-#include <asm/termbits.h>  // For termios2 / TCGETS2
+#include <asm/ioctls.h>    // For TCGETS2
+#include <asm/termbits.h>  // For termios2
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/ioctl.h>
@@ -40,7 +41,6 @@
 #include "SandboxOpenedFiles.h"
 #include "mozilla/PodOperations.h"
 #include "mozilla/ProcInfo_linux.h"
-#include "mozilla/TemplateLib.h"
 #include "mozilla/UniquePtr.h"
 #include "prenv.h"
 #include "sandbox/linux/bpf_dsl/bpf_dsl.h"

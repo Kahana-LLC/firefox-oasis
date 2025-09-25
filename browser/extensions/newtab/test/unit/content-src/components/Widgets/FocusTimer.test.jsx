@@ -45,15 +45,20 @@ describe("<FocusTimer>", () => {
   let sandbox;
   let dispatch;
   let clock; // for use with the sinon fake timers api
+  let handleUserInteraction;
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
     dispatch = sandbox.stub();
     clock = sandbox.useFakeTimers();
+    handleUserInteraction = sandbox.stub();
 
     wrapper = mount(
       <WrapWithProvider state={mockState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
   });
@@ -87,7 +92,10 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={breakState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
@@ -100,11 +108,11 @@ describe("<FocusTimer>", () => {
 
   it("should start timer and show progress bar when pressing play", () => {
     wrapper
-      .find("moz-button[data-l10n-id='newtab-widget-timer-play']")
+      .find("moz-button[data-l10n-id='newtab-widget-timer-label-play']")
       .props()
       .onClick();
     wrapper.update();
-    assert.ok(wrapper.find(".progress-circle-wrapper.visible").exists());
+    assert.ok(wrapper.find(".progress-circle-wrapper").exists());
     assert.equal(dispatch.getCall(0).args[0].type, at.WIDGETS_TIMER_PLAY);
   });
 
@@ -124,22 +132,55 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={runningState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
     const pauseBtn = wrapper.find(
-      "moz-button[data-l10n-id='newtab-widget-timer-pause']"
+      "moz-button[data-l10n-id='newtab-widget-timer-label-pause']"
     );
     assert.ok(pauseBtn.exists(), "Pause button should be rendered");
     pauseBtn.props().onClick();
     assert.equal(dispatch.getCall(0).args[0].type, at.WIDGETS_TIMER_PAUSE);
   });
 
-  it("should reset timer and hide progress bar when pressing reset", () => {
+  it("should reset timer should be hidden when timer is not running", () => {
     const resetBtn = wrapper.find(
       "moz-button[data-l10n-id='newtab-widget-timer-reset']"
     );
+    assert.ok(!resetBtn.exists(), "Reset buttons should not be rendered");
+  });
+
+  it("should reset timer when pressing reset", () => {
+    const now = Math.floor(Date.now() / 1000);
+    const runningState = {
+      ...mockState,
+      TimerWidget: {
+        ...mockState.TimerWidget,
+        focus: {
+          ...mockState.TimerWidget.focus,
+          isRunning: true,
+          startTime: now,
+        },
+      },
+    };
+
+    wrapper = mount(
+      <WrapWithProvider state={runningState}>
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
+      </WrapWithProvider>
+    );
+
+    const resetBtn = wrapper.find(
+      "moz-button[data-l10n-id='newtab-widget-timer-reset']"
+    );
+
     assert.ok(resetBtn.exists(), "Reset buttons should be rendered");
     resetBtn.props().onClick();
     assert.equal(dispatch.getCall(0).args[0].type, at.WIDGETS_TIMER_RESET);
@@ -161,12 +202,14 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={resetState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
     assert.equal(wrapper.find(".progress-circle-wrapper.visible").length, 0);
-
     const minutes = wrapper.find(".timer-set-minutes").text();
     const seconds = wrapper.find(".timer-set-seconds").text();
     assert.equal(minutes, "12");
@@ -244,7 +287,10 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={endState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
@@ -293,7 +339,10 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={endState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
@@ -336,7 +385,10 @@ describe("<FocusTimer>", () => {
 
     const activeWrapper = mount(
       <WrapWithProvider state={activeState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
@@ -369,7 +421,10 @@ describe("<FocusTimer>", () => {
 
     wrapper = mount(
       <WrapWithProvider state={endState}>
-        <FocusTimer dispatch={dispatch} />
+        <FocusTimer
+          dispatch={dispatch}
+          handleUserInteraction={handleUserInteraction}
+        />
       </WrapWithProvider>
     );
 
@@ -452,7 +507,10 @@ describe("<FocusTimer>", () => {
 
       wrapper = mount(
         <WrapWithProvider state={noNotificationsState}>
-          <FocusTimer dispatch={dispatch} />
+          <FocusTimer
+            dispatch={dispatch}
+            handleUserInteraction={handleUserInteraction}
+          />
         </WrapWithProvider>
       );
 

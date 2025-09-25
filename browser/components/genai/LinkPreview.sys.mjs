@@ -27,6 +27,12 @@ XPCOMUtils.defineLazyPreferenceGetter(
 );
 XPCOMUtils.defineLazyPreferenceGetter(
   lazy,
+  "cfrFeatures",
+  "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features",
+  true
+);
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
   "collapsed",
   "browser.ml.linkPreview.collapsed",
   null,
@@ -166,7 +172,7 @@ export const LinkPreview = {
   },
 
   get canShowKeyPoints() {
-    return this._isRegionSupported();
+    return this._isRegionSupported() && !this._isDisabledByPolicy();
   },
 
   get canShowLegacy() {
@@ -183,8 +189,13 @@ export const LinkPreview = {
   },
 
   get showOnboarding() {
-    const timesArray = lazy.onboardingTimes;
+    // Don't show onboarding if CFR features are disabled. This is true for
+    // automated tests.
+    if (!lazy.cfrFeatures) {
+      return false;
+    }
 
+    const timesArray = lazy.onboardingTimes;
     const lastValidTime = timesArray.at(-1) || 0;
     const timeSinceLastOnboarding = Date.now() - lastValidTime;
 
@@ -753,6 +764,17 @@ export const LinkPreview = {
 
     const userRegion = lazy.Region.home?.toUpperCase();
     return !disallowedRegions.includes(userRegion);
+  },
+
+  /**
+   * Checks if key points generation is disabled by policy.
+   *
+   * @returns {boolean} True if disabled by policy, false otherwise.
+   */
+  _isDisabledByPolicy() {
+    return (
+      !lazy.optin && Services.prefs.prefIsLocked("browser.ml.linkPreview.optin")
+    );
   },
 
   /**

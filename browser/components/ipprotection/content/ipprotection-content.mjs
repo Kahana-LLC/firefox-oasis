@@ -3,7 +3,11 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
-import { html, classMap } from "chrome://global/content/vendor/lit.all.mjs";
+import {
+  html,
+  classMap,
+  ifDefined,
+} from "chrome://global/content/vendor/lit.all.mjs";
 import {
   LINKS,
   ERRORS,
@@ -34,11 +38,10 @@ export default class IPProtectionContentElement extends MozLitElement {
     upgradeEl: "#upgrade-vpn-content",
     activeSubscriptionEl: "#active-subscription-vpn-content",
     supportLinkEl: "#vpn-support-link",
-    downloadButtonEl: "#download-vpn-button",
   };
 
   static properties = {
-    state: { type: Object },
+    state: { type: Object, attribute: false },
     showAnimation: { type: Boolean, state: true },
     /**
      * _timeString is the current value shown on the panel,
@@ -48,6 +51,7 @@ export default class IPProtectionContentElement extends MozLitElement {
     _timeString: { type: String, state: true },
     _showMessageBar: { type: Boolean, state: true },
     _messageDismissed: { type: Boolean, state: true },
+    _enabled: { type: Boolean, state: true },
   };
 
   constructor() {
@@ -62,6 +66,7 @@ export default class IPProtectionContentElement extends MozLitElement {
     this.showAnimation = false;
     this._timeString = "";
     this._connectionTimeInterval = null;
+    this._enabled = null;
   }
 
   connectedCallback() {
@@ -98,7 +103,7 @@ export default class IPProtectionContentElement extends MozLitElement {
       this.state &&
       this.state.isProtectionEnabled &&
       this.state.protectionEnabledSince &&
-      this.state.isSignedIn
+      !this.state.isSignedOut
     );
   }
 
@@ -134,7 +139,7 @@ export default class IPProtectionContentElement extends MozLitElement {
    */
   #getFormattedTime(startMS) {
     let duration = window.Temporal.Duration.from({
-      milliseconds: Math.ceil(Cu.now() - startMS),
+      milliseconds: Math.ceil(ChromeUtils.now() - startMS),
     }).round({ smallestUnit: "seconds", largestUnit: "hours" });
 
     let formatter = new Intl.DurationFormat("en-US", {
@@ -149,6 +154,7 @@ export default class IPProtectionContentElement extends MozLitElement {
     const win = event.target.ownerGlobal;
 
     if (event.target === this.supportLinkEl) {
+      event.preventDefault();
       win.openWebLinkIn(LINKS.PRODUCT_URL, "tab");
       this.dispatchEvent(
         new CustomEvent("IPProtection:Close", { bubbles: true })
@@ -168,6 +174,8 @@ export default class IPProtectionContentElement extends MozLitElement {
         new CustomEvent("IPProtection:UserDisable", { bubbles: true })
       );
     }
+
+    this._enabled = isEnabled;
   }
 
   handleUpgrade(event) {
@@ -175,23 +183,14 @@ export default class IPProtectionContentElement extends MozLitElement {
     win.openWebLinkIn(LINKS.PRODUCT_URL + "#pricing", "tab");
     // Close the panel
     this.dispatchEvent(
-      new CustomEvent("IPProtection:Close", { bubbles: true })
+      new CustomEvent("IPProtection:ClickUpgrade", { bubbles: true })
     );
 
     Glean.ipprotection.clickUpgradeButton.record();
   }
 
-  handleDownload(event) {
-    const win = event.target.ownerGlobal;
-    win.openWebLinkIn(LINKS.DOWNLOAD_URL, "tab");
-    // Close the panel
-    this.dispatchEvent(
-      new CustomEvent("IPProtection:Close", { bubbles: true })
-    );
-  }
-
   focus() {
-    if (!this.state.isSignedIn) {
+    if (this.state.isSignedOut) {
       this.signedOutEl?.focus();
     } else {
       this.connectionToggleEl?.focus();
@@ -226,6 +225,7 @@ export default class IPProtectionContentElement extends MozLitElement {
     if (event.type === "ipprotection-message-bar:user-dismissed") {
       this._showMessageBar = false;
       this._messageDismissed = true;
+      this.state.error = "";
     }
   }
 
@@ -235,6 +235,17 @@ export default class IPProtectionContentElement extends MozLitElement {
     // If the only updates are time string changes, ignore them.
     if (changedProperties.size == 1 && changedProperties.has("_timeString")) {
       return;
+    }
+
+    // Set the toggle to the protection enabled state, if it hasn't just changed.
+    if (!changedProperties.has("_enabled")) {
+      this._enabled = this.state.isProtectionEnabled;
+    }
+
+    // Clear hiding messages and disable the toggle when if there is an error.
+    if (this.state.error) {
+      this._messageDismissed = false;
+      this._enabled = false;
     }
 
     /**
@@ -275,6 +286,12 @@ export default class IPProtectionContentElement extends MozLitElement {
       : null;
   }
 
+  animationRingsTemplate() {
+    return html` <div id="status-card-animation">
+      <div id="animation-rings"></div>
+    </div>`;
+  }
+
   statusCardTemplate() {
     let protectionEnabled = this.state.isProtectionEnabled;
     const statusCardL10nId = protectionEnabled
@@ -291,12 +308,8 @@ export default class IPProtectionContentElement extends MozLitElement {
     let time =
       this.canShowConnectionTime && this._timeString ? this._timeString : "";
 
-    return html`<moz-box-group class="vpn-status-group">
-      ${this.showAnimation
-        ? html` <div id="status-card-animation">
-            <div id="animation-rings"></div>
-          </div>`
-        : null}
+    return html` <moz-box-group class="vpn-status-group">
+      ${this.showAnimation ? this.animationRingsTemplate() : null}
       <moz-box-item
         id="status-card"
         class=${classMap({
@@ -311,7 +324,7 @@ export default class IPProtectionContentElement extends MozLitElement {
           id="connection-toggle"
           data-l10n-id=${toggleL10nId}
           @click=${this.handleToggleConnect}
-          ?pressed=${this.state.isProtectionEnabled}
+          ?pressed=${ifDefined(this._enabled)}
           slot="actions"
         ></moz-toggle>
       </moz-box-item>
@@ -358,40 +371,14 @@ export default class IPProtectionContentElement extends MozLitElement {
     `;
   }
 
-  afterUpgradeTemplate() {
-    return html`<div
-      id="active-subscription-vpn-content"
-      class="vpn-bottom-content"
-    >
-      <h2
-        id="active-subscription-vpn-title"
-        class="vpn-subtitle"
-        data-l10n-id="active-subscription-vpn-title"
-      ></h2>
-      <p
-        id="active-subscription-vpn-message"
-        data-l10n-id="active-subscription-vpn-message"
-      ></p>
-      <moz-button
-        id="download-vpn-button"
-        class="vpn-button"
-        @click=${this.handleDownload}
-        data-l10n-id="get-vpn-button"
-        type="primary"
-      ></moz-button>
-    </div>`;
-  }
-
   mainContentTemplate() {
     // TODO: Update support-page with new SUMO link for Mozilla VPN - Bug 1975474
-    if (!this.state.isSignedIn) {
+    if (this.state.isSignedOut) {
       return html` <ipprotection-signedout></ipprotection-signedout> `;
     }
     return html`
       ${this.statusCardTemplate()}
-      ${this.state.hasUpgraded
-        ? this.afterUpgradeTemplate()
-        : this.beforeUpgradeTemplate()}
+      ${!this.state.hasUpgraded ? this.beforeUpgradeTemplate() : null}
     `;
   }
 

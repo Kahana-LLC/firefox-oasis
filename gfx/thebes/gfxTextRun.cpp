@@ -860,8 +860,6 @@ void gfxTextRun::GetLineHeightMetrics(Range aRange, gfxFloat& aAscent,
   aDescent = accumulatedMetrics.mDescent;
 }
 
-#define MEASUREMENT_BUFFER_SIZE 100
-
 void gfxTextRun::ClassifyAutoHyphenations(uint32_t aStart, Range aRange,
                                           nsTArray<HyphenType>& aHyphenBuffer,
                                           HyphenationState* aWordState) {
@@ -943,9 +941,10 @@ uint32_t gfxTextRun::BreakAndMeasureText(
 
   NS_ASSERTION(aStart + aMaxLength <= GetLength(), "Substring out of range");
 
-  Range bufferRange(
-      aStart, aStart + std::min<uint32_t>(aMaxLength, MEASUREMENT_BUFFER_SIZE));
-  PropertyProvider::Spacing spacingBuffer[MEASUREMENT_BUFFER_SIZE];
+  constexpr uint32_t kMeasurementBufferSize = 100;
+  Range bufferRange(aStart,
+                    aStart + std::min(aMaxLength, kMeasurementBufferSize));
+  PropertyProvider::Spacing spacingBuffer[kMeasurementBufferSize];
   bool haveSpacing = !!(mFlags & gfx::ShapedTextFlags::TEXT_ENABLE_SPACING);
   if (haveSpacing) {
     GetAdjustedSpacing(this, bufferRange, aProvider, spacingBuffer);
@@ -999,7 +998,7 @@ uint32_t gfxTextRun::BreakAndMeasureText(
       uint32_t oldHyphenBufferLength = hyphenBuffer.Length();
       bufferRange.start = i;
       bufferRange.end =
-          std::min(aStart + aMaxLength, i + MEASUREMENT_BUFFER_SIZE);
+          std::min(aStart + aMaxLength, i + kMeasurementBufferSize);
       // For spacing, we always overwrite the old data with the newly
       // fetched one. However, for hyphenation, hyphenation data sometimes
       // depends on the context in every word (if "hyphens: auto" is set).
@@ -3301,6 +3300,12 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
   // Handle a candidate font that could support the character, returning true
   // if we should go ahead and return |f|, false to continue searching.
   auto CheckCandidate = [&](gfxFont* f, FontMatchType t) -> bool {
+    // If a given character is a Private Use Area Unicode codepoint, user
+    // agents must only match font families named in the font-family list that
+    // are not generic families.
+    if (t.generic != StyleGenericFontFamily::None && IsPUA(aCh)) {
+      return false;
+    }
     // If no preference, or if it's an explicitly-named family in the fontgroup
     // and font-variant-emoji is 'normal', then we accept the font.
     if (presentation == FontPresentation::Any ||
@@ -3317,7 +3322,12 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
         f->HasColorGlyphFor(aCh, aNextCh) ||
         (!nextIsVarSelector && f->HasColorGlyphFor(aCh, kVariationSelector16));
     // If the provided glyph matches the preference, accept the font.
-    if (hasColorGlyph == PrefersColor(presentation)) {
+    if (hasColorGlyph == PrefersColor(presentation) &&
+        // Exception: if this is an emoji flag+tag letters sequence, and the
+        // following codepoint (the first tag) is missing from the font, we
+        // don't want to use this font as it will fail to present the cluster.
+        (!hasColorGlyph || !gfxFontUtils::IsEmojiFlagAndTag(aCh, aNextCh) ||
+         f->HasCharacter(aNextCh))) {
       *aMatchType = t;
       return true;
     }

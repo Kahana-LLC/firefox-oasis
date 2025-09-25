@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +29,7 @@ import org.mozilla.fenix.tabstray.TabsTrayTestTag
 import org.mozilla.fenix.tabstray.syncedtabs.SyncedTabsListItem
 import org.mozilla.fenix.tabstray.ui.syncedtabs.SyncedTabsList
 import org.mozilla.fenix.theme.FirefoxTheme
+import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.tabstray.ui.syncedtabs.OnTabClick as OnSyncedTabClick
 import org.mozilla.fenix.tabstray.ui.syncedtabs.OnTabCloseClick as OnSyncedTabClose
 
@@ -80,7 +82,7 @@ private fun UnauthenticatedSyncedTabsPage(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.mozac_ic_cloud_72),
+                painter = painterResource(id = iconsR.drawable.mozac_ic_cloud_72),
                 contentDescription = null,
             )
 
@@ -103,8 +105,9 @@ private fun UnauthenticatedSyncedTabsPage(
             TextButton(
                 text = stringResource(id = R.string.tab_manager_empty_synced_tabs_page_sign_in_cta),
                 onClick = onSignInClick,
-                textColor = LocalContentColor.current,
-                upperCaseText = false,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = LocalContentColor.current,
+                ),
             )
         }
     }

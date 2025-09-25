@@ -63,6 +63,7 @@ import org.mozilla.fenix.webcompat.store.WebCompatReporterAction
 import org.mozilla.fenix.webcompat.store.WebCompatReporterState
 import org.mozilla.fenix.webcompat.store.WebCompatReporterState.BrokenSiteReason
 import org.mozilla.fenix.webcompat.store.WebCompatReporterStore
+import mozilla.components.ui.icons.R as iconsR
 
 private const val PROBLEM_DESCRIPTION_MAX_LINES = 5
 
@@ -191,7 +192,7 @@ fun WebCompatReporter(
             ) {
                 if (Config.channel.isBeta || Config.channel.isNightlyOrDebug) {
                     Text(
-                        text = stringResource(id = R.string.webcompat_reporter_send_more_info),
+                        text = stringResource(id = R.string.webcompat_reporter_add_more_info),
                         modifier = Modifier
                             .clickable {
                                 store.dispatch(WebCompatReporterAction.SendMoreInfoClicked)
@@ -213,7 +214,6 @@ fun WebCompatReporter(
                         onClick = {
                             store.dispatch(WebCompatReporterAction.CancelClicked)
                         },
-                        upperCaseText = false,
                     )
 
                     Spacer(modifier = Modifier.width(10.dp))
@@ -273,7 +273,7 @@ private fun TempAppBar(
         navigationIcon = {
             IconButton(onClick = onBackClick) {
                 Icon(
-                    painter = painterResource(R.drawable.mozac_ic_back_24),
+                    painter = painterResource(iconsR.drawable.mozac_ic_back_24),
                     contentDescription = stringResource(R.string.bookmark_navigate_back_button_content_description),
                     tint = FirefoxTheme.colors.iconPrimary,
                 )

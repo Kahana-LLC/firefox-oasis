@@ -6,17 +6,19 @@ import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Lists } from "./Lists/Lists";
 import { FocusTimer } from "./FocusTimer/FocusTimer";
+import { MessageWrapper } from "content-src/components/MessageWrapper/MessageWrapper";
+import { WidgetsFeatureHighlight } from "../DiscoveryStreamComponents/FeatureHighlight/WidgetsFeatureHighlight";
+import { actionCreators as ac } from "common/Actions.mjs";
 
 const PREF_WIDGETS_LISTS_ENABLED = "widgets.lists.enabled";
 const PREF_WIDGETS_SYSTEM_LISTS_ENABLED = "widgets.system.lists.enabled";
 const PREF_WIDGETS_TIMER_ENABLED = "widgets.focusTimer.enabled";
 const PREF_WIDGETS_SYSTEM_TIMER_ENABLED = "widgets.system.focusTimer.enabled";
+const PREF_FEEDS_SECTION_TOPSTORIES = "feeds.section.topstories";
 
 function Widgets() {
   const prefs = useSelector(state => state.Prefs.values);
-  const listsState = useSelector(state => state.ListsWidget);
-  const timerState = useSelector(state => state.TimerWidget);
-  const timerType = timerState?.timerType;
+  const { messageData } = useSelector(state => state.Messages);
   const dispatch = useDispatch();
 
   const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
@@ -30,25 +32,42 @@ function Widgets() {
     (nimbusTimerEnabled || prefs[PREF_WIDGETS_SYSTEM_TIMER_ENABLED]) &&
     prefs[PREF_WIDGETS_TIMER_ENABLED];
 
-  const tasksCount =
-    listsEnabled && listsState?.lists && listsState?.selected
-      ? (listsState.lists[listsState.selected]?.tasks?.length ?? 0)
-      : 0;
+  const recommendedStoriesEnabled = prefs[PREF_FEEDS_SECTION_TOPSTORIES];
 
-  const manyTasks = tasksCount >= 4;
-  const isTimerRunning = timerState?.[timerType].isRunning;
-  const showScrollMessage = manyTasks || isTimerRunning;
+  function handleUserInteraction(widgetName) {
+    const prefName = `widgets.${widgetName}.interaction`;
+    const hasInteracted = prefs[prefName];
+    // we want to make sure that the value is a strict false (and that the property exists)
+    if (hasInteracted === false) {
+      dispatch(ac.SetPref(prefName, true));
+    }
+  }
 
   return (
     <div className="widgets-wrapper">
       <div className="widgets-container">
-        {listsEnabled && <Lists dispatch={dispatch} />}
-        {timerEnabled && <FocusTimer dispatch={dispatch} />}
+        {listsEnabled && (
+          <Lists
+            dispatch={dispatch}
+            handleUserInteraction={handleUserInteraction}
+          />
+        )}
+        {timerEnabled && (
+          <FocusTimer
+            dispatch={dispatch}
+            handleUserInteraction={handleUserInteraction}
+          />
+        )}
       </div>
-      {showScrollMessage && (
+      {recommendedStoriesEnabled && (
         <div className="widgets-scroll-message fade-in" aria-live="polite">
           <p data-l10n-id="newtab-widget-keep-scrolling"></p>
         </div>
+      )}
+      {messageData?.content?.messageType === "WidgetMessage" && (
+        <MessageWrapper dispatch={dispatch}>
+          <WidgetsFeatureHighlight dispatch={dispatch} />
+        </MessageWrapper>
       )}
     </div>
   );
