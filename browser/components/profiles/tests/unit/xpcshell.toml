@@ -11,6 +11,7 @@ prefs = [
 ["test_TelemetryLockCount.js"]
 
 ["test_command_line_handler.js"]
+run-sequentially = ["os == 'mac'"] # frequent fail in parallel on Mac
 
 ["test_create_profile.js"]
 
@@ -35,3 +36,5 @@ skip-if = [
 ]
 
 ["test_shared_prefs_lifecycles_methods.js"]
+
+["test_usageProgileGroupID.js"]

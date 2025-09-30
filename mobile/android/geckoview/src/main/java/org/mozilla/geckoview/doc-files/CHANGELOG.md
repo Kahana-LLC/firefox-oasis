@@ -13,6 +13,15 @@ exclude: true
 
 ⚠️  breaking change and deprecation notices
 
+## v145
+- Added [`WebNotification.show`][145.1]. Implementations of `WebNotificationDelegate.onShowNotification` should now call either `show` when the notification is successfully opened, or `dismiss` if it failed.
+- Added [`WebExtension.InvalidMetaDataException`][145.2]. ([bug 1981496]({{bugzilla}}1981496))
+- Added [`GeckoSession.PromptDelegate.RedirectPrompt`][145.3] to display a prompt when a third-party redirect is blocked.
+
+[145.1]: {{javadoc_uri}}/WebNotification.html#show
+[145.2]: {{javadoc_uri}}/WebExtension.InvalidMetaDataException.html
+[145.3]: {{javadoc_uri}}/GeckoSession.PromptDelegate.RedirectPrompt.html
+
 ## v144
 - Added [`GeckoSession.flushSessionState()`][144.1] to immediately notify the registered [`GeckoSession.ProgressDelegate`][144.2] and [`GeckoSession.HistoryDelegate`][144.3] of the current session state.
 - Added [`GeckoRuntimeSettings.getIsolatedProcessEnabled`][144.4] and [`GeckoRuntimeSettings.Builder.isolatedProcessEnabled`][144.5] to control whether content service runs on isolated process or not.
@@ -1831,4 +1840,4 @@ to allow adding gecko profiler markers.
 [65.24]: {{javadoc_uri}}/CrashReporter.html#sendCrashReport(android.content.Context,android.os.Bundle,java.lang.String)
 [65.25]: {{javadoc_uri}}/GeckoResult.html
 
-[api-version]: 187798664518b31b6162985a09711e1fe9a58c95
+[api-version]: d618af14d4ebf592db8cfafdf5e89e2bf6616d7a

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 
+#include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/ComputedStyle.h"
 #include "mozilla/PresShell.h"
@@ -19,7 +20,6 @@
 #include "mozilla/gfx/Types.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/widget/InitData.h"
-#include "nsAbsoluteContainingBlock.h"
 #include "nsAttrValue.h"
 #include "nsAttrValueInlines.h"
 #include "nsBlockFrame.h"
@@ -376,6 +376,9 @@ void nsContainerFrame::BuildDisplayListForNonBlockChildren(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists,
     DisplayChildFlags aFlags) {
   nsIFrame* kid = mFrames.FirstChild();
+  if (!kid || HidesContent()) {
+    return;
+  }
   // Put each child's background directly onto the content list
   nsDisplayListSet set(aLists, aLists.Content());
   // The children should be in content order
@@ -1237,8 +1240,7 @@ void nsContainerFrame::ReflowOverflowContainerChildren(
 
 void nsContainerFrame::DisplayOverflowContainers(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
-  nsFrameList* overflowconts = GetOverflowContainers();
-  if (overflowconts) {
+  if (nsFrameList* overflowconts = GetOverflowContainers()) {
     for (nsIFrame* frame : *overflowconts) {
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }

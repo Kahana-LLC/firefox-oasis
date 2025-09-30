@@ -231,6 +231,7 @@
 #if defined(MOZ_WIDGET_GTK) || defined(XP_WIN)
 #  include "nsIconChannel.h"
 #endif
+#include "XPCSelfHostedShmem.h"
 #include "nsFrameLoaderOwner.h"
 #include "nsMemoryInfoDumper.h"
 #include "nsMemoryReporterManager.h"
@@ -2415,7 +2416,9 @@ bool ContentParent::BeginSubprocessLaunch(ProcessPriority aPriority) {
   // shared across processes. We add command line arguments to pass a file
   // handle and its content length, to minimize the startup time of content
   // processes.
-  ::mozilla::ipc::ExportSharedJSInit(*mSubprocess, extraArgs);
+  if (xpc::SelfHostedShmem::SelfHostedUseSharedMemory()) {
+    ::mozilla::ipc::ExportSharedJSInit(*mSubprocess, extraArgs);
+  }
 
   // Register ContentParent as an observer for changes to any pref
   // whose prefix matches the empty string, i.e. all of them.  The
@@ -7609,24 +7612,25 @@ mozilla::ipc::IPCResult ContentParent::RecvHistoryCommit(
 mozilla::ipc::IPCResult ContentParent::RecvHistoryGo(
     const MaybeDiscarded<BrowsingContext>& aContext, int32_t aOffset,
     uint64_t aHistoryEpoch, bool aRequireUserInteraction, bool aUserActivation,
-    HistoryGoResolver&& aResolveRequestedIndex) {
+    bool aCheckForCancelation, HistoryGoResolver&& aResolveRequestedIndex) {
   if (!aContext.IsNullOrDiscarded()) {
     RefPtr<CanonicalBrowsingContext> canonical = aContext.get_canonical();
-    aResolveRequestedIndex(
-        canonical->HistoryGo(aOffset, aHistoryEpoch, aRequireUserInteraction,
-                             aUserActivation, Some(ChildID())));
+    aResolveRequestedIndex(canonical->HistoryGo(
+        aOffset, aHistoryEpoch, aRequireUserInteraction, aUserActivation,
+        aCheckForCancelation, Some(ChildID())));
   }
   return IPC_OK();
 }
 
 mozilla::ipc::IPCResult ContentParent::RecvNavigationTraverse(
     const MaybeDiscarded<BrowsingContext>& aContext, const nsID& aKey,
-    uint64_t aHistoryEpoch, bool aUserActivation,
+    uint64_t aHistoryEpoch, bool aUserActivation, bool aCheckForCancelation,
     NavigationTraverseResolver&& aResolver) {
   if (!aContext.IsNullOrDiscarded()) {
     RefPtr<CanonicalBrowsingContext> canonical = aContext.get_canonical();
     canonical->NavigationTraverse(aKey, aHistoryEpoch, aUserActivation,
-                                  Some(ChildID()), aResolver);
+                                  aCheckForCancelation, Some(ChildID()),
+                                  aResolver);
   }
   return IPC_OK();
 }

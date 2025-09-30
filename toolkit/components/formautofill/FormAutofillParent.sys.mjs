@@ -112,6 +112,7 @@ export let FormAutofillStatus = {
 
     Services.obs.removeObserver(this, "privacy-pane-loaded");
     Services.prefs.removeObserver(ENABLED_AUTOFILL_ADDRESSES_PREF, this);
+    Services.obs.removeObserver(this, "formautofill-storage-changed");
     Services.wm.removeListener(this);
 
     if (FormAutofill.isAutofillCreditCardsAvailable) {
@@ -204,11 +205,7 @@ export let FormAutofillStatus = {
       case "privacy-pane-loaded": {
         let formAutofillPreferences = new lazy.FormAutofillPreferences();
         let document = subject.document;
-        let prefFragment = formAutofillPreferences.init(document);
-        let formAutofillGroupBox = document.getElementById(
-          "formAutofillGroupBox"
-        );
-        formAutofillGroupBox.appendChild(prefFragment);
+        formAutofillPreferences.init(document);
         break;
       }
 

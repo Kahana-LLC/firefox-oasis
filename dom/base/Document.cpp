@@ -1362,7 +1362,8 @@ void Document::Shutdown() {
   }
 }
 
-Document::Document(const char* aContentType)
+Document::Document(const char* aContentType,
+                   mozilla::dom::LoadedAsData aLoadedAsData)
     : nsINode(nullptr),
       DocumentOrShadowRoot(this),
       mCharacterSet(WINDOWS_1252_ENCODING),
@@ -1373,6 +1374,7 @@ Document::Document(const char* aContentType)
 #ifdef DEBUG
       mStyledLinksCleared(false),
 #endif
+      mLoadedAsData(aLoadedAsData),
       mCachedStateObjectValid(false),
       mBlockAllMixedContent(false),
       mBlockAllMixedContentPreloads(false),
@@ -1385,7 +1387,6 @@ Document::Document(const char* aContentType)
       mIsInitialDocumentInWindow(false),
       mIsEverInitialDocumentInWindow(false),
       mIgnoreDocGroupMismatches(false),
-      mLoadedAsData(false),
       mAddedToMemoryReportingAsDataDocument(false),
       mMayStartLayout(true),
       mHaveFiredTitleChange(false),
@@ -2054,8 +2055,8 @@ void Document::LoadEventFired() {
 
   // Release the JS bytecode cache from its wait on the load event, and
   // potentially dispatch the encoding of the bytecode.
-  if (ScriptLoader()) {
-    ScriptLoader()->LoadEventFired();
+  if (mScriptLoader) {
+    mScriptLoader->LoadEventFired();
   }
 }
 
@@ -3034,7 +3035,9 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
 
   // Force initialization.
   mOnloadBlocker = new OnloadBlocker();
-  mStyleImageLoader = new css::ImageLoader(this);
+  if (mLoadedAsData != LoadedAsData::AsData) {
+    mStyleImageLoader = new css::ImageLoader(this);
+  }
 
   mNodeInfoManager = new nsNodeInfoManager(this, aPrincipal);
 
@@ -3046,9 +3049,11 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
 
   NS_ASSERTION(OwnerDoc() == this, "Our nodeinfo is busted!");
 
-  mCSSLoader = new css::Loader(this);
-  // Assume we're not quirky, until we know otherwise
-  mCSSLoader->SetCompatibilityMode(eCompatibility_FullStandards);
+  if (mLoadedAsData != LoadedAsData::AsData) {
+    mCSSLoader = new css::Loader(this);
+    // Assume we're not quirky, until we know otherwise
+    mCSSLoader->SetCompatibilityMode(eCompatibility_FullStandards);
+  }
 
   // If after creation the owner js global is not set for a document
   // we use the default compartment for this document, instead of creating
@@ -3060,7 +3065,9 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
   mScopeObject = do_GetWeakReference(global);
   MOZ_ASSERT(mScopeObject);
 
-  mScriptLoader = new dom::ScriptLoader(this);
+  if (mLoadedAsData == LoadedAsData::No) {
+    mScriptLoader = new dom::ScriptLoader(this);
+  }
 
   // we need to create a policy here so getting the policy within
   // ::Policy() can *always* return a non null policy
@@ -3531,7 +3538,10 @@ void Document::FillStyleSetDocumentSheets() {
 
 void Document::CompatibilityModeChanged() {
   MOZ_ASSERT(IsHTMLOrXHTML());
-  CSSLoader()->SetCompatibilityMode(mCompatMode);
+  if (!mCSSLoader) {
+    return;
+  }
+  mCSSLoader->SetCompatibilityMode(mCompatMode);
 
   if (mStyleSet) {
     mStyleSet->CompatibilityModeChanged();
@@ -3698,21 +3708,16 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
   SetReadyStateInternal(READYSTATE_LOADING);
 
   if (nsCRT::strcmp(kLoadAsData, aCommand) == 0) {
-    mLoadedAsData = true;
+    MOZ_RELEASE_ASSERT(mLoadedAsData != LoadedAsData::No);
     SetLoadedAsData(true, /* aConsiderForMemoryReporting */ true);
     // We need to disable script & style loading in this case.
     // We leave them disabled even in EndLoad(), and let anyone
     // who puts the document on display to worry about enabling.
-
-    // Do not load/process scripts when loading as data
-    ScriptLoader()->SetEnabled(false);
-
-    // styles
-    CSSLoader()->SetEnabled(
-        false);  // Do not load/process styles when loading as data
   } else if (nsCRT::strcmp("external-resource", aCommand) == 0) {
     // Allow CSS, but not scripts
-    ScriptLoader()->SetEnabled(false);
+    // TODO: Enforce this via the constructor and make mScriptLoader null here.
+    MOZ_ASSERT(mScriptLoader);
+    mScriptLoader->SetEnabled(false);
   }
 
   mMayStartLayout = false;
@@ -3889,7 +3894,11 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
 void Document::SetLoadedAsData(bool aLoadedAsData,
                                bool aConsiderForMemoryReporting) {
-  mLoadedAsData = aLoadedAsData;
+  if (aLoadedAsData) {
+    MOZ_RELEASE_ASSERT(mLoadedAsData != LoadedAsData::No);
+  } else {
+    MOZ_RELEASE_ASSERT(mLoadedAsData == LoadedAsData::No);
+  }
   if (aConsiderForMemoryReporting) {
     nsIGlobalObject* global = GetScopeObject();
     if (global) {
@@ -4026,7 +4035,7 @@ nsresult Document::InitCSP(nsIChannel* aChannel) {
              "Policy container must be initialized before CSP!");
 
   // If this is a data document - no need to set CSP.
-  if (mLoadedAsData) {
+  if (mLoadedAsData != LoadedAsData::No) {
     return NS_OK;
   }
 
@@ -4619,16 +4628,24 @@ void Document::SetPrincipals(nsIPrincipal* aNewPrincipal,
     }
   }
 
-  mScriptLoader->DeregisterFromCache();
-  mCSSLoader->DeregisterFromSheetCache();
+  if (mScriptLoader) {
+    mScriptLoader->DeregisterFromCache();
+  }
+  if (mCSSLoader) {
+    mCSSLoader->DeregisterFromSheetCache();
+  }
 
   mNodeInfoManager->SetDocumentPrincipal(aNewPrincipal);
   mPartitionedPrincipal = aNewPartitionedPrincipal;
 
   mCachedURLData = nullptr;
 
-  mCSSLoader->RegisterInSheetCache();
-  mScriptLoader->RegisterToCache();
+  if (mCSSLoader) {
+    mCSSLoader->RegisterInSheetCache();
+  }
+  if (mScriptLoader) {
+    mScriptLoader->RegisterToCache();
+  }
 
   RecomputeResistFingerprinting();
 
@@ -7274,7 +7291,10 @@ Element* Document::GetActiveElement() {
 }
 
 Element* Document::GetCurrentScript() {
-  nsCOMPtr<Element> el(do_QueryInterface(ScriptLoader()->GetCurrentScript()));
+  if (!mScriptLoader) {
+    return nullptr;
+  }
+  nsCOMPtr<Element> el(do_QueryInterface(mScriptLoader->GetCurrentScript()));
   return el;
 }
 
@@ -9411,6 +9431,9 @@ void Document::EnableStyleSheetsForSet(const nsAString& aSheetSet) {
 
 void Document::EnableStyleSheetsForSetInternal(const nsAString& aSheetSet,
                                                bool aUpdateCSSLoader) {
+  if (!GetCSSLoader()) {
+    return;
+  }
   size_t count = SheetCount();
   nsAutoString title;
   for (size_t index = 0; index < count; index++) {
@@ -9423,7 +9446,7 @@ void Document::EnableStyleSheetsForSetInternal(const nsAString& aSheetSet,
     }
   }
   if (aUpdateCSSLoader) {
-    CSSLoader()->DocumentStyleSheetSetChanged();
+    GetCSSLoader()->DocumentStyleSheetSetChanged();
   }
   if (EnsureStyleSet().StyleSheetsHaveChanged()) {
     ApplicableStylesChanged();
@@ -10103,7 +10126,9 @@ SMILAnimationController* Document::GetAnimationController() {
   // one and only SVG documents and the like will call this
   if (mAnimationController) return mAnimationController;
   // Refuse to create an Animation Controller for data documents.
-  if (mLoadedAsData) return nullptr;
+  if (mLoadedAsData != LoadedAsData::No) {
+    return nullptr;
+  }
 
   mAnimationController = new SMILAnimationController(this);
 
@@ -10540,7 +10565,9 @@ void Document::Close(ErrorResult& rv) {
 }
 
 void Document::WriteCommon(const Sequence<OwningTrustedHTMLOrString>& aText,
-                           bool aNewlineTerminate, mozilla::ErrorResult& rv) {
+                           bool aNewlineTerminate,
+                           nsIPrincipal* aSubjectPrincipal,
+                           mozilla::ErrorResult& rv) {
   bool isTrusted = true;
   auto getAsString =
       [&isTrusted](const OwningTrustedHTMLOrString& aTrustedHTMLOrString) {
@@ -10554,7 +10581,7 @@ void Document::WriteCommon(const Sequence<OwningTrustedHTMLOrString>& aText,
   // Fast path the common case
   if (aText.Length() == 1) {
     WriteCommon(*getAsString(aText[0]), aNewlineTerminate,
-                aText[0].IsTrustedHTML(), rv);
+                aText[0].IsTrustedHTML(), aSubjectPrincipal, rv);
   } else {
     // XXXbz it would be nice if we could pass all the strings to the parser
     // without having to do all this copying and then ask it to start
@@ -10563,12 +10590,13 @@ void Document::WriteCommon(const Sequence<OwningTrustedHTMLOrString>& aText,
     for (size_t i = 0; i < aText.Length(); ++i) {
       text.Append(*getAsString(aText[i]));
     }
-    WriteCommon(text, aNewlineTerminate, isTrusted, rv);
+    WriteCommon(text, aNewlineTerminate, isTrusted, aSubjectPrincipal, rv);
   }
 }
 
 void Document::WriteCommon(const nsAString& aText, bool aNewlineTerminate,
-                           bool aIsTrusted, ErrorResult& aRv) {
+                           bool aIsTrusted, nsIPrincipal* aSubjectPrincipal,
+                           ErrorResult& aRv) {
 #ifdef DEBUG
   {
     // Assert that we do not use or accidentally introduce doc.write()
@@ -10606,7 +10634,8 @@ void Document::WriteCommon(const nsAString& aText, bool aNewlineTerminate,
     compliantString =
         TrustedTypeUtils::GetTrustedTypesCompliantStringForTrustedHTML(
             aText, aNewlineTerminate ? sinkWriteLn : sinkWrite,
-            kTrustedTypesOnlySinkGroup, *this, compliantStringHolder, aRv);
+            kTrustedTypesOnlySinkGroup, *this, aSubjectPrincipal,
+            compliantStringHolder, aRv);
     if (aRv.Failed()) {
       return;
     }
@@ -10696,13 +10725,13 @@ void Document::WriteCommon(const nsAString& aText, bool aNewlineTerminate,
 }
 
 void Document::Write(const Sequence<OwningTrustedHTMLOrString>& aText,
-                     ErrorResult& rv) {
-  WriteCommon(aText, false, rv);
+                     nsIPrincipal* aSubjectPrincipal, ErrorResult& rv) {
+  WriteCommon(aText, false, aSubjectPrincipal, rv);
 }
 
 void Document::Writeln(const Sequence<OwningTrustedHTMLOrString>& aText,
-                       ErrorResult& rv) {
-  WriteCommon(aText, true, rv);
+                       nsIPrincipal* aSubjectPrincipal, ErrorResult& rv) {
+  WriteCommon(aText, true, aSubjectPrincipal, rv);
 }
 
 void* Document::GenerateParserKey(void) {
@@ -12232,8 +12261,9 @@ void Document::Destroy() {
     mASMJSExecutionTimer = nullptr;
     RecordExecutionTimeForAsmJS(this);
   }
-
-  ScriptLoader()->Destroy();
+  if (mScriptLoader) {
+    mScriptLoader->Destroy();
+  }
   SetScriptGlobalObject(nullptr);
   RemovedFromDocShell();
 
@@ -12957,8 +12987,10 @@ void Document::SuppressEventHandling(uint32_t aIncrease) {
       wgc->BlockBFCacheFor(BFCacheStatus::EVENT_HANDLING_SUPPRESSED);
     }
   }
-  for (uint32_t i = 0; i < aIncrease; ++i) {
-    ScriptLoader()->AddExecuteBlocker();
+  if (mScriptLoader) {
+    for (uint32_t i = 0; i < aIncrease; ++i) {
+      mScriptLoader->AddExecuteBlocker();
+    }
   }
 
   EnumerateSubDocuments([aIncrease](Document& aSubDoc) {
@@ -13263,6 +13295,9 @@ SheetPreloadStatus Document::PreloadStyle(
     const nsAString& aIntegrity, css::StylePreloadKind aKind,
     uint64_t aEarlyHintPreloaderId, const nsAString& aFetchPriority) {
   MOZ_ASSERT(aKind != css::StylePreloadKind::None);
+  if (!mCSSLoader) {
+    return SheetPreloadStatus::Errored;
+  }
 
   // The CSSLoader will retain this object after we return.
   nsCOMPtr<nsICSSLoaderObserver> obs = new StubCSSLoaderObserver();
@@ -13271,7 +13306,7 @@ SheetPreloadStatus Document::PreloadStyle(
       ReferrerInfo::CreateFromDocumentAndPolicyOverride(this, aReferrerPolicy);
 
   // Charset names are always ASCII.
-  auto result = CSSLoader()->LoadSheet(
+  auto result = GetCSSLoader()->LoadSheet(
       uri, aKind, aEncoding, referrerInfo, obs, aEarlyHintPreloaderId,
       Element::StringToCORSMode(aCrossOriginAttr), aNonce, aIntegrity,
       nsGenericHTMLElement::ToFetchPriority(aFetchPriority));
@@ -13283,12 +13318,6 @@ SheetPreloadStatus Document::PreloadStyle(
     return SheetPreloadStatus::AlreadyComplete;
   }
   return SheetPreloadStatus::InProgress;
-}
-
-RefPtr<StyleSheet> Document::LoadChromeSheetSync(nsIURI* uri) {
-  return CSSLoader()
-      ->LoadSheetSync(uri, css::eAuthorSheetFeatures)
-      .unwrapOr(nullptr);
 }
 
 void Document::ResetDocumentDirection() {
@@ -13349,7 +13378,9 @@ static void GetAndUnsuppressSubDocuments(
     Document& aDocument, nsTArray<nsCOMPtr<Document>>& aDocuments) {
   if (aDocument.EventHandlingSuppressed() > 0) {
     aDocument.DecreaseEventSuppression();
-    aDocument.ScriptLoader()->RemoveExecuteBlocker();
+    if (dom::ScriptLoader* loader = aDocument.GetScriptLoader()) {
+      loader->RemoveExecuteBlocker();
+    }
   }
   aDocuments.AppendElement(&aDocument);
   aDocument.EnumerateSubDocuments([&aDocuments](Document& aSubDoc) {
@@ -13499,8 +13530,8 @@ Document* Document::GetTemplateContentsOwner() {
         u""_ns,   // aQualifiedName
         nullptr,  // aDoctype
         Document::GetDocumentURI(), Document::GetDocBaseURI(), NodePrincipal(),
-        true,          // aLoadedAsData
-        scriptObject,  // aEventObject
+        LoadedAsData::AsData,  // aLoadedAsData
+        scriptObject,          // aEventObject
         IsHTMLDocument() ? DocumentFlavor::HTML : DocumentFlavor::XML);
     NS_ENSURE_SUCCESS(rv, nullptr);
 
@@ -16998,9 +17029,10 @@ already_AddRefed<Document> Document::Constructor(const GlobalObject& aGlobal,
   }
 
   nsCOMPtr<Document> doc;
-  nsresult res = NS_NewDOMDocument(getter_AddRefs(doc), VoidString(), u""_ns,
-                                   nullptr, uri, uri, prin->GetPrincipal(),
-                                   true, global, DocumentFlavor::Plain);
+  nsresult res =
+      NS_NewDOMDocument(getter_AddRefs(doc), VoidString(), u""_ns, nullptr, uri,
+                        uri, prin->GetPrincipal(), LoadedAsData::AsData, global,
+                        DocumentFlavor::Plain);
   if (NS_FAILED(res)) {
     rv.Throw(res);
     return nullptr;
@@ -17055,7 +17087,7 @@ WindowContext* Document::GetTopLevelWindowContext() const {
 Document* Document::GetTopLevelContentDocumentIfSameProcess() {
   Document* parent;
 
-  if (!mLoadedAsData) {
+  if (mLoadedAsData == LoadedAsData::No) {
     parent = this;
   } else {
     nsCOMPtr<nsPIDOMWindowInner> window = do_QueryInterface(GetScopeObject());
@@ -20623,9 +20655,9 @@ static already_AddRefed<Document> CreateHTMLDocument(GlobalObject& aGlobal,
   }
 
   nsCOMPtr<Document> doc;
-  aError = NS_NewHTMLDocument(
-      getter_AddRefs(doc), aGlobal.GetSubjectPrincipal(),
-      aGlobal.GetSubjectPrincipal(), /* aLoadedAsData */ true);
+  aError =
+      NS_NewHTMLDocument(getter_AddRefs(doc), aGlobal.GetSubjectPrincipal(),
+                         aGlobal.GetSubjectPrincipal(), LoadedAsData::AsData);
   if (aError.Failed()) {
     return nullptr;
   }

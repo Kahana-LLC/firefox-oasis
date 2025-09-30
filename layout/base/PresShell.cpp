@@ -2220,7 +2220,9 @@ void PresShell::SetIgnoreFrameDestruction(bool aIgnore) {
   if (mDocument) {
     // We need to tell the ImageLoader to drop all its references to frames
     // because they're about to go away and it won't get notifications of that.
-    mDocument->StyleImageLoader()->ClearFrames(mPresContext);
+    if (css::ImageLoader* loader = mDocument->GetStyleImageLoader()) {
+      loader->ClearFrames(mPresContext);
+    }
   }
   mIgnoreFrameDestruction = aIgnore;
 }
@@ -2233,7 +2235,9 @@ void PresShell::NotifyDestroyingFrame(nsIFrame* aFrame) {
 
   if (!mIgnoreFrameDestruction) {
     if (aFrame->HasImageRequest()) {
-      mDocument->StyleImageLoader()->DropRequestsForFrame(aFrame);
+      if (css::ImageLoader* loader = mDocument->GetStyleImageLoader()) {
+        loader->DropRequestsForFrame(aFrame);
+      }
     }
 
     mFrameConstructor->NotifyDestroyingFrame(aFrame);
@@ -4051,30 +4055,7 @@ bool PresShell::ScrollFrameIntoView(
 
     if (ScrollContainerFrame* sf = do_QueryFrame(container)) {
       nsPoint oldPosition = sf->GetScrollPosition();
-      nsRect targetRect = rect;
-      // Inflate the scrolled rect by the container's padding in each dimension,
-      // unless we have 'overflow-clip-box-*: content-box' in that dimension.
-      auto* disp = container->StyleDisplay();
-      if (disp->mOverflowClipBoxBlock == StyleOverflowClipBox::ContentBox ||
-          disp->mOverflowClipBoxInline == StyleOverflowClipBox::ContentBox) {
-        WritingMode wm = container->GetWritingMode();
-        bool cbH = (wm.IsVertical() ? disp->mOverflowClipBoxBlock
-                                    : disp->mOverflowClipBoxInline) ==
-                   StyleOverflowClipBox::ContentBox;
-        bool cbV = (wm.IsVertical() ? disp->mOverflowClipBoxInline
-                                    : disp->mOverflowClipBoxBlock) ==
-                   StyleOverflowClipBox::ContentBox;
-        nsMargin padding = container->GetUsedPadding();
-        if (!cbH) {
-          padding.left = padding.right = nscoord(0);
-        }
-        if (!cbV) {
-          padding.top = padding.bottom = nscoord(0);
-        }
-        targetRect.Inflate(padding);
-      }
-
-      targetRect -= sf->GetScrolledFrame()->GetPosition();
+      nsRect targetRect = rect - sf->GetScrolledFrame()->GetPosition();
 
       {
         AutoWeakFrame wf(container);
@@ -12213,20 +12194,20 @@ PresShell::AnchorPosUpdateResult PresShell::UpdateAnchorPosLayout() {
   for (auto* positioned : mAnchorPosPositioned) {
     MOZ_ASSERT(positioned->IsAbsolutelyPositioned(),
                "Anchor positioned frame is not absolutely positioned?");
-    const auto* referencedAnchors =
+    const auto* anchorPosReferenceData =
         positioned->GetProperty(nsIFrame::AnchorPosReferences());
     // Note that it's possible (Though unlikely) to register as anchor
     // positioned but not actually make any anchor resolution - e.g.
     // `position-anchor` is set, but no other anchor positioning property is
     // used.
-    if (!referencedAnchors || referencedAnchors->IsEmpty()) {
+    if (!anchorPosReferenceData || anchorPosReferenceData->IsEmpty()) {
       continue;
     }
     if (positioned->HasAnyStateBits(NS_FRAME_IS_DIRTY)) {
       // Already marked for reflow.
       continue;
     }
-    for (const auto& kv : *referencedAnchors) {
+    for (const auto& kv : *anchorPosReferenceData) {
       const auto& data = kv.GetData();
       const auto& anchorName = kv.GetKey();
       const auto* anchor = GetAnchorPosAnchor(anchorName, positioned);
@@ -12335,9 +12316,9 @@ void PresShell::UpdateAnchorPosLayoutForScroll(
       continue;
     }
 
-    const auto* referencedAnchors =
+    const auto* anchorPosReferenceData =
         positioned->GetProperty(nsIFrame::AnchorPosReferences());
-    if (!referencedAnchors || referencedAnchors->IsEmpty()) {
+    if (!anchorPosReferenceData || anchorPosReferenceData->IsEmpty()) {
       // If it doesn't reference any anchors then it doesn't compensate for
       // scroll.
       continue;
@@ -12369,7 +12350,7 @@ void PresShell::UpdateAnchorPosLayoutForScroll(
     for (const auto& entry : affectedAnchors) {
       const auto* anchorName = entry.mAnchorName;
       const auto& anchors = entry.mFrames;
-      const auto* data = referencedAnchors->Lookup(anchorName);
+      const auto* data = anchorPosReferenceData->Lookup(anchorName);
       if (!data) {
         continue;
       }

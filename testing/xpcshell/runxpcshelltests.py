@@ -93,6 +93,7 @@ import mozcrash
 import mozfile
 import mozinfo
 from manifestparser import TestManifest
+from manifestparser.expression import parse
 from manifestparser.filters import chunk_by_slice, failures, pathprefix, tags
 from manifestparser.util import normsep
 from mozlog import commandline
@@ -1941,7 +1942,6 @@ class XPCShellTests:
             self.appPath = options.get("msixAppPath")
             self.xrePath = options.get("msixXrePath")
             self.app_binary = options.get("msix_app_binary")
-            self.threadCount = 2
             self.xpcshell = None
 
         self.testCount = 0
@@ -2168,6 +2168,10 @@ class XPCShellTests:
         if options.get("repeat", 0) > 0:
             self.sequential = True
 
+        def _match_run_sequentially(value, **values):
+            """Helper function to evaluate run-sequentially conditions like skip-if/run-if"""
+            return any(parse(e, strict=True, **values) for e in value.splitlines() if e)
+
         if not options.get("verify"):
             for test_object in self.alltests:
                 # Test identifiers are provided for the convenience of logging. These
@@ -2191,7 +2195,12 @@ class XPCShellTests:
                         mobileArgs=mobileArgs,
                         **kwargs,
                     )
-                    if "run-sequentially" in test_object or self.sequential:
+                    if (
+                        "run-sequentially" in test_object
+                        and _match_run_sequentially(
+                            test_object["run-sequentially"], **mozinfo.info
+                        )
+                    ) or self.sequential:
                         sequential_tests.append(test)
                     else:
                         tests_queue.append(test)

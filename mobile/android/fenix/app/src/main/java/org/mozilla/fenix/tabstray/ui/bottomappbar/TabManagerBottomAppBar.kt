@@ -48,6 +48,7 @@ import mozilla.components.ui.icons.R as iconsR
  * [BottomAppBar] for the Tab Manager.
  *
  * @param tabsTrayStore [TabsTrayStore] used to listen for changes to [TabsTrayState].
+ * @param pbmLocked Whether the private browsing mode is currently locked.
  * @param scrollBehavior Defines how the [BottomAppBar] should behave when the content under it is scrolled.
  * @param modifier The [Modifier] to be applied to this FAB.
  * @param onTabSettingsClick Invoked when the user clicks on the tab settings banner menu item.
@@ -58,6 +59,7 @@ import mozilla.components.ui.icons.R as iconsR
 @Composable
 internal fun TabManagerBottomAppBar(
     tabsTrayStore: TabsTrayStore,
+    pbmLocked: Boolean = false,
     scrollBehavior: BottomAppBarScrollBehavior,
     modifier: Modifier = Modifier,
     onTabSettingsClick: () -> Unit,
@@ -66,9 +68,10 @@ internal fun TabManagerBottomAppBar(
     onDeleteAllTabsClick: () -> Unit,
 ) {
     val state by tabsTrayStore.observeAsState(initialValue = tabsTrayStore.state) { it }
+    val privateTabsLocked = pbmLocked && state.selectedPage == Page.PrivateTabs
 
     AnimatedVisibility(
-        visible = state.mode is Mode.Normal,
+        visible = state.mode is Mode.Normal && !privateTabsLocked,
     ) {
         val menuItems = generateMenuItems(
             selectedPage = state.selectedPage,
@@ -87,7 +90,10 @@ internal fun TabManagerBottomAppBar(
         BottomAppBar(
             actions = {
                 IconButton(
-                    onClick = { showBottomAppBarMenu = true },
+                    onClick = {
+                        tabsTrayStore.dispatch(TabsTrayAction.ThreeDotMenuShown)
+                        showBottomAppBarMenu = true
+                    },
                     modifier = Modifier.testTag(TabsTrayTestTag.THREE_DOT_BUTTON),
                 ) {
                     Icon(
@@ -203,6 +209,7 @@ private fun TabManagerBottomAppBarPreview(
         ) {
             TabManagerBottomAppBar(
                 tabsTrayStore = remember { TabsTrayStore(initialState = state) },
+                pbmLocked = false,
                 scrollBehavior = BottomAppBarDefaults.exitAlwaysScrollBehavior(),
                 onTabSettingsClick = {},
                 onRecentlyClosedClick = {},

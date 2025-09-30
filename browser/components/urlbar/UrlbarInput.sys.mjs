@@ -315,6 +315,13 @@ export class UrlbarInput {
 
     this.editor.newlineHandling =
       Ci.nsIEditor.eNewlinesStripSurroundingWhitespace;
+
+    if (isAddressbar) {
+      let searchContainersPref = lazy.UrlbarPrefs.get(
+        "switchTabs.searchAllContainers"
+      );
+      Glean.urlbar.prefSwitchTabsSearchAllContainers.set(searchContainersPref);
+    }
   }
 
   #lazy = XPCOMUtils.declareLazy({
@@ -1925,7 +1932,7 @@ export class UrlbarInput {
     let end = trimmedValue.search(lazy.UrlbarTokenizer.REGEXP_SPACES);
     let firstToken = end == -1 ? trimmedValue : trimmedValue.substring(0, end);
     // Enter search mode if the string starts with a restriction token.
-    let searchMode = lazy.UrlbarUtils.searchModeForToken(firstToken);
+    let searchMode = this.searchModeForToken(firstToken);
     let firstTokenIsRestriction = !!searchMode;
     if (!searchMode && searchEngine) {
       searchMode = { engineName: searchEngine.name };
@@ -1974,6 +1981,35 @@ export class UrlbarInput {
       });
       this.inputField.dispatchEvent(event);
     }
+  }
+
+  /**
+   * Returns a search mode object if a token should enter search mode when
+   * typed. This does not handle engine aliases.
+   *
+   * @param {Values<typeof lazy.UrlbarTokenizer.RESTRICT>} token
+   *   A restriction token to convert to search mode.
+   * @returns {?object}
+   *   A search mode object. Null if search mode should not be entered. See
+   *   setSearchMode documentation for details.
+   */
+  searchModeForToken(token) {
+    if (token == lazy.UrlbarTokenizer.RESTRICT.SEARCH) {
+      return {
+        engineName: lazy.UrlbarSearchUtils.getDefaultEngine(this.isPrivate)
+          ?.name,
+      };
+    }
+
+    let mode = lazy.UrlbarUtils.LOCAL_SEARCH_MODES.find(
+      m => m.restrict == token
+    );
+    if (mode) {
+      // Return a copy so callers don't modify the object in LOCAL_SEARCH_MODES.
+      return { ...mode };
+    }
+
+    return null;
   }
 
   /**
@@ -3943,9 +3979,7 @@ export class UrlbarInput {
       return null;
     }
 
-    let searchMode = lazy.UrlbarUtils.searchModeForToken(
-      result.payload.keyword
-    );
+    let searchMode = this.searchModeForToken(result.payload.keyword);
     // If result.originalEngine is set, then the user is Alt+Tabbing
     // through the one-offs, so the keyword doesn't match the engine.
     if (
@@ -5661,7 +5695,7 @@ class AddSearchEngineHelper {
       "search-one-offs-add-engine-menu"
     );
     if (engine.icon) {
-      elt.setAttribute("image", encodeURI(engine.icon));
+      elt.setAttribute("image", ChromeUtils.encodeURIForSrcset(engine.icon));
     }
     let popup = this.input.document.createXULElement("menupopup");
     elt.appendChild(popup);

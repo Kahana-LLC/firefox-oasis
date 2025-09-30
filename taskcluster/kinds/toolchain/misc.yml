@@ -47,15 +47,16 @@ linux64-cctools-port:
     run:
         script: build-cctools-port.sh
         resources:
-            - taskcluster/scripts/misc/cctools.patch
+            - taskcluster/scripts/misc/libtapi.patch
         toolchain-artifact: public/build/cctools.tar.zst
     fetches:
         toolchain:
             - linux64-clang-toolchain
-            - linux64-toolchain-sysroot
+            - linux64-toolchain-sysroot-gcc10
         fetch:
             - cctools-port
             - libtapi
+            - libdispatch
             - ldid
 
 linux64-hfsplus:
@@ -254,7 +255,7 @@ macosx-custom-car:
         toolchain-artifact: public/build/car_macosx.tar.zst
     fetches:
         toolchain:
-            - MacOSX15.4.sdk
+            - MacOSX26.0.sdk
 
 macosx-arm64-custom-car:
     description: "Custom chromium-as-release build for mac (apple silicon)"
@@ -290,7 +291,7 @@ macosx-arm64-custom-car:
         toolchain-artifact: public/build/car_macosx_arm.tar.zst
     fetches:
         toolchain:
-            - MacOSX15.4.sdk
+            - MacOSX26.0.sdk
 
 android-custom-car:
     description: "Custom chromium-as-release build for Android"

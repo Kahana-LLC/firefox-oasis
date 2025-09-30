@@ -305,8 +305,8 @@ nsXMLContentSink::DidBuildModel(bool aTerminated) {
 
       // We're pretty-printing now.  See whether we should wait up on
       // stylesheet loads
-      if (mDocument->CSSLoader()->HasPendingLoads()) {
-        mDocument->CSSLoader()->AddObserver(this);
+      if (mCSSLoader && mCSSLoader->HasPendingLoads()) {
+        mCSSLoader->AddObserver(this);
         // wait for those sheets to load
         startLayout = false;
       }
@@ -364,10 +364,23 @@ nsresult nsXMLContentSink::OnTransformDone(Document* aSourceDocument,
   RefPtr<Document> originalDocument = mDocument;
   bool blockingOnload = mIsBlockingOnload;
 
+  auto IsXSLTError = [](nsresult aResult, nsIDocumentViewer* aViewer,
+                        Document* aResultDocument) -> bool {
+    return NS_FAILED(aResult) && aViewer->GetDocument() && aResultDocument &&
+           aViewer->GetDocument()->GetPrincipal() ==
+               aResultDocument->GetPrincipal() &&
+           aResultDocument->GetDocumentElement() &&
+           aResultDocument->GetDocumentElement()->NodeInfo()->Equals(
+               nsGkAtoms::parsererror) &&
+           aResultDocument->GetDocumentElement()->NodeInfo()->NamespaceEquals(
+               nsDependentAtomString(nsGkAtoms::nsuri_parsererror));
+  };
+
   // Make sure that we haven't loaded a new document into the documentviewer
   // after starting the XSLT transform.
   if (viewer && (viewer->GetDocument() == aSourceDocument ||
-                 viewer->GetDocument() == aResultDocument)) {
+                 viewer->GetDocument() == aResultDocument ||
+                 IsXSLTError(aResult, viewer, aResultDocument))) {
     if (NS_FAILED(aResult)) {
       // Transform failed.
       aResultDocument->SetMayStartLayout(false);
@@ -432,8 +445,9 @@ nsXMLContentSink::StyleSheetLoaded(StyleSheet* aSheet, bool aWasDeferred,
     return nsContentSink::StyleSheetLoaded(aSheet, aWasDeferred, aStatus);
   }
 
-  if (!mDocument->CSSLoader()->HasPendingLoads()) {
-    mDocument->CSSLoader()->RemoveObserver(this);
+  if (mDocument->GetCSSLoader() &&
+      !mDocument->GetCSSLoader()->HasPendingLoads()) {
+    mDocument->GetCSSLoader()->RemoveObserver(this);
     StartLayout(false);
     ScrollToRef();
   }
@@ -655,7 +669,9 @@ nsresult nsXMLContentSink::CloseElement(nsIContent* aContent) {
       rv = updateOrError.unwrapErr();
     } else if (updateOrError.unwrap().ShouldBlock() && !mRunsToCompletion) {
       ++mPendingSheetCount;
-      mScriptLoader->AddParserBlockingScriptExecutionBlocker();
+      if (mScriptLoader) {
+        mScriptLoader->AddParserBlockingScriptExecutionBlocker();
+      }
     }
   }
 
@@ -931,7 +947,9 @@ bool nsXMLContentSink::SetDocElement(int32_t aNameSpaceID, nsAtom* aTagName,
       // Successfully started a stylesheet load
       if (update.ShouldBlock() && !mRunsToCompletion) {
         ++mPendingSheetCount;
-        mScriptLoader->AddParserBlockingScriptExecutionBlocker();
+        if (mScriptLoader) {
+          mScriptLoader->AddParserBlockingScriptExecutionBlocker();
+        }
       }
     }
   }
@@ -944,7 +962,9 @@ bool nsXMLContentSink::SetDocElement(int32_t aNameSpaceID, nsAtom* aTagName,
     if (mPrettyPrintXML) {
       // In this case, disable script execution, stylesheet
       // loading, and auto XLinks since we plan to prettyprint.
-      mDocument->ScriptLoader()->SetEnabled(false);
+      if (dom::ScriptLoader* scriptLoader = mDocument->GetScriptLoader()) {
+        scriptLoader->SetEnabled(false);
+      }
       if (mCSSLoader) {
         mCSSLoader->SetEnabled(false);
       }

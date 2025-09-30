@@ -43,7 +43,6 @@
 #include "nsGkAtoms.h"           // for nsGkAtoms, nsGkAtoms::a, etc.
 #include "nsHTMLTags.h"
 #include "nsIContentInlines.h"   // for nsIContent::IsInDesignMode(), etc.
-#include "nsIFrameInlines.h"     // for nsIFrame::IsFlexOrGridItem()
 #include "nsLiteralString.h"     // for NS_LITERAL_STRING
 #include "nsNameSpaceManager.h"  // for kNameSpaceID_None
 #include "nsPrintfCString.h"     // nsPringfCString
@@ -369,8 +368,46 @@ bool HTMLEditUtils::IsInlineContent(const nsIContent& aContent,
 }
 
 bool HTMLEditUtils::IsFlexOrGridItem(const Element& aElement) {
-  nsIFrame* frame = aElement.GetPrimaryFrame();
-  return frame && frame->IsFlexOrGridItem();
+  Element* const parentElement = aElement.GetParentElement();
+  // Editable state does not affect to elements across shadow DOM boundaries.
+  // Therefore, we don't need to treat aElement as an flex item nor a grid item
+  // as so if aElement is a root element of a shadow DOM unless we'll support
+  // inline editing host support better (all browsers do not handle surrounding
+  // content of the inline editing host strictly, e.g., when inserting a
+  // collapsible white-space at start or end of it).
+  if (MOZ_UNLIKELY(!parentElement)) {
+    return false;
+  }
+  // We should consider whether the element is a flex item or a grid item
+  // without nsIFrame since we don't want to refresh the layout while
+  // `HTMLEditor` handles an action to avoid to run script.
+  RefPtr<const ComputedStyle> elementStyle =
+      nsComputedDOMStyle::GetComputedStyleNoFlush(&aElement);
+  if (MOZ_UNLIKELY(!elementStyle)) {
+    return false;
+  }
+  const nsStyleDisplay* styleDisplay = elementStyle->StyleDisplay();
+  if (MOZ_UNLIKELY(styleDisplay->mDisplay == StyleDisplay::None)) {
+    return false;
+  }
+  const RefPtr<const ComputedStyle> parentElementStyle =
+      nsComputedDOMStyle::GetComputedStyleNoFlush(parentElement);
+  if (MOZ_UNLIKELY(!parentElementStyle)) {
+    return false;
+  }
+  const nsStyleDisplay* parentStyleDisplay = parentElementStyle->StyleDisplay();
+  const auto parentDisplayInside = parentStyleDisplay->DisplayInside();
+  const bool parentIsFlexContainerOrGridContainer =
+      parentDisplayInside == StyleDisplayInside::Flex ||
+      parentDisplayInside == StyleDisplayInside::Grid;
+  // We assume that the computed `display` value of a flex item and a grid item
+  // is "block".  If it would be false, we need to update
+  // HTMLEditUtils::IsBlockElement() and HTMLEditUtils::IsInlineContent().
+  // However, they are called a lot so that we need to be careful about changing
+  // them to check the parent style.
+  MOZ_ASSERT_IF(parentIsFlexContainerOrGridContainer,
+                styleDisplay->IsBlockOutsideStyle());
+  return parentIsFlexContainerOrGridContainer;
 }
 
 bool HTMLEditUtils::IsInclusiveAncestorCSSDisplayNone(
@@ -434,12 +471,8 @@ bool HTMLEditUtils::IsVisibleElementEvenIfLeafNode(const nsIContent& aContent) {
   return false;
 }
 
-/**
- * IsInlineStyle() returns true if aNode is an inline style.
- */
-bool HTMLEditUtils::IsInlineStyle(nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(
+bool HTMLEditUtils::IsInlineStyleElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
       nsGkAtoms::b, nsGkAtoms::i, nsGkAtoms::u, nsGkAtoms::tt, nsGkAtoms::s,
       nsGkAtoms::strike, nsGkAtoms::big, nsGkAtoms::small, nsGkAtoms::sub,
       nsGkAtoms::sup, nsGkAtoms::font);
@@ -493,150 +526,88 @@ bool HTMLEditUtils::IsRemovableInlineStyleElement(Element& aElement) {
   return tagName.LowerCaseEqualsASCII("blink");
 }
 
-/**
- * IsNodeThatCanOutdent() returns true if aNode is a list, list item or
- * blockquote.
- */
-bool HTMLEditUtils::IsNodeThatCanOutdent(nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::ul, nsGkAtoms::ol, nsGkAtoms::dl,
-                                    nsGkAtoms::li, nsGkAtoms::dd, nsGkAtoms::dt,
-                                    nsGkAtoms::blockquote);
+bool HTMLEditUtils::IsOutdentable(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
+      nsGkAtoms::ul, nsGkAtoms::ol, nsGkAtoms::dl, nsGkAtoms::li, nsGkAtoms::dd,
+      nsGkAtoms::dt, nsGkAtoms::blockquote);
 }
 
-/**
- * IsHeader() returns true if aNode is an html header.
- */
-bool HTMLEditUtils::IsHeader(nsINode& aNode) {
-  return aNode.IsAnyOfHTMLElements(nsGkAtoms::h1, nsGkAtoms::h2, nsGkAtoms::h3,
-                                   nsGkAtoms::h4, nsGkAtoms::h5, nsGkAtoms::h6);
+bool HTMLEditUtils::IsHeadingElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::h1, nsGkAtoms::h2,
+                                      nsGkAtoms::h3, nsGkAtoms::h4,
+                                      nsGkAtoms::h5, nsGkAtoms::h6);
 }
 
-/**
- * IsListItem() returns true if aNode is an html list item.
- */
-bool HTMLEditUtils::IsListItem(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::li, nsGkAtoms::dd,
-                                    nsGkAtoms::dt);
+bool HTMLEditUtils::IsListItemElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::li, nsGkAtoms::dd,
+                                      nsGkAtoms::dt);
 }
 
-/**
- * IsAnyTableElement() returns true if aNode is an html table, td, tr, ...
- */
-bool HTMLEditUtils::IsAnyTableElement(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(
+bool HTMLEditUtils::IsAnyTableElementExceptColumnElement(
+    const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
       nsGkAtoms::table, nsGkAtoms::tr, nsGkAtoms::td, nsGkAtoms::th,
       nsGkAtoms::thead, nsGkAtoms::tfoot, nsGkAtoms::tbody, nsGkAtoms::caption);
 }
 
-/**
- * IsAnyTableElementButNotTable() returns true if aNode is an html td, tr, ...
- * (doesn't include table)
- */
-bool HTMLEditUtils::IsAnyTableElementButNotTable(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::tr, nsGkAtoms::td, nsGkAtoms::th,
-                                    nsGkAtoms::thead, nsGkAtoms::tfoot,
-                                    nsGkAtoms::tbody, nsGkAtoms::caption);
+bool HTMLEditUtils::IsAnyTableElementExceptTableElementAndColumElement(
+    const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
+      nsGkAtoms::tr, nsGkAtoms::td, nsGkAtoms::th, nsGkAtoms::thead,
+      nsGkAtoms::tfoot, nsGkAtoms::tbody, nsGkAtoms::caption);
 }
 
-/**
- * IsTable() returns true if aNode is an html table.
- */
-bool HTMLEditUtils::IsTable(const nsINode* aNode) {
-  return aNode && aNode->IsHTMLElement(nsGkAtoms::table);
+bool HTMLEditUtils::IsTableRowElement(const nsIContent& aContent) {
+  return aContent.IsHTMLElement(nsGkAtoms::tr);
 }
 
-/**
- * IsTableRow() returns true if aNode is an html tr.
- */
-bool HTMLEditUtils::IsTableRow(nsINode* aNode) {
-  return aNode && aNode->IsHTMLElement(nsGkAtoms::tr);
+bool HTMLEditUtils::IsTableCellElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::td, nsGkAtoms::th);
 }
 
-/**
- * IsTableCell() returns true if aNode is an html td or th.
- */
-bool HTMLEditUtils::IsTableCell(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::td, nsGkAtoms::th);
+bool HTMLEditUtils::IsTableCellOrCaptionElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::td, nsGkAtoms::th,
+                                      nsGkAtoms::caption);
 }
 
-/**
- * IsTableCellOrCaption() returns true if aNode is an html td or th or caption.
- */
-bool HTMLEditUtils::IsTableCellOrCaption(nsINode& aNode) {
-  return aNode.IsAnyOfHTMLElements(nsGkAtoms::td, nsGkAtoms::th,
-                                   nsGkAtoms::caption);
+bool HTMLEditUtils::IsListElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::ul, nsGkAtoms::ol,
+                                      nsGkAtoms::dl);
 }
 
-/**
- * IsAnyListElement() returns true if aNode is an html list.
- */
-bool HTMLEditUtils::IsAnyListElement(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::ul, nsGkAtoms::ol,
-                                    nsGkAtoms::dl);
+bool HTMLEditUtils::IsImageElement(const nsIContent& aContent) {
+  // XXX How about <object> and <picture>?
+  return aContent.IsHTMLElement(nsGkAtoms::img);
 }
 
-/**
- * IsPre() returns true if aNode is an html pre node.
- */
-bool HTMLEditUtils::IsPre(const nsINode* aNode) {
-  return aNode && aNode->IsHTMLElement(nsGkAtoms::pre);
-}
-
-/**
- * IsImage() returns true if aNode is an html image node.
- */
-bool HTMLEditUtils::IsImage(nsINode* aNode) {
-  return aNode && aNode->IsHTMLElement(nsGkAtoms::img);
-}
-
-bool HTMLEditUtils::IsLink(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-
-  if (!aNode->IsContent()) {
-    return false;
-  }
-
-  RefPtr<const dom::HTMLAnchorElement> anchor =
-      dom::HTMLAnchorElement::FromNodeOrNull(aNode->AsContent());
+bool HTMLEditUtils::IsHyperlinkElement(const nsIContent& aContent) {
+  const dom::HTMLAnchorElement* const anchor =
+      dom::HTMLAnchorElement::FromNode(aContent);
   if (!anchor) {
     return false;
   }
-
+  // XXX Isn't it enough to check whether the `href` value is empty?
   nsAutoCString tmpText;
   anchor->GetHref(tmpText);
   return !tmpText.IsEmpty();
 }
 
-bool HTMLEditUtils::IsNamedAnchor(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  if (!aNode->IsHTMLElement(nsGkAtoms::a)) {
+bool HTMLEditUtils::IsNamedAnchorElement(const nsIContent& aContent) {
+  const dom::HTMLAnchorElement* const anchor =
+      dom::HTMLAnchorElement::FromNode(aContent);
+  if (!anchor) {
     return false;
   }
-
-  nsAutoString text;
-  return aNode->AsElement()->GetAttr(nsGkAtoms::name, text) && !text.IsEmpty();
+  return anchor->HasName();
 }
 
-/**
- * IsMozDiv() returns true if aNode is an html div node with |type = _moz|.
- */
-bool HTMLEditUtils::IsMozDiv(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsHTMLElement(nsGkAtoms::div) &&
-         aNode->AsElement()->AttrValueIs(kNameSpaceID_None, nsGkAtoms::type,
-                                         u"_moz"_ns, eIgnoreCase);
+bool HTMLEditUtils::IsMozDivElement(const nsIContent& aContent) {
+  return aContent.IsHTMLElement(nsGkAtoms::div) &&
+         aContent.AsElement()->AttrValueIs(kNameSpaceID_None, nsGkAtoms::type,
+                                           u"_moz"_ns, eIgnoreCase);
 }
 
-/**
- * IsMailCite() returns true if aNode is an html blockquote with |type=cite|.
- */
-bool HTMLEditUtils::IsMailCite(const Element& aElement) {
+bool HTMLEditUtils::IsMailCiteElement(const Element& aElement) {
   // don't ask me why, but our html mailcites are id'd by "type=cite"...
   if (aElement.AttrValueIs(kNameSpaceID_None, nsGkAtoms::type, u"cite"_ns,
                            eIgnoreCase)) {
@@ -652,19 +623,15 @@ bool HTMLEditUtils::IsMailCite(const Element& aElement) {
   return false;
 }
 
-/**
- * IsFormWidget() returns true if aNode is a form widget of some kind.
- */
-bool HTMLEditUtils::IsFormWidget(const nsINode* aNode) {
-  MOZ_ASSERT(aNode);
-  return aNode->IsAnyOfHTMLElements(nsGkAtoms::textarea, nsGkAtoms::select,
-                                    nsGkAtoms::button, nsGkAtoms::output,
-                                    nsGkAtoms::progress, nsGkAtoms::meter,
-                                    nsGkAtoms::input);
+bool HTMLEditUtils::IsFormWidgetElement(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(nsGkAtoms::textarea, nsGkAtoms::select,
+                                      nsGkAtoms::button, nsGkAtoms::output,
+                                      nsGkAtoms::progress, nsGkAtoms::meter,
+                                      nsGkAtoms::input);
 }
 
-bool HTMLEditUtils::SupportsAlignAttr(nsINode& aNode) {
-  return aNode.IsAnyOfHTMLElements(
+bool HTMLEditUtils::IsAlignAttrSupported(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
       nsGkAtoms::hr, nsGkAtoms::table, nsGkAtoms::tbody, nsGkAtoms::tfoot,
       nsGkAtoms::thead, nsGkAtoms::tr, nsGkAtoms::td, nsGkAtoms::th,
       nsGkAtoms::div, nsGkAtoms::p, nsGkAtoms::h1, nsGkAtoms::h2, nsGkAtoms::h3,
@@ -1394,10 +1361,10 @@ bool HTMLEditUtils::IsEmptyNode(nsPresContext* aPresContext,
       !IsContainerNode(*aNode.AsContent()) ||
       // If it's a named anchor, we shouldn't treat it as empty because it
       // has special meaning even if invisible.
-      IsNamedAnchor(&aNode) ||
+      IsNamedAnchorElement(*aNode.AsContent()) ||
       // Form widgets should be treated as not empty because they have special
       // meaning even if invisible.
-      IsFormWidget(&aNode)) {
+      IsFormWidgetElement(*aNode.AsContent())) {
     return false;
   }
 
@@ -1416,11 +1383,13 @@ bool HTMLEditUtils::IsEmptyNode(nsPresContext* aPresContext,
     // If there is no style information like in a document fragment, let's refer
     // the default style.
     if (MOZ_UNLIKELY(!elementStyle)) {
-      return {IsListItem(&aNode), IsTableCell(&aNode), false};
+      return {IsListItemElement(*aNode.AsContent()),
+              IsTableCellElement(*aNode.AsContent()), false};
     }
     const nsStyleDisplay* styleDisplay = elementStyle->StyleDisplay();
     if (NS_WARN_IF(!styleDisplay)) {
-      return {IsListItem(&aNode), IsTableCell(&aNode), false};
+      return {IsListItemElement(*aNode.AsContent()),
+              IsTableCellElement(*aNode.AsContent()), false};
     }
     if (styleDisplay->mDisplay != StyleDisplay::None &&
         styleDisplay->HasAppearance()) {
@@ -1904,16 +1873,17 @@ bool HTMLEditUtils::IsContainerNode(nsHTMLTag aTagId) {
   return kElements[aTagId - 1].mIsContainer;
 }
 
-bool HTMLEditUtils::IsNonListSingleLineContainer(const nsINode& aNode) {
-  return aNode.IsAnyOfHTMLElements(
+bool HTMLEditUtils::IsNonListSingleLineContainer(const nsIContent& aContent) {
+  return aContent.IsAnyOfHTMLElements(
       nsGkAtoms::address, nsGkAtoms::div, nsGkAtoms::h1, nsGkAtoms::h2,
       nsGkAtoms::h3, nsGkAtoms::h4, nsGkAtoms::h5, nsGkAtoms::h6,
       nsGkAtoms::listing, nsGkAtoms::p, nsGkAtoms::pre, nsGkAtoms::xmp);
 }
 
-bool HTMLEditUtils::IsSingleLineContainer(const nsINode& aNode) {
-  return IsNonListSingleLineContainer(aNode) ||
-         aNode.IsAnyOfHTMLElements(nsGkAtoms::li, nsGkAtoms::dt, nsGkAtoms::dd);
+bool HTMLEditUtils::IsSingleLineContainer(const nsIContent& aContent) {
+  return IsNonListSingleLineContainer(aContent) ||
+         aContent.IsAnyOfHTMLElements(nsGkAtoms::li, nsGkAtoms::dt,
+                                      nsGkAtoms::dd);
 }
 
 // static
@@ -2129,8 +2099,8 @@ EditorDOMPointType HTMLEditUtils::GetPreviousEditablePoint(
     InvisibleWhiteSpaces aInvisibleWhiteSpaces,
     TableBoundary aHowToTreatTableBoundary) {
   MOZ_ASSERT(HTMLEditUtils::IsSimplyEditableNode(aContent));
-  NS_ASSERTION(!HTMLEditUtils::IsAnyTableElement(&aContent) ||
-                   HTMLEditUtils::IsTableCellOrCaption(aContent),
+  NS_ASSERTION(!HTMLEditUtils::IsAnyTableElementExceptColumnElement(aContent) ||
+                   HTMLEditUtils::IsTableCellOrCaptionElement(aContent),
                "HTMLEditUtils::GetPreviousEditablePoint() may return a point "
                "between table structure elements");
 
@@ -2145,7 +2115,7 @@ EditorDOMPointType HTMLEditUtils::GetPreviousEditablePoint(
       return EditorDOMPointType();
     }
     nsIContent* inclusiveAncestor = &aContent;
-    for (Element* parentElement : aContent.AncestorsOfType<Element>()) {
+    for (Element* const parentElement : aContent.AncestorsOfType<Element>()) {
       if (parentElement == aAncestorLimiter ||
           !HTMLEditUtils::IsSimplyEditableNode(*parentElement) ||
           !HTMLEditUtils::CanCrossContentBoundary(*parentElement,
@@ -2157,8 +2127,9 @@ EditorDOMPointType HTMLEditUtils::GetPreviousEditablePoint(
 
       // Start of the parent element is a next editable point if it's an
       // element which is not a table structure element.
-      if (!HTMLEditUtils::IsAnyTableElement(parentElement) ||
-          HTMLEditUtils::IsTableCellOrCaption(*parentElement)) {
+      if (!HTMLEditUtils::IsAnyTableElementExceptColumnElement(
+              *parentElement) ||
+          HTMLEditUtils::IsTableCellOrCaptionElement(*parentElement)) {
         inclusiveAncestor = parentElement;
       }
 
@@ -2242,8 +2213,8 @@ EditorDOMPointType HTMLEditUtils::GetNextEditablePoint(
     InvisibleWhiteSpaces aInvisibleWhiteSpaces,
     TableBoundary aHowToTreatTableBoundary) {
   MOZ_ASSERT(HTMLEditUtils::IsSimplyEditableNode(aContent));
-  NS_ASSERTION(!HTMLEditUtils::IsAnyTableElement(&aContent) ||
-                   HTMLEditUtils::IsTableCellOrCaption(aContent),
+  NS_ASSERTION(!HTMLEditUtils::IsAnyTableElementExceptColumnElement(aContent) ||
+                   HTMLEditUtils::IsTableCellOrCaptionElement(aContent),
                "HTMLEditUtils::GetPreviousEditablePoint() may return a point "
                "between table structure elements");
 
@@ -2258,7 +2229,7 @@ EditorDOMPointType HTMLEditUtils::GetNextEditablePoint(
       return EditorDOMPointType();
     }
     nsIContent* inclusiveAncestor = &aContent;
-    for (Element* parentElement : aContent.AncestorsOfType<Element>()) {
+    for (Element* const parentElement : aContent.AncestorsOfType<Element>()) {
       if (parentElement == aAncestorLimiter ||
           !HTMLEditUtils::IsSimplyEditableNode(*parentElement) ||
           !HTMLEditUtils::CanCrossContentBoundary(*parentElement,
@@ -2270,8 +2241,9 @@ EditorDOMPointType HTMLEditUtils::GetNextEditablePoint(
 
       // End of the parent element is a next editable point if it's an
       // element which is not a table structure element.
-      if (!HTMLEditUtils::IsAnyTableElement(parentElement) ||
-          HTMLEditUtils::IsTableCellOrCaption(*parentElement)) {
+      if (!HTMLEditUtils::IsAnyTableElementExceptColumnElement(
+              *parentElement) ||
+          HTMLEditUtils::IsTableCellOrCaptionElement(*parentElement)) {
         inclusiveAncestor = parentElement;
       }
 
@@ -2601,8 +2573,8 @@ Element* HTMLEditUtils::GetInclusiveAncestorElement(
 // static
 Element* HTMLEditUtils::GetClosestAncestorAnyListElement(
     const nsIContent& aContent) {
-  for (Element* element : aContent.AncestorsOfType<Element>()) {
-    if (HTMLEditUtils::IsAnyListElement(element)) {
+  for (Element* const element : aContent.AncestorsOfType<Element>()) {
+    if (HTMLEditUtils::IsListElement(*element)) {
       return element;
     }
   }
@@ -2612,8 +2584,8 @@ Element* HTMLEditUtils::GetClosestAncestorAnyListElement(
 // static
 Element* HTMLEditUtils::GetClosestInclusiveAncestorAnyListElement(
     const nsIContent& aContent) {
-  for (Element* element : aContent.InclusiveAncestorsOfType<Element>()) {
-    if (HTMLEditUtils::IsAnyListElement(element)) {
+  for (Element* const element : aContent.InclusiveAncestorsOfType<Element>()) {
+    if (HTMLEditUtils::IsListElement(*element)) {
       return element;
     }
   }
@@ -2963,10 +2935,10 @@ size_t HTMLEditUtils::CollectChildren(
            GetFirstChild(aNode, {WalkTreeOption::IgnoreNonEditableNode});
        content; content = content->GetNextSibling()) {
     if ((aOptions.contains(CollectChildrenOption::CollectListChildren) &&
-         (HTMLEditUtils::IsAnyListElement(content) ||
-          HTMLEditUtils::IsListItem(content))) ||
+         (HTMLEditUtils::IsListElement(*content) ||
+          HTMLEditUtils::IsListItemElement(*content))) ||
         (aOptions.contains(CollectChildrenOption::CollectTableChildren) &&
-         HTMLEditUtils::IsAnyTableElement(content))) {
+         HTMLEditUtils::IsAnyTableElementExceptColumnElement(*content))) {
       numberOfFoundChildren += HTMLEditUtils::CollectChildren(
           *content, aOutArrayOfContents,
           aIndexToInsertChildren + numberOfFoundChildren, aOptions);

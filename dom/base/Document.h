@@ -23,7 +23,6 @@
 #include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/BasicEvents.h"
-#include "mozilla/BitSet.h"
 #include "mozilla/CORSMode.h"
 #include "mozilla/CallState.h"
 #include "mozilla/ContentBlockingNotifier.h"
@@ -547,6 +546,15 @@ enum class SheetPreloadStatus : uint8_t {
 
 //----------------------------------------------------------------------
 
+enum class LoadedAsData : uint8_t {
+  // Not "loaded as data"
+  No,
+  // The usual "loaded as data" case: both scripts and CSS are disabled
+  AsData,
+  // The printing case: counts as "loaded as data" but still allows styling
+  AsDataWithStyling,
+};
+
 // Document interface.  This is implemented by all document objects in
 // Gecko.
 class Document : public nsINode,
@@ -560,7 +568,7 @@ class Document : public nsINode,
   friend class LinkedListElement<Document>;
 
  protected:
-  explicit Document(const char* aContentType);
+  Document(const char* aContentType, LoadedAsData aLoadedAsData);
   virtual ~Document();
 
   Document(const Document&) = delete;
@@ -1709,15 +1717,18 @@ class Document : public nsINode,
   size_t FindDocStyleSheetInsertionPoint(const StyleSheet& aSheet);
 
   /**
-   * Get this document's CSSLoader.  This is guaranteed to not return null.
+   * Get this document's CSSLoader. This is guaranteed not to return null
+   * during normal loads but will return null when loading as data with
+   * styling disabled.
    */
-  css::Loader* CSSLoader() const { return mCSSLoader; }
+  css::Loader* GetCSSLoader() const { return mCSSLoader; }
 
   /**
-   * Get this document's StyleImageLoader.  This is guaranteed to not return
-   * null.
+   * Get this document's StyleImageLoader. This is guaranteed not to return null
+   * during normal loads but will return null when loading as data with
+   * styling disabled.
    */
-  css::ImageLoader* StyleImageLoader() const { return mStyleImageLoader; }
+  css::ImageLoader* GetStyleImageLoader() const { return mStyleImageLoader; }
 
   /**
    * Get the channel that was passed to StartDocumentLoad or Reset for this
@@ -1818,9 +1829,10 @@ class Document : public nsINode,
   }
 
   /**
-   * Get the script loader for this document
+   * Get the script loader for this document. Non-null for normal loads
+   * and null when loaded as data.
    */
-  dom::ScriptLoader* ScriptLoader() { return mScriptLoader; }
+  dom::ScriptLoader* GetScriptLoader() { return mScriptLoader; }
 
   /**
    * Add/Remove an element to the document's id and name hashes
@@ -2561,7 +2573,9 @@ class Document : public nsINode,
            !NodePrincipal()->SchemeIs("file");
   }
 
-  bool IsLoadedAsData() { return mLoadedAsData; }
+  bool IsLoadedAsData() const {
+    return mLoadedAsData != mozilla::dom::LoadedAsData::No;
+  }
 
   void SetAddedToMemoryReportAsDataDocument() {
     mAddedToMemoryReportingAsDataDocument = true;
@@ -3044,13 +3058,6 @@ class Document : public nsINode,
                                   const nsAString& aFetchPriority);
 
   /**
-   * Called by the chrome registry to load style sheets.
-   *
-   * This always does a synchronous load, and parses as a normal document sheet.
-   */
-  RefPtr<StyleSheet> LoadChromeSheetSync(nsIURI* aURI);
-
-  /**
    * Returns true if the locale used for the document specifies a direction of
    * right to left. For chrome documents, this comes from the chrome registry.
    * This is used to determine the current state for the :-moz-locale-dir
@@ -3411,10 +3418,10 @@ class Document : public nsINode,
   void Close(mozilla::ErrorResult& rv);
   MOZ_CAN_RUN_SCRIPT void Write(
       const mozilla::dom::Sequence<OwningTrustedHTMLOrString>& aText,
-      mozilla::ErrorResult& rv);
+      nsIPrincipal* aSubjectPrincipal, mozilla::ErrorResult& rv);
   MOZ_CAN_RUN_SCRIPT void Writeln(
       const mozilla::dom::Sequence<OwningTrustedHTMLOrString>& aText,
-      mozilla::ErrorResult& rv);
+      nsIPrincipal* aSubjectPrincipal, mozilla::ErrorResult& rv);
   Nullable<WindowProxyHolder> GetDefaultView() const;
   Element* GetActiveElement();
   enum class IncludeChromeOnly : bool { No, Yes };
@@ -4419,11 +4426,13 @@ class Document : public nsINode,
 
   MOZ_CAN_RUN_SCRIPT void WriteCommon(const nsAString& aText,
                                       bool aNewlineTerminate, bool aIsTrusted,
+                                      nsIPrincipal* aSubjectPrincipal,
                                       mozilla::ErrorResult& aRv);
   // A version of WriteCommon used by WebIDL bindings
   MOZ_CAN_RUN_SCRIPT void WriteCommon(
       const mozilla::dom::Sequence<OwningTrustedHTMLOrString>& aText,
-      bool aNewlineTerminate, mozilla::ErrorResult& rv);
+      bool aNewlineTerminate, nsIPrincipal* aSubjectPrincipal,
+      mozilla::ErrorResult& rv);
 
   void* GenerateParserKey(void);
 
@@ -4774,6 +4783,10 @@ class Document : public nsINode,
 
   DocumentState mState{DocumentState::LTR_LOCALE};
 
+  // Indicates whether this document is normal as in navigation, loaded as data
+  // as in XHR or DOMParser, or loaded as data with styling as in printing.
+  const mozilla::dom::LoadedAsData mLoadedAsData;
+
   RefPtr<Promise> mReadyForIdle;
 
   RefPtr<mozilla::dom::FeaturePolicy> mFeaturePolicy;
@@ -4809,10 +4822,6 @@ class Document : public nsINode,
   bool mIsEverInitialDocumentInWindow : 1;
 
   bool mIgnoreDocGroupMismatches : 1;
-
-  // True if we're loaded as data and therefor has any dangerous stuff, such
-  // as scripts and plugins, disabled.
-  bool mLoadedAsData : 1;
 
   // True if the document is considered for memory reporting as a
   // data document
@@ -5750,20 +5759,21 @@ bool IsInActiveTab(Document* aDoc);
 NON_VIRTUAL_ADDREF_RELEASE(mozilla::dom::Document)
 
 // XXX These belong somewhere else
-nsresult NS_NewHTMLDocument(mozilla::dom::Document** aInstancePtrResult,
-                            nsIPrincipal* aPrincipal,
-                            nsIPrincipal* aPartitionedPrincipal,
-                            bool aLoadedAsData = false);
+nsresult NS_NewHTMLDocument(
+    mozilla::dom::Document** aInstancePtrResult, nsIPrincipal* aPrincipal,
+    nsIPrincipal* aPartitionedPrincipal,
+    mozilla::dom::LoadedAsData aLoadedAsData = mozilla::dom::LoadedAsData::No);
 
-nsresult NS_NewXMLDocument(mozilla::dom::Document** aInstancePtrResult,
-                           nsIPrincipal* aPrincipal,
-                           nsIPrincipal* aPartitionedPrincipal,
-                           bool aLoadedAsData = false,
-                           bool aIsPlainDocument = false);
+nsresult NS_NewXMLDocument(
+    mozilla::dom::Document** aInstancePtrResult, nsIPrincipal* aPrincipal,
+    nsIPrincipal* aPartitionedPrincipal,
+    mozilla::dom::LoadedAsData aLoadedAsData = mozilla::dom::LoadedAsData::No,
+    bool aIsPlainDocument = false);
 
-nsresult NS_NewSVGDocument(mozilla::dom::Document** aInstancePtrResult,
-                           nsIPrincipal* aPrincipal,
-                           nsIPrincipal* aPartitionedPrincipal);
+nsresult NS_NewSVGDocument(
+    mozilla::dom::Document** aInstancePtrResult, nsIPrincipal* aPrincipal,
+    nsIPrincipal* aPartitionedPrincipal,
+    mozilla::dom::LoadedAsData aLoadedAsData = mozilla::dom::LoadedAsData::No);
 
 nsresult NS_NewImageDocument(mozilla::dom::Document** aInstancePtrResult,
                              nsIPrincipal* aPrincipal,
@@ -5789,7 +5799,8 @@ nsresult NS_NewDOMDocument(
     mozilla::dom::Document** aInstancePtrResult, const nsAString& aNamespaceURI,
     const nsAString& aQualifiedName, mozilla::dom::DocumentType* aDoctype,
     nsIURI* aDocumentURI, nsIURI* aBaseURI, nsIPrincipal* aPrincipal,
-    bool aLoadedAsData, nsIGlobalObject* aEventObject, DocumentFlavor aFlavor);
+    mozilla::dom::LoadedAsData aLoadedAsData, nsIGlobalObject* aEventObject,
+    DocumentFlavor aFlavor);
 
 inline mozilla::dom::Document* nsINode::GetOwnerDocument() const {
   mozilla::dom::Document* ownerDoc = OwnerDoc();

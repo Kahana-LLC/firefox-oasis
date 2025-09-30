@@ -296,6 +296,7 @@ for (const type of [
   "WEATHER_QUERY_UPDATE",
   "WEATHER_SEARCH_ACTIVE",
   "WEATHER_UPDATE",
+  "WEATHER_USER_OPT_IN_LOCATION",
   "WEBEXT_CLICK",
   "WEBEXT_DISMISS",
   "WIDGETS_LISTS_CHANGE_SELECTED",
@@ -604,47 +605,11 @@ const external_ReactRedux_namespaceObject = ReactRedux;
 ;// CONCATENATED MODULE: external "React"
 const external_React_namespaceObject = React;
 var external_React_default = /*#__PURE__*/__webpack_require__.n(external_React_namespaceObject);
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamAdmin/SimpleHashRouter.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-class SimpleHashRouter extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.onHashChange = this.onHashChange.bind(this);
-    this.state = {
-      hash: globalThis.location.hash
-    };
-  }
-  onHashChange() {
-    this.setState({
-      hash: globalThis.location.hash
-    });
-  }
-  componentWillMount() {
-    globalThis.addEventListener("hashchange", this.onHashChange);
-  }
-  componentWillUnmount() {
-    globalThis.removeEventListener("hashchange", this.onHashChange);
-  }
-  render() {
-    const [, ...routes] = this.state.hash.split("-");
-    return /*#__PURE__*/external_React_default().cloneElement(this.props.children, {
-      location: {
-        hash: this.state.hash,
-        routes
-      }
-    });
-  }
-}
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamAdmin/DiscoveryStreamAdmin.jsx
 function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
 
 
 
@@ -1218,65 +1183,36 @@ class DiscoveryStreamAdminInner extends (external_React_default()).PureComponent
     }))));
   }
 }
-class CollapseToggle extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.onCollapseToggle = this.onCollapseToggle.bind(this);
-    this.state = {
-      collapsed: false
-    };
-  }
-  get renderAdmin() {
-    const {
-      props
-    } = this;
-    return props.location.hash && props.location.hash.startsWith("#devtools");
-  }
-  onCollapseToggle(e) {
-    e.preventDefault();
-    this.setState(state => ({
-      collapsed: !state.collapsed
-    }));
-  }
-  setBodyClass() {
-    if (this.renderAdmin && !this.state.collapsed) {
-      globalThis.document.body.classList.add("no-scroll");
-    } else {
+function CollapseToggle(props) {
+  const {
+    devtoolsCollapsed
+  } = props;
+  const label = `${devtoolsCollapsed ? "Expand" : "Collapse"} devtools`;
+  (0,external_React_namespaceObject.useEffect)(() => {
+    // Set or remove body class depending on devtoolsCollapsed state
+    if (devtoolsCollapsed) {
       globalThis.document.body.classList.remove("no-scroll");
+    } else {
+      globalThis.document.body.classList.add("no-scroll");
     }
-  }
-  componentDidMount() {
-    this.setBodyClass();
-  }
-  componentDidUpdate() {
-    this.setBodyClass();
-  }
-  componentWillUnmount() {
-    globalThis.document.body.classList.remove("no-scroll");
-  }
-  render() {
-    const {
-      props
-    } = this;
-    const {
-      renderAdmin
-    } = this;
-    const isCollapsed = this.state.collapsed || !renderAdmin;
-    const label = `${isCollapsed ? "Expand" : "Collapse"} devtools`;
-    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("a", {
-      href: "#devtools",
-      title: label,
-      "aria-label": label,
-      className: `discoverystream-admin-toggle ${isCollapsed ? "collapsed" : "expanded"}`,
-      onClick: this.renderAdmin ? this.onCollapseToggle : null
-    }, /*#__PURE__*/external_React_default().createElement("span", {
-      className: "icon icon-devtools"
-    })), renderAdmin ? /*#__PURE__*/external_React_default().createElement(DiscoveryStreamAdminInner, _extends({}, props, {
-      collapsed: this.state.collapsed
-    })) : null);
-  }
+
+    // Cleanup on unmount
+    return () => {
+      globalThis.document.body.classList.remove("no-scroll");
+    };
+  }, [devtoolsCollapsed]);
+  return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("a", {
+    href: devtoolsCollapsed ? "#devtools" : "#",
+    title: label,
+    "aria-label": label,
+    className: `discoverystream-admin-toggle ${devtoolsCollapsed ? "expanded" : "collapsed"}`
+  }, /*#__PURE__*/external_React_default().createElement("span", {
+    className: "icon icon-devtools"
+  })), !devtoolsCollapsed ? /*#__PURE__*/external_React_default().createElement(DiscoveryStreamAdminInner, _extends({}, props, {
+    collapsed: devtoolsCollapsed
+  })) : null);
 }
-const _DiscoveryStreamAdmin = props => /*#__PURE__*/external_React_default().createElement(SimpleHashRouter, null, /*#__PURE__*/external_React_default().createElement(CollapseToggle, props));
+const _DiscoveryStreamAdmin = props => /*#__PURE__*/external_React_default().createElement(CollapseToggle, props);
 const DiscoveryStreamAdmin = (0,external_ReactRedux_namespaceObject.connect)(state => ({
   Sections: state.Sections,
   DiscoveryStream: state.DiscoveryStream,
@@ -3902,6 +3838,7 @@ class _DSCard extends (external_React_default()).PureComponent {
       event: "POCKET_THUMBS_UP",
       source: "THUMBS_UI",
       value: {
+        action_position: this.props.pos,
         recommendation_id: this.props.recommendation_id,
         tile_id: this.props.id,
         corpus_item_id: this.props.corpus_item_id,
@@ -3979,6 +3916,7 @@ class _DSCard extends (external_React_default()).PureComponent {
         event: "POCKET_THUMBS_DOWN",
         source: "THUMBS_UI",
         value: {
+          action_position: this.props.pos,
           recommendation_id: this.props.recommendation_id,
           tile_id: this.props.id,
           corpus_item_id: this.props.corpus_item_id,
@@ -10950,9 +10888,14 @@ const selectLayoutRender = ({ state = {}, prefs = {} }) => {
 
   // Filter sections is Widgets are turned off
   // Note extra logic is required bc this feature can be enabled via Nimbus
+  const nimbusWidgetsTrainhopEnabled = prefs.trainhopConfig?.widgets?.enabled;
   const nimbusWidgetsEnabled = prefs.widgetsConfig?.enabled;
   const widgetsEnabled = prefs["widgets.system.enabled"];
-  if (!nimbusWidgetsEnabled && !widgetsEnabled) {
+  if (
+    !nimbusWidgetsTrainhopEnabled &&
+    !nimbusWidgetsEnabled &&
+    !widgetsEnabled
+  ) {
     filterArray.push("Widgets");
   }
 
@@ -11605,8 +11548,9 @@ function LocationSearch({
       value
     } = event.target;
     setUserInput(value);
+
     // if the user input contains less than three characters and suggestedLocations is not an empty array,
-    // reset suggestedLocations to [] so there arent incorrect items in the datalist
+    // reset suggestedLocations to [] so there aren't incorrect items in the datalist
     if (value.length < 3 && suggestedLocations.length) {
       dispatch(actionCreators.AlsoToMain({
         type: actionTypes.WEATHER_LOCATION_SUGGESTIONS_UPDATE,
@@ -11661,10 +11605,10 @@ function LocationSearch({
     onClick: handleCloseSearch
   }), /*#__PURE__*/external_React_default().createElement("datalist", {
     id: "merino-location-list"
-  }, (suggestedLocations || []).map(merinoLcation => /*#__PURE__*/external_React_default().createElement("option", {
-    value: merinoLcation.key,
-    key: merinoLcation.key
-  }, merinoLcation.localized_name, ",", " ", merinoLcation.administrative_area.localized_name)))));
+  }, (suggestedLocations || []).map(merinoLocation => /*#__PURE__*/external_React_default().createElement("option", {
+    value: merinoLocation.key,
+    key: merinoLocation.key
+  }, merinoLocation.localized_name, ",", " ", merinoLocation.administrative_area.localized_name)))));
 }
 
 ;// CONCATENATED MODULE: ./content-src/components/Weather/Weather.jsx
@@ -11844,6 +11788,19 @@ class _Weather extends (external_React_default()).PureComponent {
       }
     }));
   }
+  handleRejectOptIn = () => {
+    this.props.dispatch(actionCreators.SetPref("weather.optInAccepted", false));
+    this.props.dispatch(actionCreators.SetPref("weather.optInDisplayed", false));
+  };
+  handleAcceptOptIn = () => {
+    (0,external_ReactRedux_namespaceObject.batch)(() => {
+      this.props.dispatch(actionCreators.SetPref("weather.optInAccepted", true));
+      this.props.dispatch(actionCreators.SetPref("weather.optInDisplayed", false));
+      this.props.dispatch(actionCreators.AlsoToMain({
+        type: actionTypes.WEATHER_USER_OPT_IN_LOCATION
+      }));
+    });
+  };
   render() {
     // Check if weather should be rendered
     const isWeatherEnabled = this.props.Prefs.values["system.showWeather"];
@@ -11867,10 +11824,34 @@ class _Weather extends (external_React_default()).PureComponent {
     const WEATHER_SUGGESTION = Weather.suggestions?.[0];
     const outerClassName = ["weather", Weather.searchActive && "search", props.isInSection && "section-weather"].filter(v => v).join(" ");
     const showDetailedView = Prefs.values["weather.display"] === "detailed";
+    const isOptInEnabled = Prefs.values["system.showWeatherOptIn"];
+    const optInDisplayed = Prefs.values["weather.optInDisplayed"];
+    const nimbusOptInDisplayed = Prefs.values.trainhopConfig?.weather?.optInDisplayed;
+    const optInUserChoice = Prefs.values["weather.optInAccepted"];
+    const nimbusOptInUserChoice = Prefs.values.trainhopConfig?.weather?.optInAccepted;
+    const staticWeather = Prefs.values["weather.staticData.enabled"];
+    const nimbusStaticWeather = Prefs.values.trainhopConfig?.weather?.staticDataEnabled;
+    const optInPrompt = nimbusOptInDisplayed ?? optInDisplayed ?? false;
+    const userChoice = nimbusOptInUserChoice ?? optInUserChoice ?? false;
+    const isUserWeatherEnabled = Prefs.values.showWeather;
+    const staticDataEnabled = nimbusStaticWeather ?? staticWeather ?? false;
+
+    // Opt-in dialog should only show if:
+    // - weather enabled on customization menu
+    // - weather opt-in pref is enabled
+    // - opt-in prompt is enabled
+    // - user hasn't accepted the opt-in yet
+    const shouldShowOptInDialog = isUserWeatherEnabled && isOptInEnabled && optInPrompt && !userChoice;
+
+    // Show static weather data only if:
+    // - weather is enabled on customization menu
+    // - weather opt-in pref is enabled
+    // - static weather data is enabled
+    const showStaticData = isUserWeatherEnabled && isOptInEnabled && staticDataEnabled;
 
     // Note: The temperature units/display options will become secondary menu items
     const WEATHER_SOURCE_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), ...(Prefs.values["weather.temperatureUnits"] === "f" ? ["ChangeTempUnitCelsius"] : ["ChangeTempUnitFahrenheit"]), ...(Prefs.values["weather.display"] === "simple" ? ["ChangeWeatherDisplayDetailed"] : ["ChangeWeatherDisplaySimple"]), "HideWeather", "OpenLearnMoreURL"];
-    const WEATHER_SOURCE_ERROR_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), "HideWeather", "OpenLearnMoreURL"];
+    const WEATHER_SOURCE_SHORTENED_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), "HideWeather", "OpenLearnMoreURL"];
     const contextMenu = contextOpts => /*#__PURE__*/external_React_default().createElement("div", {
       className: "weatherButtonContextMenuWrapper"
     }, /*#__PURE__*/external_React_default().createElement("button", {
@@ -11901,7 +11882,23 @@ class _Weather extends (external_React_default()).PureComponent {
         className: outerClassName
       }, /*#__PURE__*/external_React_default().createElement("div", {
         className: "weatherCard"
-      }, /*#__PURE__*/external_React_default().createElement("a", {
+      }, showStaticData ? /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherInfoLink staticWeatherInfo"
+      }, /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherIconCol"
+      }, /*#__PURE__*/external_React_default().createElement("span", {
+        className: "weatherIcon iconId3"
+      })), /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherText"
+      }, /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherForecastRow"
+      }, /*#__PURE__*/external_React_default().createElement("span", {
+        className: "weatherTemperature"
+      }, "22\xB0", Prefs.values["weather.temperatureUnits"])), /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherCityRow"
+      }, /*#__PURE__*/external_React_default().createElement("span", {
+        className: "weatherCity"
+      }, "New York City")))) : /*#__PURE__*/external_React_default().createElement("a", {
         "data-l10n-id": "newtab-weather-see-forecast",
         "data-l10n-args": "{\"provider\": \"AccuWeather\xAE\"}",
         href: WEATHER_SUGGESTION.forecast.url,
@@ -11927,12 +11924,32 @@ class _Weather extends (external_React_default()).PureComponent {
         className: "weatherHighLowTemps"
       }, /*#__PURE__*/external_React_default().createElement("span", null, WEATHER_SUGGESTION.forecast.high[Prefs.values["weather.temperatureUnits"]], "\xB0", Prefs.values["weather.temperatureUnits"]), /*#__PURE__*/external_React_default().createElement("span", null, "\u2022"), /*#__PURE__*/external_React_default().createElement("span", null, WEATHER_SUGGESTION.forecast.low[Prefs.values["weather.temperatureUnits"]], "\xB0", Prefs.values["weather.temperatureUnits"])), /*#__PURE__*/external_React_default().createElement("span", {
         className: "weatherTextSummary"
-      }, WEATHER_SUGGESTION.current_conditions.summary)) : null)), contextMenu(WEATHER_SOURCE_CONTEXT_MENU_OPTIONS)), /*#__PURE__*/external_React_default().createElement("span", {
+      }, WEATHER_SUGGESTION.current_conditions.summary)) : null)), contextMenu(showStaticData ? WEATHER_SOURCE_SHORTENED_CONTEXT_MENU_OPTIONS : WEATHER_SOURCE_CONTEXT_MENU_OPTIONS)), /*#__PURE__*/external_React_default().createElement("span", {
         className: "weatherSponsorText"
       }, /*#__PURE__*/external_React_default().createElement("span", {
         "data-l10n-id": "newtab-weather-sponsored",
         "data-l10n-args": "{\"provider\": \"AccuWeather\xAE\"}"
-      })));
+      })), shouldShowOptInDialog && /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherOptIn"
+      }, /*#__PURE__*/external_React_default().createElement("dialog", {
+        open: true
+      }, /*#__PURE__*/external_React_default().createElement("span", {
+        className: "weatherOptInImg"
+      }), /*#__PURE__*/external_React_default().createElement("div", {
+        className: "weatherOptInContent"
+      }, /*#__PURE__*/external_React_default().createElement("h3", null, "Do you want to see the weather for your location?"), /*#__PURE__*/external_React_default().createElement("moz-button-group", {
+        className: "button-group"
+      }, /*#__PURE__*/external_React_default().createElement("moz-button", {
+        size: "small",
+        type: "default",
+        label: "Not now",
+        onClick: this.handleRejectOptIn
+      }), /*#__PURE__*/external_React_default().createElement("moz-button", {
+        size: "small",
+        type: "default",
+        label: "Yes",
+        onClick: this.handleAcceptOptIn
+      }))))));
     }
     return /*#__PURE__*/external_React_default().createElement("div", {
       ref: this.setErrorRef,
@@ -11943,7 +11960,7 @@ class _Weather extends (external_React_default()).PureComponent {
       className: "icon icon-info-warning"
     }), " ", /*#__PURE__*/external_React_default().createElement("p", {
       "data-l10n-id": "newtab-weather-error-not-available"
-    }), contextMenu(WEATHER_SOURCE_ERROR_CONTEXT_MENU_OPTIONS)));
+    }), contextMenu(WEATHER_SOURCE_SHORTENED_CONTEXT_MENU_OPTIONS)));
   }
 }
 const Weather_Weather = (0,external_ReactRedux_namespaceObject.connect)(state => ({
@@ -11994,6 +12011,7 @@ const CardSections_PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled"
 const CardSections_PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
 const CardSections_PREF_TRENDING_SEARCH_VARIANT = "trendingSearch.variant";
 const CardSections_PREF_DAILY_BRIEF_SECTIONID = "discoverystream.dailyBrief.sectionId";
+const CardSections_PREF_SPOCS_STARTUPCACHE_ENABLED = "discoverystream.spocs.startupCache.enabled";
 function getLayoutData(responsiveLayouts, index, refinedCardsLayout, sectionKey) {
   let layoutData = {
     classNames: [],
@@ -12081,6 +12099,9 @@ function CardSection({
   const {
     sectionPersonalization
   } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.DiscoveryStream);
+  const {
+    isForStartupCache
+  } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.App);
   const showTopics = prefs[CardSections_PREF_TOPICS_ENABLED];
   const mayHaveSectionsCards = prefs[CardSections_PREF_SECTIONS_CARDS_ENABLED];
   const mayHaveSectionsCardsThumbsUpDown = prefs[PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED];
@@ -12088,6 +12109,7 @@ function CardSection({
   const selectedTopics = prefs[CardSections_PREF_TOPICS_SELECTED];
   const availableTopics = prefs[CardSections_PREF_TOPICS_AVAILABLE];
   const refinedCardsLayout = prefs[PREF_REFINED_CARDS_ENABLED];
+  const spocsStartupCacheEnabled = prefs[CardSections_PREF_SPOCS_STARTUPCACHE_ENABLED];
   const trendingEnabled = prefs[CardSections_PREF_TRENDING_SEARCH] && prefs[CardSections_PREF_TRENDING_SEARCH_SYSTEM] && prefs[CardSections_PREF_SEARCH_ENGINE]?.toLowerCase() === "google";
   const trendingVariant = prefs[CardSections_PREF_TRENDING_SEARCH_VARIANT];
   const shouldShowTrendingSearch = trendingEnabled && trendingVariant === "b";
@@ -12238,7 +12260,11 @@ function CardSection({
       classNames,
       imageSizes
     } = layoutData;
-    if (!rec || rec.placeholder) {
+    // Render a placeholder card when:
+    // 1. No recommendation is available.
+    // 2. The item is flagged as a placeholder.
+    // 3. Spocs are loading for with spocs startup cache disabled.
+    if (!rec || rec.placeholder || rec.flight_id && !spocsStartupCacheEnabled && isForStartupCache.DiscoveryStream) {
       return /*#__PURE__*/external_React_default().createElement(PlaceholderDSCard, {
         key: `dscard-${index}`
       });
@@ -13803,8 +13829,10 @@ function Widgets() {
   const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
   const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
   const nimbusTimerEnabled = prefs.widgetsConfig?.timerEnabled;
-  const listsEnabled = (nimbusListsEnabled || prefs[PREF_WIDGETS_SYSTEM_LISTS_ENABLED]) && prefs[PREF_WIDGETS_LISTS_ENABLED];
-  const timerEnabled = (nimbusTimerEnabled || prefs[PREF_WIDGETS_SYSTEM_TIMER_ENABLED]) && prefs[PREF_WIDGETS_TIMER_ENABLED];
+  const nimbusListsTrainhopEnabled = prefs.trainhopConfig?.widgets?.listsEnabled;
+  const nimbusTimerTrainhopEnabled = prefs.trainhopConfig?.widgets?.timerEnabled;
+  const listsEnabled = (nimbusListsTrainhopEnabled || nimbusListsEnabled || prefs[PREF_WIDGETS_SYSTEM_LISTS_ENABLED]) && prefs[PREF_WIDGETS_LISTS_ENABLED];
+  const timerEnabled = (nimbusTimerTrainhopEnabled || nimbusTimerEnabled || prefs[PREF_WIDGETS_SYSTEM_TIMER_ENABLED]) && prefs[PREF_WIDGETS_TIMER_ENABLED];
   const recommendedStoriesEnabled = prefs[PREF_FEEDS_SECTION_TOPSTORIES];
   function handleUserInteraction(widgetName) {
     const prefName = `widgets.${widgetName}.interaction`;
@@ -13813,6 +13841,9 @@ function Widgets() {
     if (hasInteracted === false) {
       dispatch(actionCreators.SetPref(prefName, true));
     }
+  }
+  if (!(listsEnabled || timerEnabled)) {
+    return null;
   }
   return /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-wrapper"
@@ -14089,9 +14120,10 @@ class _DiscoveryStreamBase extends (external_React_default()).PureComponent {
 
     // There are two ways to enable widgets:
     // Via `widgets.system.*` prefs or Nimbus experiment
+    const widgetsNimbusTrainhopEnabled = this.props.Prefs.values.trainhopConfig?.widgets?.enabled;
     const widgetsNimbusEnabled = this.props.Prefs.values.widgetsConfig?.enabled;
     const widgetsSystemPrefsEnabled = this.props.Prefs.values["widgets.system.enabled"];
-    const widgets = widgetsNimbusEnabled || widgetsSystemPrefsEnabled;
+    const widgets = widgetsNimbusTrainhopEnabled || widgetsNimbusEnabled || widgetsSystemPrefsEnabled;
     const message = extractComponent("Message") || {
       header: {
         link_text: topStories.learnMore.link.message,
@@ -16235,36 +16267,37 @@ function Base_debounce(func, wait) {
     func.apply(this, args);
   };
 }
-class _Base extends (external_React_default()).PureComponent {
-  constructor(props) {
-    super(props);
-    this.state = {
-      message: {}
+function WithDsAdmin(props) {
+  const {
+    hash = globalThis?.location?.hash || ""
+  } = props;
+  const [devtoolsCollapsed, setDevtoolsCollapsed] = (0,external_React_namespaceObject.useState)(!hash.startsWith("#devtools"));
+  (0,external_React_namespaceObject.useEffect)(() => {
+    const onHashChange = () => {
+      const h = globalThis?.location?.hash || "";
+      setDevtoolsCollapsed(!h.startsWith("#devtools"));
     };
-    this.notifyContent = this.notifyContent.bind(this);
+
+    // run once in case hash changed before mount
+    onHashChange();
+    globalThis?.addEventListener("hashchange", onHashChange);
+    return () => globalThis?.removeEventListener("hashchange", onHashChange);
+  }, []);
+  return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement(DiscoveryStreamAdmin, {
+    devtoolsCollapsed: devtoolsCollapsed
+  }), devtoolsCollapsed ? /*#__PURE__*/external_React_default().createElement(BaseContent, props) : null);
+}
+function _Base(props) {
+  const isDevtoolsEnabled = props.Prefs.values["asrouter.devtoolsEnabled"];
+  const {
+    App
+  } = props;
+  if (!App.initialized) {
+    return null;
   }
-  notifyContent(state) {
-    this.setState(state);
-  }
-  render() {
-    const {
-      props
-    } = this;
-    const {
-      App
-    } = props;
-    const isDevtoolsEnabled = props.Prefs.values["asrouter.devtoolsEnabled"];
-    if (!App.initialized) {
-      return null;
-    }
-    return /*#__PURE__*/external_React_default().createElement(ErrorBoundary, {
-      className: "base-content-fallback"
-    }, /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement(BaseContent, Base_extends({}, this.props, {
-      adminContent: this.state
-    })), isDevtoolsEnabled ? /*#__PURE__*/external_React_default().createElement(DiscoveryStreamAdmin, {
-      notifyContent: this.notifyContent
-    }) : null));
-  }
+  return /*#__PURE__*/external_React_default().createElement(ErrorBoundary, {
+    className: "base-content-fallback"
+  }, isDevtoolsEnabled ? /*#__PURE__*/external_React_default().createElement(WithDsAdmin, props) : /*#__PURE__*/external_React_default().createElement(BaseContent, props));
 }
 class BaseContent extends (external_React_default()).PureComponent {
   constructor(props) {
@@ -16279,7 +16312,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     this.updateWallpaper = this.updateWallpaper.bind(this);
     this.prefersDarkQuery = null;
     this.handleColorModeChange = this.handleColorModeChange.bind(this);
-    this.shouldDisplayTopicSelectionModal = this.shouldDisplayTopicSelectionModal.bind(this);
+    this.onVisible = this.onVisible.bind(this);
     this.toggleDownloadHighlight = this.toggleDownloadHighlight.bind(this);
     this.handleDismissDownloadHighlight = this.handleDismissDownloadHighlight.bind(this);
     this.applyBodyClasses = this.applyBodyClasses.bind(this);
@@ -16299,6 +16332,10 @@ class BaseContent extends (external_React_default()).PureComponent {
       });
     }
   }
+  onVisible() {
+    this.setFirstVisibleTimestamp();
+    this.shouldDisplayTopicSelectionModal();
+  }
   componentDidMount() {
     this.applyBodyClasses();
     __webpack_require__.g.addEventListener("scroll", this.onWindowScroll);
@@ -16306,13 +16343,11 @@ class BaseContent extends (external_React_default()).PureComponent {
     const prefs = this.props.Prefs.values;
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     if (this.props.document.visibilityState === Base_VISIBLE) {
-      this.setFirstVisibleTimestamp();
-      this.shouldDisplayTopicSelectionModal();
+      this.onVisible();
     } else {
       this._onVisibilityChange = () => {
         if (this.props.document.visibilityState === Base_VISIBLE) {
-          this.setFirstVisibleTimestamp();
-          this.shouldDisplayTopicSelectionModal();
+          this.onVisible();
           this.props.document.removeEventListener(Base_VISIBILITY_CHANGE_EVENT, this._onVisibilityChange);
           this._onVisibilityChange = null;
         }
@@ -16330,6 +16365,14 @@ class BaseContent extends (external_React_default()).PureComponent {
   componentDidUpdate(prevProps) {
     this.applyBodyClasses();
     const prefs = this.props.Prefs.values;
+
+    // Check if weather widget was re-enabled from customization menu
+    const wasWeatherDisabled = !prevProps.Prefs.values.showWeather;
+    const isWeatherEnabled = this.props.Prefs.values.showWeather;
+    if (wasWeatherDisabled && isWeatherEnabled) {
+      // If weather widget was enabled from customization menu, display opt-in dialog
+      this.props.dispatch(actionCreators.SetPref("weather.optInDisplayed", true));
+    }
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     if (wallpapersEnabled) {
       // destructure current and previous props with fallbacks
@@ -16693,9 +16736,12 @@ class BaseContent extends (external_React_default()).PureComponent {
     const nimbusWidgetsEnabled = prefs.widgetsConfig?.enabled;
     const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
     const nimbusTimerEnabled = prefs.widgetsConfig?.timerEnabled;
-    const mayHaveWidgets = prefs["widgets.system.enabled"] || nimbusWidgetsEnabled;
-    const mayHaveListsWidget = prefs["widgets.system.lists.enabled"] || nimbusListsEnabled;
-    const mayHaveTimerWidget = prefs["widgets.system.focusTimer.enabled"] || nimbusTimerEnabled;
+    const nimbusWidgetsTrainhopEnabled = prefs.trainhopConfig?.widgets?.enabled;
+    const nimbusListsTrainhopEnabled = prefs.trainhopConfig?.widgets?.listsEnabled;
+    const nimbusTimerTrainhopEnabled = prefs.trainhopConfig?.widgets?.timerEnabled;
+    const mayHaveWidgets = prefs["widgets.system.enabled"] || nimbusWidgetsEnabled || nimbusWidgetsTrainhopEnabled;
+    const mayHaveListsWidget = prefs["widgets.system.lists.enabled"] || nimbusListsEnabled || nimbusListsTrainhopEnabled;
+    const mayHaveTimerWidget = prefs["widgets.system.focusTimer.enabled"] || nimbusTimerEnabled || nimbusTimerTrainhopEnabled;
 
     // These prefs set the initial values on the Customize panel toggle switches
     const enabledWidgets = {

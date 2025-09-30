@@ -1399,7 +1399,6 @@ newtab.handoff_preference:
     notification_emails:
       - fx-search-telemetry@mozilla.com
 
-
 topsites:
   enabled:
     lifetime: application
@@ -2082,6 +2081,10 @@ pocket:
           If click belongs in a section, the numeric position of the section
         type: string
       is_section_followed: *is_section_followed
+      content_redacted:
+        description: >
+          Are content details sent separately in the newtab_content ping
+        type: boolean
     send_in_pings:
       - newtab
 
@@ -2264,6 +2267,7 @@ pocket:
       recommendation_id: *recommendation_id
       tile_id: *pocket_tile_id
       format: *format
+      position: *pocket_position
       thumbs_up:
         description: >
           If the user clicked thumbs up.
@@ -2660,6 +2664,7 @@ newtab_content:
       recommendation_id: *recommendation_id
       tile_id: *pocket_tile_id
       format: *format
+      position: *pocket_position
       thumbs_up:
         description: >
           If the user clicked thumbs up.

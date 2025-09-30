@@ -36,7 +36,7 @@ support-files = [
 
 ["test_BackupService_onedrive.js"]
 run-if = ["os == 'win'"]
-run-sequentially = "Mock Windows registry interferes with normal operations"
+run-sequentially = ["true"] # Mock Windows registry interferes with normal operations
 
 ["test_BackupService_recoverFromSnapshotFolder.js"]
 
@@ -47,6 +47,8 @@ run-sequentially = "Mock Windows registry interferes with normal operations"
 ["test_BackupService_resolveArchiveDestFolderPath.js"]
 
 ["test_BackupService_resolveDownloadLink.js"]
+
+["test_BackupService_retryHeuristic.js"]
 
 ["test_BackupService_scheduler.js"]
 

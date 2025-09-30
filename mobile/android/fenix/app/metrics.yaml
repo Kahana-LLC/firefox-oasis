@@ -3561,26 +3561,6 @@ metrics:
     metadata:
       tags:
         - Performance
-  search_page_load_time:
-    type: timing_distribution
-    time_unit: millisecond
-    lifetime: application
-    description: The time that it takes to load the Search content.
-    send_in_pings:
-      - metrics
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1842604
-    data_reviews:
-      - https://github.com/mozilla-mobile/firefox-android/pull/2889
-      - https://github.com/mozilla-mobile/firefox-android/pull/4039
-    data_sensitivity:
-      - technical
-    notification_emails:
-      - android-probes@mozilla.com
-    expires: never
-    metadata:
-      tags:
-        - Experiments
   is_large_device:
     type: boolean
     lifetime: application
@@ -13204,6 +13184,22 @@ broken_site_report.tab_info:
     send_in_pings:
       - broken-site-report
 broken_site_report.tab_info.antitracking:
+  blocked_origins:
+    type: string_list
+    expires: never
+    data_sensitivity:
+      - highly_sensitive
+    description: >
+      List of origins which were blocked by antitracking.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=1970745
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=1970745
+    notification_emails:
+      - twisniewski@mozilla.com
+      - webcompat-reporting-tool-telemetry@mozilla.com
+    send_in_pings:
+      - broken-site-report
   block_list:
     type: string
     expires: never

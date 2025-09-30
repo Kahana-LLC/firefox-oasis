@@ -9,7 +9,7 @@ import { connect } from "react-redux";
 import { DiscoveryStreamBase } from "content-src/components/DiscoveryStreamBase/DiscoveryStreamBase";
 import { ErrorBoundary } from "content-src/components/ErrorBoundary/ErrorBoundary";
 import { CustomizeMenu } from "content-src/components/CustomizeMenu/CustomizeMenu";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Search } from "content-src/components/Search/Search";
 import { Sections } from "content-src/components/Sections/Sections";
 import { Logo } from "content-src/components/Logo/Logo";
@@ -47,39 +47,51 @@ function debounce(func, wait) {
   };
 }
 
-export class _Base extends React.PureComponent {
-  constructor(props) {
-    super(props);
-    this.state = {
-      message: {},
+export function WithDsAdmin(props) {
+  const { hash = globalThis?.location?.hash || "" } = props;
+
+  const [devtoolsCollapsed, setDevtoolsCollapsed] = useState(
+    !hash.startsWith("#devtools")
+  );
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = globalThis?.location?.hash || "";
+      setDevtoolsCollapsed(!h.startsWith("#devtools"));
     };
-    this.notifyContent = this.notifyContent.bind(this);
+
+    // run once in case hash changed before mount
+    onHashChange();
+
+    globalThis?.addEventListener("hashchange", onHashChange);
+    return () => globalThis?.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  return (
+    <>
+      <DiscoveryStreamAdmin devtoolsCollapsed={devtoolsCollapsed} />
+      {devtoolsCollapsed ? <BaseContent {...props} /> : null}
+    </>
+  );
+}
+
+export function _Base(props) {
+  const isDevtoolsEnabled = props.Prefs.values["asrouter.devtoolsEnabled"];
+  const { App } = props;
+
+  if (!App.initialized) {
+    return null;
   }
 
-  notifyContent(state) {
-    this.setState(state);
-  }
-
-  render() {
-    const { props } = this;
-    const { App } = props;
-    const isDevtoolsEnabled = props.Prefs.values["asrouter.devtoolsEnabled"];
-
-    if (!App.initialized) {
-      return null;
-    }
-
-    return (
-      <ErrorBoundary className="base-content-fallback">
-        <React.Fragment>
-          <BaseContent {...this.props} adminContent={this.state} />
-          {isDevtoolsEnabled ? (
-            <DiscoveryStreamAdmin notifyContent={this.notifyContent} />
-          ) : null}
-        </React.Fragment>
-      </ErrorBoundary>
-    );
-  }
+  return (
+    <ErrorBoundary className="base-content-fallback">
+      {isDevtoolsEnabled ? (
+        <WithDsAdmin {...props} />
+      ) : (
+        <BaseContent {...props} />
+      )}
+    </ErrorBoundary>
+  );
 }
 
 export class BaseContent extends React.PureComponent {
@@ -95,8 +107,7 @@ export class BaseContent extends React.PureComponent {
     this.updateWallpaper = this.updateWallpaper.bind(this);
     this.prefersDarkQuery = null;
     this.handleColorModeChange = this.handleColorModeChange.bind(this);
-    this.shouldDisplayTopicSelectionModal =
-      this.shouldDisplayTopicSelectionModal.bind(this);
+    this.onVisible = this.onVisible.bind(this);
     this.toggleDownloadHighlight = this.toggleDownloadHighlight.bind(this);
     this.handleDismissDownloadHighlight =
       this.handleDismissDownloadHighlight.bind(this);
@@ -119,6 +130,11 @@ export class BaseContent extends React.PureComponent {
     }
   }
 
+  onVisible() {
+    this.setFirstVisibleTimestamp();
+    this.shouldDisplayTopicSelectionModal();
+  }
+
   componentDidMount() {
     this.applyBodyClasses();
     global.addEventListener("scroll", this.onWindowScroll);
@@ -126,13 +142,11 @@ export class BaseContent extends React.PureComponent {
     const prefs = this.props.Prefs.values;
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     if (this.props.document.visibilityState === VISIBLE) {
-      this.setFirstVisibleTimestamp();
-      this.shouldDisplayTopicSelectionModal();
+      this.onVisible();
     } else {
       this._onVisibilityChange = () => {
         if (this.props.document.visibilityState === VISIBLE) {
-          this.setFirstVisibleTimestamp();
-          this.shouldDisplayTopicSelectionModal();
+          this.onVisible();
           this.props.document.removeEventListener(
             VISIBILITY_CHANGE_EVENT,
             this._onVisibilityChange
@@ -163,6 +177,16 @@ export class BaseContent extends React.PureComponent {
   componentDidUpdate(prevProps) {
     this.applyBodyClasses();
     const prefs = this.props.Prefs.values;
+
+    // Check if weather widget was re-enabled from customization menu
+    const wasWeatherDisabled = !prevProps.Prefs.values.showWeather;
+    const isWeatherEnabled = this.props.Prefs.values.showWeather;
+
+    if (wasWeatherDisabled && isWeatherEnabled) {
+      // If weather widget was enabled from customization menu, display opt-in dialog
+      this.props.dispatch(ac.SetPref("weather.optInDisplayed", true));
+    }
+
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     if (wallpapersEnabled) {
       // destructure current and previous props with fallbacks
@@ -578,13 +602,24 @@ export class BaseContent extends React.PureComponent {
     const nimbusWidgetsEnabled = prefs.widgetsConfig?.enabled;
     const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
     const nimbusTimerEnabled = prefs.widgetsConfig?.timerEnabled;
+    const nimbusWidgetsTrainhopEnabled = prefs.trainhopConfig?.widgets?.enabled;
+    const nimbusListsTrainhopEnabled =
+      prefs.trainhopConfig?.widgets?.listsEnabled;
+    const nimbusTimerTrainhopEnabled =
+      prefs.trainhopConfig?.widgets?.timerEnabled;
 
     const mayHaveWidgets =
-      prefs["widgets.system.enabled"] || nimbusWidgetsEnabled;
+      prefs["widgets.system.enabled"] ||
+      nimbusWidgetsEnabled ||
+      nimbusWidgetsTrainhopEnabled;
     const mayHaveListsWidget =
-      prefs["widgets.system.lists.enabled"] || nimbusListsEnabled;
+      prefs["widgets.system.lists.enabled"] ||
+      nimbusListsEnabled ||
+      nimbusListsTrainhopEnabled;
     const mayHaveTimerWidget =
-      prefs["widgets.system.focusTimer.enabled"] || nimbusTimerEnabled;
+      prefs["widgets.system.focusTimer.enabled"] ||
+      nimbusTimerEnabled ||
+      nimbusTimerTrainhopEnabled;
 
     // These prefs set the initial values on the Customize panel toggle switches
     const enabledWidgets = {

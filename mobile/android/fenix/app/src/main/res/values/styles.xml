@@ -10,11 +10,13 @@
 
     <style name="SplashScreenThemeBase" parent="Theme.SplashScreen">
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_screen</item>
-        <item name="windowSplashScreenBackground">@color/fx_mobile_layer_color_1</item>
+        <item name="windowSplashScreenBackground">@color/splash_screen_color</item>
         <item name="postSplashScreenTheme">@style/NormalTheme</item>
     </style>
 
     <style name="NormalThemeBase" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="preferenceTheme">@style/PreferenceTheme</item>
+
         <!-- Android system styling -->
         <item name="searchViewStyle">@style/SearchViewStyle</item>
         <item name="autoCompleteTextViewStyle">@style/AutoCompleteTextViewStyle</item>
@@ -461,6 +463,11 @@
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowTranslucentNavigation">true</item>
+    </style>
+
+    <style name="PreferenceTheme" parent="PreferenceThemeOverlay.v14.Material">
+        <item name="android:textFontWeight" tools:ignore="NewApi">@integer/font_weight_light</item>
+        <item name="android:fontWeight">@integer/font_weight_light</item>
     </style>
 
     <style name="HeaderTextStyle" parent="TextAppearance.MaterialComponents.Subtitle1">
