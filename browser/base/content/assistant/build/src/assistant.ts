@@ -1,10 +1,9 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { SystemMessage, HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { DynamicTool } from "@langchain/core/tools";
-import { z } from "zod";
+import { routeRemote } from "./llmRemote";
+
+// Your local command implementations (tabs/groups etc.)
 import {
   ListTabsCommand,
   OpenTabCommand,
@@ -21,36 +20,35 @@ import {
   CmdResult,
 } from "./commands";
 
-// ========= Ephemeral, in-memory chat history (per session) =========
+/* ========= ENV (baked by esbuild.define in esbuild.config.mjs) ========= */
+const OASIS_API_BASE = process.env.OASIS_API_BASE as string;
+const OASIS_CLIENT_TOKEN = (process.env.OASIS_CLIENT_TOKEN as string) || undefined;
+if (!OASIS_API_BASE) throw new Error("OASIS_API_BASE not set. Define it in esbuild.config.mjs.");
+
+/* ========= Ephemeral chat history per session ========= */
 const SESSIONS = new Map<string, BaseMessage[]>();
-const MAX_TURNS = 12; // keep last N user/assistant turns (each turn = 2 messages)
+const MAX_TURNS = 12; // keep last 12 user/assistant pairs
 
-function getSessionMessages(sessionId: string) {
-  if (!SESSIONS.has(sessionId)) SESSIONS.set(sessionId, []);
-  return SESSIONS.get(sessionId)!;
+function getSessionMessages(id: string) {
+  if (!SESSIONS.has(id)) SESSIONS.set(id, []);
+  return SESSIONS.get(id)!;
+}
+function pushTurn(id: string, user: string, assistant: string) {
+  const msgs = getSessionMessages(id);
+  msgs.push(new HumanMessage(user));
+  msgs.push(new AIMessage(assistant));
+  const cap = MAX_TURNS * 2;
+  if (msgs.length > cap) msgs.splice(0, msgs.length - cap);
 }
 
-function pushTurn(sessionId: string, userText: string, assistantText: string) {
-  const msgs = getSessionMessages(sessionId);
-  msgs.push(new HumanMessage(userText));
-  msgs.push(new AIMessage(assistantText));
-  const maxMsgs = MAX_TURNS * 2;
-  if (msgs.length > maxMsgs) msgs.splice(0, msgs.length - maxMsgs);
+export function resetAssistantSession(id = "default") {
+  SESSIONS.delete(id);
+}
+export function getAssistantHistory(id = "default"): BaseMessage[] {
+  return [...(SESSIONS.get(id) || [])];
 }
 
-export function resetAssistantSession(sessionId = "default") {
-  SESSIONS.delete(sessionId);
-}
-
-export function getAssistantHistory(sessionId = "default"): BaseMessage[] {
-  return [...(SESSIONS.get(sessionId) || [])];
-}
-
-// ========= Baked secrets / config =========
-const googleApiKey = process.env.GOOGLE_API_KEY as string;
-if (!googleApiKey) throw new Error("GOOGLE_API_KEY was not baked into the bundle.");
-
-// ========= Graph state (with repeat loop guard) =========
+/* ========= LangGraph state ========= */
 const GraphState = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
     reducer: (x, y) => x.concat(y),
@@ -70,24 +68,13 @@ const GraphState = Annotation.Root({
   }),
 });
 
-// ========= Build the graph (one LLM supervisor + one node per tool) =========
+/* ========= Build the tool graph ========= */
 async function buildGraph(commands: Command[]) {
-  const llm = new ChatGoogleGenerativeAI({
-    apiKey: googleApiKey,
-    model: "gemini-2.0-flash",
-    temperature: 0.3,
-    maxOutputTokens: 150,
-    // @ts-ignore
-    timeout: 30000,
-    // @ts-ignore
-    maxRetries: 2,
-  });
-
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
 
-  // One tiny agent per command (executes the JS tool; returns AIMessage)
   for (const command of commands) {
+    // We register a DynamicTool for clarity, but the node calls the command directly.
     const tool = new DynamicTool({
       name: command.commandName,
       description: command.description,
@@ -97,33 +84,19 @@ async function buildGraph(commands: Command[]) {
       },
     });
 
-    const agent = createReactAgent({
-      llm,
-      tools: [tool],
-      stateModifier: new SystemMessage(
-        `You are responsible for "${command.commandName}". ${command.description}
-         Receive structured input; execute with your tool; return only the result text.
-         If params are missing, say what is needed.`
-      ),
-    });
-
+    // Node: take the last human content as input; run the command; emit AI text.
     const node = async (state: typeof GraphState.State) => {
-      const result = await agent.invoke(state);
-      const last = result.messages[result.messages.length - 1];
+      const msgs = state.messages;
+      const lastHuman = [...msgs].reverse().find(m => (m as any)?._getType?.() === "human");
+      const input = (lastHuman as any)?.content;
 
-      // Normalize to plain text
-      const text =
-        typeof last?.content === "string"
-          ? last.content
-          : Array.isArray(last?.content)
-          ? last.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("")
-          : String(last?.content ?? "");
+      const res: CmdResult = await command.execute(input);
+      const text = res.message || "";
 
       const nextRepeat =
         state.lastWorker === command.commandName ? (state.repeatCount ?? 0) + 1 : 1;
 
       return {
-        // Important for Gemini: AIMessage so author="model", no custom name
         messages: [new AIMessage(text)],
         lastWorker: command.commandName,
         repeatCount: nextRepeat,
@@ -134,87 +107,58 @@ async function buildGraph(commands: Command[]) {
     memberNames.push(command.commandName);
   }
 
-  // ---------- Supervisor with routing rules + few-shots ----------
+  /* ----- Remote router (AWS Lambda) prompt + few-shots ----- */
+
   const ROUTING_GUIDELINES = `
-Pick exactly ONE next worker from {options}. If the task needs multiple steps,
+Pick exactly ONE next worker from {options}. If multiple steps are needed,
 choose the earliest step first; you'll be invoked again after that worker runs.
 
-Route by intent:
-- open/go/navigate to a URL or site name → open_tab
-- list/show current tabs → list_tabs
-- close the current tab or "tab N" → close_tab
-- move/detach a tab to a new window → move_tab_to_new_window
-- copy/export/share/collect all tab URLs → copy_tab_urls
+Tabs:
+- "open/go/navigate" to a site or URL → open_tab
+- "list/show" current tabs → list_tabs
+- "close" current tab or "tab N" → close_tab
+- "move/detach to new window" → move_tab_to_new_window
+- "copy/export/share all URLs" → copy_tab_urls
 
-Ambiguity:
-- If uncertain, prefer list_tabs (do NOT open sites on guesses).
-- If the user asks for something you can't do, FINISH.
-
-After a worker reports success (often a message stating the action it did),
-choose FINISH unless the user explicitly asked for another action.
+Do not ask for confirmation; prefer to act directly. If uncertain, prefer list_tabs.
+If the user asks for something unsupported, FINISH.
 `.trim();
 
-  const ROUTING_FEWSHOTS: Array<{ user: string; next: string }> = [
-    { user: "show my tabs", next: "list_tabs" },
-    { user: "what tabs do I have open?", next: "list_tabs" },
-    { user: "open https://example.com", next: "open_tab" },
-    { user: "go to mozilla.org", next: "open_tab" },
-    { user: "close this tab", next: "close_tab" },
-    { user: "close tab 3", next: "close_tab" },
-    { user: "move this tab to a new window", next: "move_tab_to_new_window" },
-    { user: "detach tab 2", next: "move_tab_to_new_window" },
-    { user: "copy all tab urls", next: "copy_tab_urls" },
-    { user: "export my open links", next: "copy_tab_urls" },
-    { user: "open github and put it in a new window", next: "open_tab" }, // multi-step: open → move
-    { user: "can you help with my tabs?", next: "list_tabs" },            // ambiguity → safe default
-  ];
+  const FEWSHOTS = [
+    `- "show my tabs" → list_tabs`,
+    `- "open https://example.com" → open_tab`,
+    `- "go to youtube" → open_tab`,
+    `- "close this tab" → close_tab`,
+    `- "move this tab to a new window" → move_tab_to_new_window`,
+    `- "copy all tab urls" → copy_tab_urls`,
+    `- "open github then list tabs" → open_tab  (next turn will route to list_tabs)`,
+  ].join("\n");
 
-  const FEWSHOTS_TEXT = ROUTING_FEWSHOTS
-    .filter(e => memberNames.includes(e.next))
-    .map(e => `- "${e.user}" → ${e.next}`)
-    .join("\n");
-
-  const systemPrompt =
-`You are a supervisor managing these workers: {members}.
-Given the user request, choose who should act next. Use FINISH if done.
+  const systemTemplate = `You are a supervisor managing: {members}.
+Given the user request and conversation so far, choose who should act next.
+Use FINISH if done.
 
 ${ROUTING_GUIDELINES}
 
 Routing examples:
-${FEWSHOTS_TEXT}`.trim();
+${FEWSHOTS}`.trim();
 
-  const routingTool = {
-    name: "route",
-    description: "Select the next role.",
-    schema: z.object({ next: z.enum([END, ...memberNames]) }),
-  };
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    ["system", systemPrompt],
-    new MessagesPlaceholder("messages"),
-    ["human", "Who should act next? Or FINISH? Choose one of: {options}"],
-  ]);
-
-  const formattedPrompt = await prompt.partial({
-    options: [END, ...memberNames].join(", "),
-    members: memberNames.join(", "),
-  });
-
-  const supervisorChain = formattedPrompt
-    .pipe((llm as any).bindTools([routingTool], { tool_choice: "route" }))
-    .pipe((x: any) => {
-      if (!x.tool_calls || x.tool_calls.length === 0) throw new Error("No tool_calls from supervisor.");
-      return x.tool_calls[0].args;
-    });
-
-  // Repeat guard only (no forced FINISH on success so multi-steps can proceed)
   const MAX_REPEAT = 2;
   const supervisorNode = async (s: typeof GraphState.State) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
-    return supervisorChain.invoke(s);
+    const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", "));
+    const options = [END, ...memberNames];
+    const { next } = await routeRemote(
+      OASIS_API_BASE,
+      OASIS_CLIENT_TOKEN,
+      systemPrompt,
+      s.messages,
+      options
+    );
+    return { next };
   };
 
-  // Wire it up
+  /* ----- Wire the graph ----- */
   const workflow = new StateGraph(GraphState);
   for (const name of memberNames) {
     workflow.addNode(name, toolAgents[name]);
@@ -227,10 +171,9 @@ ${FEWSHOTS_TEXT}`.trim();
   return workflow.compile();
 }
 
-// ========= Public API =========
+/* ========= Public APIs ========= */
 
-// Streaming variant with ephemeral history.
-// Pass an optional { sessionId } to keep separate threads.
+// Streaming variant used by the UI for live updates.
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
@@ -253,10 +196,7 @@ export async function runAssistantStream(
   ];
 
   const graph = await buildGraph(commands);
-
-  // Seed with existing session history + this turn's user message
-  const prior = getSessionMessages(sessionId);
-  const seed = [...prior, new HumanMessage({ content: prompt })];
+  const seed = [...getSessionMessages(sessionId), new HumanMessage({ content: prompt })];
 
   const stream = await graph.stream({ messages: seed }, { recursionLimit: 16 });
 
@@ -264,7 +204,7 @@ export async function runAssistantStream(
   for await (const state of stream as any) {
     if ("__end__" in state) break;
 
-    // pick the node payload (skip special key)
+    // exclude the special __end__ key and pull the node payload
     const step = Object.entries(state).find(([k]) => k !== "__end__");
     const payload = step?.[1];
 
@@ -292,9 +232,6 @@ export async function runAssistantStream(
   }
 
   const finalText = lastFull || "(no output)";
-
-  // Persist this turn into the session history
   pushTurn(sessionId, prompt, finalText);
-
   return finalText;
 }

@@ -1,65 +1,86 @@
-// Renders hubs like a start page and wires basic actions.
-import { hubs } from "chrome://browser/content/assistant/assistant.bundle.js";
-
-const grid = document.getElementById("grid");
-const nameInput = document.getElementById("newHubName");
-const createBtn = document.getElementById("createHub");
-
-function el(tag, props = {}, children = []) {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === "class") n.className = v;
-    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v);
+// Simple Hubs page that uses the chrome-exposed gOasisGroups API (from your bootstrap).
+(function () {
+  function api() {
+    // gOasisGroups is exposed by your chrome bootstrap (window.top).
+    return (window.top && window.top.gOasisGroups) || null;
   }
-  for (const c of children) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
-  return n;
-}
 
-function urlLabel(u, t) {
-  try { return t || new URL(u).host; } catch { return t || u; }
-}
-
-function render() {
-  grid.textContent = "";
-  const all = hubs.getAll(); // [{name, items:[]}]
-  if (!all.length) {
-    grid.appendChild(el("div", { class: "card" }, [
-      el("h2", {}, ["No hubs yet"]),
-      el("div", {}, ["Use the Assistant or the box above to create a hub."]),
-    ]));
-    return;
-  }
-  for (const { name, items } of all) {
-    const urls = el("div", { class: "urls" });
-    for (const it of items.slice(0, 8)) {
-      urls.appendChild(el("div", {}, [urlLabel(it.url, it.title)]));
+  async function renderOpen() {
+    const a = api(); if (!a) return;
+    const tbody = document.getElementById("groups");
+    tbody.textContent = "";
+    const groups = await a.listOpenGroups().catch(() => []);
+    for (const g of groups) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${g.id}</td>
+        <td>${g.title || "(untitled)"}</td>
+        <td>${g.color || ""}</td>
+        <td>${g.collapsed ? "collapsed" : "open"}</td>
+        <td>
+          <button data-act="select" data-id="${g.id}">Focus</button>
+          <button data-act="rename" data-id="${g.id}">Rename</button>
+          <button data-act="delete" data-id="${g.id}">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
     }
-    const open = el("button", { onclick: () => { hubs.openHub(name, "tabs"); } }, ["Open all"]);
-    const openWin = el("button", { onclick: () => { hubs.openHub(name, "window"); } }, ["Open in window"]);
-    const del = el("button", {
-      onclick: () => { if (confirm(`Delete hub "${name}"?`)) { hubs.delete(name, { closeTabs: false }); render(); } }
-    }, ["Delete"]);
-    const header = el("h2", {}, [
-      name,
-      el("span", { class: "count" }, [`${items.length}`]),
-    ]);
-    grid.appendChild(el("div", { class: "card" }, [
-      header, urls,
-      el("div", { class: "row" }, [open, openWin, del]),
-    ]));
   }
-}
 
-createBtn.addEventListener("click", () => {
-  const n = nameInput.value.trim();
-  if (!n) return;
-  hubs.create(n, { include: "none" });
-  nameInput.value = "";
-  render();
-});
-nameInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") createBtn.click();
-});
+  async function renderSaved() {
+    const a = api(); if (!a) return;
+    const tbody = document.getElementById("saved");
+    tbody.textContent = "";
+    const saved = await a.listSavedGroups().catch(() => []);
+    for (const g of saved) {
+      const count = (g.tabs && g.tabs.length) || 0;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${g.id}</td>
+        <td>${g.name || "(untitled)"}</td>
+        <td>${count}</td>
+        <td><button data-act="restore" data-saved="${g.id}">Restore</button></td>`;
+      tbody.appendChild(tr);
+    }
+  }
 
-window.addEventListener("load", () => render());
+  async function doAction(evt) {
+    const btn = evt.target.closest("button"); if (!btn) return;
+    const act = btn.getAttribute("data-act");
+    const a = api(); if (!a) return;
+
+    try {
+      if (act === "select") {
+        const id = Number(btn.getAttribute("data-id"));
+        await a.selectGroup(id);
+      } else if (act === "rename") {
+        const id = Number(btn.getAttribute("data-id"));
+        const title = prompt("New group title:");
+        if (title != null) await a.renameGroup({ groupId: id, title });
+      } else if (act === "delete") {
+        const id = Number(btn.getAttribute("data-id"));
+        const closeTabs = confirm("Close tabs in this group? (Cancel = ungroup instead)");
+        await a.deleteGroup({ groupId: id, closeTabs });
+      } else if (act === "restore") {
+        const savedId = btn.getAttribute("data-saved");
+        await a.restoreSavedGroup(savedId);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Action failed: " + (e?.message || e));
+    } finally {
+      await renderOpen();
+      await renderSaved();
+    }
+  }
+
+  async function init() {
+    document.getElementById("refresh").addEventListener("click", async () => {
+      await renderOpen(); await renderSaved();
+    });
+    document.addEventListener("click", doAction);
+    await renderOpen();
+    await renderSaved();
+  }
+
+  window.addEventListener("DOMContentLoaded", init);
+})();
