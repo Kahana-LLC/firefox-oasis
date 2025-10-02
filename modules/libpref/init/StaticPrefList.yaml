@@ -9375,6 +9375,18 @@
   mirror: always
   do_not_use_directly: true
 
+# Use the JS microtask queue for Promise jobs and other microtasks.
+# DO NOT TURN THIS ON BY DEFAULT WITHOUT THE BUGS BLOCKING
+# BUG 1990841 being fixed (especially Bug 1990842).
+- name: javascript.options.use_js_microtask_queue
+  type: RelaxedAtomicBool
+  value: false
+  # Changing this mid process will break invariants and crash, however
+  # making this mirror: once, and set_spidermonkey_pref: startup is
+  # broken: See Bug 1989094
+  mirror: always
+  set_spidermonkey_pref: startup
+
 # Whether to use the off-thread script compilation and decoding.
 - name: javascript.options.parallel_parsing
   type: bool
@@ -10102,13 +10114,6 @@
   mirror: always
   rust: true
 
-# Perform intrinsic sizing of flexible grid tracks based on grid items that
-# span more than one track.
-- name: layout.css.grid-flex-spanning-items-intrinsic-sizing.enabled
-  type: bool
-  value: true
-  mirror: always
-
 # Enable the new multi-pass grid track sizing algorithm.
 # This features implements two aspects from the CSS Grid Level 2 spec:
 # 1. Percent-valued row track size re-resolution:
@@ -10177,12 +10182,6 @@
 #else
   value: false
 #endif
-  mirror: always
-
-# Is support for CSS overflow-clip-box enabled for non-UA sheets?
-- name: layout.css.overflow-clip-box.enabled
-  type: bool
-  value: false
   mirror: always
 
 # Is support for CSS overflow: -moz-hidden-unscrollable enabled
@@ -12247,7 +12246,7 @@
 # Matroska
 - name: media.mkv.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 - name: media.av1.use-dav1d
@@ -15699,6 +15698,12 @@
 - name: network.essential_domains_fallback
   type: RelaxedAtomicBool
   value: false
+  mirror: always
+
+# Enable HTTP Compression Dictionary support
+- name: network.http.dictionaries.enable
+  type: RelaxedAtomicBool
+  value: true
   mirror: always
 
 #---------------------------------------------------------------------------

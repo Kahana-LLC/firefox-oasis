@@ -1314,6 +1314,7 @@ nsresult CacheFileIOManager::Shutdown() {
   }
 
   CacheIndex::Shutdown();
+  DictionaryCache::Shutdown();
 
   if (CacheObserver::ClearCacheOnShutdown()) {
     auto totalTimer =
@@ -1360,7 +1361,7 @@ void CacheFileIOManager::ShutdownInternal() {
     // (hashes won't match).
 
     if (!h->IsSpecialFile() && !h->mIsDoomed && !h->mFileExists) {
-      CacheIndex::RemoveEntry(h->Hash());
+      CacheIndex::RemoveEntry(h->Hash(), h->Key());
     }
 
     // Remove the handle from mHandles/mSpecialHandles
@@ -1820,7 +1821,7 @@ nsresult CacheFileIOManager::OpenFileInternal(const SHA1Sum::Hash* aHash,
     NS_ENSURE_SUCCESS(rv, rv);
 
     if (exists) {
-      CacheIndex::RemoveEntry(aHash);
+      CacheIndex::RemoveEntry(aHash, handle->Key());
 
       LOG(
           ("CacheFileIOManager::OpenFileInternal() - Removing old file from "
@@ -1872,7 +1873,7 @@ nsresult CacheFileIOManager::OpenFileInternal(const SHA1Sum::Hash* aHash,
   if (exists) {
     // If this file has been found evicted through the context file evictor
     // above for any of pinned or non-pinned state, these calls ensure we doom
-    // the handle ASAP we know the real pinning state after metadta has been
+    // the handle ASAP we know the real pinning state after metadata has been
     // parsed.  DoomFileInternal on the |handle| doesn't doom right now, since
     // the pinning state is unknown and we pass down a pinning restriction.
     if (evictedAsPinned) {
@@ -2033,7 +2034,7 @@ void CacheFileIOManager::CloseHandleInternal(CacheFileHandle* aHandle) {
 
   if (!aHandle->IsSpecialFile() && !aHandle->mIsDoomed &&
       (aHandle->mInvalid || !aHandle->mFileExists)) {
-    CacheIndex::RemoveEntry(aHandle->Hash());
+    CacheIndex::RemoveEntry(aHandle->Hash(), aHandle->Key());
   }
 
   // Don't remove handles after shutdown
@@ -2512,7 +2513,9 @@ nsresult CacheFileIOManager::DoomFileInternal(
   }
 
   if (!aHandle->IsSpecialFile()) {
-    CacheIndex::RemoveEntry(aHandle->Hash());
+    // Ensure the string doesn't disappear with the handle
+    RefPtr<CacheFileHandle> handle(aHandle);
+    CacheIndex::RemoveEntry(aHandle->Hash(), aHandle->Key());
   }
 
   aHandle->mIsDoomed = true;
@@ -2525,7 +2528,7 @@ nsresult CacheFileIOManager::DoomFileInternal(
           CacheFileUtils::ParseKey(aHandle->Key(), &idExtension, &url);
       MOZ_ASSERT(info);
       if (info) {
-        storageService->CacheFileDoomed(info, idExtension, url);
+        storageService->CacheFileDoomed(aHandle->mKey, info, idExtension, url);
       }
     }
   }
@@ -2607,7 +2610,15 @@ nsresult CacheFileIOManager::DoomFileByKeyInternal(const SHA1Sum::Hash* aHash) {
          static_cast<uint32_t>(rv)));
   }
 
-  CacheIndex::RemoveEntry(aHash);
+  // Find the key for the hash
+  // Read metadata from the file synchronously
+  RefPtr<CacheFileMetadata> metadata = new CacheFileMetadata();
+  rv = metadata->SyncReadMetadata(file);
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    CacheIndex::RemoveEntry(aHash, ""_ns);
+  } else {
+    CacheIndex::RemoveEntry(aHash, metadata->GetKey());
+  }
 
   return NS_OK;
 }
@@ -3234,7 +3245,8 @@ nsresult CacheFileIOManager::OverLimitEvictionInternal() {
       // TODO index is outdated, start update
 
       // Make sure index won't return the same entry again
-      CacheIndex::RemoveEntry(&hash);
+      // XXX find the key for the hash
+      CacheIndex::RemoveEntry(&hash, ""_ns);
       consecutiveFailures = 0;
     } else {
       // This shouldn't normally happen, but the eviction must not fail
@@ -3384,6 +3396,7 @@ nsresult CacheFileIOManager::EvictByContext(
   LOG(("CacheFileIOManager::EvictByContext() [loadContextInfo=%p]",
        aLoadContextInfo));
 
+  // XXX evict dictionary data from memory cache
   nsresult rv;
   RefPtr<CacheFileIOManager> ioMan = gInstance;
 
@@ -3514,7 +3527,8 @@ nsresult CacheFileIOManager::EvictByContextInternal(
       }
 
       // Filter by origin.
-      if (!origin.IsEmpty()) {
+      if (!origin.IsEmpty()) {  // XXX also look for dict:<origin>, or let that
+                                // be handled by Doom?  Probably Doom
         RefPtr<MozURL> url;
         rv = MozURL::Init(getter_AddRefs(url), uriSpec);
         if (NS_FAILED(rv)) {

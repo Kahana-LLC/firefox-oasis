@@ -18,31 +18,11 @@ skip-if = [
 # These tests do take a little longer on Linux ccov, so allow that here.
 requesttimeoutfactor = 2
 
-["test_amazon.js"]
-
-["test_baidu.js"]
-
-["test_bing.js"]
-
 ["test_distributions.js"]
-
-["test_duckduckgo.js"]
-
-# The test_ebay needs newSearchConfig.enabled=true because there
-# are changes to ebay and locale pl for search-config-v2.
-# We have rolled out search-config-v2 100% to Beta 126 and the next Beta 127
-# will pick up newSearchConfig.enabled=true from Nimbus Settings but not
-# immediately, we need to turn the PREF on for this test to prevent failures
-# in the merge from central to Beta 127.
-
-["test_ebay.js"]
-prefs = ["browser.search.newSearchConfig.enabled=true"]
-
-["test_ecosia.js"]
 
 ["test_google.js"]
 
-["test_qwant.js"]
+["test_searchconfig.js"]
 
 ["test_searchconfig_ui_schemas_valid.js"]
 support-files = [
@@ -65,7 +45,3 @@ support-files = [
 ]
 
 ["test_selector_db_out_of_date.js"]
-
-["test_wikipedia.js"]
-
-["test_yahoojp.js"]

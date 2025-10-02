@@ -202,6 +202,11 @@ async function openAboutTranslations({
   // Now load the about:translations page, since the actor could be mocked.
   await loadNewPage(tab.linkedBrowser, "about:translations");
 
+  // Ensure the window always opens with a horizontal page layout.
+  // Divide everything by sqrt(2) to halve the overall content size.
+  await ensureWindowSize(window, 1600 * Math.SQRT1_2, 900 * Math.SQRT1_2);
+  FullZoom.setZoom(Math.SQRT1_2, tab.linkedBrowser);
+
   /**
    * @param {number} count - Count of the language pairs expected.
    */
@@ -1360,7 +1365,10 @@ class MockedA11yUtils {
  * @returns {Promise<void>}
  */
 async function ensureWindowSize(win, width, height) {
-  if (win.outerWidth < width + 50 && win.outerHeight < height + 50) {
+  if (
+    Math.abs(win.outerWidth - width) < 1 &&
+    Math.abs(win.outerHeight - height) < 1
+  ) {
     return;
   }
 
@@ -2765,7 +2773,7 @@ class AboutTranslationsTestUtils {
      * @type {string}
      */
     static DetectedLanguageUpdated =
-      "AboutTranslations:DetectedLanguageUpdated";
+      "AboutTranslationsTest:DetectedLanguageUpdated";
 
     /**
      * Event fired when the swap-languages button becomes disabled.
@@ -2773,7 +2781,7 @@ class AboutTranslationsTestUtils {
      * @type {string}
      */
     static SwapLanguagesButtonDisabled =
-      "AboutTranslations:SwapLanguagesButtonDisabled";
+      "AboutTranslationsTest:SwapLanguagesButtonDisabled";
 
     /**
      * Event fired when the swap-languages button becomes enabled.
@@ -2781,7 +2789,7 @@ class AboutTranslationsTestUtils {
      * @type {string}
      */
     static SwapLanguagesButtonEnabled =
-      "AboutTranslations:SwapLanguagesButtonEnabled";
+      "AboutTranslationsTest:SwapLanguagesButtonEnabled";
 
     /**
      * Event fired when the translating placeholder message is shown.
@@ -2789,35 +2797,51 @@ class AboutTranslationsTestUtils {
      * @type {string}
      */
     static ShowTranslatingPlaceholder =
-      "AboutTranslations:ShowTranslatingPlaceholder";
+      "AboutTranslationsTest:ShowTranslatingPlaceholder";
 
     /**
      * Event fired after the URL has been updated from UI interactions.
      *
      * @type {string}
      */
-    static URLUpdatedFromUI = "AboutTranslations:URLUpdatedFromUI";
+    static URLUpdatedFromUI = "AboutTranslationsTest:URLUpdatedFromUI";
 
     /**
      * Event fired when a translation is requested.
      *
      * @type {string}
      */
-    static TranslationRequested = "AboutTranslations:TranslationRequested";
+    static TranslationRequested = "AboutTranslationsTest:TranslationRequested";
 
     /**
      * Event fired when a translation completes.
      *
      * @type {string}
      */
-    static TranslationComplete = "AboutTranslations:TranslationComplete";
+    static TranslationComplete = "AboutTranslationsTest:TranslationComplete";
+
+    /**
+     * Event fired when the page layout changes.
+     *
+     * @type {string}
+     */
+    static PageOrientationChanged =
+      "AboutTranslationsTest:PageOrientationChanged";
+
+    /**
+     * Event fired when the source/target textarea heights change.
+     *
+     * @type {string}
+     */
+    static TextAreaHeightsChanged =
+      "AboutTranslationsTest:TextAreaHeightsChanged";
 
     /**
      * Event fired when the target text is cleared programmatically.
      *
      * @type {string}
      */
-    static ClearTargetText = "AboutTranslations:ClearTargetText";
+    static ClearTargetText = "AboutTranslationsTest:ClearTargetText";
   };
 
   /**
@@ -3147,6 +3171,9 @@ class AboutTranslationsTestUtils {
    * @returns {Promise<void>}
    */
   async assertEvents({ expected = [], unexpected = [] } = {}, callback) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     try {
       const expectedEventWaiters = Object.fromEntries(
         expected.map(([eventName]) => [eventName, this.waitForEvent(eventName)])
@@ -3155,9 +3182,14 @@ class AboutTranslationsTestUtils {
       const unexpectedEventMap = {};
       for (const eventName of unexpected) {
         unexpectedEventMap[eventName] = false;
-        this.waitForEvent(eventName).then(() => {
-          unexpectedEventMap[eventName] = true;
-        });
+        this.waitForEvent(eventName)
+          .then(() => {
+            unexpectedEventMap[eventName] = true;
+          })
+          .catch(() => {
+            // The waitForEvent() timeout race triggered, which is okay
+            // since we didn't expect this event to fire anyway.
+          });
       }
 
       await callback();
@@ -3184,6 +3216,9 @@ class AboutTranslationsTestUtils {
     } catch (error) {
       AboutTranslationsTestUtils.#reportTestFailure(error);
     }
+
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
   }
 
   /**
@@ -3200,6 +3235,9 @@ class AboutTranslationsTestUtils {
     showsPlaceholder,
     scriptDirection,
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let pageResult = {};
     try {
       pageResult = await this.#runInPage(
@@ -3265,6 +3303,9 @@ class AboutTranslationsTestUtils {
     showsPlaceholder,
     scriptDirection,
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let pageResult = {};
     try {
       pageResult = await this.#runInPage(
@@ -3330,6 +3371,9 @@ class AboutTranslationsTestUtils {
     options,
     detectedLanguage,
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let pageResult = {};
     try {
       pageResult = await this.#runInPage(selectors => {
@@ -3400,6 +3444,9 @@ class AboutTranslationsTestUtils {
    * @returns {Promise<void>}
    */
   async assertTargetLanguageSelector({ value, options } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let pageResult = {};
     try {
       pageResult = await this.#runInPage(
@@ -3461,6 +3508,9 @@ class AboutTranslationsTestUtils {
     defaultValue,
     language,
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     if (language !== undefined && defaultValue) {
       throw new Error(
         "assertDetectLanguageOption: `language` and `defaultValue: true` are mutually exclusive."
@@ -3541,6 +3591,9 @@ class AboutTranslationsTestUtils {
    * @returns {Promise<void>}
    */
   async assertSwapLanguagesButton({ enabled } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let pageResult = {};
     try {
       pageResult = await this.#runInPage(
@@ -3575,6 +3628,9 @@ class AboutTranslationsTestUtils {
    * @returns {Promise<void>}
    */
   async assertTranslatingPlaceholder() {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     let actualValue;
     try {
       actualValue = await this.#runInPage(selectors => {
@@ -3610,6 +3666,9 @@ class AboutTranslationsTestUtils {
     targetLanguage,
     sourceText,
   }) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     if (sourceLanguage !== undefined && detectedLanguage !== undefined) {
       throw new Error(
         "assertTranslatedText: sourceLanguage and detectedLanguage are mutually exclusive assertion options."
@@ -3667,6 +3726,9 @@ class AboutTranslationsTestUtils {
     targetLanguage = "",
     sourceText = "",
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     try {
       // First verify that the UI controls contain the expected values.
       await this.assertSourceLanguageSelector({ value: sourceLanguage });
@@ -3760,6 +3822,9 @@ class AboutTranslationsTestUtils {
     unsupportedInfoMessage = false,
     languageLoadErrorMessage = false,
   } = {}) {
+    // This helps the test visually render at each step without significantly slowing test speed.
+    await doubleRaf(document);
+
     try {
       const visibilityMap = await this.#runInPage(selectors => {
         const { document, window } = content;
