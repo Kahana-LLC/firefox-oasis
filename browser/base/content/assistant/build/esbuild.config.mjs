@@ -1,17 +1,8 @@
 import esbuild from "esbuild";
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
 import path from "node:path";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(here, ".env") });
-
-const KEY  = (process.env.ANTHROPIC_API_KEY || "").trim();
-
-if (!KEY) {
-  console.error("[assistant] Missing ANTHROPIC_API_KEY (set it in build/.env)");
-  process.exit(1);
-}
+const OASIS_API_BASE = "https://segvax3qd7tkhcckzrijydbz6m0cijdu.lambda-url.us-east-2.on.aws/";
+const OASIS_CLIENT_TOKEN = "geminiclienttoken"
 
 await esbuild.build({
   entryPoints: ["./src/assistant.ts"],
@@ -23,6 +14,7 @@ await esbuild.build({
   sourcemap: false,
   logLevel: "warning",
   define: {
-    "process.env.ANTHROPIC_API_KEY": JSON.stringify(KEY),
+    "process.env.OASIS_API_BASE": JSON.stringify(OASIS_API_BASE),
+    "process.env.OASIS_CLIENT_TOKEN": JSON.stringify(OASIS_CLIENT_TOKEN),
   },
 });

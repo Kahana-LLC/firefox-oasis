@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8"/>
+  <title>Hubs</title>
+
+  <!-- Base browser styling -->
+  <link rel="stylesheet" href="chrome://browser/skin/"/>
+
+  <!-- Your page logic -->
+  <script type="module" src="chrome://browser/content/assistant/hubs.page.js"></script>
+
+  <style>
+    body {
+      font: message-box;
+      color: var(--in-content-page-color);
+      background: var(--in-content-page-background);
+      margin: 24px;
+    }
+    h1 { margin: 0 0 16px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+    button { padding: 6px 10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--in-content-border-color); }
+    tbody tr:hover { background: color-mix(in sRGB, currentColor 6%, transparent); }
+    .muted { opacity: .7; }
+  </style>
+</head>
+<body>
+  <h1>Hubs (Tab Groups)</h1>
+
+  <div class="row">
+    <button id="refresh">Refresh</button>
+    <span class="muted">Lists native Firefox Tab Groups in this window.</span>
+  </div>
+
+  <table aria-label="Open groups">
+    <thead>
+      <tr><th>ID</th><th>Title</th><th>Color</th><th>State</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="groups"></tbody>
+  </table>
+
+  <h2 style="margin-top:24px;">Saved (Closed) Groups</h2>
+  <table aria-label="Saved groups">
+    <thead>
+      <tr><th>Saved ID</th><th>Name</th><th>Tabs</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="saved"></tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,28 @@
+body { font-family: system-ui, sans-serif; margin: 0; color: CanvasText; background: Canvas; }
+.oasis-hubs-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid color-mix(in oklab, Canvas 90%, CanvasText 10%); }
+.oasis-hubs-header h1 { margin:0; font-size:18px; }
+.oasis-hubs-header .actions { display:flex; gap:8px; }
+#newHubName { padding:6px 8px; min-width: 220px; }
+#grid.oasis-hubs-grid { display:grid; gap:12px; padding:16px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+.card { border:1px solid color-mix(in oklab, CanvasText 10%, Canvas 90%); border-radius:12px; padding:12px; background: color-mix(in oklab, Canvas 98%, AccentColor 2%); box-shadow: 0 1px 2px color-mix(in oklab, CanvasText 10%, transparent); }
+.card h2 { font-size:14px; margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; }
+.card .count { font-size:12px; opacity:0.7; }
+.card .urls { font-size:12px; max-height: 7lh; overflow:auto; margin:8px 0 12px; }
+.card .urls div { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.card .row { display:flex; gap:8px; }
+.card button { padding:6px 8px; border-radius:8px; }
+
+/* Tab badges (reuses the attribute set by HubManager) */
+.tabbrowser-tab[oasis-hub] .tab-label-container::after {
+  content: attr(oasis-hub);
+  margin-inline-start: 6px; padding: 0 6px; border-radius: 10px;
+  font-size: 10px; line-height: 16px;
+  background: color-mix(in oklab, AccentColor 20%, Canvas 80%);
+  color: color-mix(in oklab, AccentColorText 95%, CanvasText 5%);
+  border: 1px solid color-mix(in oklab, AccentColor 30%, Canvas 70%);
+  opacity: 0.9;
+}
+.tabbrowser-tab[oasis-hub-count]:not([oasis-hub-count="1"]) .tab-label-container::after {
+  content: attr(oasis-hub) " +" attr(oasis-hub-count);
+}

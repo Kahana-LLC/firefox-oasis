@@ -5,71 +5,44 @@
   const fab   = document.getElementById("oasis-assistant-fab");
   const close = document.getElementById("oasis-assistant-close");
 
-  // Prefer Services if available; otherwise fall back to XPCOM prefs.
-  let getStringPref = (name, def) => def;
-  (function initPrefAccess() {
+  function focusInput() {
     try {
-      // If Services is already on the global (common in chrome windows), use it.
-      if (typeof Services !== "undefined" && Services?.prefs) {
-        getStringPref = (n, d) => Services.prefs.getStringPref(n, d);
-        return;
-      }
-    } catch (_) {}
-
-    // Fallback: use XPCOM directly.
-    try {
-      /* global Components */
-      const { classes: Cc, interfaces: Ci } = Components;
-      const prefs = Cc["@mozilla.org/preferences-service;1"].getService(Ci.nsIPrefBranch);
-      getStringPref = (n, d) => {
-        try { return prefs.getCharPref(n); } catch (_) { return d; }
-      };
-    } catch (e) {
-      console.error("Oasis: no pref access available", e);
-    }
-  })();
-
-  function readCfg() {
-    // Defaults
-    const cfg = {
-      key: "",
-      model: "claude-3-5-sonnet-20240620",
-      temperature: 0.3,
-      maxTokens: 200,
-    };
-    try {
-      cfg.key         = getStringPref("oasis.assistant.anthropic_api_key", cfg.key);
-      cfg.model       = getStringPref("oasis.assistant.model", cfg.model);
-      cfg.temperature = parseFloat(getStringPref("oasis.assistant.temperature", String(cfg.temperature)));
-      cfg.maxTokens   = parseInt(getStringPref("oasis.assistant.maxTokens", String(cfg.maxTokens)), 10);
-    } catch (e) {
-      console.error("Oasis: failed to read prefs", e);
-    }
-    return cfg;
+      const w = frame?.contentWindow;
+      const d = w?.document;
+      const q = d?.getElementById("q");
+      if (q) q.focus();
+    } catch {}
   }
 
-  function seedFrameConfig() {
-    try {
-      if (!frame?.contentWindow) return;
-      const cfg = readCfg();
-      frame.contentWindow.OASIS_CFG = cfg;
-      // Signal to the iframe that config is ready (idempotent)
-      frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent("oasis-cfg-ready"));
-    } catch (e) {
-      console.error("Oasis: failed to seed frame config", e);
+  // Focus when the iframe finishes loading
+  frame?.addEventListener("load", () => setTimeout(focusInput, 50));
+
+  function show() {
+    if (!sheet) return;
+    sheet.removeAttribute("hidden");
+    if (fab) fab.setAttribute("aria-expanded", "true");
+    // If already loaded, focus shortly after opening
+    setTimeout(focusInput, 50);
+  }
+
+  function hide() {
+    if (!sheet) return;
+    sheet.setAttribute("hidden", "hidden");
+    if (fab) {
+      fab.setAttribute("aria-expanded", "false");
+      try { fab.focus(); } catch {}
     }
   }
 
-  // Seed whenever the iframe loads
-  frame?.addEventListener("load", seedFrameConfig);
+  function toggle() { sheet?.hasAttribute("hidden") ? show() : hide(); }
 
-  function show() { sheet.removeAttribute("hidden"); }
-  function hide() { sheet.setAttribute("hidden", "hidden"); }
-  function toggle() { sheet.hasAttribute("hidden") ? show() : hide(); }
-
+  // Expose helpers (optional)
   window.gOasisAssistant = { open: show, close: hide, toggle };
 
   if (fab) {
+    fab.setAttribute("role", "button");
+    fab.setAttribute("aria-controls", "oasis-assistant-sheet");
+    fab.setAttribute("aria-expanded", "false");
     fab.addEventListener("click", toggle);
     fab.addEventListener("keydown", (e) => {
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); }
@@ -78,6 +51,6 @@
   if (close) close.addEventListener("click", hide);
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !sheet.hasAttribute("hidden")) hide();
+    if (e.key === "Escape" && sheet && !sheet.hasAttribute("hidden")) hide();
   });
 })();
