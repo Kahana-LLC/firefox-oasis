@@ -1,17 +1,48 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { ChatAnthropic } from "@langchain/anthropic";
-import { SystemMessage, HumanMessage, BaseMessage } from "@langchain/core/messages";
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { DynamicTool } from "@langchain/core/tools";
-import { z } from "zod";
-import { ListTabsCommand, OpenTabCommand, Command, CmdResult, CloseTabCommand, MoveTabToNewWindowCommand, CopyTabUrlsCommand } from "./commands";
+import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+import { routeRemote } from "./proxyClient";
 
-// Baked by esbuild.define()
-const anthropicApiKey = process.env.ANTHROPIC_API_KEY as string;
+// Local command implementations (tabs / groups)
+import {
+  ListTabsCommand,
+  OpenTabCommand,
+  CloseTabCommand,
+  MoveTabToNewWindowCommand,
+  CopyTabUrlsCommand,
+  CreateHubCommand,
+  DeleteHubCommand,
+  ListHubsCommand,
+  RenameHubCommand,
+  AddTabToHubCommand,
+  OpenHubCommand,
+  Command,
+  CmdResult,
+} from "./commands";
 
-if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY was not baked into the bundle.");
+/* ========= Ephemeral chat history per session ========= */
+const SESSIONS = new Map<string, BaseMessage[]>();
+const MAX_TURNS = 12; // keep last 12 user/assistant pairs
 
+function getSessionMessages(id: string) {
+  if (!SESSIONS.has(id)) SESSIONS.set(id, []);
+  return SESSIONS.get(id)!;
+}
+function pushTurn(id: string, user: string, assistant: string) {
+  const msgs = getSessionMessages(id);
+  msgs.push(new HumanMessage(user));
+  msgs.push(new AIMessage(assistant));
+  const cap = MAX_TURNS * 2;
+  if (msgs.length > cap) msgs.splice(0, msgs.length - cap);
+}
+
+export function resetAssistantSession(id = "default") {
+  SESSIONS.delete(id);
+}
+export function getAssistantHistory(id = "default"): BaseMessage[] {
+  return [...(SESSIONS.get(id) || [])];
+}
+
+/* ========= LangGraph state ========= */
 const GraphState = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
     reducer: (x, y) => x.concat(y),
@@ -31,49 +62,41 @@ const GraphState = Annotation.Root({
   }),
 });
 
-async function buildGraph(commands: Command[]) {
-  const llm = new ChatAnthropic({
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName: "claude-3-5-sonnet-20240620",
-    temperature: 0.3,
-    maxTokens: 150,
-    // @ts-ignore
-    timeout: 30000,
-    // @ts-ignore
-    maxRetries: 2,
+/* ========= Helpers ========= */
+function msgText(m: any): string {
+  if (!m) return "";
+  const c = m.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) return c.map(v => (typeof v === "string" ? v : v?.text || "")).join("");
+  return String(c ?? "");
+}
+
+type WireMsg = { role: "user" | "model"; content: string };
+function toWire(messages: BaseMessage[]): WireMsg[] {
+  return messages.map(m => {
+    const role = m._getType() === "human" ? "user" : "model";
+    return { role, content: msgText(m) };
   });
+}
+
+/* ========= Build the tool graph ========= */
+async function buildGraph(commands: Command[]) {
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    const tool = new DynamicTool({
-      name: command.commandName,
-      description: command.description,
-      func: async (input: any) => {
-        const res: CmdResult = await command.execute(input);
-        return res.message;
-      },
-    });
-
-    const agent = createReactAgent({
-      llm,
-      tools: [tool],
-      stateModifier: new SystemMessage(
-        `You are responsible for "${command.commandName}". ${command.description}
-         Receive structured input; execute with your tool; return only the result text.
-         If params are missing, say what is needed.`
-      ),
-    });
-
+    // Node: take the last human content as input; run the command; emit AI text.
     const node = async (state: typeof GraphState.State) => {
-      const result = await agent.invoke(state);
-      const last = result.messages[result.messages.length - 1];
+      const msgs = state.messages;
+      const lastHuman = [...msgs].reverse().find(m => (m as any)?._getType?.() === "human");
+      const input = msgText(lastHuman);
 
+      const result: CmdResult = await command.execute(input);
       const nextRepeat =
         state.lastWorker === command.commandName ? (state.repeatCount ?? 0) + 1 : 1;
 
       return {
-        messages: [new HumanMessage({ content: last.content, name: command.commandName })],
+        messages: [new AIMessage({ content: result.message, name: command.commandName })],
         lastWorker: command.commandName,
         repeatCount: nextRepeat,
       };
@@ -95,93 +118,54 @@ async function buildGraph(commands: Command[]) {
   - move/detach a tab to a new window → move_tab_to_new_window
   - copy/export/share/collect all tab URLs → copy_tab_urls
 
-  Ambiguity:
-  - If uncertain, prefer list_tabs (do NOT open sites on guesses).
-  - If the user asks for something you can't do, FINISH.
+Hubs:
+- "create hub", "new group" → create_hub
+- "delete/remove hub <name>" → delete_hub
+- "list hubs" → list_hubs
+- "rename hub <old> to <new>" → rename_hub
+- "add this tab to <hub>" → add_tab_to_hub
+- "open/switch to hub <name>" → open_hub
 
-  After a worker reports success (Often a message stating the action it did),
-  choose FINISH unless the user explicitly asked for another action.
-  `.trim();
+Do not ask for confirmation; act directly when possible.
+If uncertain, prefer list_tabs. If unsupported, FINISH.
+`.trim();
 
-  const ROUTING_FEWSHOTS: Array<{ user: string; next: string }> = [
-    { user: "show my tabs", next: "list_tabs" },
-    { user: "what tabs do I have open?", next: "list_tabs" },
-    { user: "open https://example.com", next: "open_tab" },
-    { user: "go to mozilla.org", next: "open_tab" },
-    { user: "close this tab", next: "close_tab" },
-    { user: "close tab 3", next: "close_tab" },
-    { user: "move this tab to a new window", next: "move_tab_to_new_window" },
-    { user: "detach tab 2", next: "move_tab_to_new_window" },
-    { user: "copy all tab urls", next: "copy_tab_urls" },
-    { user: "export my open links", next: "copy_tab_urls" },
-    // multi-step example: open then move
-    { user: "open github and put it in a new window", next: "open_tab" },
-    // ambiguity → safe default
-    { user: "can you help with my tabs?", next: "list_tabs" },
-  ];
+  const FEWSHOTS = [
+    `- "show my tabs" → list_tabs`,
+    `- "open https://example.com" → open_tab`,
+    `- "go to youtube" → open_tab`,
+    `- "close this tab" → close_tab`,
+    `- "move this tab to a new window" → move_tab_to_new_window`,
+    `- "copy all tab urls" → copy_tab_urls`,
+    `- "create hub Work" → create_hub`,
+    `- "add this tab to Work" → add_tab_to_hub`,
+    `- "rename hub Work to Projects" → rename_hub`,
+    `- "open github then list tabs" → open_tab  (next turn will route to list_tabs)`,
+  ].join("\n");
 
-  const FEWSHOTS_TEXT = ROUTING_FEWSHOTS
-    .filter(e => memberNames.includes(e.next))
-    .map(e => `- "${e.user}" → ${e.next}`)
-    .join("\n");
+  const systemTemplate = `You are a supervisor managing: {members}.
+Given the user request and conversation so far, choose who should act next.
+Return only {"next": "<one of: {options}>"}.
+Use FINISH if done.
 
-  const systemPrompt =
-  `You are a supervisor managing these workers: {members}.
-  Given the user request, choose who should act next. Use FINISH if done.
+${ROUTING_GUIDELINES}
 
-  ${ROUTING_GUIDELINES}
+Routing examples:
+${FEWSHOTS}`.trim();
 
-  Routing examples:
-  ${FEWSHOTS_TEXT}`.trim();
-
-
-  const routingTool = {
-    name: "route",
-    description: "Select the next role.",
-    schema: z.object({ next: z.enum([END, ...memberNames]) }),
-  };
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    ["system", `You are a supervisor managing these workers: {members}. Choose the next worker. Use FINISH if done.`],
-    new MessagesPlaceholder("messages"),
-    ["human", "Who should act next? Or FINISH? Choose one of: {options}"],
-  ]);
-
-  const formattedPrompt = await prompt.partial({
-    options: [END, ...memberNames].join(", "),
-    members: memberNames.join(", "),
-  });
-
-  const supervisorChain = formattedPrompt
-    .pipe((llm as any).bindTools([routingTool], { tool_choice: "route" }))
-    .pipe((x: any) => {
-      if (!x.tool_calls || x.tool_calls.length === 0) throw new Error("No tool_calls from supervisor.");
-      return x.tool_calls[0].args;
-  });
-
-  // Wrap the LLM router with loop guard + success FINISH
   const MAX_REPEAT = 2;
-  const SUCCESS_PREFIXES = ["Opened", "Closed", "Moved", "Copied", "Listed", "OK", "Done"];
 
   const supervisorNode = async (s: typeof GraphState.State) => {
-    // Hard stop on repeats
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
 
-    // If the last message looks like a successful tool result, FINISH
-    const last = s.messages?.[s.messages.length - 1] as any;
-    const txt =
-      typeof last?.content === "string"
-        ? last.content.trim()
-        : Array.isArray(last?.content)
-        ? last.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("")
-        : "";
+    const options = [END, ...memberNames];
+    const systemPrompt = systemTemplate
+      .replace("{members}", memberNames.join(", "))
+      .replace("{options}", options.join(", "));
 
-    if (txt && SUCCESS_PREFIXES.some((p) => txt.startsWith(p))) {
-      return { next: END };
-    }
-
-    // Otherwise, ask the supervisor LLM to pick the next worker
-    return supervisorChain.invoke(s);
+    const out = await routeRemote(systemPrompt, toWire(s.messages), options);
+    const nxt = out?.next && options.includes(out.next) ? out.next : END;
+    return { next: nxt };
   };
 
   const workflow = new StateGraph(GraphState);
@@ -237,11 +221,19 @@ export async function runAssistantStream(
   onChunk: (text: string) => void
 ): Promise<string> {
   const commands: Command[] = [
+    // Tabs
     new ListTabsCommand(),
     new OpenTabCommand(),
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
+    // Hubs
+    new CreateHubCommand(),
+    new DeleteHubCommand(),
+    new ListHubsCommand(),
+    new RenameHubCommand(),
+    new AddTabToHubCommand(),
+    new OpenHubCommand(),
   ];
   const graph = await buildGraph(commands);
   const stream = await graph.stream(

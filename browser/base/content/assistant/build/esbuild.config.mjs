@@ -1,17 +1,8 @@
 import esbuild from "esbuild";
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import path from "node:path";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(here, ".env") });
-
-const KEY  = (process.env.ANTHROPIC_API_KEY || "").trim();
-
-if (!KEY) {
-  console.error("[assistant] Missing ANTHROPIC_API_KEY (set it in build/.env)");
-  process.exit(1);
-}
+const OASIS_API_BASE = "https://segvax3qd7tkhcckzrijydbz6m0cijdu.lambda-url.us-east-2.on.aws/";
+const AWS_REGION = "us-east-2";
+const COGNITO_IDENTITY_POOL_ID = "us-east-2:21ce1894-9a97-48ac-8741-b69f7eafea1c";
 
 await esbuild.build({
   entryPoints: ["./src/assistant.ts"],
@@ -21,8 +12,10 @@ await esbuild.build({
   target: "es2022",
   outfile: "../assistant.bundle.js",
   sourcemap: false,
-  logLevel: "warning",
+  logLevel: "info",
   define: {
-    "process.env.ANTHROPIC_API_KEY": JSON.stringify(KEY),
+    "process.env.OASIS_API_BASE": JSON.stringify(OASIS_API_BASE),
+    "process.env.AWS_REGION": JSON.stringify(AWS_REGION),
+    "process.env.COGNITO_IDENTITY_POOL_ID": JSON.stringify(COGNITO_IDENTITY_POOL_ID),
   },
 });
