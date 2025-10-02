@@ -8087,7 +8087,7 @@
 - name: gfx.webrender.precise-radial-gradients
   type: bool
   rust: true
-  value: false
+  value: true
   mirror: once
 
 # Use a more precise method for sampling gradients when using SWGL.
@@ -15698,12 +15698,6 @@
 - name: network.essential_domains_fallback
   type: RelaxedAtomicBool
   value: false
-  mirror: always
-
-# Enable HTTP Compression Dictionary support
-- name: network.http.dictionaries.enable
-  type: RelaxedAtomicBool
-  value: true
   mirror: always
 
 #---------------------------------------------------------------------------

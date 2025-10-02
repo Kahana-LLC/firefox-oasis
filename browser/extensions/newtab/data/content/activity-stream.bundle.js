@@ -2045,6 +2045,12 @@ const LinkMenuOptions = {
       data: true,
     }),
   }),
+  DetectLocation: () => ({
+    id: "newtab-weather-menu-detect-my-location",
+    action: actionCreators.AlsoToMain({
+      type: actionTypes.WEATHER_USER_OPT_IN_LOCATION,
+    }),
+  }),
   ChangeWeatherDisplaySimple: () => ({
     id: "newtab-weather-menu-change-weather-display-simple",
     action: actionCreators.OnlyToMain({
@@ -11826,8 +11832,6 @@ class _Weather extends (external_React_default()).PureComponent {
   };
   handleAcceptOptIn = () => {
     (0,external_ReactRedux_namespaceObject.batch)(() => {
-      this.props.dispatch(actionCreators.SetPref("weather.optInAccepted", true));
-      this.props.dispatch(actionCreators.SetPref("weather.optInDisplayed", false));
       this.props.dispatch(actionCreators.AlsoToMain({
         type: actionTypes.WEATHER_USER_OPT_IN_LOCATION
       }));
@@ -11886,8 +11890,8 @@ class _Weather extends (external_React_default()).PureComponent {
     const showStaticData = isUserWeatherEnabled && isOptInEnabled && staticDataEnabled;
 
     // Note: The temperature units/display options will become secondary menu items
-    const WEATHER_SOURCE_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), ...(Prefs.values["weather.temperatureUnits"] === "f" ? ["ChangeTempUnitCelsius"] : ["ChangeTempUnitFahrenheit"]), ...(Prefs.values["weather.display"] === "simple" ? ["ChangeWeatherDisplayDetailed"] : ["ChangeWeatherDisplaySimple"]), "HideWeather", "OpenLearnMoreURL"];
-    const WEATHER_SOURCE_SHORTENED_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), "HideWeather", "OpenLearnMoreURL"];
+    const WEATHER_SOURCE_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), ...(Prefs.values["system.showWeatherOptIn"] ? ["DetectLocation"] : []), ...(Prefs.values["weather.temperatureUnits"] === "f" ? ["ChangeTempUnitCelsius"] : ["ChangeTempUnitFahrenheit"]), ...(Prefs.values["weather.display"] === "simple" ? ["ChangeWeatherDisplayDetailed"] : ["ChangeWeatherDisplaySimple"]), "HideWeather", "OpenLearnMoreURL"];
+    const WEATHER_SOURCE_SHORTENED_CONTEXT_MENU_OPTIONS = [...(Prefs.values["weather.locationSearchEnabled"] ? ["ChangeWeatherLocation"] : []), ...(Prefs.values["system.showWeatherOptIn"] ? ["DetectLocation"] : []), "HideWeather", "OpenLearnMoreURL"];
     const contextMenu = contextOpts => /*#__PURE__*/external_React_default().createElement("div", {
       className: "weatherButtonContextMenuWrapper"
     }, /*#__PURE__*/external_React_default().createElement("button", {
@@ -11933,8 +11937,9 @@ class _Weather extends (external_React_default()).PureComponent {
       }, "22\xB0", Prefs.values["weather.temperatureUnits"])), /*#__PURE__*/external_React_default().createElement("div", {
         className: "weatherCityRow"
       }, /*#__PURE__*/external_React_default().createElement("span", {
-        className: "weatherCity"
-      }, "New York City")))) : /*#__PURE__*/external_React_default().createElement("a", {
+        className: "weatherCity",
+        "data-l10n-id": "newtab-weather-static-city"
+      })))) : /*#__PURE__*/external_React_default().createElement("a", {
         "data-l10n-id": "newtab-weather-see-forecast",
         "data-l10n-args": "{\"provider\": \"AccuWeather\xAE\"}",
         href: WEATHER_SUGGESTION.forecast.url,
@@ -11973,17 +11978,19 @@ class _Weather extends (external_React_default()).PureComponent {
         className: "weatherOptInImg"
       }), /*#__PURE__*/external_React_default().createElement("div", {
         className: "weatherOptInContent"
-      }, /*#__PURE__*/external_React_default().createElement("h3", null, "Do you want to see the weather for your location?"), /*#__PURE__*/external_React_default().createElement("moz-button-group", {
+      }, /*#__PURE__*/external_React_default().createElement("h3", {
+        "data-l10n-id": "newtab-weather-opt-in-see-weather"
+      }), /*#__PURE__*/external_React_default().createElement("moz-button-group", {
         className: "button-group"
       }, /*#__PURE__*/external_React_default().createElement("moz-button", {
         size: "small",
         type: "default",
-        label: "Not now",
+        "data-l10n-id": "newtab-weather-opt-in-not-now",
         onClick: this.handleRejectOptIn
       }), /*#__PURE__*/external_React_default().createElement("moz-button", {
         size: "small",
         type: "default",
-        label: "Yes",
+        "data-l10n-id": "newtab-weather-opt-in-yes",
         onClick: this.handleAcceptOptIn
       }))))));
     }
