@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Application>
-  <VisualElements
-    DisplayName="Oasis Browser"
-    Square150x150Logo="VisualElements/Square150x150Logo.png"
-    Square70x70Logo="VisualElements/Square70x70Logo.png"
-    BackgroundColor="#1c1b22"
-    ForegroundText="light" />
-</Application>

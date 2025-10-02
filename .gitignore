@@ -18,7 +18,6 @@ tags
 *.tsbuildinfo
 compile_commands.json
 *.env
-assistant.bundle.js
 
 # emacs backup files in any directory.
 # lint-ignore-next-line: syntax-difference
