@@ -1,9 +1,8 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
-import { SystemMessage, HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
-import { DynamicTool } from "@langchain/core/tools";
-import { routeRemote } from "./llmRemote";
+import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+import { routeRemote } from "./proxyClient";
 
-// Your local command implementations (tabs/groups etc.)
+// Local command implementations (tabs / groups)
 import {
   ListTabsCommand,
   OpenTabCommand,
@@ -19,11 +18,6 @@ import {
   Command,
   CmdResult,
 } from "./commands";
-
-/* ========= ENV (baked by esbuild.define in esbuild.config.mjs) ========= */
-const OASIS_API_BASE = process.env.OASIS_API_BASE as string;
-const OASIS_CLIENT_TOKEN = (process.env.OASIS_CLIENT_TOKEN as string) || undefined;
-if (!OASIS_API_BASE) throw new Error("OASIS_API_BASE not set. Define it in esbuild.config.mjs.");
 
 /* ========= Ephemeral chat history per session ========= */
 const SESSIONS = new Map<string, BaseMessage[]>();
@@ -68,27 +62,34 @@ const GraphState = Annotation.Root({
   }),
 });
 
+/* ========= Helpers ========= */
+function msgText(m: any): string {
+  if (!m) return "";
+  const c = m.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) return c.map(v => (typeof v === "string" ? v : v?.text || "")).join("");
+  return String(c ?? "");
+}
+
+type WireMsg = { role: "user" | "model"; content: string };
+function toWire(messages: BaseMessage[]): WireMsg[] {
+  return messages.map(m => {
+    const role = m._getType() === "human" ? "user" : "model";
+    return { role, content: msgText(m) };
+  });
+}
+
 /* ========= Build the tool graph ========= */
 async function buildGraph(commands: Command[]) {
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    // We register a DynamicTool for clarity, but the node calls the command directly.
-    const tool = new DynamicTool({
-      name: command.commandName,
-      description: command.description,
-      func: async (input: any) => {
-        const res: CmdResult = await command.execute(input);
-        return res.message;
-      },
-    });
-
     // Node: take the last human content as input; run the command; emit AI text.
     const node = async (state: typeof GraphState.State) => {
       const msgs = state.messages;
       const lastHuman = [...msgs].reverse().find(m => (m as any)?._getType?.() === "human");
-      const input = (lastHuman as any)?.content;
+      const input = msgText(lastHuman);
 
       const res: CmdResult = await command.execute(input);
       const text = res.message || "";
@@ -120,8 +121,16 @@ Tabs:
 - "move/detach to new window" → move_tab_to_new_window
 - "copy/export/share all URLs" → copy_tab_urls
 
-Do not ask for confirmation; prefer to act directly. If uncertain, prefer list_tabs.
-If the user asks for something unsupported, FINISH.
+Hubs:
+- "create hub", "new group" → create_hub
+- "delete/remove hub <name>" → delete_hub
+- "list hubs" → list_hubs
+- "rename hub <old> to <new>" → rename_hub
+- "add this tab to <hub>" → add_tab_to_hub
+- "open/switch to hub <name>" → open_hub
+
+Do not ask for confirmation; act directly when possible.
+If uncertain, prefer list_tabs. If unsupported, FINISH.
 `.trim();
 
   const FEWSHOTS = [
@@ -131,11 +140,15 @@ If the user asks for something unsupported, FINISH.
     `- "close this tab" → close_tab`,
     `- "move this tab to a new window" → move_tab_to_new_window`,
     `- "copy all tab urls" → copy_tab_urls`,
+    `- "create hub Work" → create_hub`,
+    `- "add this tab to Work" → add_tab_to_hub`,
+    `- "rename hub Work to Projects" → rename_hub`,
     `- "open github then list tabs" → open_tab  (next turn will route to list_tabs)`,
   ].join("\n");
 
   const systemTemplate = `You are a supervisor managing: {members}.
 Given the user request and conversation so far, choose who should act next.
+Return only {"next": "<one of: {options}>"}.
 Use FINISH if done.
 
 ${ROUTING_GUIDELINES}
@@ -144,18 +157,18 @@ Routing examples:
 ${FEWSHOTS}`.trim();
 
   const MAX_REPEAT = 2;
+
   const supervisorNode = async (s: typeof GraphState.State) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
-    const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", "));
+
     const options = [END, ...memberNames];
-    const { next } = await routeRemote(
-      OASIS_API_BASE,
-      OASIS_CLIENT_TOKEN,
-      systemPrompt,
-      s.messages,
-      options
-    );
-    return { next };
+    const systemPrompt = systemTemplate
+      .replace("{members}", memberNames.join(", "))
+      .replace("{options}", options.join(", "));
+
+    const out = await routeRemote(systemPrompt, toWire(s.messages), options);
+    const nxt = out?.next && options.includes(out.next) ? out.next : END;
+    return { next: nxt };
   };
 
   /* ----- Wire the graph ----- */
@@ -182,11 +195,13 @@ export async function runAssistantStream(
   const sessionId = opts?.sessionId || "default";
 
   const commands: Command[] = [
+    // Tabs
     new ListTabsCommand(),
     new OpenTabCommand(),
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
+    // Hubs
     new CreateHubCommand(),
     new DeleteHubCommand(),
     new ListHubsCommand(),
