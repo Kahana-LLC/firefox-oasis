@@ -196,8 +196,7 @@ document.addEventListener(
         #tracking-protection-icon-container,
         #identity-icon-box,
         #identity-permission-box,
-        #translations-button,
-        #oasis-hubs-button
+        #translations-button
         `);
       if (!element) {
         return;
@@ -290,10 +289,6 @@ document.addEventListener(
           FullPageTranslationsPanel.open(event);
           break;
 
-        case "oasis-hubs-button":
-          openTrustedLinkIn("chrome://browser/content/assistant/hubs.xhtml", "tab");
-          break;
-
         default:
           throw new Error(`Missing case for #${element.id}`);
       }
@@ -321,8 +316,7 @@ document.addEventListener(
         #downloads-button,
         #fxa-toolbar-menu-button,
         #unified-extensions-button,
-        #library-button,
-        #oasis-hubs-button
+        #library-button
       `);
       if (!element) {
         return;
@@ -406,12 +400,6 @@ document.addEventListener(
 
         case "library-button":
           PanelUI.showSubView("appMenu-libraryView", element, event);
-          break;
-
-        case "oasis-hubs-button":
-          if (event.key === "Enter" || event.key === " ") {
-            openTrustedLinkIn("chrome://browser/content/assistant/hubs.xhtml", "tab");
-          }
           break;
 
         default:
