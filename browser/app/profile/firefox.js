@@ -1242,6 +1242,9 @@ pref("privacy.globalprivacycontrol.functionality.enabled",  true);
 // Enable GPC in private browsing mode
 pref("privacy.globalprivacycontrol.pbmode.enabled", true);
 
+// What custom schemes to treat as accessing digital wallets, comma separated
+pref("privacy.wallet_schemes", "openid4vp,mdoc,mdoc-openid4vp,haip,eudi-wallet,eudi-openid4vp,openid-credential-offer");
+
 pref("network.proxy.share_proxy_settings",  false); // use the same proxy settings for all protocols
 
 // simple gestures support
@@ -3434,6 +3437,11 @@ pref("browser.backup.template.fallback-download.esr", " https://www.firefox.com/
 pref("browser.backup.errorCode", 0);
 pref("browser.backup.backup-retry-limit", 100);
 pref("browser.backup.disabled-on-idle-backup-retry", false);
+// Limit of number of unremovable staging directories and archives that are
+// permitted before backup will stop making additional backups.  Unremovable
+// staging directories/archives are ones that the file system prevents us from
+// removing for any reason.
+pref("browser.backup.max-num-unremovable-staging-items", 5);
 
 #ifdef NIGHTLY_BUILD
   // Pref to enable the new profiles
@@ -3444,6 +3452,8 @@ pref("browser.backup.disabled-on-idle-backup-retry", false);
 pref("browser.profiles.profile-name.updated", false);
 // Whether to allow the user to merge profile data
 pref("browser.profiles.sync.allow-danger-merge", false);
+// Allow Firefox Refresh even if profile is ineligible, see Bug 1928138
+pref("browser.profiles.forceEnableRefresh", false);
 
 pref("startup.homepage_override_url_nimbus", "");
 // These prefs are referring to the Fx update version
@@ -3468,6 +3478,8 @@ pref("browser.contextual-services.contextId.rust-component.enabled", true);
 pref("browser.ipProtection.enabled", false);
 pref("browser.ipProtection.userEnabled", false);
 pref("browser.ipProtection.variant", "");
+pref("browser.ipProtection.exceptionsMode", "all");
+pref("browser.ipProtection.domainExclusions", "");
 pref("browser.ipProtection.log", false);
 pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");
 

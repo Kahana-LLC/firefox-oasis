@@ -835,6 +835,25 @@ void AbsoluteContainingBlock::ResolveAutoMarginsAfterLayout(
   }
 }
 
+struct MOZ_STACK_CLASS MOZ_RAII AutoFallbackStyleSetter {
+  AutoFallbackStyleSetter(nsIFrame* aFrame, ComputedStyle* aFallbackStyle)
+      : mFrame(aFrame) {
+    if (aFallbackStyle) {
+      mOldStyle = aFrame->SetComputedStyleWithoutNotification(aFallbackStyle);
+    }
+  }
+
+  ~AutoFallbackStyleSetter() {
+    if (mOldStyle) {
+      mFrame->SetComputedStyleWithoutNotification(std::move(mOldStyle));
+    }
+  }
+
+ private:
+  nsIFrame* const mFrame;
+  RefPtr<ComputedStyle> mOldStyle;
+};
+
 // XXX Optimize the case where it's a resize reflow and the absolutely
 // positioned child has the exact same size and position and skip the
 // reflow...
@@ -872,54 +891,78 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 #endif  // DEBUG
 
   const bool isGrid = aFlags.contains(AbsPosReflowFlag::IsGridContainerCB);
-  const auto* stylePos = aKidFrame->StylePosition();
   // TODO(bug 1989059): position-try-order.
-  auto fallbacks = stylePos->mPositionTryFallbacks._0.AsSpan();
+  auto fallbacks =
+      aKidFrame->StylePosition()->mPositionTryFallbacks._0.AsSpan();
   Maybe<uint32_t> currentFallbackIndex;
+  const StylePositionTryFallbacksItem* currentFallback = nullptr;
+  RefPtr<ComputedStyle> currentFallbackStyle;
+
+  auto SeekFallbackTo = [&](uint32_t aIndex) -> bool {
+    if (aIndex >= fallbacks.Length()) {
+      return false;
+    }
+    const StylePositionTryFallbacksItem* nextFallback;
+    RefPtr<ComputedStyle> nextFallbackStyle;
+    while (true) {
+      nextFallback = &fallbacks[aIndex];
+      if (nextFallback->IsIdentAndOrTactic()) {
+        auto* ident = nextFallback->AsIdentAndOrTactic().ident.AsAtom();
+        if (!ident->IsEmpty()) {
+          nextFallbackStyle = aPresContext->StyleSet()->ResolvePositionTry(
+              *aKidFrame->GetContent()->AsElement(), *aKidFrame->Style(),
+              ident);
+          if (!nextFallbackStyle) {
+            // No @position-try rule for this name was found, per spec we should
+            // skip it.
+            aIndex++;
+            if (aIndex >= fallbacks.Length()) {
+              return false;
+            }
+          }
+        }
+      }
+      break;
+    }
+    currentFallbackIndex = Some(aIndex);
+    currentFallback = nextFallback;
+    currentFallbackStyle = std::move(nextFallbackStyle);
+    return true;
+  };
+
+  auto TryAdvanceFallback = [&]() -> bool {
+    if (fallbacks.IsEmpty()) {
+      return false;
+    }
+    uint32_t nextFallbackIndex =
+        currentFallbackIndex ? *currentFallbackIndex + 1 : 0;
+    return SeekFallbackTo(nextFallbackIndex);
+  };
+
   // TODO(emilio): Right now fallback only applies to position-area, which only
   // makes a difference with a default anchor... Generalize it?
   if (aAnchorPosReferenceData) {
     bool found = false;
     uint32_t index = aKidFrame->GetProperty(
         nsIFrame::LastSuccessfulPositionFallback(), &found);
-    if (found) {
-      if (index >= fallbacks.Length()) {
-        // This should not happen, because we remove the frame property if the
-        // fallback list changes.
-        MOZ_ASSERT_UNREACHABLE("invalid LastSuccessfulPositionFallback");
-        aKidFrame->RemoveProperty(nsIFrame::LastSuccessfulPositionFallback());
-      } else {
-        currentFallbackIndex.emplace(index);
-      }
+    if (found && !SeekFallbackTo(index)) {
+      aKidFrame->RemoveProperty(nsIFrame::LastSuccessfulPositionFallback());
     }
   }
-  do {
-    const StylePositionTryFallbacksItem* currentFallback = nullptr;
-    RefPtr<ComputedStyle> currentFallbackStyle;
-    if (currentFallbackIndex) {
-      currentFallback = &fallbacks[*currentFallbackIndex];
-    }
 
+  do {
+    AutoFallbackStyleSetter fallback(aKidFrame, currentFallbackStyle);
     const nsRect usedCb = [&] {
       if (isGrid) {
         // TODO(emilio): how does position-area interact with grid?
         return nsGridContainerFrame::GridItemCB(aKidFrame);
       }
 
-      auto positionArea = stylePos->mPositionArea;
+      auto positionArea = aKidFrame->StylePosition()->mPositionArea;
       const StylePositionTryFallbacksTryTactic* tactic = nullptr;
       if (currentFallback) {
         if (currentFallback->IsIdentAndOrTactic()) {
           const auto& item = currentFallback->AsIdentAndOrTactic();
-          if (!item.ident.AsAtom()->IsEmpty()) {
-            currentFallbackStyle = aPresContext->StyleSet()->ResolvePositionTry(
-                *aKidFrame->GetContent()->AsElement(), *aKidFrame->Style(),
-                item.ident.AsAtom());
-            if (currentFallbackStyle) {
-              positionArea =
-                  currentFallbackStyle->StylePosition()->mPositionArea;
-            }
-          }
           tactic = &item.try_tactic;
         } else {
           MOZ_ASSERT(currentFallback->IsPositionArea());
@@ -950,17 +993,32 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     nscoord availISize = logicalCBSize.ISize(wm);
 
     ReflowInput::InitFlags initFlags;
-    if (aFlags.contains(AbsPosReflowFlag::IsGridContainerCB)) {
-      // When a grid container generates the abs.pos. CB for a *child* then
-      // the static position is determined via CSS Box Alignment within the
-      // abs.pos. CB (a grid area, i.e. a piece of the grid). In this scenario,
-      // due to the multiple coordinate spaces in play, we use a convenience
-      // flag to simply have the child's ReflowInput give it a static position
-      // at its abs.pos. CB origin, and then we'll align & offset it from there.
-      nsIFrame* placeholder = aKidFrame->GetPlaceholderFrame();
-      if (placeholder && placeholder->GetParent() == aDelegatingFrame) {
-        initFlags += ReflowInput::InitFlag::StaticPosIsCBOrigin;
+    const bool staticPosIsCBOrigin = [&] {
+      if (aFlags.contains(AbsPosReflowFlag::IsGridContainerCB)) {
+        // When a grid container generates the abs.pos. CB for a *child* then
+        // the static position is determined via CSS Box Alignment within the
+        // abs.pos. CB (a grid area, i.e. a piece of the grid). In this
+        // scenario, due to the multiple coordinate spaces in play, we use a
+        // convenience flag to simply have the child's ReflowInput give it a
+        // static position at its abs.pos. CB origin, and then we'll align &
+        // offset it from there.
+        nsIFrame* placeholder = aKidFrame->GetPlaceholderFrame();
+        if (placeholder && placeholder->GetParent() == aDelegatingFrame) {
+          return true;
+        }
       }
+      if (aKidFrame->IsMenuPopupFrame()) {
+        // Popups never use their static pos.
+        return true;
+      }
+      // TODO(emilio): Either reparent the top layer placeholder frames to the
+      // viewport, or return true here for top layer frames more generally (not
+      // only menupopups), see https://github.com/w3c/csswg-drafts/issues/8040.
+      return false;
+    }();
+
+    if (staticPosIsCBOrigin) {
+      initFlags += ReflowInput::InitFlag::StaticPosIsCBOrigin;
     }
 
     const bool kidFrameMaySplit =
@@ -1159,21 +1217,18 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
     aKidFrame->DidReflow(aPresContext, &kidReflowInput);
 
-    if (fallbacks.IsEmpty() ||
-        (currentFallbackIndex &&
-         *currentFallbackIndex >= fallbacks.Length() - 1) ||
-        (usedCb.Contains(aKidFrame->GetRect()) && aStatus.IsComplete())) {
-      // If there are no further fallbacks, or we don't overflow, we're done.
+    if (usedCb.Contains(aKidFrame->GetRect()) && aStatus.IsComplete()) {
+      // We don't overflow our CB, no further fallback needed.
+      break;
+    }
+
+    if (!TryAdvanceFallback()) {
+      // If there are no further fallbacks, we're done.
       break;
     }
 
     // Try with the next  fallback.
     aKidFrame->AddStateBits(NS_FRAME_IS_DIRTY);
-    if (currentFallbackIndex) {
-      (*currentFallbackIndex)++;
-    } else {
-      currentFallbackIndex.emplace(0);
-    }
     aStatus.Reset();
   } while (true);
 

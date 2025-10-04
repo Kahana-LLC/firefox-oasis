@@ -9385,7 +9385,7 @@
   # making this mirror: once, and set_spidermonkey_pref: startup is
   # broken: See Bug 1989094
   mirror: always
-  set_spidermonkey_pref: startup
+  set_spidermonkey_pref: always
 
 # Whether to use the off-thread script compilation and decoding.
 - name: javascript.options.parallel_parsing
@@ -9523,6 +9523,13 @@
 #endif
   mirror: always
 
+# If true, allow the parent process as a fallback for compositing due to an
+# unstable GPU process, otherwise simply crash the parent process.
+- name: layers.gpu-process.allow-fallback-to-parent
+  type: bool
+  value: false
+  mirror: once
+
 - name: layers.gpu-process.allow-software
   type: bool
 #if defined(XP_WIN)
@@ -9569,6 +9576,17 @@
   value: 20000
   mirror: once
 
+# How many additional attempts to launch the GPU process we try if we fail
+# during process launch, before any configuration is attempted.
+- name: layers.gpu-process.max_launch_attempts
+  type: RelaxedAtomicInt32
+#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
+  value: 2
+#else
+  value: 0
+#endif
+  mirror: always
+
 # How many unstable GPU process restarts we allow for a given configuration.
 - name: layers.gpu-process.max_restarts
   type: RelaxedAtomicInt32
@@ -9591,7 +9609,7 @@
 # restarts.
 - name: layers.gpu-process.stable.min-uptime-ms
   type: RelaxedAtomicInt32
-  value: 4 * 60000
+  value: 30000
   mirror: always
 
 # Note: This pref will only be used if it is less than layers.gpu-process.max_restarts.
@@ -15135,12 +15153,7 @@
 # Use NSPR for HTTP3 UDP IO
 - name: network.http.http3.use_nspr_for_io
   type: RelaxedAtomicBool
-#ifdef ANDROID
-  # Holding back on Android for now given <https://bugzilla.mozilla.org/show_bug.cgi?id=1987256>.
-  value: @IS_NOT_EARLY_BETA_OR_EARLIER@
-#else
   value: false
-#endif
   mirror: always
   rust: true
 
@@ -15178,6 +15191,11 @@
   # Disable GSO on Windows.
   #
   # See https://bugzilla.mozilla.org/show_bug.cgi?id=1979279 for details.
+  value: 1
+#elif defined(ANDROID)
+  # Disable GSO on Android.
+  #
+  # See <https://bugzilla.mozilla.org/show_bug.cgi?id=1987256> for details.
   value: 1
 #else
   # Current industry standard. Likely worth tuning.
@@ -15278,11 +15296,7 @@
 # Has no effect unless security.tls.enable_kyber is true.
 - name: network.http.http3.enable_kyber
   type: RelaxedAtomicBool
-#ifdef ANDROID
-  value: @IS_NIGHTLY_BUILD@
-#else
   value: true
-#endif
   mirror: always
   rust: true
 
@@ -17349,17 +17363,13 @@
 
 - name: security.tls.enable_kyber
   type: RelaxedAtomicBool
-#ifdef ANDROID
-  value: @IS_NIGHTLY_BUILD@
-#else
   value: true
-#endif
   mirror: always
   rust: true
 
 - name: security.tls.client_hello.send_p256_keyshare
   type: RelaxedAtomicBool
-  value: true
+  value: @IS_NOT_NIGHTLY_BUILD@
   mirror: always
   rust: true
 
