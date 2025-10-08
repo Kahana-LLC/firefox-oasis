@@ -4434,7 +4434,7 @@
 # (https://w3c.github.io/trusted-types/dist/spec/) is enabled.
 - name: dom.security.trusted_types.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: @IS_EARLY_BETA_OR_EARLIER@
   mirror: always
 
 # If true, all content requests will get upgraded to HTTPS://
@@ -4804,7 +4804,7 @@
 # Enable Storage-Access-Headers
 - name: dom.storage_access.headers.enabled
   type: bool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 # Forward-Declared Storage-access API.
@@ -5546,6 +5546,17 @@
   value: @IS_EARLY_BETA_OR_EARLIER@
 #endif
   mirror: always
+
+# Is WebGPU allowed to run in the parent process? This should be false if
+# on a platform that supports the GPU process, else true.
+- name: dom.webgpu.allow-in-parent
+  type: bool
+#if defined(XP_WIN) || defined(ANDROID)
+  value: false
+#else
+  value: true
+#endif
+  mirror: once
 
 # Is support for the Web GPU API enabled on service workers?
 - name: dom.webgpu.service-workers.enabled
@@ -6641,6 +6652,15 @@
   value: false
 #endif
   mirror: always
+
+- name: gfx.canvas.accelerated.allow-in-parent
+  type: bool
+#if defined(XP_WIN) || defined(ANDROID)
+  value: false
+#else
+  value: true
+#endif
+  mirror: once
 
 # Whether to attempt to enable Accelerated Canvas2D regardless of blocklisting.
 - name: gfx.canvas.accelerated.force-enabled
@@ -8094,7 +8114,7 @@
 - name: gfx.webrender.precise-radial-gradients-swgl
   type: bool
   rust: true
-  value: false
+  value: true
   mirror: once
 
 # Use a more precise method for sampling gradients when *not* using SWGL .
@@ -9545,6 +9565,8 @@
   value: true
 #elif defined(MOZ_X11)
   value: false  # we'd like this to be @IS_NIGHTLY_BUILD@, see Bug 1927058
+#elif defined(XP_MACOSX)
+  value: @IS_NIGHTLY_BUILD@
 #else
   value: false
 #endif
@@ -10982,6 +11004,21 @@
   value: false
   mirror: always
 
+# Determines how we snap css outline-offset:
+#   0: No snapping (historical behavior)
+#   1: Always snap as border-width (proposed behavior in
+#      https://github.com/w3c/csswg-drafts/issues/12906)
+#   2: The above, but only on chrome code, for now.
+- name: layout.css.outline-offset.snapping
+  type: RelaxedAtomicInt32
+#ifdef NIGHTLY_BUILD
+  value: 1
+#else
+  value: 2
+#endif
+  mirror: always
+  rust: true
+
 - name: layout.visibility.min-recompute-interval-ms
   type: uint32_t
   value: 1000
@@ -12151,7 +12188,13 @@
   mirror: always
 
 # This pref disables using PQ crypto for WebRTC DTLS code.
-- name: media.webrtc.enable_pq_dtls
+- name: media.webrtc.enable_pq_hybrid_kex
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
+
+# This pref enabled sending ssl_grp_kem_mlkem768x25519 Key Share for WebRTC DTLS code.
+- name: media.webrtc.send_mlkem_keyshare
   type: RelaxedAtomicBool
   value: @IS_EARLY_BETA_OR_EARLIER@
   mirror: always
@@ -12290,11 +12333,7 @@
 # Hls
 - name: media.hls.enabled
   type: RelaxedAtomicBool
-#if defined(ANDROID)
-  value: @IS_NOT_EARLY_BETA_OR_EARLIER@
-#else
-  value: false
-#endif
+  value: @IS_ANDROID@
   mirror: always
 
 # Max number of HLS players that can be created concurrently. Used only on
@@ -15712,6 +15751,12 @@
 - name: network.essential_domains_fallback
   type: RelaxedAtomicBool
   value: false
+  mirror: always
+
+# Enable HTTP Compression Dictionary support
+- name: network.http.dictionaries.enable
+  type: RelaxedAtomicBool
+  value: true
   mirror: always
 
 #---------------------------------------------------------------------------
@@ -19320,6 +19365,16 @@
 - name: widget.windows.mica.toplevel-backdrop
   type: RelaxedAtomicInt32
   value: 0
+  mirror: always
+
+# Whether to use the Windows App SDK to disable the minimize/maximize/close buttons.
+# This should only be disabled if crashes are happening, because it will make
+# double minimize/maximize/close buttons draw. Note that this preference is disregarded
+# when running on Windows 11 H2 or earlier (which includes Windows 10), as we never use
+# the Windows App SDK on those versions.
+- name: widget.windows.windowsappsdk.enabled
+  type: bool
+  value: true
   mirror: always
 #endif
 

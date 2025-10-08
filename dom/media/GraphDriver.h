@@ -38,23 +38,6 @@ namespace mozilla {
 static const int MEDIA_GRAPH_TARGET_PERIOD_MS = 10;
 
 /**
- * Assume that we might miss our scheduled wakeup of the MediaTrackGraph by
- * this much.
- */
-static const int SCHEDULE_SAFETY_MARGIN_MS = 10;
-
-/**
- * Try have this much audio buffered in streams and queued to the hardware.
- * The maximum delay to the end of the next control loop
- * is 2*MEDIA_GRAPH_TARGET_PERIOD_MS + SCHEDULE_SAFETY_MARGIN_MS.
- * There is no point in buffering more audio than this in a stream at any
- * given time (until we add processing).
- * This is not optimal yet.
- */
-static const int AUDIO_TARGET_MS =
-    2 * MEDIA_GRAPH_TARGET_PERIOD_MS + SCHEDULE_SAFETY_MARGIN_MS;
-
-/**
  * After starting a fallback driver, wait this long before attempting to re-init
  * the audio stream the first time.
  */
@@ -282,7 +265,7 @@ class GraphDriver {
    * it can be indirectly set by the latency of the audio backend, and the
    * number of buffers of this audio backend: say we have four buffers, and 40ms
    * latency, we will get a callback approximately every 10ms. */
-  virtual uint32_t IterationDuration() = 0;
+  virtual TimeDuration IterationDuration() = 0;
   /*
    * Signaled by the graph when it needs another iteration. Goes unhandled for
    * GraphDrivers that are not able to sleep indefinitely (i.e., all drivers but
@@ -328,10 +311,14 @@ class GraphDriver {
   // GraphDriver's thread has started and the thread is running.
   virtual bool ThreadRunning() const = 0;
 
-  double MediaTimeToSeconds(GraphTime aTime) const {
+  double MediaTimeToSeconds(MediaTime aTime) const {
     NS_ASSERTION(aTime > -TRACK_TIME_MAX && aTime <= TRACK_TIME_MAX,
                  "Bad time");
     return static_cast<double>(aTime) / mSampleRate;
+  }
+
+  TimeDuration MediaTimeToTimeDuration(MediaTime aTime) const {
+    return TimeDuration::FromSeconds(MediaTimeToSeconds(aTime));
   }
 
   GraphTime SecondsToMediaTime(double aS) const {
@@ -380,7 +367,12 @@ class ThreadedDriver : public GraphDriver {
   class IterationWaitHelper {
     Monitor mMonitor MOZ_UNANNOTATED;
     // The below members are guarded by mMonitor.
-    bool mNeedAnotherIteration = false;
+
+    // Whether another iteration is required either to process control
+    // messages or to render.
+    // Drivers do not pass on this state when switching to another driver,
+    // so always perform at least one iteration.
+    bool mNeedAnotherIteration = true;
     TimeStamp mWakeTime;
 
    public:
@@ -436,7 +428,7 @@ class ThreadedDriver : public GraphDriver {
    */
   virtual void RunThread();
   friend class MediaTrackGraphInitThreadRunnable;
-  uint32_t IterationDuration() override { return MEDIA_GRAPH_TARGET_PERIOD_MS; }
+  TimeDuration IterationDuration() override;
 
   nsIThread* Thread() const { return mThread; }
 
@@ -449,13 +441,12 @@ class ThreadedDriver : public GraphDriver {
  protected:
   /* Waits until it's time to process more data. */
   void WaitForNextIteration();
-  /* Implementation dependent time the ThreadedDriver should wait between
-   * iterations. */
-  virtual TimeDuration WaitInterval() = 0;
+  /* Return the implementation-dependent time that the ThreadedDriver should
+   * wait for the next iteration.  Called only once per iteration;
+   * SystemClockDriver advances it's target iteration time stamp.*/
+  virtual TimeDuration NextIterationWaitDuration() = 0;
   /* When the graph wakes up to do an iteration, implementations return the
-   * range of time that will be processed.  This is called only once per
-   * iteration; it may determine the interval from state in a previous
-   * call. */
+   * range of time that will be processed. */
   virtual MediaTime GetIntervalForIteration() = 0;
 
   virtual ~ThreadedDriver();
@@ -475,7 +466,7 @@ class ThreadedDriver : public GraphDriver {
  * A SystemClockDriver drives a GraphInterface using a system clock, and waits
  * using a monitor, between each iteration.
  */
-class SystemClockDriver : public ThreadedDriver {
+class SystemClockDriver final : public ThreadedDriver {
  public:
   SystemClockDriver(GraphInterface* aGraphInterface,
                     GraphDriver* aPreviousDriver, uint32_t aSampleRate);
@@ -485,22 +476,24 @@ class SystemClockDriver : public ThreadedDriver {
 
  protected:
   /* Return the TimeDuration to wait before the next rendering iteration. */
-  TimeDuration WaitInterval() override;
+  TimeDuration NextIterationWaitDuration() override;
   MediaTime GetIntervalForIteration() override;
 
  private:
   // Those are only modified (after initialization) on the graph thread. The
   // graph thread does not run during the initialization.
   TimeStamp mInitialTimeStamp;
-  TimeStamp mCurrentTimeStamp;
-  TimeStamp mLastTimeStamp;
+  // The system clock time when the next or in-progress iteration should start
+  // if the time that rendering happens advances consistently with the frames
+  // rendered.  Advanced before waiting to render the next iteration.
+  TimeStamp mTargetIterationTimeStamp;
 };
 
 /**
  * An OfflineClockDriver runs the graph as fast as possible, without waiting
  * between iteration.
  */
-class OfflineClockDriver : public ThreadedDriver {
+class OfflineClockDriver final : public ThreadedDriver {
  public:
   OfflineClockDriver(GraphInterface* aGraphInterface, uint32_t aSampleRate,
                      GraphTime aSlice);
@@ -513,7 +506,7 @@ class OfflineClockDriver : public ThreadedDriver {
   void RunThread() override;
 
  protected:
-  TimeDuration WaitInterval() override { return TimeDuration(); }
+  TimeDuration NextIterationWaitDuration() override { return TimeDuration(); }
   MediaTime GetIntervalForIteration() override;
 
  private:
@@ -548,7 +541,8 @@ struct AudioInputProcessingParamsRequest {
  *   API, we have to do block processing at 128 frames per block, we need to
  *   keep a little spill buffer to store the extra frames.
  */
-class AudioCallbackDriver : public GraphDriver, public MixerCallbackReceiver {
+class AudioCallbackDriver final : public GraphDriver,
+                                  public MixerCallbackReceiver {
   using IterationResult = GraphInterface::IterationResult;
   enum class FallbackDriverState;
   class FallbackWrapper;
@@ -589,7 +583,7 @@ class AudioCallbackDriver : public GraphDriver, public MixerCallbackReceiver {
   void StateCallback(cubeb_state aState);
   /* This is an approximation of the number of millisecond there are between two
    * iterations of the graph. */
-  uint32_t IterationDuration() override;
+  TimeDuration IterationDuration() override;
   /* If the audio stream has started, this does nothing. There will be another
    * iteration. If there is an active fallback driver, we forward the call so it
    * can wake up. */

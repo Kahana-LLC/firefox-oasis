@@ -315,7 +315,7 @@ end = "2025-08-30"
 [[wildcard-audits.hawk]]
 who = "Ryan Safaeian <rsafaeian@mozilla.com>"
 criteria = "safe-to-deploy"
-user-id = 158511
+user-id = 158511 # Yarik (lotas)
 start = "2022-05-05"
 end = "2026-04-24"
 notes = "Hawk is written and maintained by mozilla employees."
@@ -1023,6 +1023,12 @@ version = "0.2.1"
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.13.0 -> 0.13.1"
+
+[[audits.bhttp]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.6.1 -> 0.6.1@git:bf6a983845cc0b540effb3a615e92d914dfcfd0b"
+importable = false
 
 [[audits.bindgen]]
 who = "Emilio Cobos Álvarez <emilio@crisal.io>"
@@ -4302,7 +4308,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.naga]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.net2]]
@@ -4489,6 +4500,12 @@ who = "Alex Franchuk <afranchuk@mozilla.com>"
 criteria = "safe-to-deploy"
 delta = "0.33.0 -> 0.36.4"
 notes = "Hardly any new unsafe code, no new dependencies nor side-effectful std functions. Plenty of new tests."
+
+[[audits.ohttp]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.6.1 -> 0.6.1@git:bf6a983845cc0b540effb3a615e92d914dfcfd0b"
+importable = false
 
 [[audits.once_cell]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -6817,7 +6834,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.wgpu-core]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.wgpu-core-deps-apple]]
@@ -6838,7 +6860,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.wgpu-core-deps-apple]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.wgpu-core-deps-windows-linux-android]]
@@ -6859,7 +6886,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.wgpu-core-deps-windows-linux-android]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.wgpu-hal]]
@@ -6958,7 +6990,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.wgpu-hal]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.wgpu-types]]
@@ -7052,7 +7089,12 @@ who = [
     "Erich Gubler <erichdongubler@gmail.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "26.0.0 -> 26.0.0@git:8c4aebc0c1b75e3f7412dfc180745a0717fc30ec"
+delta = "26.0.0 -> 27.0.0"
+
+[[audits.wgpu-types]]
+who = "Andy Leiserson <aleiserson@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "27.0.0 -> 27.0.0@git:1072b87894b7c3084f80bc9d2679e822435186ba"
 importable = false
 
 [[audits.whatsys]]
@@ -7857,43 +7899,79 @@ end = "2024-05-03"
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-01-15"
-end = "2025-01-30"
+end = "2026-10-02"
+
+[[trusted.windows-collections]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2025-02-06"
+end = "2026-10-02"
 
 [[trusted.windows-core]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-15"
-end = "2024-09-20"
+end = "2026-10-02"
+
+[[trusted.windows-future]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2025-02-10"
+end = "2026-10-02"
 
 [[trusted.windows-implement]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2022-01-27"
-end = "2025-07-29"
+end = "2026-10-02"
 
 [[trusted.windows-interface]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2022-02-18"
-end = "2025-07-29"
+end = "2026-10-02"
+
+[[trusted.windows-link]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2024-07-17"
+end = "2026-10-02"
+
+[[trusted.windows-numerics]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2023-05-15"
+end = "2026-10-02"
 
 [[trusted.windows-result]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2024-02-02"
-end = "2025-07-29"
+end = "2026-10-02"
 
 [[trusted.windows-strings]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2024-02-02"
-end = "2025-07-29"
+end = "2026-10-02"
 
 [[trusted.windows-sys]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-15"
-end = "2024-09-12"
+end = "2026-10-02"
+
+[[trusted.windows-targets]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2022-09-09"
+end = "2026-10-02"
+
+[[trusted.windows-threading]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2025-04-29"
+end = "2026-10-02"
 
 [[trusted.winnow]]
 criteria = "safe-to-deploy"

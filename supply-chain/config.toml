@@ -31,6 +31,10 @@ notes = "This is the upstream code plus the ARM intrinsics workaround from qcms,
 audit-as-crates-io = true
 notes = "This is the upstream code plus a few local fixes, see bug 1685697."
 
+[policy.bhttp]
+audit-as-crates-io = true
+notes = "This is upstream code in between released versions."
+
 [policy."bindgen:0.72.0@git:9366e0af8da529c958b4cd4fcbe492d951c86f5c"]
 audit-as-crates-io = true
 notes = "This is the upstream code not yet released"
@@ -185,7 +189,6 @@ audit-as-crates-io = false
 
 [policy.mtu]
 audit-as-crates-io = true
-notes = "This is a first-party crate which is also published to crates.io, but since <https://github.com/mozilla/neqo/pull/2897> part of <https://github.com/mozilla/neqo>."
 
 [policy.naga]
 audit-as-crates-io = true
@@ -198,6 +201,10 @@ notes = "This is a pinned version of the upstream code, pending update of the cr
 [policy.objc]
 audit-as-crates-io = true
 notes = "This is the upstream code plus a backported fix."
+
+[policy.ohttp]
+audit-as-crates-io = true
+notes = "This is upstream code in between released versions."
 
 [policy.osclientcerts]
 audit-as-crates-io = false
