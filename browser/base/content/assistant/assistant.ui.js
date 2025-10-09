@@ -1,5 +1,31 @@
 import { runAssistantStream } from "chrome://browser/content/assistant/assistant.bundle.js";
 
+// SupabaseAuth should be available from the bundle
+// The bundle now exposes window.supabaseAuth directly
+console.log('SupabaseAuth available:', !!window.supabaseAuth);
+
+// Check current authentication status on page load
+async function checkCurrentAuthStatus() {
+    if (window.supabaseAuth && window.supabaseAuth.supabase) {
+        try {
+            const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
+            if (user && !error) {
+                console.log('User is already authenticated:', user.email);
+                updateAuthUI(true, user);
+            } else {
+                console.log('User is not authenticated');
+                updateAuthUI(false);
+            }
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            updateAuthUI(false);
+        }
+    }
+}
+
+// Check auth status after a short delay to ensure everything is loaded
+setTimeout(checkCurrentAuthStatus, 1000);
+
 const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
@@ -10,6 +36,480 @@ const stop = document.createElement("button");
 stop.textContent = "Stop";
 stop.disabled = true;
 bar.appendChild(stop);
+
+// Authentication state
+let isAuthenticated = false;
+let currentUser = null;
+
+// Function to update the authentication UI
+function updateAuthUI(authenticated, user = null) {
+    isAuthenticated = authenticated;
+    currentUser = user;
+    
+    // Update the input field placeholder
+    const inputField = document.getElementById('q');
+    if (inputField) {
+        if (authenticated) {
+            inputField.placeholder = 'Ask me anything...';
+            inputField.disabled = false;
+        } else {
+            inputField.placeholder = 'Please sign in first...';
+            inputField.disabled = true;
+        }
+    }
+    
+    // Update send button
+    const sendButton = document.getElementById('go');
+    if (sendButton) {
+        sendButton.disabled = !authenticated;
+    }
+    
+    console.log('Auth UI updated:', { authenticated, user: user?.email });
+}
+
+// Custom protocol handler for kahana:// URLs
+function handleKahanaProtocol(url) {
+    console.log('Received kahana:// protocol URL:', url);
+    
+    if (url.startsWith('kahana://auth-callback')) {
+        // Parse the URL to extract auth parameters
+        const urlObj = new URL(url);
+        const params = new URLSearchParams(urlObj.search);
+        
+        // Check for error
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
+        
+        // Check for success
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const code = params.get('code');
+        
+        if (error) {
+            console.error('OAuth error:', error, errorDescription);
+            showAuthError(`Authentication failed: ${error}`);
+        } else if (accessToken || code) {
+            console.log('OAuth success, tokens received');
+            // The Supabase client should automatically handle the session
+            // We'll let the auth state change listener handle the rest
+            showAuthSuccess('Authentication successful!');
+        } else {
+            console.log('No auth parameters found in callback');
+            showAuthError('No authentication data received');
+        }
+    }
+}
+
+// Simple OAuth flow - no complex message handling needed
+// The user will complete OAuth in a new tab, then we'll check their auth status
+
+// Check for auth callback data in localStorage
+function checkForAuthCallback() {
+    try {
+        const authData = localStorage.getItem('oasis_auth_callback');
+        if (authData) {
+            const parsed = JSON.parse(authData);
+            // Only process if it's recent (within last 30 seconds)
+            if (parsed.timestamp && (Date.now() - parsed.timestamp) < 30000) {
+                console.log('Found recent auth callback data:', parsed);
+                handleAuthSuccess(parsed);
+                // Clear the data after processing
+                localStorage.removeItem('oasis_auth_callback');
+            }
+        }
+    } catch (e) {
+        // Don't spam the console with localStorage errors
+        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
+            console.error('Error checking auth callback:', e);
+        }
+    }
+}
+
+// Check for auth callback data when the page loads
+checkForAuthCallback();
+
+// Also check periodically in case the message was missed (disabled due to localStorage issues)
+// setInterval(checkForAuthCallback, 2000);
+
+// Check for OAuth callback data in localStorage (fallback for postMessage issues)
+function checkOAuthCallbackData() {
+    try {
+        const callbackData = localStorage.getItem('oasis_auth_callback');
+        if (callbackData) {
+            const authData = JSON.parse(callbackData);
+            console.log('Found OAuth callback data in localStorage:', authData);
+            
+            // Process the auth data
+            if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+                window.supabaseAuth.handleOAuthCallbackData(authData).then(result => {
+                    if (result.success) {
+                        showAuthSuccess('Authentication successful! You are now signed in.');
+                        // Clear the localStorage data
+                        localStorage.removeItem('oasis_auth_callback');
+                        // Refresh the auth state
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showAuthError(`Authentication failed: ${result.error}`);
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        // Don't spam the console with localStorage errors
+        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
+            console.error('Error checking OAuth callback data:', e);
+        }
+    }
+}
+
+// Check for OAuth callback data periodically (disabled due to localStorage issues)
+// setInterval(checkOAuthCallbackData, 1000);
+
+// Listen for OAuth callback messages from the redirect page
+window.addEventListener('message', async (event) => {
+    // Only accept messages from our OAuth callback page
+    if (event.origin !== 'https://kahana.co') {
+        return;
+    }
+    
+    if (event.data && event.data.type === 'oauth-success') {
+        console.log('Received OAuth success message:', event.data.data);
+        
+        // Use the new OAuth callback handler
+        if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+            const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
+            if (result.success) {
+                showAuthSuccess('Authentication successful! You are now signed in.');
+                // Refresh the auth state
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showAuthError(`Authentication failed: ${result.error}`);
+            }
+        } else {
+            // Fallback to old method
+            handleAuthSuccess(event.data.data);
+        }
+    }
+});
+
+// Add a simple "Check Authentication" button for after OAuth
+function addAuthCheckButton() {
+    // Check if button already exists
+    if (document.getElementById('checkAuthBtn')) {
+        return;
+    }
+    
+    // Try to find the auth header, if not found, add it to the log area
+    let authHeader = document.getElementById('authHeader');
+    if (!authHeader) {
+        // Create auth header in the log area
+        const log = document.getElementById('log');
+        if (log) {
+            authHeader = document.createElement('div');
+            authHeader.id = 'authHeader';
+            authHeader.style.cssText = `
+                background: #f3f4f6;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                padding: 12px;
+                margin: 8px 0;
+                text-align: center;
+            `;
+            log.appendChild(authHeader);
+        } else {
+            return;
+        }
+    }
+    
+    const checkAuthBtn = document.createElement('button');
+    checkAuthBtn.id = 'checkAuthBtn';
+    checkAuthBtn.textContent = 'Check Authentication';
+    checkAuthBtn.style.cssText = `
+        background: #10b981;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        margin-left: 10px;
+        font-weight: 500;
+    `;
+    
+    checkAuthBtn.addEventListener('click', async () => {
+        // Create a more detailed input dialog for the full OAuth data
+        const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
+        
+The URL should look like:
+https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
+
+Or just paste the access_token part if you prefer:`;
+        
+        const input = prompt(instructions);
+        if (input && input.trim()) {
+            try {
+                console.log('Processing OAuth data manually...');
+                
+                let authData = {};
+                
+                // Check if it's a full URL or just a token
+                if (input.includes('#')) {
+                    // It's a full URL, parse it
+                    const url = new URL(input);
+                    const hashParams = new URLSearchParams(url.hash.substring(1));
+                    
+                    authData = {
+                        access_token: hashParams.get('access_token'),
+                        refresh_token: hashParams.get('refresh_token'),
+                        expires_at: hashParams.get('expires_at'),
+                        expires_in: hashParams.get('expires_in'),
+                        token_type: hashParams.get('token_type'),
+                        timestamp: Date.now(),
+                        source: 'manual_url'
+                    };
+                } else {
+                    // It's just a token, create minimal auth data
+                    authData = {
+                        access_token: input.trim(),
+                        refresh_token: '', // We'll need to handle this differently
+                        timestamp: Date.now(),
+                        source: 'manual_token'
+                    };
+                }
+                
+                console.log('Auth data:', authData);
+                
+                // Try to set the session with the auth data
+                if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
+                    console.log('Setting session with auth data...');
+                    const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
+                        access_token: authData.access_token,
+                        refresh_token: authData.refresh_token || ''
+                    });
+                    
+                    if (error) {
+                        console.error('Failed to set session:', error.message);
+                        showAuthError(`Authentication failed: ${error.message}`);
+                    } else {
+                        console.log('Session set successfully for user:', data.user?.id);
+                        showAuthSuccess('Authentication successful! You are now signed in.');
+                        
+                        // Update the UI immediately
+                        updateAuthUI(true, data.user);
+                        
+                        // Also reload after a delay to ensure everything is synced
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }
+                    return;
+                }
+                
+                // Fallback: Use the OAuth callback handler
+                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+                    const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
+                    if (result.success) {
+                        showAuthSuccess('Authentication successful! You are now signed in.');
+                        
+                        // Update the UI immediately
+                        updateAuthUI(true);
+                        
+                        // Also reload after a delay to ensure everything is synced
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        showAuthError(`Authentication failed: ${result.error}`);
+                    }
+                } else {
+                    showAuthError('Authentication service not available.');
+                }
+            } catch (error) {
+                console.error('Error processing OAuth data:', error);
+                showAuthError('Error processing OAuth data. Please try again.');
+            }
+        }
+    });
+    
+    authHeader.appendChild(checkAuthBtn);
+}
+
+// Add the check authentication button
+setTimeout(addAuthCheckButton, 1000);
+
+// Also try to add it immediately
+addAuthCheckButton();
+
+// Try multiple times to ensure the button gets added
+setTimeout(addAuthCheckButton, 2000);
+setTimeout(addAuthCheckButton, 3000);
+
+// Handle successful authentication
+function handleAuthSuccess(authData) {
+    console.log('Handling auth success:', authData);
+    
+    // Show success message
+    showAuthSuccess('Authentication successful! Signing you in...');
+    
+    // The Supabase client should automatically detect the session change
+    // We'll let the auth state change listener handle the rest
+    // But we can also try to refresh the auth state manually
+    if (window.supabaseAuth) {
+        window.supabaseAuth.getCurrentUser().then(user => {
+            if (user) {
+                console.log('User authenticated:', user.email);
+                // Update the UI to show authenticated state
+                updateAuthUI(user);
+            }
+        }).catch(error => {
+            console.error('Error getting current user:', error);
+        });
+    }
+}
+
+// Helper functions for auth feedback
+function showAuthSuccess(message) {
+    const successDiv = document.createElement('div');
+    successDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #51cf66;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    successDiv.textContent = message;
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        if (successDiv.parentNode) {
+            successDiv.parentNode.removeChild(successDiv);
+        }
+    }, 3000);
+}
+
+function showAuthError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #ff6b6b;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+    
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
+}
+
+// Create a clean authentication header
+const authHeader = document.createElement("div");
+authHeader.style.cssText = `
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+`;
+bar.parentElement.insertBefore(authHeader, bar);
+
+// Auth status display
+const authStatus = document.createElement("div");
+authStatus.style.cssText = "display: flex; align-items: center; gap: 8px;";
+authStatus.innerHTML = `
+  <span style="font-size: 16px;">🔒</span>
+  <span>Not Authenticated</span>
+`;
+authHeader.appendChild(authStatus);
+
+// Auth buttons container
+const authButtons = document.createElement("div");
+authButtons.style.cssText = "display: flex; gap: 8px;";
+authHeader.appendChild(authButtons);
+
+const loginButton = document.createElement("button");
+loginButton.textContent = "Sign In";
+loginButton.style.cssText = `
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+`;
+loginButton.addEventListener("mouseenter", () => {
+  loginButton.style.background = "rgba(255,255,255,0.3)";
+});
+loginButton.addEventListener("mouseleave", () => {
+  loginButton.style.background = "rgba(255,255,255,0.2)";
+});
+authButtons.appendChild(loginButton);
+
+const signupButton = document.createElement("button");
+signupButton.textContent = "Sign Up";
+signupButton.style.cssText = `
+  background: rgba(255,255,255,0.9);
+  color: #667eea;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+`;
+signupButton.addEventListener("mouseenter", () => {
+  signupButton.style.background = "white";
+});
+signupButton.addEventListener("mouseleave", () => {
+  signupButton.style.background = "rgba(255,255,255,0.9)";
+});
+authButtons.appendChild(signupButton);
+
+const logoutButton = document.createElement("button");
+logoutButton.textContent = "Sign Out";
+logoutButton.style.cssText = `
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  display: none;
+  transition: all 0.2s;
+`;
+logoutButton.addEventListener("mouseenter", () => {
+  logoutButton.style.background = "rgba(255,255,255,0.3)";
+});
+logoutButton.addEventListener("mouseleave", () => {
+  logoutButton.style.background = "rgba(255,255,255,0.2)";
+});
+authButtons.appendChild(logoutButton);
 
 let busy = false;
 let stopped = false;
@@ -27,8 +527,574 @@ function append(text) {
   log.scrollTop = log.scrollHeight;
 }
 
+
+// Show Google OAuth instructions
+function showGoogleOAuthInstructions(oauthUrl) {
+  const instructions = document.createElement("div");
+  instructions.style.cssText = "display: flex; flex-direction: column; gap: 20px; text-align: center;";
+  
+  const title = document.createElement("h3");
+  title.textContent = "Complete Google Sign-In";
+  title.style.cssText = "margin: 0; color: #1f2937; font-size: 20px; font-weight: 600;";
+  
+  const description = document.createElement("p");
+  description.textContent = "Click the button below to open Google sign-in in a new tab:";
+  description.style.cssText = "margin: 0; color: #6b7280; font-size: 16px;";
+  
+  const openButton = document.createElement("button");
+  openButton.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    Open Google Sign-In
+  `;
+  openButton.style.cssText = `
+    background: #4285F4;
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    transition: background-color 0.2s;
+  `;
+  
+  openButton.addEventListener("click", () => {
+    // Try to open in new tab
+    try {
+      window.open(oauthUrl, '_blank');
+      // Close the modal
+      document.body.removeChild(document.querySelector('.modal'));
+    } catch (error) {
+      console.log('Could not open URL directly:', error);
+      // Fallback: copy to clipboard and show instructions
+      navigator.clipboard.writeText(oauthUrl).then(() => {
+        alert('URL copied to clipboard! Please paste it in a new tab.');
+      }).catch(() => {
+        alert('Please manually copy this URL and open it in a new tab: ' + oauthUrl);
+      });
+    }
+  });
+  
+  const note = document.createElement("p");
+  note.textContent = "After completing authentication, return here and click 'Check Authentication'";
+  note.style.cssText = "margin: 0; color: #6b7280; font-size: 14px; font-style: italic;";
+  
+  instructions.appendChild(title);
+  instructions.appendChild(description);
+  instructions.appendChild(openButton);
+  instructions.appendChild(note);
+  
+  const { modal } = createModal("Google Sign-In", instructions);
+}
+
+// Create modal dialog system
+function createModal(title, content) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+  `;
+  
+  const dialog = document.createElement("div");
+  dialog.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 400px;
+    max-width: 500px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+  `;
+  
+  const header = document.createElement("div");
+  header.style.cssText = `
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 20px;
+    text-align: center;
+  `;
+  header.textContent = title;
+  
+  dialog.appendChild(header);
+  dialog.appendChild(content);
+  modal.appendChild(dialog);
+  
+  // Close on background click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
+  
+  document.body.appendChild(modal);
+  return { modal, dialog };
+}
+
+function showLoginForm() {
+  const form = document.createElement("form");
+  form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+  
+  const emailInput = document.createElement("input");
+  emailInput.type = "email";
+  emailInput.placeholder = "Enter your email";
+  emailInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  emailInput.addEventListener("focus", () => {
+    emailInput.style.borderColor = "#667eea";
+  });
+  emailInput.addEventListener("blur", () => {
+    emailInput.style.borderColor = "#e5e7eb";
+  });
+  
+  const passwordInput = document.createElement("input");
+  passwordInput.type = "password";
+  passwordInput.placeholder = "Enter your password";
+  passwordInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  passwordInput.addEventListener("focus", () => {
+    passwordInput.style.borderColor = "#667eea";
+  });
+  passwordInput.addEventListener("blur", () => {
+    passwordInput.style.borderColor = "#e5e7eb";
+  });
+  
+  // Divider
+  const divider = document.createElement("div");
+  divider.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    color: #6b7280;
+    font-size: 14px;
+  `;
+  divider.innerHTML = `
+    <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
+    <span style="margin: 0 16px;">or</span>
+    <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
+  `;
+  
+  // Google Sign-In button
+  const googleButton = document.createElement("button");
+  googleButton.type = "button";
+  googleButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 8px;">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    Continue with Google
+  `;
+  googleButton.style.cssText = `
+    width: 100%;
+    background: white;
+    color: #374151;
+    border: 2px solid #e5e7eb;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  `;
+  googleButton.addEventListener("mouseenter", () => {
+    googleButton.style.borderColor = "#d1d5db";
+    googleButton.style.backgroundColor = "#f9fafb";
+  });
+  googleButton.addEventListener("mouseleave", () => {
+    googleButton.style.borderColor = "#e5e7eb";
+    googleButton.style.backgroundColor = "white";
+  });
+  
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
+  
+  const submitButton = document.createElement("button");
+  submitButton.type = "submit";
+  submitButton.textContent = "Sign In";
+  submitButton.style.cssText = `
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+  `;
+  submitButton.addEventListener("mouseenter", () => {
+    submitButton.style.transform = "translateY(-1px)";
+  });
+  submitButton.addEventListener("mouseleave", () => {
+    submitButton.style.transform = "translateY(0)";
+  });
+  
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.cssText = `
+    flex: 1;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  `;
+  cancelButton.addEventListener("mouseenter", () => {
+    cancelButton.style.background = "#e5e7eb";
+  });
+  cancelButton.addEventListener("mouseleave", () => {
+    cancelButton.style.background = "#f3f4f6";
+  });
+  
+  buttonContainer.appendChild(submitButton);
+  buttonContainer.appendChild(cancelButton);
+  
+  form.appendChild(emailInput);
+  form.appendChild(passwordInput);
+  form.appendChild(divider);
+  form.appendChild(googleButton);
+  form.appendChild(buttonContainer);
+  
+  const { modal } = createModal("Sign In to Oasis", form);
+  
+  cancelButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+  });
+  
+  googleButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+    
+    // Import and use Supabase auth
+    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
+      supabaseAuth.signInWithGoogle().then(({ user, error }) => {
+        if (error) {
+          const errorMessage = supabaseAuth.handleAuthError(error);
+          
+          // Check if this is the special OAuth URL case
+          if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
+            const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
+            showGoogleOAuthInstructions(oauthUrl);
+          } else {
+            append(`\n❌ Google sign in failed: ${errorMessage}\n`);
+          }
+        } else {
+          append(`\n🔄 Redirecting to Google for authentication...\n`);
+        }
+      });
+    });
+  });
+  
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) return;
+    
+    document.body.removeChild(modal);
+    
+    // Import and use Supabase auth
+    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
+      supabaseAuth.signInWithEmail(email, password).then(({ user, error }) => {
+        if (error) {
+          append(`\n❌ Sign in failed: ${supabaseAuth.handleAuthError(error)}\n`);
+        } else if (user) {
+          isAuthenticated = true;
+          currentUser = user;
+          updateAuthUI();
+          append(`\n🔓 Signed in as ${user.email}\n`);
+        }
+      });
+    });
+  });
+  
+  // Focus first input
+  setTimeout(() => emailInput.focus(), 100);
+}
+
+function showSignupForm() {
+  const form = document.createElement("form");
+  form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+  
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Enter your name (optional)";
+  nameInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  nameInput.addEventListener("focus", () => {
+    nameInput.style.borderColor = "#667eea";
+  });
+  nameInput.addEventListener("blur", () => {
+    nameInput.style.borderColor = "#e5e7eb";
+  });
+  
+  const emailInput = document.createElement("input");
+  emailInput.type = "email";
+  emailInput.placeholder = "Enter your email";
+  emailInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  emailInput.addEventListener("focus", () => {
+    emailInput.style.borderColor = "#667eea";
+  });
+  emailInput.addEventListener("blur", () => {
+    emailInput.style.borderColor = "#e5e7eb";
+  });
+  
+  const passwordInput = document.createElement("input");
+  passwordInput.type = "password";
+  passwordInput.placeholder = "Enter your password (min 6 characters)";
+  passwordInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  passwordInput.addEventListener("focus", () => {
+    passwordInput.style.borderColor = "#667eea";
+  });
+  passwordInput.addEventListener("blur", () => {
+    passwordInput.style.borderColor = "#e5e7eb";
+  });
+  
+  // Divider
+  const divider = document.createElement("div");
+  divider.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    color: #6b7280;
+    font-size: 14px;
+  `;
+  divider.innerHTML = `
+    <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
+    <span style="margin: 0 16px;">or</span>
+    <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
+  `;
+  
+  // Google Sign-In button
+  const googleButton = document.createElement("button");
+  googleButton.type = "button";
+  googleButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 8px;">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    Continue with Google
+  `;
+  googleButton.style.cssText = `
+    width: 100%;
+    background: white;
+    color: #374151;
+    border: 2px solid #e5e7eb;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  `;
+  googleButton.addEventListener("mouseenter", () => {
+    googleButton.style.borderColor = "#d1d5db";
+    googleButton.style.backgroundColor = "#f9fafb";
+  });
+  googleButton.addEventListener("mouseleave", () => {
+    googleButton.style.borderColor = "#e5e7eb";
+    googleButton.style.backgroundColor = "white";
+  });
+  
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
+  
+  const submitButton = document.createElement("button");
+  submitButton.type = "submit";
+  submitButton.textContent = "Create Account";
+  submitButton.style.cssText = `
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+  `;
+  submitButton.addEventListener("mouseenter", () => {
+    submitButton.style.transform = "translateY(-1px)";
+  });
+  submitButton.addEventListener("mouseleave", () => {
+    submitButton.style.transform = "translateY(0)";
+  });
+  
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.cssText = `
+    flex: 1;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  `;
+  cancelButton.addEventListener("mouseenter", () => {
+    cancelButton.style.background = "#e5e7eb";
+  });
+  cancelButton.addEventListener("mouseleave", () => {
+    cancelButton.style.background = "#f3f4f6";
+  });
+  
+  buttonContainer.appendChild(submitButton);
+  buttonContainer.appendChild(cancelButton);
+  
+  form.appendChild(nameInput);
+  form.appendChild(emailInput);
+  form.appendChild(passwordInput);
+  form.appendChild(divider);
+  form.appendChild(googleButton);
+  form.appendChild(buttonContainer);
+  
+  const { modal } = createModal("Create Oasis Account", form);
+  
+  cancelButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+  });
+  
+  googleButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+    
+    // Import and use Supabase auth
+    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
+      supabaseAuth.signInWithGoogle().then(({ user, error }) => {
+        if (error) {
+          const errorMessage = supabaseAuth.handleAuthError(error);
+          
+          // Check if this is the special OAuth URL case
+          if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
+            const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
+            showGoogleOAuthInstructions(oauthUrl);
+          } else {
+            append(`\n❌ Google sign in failed: ${errorMessage}\n`);
+          }
+        } else {
+          append(`\n🔄 Redirecting to Google for authentication...\n`);
+        }
+      });
+    });
+  });
+  
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) return;
+    
+    document.body.removeChild(modal);
+    
+    // Import and use Supabase auth
+    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
+      supabaseAuth.signUp(email, password, name || undefined).then(({ user, error }) => {
+        if (error) {
+          append(`\n❌ Sign up failed: ${supabaseAuth.handleAuthError(error)}\n`);
+          append(`\nDebug info: ${JSON.stringify(error, null, 2)}\n`);
+        } else if (user) {
+          append(`\n✅ Account created! Please check your email to confirm your account.\n`);
+          append(`\nUser ID: ${user.id}\n`);
+        } else {
+          append(`\n⚠️ Sign up completed but no user returned. Check your email for confirmation.\n`);
+        }
+      }).catch((err) => {
+        append(`\n❌ Sign up error: ${err.message}\n`);
+      });
+    });
+  });
+  
+  // Focus first input
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+async function logout() {
+  // Import and use Supabase auth
+  const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
+  const { error } = await supabaseAuth.signOut();
+  
+  if (error) {
+    append(`\n❌ Logout failed: ${error.message}\n`);
+  } else {
+    isAuthenticated = false;
+    currentUser = null;
+    updateAuthUI();
+    append(`\n🔒 Logged out\n`);
+  }
+}
+
 async function send() {
   if (busy) return;
+  
+  // Check authentication
+  if (!isAuthenticated) {
+    append("\n❌ Please login first\n");
+    return;
+  }
+  
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
@@ -51,3 +1117,27 @@ async function send() {
 go.addEventListener("click", send);
 q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
 stop.addEventListener("click", () => { stopped = true; setBusy(false); append("\n(stopped)\n"); });
+loginButton.addEventListener("click", showLoginForm);
+signupButton.addEventListener("click", showSignupForm);
+logoutButton.addEventListener("click", logout);
+
+// Initialize UI
+updateAuthUI();
+
+// Check for existing authentication on load
+async function checkExistingAuth() {
+  try {
+    const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
+    const user = await supabaseAuth.getCurrentUser();
+    if (user) {
+      isAuthenticated = true;
+      currentUser = user;
+      updateAuthUI();
+      append(`\n🔓 Already logged in as ${user.email}\n`);
+    }
+  } catch (error) {
+    console.error('Error checking existing auth:', error);
+  }
+}
+
+checkExistingAuth();
