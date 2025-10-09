@@ -294,11 +294,7 @@
 # * 2: Enable unless incompatible accessibility clients are detected.
 - name: accessibility.uia.enable
   type: uint32_t
-#ifdef NIGHTLY_BUILD
   value: 2
-#else
-  value: 0
-#endif
   mirror: always
   do_not_use_directly: true
 
@@ -1807,6 +1803,17 @@
   type: RelaxedAtomicUint32
   value: 2
   mirror: always
+
+# Whether (-moz-native-theme) evaluates to true by default.
+- name: browser.theme.native-theme
+  type: RelaxedAtomicBool
+#ifdef MOZ_WIDGET_GTK
+  value: true
+#else
+  value: false
+#endif
+  mirror: always
+  rust: true
 
 # Communicates the preferred content theme color to platform (for e.g.,
 # prefers-color-scheme).
@@ -5538,9 +5545,13 @@
 #
 # When this condition changes, be sure to update the `run-if` / `skip-if`
 # conditions in `dom/webgpu/tests/mochitest/*.toml` accordingly.
+#
+# preprocessor.py doesn't understand parentheses, but && is higher precedence
+# than ||, meaning this pref defaults to true on any Windows architecture, or
+# on aarch64 (Apple Silicon) MacOS.
 - name: dom.webgpu.enabled
   type: RelaxedAtomicBool
-#ifdef XP_WIN
+#if defined(XP_WIN) || defined(XP_MACOSX) && defined(MOZ_AARCH64)
   value: true
 #else
   value: @IS_EARLY_BETA_OR_EARLIER@
@@ -9565,8 +9576,6 @@
   value: true
 #elif defined(MOZ_X11)
   value: false  # we'd like this to be @IS_NIGHTLY_BUILD@, see Bug 1927058
-#elif defined(XP_MACOSX)
-  value: @IS_NIGHTLY_BUILD@
 #else
   value: false
 #endif
@@ -9602,7 +9611,7 @@
 # during process launch, before any configuration is attempted.
 - name: layers.gpu-process.max_launch_attempts
   type: RelaxedAtomicInt32
-#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
+#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK) || defined(XP_MACOSX)
   value: 2
 #else
   value: 0
@@ -9612,11 +9621,7 @@
 # How many unstable GPU process restarts we allow for a given configuration.
 - name: layers.gpu-process.max_restarts
   type: RelaxedAtomicInt32
-#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK) || defined(MOZ_WIDGET_ANDROID)
   value: 6
-#else
-  value: 1
-#endif
   mirror: always
 
 # How many frames we must render before declaring the GPU process stable, and
