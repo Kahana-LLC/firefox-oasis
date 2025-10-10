@@ -72,6 +72,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
   JsonSchema: "resource://gre/modules/JsonSchema.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
+  NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   UIState: "resource://services-sync/UIState.sys.mjs",
 });
 
@@ -99,7 +100,7 @@ ChromeUtils.defineLazyGetter(lazy, "BinaryInputStream", () =>
 
 ChromeUtils.defineLazyGetter(lazy, "gFluentStrings", function () {
   return new Localization(
-    ["branding/brand.ftl", "preview/backupSettings.ftl"],
+    ["branding/brand.ftl", "browser/backupSettings.ftl"],
     true
   );
 });
@@ -107,7 +108,7 @@ ChromeUtils.defineLazyGetter(lazy, "gFluentStrings", function () {
 ChromeUtils.defineLazyGetter(lazy, "gDOMLocalization", function () {
   return new DOMLocalization([
     "branding/brand.ftl",
-    "preview/backupSettings.ftl",
+    "browser/backupSettings.ftl",
   ]);
 });
 
@@ -592,6 +593,52 @@ export class BackupService extends EventTarget {
    * Number of retries that have occured in this session on error
    */
   static #errorRetries = 0;
+
+  /**
+   * @typedef {object} EnabledStatus
+   * @property {boolean} enabled
+   *   True if the feature is enabled.
+   * @property {string} [reason]
+   *   Reason the feature is disabled if `enabled` is false.
+   */
+
+  /**
+   * Context for whether creating a backup archive is enabled.
+   *
+   * @type {EnabledStatus}
+   */
+  get archiveEnabledStatus() {
+    // Check if disabled by Nimbus killswitch.
+    const archiveKillswitchTriggered =
+      lazy.NimbusFeatures.backupService.getVariable("archiveKillswitch");
+    if (archiveKillswitchTriggered) {
+      return {
+        enabled: false,
+        reason: "Archiving a profile disabled remotely.",
+      };
+    }
+
+    return { enabled: true };
+  }
+
+  /**
+   * Context for whether restore from backup is enabled.
+   *
+   * @type {EnabledStatus}
+   */
+  get restoreEnabledStatus() {
+    // Check if disabled by Nimbus killswitch.
+    const restoreKillswitchTriggered =
+      lazy.NimbusFeatures.backupService.getVariable("restoreKillswitch");
+    if (restoreKillswitchTriggered) {
+      return {
+        enabled: false,
+        reason: "Restore from backup disabled remotely.",
+      };
+    }
+
+    return { enabled: true };
+  }
 
   /**
    * Set to true if a backup is currently in progress. Causes stateUpdate()
@@ -1228,6 +1275,12 @@ export class BackupService extends EventTarget {
    *   created, or null if the backup failed.
    */
   async createBackup({ profilePath = PathUtils.profileDir } = {}) {
+    const status = this.archiveEnabledStatus;
+    if (!status.enabled) {
+      lazy.logConsole.debug(status.reason);
+      return null;
+    }
+
     // createBackup does not allow re-entry or concurrent backups.
     if (this.#backupInProgress) {
       lazy.logConsole.warn("Backup attempt already in progress");
@@ -2570,6 +2623,7 @@ export class BackupService extends EventTarget {
       appVersion: AppConstants.MOZ_APP_VERSION,
       buildID: AppConstants.MOZ_BUILDID,
       profileName,
+      deviceName: Services.sysinfo.get("device") || Services.dns.myHostName,
       machineName: lazy.fxAccounts.device.getLocalName(),
       osName: Services.sysinfo.getProperty("name"),
       osVersion: Services.sysinfo.getProperty("version"),
@@ -2636,6 +2690,11 @@ export class BackupService extends EventTarget {
     profilePath = PathUtils.profileDir,
     profileRootPath = null
   ) {
+    const status = this.restoreEnabledStatus;
+    if (!status.enabled) {
+      throw new Error(status.reason);
+    }
+
     // No concurrent recoveries.
     if (this.#_state.recoveryInProgress) {
       lazy.logConsole.warn("Recovery attempt already in progress");
@@ -3266,8 +3325,6 @@ export class BackupService extends EventTarget {
       );
     }
 
-    // TODO: Enforce other password rules here, such as ensuring that the
-    // password is not considered common.
     ({ instance: encState } =
       await lazy.ArchiveEncryptionState.initialize(password));
     if (!encState) {
@@ -3726,6 +3783,7 @@ export class BackupService extends EventTarget {
     this.#_state.backupFileInfo = {
       isEncrypted,
       date: archiveJSON?.meta?.date,
+      deviceName: archiveJSON?.meta?.deviceName,
     };
     this.#_state.backupFileToRestore = backupFilePath;
     this.stateUpdate();

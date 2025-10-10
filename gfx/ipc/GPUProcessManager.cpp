@@ -225,17 +225,6 @@ void GPUProcessManager::ResetProcessStable() {
 }
 
 bool GPUProcessManager::IsProcessStable(const TimeStamp& aNow) {
-#ifdef MOZ_WIDGET_ANDROID
-  // On Android if the process is lost whilst in the background it was probably
-  // killed by the OS, and it may never have had a chance to have been declared
-  // stable prior to being killed. We don't want this happening repeatedly to
-  // result in the GPU process being disabled, so treat any process lost whilst
-  // in the background as stable.
-  if (!mAppInForeground) {
-    return true;
-  }
-#endif
-
   if (mTotalProcessAttempts > 0) {
     auto delta = (int32_t)(aNow - mProcessAttemptLastTime).ToMilliseconds();
     if (delta < StaticPrefs::layers_gpu_process_stable_min_uptime_ms()) {
@@ -739,7 +728,7 @@ bool GPUProcessManager::DisableWebRenderConfig(wr::WebRenderError aError,
   // bad driver state. In that case, we should consider restarting the GPU
   // process, or simulating a device reset to teardown the compositors to
   // hopefully alleviate the situation.
-  if (IsProcessStable(TimeStamp::Now())) {
+  if (IsProcessStable(TimeStamp::Now()) || (kIsAndroid && !mAppInForeground)) {
     if (mProcess) {
       mProcess->KillProcess(/* aGenerateMinidump */ false);
     } else {
@@ -948,6 +937,13 @@ void GPUProcessManager::OnProcessUnexpectedShutdown(GPUProcessHost* aHost) {
   // eagerly.
   if (IsProcessStable(TimeStamp::Now())) {
     mProcessStableOnce = true;
+    mUnstableProcessAttempts = 0;
+  } else if (kIsAndroid && !mAppInForeground) {
+    // On Android if the process is lost whilst in the background it was
+    // probably killed by the OS, and it may never have had a chance to have
+    // been declared stable prior to being killed. We don't want this happening
+    // repeatedly to result in the GPU process being disabled, so treat any
+    // process lost whilst in the background as stable.
     mUnstableProcessAttempts = 0;
   } else {
     mUnstableProcessAttempts++;
@@ -1555,23 +1551,15 @@ void GPUProcessManager::MapLayerTreeId(LayersId aLayersId,
 
 void GPUProcessManager::UnmapLayerTreeId(LayersId aLayersId,
                                          base::ProcessId aOwningId) {
-  // Only call EnsureGPUReady() if we have already launched the process, to
-  // avoid launching a new process unnecesarily. (eg if we are backgrounded)
-  nsresult rv = mProcess ? EnsureGPUReady() : NS_ERROR_NOT_AVAILABLE;
-  if (NS_WARN_IF(rv == NS_ERROR_ILLEGAL_DURING_SHUTDOWN)) {
-    return;
-  }
-
-  if (NS_SUCCEEDED(rv)) {
+  // If the GPU process is down, but not disabled, there is no need to relaunch
+  // here because the layers ID is already invalid.
+  if (mGPUChild) {
     mGPUChild->SendRemoveLayerTreeIdMapping(
         LayerTreeIdMapping(aLayersId, aOwningId));
-  } else if (!mProcess) {
+  } else if (!gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
     CompositorBridgeParent::DeallocateLayerTreeId(aLayersId);
   }
 
-  // Must do this *after* the call to EnsureGPUReady, so that if the
-  // process is launched as a result then it is initialized with this
-  // LayersId, meaning it can be successfully unmapped.
   LayerTreeOwnerTracker::Get()->Unmap(aLayersId, aOwningId);
 }
 
@@ -1687,12 +1675,25 @@ void GPUProcessManager::RemoveListener(GPUProcessListener* aListener) {
 }
 
 bool GPUProcessManager::NotifyGpuObservers(const char* aTopic) {
-  if (NS_FAILED(EnsureGPUReady())) {
-    return false;
+  if (mGPUChild) {
+    nsCString topic(aTopic);
+    mGPUChild->SendNotifyGpuObservers(topic);
+    return true;
   }
-  nsCString topic(aTopic);
-  mGPUChild->SendNotifyGpuObservers(topic);
-  return true;
+
+  if (!gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
+    nsCOMPtr<nsIObserverService> obsSvc =
+        mozilla::services::GetObserverService();
+    MOZ_ASSERT(obsSvc);
+    if (obsSvc) {
+      obsSvc->NotifyObservers(nullptr, aTopic, nullptr);
+    }
+    return true;
+  }
+
+  // If we still are using a GPU process, but do not have one ready at the
+  // moment, we can drop these notifications since there is nothing to do.
+  return false;
 }
 
 class GPUMemoryReporter : public MemoryReportingProcess {
@@ -1729,9 +1730,7 @@ class GPUMemoryReporter : public MemoryReportingProcess {
  private:
   GPUChild* GetChild() const {
     if (GPUProcessManager* gpm = GPUProcessManager::Get()) {
-      if (GPUChild* child = gpm->GetGPUChild()) {
-        return child;
-      }
+      return gpm->GetGPUChild();
     }
     return nullptr;
   }
@@ -1741,12 +1740,14 @@ class GPUMemoryReporter : public MemoryReportingProcess {
 };
 
 RefPtr<MemoryReportingProcess> GPUProcessManager::GetProcessMemoryReporter() {
-  // Ensure mProcess is non-null before calling EnsureGPUReady, to avoid
-  // launching the process if it has not already been launched.
-  if (!mProcess || NS_FAILED(EnsureGPUReady())) {
+  // If we are in the middle of launching a GPU process, we can wait for it to
+  // finish, otherwise if there is no GPU process, we should just return now to
+  // avoid launching it again.
+  if (!mProcess || AppShutdown::IsInOrBeyond(ShutdownPhase::XPCOMShutdown) ||
+      !mProcess->WaitForLaunch()) {
     return nullptr;
   }
-  return new GPUMemoryReporter();
+  return MakeRefPtr<GPUMemoryReporter>();
 }
 
 void GPUProcessManager::SetAppInForeground(bool aInForeground) {
