@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oasis Browser - Authentication Callback</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+        }
+        .success {
+            color: #51cf66;
+            background: rgba(81, 207, 102, 0.1);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <div class="message">Processing authentication...</div>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        // Check for error
+        const error = urlParams.get('error') || hashParams.get('error');
+        const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
+        
+        // Check for success
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const code = urlParams.get('code');
+        
+        const statusDiv = document.getElementById('status');
+        
+        if (error) {
+            // Handle error
+            statusDiv.innerHTML = `
+                <div class="error">
+                    <strong>Authentication Error:</strong><br>
+                    ${error}<br>
+                    ${errorDescription ? `<small>${errorDescription}</small>` : ''}
+                </div>
+            `;
+            
+            // Redirect back to assistant after 3 seconds
+            setTimeout(() => {
+                window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+            }, 3000);
+            
+        } else if (accessToken || code) {
+            // Handle success
+            statusDiv.innerHTML = `
+                <div class="success">
+                    <strong>Authentication Successful!</strong><br>
+                    Redirecting to Oasis Browser...
+                </div>
+            `;
+            
+            // Store auth data in localStorage for the assistant to pick up
+            const authData = {
+                success: true,
+                timestamp: Date.now(),
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                code: code,
+                url: window.location.href
+            };
+            
+            localStorage.setItem('oasis_auth_callback', JSON.stringify(authData));
+            
+            // Also trigger a custom event that the assistant can listen for
+            try {
+                // Try to communicate with the parent window (assistant)
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'oasis_auth_success',
+                        data: authData
+                    }, '*');
+                }
+            } catch (e) {
+                console.log('Could not communicate with parent window:', e);
+            }
+            
+            // Redirect to assistant immediately
+            setTimeout(() => {
+                window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+            }, 1000);
+            
+        } else {
+            // No auth parameters found
+            statusDiv.innerHTML = `
+                <div class="error">
+                    <strong>No authentication data found.</strong><br>
+                    Please try signing in again.
+                </div>
+            `;
+            
+            // Redirect back to assistant after 3 seconds
+            setTimeout(() => {
+                window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
