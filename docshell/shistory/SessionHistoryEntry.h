@@ -169,8 +169,8 @@ class SessionHistoryInfo {
   const nsID& NavigationKey() const { return mNavigationKey; }
   const nsID& NavigationId() const { return mNavigationId; }
 
-  nsStructuredCloneContainer* GetNavigationState() const;
-  void SetNavigationState(nsStructuredCloneContainer* aState);
+  nsIStructuredCloneContainer* GetNavigationAPIState() const;
+  void SetNavigationAPIState(nsIStructuredCloneContainer* aState);
 
   already_AddRefed<nsIURI> GetURIOrInheritedForAboutBlank() const;
 
@@ -198,6 +198,8 @@ class SessionHistoryInfo {
   // Fields needed for NavigationHistoryEntry.
   nsID mNavigationKey = nsID::GenerateUUID();
   nsID mNavigationId = nsID::GenerateUUID();
+  // https://html.spec.whatwg.org/#she-navigation-api-state
+  RefPtr<nsStructuredCloneContainer> mNavigationAPIState;
 
   bool mLoadReplace = false;
   bool mURIWasModified = false;

@@ -144,7 +144,7 @@ void js::TrackedAllocPolicy<kind>::decMemory(size_t nbytes) {
     // Only subtract freed cell memory from retained size for cell associations
     // during sweeping.
     JS::GCContext* gcx = TlsGCContext.get();
-    updateRetainedSize = gcx->isFinalizing();
+    updateRetainedSize = gcx->isSweeping() || gcx->isFinalizing();
   }
 
   zone_->decNonGCMemory(this, nbytes, MemoryUse::TrackedAllocPolicy,
@@ -257,7 +257,10 @@ static void EraseIf(js::gc::EphemeronEdgeVector& entries, Pred pred) {
 static void SweepEphemeronEdgesWhileMinorSweeping(
     js::gc::EphemeronEdgeVector& entries) {
   EraseIf(entries, [](js::gc::EphemeronEdge& edge) -> bool {
-    return IsAboutToBeFinalizedDuringMinorSweep(&edge.target);
+    Cell* target = edge.target();
+    bool dead = IsAboutToBeFinalizedDuringMinorSweep(&target);
+    edge = js::gc::EphemeronEdge(edge.color(), target);
+    return dead;
   });
 }
 

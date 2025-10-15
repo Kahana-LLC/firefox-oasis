@@ -68,10 +68,10 @@ const SUGGEST_PREFS = Object.freeze({
   },
   "quicksuggest.enabled": {
     defaultValues: {
-      DE: [["de"], true],
-      FR: [["fr"], true],
+      DE: [["de", ...EN_LOCALES], true],
+      FR: [["fr", ...EN_LOCALES], true],
       GB: [EN_LOCALES, true],
-      IT: [["it"], true],
+      IT: [["it", ...EN_LOCALES], true],
       US: [EN_LOCALES, true],
     },
   },
@@ -121,10 +121,10 @@ const SUGGEST_PREFS = Object.freeze({
   },
   "importantDates.featureGate": {
     defaultValues: {
-      DE: [["de"], true],
-      FR: [["fr"], true],
+      DE: [["de", ...EN_LOCALES], true],
+      FR: [["fr", ...EN_LOCALES], true],
       GB: [EN_LOCALES, true],
-      IT: [["it"], true],
+      IT: [["it", ...EN_LOCALES], true],
       US: [EN_LOCALES, true],
     },
   },
@@ -164,6 +164,8 @@ const FEATURES = {
     "moz-src:///browser/components/urlbar/private/AmpSuggestions.sys.mjs",
   DynamicSuggestions:
     "moz-src:///browser/components/urlbar/private/DynamicSuggestions.sys.mjs",
+  FlightStatusSuggestions:
+    "moz-src:///browser/components/urlbar/private/FlightStatusSuggestions.sys.mjs",
   ImportantDatesSuggestions:
     "moz-src:///browser/components/urlbar/private/ImportantDatesSuggestions.sys.mjs",
   ImpressionCaps:

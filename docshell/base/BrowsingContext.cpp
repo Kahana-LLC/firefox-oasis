@@ -62,7 +62,6 @@
 #include "mozilla/HashTable.h"
 #include "mozilla/Logging.h"
 #include "mozilla/MediaFeatureChange.h"
-#include "mozilla/ResultExtensions.h"
 #include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_fission.h"
 #include "mozilla/StaticPrefs_media.h"
@@ -2436,10 +2435,11 @@ BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
 // https://html.spec.whatwg.org/#navigate
 // In its current state, this method is not closely following the spec.
 // https://bugzil.la/1974717 tracks the work to align this method with the spec.
-void BrowsingContext::Navigate(nsIURI* aURI, nsIPrincipal& aSubjectPrincipal,
-                               ErrorResult& aRv,
-                               NavigationHistoryBehavior aHistoryHandling,
-                               bool aNeedsCompletelyLoadedDocument) {
+void BrowsingContext::Navigate(
+    nsIURI* aURI, nsIPrincipal& aSubjectPrincipal, ErrorResult& aRv,
+    NavigationHistoryBehavior aHistoryHandling,
+    bool aNeedsCompletelyLoadedDocument,
+    nsIStructuredCloneContainer* aNavigationAPIState) {
   MOZ_LOG_FMT(gNavigationAPILog, LogLevel::Debug, "Navigate to {} as {}", *aURI,
               aHistoryHandling);
   CallerType callerType = aSubjectPrincipal.IsSystemPrincipal()
@@ -2481,6 +2481,7 @@ void BrowsingContext::Navigate(nsIURI* aURI, nsIPrincipal& aSubjectPrincipal,
 
   loadState->SetLoadFlags(nsIWebNavigation::LOAD_FLAGS_NONE);
   loadState->SetFirstParty(true);
+  loadState->SetNavigationAPIState(aNavigationAPIState);
 
   rv = LoadURI(loadState);
   if (NS_WARN_IF(NS_FAILED(rv))) {

@@ -17,6 +17,7 @@
 #include "mozilla/a11y/Platform.h"
 #include "mozilla/FocusModel.h"
 #include "nsAccUtils.h"
+#include "nsMenuPopupFrame.h"
 #include "nsAccessibilityService.h"
 #include "ApplicationAccessible.h"
 #include "nsGenericHTMLElement.h"
@@ -316,13 +317,14 @@ uint64_t LocalAccessible::VisibilityState() const {
   // scrolled out.
   nsIFrame* curFrame = frame;
   do {
-    nsView* view = curFrame->GetView();
-    if (view && view->GetVisibility() == ViewVisibility::Hide) {
-      return states::INVISIBLE;
+    if (nsView* view = curFrame->GetView()) {
+      if (view->GetVisibility() == ViewVisibility::Hide) {
+        return states::INVISIBLE;
+      }
     }
 
-    if (nsLayoutUtils::IsPopup(curFrame)) {
-      return 0;
+    if (nsMenuPopupFrame* popup = do_QueryFrame(curFrame)) {
+      return popup->IsOpen() ? 0 : states::INVISIBLE;
     }
 
     if (curFrame->StyleUIReset()->mMozSubtreeHiddenOnlyVisually) {
@@ -2408,8 +2410,9 @@ Relation LocalAccessible::RelationByType(RelationType aType) const {
       // Check early if the accessible is a tooltip. If so, it can never be a
       // valid target for an anchor's details relation.
       if (Role() != roles::TOOLTIP) {
-        if (nsIFrame* anchorFrame = nsCoreUtils::GetAnchorForPositionedFrame(
-                mDoc->PresShellPtr(), GetFrame())) {
+        if (const nsIFrame* anchorFrame =
+                nsCoreUtils::GetAnchorForPositionedFrame(mDoc->PresShellPtr(),
+                                                         GetFrame())) {
           LocalAccessible* anchorAcc =
               mDoc->GetAccessible(anchorFrame->GetContent());
           if (anchorAcc->GetAnchorPositionTargetDetailsRelation() == this &&
