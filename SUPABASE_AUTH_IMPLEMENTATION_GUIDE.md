@@ -24,8 +24,10 @@ Create a `.env` file with the following variables:
 
 ```env
 # Supabase Configuration
-SUPABASE_URL=https://wvclepquxxczgrukfqyr.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY
+# IMPORTANT: Replace with your actual Supabase project credentials
+# DO NOT commit real credentials to version control!
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key-here
 
 # Google OAuth Configuration (Optional - for OAuth flow)
 GOOGLE_CLIENT_ID=your_google_client_id
@@ -35,6 +37,12 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 APP_VERSION=1.0.0
 LOG_LEVEL=info
 ```
+
+**⚠️ SECURITY WARNING:**
+- Never commit real credentials to version control
+- Use environment variables or secure configuration management
+- The anon key is safe to use in client-side code but should not be exposed in public repositories
+- Consider using different keys for development and production environments
 
 ### Environment Configuration Class
 
