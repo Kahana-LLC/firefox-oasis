@@ -41,21 +41,128 @@ bar.appendChild(stop);
 let isAuthenticated = false;
 let currentUser = null;
 
+// Cross-frame authentication synchronization and command coordination
+function setupCrossFrameAuthSync() {
+    // Check if we're in an iframe (popup) or main window
+    const isInIframe = window !== window.top;
+    
+    // Listen for messages from parent window (if in iframe) or iframe (if parent)
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'OASIS_AUTH_STATE_CHANGE') {
+            console.log('Received auth state change from parent:', event.data);
+            const { authenticated, user } = event.data;
+            updateAuthUI(authenticated, user);
+        } else if (event.data && event.data.type === 'OASIS_COMMAND_RESULT') {
+            // Handle command results from parent window (if in iframe)
+            console.log('Received command result from parent:', event.data);
+            const { result, error } = event.data;
+            if (error) {
+                append(`\nError: ${error}\n`);
+            } else if (result) {
+                append(`\n${result}\n`);
+            }
+        }
+    });
+
+    // Send authentication state to iframe (if we're the parent)
+    function notifyIframeAuthChange(authenticated, user) {
+        try {
+            const iframe = document.getElementById('oasis-assistant-frame');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'OASIS_AUTH_STATE_CHANGE',
+                    authenticated,
+                    user
+                }, '*');
+                console.log('Sent auth state change to iframe:', { authenticated, user: user?.email });
+            }
+        } catch (error) {
+            console.warn('Failed to notify iframe of auth change:', error);
+        }
+    }
+
+    // Send command result to iframe (if we're the parent)
+    function notifyIframeCommandResult(result, error = null) {
+        try {
+            const iframe = document.getElementById('oasis-assistant-frame');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'OASIS_COMMAND_RESULT',
+                    result,
+                    error
+                }, '*');
+                console.log('Sent command result to iframe:', { result, error });
+            }
+        } catch (error) {
+            console.warn('Failed to notify iframe of command result:', error);
+        }
+    }
+
+    // Expose functions globally
+    window.notifyIframeAuthChange = notifyIframeAuthChange;
+    window.notifyIframeCommandResult = notifyIframeCommandResult;
+    window.isInIframe = isInIframe;
+}
+
+// Function to wait for an element to exist
+function waitForElement(selector, timeout = 1000) {
+    return new Promise((resolve, reject) => {
+        const element = document.querySelector(selector);
+        if (element) {
+            resolve(element);
+            return;
+        }
+        
+        const observer = new MutationObserver((mutations, obs) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                obs.disconnect();
+                resolve(element);
+            }
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+        }, timeout);
+    });
+}
+
 // Function to update the authentication UI
 function updateAuthUI(authenticated, user = null) {
+    console.log('updateAuthUI called with:', { authenticated, user: user?.email });
+    
     isAuthenticated = authenticated;
     currentUser = user;
     
+    // Set global authentication state for the proxy client to access
+    window.oasisAuthState = {
+        isAuthenticated: authenticated,
+        user: user
+    };
+    
+    console.log('Global auth state set:', window.oasisAuthState);
+    
     // Update the input field placeholder
     const inputField = document.getElementById('q');
+    console.log('Input field found:', inputField);
     if (inputField) {
         if (authenticated) {
             inputField.placeholder = 'Ask me anything...';
             inputField.disabled = false;
+            console.log('Input field enabled for authenticated user');
         } else {
             inputField.placeholder = 'Please sign in first...';
             inputField.disabled = true;
+            console.log('Input field disabled for unauthenticated user');
         }
+    } else {
+        console.warn('Input field not found');
     }
     
     // Update send button
@@ -64,7 +171,69 @@ function updateAuthUI(authenticated, user = null) {
         sendButton.disabled = !authenticated;
     }
     
+    // Update auth status display - wait for element to exist
+    waitForElement('#authStatus').then(authStatus => {
+        console.log('Auth status element found:', authStatus);
+        const statusSpan = authStatus.querySelector('span:last-child');
+        if (statusSpan) {
+            if (authenticated) {
+                statusSpan.textContent = `Signed in as ${user?.email || 'User'}`;
+                statusSpan.style.color = '#51cf66';
+                console.log('Updated auth status to authenticated');
+            } else {
+                statusSpan.textContent = 'Not Authenticated';
+                statusSpan.style.color = '#ff6b6b';
+                console.log('Updated auth status to not authenticated');
+            }
+        } else {
+            console.warn('Status span not found within authStatus');
+        }
+    }).catch(error => {
+        console.warn('Auth status element not found:', error.message);
+    });
+    
+    // Show/hide auth buttons - wait for element to exist
+    waitForElement('#authButtons').then(authButtons => {
+        console.log('Auth buttons container found:', authButtons);
+        const buttons = authButtons.querySelectorAll('button');
+        console.log('Found buttons:', buttons.length, buttons);
+        if (buttons.length >= 3) {
+            const loginButton = buttons[0]; // Sign In button
+            const signupButton = buttons[1]; // Sign Up button  
+            const logoutButton = buttons[2]; // Sign Out button
+            
+            console.log('Button states:', { 
+                authenticated, 
+                loginButton: loginButton?.textContent, 
+                signupButton: signupButton?.textContent, 
+                logoutButton: logoutButton?.textContent 
+            });
+            
+            if (loginButton) {
+                loginButton.style.display = authenticated ? 'none' : 'inline-block';
+                console.log('Login button display set to:', loginButton.style.display);
+            }
+            if (signupButton) {
+                signupButton.style.display = authenticated ? 'none' : 'inline-block';
+                console.log('Signup button display set to:', signupButton.style.display);
+            }
+            if (logoutButton) {
+                logoutButton.style.display = authenticated ? 'inline-block' : 'none';
+                console.log('Logout button display set to:', logoutButton.style.display);
+            }
+        } else {
+            console.warn('Not enough buttons found in authButtons container');
+        }
+    }).catch(error => {
+        console.warn('Auth buttons container not found:', error.message);
+    });
+    
     console.log('Auth UI updated:', { authenticated, user: user?.email });
+    
+    // Notify iframe of authentication state change (if we're the parent window)
+    if (typeof window.notifyIframeAuthChange === 'function') {
+        window.notifyIframeAuthChange(authenticated, user);
+    }
 }
 
 // Custom protocol handler for kahana:// URLs
@@ -316,7 +485,7 @@ Or just paste the access_token part if you prefer:`;
                         showAuthSuccess('Authentication successful! You are now signed in.');
                         
                         // Update the UI immediately
-                        updateAuthUI(true);
+                        updateAuthUI(true, data.user);
                         
                         // Also reload after a delay to ensure everything is synced
                         setTimeout(() => {
@@ -363,7 +532,7 @@ function handleAuthSuccess(authData) {
             if (user) {
                 console.log('User authenticated:', user.email);
                 // Update the UI to show authenticated state
-                updateAuthUI(user);
+                updateAuthUI(true, user);
             }
         }).catch(error => {
             console.error('Error getting current user:', error);
@@ -437,6 +606,7 @@ bar.parentElement.insertBefore(authHeader, bar);
 
 // Auth status display
 const authStatus = document.createElement("div");
+authStatus.id = "authStatus";
 authStatus.style.cssText = "display: flex; align-items: center; gap: 8px;";
 authStatus.innerHTML = `
   <span style="font-size: 16px;">🔒</span>
@@ -446,6 +616,7 @@ authHeader.appendChild(authStatus);
 
 // Auth buttons container
 const authButtons = document.createElement("div");
+authButtons.id = "authButtons";
 authButtons.style.cssText = "display: flex; gap: 8px;";
 authHeader.appendChild(authButtons);
 
@@ -837,7 +1008,7 @@ function showLoginForm() {
         } else if (user) {
           isAuthenticated = true;
           currentUser = user;
-          updateAuthUI();
+          updateAuthUI(true, user);
           append(`\n🔓 Signed in as ${user.email}\n`);
         }
       });
@@ -1089,9 +1260,10 @@ async function logout() {
 async function send() {
   if (busy) return;
   
-  // Check authentication
-  if (!isAuthenticated) {
-    append("\n❌ Please login first\n");
+  // Check authentication - both local state and global state
+  if (!isAuthenticated || !window.oasisAuthState?.isAuthenticated) {
+    append("\n❌ Authentication required: Please sign in to use the AI assistant\n");
+    append("🔒 This protects our API tokens from unauthorized usage\n");
     return;
   }
   
@@ -1103,12 +1275,44 @@ async function send() {
   setBusy(true);
 
   try {
+    // Double-check authentication before making the API call
+    if (!window.oasisAuthState?.isAuthenticated) {
+      throw new Error('Authentication lost during request. Please sign in again.');
+    }
+    
+    // If we're in an iframe, don't execute commands - just show a message
+    if (window.isInIframe) {
+      append(`\nCommand sent to main window...\n`);
+      return;
+    }
+    
     await runAssistantStream(prompt, (chunk) => {
-      if (!stopped) append(chunk);
+      if (!stopped) {
+        append(chunk);
+        // Forward the chunk to iframe if it exists
+        if (typeof window.notifyIframeCommandResult === 'function') {
+          window.notifyIframeCommandResult(chunk);
+        }
+      }
     });
-    if (!stopped) append("\n");
+    if (!stopped) {
+      append("\n");
+      // Forward completion to iframe
+      if (typeof window.notifyIframeCommandResult === 'function') {
+        window.notifyIframeCommandResult("\n");
+      }
+    }
   } catch (e) {
-    append(`Error: ${e?.message || e}\n`);
+    const errorMessage = e?.message?.includes('Authentication required') 
+      ? `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`
+      : `Error: ${e?.message || e}`;
+    
+    append(`\n${errorMessage}\n`);
+    
+    // Forward error to iframe if we're in main window
+    if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
+      window.notifyIframeCommandResult(null, errorMessage);
+    }
   } finally {
     setBusy(false);
   }
@@ -1132,7 +1336,7 @@ async function checkExistingAuth() {
     if (user) {
       isAuthenticated = true;
       currentUser = user;
-      updateAuthUI();
+      updateAuthUI(true, user);
       append(`\n🔓 Already logged in as ${user.email}\n`);
     }
   } catch (error) {
@@ -1141,3 +1345,37 @@ async function checkExistingAuth() {
 }
 
 checkExistingAuth();
+
+// Setup cross-frame authentication synchronization
+setupCrossFrameAuthSync();
+
+// Add a function to manually refresh auth state (for debugging)
+window.refreshAuthState = async function() {
+    console.log('Manually refreshing authentication state...');
+    try {
+        const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
+        const user = await supabaseAuth.getCurrentUser();
+        console.log('Current user from Supabase:', user);
+        
+        if (user) {
+            isAuthenticated = true;
+            currentUser = user;
+            updateAuthUI(true, user);
+            console.log('Updated UI to authenticated state');
+        } else {
+            isAuthenticated = false;
+            currentUser = null;
+            updateAuthUI(false);
+            console.log('Updated UI to unauthenticated state');
+        }
+    } catch (error) {
+        console.error('Error refreshing auth state:', error);
+    }
+};
+
+// Add a function to force update the UI (for debugging)
+window.forceUpdateUI = function() {
+    console.log('Force updating UI with current state...');
+    console.log('Current state:', { isAuthenticated, currentUser: currentUser?.email });
+    updateAuthUI(isAuthenticated, currentUser);
+};
