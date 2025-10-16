@@ -67515,11 +67515,82 @@ var OpenTabCommand = class {
   description = "Open a new tab with a given URL. Input can be a string or { url: string }.";
   async execute(input) {
     const { topWin } = getChrome();
-    const url = typeof input === "string" ? input : input?.url;
+    let url = typeof input === "string" ? input : input?.url;
     if (!url) return { message: "Missing 'url'." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
+    
+    // Normalize the URL
+    url = this.normalizeUrl(url);
+    
     topWin.openTrustedLinkIn(url, "tab");
     return { message: `Opened ${url}` };
+  }
+  
+  normalizeUrl(input) {
+    // Remove common prefixes that users might include
+    let url = input.trim();
+    
+    // Remove "go to", "navigate to", "open", etc.
+    url = url.replace(/^(go to|navigate to|open|visit)\s+/i, '');
+    
+    // If it already has a protocol, use as-is
+    if (url.match(/^https?:\/\//i)) {
+      return url;
+    }
+    
+    // If it looks like a domain (contains dots but no spaces), add https://
+    if (url.includes('.') && !url.includes(' ')) {
+      return `https://${url}`;
+    }
+    
+    // For common sites, convert to proper URLs
+    const commonSites = {
+      'youtube': 'https://youtube.com',
+      'google': 'https://google.com',
+      'github': 'https://github.com',
+      'stackoverflow': 'https://stackoverflow.com',
+      'reddit': 'https://reddit.com',
+      'twitter': 'https://twitter.com',
+      'facebook': 'https://facebook.com',
+      'instagram': 'https://instagram.com',
+      'linkedin': 'https://linkedin.com',
+      'amazon': 'https://amazon.com',
+      'netflix': 'https://netflix.com',
+      'spotify': 'https://spotify.com',
+      'gmail': 'https://gmail.com',
+      'outlook': 'https://outlook.com',
+      'yahoo': 'https://yahoo.com',
+      'bing': 'https://bing.com',
+      'duckduckgo': 'https://duckduckgo.com',
+      'wikipedia': 'https://wikipedia.org',
+      'medium': 'https://medium.com',
+      'dev.to': 'https://dev.to',
+      'hackernews': 'https://news.ycombinator.com',
+      'producthunt': 'https://producthunt.com',
+      'figma': 'https://figma.com',
+      'notion': 'https://notion.so',
+      'slack': 'https://slack.com',
+      'discord': 'https://discord.com',
+      'zoom': 'https://zoom.us',
+      'dropbox': 'https://dropbox.com',
+      'drive': 'https://drive.google.com',
+      'docs': 'https://docs.google.com',
+      'sheets': 'https://sheets.google.com',
+      'slides': 'https://slides.google.com',
+    };
+    
+    const lowerInput = url.toLowerCase();
+    if (commonSites[lowerInput]) {
+      return commonSites[lowerInput];
+    }
+    
+    // If it contains spaces, treat it as a search query
+    if (url.includes(' ')) {
+      return `https://google.com/search?q=${encodeURIComponent(url)}`;
+    }
+    
+    // Default: try to add https://
+    return `https://${url}`;
   }
 };
 var CloseTabCommand = class {
