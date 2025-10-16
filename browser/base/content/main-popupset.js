@@ -24,6 +24,12 @@ document.addEventListener(
         case "context_ungroupTab":
           TabContextMenu.ungroupTabs();
           break;
+        case "context_moveTabToSplitView":
+          TabContextMenu.moveTabsToSplitView();
+          break;
+        case "context_separateSplitView":
+          TabContextMenu.unsplitTabs();
+          break;
         case "context_reloadTab":
           gBrowser.reloadTab(TabContextMenu.contextTab);
           break;
@@ -521,7 +527,9 @@ document.addEventListener(
         case "bhTooltip":
           BookmarksEventHandler.fillInBHTooltip(event.target, event);
           break;
-
+        case "tabContextMenu":
+          TabContextMenu.addNewBadge();
+          break;
       }
     });
 

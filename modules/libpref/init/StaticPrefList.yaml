@@ -7977,7 +7977,11 @@
  # Width of WebRender tile size
 - name: gfx.webrender.picture-tile-width
   type: RelaxedAtomicInt32
+#if defined(XP_WIN)
+  value: 512
+#else
   value: 1024
+#endif
   mirror: always
 
  # Width of WebRender tile size
@@ -8932,20 +8936,6 @@
   mirror: always
   # Non-startup pref because the WPT test harness sets prefs after startup.
   set_spidermonkey_pref: always
-
-# Experimental support for Duplicate Named Capture Groups in JavaScript.
-- name: javascript.options.experimental.regexp_duplicate_named_groups
-  type: bool
-  value: true
-  mirror: always
-  set_spidermonkey_pref: startup
-
-# Experimental support for Pattern Modifiers in JavaScript.
-- name: javascript.options.experimental.regexp_modifiers
-  type: bool
-  value: true
-  mirror: always
-  set_spidermonkey_pref: startup
 
 # Experimental support for Uint8Array base64/hex in JavaScript.
 - name: javascript.options.experimental.uint8array_base64
@@ -10471,7 +10461,7 @@
 # https://drafts.csswg.org/css-text-4/#text-autospace-property
 - name: layout.css.text-autospace.enabled
   type: bool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 # Maximum number of lines to try balancing.
@@ -11104,12 +11094,6 @@
 - name: mathml.mathspace_names.disabled
   type: bool
   value: @IS_EARLY_BETA_OR_EARLIER@
-  mirror: always
-
-# Whether to render all unknown mathml elements as <mrow>
-- name: mathml.unknown_mrow.enabled
-  type: bool
-  value: true
   mirror: always
 
 # Whether to enable character and glyph level mirroring for operators when

@@ -41,7 +41,7 @@ more-from-moz-mozilla-monitor-button = Schedule Demo
 
 ## These strings are for the Solo card in about:preferences moreFromMozilla page
 
-more-from-moz-solo-title = { -solo-ai-brand-name } AI
+more-from-moz-solo-title-2 = { -solo-ai-brand-name } AI Website Creator
 more-from-moz-solo-description = Create your website instantly and connect your own custom domain for free.
 more-from-moz-solo-button = Join Discord
 
