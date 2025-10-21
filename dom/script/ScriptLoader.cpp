@@ -23,7 +23,7 @@
 #include "js/Transcoding.h"  // JS::TranscodeRange, JS::TranscodeResult, JS::IsTranscodeFailureResult
 #include "js/Utility.h"
 #include "js/experimental/CompileScript.h"  // JS::FrontendContext, JS::NewFrontendContext, JS::DestroyFrontendContext, JS::SetNativeStackQuota, JS::ThreadStackQuotaForSize, JS::CompilationStorage, JS::CompileGlobalScriptToStencil, JS::CompileModuleScriptToStencil, JS::DecodeStencil, JS::PrepareForInstantiate
-#include "js/experimental/JSStencil.h"  // JS::Stencil, JS::InstantiationStorage, JS::StartCollectingDelazifications, JS::FinishCollectingDelazifications, JS::AbortCollectingDelazifications, JS::IsStencilCacheable
+#include "js/experimental/JSStencil.h"  // JS::Stencil, JS::InstantiationStorage, JS::StartCollectingDelazifications, JS::IsStencilCacheable
 #include "js/loader/LoadedScript.h"
 #include "js/loader/ModuleLoadRequest.h"
 #include "js/loader/ModuleLoaderBase.h"
@@ -2457,15 +2457,6 @@ nsresult ScriptLoader::ProcessRequest(ScriptLoadRequest* aRequest) {
     }
   }
 
-  nsCOMPtr<nsINode> scriptElem = do_QueryInterface(
-      aRequest->GetScriptLoadContext()->GetScriptElementForExecuteEvents());
-
-  nsCOMPtr<Document> doc;
-  if (!aRequest->GetScriptLoadContext()->mIsInline ||
-      aRequest->IsModuleRequest()) {
-    doc = scriptElem->OwnerDoc();
-  }
-
   nsCOMPtr<nsIScriptElement> oldParserInsertedScript;
   uint32_t parserCreated = aRequest->GetScriptLoadContext()->GetParserCreated();
   if (parserCreated) {
@@ -2479,48 +2470,12 @@ nsresult ScriptLoader::ProcessRequest(ScriptLoadRequest* aRequest) {
 
   FireScriptAvailable(NS_OK, aRequest);
 
-  // The window may have gone away by this point, in which case there's no point
-  // in trying to run the script.
-
   {
     // Try to perform a microtask checkpoint
     nsAutoMicroTask mt;
   }
 
-  nsPIDOMWindowInner* pwin = mDocument->GetInnerWindow();
-  bool runScript = !!pwin;
-  if (runScript) {
-    nsContentUtils::DispatchTrustedEvent(
-        scriptElem->OwnerDoc(), scriptElem, u"beforescriptexecute"_ns,
-        CanBubble::eYes, Cancelable::eYes, &runScript,
-        StaticPrefs::dom_events_script_execute_enabled()
-            ? SystemGroupOnly::eNo
-            : SystemGroupOnly::eYes);
-  }
-
-  // Inner window could have gone away after firing beforescriptexecute
-  pwin = mDocument->GetInnerWindow();
-  if (!pwin) {
-    runScript = false;
-  }
-
-  nsresult rv = NS_OK;
-  if (runScript) {
-    if (doc) {
-      doc->IncrementIgnoreDestructiveWritesCounter();
-    }
-    rv = EvaluateScriptElement(aRequest);
-    if (doc) {
-      doc->DecrementIgnoreDestructiveWritesCounter();
-    }
-
-    nsContentUtils::DispatchTrustedEvent(
-        scriptElem->OwnerDoc(), scriptElem, u"afterscriptexecute"_ns,
-        CanBubble::eYes, Cancelable::eNo, nullptr,
-        StaticPrefs::dom_events_script_execute_enabled()
-            ? SystemGroupOnly::eNo
-            : SystemGroupOnly::eYes);
-  }
+  nsresult rv = EvaluateScriptElement(aRequest);
 
   FireScriptEvaluated(rv, aRequest);
 
@@ -2902,19 +2857,21 @@ static void ExecuteCompiledScript(JSContext* aCx, ClassicScript* aLoaderScript,
   }
 }
 
+// https://html.spec.whatwg.org/#execute-the-script-element
 nsresult ScriptLoader::EvaluateScriptElement(ScriptLoadRequest* aRequest) {
   MOZ_ASSERT(aRequest->IsFinished());
+  MOZ_ASSERT(mDocument);
 
-  // We need a document to evaluate scripts.
-  if (!mDocument) {
-    return NS_ERROR_FAILURE;
+  // The window may have gone away by this point, in which case there's no point
+  // in trying to run the script.
+  if (!mDocument->GetInnerWindow()) {
+    return NS_OK;
   }
 
+  // 2. If el's preparation-time document is not equal to document, then return.
   Document* ownerDoc =
       aRequest->GetScriptLoadContext()->GetScriptOwnerDocument();
   if (ownerDoc != mDocument) {
-    // https://html.spec.whatwg.org/#prepare-the-script-element step 16
-    // as of 2025-01-15
     return NS_ERROR_FAILURE;
   }
 
@@ -2942,13 +2899,22 @@ nsresult ScriptLoader::EvaluateScriptElement(ScriptLoadRequest* aRequest) {
     globalObject = scriptGlobal;
   }
 
-  // This mechanism is currently only used when the parser returns
-  // early due to this script loader having a current script. However,
-  // now that we have this, we could migrate continuing after a
-  // parser-blocking script to this same mechanism. Not doing it right
-  // away to reduce risk of introducing bugs.
-  auto maybeContinueParser = MakeScopeExit([&] {
+  // 5. If el's from an external file is true, or el's type is "module", then
+  // increment document's ignore-destructive-writes counter.
+  const bool ignoreDestructiveWrites =
+      !aRequest->GetScriptLoadContext()->mIsInline ||
+      aRequest->IsModuleRequest();
+  if (ignoreDestructiveWrites) {
+    ownerDoc->IncrementIgnoreDestructiveWritesCounter();
+  }
+
+  auto afterScript = MakeScopeExit([&] {
     if (mContinueParsingDocumentAfterCurrentScript) {
+      // This mechanism is currently only used when the parser returns
+      // early due to this script loader having a current script. However,
+      // now that we have this, we could migrate continuing after a
+      // parser-blocking script to this same mechanism. Not doing it right
+      // away to reduce risk of introducing bugs.
       mContinueParsingDocumentAfterCurrentScript = false;
       if (mDocument) {
         nsCOMPtr<nsIParser> parser = mDocument->CreatorParserOrNull();
@@ -2956,6 +2922,11 @@ nsresult ScriptLoader::EvaluateScriptElement(ScriptLoadRequest* aRequest) {
           parser->ContinueInterruptedParsingAsync();
         }
       }
+    }
+    // 7. Decrement the ignore-destructive-writes counter of document, if it was
+    // incremented in the earlier step.
+    if (ignoreDestructiveWrites) {
+      ownerDoc->DecrementIgnoreDestructiveWritesCounter();
     }
   });
 
@@ -3328,18 +3299,9 @@ nsCString& ScriptLoader::BytecodeMimeTypeFor(
   return nsContentUtils::JSScriptBytecodeMimeType();
 }
 
-void ScriptLoader::MaybePrepareForCacheBeforeExecute(
-    ScriptLoadRequest* aRequest, JS::Handle<JSScript*> aScript) {
-  if (!aRequest->PassedConditionForEitherCache()) {
-    return;
-  }
-
-  aRequest->MarkScriptForCache(aScript);
-}
-
 nsresult ScriptLoader::MaybePrepareForCacheAfterExecute(
     ScriptLoadRequest* aRequest, nsresult aRv) {
-  if (aRequest->IsMarkedForEitherCache()) {
+  if (aRequest->PassedConditionForEitherCache() && aRequest->HasStencil()) {
     TRACE_FOR_TEST(aRequest, "scriptloader_encode");
     // Bytecode-encoding branch is used for 2 purposes right now:
     //   * If the request is stencil, reflect delazifications to cached stencil
@@ -3364,30 +3326,6 @@ nsresult ScriptLoader::MaybePrepareForCacheAfterExecute(
   aRequest->getLoadedScript()->DropDiskCacheReference();
 
   return aRv;
-}
-
-void ScriptLoader::MaybePrepareModuleForCacheBeforeExecute(
-    JSContext* aCx, ModuleLoadRequest* aRequest) {
-  if (aRequest->IsMarkedForEitherCache()) {
-    // This module is imported multiple times, and already marked.
-    return;
-  }
-
-  if (aRequest->PassedConditionForEitherCache()) {
-    aRequest->MarkModuleForCache();
-  }
-
-  for (auto* r = mCacheableDependencyModules.getFirst(); r; r = r->getNext()) {
-    auto* dep = r->AsModuleRequest();
-    MOZ_ASSERT(dep->PassedConditionForEitherCache());
-
-    if (dep->GetRootModule() != aRequest) {
-      continue;
-    }
-    MOZ_ASSERT(!dep->IsMarkedForEitherCache());
-
-    dep->MarkModuleForCache();
-  }
 }
 
 nsresult ScriptLoader::MaybePrepareModuleForCacheAfterExecute(
@@ -3505,17 +3443,13 @@ nsresult ScriptLoader::EvaluateScript(nsIGlobalObject* aGlobalObject,
                                   classicScriptValue, introductionScript, erv);
 
   if (!erv.Failed()) {
-    MaybePrepareForCacheBeforeExecute(aRequest, script);
+    LOG(("ScriptLoadRequest (%p): Evaluate Script", aRequest));
+    AUTO_PROFILER_MARKER_TEXT("ScriptExecution", JS,
+                              MarkerInnerWindowIdFromJSContext(cx),
+                              profilerLabelString);
 
-    {
-      LOG(("ScriptLoadRequest (%p): Evaluate Script", aRequest));
-      AUTO_PROFILER_MARKER_TEXT("ScriptExecution", JS,
-                                MarkerInnerWindowIdFromJSContext(cx),
-                                profilerLabelString);
-
-      MOZ_ASSERT(options.noScriptRval);
-      ExecuteCompiledScript(cx, classicScript, script, erv);
-    }
+    MOZ_ASSERT(options.noScriptRval);
+    ExecuteCompiledScript(cx, classicScript, script, erv);
   }
   rv = EvaluationExceptionToNSResult(erv);
 
@@ -3547,8 +3481,9 @@ LoadedScript* ScriptLoader::GetActiveScript(JSContext* aCx) {
 }
 
 void ScriptLoader::RegisterForCache(ScriptLoadRequest* aRequest) {
-  MOZ_ASSERT(aRequest->IsMarkedForEitherCache());
-  MOZ_ASSERT_IF(aRequest->IsMarkedForDiskCache(),
+  MOZ_ASSERT(aRequest->PassedConditionForEitherCache());
+  MOZ_ASSERT(aRequest->HasStencil());
+  MOZ_ASSERT_IF(aRequest->PassedConditionForDiskCache(),
                 aRequest->getLoadedScript()->HasDiskCacheReference());
   MOZ_DIAGNOSTIC_ASSERT(!aRequest->isInList());
   mCachingQueue.AppendElement(aRequest);
@@ -3644,13 +3579,11 @@ void ScriptLoader::UpdateCache() {
     MOZ_ASSERT(!IsWebExtensionRequest(request),
                "Bytecode for web extension content scrips is not cached");
 
-    FinishCollectingDelazifications(aes.cx(), request);
-
     // The bytecode encoding is performed only when there was no
     // bytecode stored in the necko cache.
     //
     // TODO: Move this to SharedScriptCache.
-    if (request->IsMarkedForDiskCache() &&
+    if (request->PassedConditionForDiskCache() &&
         request->getLoadedScript()->HasDiskCacheReference()) {
       EncodeBytecodeAndSave(aes.cx(), request->getLoadedScript());
     }
@@ -3658,29 +3591,6 @@ void ScriptLoader::UpdateCache() {
     request->DropBytecode();
     request->getLoadedScript()->DropDiskCacheReference();
   }
-}
-
-void ScriptLoader::FinishCollectingDelazifications(
-    JSContext* aCx, ScriptLoadRequest* aRequest) {
-  RefPtr<JS::Stencil> stencil;
-  bool result;
-  if (aRequest->IsModuleRequest()) {
-    aRequest->mScriptForCache = nullptr;
-    ModuleScript* moduleScript = aRequest->AsModuleRequest()->mModuleScript;
-    JS::Rooted<JSObject*> module(aCx, moduleScript->ModuleRecord());
-    result = JS::FinishCollectingDelazifications(aCx, module,
-                                                 getter_AddRefs(stencil));
-  } else {
-    JS::Rooted<JSScript*> script(aCx, aRequest->mScriptForCache);
-    aRequest->mScriptForCache = nullptr;
-    result = JS::FinishCollectingDelazifications(aCx, script,
-                                                 getter_AddRefs(stencil));
-  }
-  if (!result) {
-    JS_ClearPendingException(aCx);
-    return;
-  }
-  MOZ_ASSERT(stencil == aRequest->GetStencil());
 }
 
 void ScriptLoader::EncodeBytecodeAndSave(
@@ -3764,38 +3674,11 @@ void ScriptLoader::GiveUpCaching() {
   // to avoid queuing more scripts.
   mGiveUpCaching = true;
 
-  // Ideally we prefer to properly end the incremental encoder, such that we
-  // would not keep a large buffer around.  If we cannot, we fallback on the
-  // removal of all request from the current list and these large buffers would
-  // be removed at the same time as the source object.
-  nsCOMPtr<nsIScriptGlobalObject> globalObject = GetScriptGlobalObject();
-  AutoAllowLegacyScriptExecution exemption;
-  Maybe<AutoEntryScript> aes;
-
-  if (globalObject) {
-    nsCOMPtr<nsIScriptContext> context = globalObject->GetScriptContext();
-    if (context) {
-      aes.emplace(globalObject, "give-up bytecode encoding", true);
-    }
-  }
-
   while (!mCachingQueue.isEmpty()) {
     RefPtr<ScriptLoadRequest> request = mCachingQueue.StealFirst();
     LOG(("ScriptLoadRequest (%p): Cannot serialize bytecode", request.get()));
     TRACE_FOR_TEST_NONE(request, "scriptloader_bytecode_failed");
     MOZ_ASSERT(!IsWebExtensionRequest(request));
-
-    if (aes.isSome()) {
-      if (request->IsModuleRequest()) {
-        ModuleScript* moduleScript = request->AsModuleRequest()->mModuleScript;
-        JS::Rooted<JSObject*> module(aes->cx(), moduleScript->ModuleRecord());
-        JS::AbortCollectingDelazifications(module);
-      } else {
-        JS::Rooted<JSScript*> script(aes->cx(), request->mScriptForCache);
-        request->mScriptForCache = nullptr;
-        JS::AbortCollectingDelazifications(script);
-      }
-    }
 
     request->getLoadedScript()->DropDiskCacheReference();
   }
@@ -3964,8 +3847,8 @@ bool ScriptLoader::ReadyToExecuteParserBlockingScripts() {
              mDocument->GetWindowContext()->GetParentWindowContext();
          wc; wc = wc->GetParentWindowContext()) {
       if (Document* doc = wc->GetDocument()) {
-        ScriptLoader* ancestor = doc->ScriptLoader();
-        if (!ancestor->SelfReadyToExecuteParserBlockingScripts() &&
+        ScriptLoader* ancestor = doc->GetScriptLoader();
+        if (ancestor && !ancestor->SelfReadyToExecuteParserBlockingScripts() &&
             ancestor->AddPendingChildLoader(this)) {
           AddParserBlockingScriptExecutionBlocker();
           return false;
@@ -4228,6 +4111,10 @@ void ScriptLoader::ReportErrorToConsole(ScriptLoadRequest* aRequest,
     return;
   }
 
+  if (!mDocument) {
+    return;
+  }
+
   bool isScript = !aRequest->IsModuleRequest();
   const char* message;
   if (aResult == NS_ERROR_MALFORMED_URI) {
@@ -4267,6 +4154,9 @@ void ScriptLoader::ReportErrorToConsole(ScriptLoadRequest* aRequest,
 void ScriptLoader::ReportWarningToConsole(
     ScriptLoadRequest* aRequest, const char* aMessageName,
     const nsTArray<nsString>& aParams) const {
+  if (!mDocument) {
+    return;
+  }
   uint32_t lineNo = aRequest->GetScriptLoadContext()->GetScriptLineNumber();
   JS::ColumnNumberOneOrigin columnNo =
       aRequest->GetScriptLoadContext()->GetScriptColumnNumber();
@@ -4857,8 +4747,8 @@ void ScriptLoader::BeginDeferringScripts() {
 }
 
 nsAutoScriptLoaderDisabler::nsAutoScriptLoaderDisabler(Document* aDoc) {
-  mLoader = aDoc->ScriptLoader();
-  mWasEnabled = mLoader->GetEnabled();
+  mLoader = aDoc->GetScriptLoader();
+  mWasEnabled = mLoader && mLoader->GetEnabled();
   if (mWasEnabled) {
     mLoader->SetEnabled(false);
   }
@@ -4866,6 +4756,7 @@ nsAutoScriptLoaderDisabler::nsAutoScriptLoaderDisabler(Document* aDoc) {
 
 nsAutoScriptLoaderDisabler::~nsAutoScriptLoaderDisabler() {
   if (mWasEnabled) {
+    MOZ_ASSERT(mLoader, "mWasEnabled can be true only if we have a loader");
     mLoader->SetEnabled(true);
   }
 }

@@ -592,7 +592,7 @@ static bool SetProp(StyleLockedDeclarationBlock* aDecls, Document* aDoc,
       aDecls, aProp, &aValue,
       /* is_important = */ false, aDoc->DefaultStyleAttrURLData(),
       StyleParsingMode::DEFAULT, eCompatibility_FullStandards,
-      aDoc->CSSLoader(), StyleCssRuleType::Style, {});
+      &aDoc->EnsureCSSLoader(), StyleCssRuleType::Style, {});
 }
 
 static bool SetProp(StyleLockedDeclarationBlock* aDecls, Document*,
@@ -1354,8 +1354,7 @@ Maybe<SkipTransitionReason> ViewTransition::CaptureOldState() {
                 ->GetPresShell()) {
       // Build a display list and send it to WR in order to perform the
       // capturing of old content.
-      RefPtr<nsViewManager> vm = ps->GetViewManager();
-      if (RefPtr widget = vm->GetRootWidget()) {
+      if (RefPtr widget = ps->GetRootWidget()) {
         VT_LOG("ViewTransitions::CaptureOldState(), requesting composite");
         ps->PaintAndRequestComposite(ps->GetRootFrame(),
                                      widget->GetWindowRenderer(),

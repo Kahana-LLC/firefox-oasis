@@ -971,7 +971,7 @@ bool Navigation::FireTraverseNavigateEvent(
 bool Navigation::FirePushReplaceReloadNavigateEvent(
     JSContext* aCx, NavigationType aNavigationType, nsIURI* aDestinationURL,
     bool aIsSameDocument, Maybe<UserNavigationInvolvement> aUserInvolvement,
-    Element* aSourceElement, already_AddRefed<FormData> aFormDataEntryList,
+    Element* aSourceElement, FormData* aFormDataEntryList,
     nsIStructuredCloneContainer* aNavigationAPIState,
     nsIStructuredCloneContainer* aClassicHistoryAPIState) {
   // To not unnecessarily create an event that's never used, step 1 and step 2
@@ -991,7 +991,7 @@ bool Navigation::FirePushReplaceReloadNavigateEvent(
   return InnerFireNavigateEvent(
       aCx, aNavigationType, destination,
       aUserInvolvement.valueOr(UserNavigationInvolvement::None), aSourceElement,
-      std::move(aFormDataEntryList), aClassicHistoryAPIState,
+      aFormDataEntryList, aClassicHistoryAPIState,
       /* aDownloadRequestFilename */ VoidString());
 }
 
@@ -1003,6 +1003,8 @@ bool Navigation::FireDownloadRequestNavigateEvent(
   // To not unnecessarily create an event that's never used, step 1 and step 2
   // in #fire-a-download-request-navigate-event have been moved to after step
   // 25 in #inner-navigate-event-firing-algorithm in our implementation.
+
+  InnerInformAboutAbortingNavigation(aCx);
 
   // Step 3 to step 7
   RefPtr<NavigationDestination> destination =
@@ -1190,7 +1192,7 @@ bool Navigation::InnerFireNavigateEvent(
     JSContext* aCx, NavigationType aNavigationType,
     NavigationDestination* aDestination,
     UserNavigationInvolvement aUserInvolvement, Element* aSourceElement,
-    already_AddRefed<FormData> aFormDataEntryList,
+    FormData* aFormDataEntryList,
     nsIStructuredCloneContainer* aClassicHistoryAPIState,
     const nsAString& aDownloadRequestFilename) {
   nsCOMPtr<nsIGlobalObject> globalObject = GetOwnerGlobal();
@@ -1239,7 +1241,8 @@ bool Navigation::InnerFireNavigateEvent(
 
   // Step 9
   init.mCanIntercept = document &&
-                       document->CanRewriteURL(aDestination->GetURL()) &&
+                       document->CanRewriteURL(aDestination->GetURL(),
+                                               /*aReportErrors*/ false) &&
                        (aDestination->SameDocument() ||
                         aNavigationType != NavigationType::Traverse);
 
@@ -1581,6 +1584,12 @@ bool Navigation::InnerFireNavigateEvent(
     MOZ_DIAGNOSTIC_ASSERT(apiMethodTracker == mOngoingAPIMethodTracker);
     // Step 35
     apiMethodTracker->CleanUp();
+  } else {
+    // It needs to be ensured that the ongoing navigate event is cleared in
+    // every code path (e.g. for download events), so that we don't keep
+    // intermediate state around.
+    // See also https://github.com/whatwg/html/issues/11802
+    mOngoingNavigateEvent = nullptr;
   }
 
   // Step 37 and step 38

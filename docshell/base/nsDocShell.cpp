@@ -3566,6 +3566,12 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
     if (messageStr.IsEmpty()) {
       messageStr.AssignLiteral(u" ");
     }
+  } else if (aError == NS_ERROR_RESTRICTED_CONTENT) {
+    errorPage.AssignLiteral("restricted");
+    error = "restrictedcontent";
+    if (messageStr.IsEmpty()) {
+      messageStr.AssignLiteral(u" ");
+    }
   } else {
     // Errors requiring simple formatting
     switch (aError) {
@@ -4115,6 +4121,17 @@ nsresult nsDocShell::ReloadNavigable(
   nsCOMPtr<nsIURI> currentURI = mCurrentURI;
   nsCOMPtr<nsIReferrerInfo> referrerInfo = mReferrerInfo;
   return ReloadDocument(this, doc, loadType, bc, currentURI, referrerInfo);
+}
+
+void nsDocShell::DisplayRestrictedContentError() {
+  bool didDisplayLoadError = false;
+  RefPtr<mozilla::dom::Document> doc = GetDocument();
+  if (!doc) {
+    return;
+  }
+  doc->TerminateParserAndDisableScripts();
+  DisplayLoadError(NS_ERROR_RESTRICTED_CONTENT, doc->GetDocumentURI(), nullptr,
+                   nullptr, &didDisplayLoadError);
 }
 
 /* static */
@@ -9801,9 +9818,6 @@ nsresult nsDocShell::InternalLoad(nsDocShellLoadState* aLoadState,
           // Step 21.3
           RefPtr<nsIStructuredCloneContainer> navigationAPIStateForFiring =
               aLoadState->GetNavigationAPIState();
-          if (!navigationAPIStateForFiring) {
-            navigationAPIStateForFiring = nullptr;
-          }
 
           nsCOMPtr<nsIURI> destinationURL = aLoadState->URI();
           // Step 21.4
@@ -9811,7 +9825,7 @@ nsresult nsDocShell::InternalLoad(nsDocShellLoadState* aLoadState,
               jsapi.cx(), aLoadState->GetNavigationType(), destinationURL,
               /* aIsSameDocument */ false,
               Some(aLoadState->UserNavigationInvolvement()), sourceElement,
-              formData.forget(), navigationAPIStateForFiring,
+              formData, navigationAPIStateForFiring,
               /* aClassicHistoryAPIState */ nullptr);
 
           // Step 21.5

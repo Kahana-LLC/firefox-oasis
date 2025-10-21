@@ -6,6 +6,12 @@
 
 import valueParser from "postcss-value-parser";
 import { tokensTable } from "../../../../toolkit/themes/shared/design-system/tokens-table.mjs";
+import {
+  DEPRECATED_SYSTEM_COLORS,
+  NAMED_COLORS,
+  PREFIXED_SYSTEM_COLORS,
+  SYSTEM_COLORS,
+} from "./referenceColors.mjs";
 
 /**
  * Allows rules to access the tokens table without hard-coding the import path in multiple files.
@@ -161,6 +167,38 @@ export const isFunction = node => node.type === "function";
 export const isVariableFunction = node =>
   isFunction(node) && node.value === "var";
 
+// checks if a node is a url() function
+export const isUrlFunction = node => isFunction(node) && node.value === "url";
+
+/**
+ * Checks if CSS includes a named color, e.g. 'white' or 'rebeccapurple'
+ *
+ * @param {string} value some CSS declaration to match
+ * @returns {boolean}
+ */
+export const containsNamedColor = value =>
+  valueParser(String(value)).nodes.some(
+    node =>
+      node.type === "word" && NAMED_COLORS.includes(node.value.toLowerCase())
+  );
+
+/**
+ * Checks if CSS includes a named color, e.g. 'white' or 'rebeccapurple'
+ *
+ * @param {string} value some CSS declaration to match
+ * @returns {boolean}
+ */
+export const containsSystemColor = value =>
+  valueParser(String(value)).nodes.some(
+    node =>
+      node.type === "word" &&
+      [
+        ...PREFIXED_SYSTEM_COLORS,
+        ...DEPRECATED_SYSTEM_COLORS,
+        ...SYSTEM_COLORS,
+      ].includes(node.value.toLowerCase())
+  );
+
 /**
  * Checks if CSS includes a hex value, e.g. `#00000`.
  *
@@ -186,6 +224,33 @@ export const containsColorFunction = value => {
     node =>
       node.type === "function" && COLOR_FUNCTIONS.includes(String(node.value))
   );
+};
+
+/**
+ * Returns only the properties in the declaration that are colors, or at least likely to be colors.
+ * This allows for ignoring properties in shorthand that are not relevant to color rules.
+ *
+ * @param {string} value some CSS declaration to match
+ * @returns {string[]}
+ */
+export const getColorProperties = value => {
+  const relevantProperties = [];
+  const parsed = valueParser(value);
+  parsed.nodes.forEach(node => {
+    const property = value.substring(node.sourceIndex, node.sourceEndIndex);
+    if (
+      ALLOW_LIST.includes(property) ||
+      containsHexColor(property) ||
+      containsNamedColor(property) ||
+      containsSystemColor(property) ||
+      containsColorFunction(property) ||
+      isVariableFunction(node)
+    ) {
+      relevantProperties.push(property);
+    }
+  });
+
+  return relevantProperties;
 };
 
 /**

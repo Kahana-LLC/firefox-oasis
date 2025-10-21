@@ -7,6 +7,7 @@
 
 use crate::computed_value_flags::ComputedValueFlags;
 use crate::dom::TElement;
+use crate::logical_geometry::PhysicalSide;
 use crate::properties::longhands::display::computed_value::T as Display;
 use crate::properties::longhands::float::computed_value::T as Float;
 use crate::properties::longhands::position::computed_value::T as Position;
@@ -17,9 +18,30 @@ use crate::properties::longhands::{
     overflow_x::computed_value::T as Overflow,
 };
 use crate::properties::{self, ComputedValues, StyleBuilder};
+use crate::values::specified::align::AlignFlags;
+use crate::values::specified::position::{
+    PositionTryFallbacksTryTactic, PositionTryFallbacksTryTacticKeyword,
+};
 
 #[cfg(feature = "gecko")]
 use selectors::parser::PseudoElement;
+
+macro_rules! flip_property {
+    ($adjuster:ident, $struct_getter:ident, $struct_setter:ident, $a_getter:ident, $a_setter:ident, $b_getter:ident, $b_setter:ident) => {{
+        loop {
+            let s = $adjuster.style.$struct_getter();
+            let a = s.$a_getter();
+            let b = s.$b_getter();
+            if a == b {
+                break;
+            }
+            let s = $adjuster.style.$struct_setter();
+            s.$b_setter(a);
+            s.$a_setter(b);
+            break;
+        }
+    }};
+}
 
 /// A struct that implements all the adjustment methods.
 ///
@@ -794,17 +816,13 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
     fn adjust_for_justify_items(&mut self) {
         use crate::values::specified::align;
         let justify_items = self.style.get_position().clone_justify_items();
-        if justify_items.specified.0 != align::AlignFlags::LEGACY {
+        if justify_items.specified != align::JustifyItems::legacy() {
             return;
         }
 
         let parent_justify_items = self.style.get_parent_position().clone_justify_items();
 
-        if !parent_justify_items
-            .computed
-            .0
-            .contains(align::AlignFlags::LEGACY)
-        {
+        if !parent_justify_items.computed.contains(AlignFlags::LEGACY) {
             return;
         }
 
@@ -908,14 +926,199 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         }
     }
 
-    /// Adjusts the style to account for various fixups that don't fit naturally
-    /// into the cascade.
+    /// Performs adjustments for position-try-fallbacks. The properties that need adjustments here
+    /// are luckily not affected by previous adjustments nor by other computed-value-time effects,
+    /// so we can just perform them here.
     ///
-    /// When comparing to Gecko, this is similar to the work done by
-    /// `ComputedStyle::ApplyStyleFixups`, plus some parts of
-    /// `nsStyleSet::GetContext`.
-    pub fn adjust<E>(&mut self, layout_parent_style: &ComputedValues, element: Option<E>)
-    where
+    /// NOTE(emilio): If we ever perform the interleaving dance, this could / should probably move
+    /// around to the specific properties' to_computed_value implementations, but that seems
+    /// overkill for now.
+    fn adjust_for_try_tactic(&mut self, tactic: PositionTryFallbacksTryTactic) {
+        debug_assert!(!tactic.is_empty());
+        let horizontal = self.style.writing_mode.is_horizontal();
+        // TODO: Flip inset / margin / sizes percentages and anchor lookup sides as necessary.
+        for tactic in tactic.into_iter() {
+            match tactic {
+                PositionTryFallbacksTryTacticKeyword::None => break,
+                PositionTryFallbacksTryTacticKeyword::FlipBlock => {
+                    self.flip_self_alignment(/* block = */ true);
+                    self.flip_insets_and_margins(!horizontal);
+                },
+                PositionTryFallbacksTryTacticKeyword::FlipInline => {
+                    self.flip_self_alignment(/* block = */ false);
+                    self.flip_insets_and_margins(horizontal);
+                },
+                PositionTryFallbacksTryTacticKeyword::FlipStart => {
+                    self.flip_start();
+                },
+            }
+        }
+    }
+
+    fn swap_insets(&mut self, a_side: PhysicalSide, b_side: PhysicalSide) {
+        debug_assert_ne!(a_side, b_side);
+        let pos = self.style.get_position();
+        let a = pos.get_inset(a_side);
+        let b = pos.get_inset(b_side);
+        if a == b {
+            return;
+        }
+        let a = a.clone();
+        let b = b.clone();
+        let pos = self.style.mutate_position();
+        pos.set_inset(a_side, b);
+        pos.set_inset(b_side, a);
+    }
+
+    fn swap_margins(&mut self, a_side: PhysicalSide, b_side: PhysicalSide) {
+        debug_assert_ne!(a_side, b_side);
+        let margin = self.style.get_margin();
+        let a = margin.get_margin(a_side);
+        let b = margin.get_margin(b_side);
+        if a == b {
+            return;
+        }
+        let a = a.clone();
+        let b = b.clone();
+        let margin = self.style.mutate_margin();
+        margin.set_margin(a_side, b);
+        margin.set_margin(b_side, a);
+    }
+
+    fn flip_start(&mut self) {
+        flip_property!(
+            self,
+            get_position,
+            mutate_position,
+            clone_width,
+            set_width,
+            clone_height,
+            set_height
+        );
+        flip_property!(
+            self,
+            get_position,
+            mutate_position,
+            clone_min_width,
+            set_min_width,
+            clone_min_height,
+            set_min_height
+        );
+        flip_property!(
+            self,
+            get_position,
+            mutate_position,
+            clone_max_width,
+            set_max_width,
+            clone_max_height,
+            set_max_height
+        );
+        let wm = self.style.writing_mode;
+        let bs = wm.block_start_physical_side();
+        let is = wm.inline_start_physical_side();
+        let be = wm.block_end_physical_side();
+        let ie = wm.inline_end_physical_side();
+        self.swap_insets(bs, is);
+        self.swap_insets(ie, be);
+        self.swap_margins(bs, is);
+        self.swap_margins(ie, be);
+        self.flip_alignment_start();
+    }
+
+    fn flip_insets_and_margins(&mut self, horizontal: bool) {
+        if horizontal {
+            // TODO: Avoid the clone here?
+            flip_property!(
+                self,
+                get_position,
+                mutate_position,
+                clone_left,
+                set_left,
+                clone_right,
+                set_right
+            );
+            flip_property!(
+                self,
+                get_margin,
+                mutate_margin,
+                clone_margin_left,
+                set_margin_left,
+                clone_margin_right,
+                set_margin_right
+            );
+        } else {
+            flip_property!(
+                self,
+                get_position,
+                mutate_position,
+                clone_top,
+                set_top,
+                clone_bottom,
+                set_bottom
+            );
+            flip_property!(
+                self,
+                get_margin,
+                mutate_margin,
+                clone_margin_top,
+                set_margin_top,
+                clone_margin_bottom,
+                set_margin_bottom
+            );
+        }
+    }
+
+    fn flip_alignment_start(&mut self) {
+        let pos = self.style.get_position();
+        let align = pos.clone_align_self();
+        let mut justify = pos.clone_justify_self();
+        if align == justify {
+            return;
+        }
+
+        // Fix-up potential justify-self: {left, right} values which might end up as alignment
+        // values.
+        if matches!(justify.value(), AlignFlags::LEFT | AlignFlags::RIGHT) {
+            let left = justify.value() == AlignFlags::LEFT;
+            let ltr = self.style.writing_mode.is_bidi_ltr();
+            justify = justify.with_value(if left == ltr {
+                AlignFlags::SELF_START
+            } else {
+                AlignFlags::SELF_END
+            });
+        }
+
+        let pos = self.style.mutate_position();
+        pos.set_align_self(justify);
+        pos.set_justify_self(align);
+    }
+
+    fn flip_self_alignment(&mut self, block: bool) {
+        let pos = self.style.get_position();
+        let cur = if block {
+            pos.clone_align_self()
+        } else {
+            pos.clone_justify_self()
+        };
+        let flipped = cur.flip_position();
+        if flipped == cur {
+            return;
+        }
+        let pos = self.style.mutate_position();
+        if block {
+            pos.set_align_self(flipped);
+        } else {
+            pos.set_justify_self(flipped);
+        }
+    }
+
+    /// Adjusts the style to account for various fixups that don't fit naturally into the cascade.
+    pub fn adjust<E>(
+        &mut self,
+        layout_parent_style: &ComputedValues,
+        element: Option<E>,
+        try_tactic: PositionTryFallbacksTryTactic,
+    ) where
         E: TElement,
     {
         if cfg!(debug_assertions) {
@@ -972,6 +1175,9 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
             self.adjust_for_ruby(layout_parent_style, element);
             self.adjust_for_appearance(element);
             self.adjust_for_marker_pseudo();
+        }
+        if !try_tactic.is_empty() {
+            self.adjust_for_try_tactic(try_tactic);
         }
         self.set_bits();
     }

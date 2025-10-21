@@ -82,6 +82,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.json.JSONObject;
+import org.mozilla.gecko.util.GeckoBundle;
 import org.mozilla.geckoview.AllowOrDeny;
 import org.mozilla.geckoview.Autocomplete;
 import org.mozilla.geckoview.Autofill;
@@ -191,6 +192,31 @@ package org.mozilla.geckoview {
     ctor public Hint();
     field public static final int INSECURE_FORM = 2;
     field public static final int NONE = 0;
+  }
+
+  public static class Autocomplete.AddressStructure {
+    method @AnyThread @NonNull public static GeckoResult<List<Autocomplete.AddressStructure.Field>> getAddressStructure(@NonNull String);
+  }
+
+  public static interface Autocomplete.AddressStructure.Field {
+    method @AnyThread @NonNull default public String getId();
+    method @AnyThread @NonNull default public String getLocalizationKey();
+  }
+
+  public static class Autocomplete.AddressStructure.Field.SelectField implements Autocomplete.AddressStructure.Field {
+    ctor public SelectField(String, String, @NonNull String, @NonNull List<Autocomplete.AddressStructure.Field.SelectField.Option>);
+    field @NonNull public final String defaultValue;
+    field @NonNull public final List<Autocomplete.AddressStructure.Field.SelectField.Option> options;
+  }
+
+  public static class Autocomplete.AddressStructure.Field.SelectField.Option {
+    ctor public Option(@NonNull String, @NonNull String);
+    field @NonNull public final String key;
+    field @NonNull public final String value;
+  }
+
+  public static final class Autocomplete.AddressStructure.Field.TextField implements Autocomplete.AddressStructure.Field {
+    ctor public TextField(String, String);
   }
 
   public static class Autocomplete.CreditCard {
@@ -969,6 +995,7 @@ package org.mozilla.geckoview {
   @AnyThread public final class GeckoRuntimeSettings extends RuntimeSettings {
     method public boolean getAboutConfigEnabled();
     method public int getAllowInsecureConnections();
+    method public boolean getAppZygoteProcessEnabled();
     method @NonNull public String[] getArguments();
     method public boolean getAutomaticFontSizeAdjustment();
     method @NonNull public String getBannedPorts();
@@ -1105,6 +1132,7 @@ package org.mozilla.geckoview {
     ctor public Builder();
     method @NonNull public GeckoRuntimeSettings.Builder aboutConfigEnabled(boolean);
     method @NonNull public GeckoRuntimeSettings.Builder allowInsecureConnections(int);
+    method @NonNull public GeckoRuntimeSettings.Builder appZygoteProcessEnabled(boolean);
     method @NonNull public GeckoRuntimeSettings.Builder arguments(@NonNull String[]);
     method @NonNull public GeckoRuntimeSettings.Builder automaticFontSizeAdjustment(boolean);
     method @NonNull public GeckoRuntimeSettings.Builder configFilePath(@Nullable String);

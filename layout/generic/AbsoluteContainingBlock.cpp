@@ -935,6 +935,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     }
   }
 
+  // Assume we *are* overflowing the CB and if we find a fallback that doesn't
+  // overflow, we set this to false and break the loop.
+  bool isOverflowingCB = true;
+
   do {
     AutoFallbackStyleSetter fallback(aKidFrame, currentFallbackStyle);
     const nsRect usedCb = [&] {
@@ -956,10 +960,15 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       }
 
       if (!positionArea.IsNone()) {
-        return AnchorPositioningUtils::
-            AdjustAbsoluteContainingBlockRectForPositionArea(
-                aKidFrame, aDelegatingFrame, aOriginalContainingBlockRect,
-                aAnchorPosReferenceData, positionArea, tactic);
+        const auto defaultAnchorInfo = AnchorPositioningUtils::GetDefaultAnchor(
+            aKidFrame, false, aAnchorPosReferenceData);
+        if (defaultAnchorInfo.mRect) {
+          return AnchorPositioningUtils::
+              AdjustAbsoluteContainingBlockRectForPositionArea(
+                  *defaultAnchorInfo.mRect, aOriginalContainingBlockRect,
+                  aKidFrame->GetWritingMode(),
+                  aDelegatingFrame->GetWritingMode(), positionArea, tactic);
+        }
       }
 
       if (ViewportFrame* viewport = do_QueryFrame(aDelegatingFrame)) {
@@ -1184,6 +1193,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
     if (usedCb.Contains(aKidFrame->GetRect()) && aStatus.IsComplete()) {
       // We don't overflow our CB, no further fallback needed.
+      isOverflowingCB = false;
       break;
     }
 
@@ -1196,6 +1206,13 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     aKidFrame->AddStateBits(NS_FRAME_IS_DIRTY);
     aStatus.Reset();
   } while (true);
+
+  // If author asked for `position-visibility: no-overflow` and we overflow
+  // `usedCB`, treat as "strongly hidden".
+  aKidFrame->AddOrRemoveStateBits(
+      NS_FRAME_POSITION_VISIBILITY_HIDDEN,
+      isOverflowingCB && aKidFrame->StylePosition()->mPositionVisibility ==
+                             StylePositionVisibility::NO_OVERFLOW);
 
   if (currentFallbackIndex) {
     aKidFrame->SetProperty(nsIFrame::LastSuccessfulPositionFallback(),

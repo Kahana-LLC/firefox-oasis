@@ -63,6 +63,7 @@
 #include "nsTransportUtils.h"
 #include "sslerr.h"
 #include "SpeculativeTransaction.h"
+#include "mozilla/Preferences.h"
 
 //-----------------------------------------------------------------------------
 
@@ -3737,8 +3738,21 @@ nsILoadInfo::IPAddressSpace nsHttpTransaction::GetTargetIPAddressSpace() {
 bool nsHttpTransaction::AllowedToConnectToIpAddressSpace(
     nsILoadInfo::IPAddressSpace aTargetIpAddressSpace) {
   // skip checks if LNA feature is disabled
+
   if (!StaticPrefs::network_lna_enabled()) {
     return true;
+  }
+
+  // Skip LNA checks if domain is in skip list
+  if (mConnInfo && gIOService &&
+      gIOService->ShouldSkipDomainForLNA(mConnInfo->GetOrigin())) {
+    return true;
+  }
+
+  // Skip LNA checks entirely for WebSocket connections if websocket LNA is
+  // disabled
+  if (!StaticPrefs::network_lna_websocket_enabled() && IsWebsocketUpgrade()) {
+    return true;  // Allow all WebSocket connections
   }
 
   // store targetIpAddress space which is required later by nsHttpChannel for
@@ -3760,6 +3774,13 @@ bool nsHttpTransaction::AllowedToConnectToIpAddressSpace(
   // https://wicg.github.io/private-network-access/#private-network-request-heading
   // for private network access
   // XXX add link to LNA spec once it is published
+
+  // Skip LNA checks for private network to localhost if preference is enabled
+  if (StaticPrefs::network_lna_local_network_to_localhost_skip_checks() &&
+      mParentIPAddressSpace == nsILoadInfo::IPAddressSpace::Private &&
+      aTargetIpAddressSpace == nsILoadInfo::IPAddressSpace::Local) {
+    return true;  // Allow private->localhost access
+  }
 
   if (mozilla::net::IsLocalOrPrivateNetworkAccess(mParentIPAddressSpace,
                                                   aTargetIpAddressSpace)) {

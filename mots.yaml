@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2025-10-15T12:40:19.107213+00:00'
+updated_at: '2025-10-20T12:17:25.168604+00:00'
 export:
   path: ./docs/mots/index.rst
   format: rst
@@ -3042,6 +3042,7 @@ modules:
       - *nical
       - *teoxoy
       - *aleiserson
+      - *jnicol
     machine_name: core_webgpu_graphics_submodule
 
   - name: 'Core: WebRTC'
@@ -3533,15 +3534,16 @@ modules:
           review_group: desktop-theme-reviewers
         owners:
           - *dao
+          - *hjones
         peers:
           - *emilio
-          - *hjones
           - *itielyn8
           - *Julian
           - *jules
           - *kcochrane
           - *sfoster
           - *tgiles
+          - *mstriemer
         machine_name: desktop_theme
 
       - name: Desktop UI
@@ -3916,13 +3918,13 @@ modules:
             - *mconley
         owners:
           - *dao
+          - *sthompson
         peers:
           - *mak
           - *dwalker
           - *nikkis
           - *niklas
           - *jswinarton
-          - *sthompson
           - *sclements
           - *kcochrane
           - *jsudiaman
@@ -4632,5 +4634,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: e3c3d292cb701c56b1ebc1a13d31f6fd3aefd336
-  export: 0b0e7c64fea9c363b5bb2ec257efba8aedd5d81e
+  config: b7f0f9691c016a413b8cda97a949ebffccbca2ca
+  export: d34a6837e4c30f08861ebfd2e725de6fc3cd561a

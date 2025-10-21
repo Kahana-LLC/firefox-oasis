@@ -384,6 +384,7 @@
 #include "nsINodeList.h"
 #include "nsIObjectLoadingContent.h"
 #include "nsIObserverService.h"
+#include "nsIParentalControlsService.h"
 #include "nsIPermission.h"
 #include "nsIPrompt.h"
 #include "nsIPropertyBag2.h"
@@ -1358,7 +1359,8 @@ void Document::Shutdown() {
   }
 }
 
-Document::Document(const char* aContentType)
+Document::Document(const char* aContentType,
+                   mozilla::dom::LoadedAsData aLoadedAsData)
     : nsINode(nullptr),
       DocumentOrShadowRoot(this),
       mCharacterSet(WINDOWS_1252_ENCODING),
@@ -1375,13 +1377,13 @@ Document::Document(const char* aContentType)
       mUpgradeInsecureRequests(false),
       mUpgradeInsecurePreloads(false),
       mDevToolsWatchingDOMMutations(false),
+      mLoadedAsData(aLoadedAsData == LoadedAsData::AsData),
       mRenderingSuppressedForViewTransitions(false),
       mBidiEnabled(false),
       mMayNeedFontPrefsUpdate(true),
       mIsInitialDocumentInWindow(false),
       mIsEverInitialDocumentInWindow(false),
       mIgnoreDocGroupMismatches(false),
-      mLoadedAsData(false),
       mAddedToMemoryReportingAsDataDocument(false),
       mMayStartLayout(true),
       mHaveFiredTitleChange(false),
@@ -2052,8 +2054,8 @@ void Document::LoadEventFired() {
 
   // Release the JS bytecode cache from its wait on the load event, and
   // potentially dispatch the encoding of the bytecode.
-  if (ScriptLoader()) {
-    ScriptLoader()->LoadEventFired();
+  if (mScriptLoader) {
+    mScriptLoader->LoadEventFired();
   }
 }
 
@@ -2544,6 +2546,12 @@ void Document::AccumulatePageLoadTelemetry() {
       if (timeToRequestStart > zeroDuration) {
         mPageloadEventData.set_timeToRequestStart(
             static_cast<uint32_t>(timeToRequestStart.ToMilliseconds()));
+      } else {
+        // Speculative and pre-established connections may yield zero or
+        // slightly negative timeToRequestStart timings. We record these as zero
+        // to maintain consistent, non-negative timing data, while still
+        // capturing the impact of early connection establishment.
+        mPageloadEventData.set_timeToRequestStart(0);
       }
     }
 
@@ -3032,7 +3040,6 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
 
   // Force initialization.
   mOnloadBlocker = new OnloadBlocker();
-  mStyleImageLoader = new css::ImageLoader(this);
 
   mNodeInfoManager = new nsNodeInfoManager(this, aPrincipal);
 
@@ -3044,9 +3051,9 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
 
   NS_ASSERTION(OwnerDoc() == this, "Our nodeinfo is busted!");
 
-  mCSSLoader = new css::Loader(this);
-  // Assume we're not quirky, until we know otherwise
-  mCSSLoader->SetCompatibilityMode(eCompatibility_FullStandards);
+  if (!mLoadedAsData) {
+    CreateCSSAndStyleImageLoaders(false);
+  }
 
   // If after creation the owner js global is not set for a document
   // we use the default compartment for this document, instead of creating
@@ -3058,7 +3065,9 @@ nsresult Document::Init(nsIPrincipal* aPrincipal,
   mScopeObject = do_GetWeakReference(global);
   MOZ_ASSERT(mScopeObject);
 
-  mScriptLoader = new dom::ScriptLoader(this);
+  if (!mLoadedAsData) {
+    mScriptLoader = new dom::ScriptLoader(this);
+  }
 
   // we need to create a policy here so getting the policy within
   // ::Policy() can *always* return a non null policy
@@ -3529,7 +3538,9 @@ void Document::FillStyleSetDocumentSheets() {
 
 void Document::CompatibilityModeChanged() {
   MOZ_ASSERT(IsHTMLOrXHTML());
-  CSSLoader()->SetCompatibilityMode(mCompatMode);
+  if (mCSSLoader) {
+    mCSSLoader->SetCompatibilityMode(mCompatMode);
+  }
 
   if (mStyleSet) {
     mStyleSet->CompatibilityModeChanged();
@@ -3696,21 +3707,16 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
   SetReadyStateInternal(READYSTATE_LOADING);
 
   if (nsCRT::strcmp(kLoadAsData, aCommand) == 0) {
-    mLoadedAsData = true;
+    MOZ_RELEASE_ASSERT(mLoadedAsData);
     SetLoadedAsData(true, /* aConsiderForMemoryReporting */ true);
     // We need to disable script & style loading in this case.
     // We leave them disabled even in EndLoad(), and let anyone
     // who puts the document on display to worry about enabling.
-
-    // Do not load/process scripts when loading as data
-    ScriptLoader()->SetEnabled(false);
-
-    // styles
-    CSSLoader()->SetEnabled(
-        false);  // Do not load/process styles when loading as data
   } else if (nsCRT::strcmp("external-resource", aCommand) == 0) {
     // Allow CSS, but not scripts
-    ScriptLoader()->SetEnabled(false);
+    // TODO: Enforce this via the constructor and make mScriptLoader null here.
+    MOZ_ASSERT(mScriptLoader);
+    mScriptLoader->SetEnabled(false);
   }
 
   mMayStartLayout = false;
@@ -3887,7 +3893,7 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
 void Document::SetLoadedAsData(bool aLoadedAsData,
                                bool aConsiderForMemoryReporting) {
-  mLoadedAsData = aLoadedAsData;
+  MOZ_RELEASE_ASSERT(aLoadedAsData == mLoadedAsData);
   if (aConsiderForMemoryReporting) {
     nsIGlobalObject* global = GetScopeObject();
     if (global) {
@@ -4617,16 +4623,24 @@ void Document::SetPrincipals(nsIPrincipal* aNewPrincipal,
     }
   }
 
-  mScriptLoader->DeregisterFromCache();
-  mCSSLoader->DeregisterFromSheetCache();
+  if (mScriptLoader) {
+    mScriptLoader->DeregisterFromCache();
+  }
+  if (mCSSLoader) {
+    mCSSLoader->DeregisterFromSheetCache();
+  }
 
   mNodeInfoManager->SetDocumentPrincipal(aNewPrincipal);
   mPartitionedPrincipal = aNewPartitionedPrincipal;
 
   mCachedURLData = nullptr;
 
-  mCSSLoader->RegisterInSheetCache();
-  mScriptLoader->RegisterToCache();
+  if (mCSSLoader) {
+    mCSSLoader->RegisterInSheetCache();
+  }
+  if (mScriptLoader) {
+    mScriptLoader->RegisterToCache();
+  }
 
   RecomputeResistFingerprinting();
 
@@ -6876,7 +6890,7 @@ void Document::GetCookie(nsAString& aCookie, ErrorResult& aRv) {
   nsTArray<RefPtr<Cookie>> cookieList;
   bool stale = false;
   int64_t currentTimeInUsec = PR_Now();
-  int64_t currentTime = currentTimeInUsec / PR_USEC_PER_MSEC;
+  int64_t currentTimeInMSec = currentTimeInUsec / PR_USEC_PER_MSEC;
 
   // not having a cookie service isn't an error
   nsCOMPtr<nsICookieService> service =
@@ -6953,7 +6967,7 @@ void Document::GetCookie(nsAString& aCookie, ErrorResult& aRv) {
       }
 
       // check if the cookie has expired
-      if (cookie->Expiry() <= currentTime) {
+      if (cookie->ExpiryInMSec() <= currentTimeInMSec) {
         continue;
       }
 
@@ -7272,7 +7286,10 @@ Element* Document::GetActiveElement() {
 }
 
 Element* Document::GetCurrentScript() {
-  nsCOMPtr<Element> el(do_QueryInterface(ScriptLoader()->GetCurrentScript()));
+  if (!mScriptLoader) {
+    return nullptr;
+  }
+  nsCOMPtr<Element> el(do_QueryInterface(mScriptLoader->GetCurrentScript()));
   return el;
 }
 
@@ -8160,6 +8177,16 @@ void Document::RemoveAdditionalStyleSheet(additionalSheetType aType,
     }
     sheetRef->ClearAssociatedDocumentOrShadowRoot();
   }
+}
+
+void Document::CreateCSSAndStyleImageLoaders(bool aLazy) {
+  if (aLazy) {
+    PROFILER_MARKER_UNTYPED("LazyCreateCSSAndStyleImageLoaders", DOM,
+                            MarkerStack::Capture());
+  }
+  mStyleImageLoader = new css::ImageLoader(this);
+  mCSSLoader = new css::Loader(this);
+  mCSSLoader->SetCompatibilityMode(mCompatMode);
 }
 
 nsIGlobalObject* Document::GetScopeObject() const {
@@ -9421,7 +9448,7 @@ void Document::EnableStyleSheetsForSetInternal(const nsAString& aSheetSet,
     }
   }
   if (aUpdateCSSLoader) {
-    CSSLoader()->DocumentStyleSheetSetChanged();
+    EnsureCSSLoader().DocumentStyleSheetSetChanged();
   }
   if (EnsureStyleSet().StyleSheetsHaveChanged()) {
     ApplicableStylesChanged();
@@ -10101,7 +10128,9 @@ SMILAnimationController* Document::GetAnimationController() {
   // one and only SVG documents and the like will call this
   if (mAnimationController) return mAnimationController;
   // Refuse to create an Animation Controller for data documents.
-  if (mLoadedAsData) return nullptr;
+  if (mLoadedAsData) {
+    return nullptr;
+  }
 
   mAnimationController = new SMILAnimationController(this);
 
@@ -11857,6 +11886,34 @@ void Document::ProcessMETATag(HTMLMetaElement* aMetaElement) {
       SetHeaderData(nsGkAtoms::handheldFriendly, result);
     }
   }
+  // Check for Restricted To Adults meta tag
+  if (aMetaElement->AttrValueIs(kNameSpaceID_None, nsGkAtoms::name,
+                                nsGkAtoms::rating, eIgnoreCase)) {
+    if (aMetaElement->AttrValueIs(kNameSpaceID_None, nsGkAtoms::content,
+                                  nsGkAtoms::adult, eIgnoreCase) ||
+        aMetaElement->AttrValueIs(kNameSpaceID_None, nsGkAtoms::content,
+                                  nsGkAtoms::restrictToAdults, eIgnoreCase)) {
+      BrowsingContext* bc = GetBrowsingContext();
+      if (bc && bc->GetParentalControlsEnabled() && GetDocShell()) {
+        RefPtr<nsDocShell> docShell = nsDocShell::Cast(GetDocShell());
+        nsCOMPtr<nsIRunnable> redirect = NewRunnableMethod(
+            "Document::ProcessMETATag::DisplayRestrictedContentError", docShell,
+            &nsDocShell::DisplayRestrictedContentError);
+        nsContentUtils::AddScriptRunner(redirect.forget());
+      }
+    }
+  }
+}
+
+void Document::TerminateParserAndDisableScripts() {
+  if (mParser) {
+    Unused << mParser->Terminate();
+    MOZ_ASSERT(!mParser, "mParser should have been null'd out");
+  }
+
+  if (WindowContext* wc = GetWindowContext()) {
+    Unused << wc->SetAllowJavascript(false);
+  }
 }
 
 already_AddRefed<Element> Document::CreateElem(const nsAString& aName,
@@ -12234,8 +12291,9 @@ void Document::Destroy() {
     mASMJSExecutionTimer = nullptr;
     RecordExecutionTimeForAsmJS(this);
   }
-
-  ScriptLoader()->Destroy();
+  if (mScriptLoader) {
+    mScriptLoader->Destroy();
+  }
   SetScriptGlobalObject(nullptr);
   RemovedFromDocShell();
 
@@ -12961,8 +13019,10 @@ void Document::SuppressEventHandling(uint32_t aIncrease) {
       wgc->BlockBFCacheFor(BFCacheStatus::EVENT_HANDLING_SUPPRESSED);
     }
   }
-  for (uint32_t i = 0; i < aIncrease; ++i) {
-    ScriptLoader()->AddExecuteBlocker();
+  if (mScriptLoader) {
+    for (uint32_t i = 0; i < aIncrease; ++i) {
+      mScriptLoader->AddExecuteBlocker();
+    }
   }
 
   EnumerateSubDocuments([aIncrease](Document& aSubDoc) {
@@ -13267,6 +13327,9 @@ SheetPreloadStatus Document::PreloadStyle(
     const nsAString& aIntegrity, css::StylePreloadKind aKind,
     uint64_t aEarlyHintPreloaderId, const nsAString& aFetchPriority) {
   MOZ_ASSERT(aKind != css::StylePreloadKind::None);
+  if (!mCSSLoader) {
+    return SheetPreloadStatus::Errored;
+  }
 
   // The CSSLoader will retain this object after we return.
   nsCOMPtr<nsICSSLoaderObserver> obs = new StubCSSLoaderObserver();
@@ -13275,7 +13338,7 @@ SheetPreloadStatus Document::PreloadStyle(
       ReferrerInfo::CreateFromDocumentAndPolicyOverride(this, aReferrerPolicy);
 
   // Charset names are always ASCII.
-  auto result = CSSLoader()->LoadSheet(
+  auto result = mCSSLoader->LoadSheet(
       uri, aKind, aEncoding, referrerInfo, obs, aEarlyHintPreloaderId,
       Element::StringToCORSMode(aCrossOriginAttr), aNonce, aIntegrity,
       nsGenericHTMLElement::ToFetchPriority(aFetchPriority));
@@ -13287,12 +13350,6 @@ SheetPreloadStatus Document::PreloadStyle(
     return SheetPreloadStatus::AlreadyComplete;
   }
   return SheetPreloadStatus::InProgress;
-}
-
-RefPtr<StyleSheet> Document::LoadChromeSheetSync(nsIURI* uri) {
-  return CSSLoader()
-      ->LoadSheetSync(uri, css::eAuthorSheetFeatures)
-      .unwrapOr(nullptr);
 }
 
 void Document::ResetDocumentDirection() {
@@ -13353,7 +13410,9 @@ static void GetAndUnsuppressSubDocuments(
     Document& aDocument, nsTArray<nsCOMPtr<Document>>& aDocuments) {
   if (aDocument.EventHandlingSuppressed() > 0) {
     aDocument.DecreaseEventSuppression();
-    aDocument.ScriptLoader()->RemoveExecuteBlocker();
+    if (dom::ScriptLoader* loader = aDocument.GetScriptLoader()) {
+      loader->RemoveExecuteBlocker();
+    }
   }
   aDocuments.AppendElement(&aDocument);
   aDocument.EnumerateSubDocuments([&aDocuments](Document& aSubDoc) {
@@ -13452,7 +13511,7 @@ bool Document::HasBeenScrolledSince(
   return false;
 }
 
-bool Document::CanRewriteURL(nsIURI* aTargetURL) const {
+bool Document::CanRewriteURL(nsIURI* aTargetURL, bool aReportErrors) const {
   if (nsContentUtils::URIIsLocalFile(aTargetURL)) {
     // It's a file:// URI
     nsCOMPtr<nsIPrincipal> principal = NodePrincipal();
@@ -13471,8 +13530,8 @@ bool Document::CanRewriteURL(nsIURI* aTargetURL) const {
   // set docBaseURI arbitrarily to any domain.
   bool isPrivateWin =
       NodePrincipal()->OriginAttributesRef().IsPrivateBrowsing();
-  if (NS_FAILED(secMan->CheckSameOriginURI(mDocumentURI, aTargetURL, true,
-                                           isPrivateWin))) {
+  if (NS_FAILED(secMan->CheckSameOriginURI(mDocumentURI, aTargetURL,
+                                           aReportErrors, isPrivateWin))) {
     return false;
   }
 
@@ -13508,8 +13567,8 @@ Document* Document::GetTemplateContentsOwner() {
         u""_ns,   // aQualifiedName
         nullptr,  // aDoctype
         Document::GetDocumentURI(), Document::GetDocBaseURI(), NodePrincipal(),
-        true,          // aLoadedAsData
-        scriptObject,  // aEventObject
+        LoadedAsData::AsData,  // aLoadedAsData
+        scriptObject,          // aEventObject
         IsHTMLDocument() ? DocumentFlavor::HTML : DocumentFlavor::XML);
     NS_ENSURE_SUCCESS(rv, nullptr);
 
@@ -17022,9 +17081,10 @@ already_AddRefed<Document> Document::Constructor(const GlobalObject& aGlobal,
   }
 
   nsCOMPtr<Document> doc;
-  nsresult res = NS_NewDOMDocument(getter_AddRefs(doc), VoidString(), u""_ns,
-                                   nullptr, uri, uri, prin->GetPrincipal(),
-                                   true, global, DocumentFlavor::Plain);
+  nsresult res =
+      NS_NewDOMDocument(getter_AddRefs(doc), VoidString(), u""_ns, nullptr, uri,
+                        uri, prin->GetPrincipal(), LoadedAsData::AsData, global,
+                        DocumentFlavor::Plain);
   if (NS_FAILED(res)) {
     rv.Throw(res);
     return nullptr;
@@ -20647,9 +20707,9 @@ static already_AddRefed<Document> CreateHTMLDocument(GlobalObject& aGlobal,
   }
 
   nsCOMPtr<Document> doc;
-  aError = NS_NewHTMLDocument(
-      getter_AddRefs(doc), aGlobal.GetSubjectPrincipal(),
-      aGlobal.GetSubjectPrincipal(), /* aLoadedAsData */ true);
+  aError =
+      NS_NewHTMLDocument(getter_AddRefs(doc), aGlobal.GetSubjectPrincipal(),
+                         aGlobal.GetSubjectPrincipal(), LoadedAsData::AsData);
   if (aError.Failed()) {
     return nullptr;
   }

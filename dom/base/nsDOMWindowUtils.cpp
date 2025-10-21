@@ -934,24 +934,15 @@ nsresult nsDOMWindowUtils::SendTouchEventCommon(
 
   nsEventStatus status = nsEventStatus_eIgnore;
   if (aToWindow) {
-    RefPtr<PresShell> presShell;
-    nsView* view = nsContentUtils::GetViewToDispatchEvent(
-        presContext, getter_AddRefs(presShell));
-    if (!presShell || !view) {
-      return NS_ERROR_FAILURE;
-    }
-    *aPreventDefault = (status == nsEventStatus_eConsumeNoDefault);
-    return presShell->HandleEvent(view->GetFrame(), &event, false, &status);
-  }
-
-  if (aAsyncEnabled == AsyncEnabledOption::ASYNC_ENABLED ||
-      StaticPrefs::test_events_async_enabled()) {
+    RefPtr<PresShell> presShell = presContext->PresShell();
+    MOZ_TRY(presShell->HandleEvent(presShell->GetRootFrame(), &event, false,
+                                   &status));
+  } else if (aAsyncEnabled == AsyncEnabledOption::ASYNC_ENABLED ||
+             StaticPrefs::test_events_async_enabled()) {
     status = widget->DispatchInputEvent(&event).mContentStatus;
   } else {
-    nsresult rv = widget->DispatchEvent(&event, status);
-    NS_ENSURE_SUCCESS(rv, rv);
+    MOZ_TRY(widget->DispatchEvent(&event, status));
   }
-
   if (aPreventDefault) {
     *aPreventDefault = (status == nsEventStatus_eConsumeNoDefault);
   }
@@ -1288,8 +1279,12 @@ nsDOMWindowUtils::GetParsedStyleSheets(uint32_t* aSheets) {
   if (!doc) {
     return NS_ERROR_UNEXPECTED;
   }
-
-  *aSheets = doc->CSSLoader()->ParsedSheetCount();
+  css::Loader* cssLoader = doc->GetExistingCSSLoader();
+  if (cssLoader) {
+    *aSheets = cssLoader->ParsedSheetCount();
+  } else {
+    *aSheets = 0;
+  }
   return NS_OK;
 }
 

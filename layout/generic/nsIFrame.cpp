@@ -1243,7 +1243,7 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
   MaybeScheduleReflowSVGNonDisplayText(this);
 
   Document* doc = PresContext()->Document();
-  ImageLoader* loader = doc->StyleImageLoader();
+  ImageLoader& loader = doc->EnsureStyleImageLoader();
   // Continuing text frame doesn't initialize its continuation pointer before
   // reaching here for the first time, so we have to exclude text frames. This
   // doesn't affect correctness because text can't match selectors.
@@ -1268,12 +1268,12 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
       aOldComputedStyle ? &aOldComputedStyle->StyleBackground()->mImage
                         : nullptr;
   const nsStyleImageLayers* newLayers = &StyleBackground()->mImage;
-  AddAndRemoveImageAssociations(*loader, this, oldLayers, newLayers);
+  AddAndRemoveImageAssociations(loader, this, oldLayers, newLayers);
 
   oldLayers =
       aOldComputedStyle ? &aOldComputedStyle->StyleSVGReset()->mMask : nullptr;
   newLayers = &StyleSVGReset()->mMask;
-  AddAndRemoveImageAssociations(*loader, this, oldLayers, newLayers);
+  AddAndRemoveImageAssociations(loader, this, oldLayers, newLayers);
 
   const nsStyleDisplay* disp = StyleDisplay();
   bool handleStickyChange = false;
@@ -1390,10 +1390,10 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
   if (oldBorderImage != newBorderImage) {
     // stop and restart the image loading/notification
     if (oldBorderImage && HasImageRequest()) {
-      loader->DisassociateRequestFromFrame(oldBorderImage, this);
+      loader.DisassociateRequestFromFrame(oldBorderImage, this);
     }
     if (newBorderImage) {
-      loader->AssociateRequestToFrame(newBorderImage, this);
+      loader.AssociateRequestToFrame(newBorderImage, this);
     }
   }
 
@@ -1412,10 +1412,10 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
   imgIRequest* newShapeImage = GetShapeImageRequest(Style());
   if (oldShapeImage != newShapeImage) {
     if (oldShapeImage && HasImageRequest()) {
-      loader->DisassociateRequestFromFrame(oldShapeImage, this);
+      loader.DisassociateRequestFromFrame(oldShapeImage, this);
     }
     if (newShapeImage) {
-      loader->AssociateRequestToFrame(
+      loader.AssociateRequestToFrame(
           newShapeImage, this,
           ImageLoader::Flags::
               RequiresReflowOnFirstFrameCompleteAndLoadEventBlocking);
@@ -4180,8 +4180,9 @@ static bool ShouldSkipFrame(nsDisplayListBuilder* aBuilder,
       !aFrame->IsSelected()) {
     return true;
   }
-  static const nsFrameState skipFlags =
-      NS_FRAME_TOO_DEEP_IN_FRAME_TREE | NS_FRAME_IS_NONDISPLAY;
+  static const nsFrameState skipFlags = NS_FRAME_TOO_DEEP_IN_FRAME_TREE |
+                                        NS_FRAME_IS_NONDISPLAY |
+                                        NS_FRAME_POSITION_VISIBILITY_HIDDEN;
   if (aFrame->HasAnyStateBits(skipFlags)) {
     return true;
   }
@@ -6132,10 +6133,8 @@ bool nsIFrame::AssociateImage(const StyleImage& aImage) {
     return false;
   }
 
-  mozilla::css::ImageLoader* loader =
-      PresContext()->Document()->StyleImageLoader();
-
-  loader->AssociateRequestToFrame(req, this);
+  PresContext()->Document()->EnsureStyleImageLoader().AssociateRequestToFrame(
+      req, this);
   return true;
 }
 
@@ -6145,10 +6144,10 @@ void nsIFrame::DisassociateImage(const StyleImage& aImage) {
     return;
   }
 
-  mozilla::css::ImageLoader* loader =
-      PresContext()->Document()->StyleImageLoader();
-
-  loader->DisassociateRequestFromFrame(req, this);
+  PresContext()
+      ->Document()
+      ->EnsureStyleImageLoader()
+      .DisassociateRequestFromFrame(req, this);
 }
 
 StyleImageRendering nsIFrame::UsedImageRendering() const {
@@ -7125,7 +7124,7 @@ LogicalSize nsIFrame::ComputeAbsolutePosAutoSize(
   const auto boxSizingAdjust = stylePos->mBoxSizing == StyleBoxSizing::Border
                                    ? aBorderPadding
                                    : LogicalSize(aWM);
-  auto shouldStretch = [](StyleSelfAlignment aAlignment, const nsIFrame* aFrame,
+  auto shouldStretch = [](StyleAlignFlags aAlignment, const nsIFrame* aFrame,
                           bool aStartIsAuto, bool aEndIsAuto) {
     if (aStartIsAuto || aEndIsAuto) {
       // Note(dshin, bug 1930427): This is not part of the current spec [1];
@@ -7139,13 +7138,13 @@ LogicalSize nsIFrame::ComputeAbsolutePosAutoSize(
       return false;
     }
     // Don't care about flag bits for auto-sizing.
-    aAlignment &= ~StyleSelfAlignment::FLAG_BITS;
+    aAlignment &= ~StyleAlignFlags::FLAG_BITS;
 
-    if (aAlignment == StyleSelfAlignment::STRETCH) {
+    if (aAlignment == StyleAlignFlags::STRETCH) {
       return true;
     }
 
-    if (aAlignment == StyleSelfAlignment::NORMAL) {
+    if (aAlignment == StyleAlignFlags::NORMAL) {
       // Some replaced elements behave as semi-replaced elements - we want them
       // to stretch (See bug 1740580).
       return !aFrame->HasReplacedSizing() && !aFrame->IsTableWrapperFrame();
@@ -7160,15 +7159,15 @@ LogicalSize nsIFrame::ComputeAbsolutePosAutoSize(
   // Self alignment properties translate `auto` to normal for this purpose.
   // https://drafts.csswg.org/css-align-3/#valdef-justify-self-auto
   const auto inlineAlignSelf = parentWM.IsOrthogonalTo(aWM)
-                                   ? stylePos->UsedAlignSelf(nullptr)._0
-                                   : stylePos->UsedJustifySelf(nullptr)._0;
+                                   ? stylePos->UsedAlignSelf(nullptr)
+                                   : stylePos->UsedJustifySelf(nullptr);
   const auto blockAlignSelf = parentWM.IsOrthogonalTo(aWM)
-                                  ? stylePos->UsedJustifySelf(nullptr)._0
-                                  : stylePos->UsedAlignSelf(nullptr)._0;
+                                  ? stylePos->UsedJustifySelf(nullptr)
+                                  : stylePos->UsedAlignSelf(nullptr);
   const auto iShouldStretch = shouldStretch(
-      inlineAlignSelf, this, iStartOffsetIsAuto, iEndOffsetIsAuto);
-  const auto bShouldStretch =
-      shouldStretch(blockAlignSelf, this, bStartOffsetIsAuto, bEndOffsetIsAuto);
+      inlineAlignSelf._0, this, iStartOffsetIsAuto, iEndOffsetIsAuto);
+  const auto bShouldStretch = shouldStretch(
+      blockAlignSelf._0, this, bStartOffsetIsAuto, bEndOffsetIsAuto);
   const auto iSizeIsAuto = styleISize->IsAuto();
   // Note(dshin, bug 1789477): `auto` in the context of abs-element uses
   // stretch-fit sizing, given specific alignment conditions [1]. Effectively,
@@ -7902,14 +7901,10 @@ nsRect nsIFrame::GetScreenRectInAppUnits() const {
         parentScreenRectAppUnits.TopLeft() + rootFrameOffsetInParent;
     rootScreenPos.x = NS_round(parentScale * rootPt.x);
     rootScreenPos.y = NS_round(parentScale * rootPt.y);
-  } else {
-    nsCOMPtr<nsIWidget> rootWidget =
-        presContext->PresShell()->GetViewManager()->GetRootWidget();
-    if (rootWidget) {
-      LayoutDeviceIntPoint rootDevPx = rootWidget->WidgetToScreenOffset();
-      rootScreenPos.x = presContext->DevPixelsToAppUnits(rootDevPx.x);
-      rootScreenPos.y = presContext->DevPixelsToAppUnits(rootDevPx.y);
-    }
+  } else if (nsCOMPtr<nsIWidget> rootWidget = presContext->GetRootWidget()) {
+    LayoutDeviceIntPoint rootDevPx = rootWidget->WidgetToScreenOffset();
+    rootScreenPos.x = presContext->DevPixelsToAppUnits(rootDevPx.x);
+    rootScreenPos.y = presContext->DevPixelsToAppUnits(rootDevPx.y);
   }
 
   return nsRect(rootScreenPos + GetOffsetTo(rootFrame), GetSize());
@@ -7938,7 +7933,7 @@ void nsIFrame::GetOffsetFromView(nsPoint& aOffset, nsView** aView) const {
 
 nsIWidget* nsIFrame::GetNearestWidget() const {
   if (!HasAnyStateBits(NS_FRAME_IN_POPUP)) {
-    return PresShell()->GetViewManager()->GetRootWidget();
+    return PresContext()->GetRootWidget();
   }
   nsPoint unused;
   return GetNearestWidget(unused);
@@ -7974,7 +7969,7 @@ nsIWidget* nsIFrame::GetNearestWidget(nsPoint& aOffset) const {
       break;
     }
   } while (true);
-  return PresShell()->GetViewManager()->GetRootWidget();
+  return PresContext()->GetRootWidget();
 }
 
 Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,

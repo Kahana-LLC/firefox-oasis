@@ -2427,7 +2427,7 @@ var gUnifiedExtensions = {
       );
       document.l10n.setAttributes(
         emptyStateBox.querySelector("description"),
-        "unified-extensions-empty-content-explain-enable"
+        "unified-extensions-empty-content-explain-enable2"
       );
       emptyStateBox.hidden = false;
       this.isAtLeastOneExtensionWithPBMOptIn().then(result => {
@@ -2436,7 +2436,7 @@ var gUnifiedExtensions = {
         if (!result) {
           document.l10n.setAttributes(
             emptyStateBox.querySelector("description"),
-            "unified-extensions-empty-content-explain-manage"
+            "unified-extensions-empty-content-explain-manage2"
           );
         }
       });
@@ -2451,8 +2451,8 @@ var gUnifiedExtensions = {
           document.l10n.setAttributes(
             emptyStateBox.querySelector("description"),
             disabledExtensionsInfo.isAnyEnableable
-              ? "unified-extensions-empty-content-explain-enable"
-              : "unified-extensions-empty-content-explain-manage"
+              ? "unified-extensions-empty-content-explain-enable2"
+              : "unified-extensions-empty-content-explain-manage2"
           );
           emptyStateBox.hidden = false;
         } else if (!policies.length) {
@@ -2485,6 +2485,15 @@ var gUnifiedExtensions = {
       "#unified-extensions-messages-container"
     );
 
+    if (Services.appinfo.inSafeMode) {
+      this._messageBarSafemode ??= this._makeMessageBar({
+        messageBarFluentId: "unified-extensions-notice-safe-mode",
+        supportPage: "diagnose-firefox-issues-using-troubleshoot-mode",
+        type: "info",
+      });
+      container.prepend(this._messageBarSafemode);
+    } // No "else" case; inSafeMode flag is fixed at browser startup.
+
     if (this.blocklistAttentionInfo?.shouldShow) {
       this._messageBarBlocklist = this._createBlocklistMessageBar(container);
     } else {
@@ -2500,6 +2509,8 @@ var gUnifiedExtensions = {
           messageBarFluentId:
             "unified-extensions-mb-quarantined-domain-message-3",
           supportPage: "quarantined-domains",
+          supportPageFluentId:
+            "unified-extensions-mb-quarantined-domain-learn-more",
           dismissible: false,
         });
         this._messageBarQuarantinedDomain
@@ -3132,6 +3143,7 @@ var gUnifiedExtensions = {
     messageBarFluentId,
     messageBarFluentArgs,
     supportPage = null,
+    supportPageFluentId,
     linkToAboutAddons = false,
     type = "warning",
   }) {
@@ -3173,11 +3185,9 @@ var gUnifiedExtensions = {
         is: "moz-support-link",
       });
       supportUrl.setAttribute("support-page", supportPage);
-      document.l10n.setAttributes(
-        supportUrl,
-        "unified-extensions-mb-quarantined-domain-learn-more"
-      );
-      supportUrl.setAttribute("data-l10n-attrs", "aria-label");
+      if (supportPageFluentId) {
+        document.l10n.setAttributes(supportUrl, supportPageFluentId);
+      }
       supportUrl.setAttribute("slot", "support-link");
 
       messageBar.append(supportUrl);

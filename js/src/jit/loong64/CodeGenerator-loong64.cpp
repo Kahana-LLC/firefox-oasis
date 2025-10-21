@@ -153,7 +153,7 @@ class js::jit::OutOfLineTableSwitch
   }
 
  public:
-  OutOfLineTableSwitch(MTableSwitch* mir) : mir_(mir) {}
+  explicit OutOfLineTableSwitch(MTableSwitch* mir) : mir_(mir) {}
 
   MTableSwitch* mir() const { return mir_; }
 
@@ -1580,41 +1580,6 @@ void CodeGenerator::visitWasmTruncateToInt32(LWasmTruncateToInt32* lir) {
   }
 
   masm.bind(ool->rejoin());
-}
-
-void CodeGenerator::visitCopySignF(LCopySignF* ins) {
-  FloatRegister lhs = ToFloatRegister(ins->lhs());
-  FloatRegister rhs = ToFloatRegister(ins->rhs());
-  FloatRegister output = ToFloatRegister(ins->output());
-
-  Register lhsi = ToRegister(ins->temp0());
-  Register rhsi = ToRegister(ins->temp1());
-
-  masm.moveFromFloat32(lhs, lhsi);
-  masm.moveFromFloat32(rhs, rhsi);
-
-  // Combine.
-  masm.as_bstrins_w(rhsi, lhsi, 30, 0);
-
-  masm.moveToFloat32(rhsi, output);
-}
-
-void CodeGenerator::visitCopySignD(LCopySignD* ins) {
-  FloatRegister lhs = ToFloatRegister(ins->lhs());
-  FloatRegister rhs = ToFloatRegister(ins->rhs());
-  FloatRegister output = ToFloatRegister(ins->output());
-
-  Register lhsi = ToRegister(ins->temp0());
-  Register rhsi = ToRegister(ins->temp1());
-
-  // Manipulate high words of double inputs.
-  masm.moveFromDoubleHi(lhs, lhsi);
-  masm.moveFromDoubleHi(rhs, rhsi);
-
-  // Combine.
-  masm.as_bstrins_w(rhsi, lhsi, 30, 0);
-
-  masm.moveToDoubleHi(rhsi, output);
 }
 
 void CodeGenerator::visitTestDAndBranch(LTestDAndBranch* test) {

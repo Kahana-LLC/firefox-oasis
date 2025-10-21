@@ -185,7 +185,7 @@ XPCOMUtils.defineLazyServiceGetter(
   lazy,
   "idleService",
   "@mozilla.org/widget/useridleservice;1",
-  "nsIUserIdleService"
+  Ci.nsIUserIdleService
 );
 
 XPCOMUtils.defineLazyServiceGetter(
@@ -2630,6 +2630,14 @@ export class BackupService extends EventTarget {
       osVersion: Services.sysinfo.getProperty("version"),
       legacyClientID: await lazy.ClientID.getClientID(),
       profileGroupID: await lazy.ClientID.getProfileGroupID(),
+      healthTelemetryEnabled: Services.prefs.getBoolPref(
+        "datareporting.healthreport.uploadEnabled",
+        false
+      ),
+      usageTelemetryEnabled: Services.prefs.getBoolPref(
+        "datareporting.usage.uploadEnabled",
+        false
+      ),
     };
 
     let fxaState = lazy.UIState.get();

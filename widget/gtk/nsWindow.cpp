@@ -1117,29 +1117,23 @@ void nsWindow::ResizeInt(const Maybe<LayoutDeviceIntPoint>& aMove,
   NativeMoveResize(moved, resized);
 }
 
-void nsWindow::Resize(double aWidth, double aHeight, bool aRepaint) {
-  double scale =
-      BoundsUseDesktopPixels() ? GetDesktopToDeviceScale().scale : 1.0;
-  LOG("nsWindow::Resize %.2f x %.2f (scaled %.2f x %.2f)", aWidth, aHeight,
-      scale * aWidth, scale * aHeight);
-
-  auto size = LayoutDeviceIntSize::Round(scale * aWidth, scale * aHeight);
-
+void nsWindow::Resize(const DesktopSize& aSize, bool aRepaint) {
+  auto size = LayoutDeviceIntSize::Round(aSize * GetDesktopToDeviceScale());
+  LOG("nsWindow::Resize %s (scaled %s)", ToString(aSize).c_str(),
+      ToString(size).c_str());
   ResizeInt(Nothing(), size);
 }
 
-void nsWindow::Resize(double aX, double aY, double aWidth, double aHeight,
-                      bool aRepaint) {
-  double scale =
-      BoundsUseDesktopPixels() ? GetDesktopToDeviceScale().scale : 1.0;
-  auto size = LayoutDeviceIntSize::Round(scale * aWidth, scale * aHeight);
-  auto topLeft = LayoutDeviceIntPoint::Round(scale * aX, scale * aY);
+void nsWindow::Resize(const DesktopRect& aRect, bool aRepaint) {
+  auto size =
+      LayoutDeviceIntSize::Round(aRect.Size() * GetDesktopToDeviceScale());
+  auto topLeft =
+      LayoutDeviceIntPoint::Round(aRect.TopLeft() * GetDesktopToDeviceScale());
 
-  LOG("nsWindow::Resize [%.2f,%.2f] -> [%.2f x %.2f] scaled [%.2f,%.2f] -> "
-      "[%.2f x %.2f] "
-      "repaint %d\n",
-      aX, aY, aWidth, aHeight, scale * aX, scale * aY, scale * aWidth,
-      scale * aHeight, aRepaint);
+  LOG("nsWindow::Resize [%.2f,%.2f] -> [%.2f x %.2f] scaled [%d,%d] -> "
+      "[%d x %d] repaint %d\n",
+      aRect.x, aRect.y, aRect.width, aRect.height, topLeft.x.value,
+      topLeft.y.value, size.width, size.height, aRepaint);
 
   ResizeInt(Some(topLeft), size);
 }
@@ -1148,11 +1142,9 @@ void nsWindow::Enable(bool aState) { mEnabled = aState; }
 
 bool nsWindow::IsEnabled() const { return mEnabled; }
 
-void nsWindow::Move(double aX, double aY) {
-  double scale =
-      BoundsUseDesktopPixels() ? GetDesktopToDeviceScale().scale : 1.0;
-  const LayoutDeviceIntPoint request(NSToIntRound(aX * scale),
-                                     NSToIntRound(aY * scale));
+void nsWindow::Move(const DesktopPoint& aTopLeft) {
+  auto request =
+      LayoutDeviceIntPoint::Round(aTopLeft * GetDesktopToDeviceScale());
   LOG("nsWindow::Move to %d x %d\n", request.x.value, request.y.value);
 
   if (mSizeMode != nsSizeMode_Normal && IsTopLevelWidget()) {
@@ -6072,9 +6064,8 @@ void nsWindow::ConfigureCompositor() {
 }
 
 nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
-                          widget::InitData* aInitData) {
-  MOZ_DIAGNOSTIC_ASSERT(!aInitData ||
-                        aInitData->mWindowType != WindowType::Invisible);
+                          const widget::InitData& aInitData) {
+  MOZ_DIAGNOSTIC_ASSERT(aInitData.mWindowType != WindowType::Invisible);
 
 #ifdef ACCESSIBILITY
   // Send a DBus message to check whether a11y is enabled
@@ -6107,8 +6098,8 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
   mLastMoveRequest = mBounds.TopLeft();
 
   const bool popupNeedsAlphaVisual =
-      mWindowType == WindowType::Popup && aInitData &&
-      aInitData->mTransparencyMode == TransparencyMode::Transparent;
+      mWindowType == WindowType::Popup &&
+      aInitData.mTransparencyMode == TransparencyMode::Transparent;
 
   // Figure out our parent window.
   auto* parentnsWindow = static_cast<nsWindow*>(aParent);
@@ -6122,9 +6113,9 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
     return NS_ERROR_FAILURE;
   }
 
-  mAlwaysOnTop = aInitData && aInitData->mAlwaysOnTop;
-  mIsAlert = aInitData && aInitData->mIsAlert;
-  mIsDragPopup = aInitData && aInitData->mIsDragPopup;
+  mAlwaysOnTop = aInitData.mAlwaysOnTop;
+  mIsAlert = aInitData.mIsAlert;
+  mIsDragPopup = aInitData.mIsDragPopup;
 
   // For popups, use the standard GtkWindowType GTK_WINDOW_POPUP,
   // which will use a Window with the override-redirect attribute
@@ -6133,7 +6124,6 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
   // popup window position.
   GtkWindowType type = GTK_WINDOW_TOPLEVEL;
   if (mWindowType == WindowType::Popup) {
-    MOZ_ASSERT(aInitData);
     type = GTK_WINDOW_POPUP;
   }
   mShell = gtk_window_new(type);
@@ -6221,7 +6211,6 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
       LOG("  set parent window [%p]\n", parentnsWindow);
     }
   } else if (mWindowType == WindowType::Popup) {
-    MOZ_ASSERT(aInitData);
     mGtkWindowRoleName = "Popup";
 
     LOG("  nsWindow::Create() Popup");
@@ -6348,7 +6337,6 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
   }
 
   if (mWindowType == WindowType::Popup) {
-    MOZ_ASSERT(aInitData);
     // gdk does not automatically set the cursor for "temporary"
     // windows, which are what gtk uses for popups.
 

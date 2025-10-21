@@ -453,6 +453,8 @@ class CanonicalBrowsingContext final : public BrowsingContext {
 
   bool CanOpenModalPicker();
 
+  static bool ShouldEnforceParentalControls();
+
  protected:
   // Called when the browsing context is being discarded.
   void CanonicalDiscard();
@@ -581,6 +583,9 @@ class CanonicalBrowsingContext final : public BrowsingContext {
 
   already_AddRefed<nsDocShellLoadState> CreateLoadInfo(
       SessionHistoryEntry* aEntry);
+
+  void GetContiguousEntriesForLoad(LoadingSessionHistoryInfo& aLoadingInfo,
+                                   const RefPtr<SessionHistoryEntry>& aEntry);
 
   // XXX(farre): Store a ContentParent pointer here rather than mProcessId?
   // Indicates which process owns the docshell.

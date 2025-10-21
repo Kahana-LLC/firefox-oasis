@@ -51,11 +51,9 @@ ipprotection-connection-status-off =
 # When VPN is toggled on
 ipprotection-toggle-active =
   .aria-label = Turn VPN off
-  .title = Toggle set to VPN on
 # When VPN is toggled off
 ipprotection-toggle-inactive =
   .aria-label = Turn VPN on
-  .title = Toggle set to VPN off
 
 # Location refers to the VPN server geographical position.
 ipprotection-location-title =
@@ -75,5 +73,12 @@ sign-in-vpn = Next
 ipprotection-message-generic-error =
   .heading = Couldn’t connect to VPN
   .message = Try again in a few minutes.
+
+## IP Protection Settings
+
+ip-protection-description =
+  .label = { -firefox-vpn-brand-name }
+  .description = Hides your location and adds extra encryption to your browsing in { -brand-short-name }.
+ip-protection-learn-more = Learn more
 
 ##

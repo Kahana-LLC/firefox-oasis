@@ -43,6 +43,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   TelemetryEnvironment: "resource://gre/modules/TelemetryEnvironment.sys.mjs",
   UTEventReporting: "resource://newtab/lib/UTEventReporting.sys.mjs",
   NewTabContentPing: "resource://newtab/lib/NewTabContentPing.sys.mjs",
+  NewTabGleanUtils: "resource://newtab/lib/NewTabGleanUtils.sys.mjs",
   NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
 });
@@ -134,15 +135,18 @@ const PREF_SURFACE_ID = "telemetry.surfaceId";
 const CONTENT_PING_VERSION = 2;
 
 const ACTIVITY_STREAM_PREF_BRANCH = "browser.newtabpage.activity-stream.";
+
 const NEWTAB_PING_PREFS = {
   showSearch: Glean.newtabSearch.enabled,
   "feeds.topsites": Glean.topsites.enabled,
   [PREF_SHOW_SPONSORED_TOPSITES]: Glean.topsites.sponsoredEnabled,
+  "feeds.section.highlights": Glean.newtab.highlightsEnabled,
   "feeds.section.topstories": Glean.pocket.enabled,
   [PREF_SHOW_SPONSORED_STORIES]: Glean.pocket.sponsoredStoriesEnabled,
   topSitesRows: Glean.topsites.rows,
   showWeather: Glean.newtab.weatherEnabled,
 };
+
 const TOP_SITES_BLOCKED_SPONSORS_PREF = "browser.topsites.blockedSponsors";
 const TOPIC_SELECTION_SELECTED_TOPICS_PREF =
   "browser.newtabpage.activity-stream.discoverystream.topicSelection.selectedTopics";
@@ -157,6 +161,7 @@ export class TelemetryFeed {
     this._privateRandomContentTelemetryProbablityValues = {};
 
     this.newtabContentPing = new lazy.NewTabContentPing();
+    this._initialized = false;
 
     XPCOMUtils.defineLazyPreferenceGetter(
       this,
@@ -244,11 +249,20 @@ export class TelemetryFeed {
   }
 
   init() {
+    // TODO: It looks like (at least) browser_newtab_glean.js and
+    // browser_newtab_ping.js depend on most of the following to be executed
+    // even if init() is called more than once. That feels fragile.
+
     this._beginObservingNewtabPingPrefs();
-    Services.obs.addObserver(
-      this.browserOpenNewtabStart,
-      "browser-open-newtab-start"
-    );
+
+    if (!this._initialized) {
+      this._initialized = true;
+      Services.obs.addObserver(
+        this.browserOpenNewtabStart,
+        "browser-open-newtab-start"
+      );
+    }
+
     // Set two scalars for the "deletion-request" ping (See bug 1602064 and 1729474)
     Glean.deletionRequest.impressionId.set(this._impressionId);
     if (!lazy.ContextId.rotationEnabled) {
@@ -272,9 +286,7 @@ export class TelemetryFeed {
   }
 
   browserOpenNewtabStart() {
-    // This shim can be removed once Firefox 144 makes it to the release
-    // channel.
-    let now = ChromeUtils.now?.() || Cu.now();
+    let now = ChromeUtils.now();
     this._browserOpenNewtabStart = Math.round(this.processStartTs + now);
 
     ChromeUtils.addProfilerMarker(
@@ -514,9 +526,7 @@ export class TelemetryFeed {
     }
 
     if (session.perf.visibility_event_rcvd_ts) {
-      // @backward-compat { version 144 } This newtab train-hop compatibility
-      // shim can be removed once Firefox 144 makes it to the release channel.
-      let absNow = this.processStartTs + (ChromeUtils.now?.() || Cu.now());
+      let absNow = this.processStartTs + ChromeUtils.now();
       session.session_duration = Math.round(
         absNow - session.perf.visibility_event_rcvd_ts
       );
@@ -2143,7 +2153,17 @@ export class TelemetryFeed {
     }
   }
 
-  _setNewtabPrefMetrics(fullPrefName, isChanged) {
+  async _setNewtabPrefMetrics(fullPrefName, isChanged) {
+    // @backward-compat { version 146 } This newtab train-hop compatibility
+    // shim can be removed once Firefox 146 makes it to the release channel.
+    const is146AndUp =
+      Services.vc.compare(AppConstants.MOZ_APP_VERSION, "146.0a1") >= 0;
+    if (!is146AndUp) {
+      await lazy.NewTabGleanUtils.registrationDone;
+      NEWTAB_PING_PREFS["feeds.section.highlights"] =
+        Glean.newtab.highlightsEnabled;
+    }
+
     const pref = fullPrefName.slice(ACTIVITY_STREAM_PREF_BRANCH.length);
     if (!Object.hasOwn(NEWTAB_PING_PREFS, pref)) {
       return;
@@ -2202,15 +2222,12 @@ export class TelemetryFeed {
   uninit() {
     this._stopObservingNewtabPingPrefs();
     this.newtabContentPing.uninit();
-
-    try {
+    if (this._initialized) {
       Services.obs.removeObserver(
         this.browserOpenNewtabStart,
         "browser-open-newtab-start"
       );
-    } catch (e) {
-      // Operation can fail when uninit is called before
-      // init has finished setting up the observer
+      this._initialized = false;
     }
 
     // TODO: Send any unfinished sessions

@@ -120,14 +120,11 @@ void HeadlessWidget::Destroy() {
 
 nsresult HeadlessWidget::Create(nsIWidget* aParent,
                                 const LayoutDeviceIntRect& aRect,
-                                widget::InitData* aInitData) {
+                                const widget::InitData& aInitData) {
   BaseCreate(aParent, aInitData);
-
   mBounds = aRect;
   mRestoreBounds = aRect;
-
-  mAlwaysOnTop = aInitData && aInitData->mAlwaysOnTop;
-
+  mAlwaysOnTop = aInitData.mAlwaysOnTop;
   return NS_OK;
 }
 
@@ -203,20 +200,17 @@ void HeadlessWidget::Enable(bool aState) { mEnabled = aState; }
 
 bool HeadlessWidget::IsEnabled() const { return mEnabled; }
 
-void HeadlessWidget::Move(double aX, double aY) {
-  LOG(("HeadlessWidget::Move [%p] %f %f\n", (void*)this, aX, aY));
+void HeadlessWidget::Move(const DesktopPoint& aPoint) {
+  LOG(("HeadlessWidget::Move [%p] %f %f\n", this, aPoint.x.value,
+       aPoint.y.value));
 
-  double scale =
-      BoundsUseDesktopPixels() ? GetDesktopToDeviceScale().scale : 1.0;
-  int32_t x = NSToIntRound(aX * scale);
-  int32_t y = NSToIntRound(aY * scale);
-
+  auto topLeft =
+      LayoutDeviceIntPoint::Round(aPoint * GetDesktopToDeviceScale());
   if (mWindowType == WindowType::TopLevel ||
       mWindowType == WindowType::Dialog) {
     SetSizeMode(nsSizeMode_Normal);
   }
-
-  MoveInternal(x, y);
+  MoveInternal(topLeft.x, topLeft.y);
 }
 
 void HeadlessWidget::MoveInternal(int32_t aX, int32_t aY) {
@@ -254,9 +248,9 @@ void HeadlessWidget::SetCompositorWidgetDelegate(
   }
 }
 
-void HeadlessWidget::Resize(double aWidth, double aHeight, bool aRepaint) {
-  int32_t width = NSToIntRound(aWidth);
-  int32_t height = NSToIntRound(aHeight);
+void HeadlessWidget::Resize(const DesktopSize& aSize, bool aRepaint) {
+  int32_t width = NSToIntRound(aSize.width);
+  int32_t height = NSToIntRound(aSize.height);
   ResizeInternal(width, height, aRepaint);
 }
 
@@ -266,8 +260,7 @@ void HeadlessWidget::ResizeInternal(int32_t aWidth, int32_t aHeight,
   mBounds.SizeTo(LayoutDeviceIntSize(aWidth, aHeight));
 
   if (mCompositorWidget) {
-    mCompositorWidget->NotifyClientSizeChanged(
-        LayoutDeviceIntSize(mBounds.Width(), mBounds.Height()));
+    mCompositorWidget->NotifyClientSizeChanged(mBounds.Size());
   }
   if (mWidgetListener) {
     mWidgetListener->WindowResized(this, mBounds.Width(), mBounds.Height());
@@ -278,10 +271,12 @@ void HeadlessWidget::ResizeInternal(int32_t aWidth, int32_t aHeight,
   }
 }
 
-void HeadlessWidget::Resize(double aX, double aY, double aWidth, double aHeight,
-                            bool aRepaint) {
-  MoveInternal(NSToIntRound(aX), NSToIntRound(aY));
-  Resize(aWidth, aHeight, aRepaint);
+void HeadlessWidget::Resize(const DesktopRect& aRect, bool aRepaint) {
+  auto tl =
+      LayoutDeviceIntPoint::Round(aRect.TopLeft() * GetDesktopToDeviceScale());
+  // Intentionally to avoid SetSizeMode() call in Move().
+  MoveInternal(tl.x, tl.y);
+  Resize(aRect.Size(), aRepaint);
 }
 
 void HeadlessWidget::SetSizeMode(nsSizeMode aMode) {

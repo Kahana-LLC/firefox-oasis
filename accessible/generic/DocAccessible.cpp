@@ -68,7 +68,8 @@ static nsStaticAtom* const kRelationAttrs[] = {
     nsGkAtoms::aria_controls,     nsGkAtoms::aria_flowto,
     nsGkAtoms::aria_errormessage, nsGkAtoms::_for,
     nsGkAtoms::control,           nsGkAtoms::popovertarget,
-    nsGkAtoms::commandfor,        nsGkAtoms::aria_activedescendant};
+    nsGkAtoms::commandfor,        nsGkAtoms::aria_activedescendant,
+    nsGkAtoms::aria_actions};
 
 static const uint32_t kRelationAttrsLen = std::size(kRelationAttrs);
 
@@ -1183,13 +1184,9 @@ void* DocAccessible::GetNativeWindow() const {
   if (!mPresShell) {
     return nullptr;
   }
-
-  nsViewManager* vm = mPresShell->GetViewManager();
-  if (!vm) return nullptr;
-
-  nsCOMPtr<nsIWidget> widget = vm->GetRootWidget();
-  if (widget) return widget->GetNativeData(NS_NATIVE_WINDOW);
-
+  if (nsIWidget* widget = mPresShell->GetRootWidget()) {
+    return widget->GetNativeData(NS_NATIVE_WINDOW);
+  }
   return nullptr;
 }
 
@@ -1300,7 +1297,13 @@ void DocAccessible::BindToDocument(LocalAccessible* aAccessible,
     }
   }
 
-  if (mIPCDoc) {
+  if (mIPCDoc && HasLoadState(eTreeConstructed)) {
+    // Child process and not in initial tree construction phase.
+    // We need to track inserted accessibles so we don't mark them as moved
+    // before their initial show event.
+    // If this is the initial tree construction, we will push the tree to the
+    // parent process before we process moves, so we will always need to mark a
+    // relocated accessible as moved.
     mInsertedAccessibles.EnsureInserted(aAccessible);
   }
 
@@ -1774,13 +1777,14 @@ void DocAccessible::DoInitialUpdate() {
     }
   }
 
-  mLoadState |= eTreeConstructed;
-
   // Set up a root element and ARIA role mapping.
   UpdateRootElIfNeeded();
 
   // Build initial tree.
   CacheChildrenInSubtree(this);
+
+  mLoadState |= eTreeConstructed;
+
 #ifdef A11Y_LOG
   if (logging::IsEnabled(logging::eVerbose)) {
     logging::Tree("TREE", "Initial subtree", this);
