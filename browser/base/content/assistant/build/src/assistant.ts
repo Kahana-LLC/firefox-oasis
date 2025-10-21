@@ -1,6 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote } from "./proxyClient";
+import SupabaseAuth from "./services/supabase";
 
 // Local command implementations (tabs / groups)
 import {
@@ -18,6 +19,10 @@ import {
   Command,
   CmdResult,
 } from "./commands";
+
+// Expose Supabase auth for UI
+const supabaseAuth = SupabaseAuth.getInstance();
+(window as any).supabaseAuth = supabaseAuth;
 
 /* ========= Ephemeral chat history per session ========= */
 const SESSIONS = new Map<string, BaseMessage[]>();
@@ -182,44 +187,18 @@ ${FEWSHOTS}`.trim();
 
 // ---------- Public APIs ----------
 
-// Non-streaming (kept for compatibility)
-// export async function runAssistant(prompt: string): Promise<string> {
-//   const commands: Command[] = [
-//     new ListTabsCommand(),
-//     new OpenTabCommand(),
-//     new CloseTabCommand(),
-//     new MoveTabToNewWindowCommand(),
-//     new CopyTabUrlsCommand(),
-//   ];
-//   const graph = await buildGraph(commands);
-//   const stream = await graph.stream(
-//     { messages: [new HumanMessage({ content: prompt })] },
-//     { recursionLimit: 16 }
-//   );
-
-//   const outputs: string[] = [];
-//   for await (const state of stream as any) {
-//     if ("__end__" in state) break;
-//     const step = Object.entries(state).find(([k]) => k !== "__end");
-//     if (step?.[1] && "messages" in (step[1] as any)) {
-//       const lastMsg = (step[1] as any).messages.at(-1);
-//       if (lastMsg?.content) outputs.push(
-//         typeof lastMsg.content === "string"
-//           ? lastMsg.content
-//           : Array.isArray(lastMsg.content)
-//           ? lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("")
-//           : String(lastMsg.content)
-//       );
-//     }
-//   }
-//   return outputs.join("\n\n") || "(no output)";
-// }
-
 // Streaming variant used by the UI for live updates
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void
 ): Promise<string> {
+  const isAuthenticated = await supabaseAuth.isAuthenticated();
+  if (!isAuthenticated) {
+    const msg = "Please sign in to use the assistant.";
+    onChunk(msg);
+    return msg;
+  }
+
   const commands: Command[] = [
     // Tabs
     new ListTabsCommand(),
