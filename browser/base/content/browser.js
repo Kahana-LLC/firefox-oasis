@@ -772,6 +772,32 @@ var gNavigatorBundle = {
   },
 };
 
+function toggleAssistantSidebar() {
+  const assistantSidebar = document.getElementById("assistant-sidebar");
+  const browserElement = document.getElementById("browser");
+
+  if (!assistantSidebar || !browserElement) {
+    return;
+  }
+
+  if (assistantSidebar.hidden) {
+    // It's closed, so open it
+    assistantSidebar.hidden = false;
+    browserElement.setAttribute("sidebar-open", "true");
+  } else {
+    // It's open, so close it
+    assistantSidebar.hidden = true;
+    browserElement.removeAttribute("sidebar-open");
+  }
+}
+
+window.addEventListener("load", function() {
+  const assistantSidebarButton = document.getElementById("assistant-button");
+  if (assistantSidebarButton) {
+    assistantSidebarButton.addEventListener("click", toggleAssistantSidebar);
+  }
+}, { once: true });
+
 function updateFxaToolbarMenu(enable, isInitialUpdate = false) {
   // We only show the Firefox Account toolbar menu if the feature is enabled and
   // if sync is enabled.

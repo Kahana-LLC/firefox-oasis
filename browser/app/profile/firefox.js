@@ -2181,6 +2181,7 @@ pref("sidebar.animation.expand-on-hover.delay-duration-ms", 200);
 pref("sidebar.main.tools", "");
 pref("sidebar.installed.extensions", "");
 pref("sidebar.verticalTabs", false);
+pref("browser.sidebar.oasis_assistant.enabled", true);
 pref("sidebar.verticalTabs.dragToPinPromo.dismissed", false);
 pref("sidebar.visibility", "always-show");
 // Sidebar UI state is stored per-window via session restore. Use this pref

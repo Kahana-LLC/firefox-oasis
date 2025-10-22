@@ -15,6 +15,7 @@ const { XPCOMUtils } = ChromeUtils.importESModule(
 );
 
 const l10nMap = new Map([
+  ["viewOasisAssistantSidebar", "oasis-assistant"],
   ["viewGenaiChatSidebar", "sidebar-menu-genai-chat-label"],
   ["viewGenaiPageAssistSidebar", "sidebar-menu-genai-page-assist-label"],
   ["viewGenaiSmartAssistSidebar", "sidebar-menu-genai-smart-assist-label"],

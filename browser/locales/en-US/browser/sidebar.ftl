@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+menu-view-oasis-assistant =
+  .label = Oasis Assistant
 menu-view-genai-chat =
   .label = AI Chatbot
 
@@ -124,6 +126,8 @@ sidebar-history-context-menu-delete-pages =
 
 ## Labels for sidebar menu items.
 
+sidebar-menu-oasis-assistant-label =
+  .label = Oasis Assistant
 sidebar-menu-genai-chat-label =
   .label = AI chatbot
 sidebar-menu-history-label =
@@ -138,6 +142,9 @@ sidebar-menu-contextual-password-manager-label =
   .label = Passwords
 sidebar-menu-more-tools-label =
   .label = More tools
+
+oasis-assistant =
+  .label = Oasis Assistant
 
 ## Tooltips for sidebar menu items.
 

@@ -1,4 +1,4 @@
-import { runAssistantStream } from "chrome://browser/content/assistant/assistant.bundle.js";
+import { runAssistantStream } from "./assistant.bundle.js";
 
 // SupabaseAuth should be available from the bundle
 // The bundle now exposes window.supabaseAuth directly
@@ -195,35 +195,14 @@ function updateAuthUI(authenticated, user = null) {
     // Show/hide auth buttons - wait for element to exist
     waitForElement('#authButtons').then(authButtons => {
         console.log('Auth buttons container found:', authButtons);
-        const buttons = authButtons.querySelectorAll('button');
-        console.log('Found buttons:', buttons.length, buttons);
-        if (buttons.length >= 3) {
-            const loginButton = buttons[0]; // Sign In button
-            const signupButton = buttons[1]; // Sign Up button  
-            const logoutButton = buttons[2]; // Sign Out button
-            
-            console.log('Button states:', { 
-                authenticated, 
-                loginButton: loginButton?.textContent, 
-                signupButton: signupButton?.textContent, 
-                logoutButton: logoutButton?.textContent 
-            });
-            
-            if (loginButton) {
-                loginButton.style.display = authenticated ? 'none' : 'inline-block';
-                console.log('Login button display set to:', loginButton.style.display);
-            }
-            if (signupButton) {
-                signupButton.style.display = authenticated ? 'none' : 'inline-block';
-                console.log('Signup button display set to:', signupButton.style.display);
-            }
-            if (logoutButton) {
-                logoutButton.style.display = authenticated ? 'inline-block' : 'none';
-                console.log('Logout button display set to:', logoutButton.style.display);
-            }
-        } else {
-            console.warn('Not enough buttons found in authButtons container');
-        }
+        const loginButton = authButtons.querySelector('.login-btn');
+        const signupButton = authButtons.querySelector('.signup-btn');
+        const menuButton = authButtons.querySelector('.menu-btn');
+
+        if (loginButton) loginButton.style.display = authenticated ? 'none' : 'inline-block';
+        if (signupButton) signupButton.style.display = authenticated ? 'none' : 'inline-block';
+        if (menuButton) menuButton.style.display = authenticated ? 'inline-block' : 'none';
+        
     }).catch(error => {
         console.warn('Auth buttons container not found:', error.message);
     });
@@ -622,6 +601,7 @@ authHeader.appendChild(authButtons);
 
 const loginButton = document.createElement("button");
 loginButton.textContent = "Sign In";
+loginButton.className = "login-btn";
 loginButton.style.cssText = `
   background: rgba(255,255,255,0.2);
   color: white;
@@ -642,6 +622,7 @@ authButtons.appendChild(loginButton);
 
 const signupButton = document.createElement("button");
 signupButton.textContent = "Sign Up";
+signupButton.className = "signup-btn";
 signupButton.style.cssText = `
   background: rgba(255,255,255,0.9);
   color: #667eea;
@@ -661,26 +642,74 @@ signupButton.addEventListener("mouseleave", () => {
 });
 authButtons.appendChild(signupButton);
 
-const logoutButton = document.createElement("button");
-logoutButton.textContent = "Sign Out";
-logoutButton.style.cssText = `
-  background: rgba(255,255,255,0.2);
+// Create three-dot menu button
+const menuButton = document.createElement("button");
+menuButton.className = "menu-btn";
+menuButton.innerHTML = "&#8942;"; // Vertical ellipsis
+menuButton.style.cssText = `
+  background: transparent;
   color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
+  border: none;
+  font-size: 20px;
   cursor: pointer;
-  display: none;
-  transition: all 0.2s;
+  padding: 0 8px;
+  display: none; /* Hidden by default */
 `;
-logoutButton.addEventListener("mouseenter", () => {
-  logoutButton.style.background = "rgba(255,255,255,0.3)";
+authButtons.appendChild(menuButton);
+
+// Create dropdown menu
+const dropdownMenu = document.createElement("div");
+dropdownMenu.className = "dropdown-menu";
+dropdownMenu.style.cssText = `
+  display: none;
+  position: absolute;
+  top: 40px;
+  right: 10px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+`;
+authHeader.appendChild(dropdownMenu);
+
+// Dropdown items
+const dropdownItems = [
+    { label: "Account", action: () => alert("Account clicked") },
+    { label: "Subscription", action: () => alert("Subscription clicked") },
+    { label: "Settings", action: () => alert("Settings clicked") },
+    { label: "Logout", action: () => logout() }
+];
+
+dropdownItems.forEach(item => {
+    const menuItem = document.createElement("a");
+    menuItem.textContent = item.label;
+    menuItem.style.cssText = `
+        display: block;
+        padding: 8px 16px;
+        color: #333;
+        text-decoration: none;
+        cursor: pointer;
+    `;
+    menuItem.addEventListener("mouseenter", () => menuItem.style.backgroundColor = "#f4f4f4");
+    menuItem.addEventListener("mouseleave", () => menuItem.style.backgroundColor = "white");
+    menuItem.addEventListener("click", item.action);
+    dropdownMenu.appendChild(menuItem);
 });
-logoutButton.addEventListener("mouseleave", () => {
-  logoutButton.style.background = "rgba(255,255,255,0.2)";
+
+// Toggle dropdown menu
+menuButton.addEventListener("click", () => {
+    const isDisplayed = dropdownMenu.style.display === "block";
+    dropdownMenu.style.display = isDisplayed ? "none" : "block";
 });
-authButtons.appendChild(logoutButton);
+
+// Hide dropdown if clicked outside
+document.addEventListener("click", (event) => {
+    if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+        dropdownMenu.style.display = "none";
+    }
+});
+
 
 let busy = false;
 let stopped = false;
@@ -971,23 +1000,21 @@ function showLoginForm() {
   googleButton.addEventListener("click", () => {
     document.body.removeChild(modal);
     
-    // Import and use Supabase auth
-    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
-      supabaseAuth.signInWithGoogle().then(({ user, error }) => {
-        if (error) {
-          const errorMessage = supabaseAuth.handleAuthError(error);
-          
-          // Check if this is the special OAuth URL case
-          if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
-            const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
-            showGoogleOAuthInstructions(oauthUrl);
-          } else {
-            append(`\n❌ Google sign in failed: ${errorMessage}\n`);
-          }
+    // Use Supabase auth from window
+    window.supabaseAuth.signInWithGoogle().then(({ user, error }) => {
+      if (error) {
+        const errorMessage = window.supabaseAuth.handleAuthError(error);
+        
+        // Check if this is the special OAuth URL case
+        if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
+          const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
+          showGoogleOAuthInstructions(oauthUrl);
         } else {
-          append(`\n🔄 Redirecting to Google for authentication...\n`);
+          append(`\n❌ Google sign in failed: ${errorMessage}\n`);
         }
-      });
+      } else {
+        append(`\n🔄 Redirecting to Google for authentication...\n`);
+      }
     });
   });
   
@@ -1000,18 +1027,16 @@ function showLoginForm() {
     
     document.body.removeChild(modal);
     
-    // Import and use Supabase auth
-    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
-      supabaseAuth.signInWithEmail(email, password).then(({ user, error }) => {
-        if (error) {
-          append(`\n❌ Sign in failed: ${supabaseAuth.handleAuthError(error)}\n`);
-        } else if (user) {
-          isAuthenticated = true;
-          currentUser = user;
-          updateAuthUI(true, user);
-          append(`\n🔓 Signed in as ${user.email}\n`);
-        }
-      });
+    // Use Supabase auth from window
+    window.supabaseAuth.signInWithEmail(email, password).then(({ user, error }) => {
+      if (error) {
+        append(`\n❌ Sign in failed: ${window.supabaseAuth.handleAuthError(error)}\n`);
+      } else if (user) {
+        isAuthenticated = true;
+        currentUser = user;
+        updateAuthUI(true, user);
+        append(`\n🔓 Signed in as ${user.email}\n`);
+      }
     });
   });
   
@@ -1190,23 +1215,21 @@ function showSignupForm() {
   googleButton.addEventListener("click", () => {
     document.body.removeChild(modal);
     
-    // Import and use Supabase auth
-    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
-      supabaseAuth.signInWithGoogle().then(({ user, error }) => {
-        if (error) {
-          const errorMessage = supabaseAuth.handleAuthError(error);
-          
-          // Check if this is the special OAuth URL case
-          if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
-            const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
-            showGoogleOAuthInstructions(oauthUrl);
-          } else {
-            append(`\n❌ Google sign in failed: ${errorMessage}\n`);
-          }
+    // Use Supabase auth from window
+    window.supabaseAuth.signInWithGoogle().then(({ user, error }) => {
+      if (error) {
+        const errorMessage = window.supabaseAuth.handleAuthError(error);
+        
+        // Check if this is the special OAuth URL case
+        if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
+          const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
+          showGoogleOAuthInstructions(oauthUrl);
         } else {
-          append(`\n🔄 Redirecting to Google for authentication...\n`);
+          append(`\n❌ Google sign in failed: ${errorMessage}\n`);
         }
-      });
+      } else {
+        append(`\n🔄 Redirecting to Google for authentication...\n`);
+      }
     });
   });
   
@@ -1220,21 +1243,19 @@ function showSignupForm() {
     
     document.body.removeChild(modal);
     
-    // Import and use Supabase auth
-    import("chrome://browser/content/assistant/assistant.bundle.js").then(({ supabaseAuth }) => {
-      supabaseAuth.signUp(email, password, name || undefined).then(({ user, error }) => {
-        if (error) {
-          append(`\n❌ Sign up failed: ${supabaseAuth.handleAuthError(error)}\n`);
-          append(`\nDebug info: ${JSON.stringify(error, null, 2)}\n`);
-        } else if (user) {
-          append(`\n✅ Account created! Please check your email to confirm your account.\n`);
-          append(`\nUser ID: ${user.id}\n`);
-        } else {
-          append(`\n⚠️ Sign up completed but no user returned. Check your email for confirmation.\n`);
-        }
-      }).catch((err) => {
-        append(`\n❌ Sign up error: ${err.message}\n`);
-      });
+    // Use Supabase auth from window
+    window.supabaseAuth.signUp(email, password, name || undefined).then(({ user, error }) => {
+      if (error) {
+        append(`\n❌ Sign up failed: ${window.supabaseAuth.handleAuthError(error)}\n`);
+        append(`\nDebug info: ${JSON.stringify(error, null, 2)}\n`);
+      } else if (user) {
+        append(`\n✅ Account created! Please check your email to confirm your account.\n`);
+        append(`\nUser ID: ${user.id}\n`);
+      } else {
+        append(`\n⚠️ Sign up completed but no user returned. Check your email for confirmation.\n`);
+      }
+    }).catch((err) => {
+      append(`\n❌ Sign up error: ${err.message}\n`);
     });
   });
   
@@ -1243,9 +1264,8 @@ function showSignupForm() {
 }
 
 async function logout() {
-  // Import and use Supabase auth
-  const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
-  const { error } = await supabaseAuth.signOut();
+  // Use Supabase auth from window
+  const { error } = await window.supabaseAuth.signOut();
   
   if (error) {
     append(`\n❌ Logout failed: ${error.message}\n`);
@@ -1278,12 +1298,6 @@ async function send() {
     // Double-check authentication before making the API call
     if (!window.oasisAuthState?.isAuthenticated) {
       throw new Error('Authentication lost during request. Please sign in again.');
-    }
-    
-    // If we're in an iframe, don't execute commands - just show a message
-    if (window.isInIframe) {
-      append(`\nCommand sent to main window...\n`);
-      return;
     }
     
     await runAssistantStream(prompt, (chunk) => {
@@ -1323,7 +1337,6 @@ q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
 stop.addEventListener("click", () => { stopped = true; setBusy(false); append("\n(stopped)\n"); });
 loginButton.addEventListener("click", showLoginForm);
 signupButton.addEventListener("click", showSignupForm);
-logoutButton.addEventListener("click", logout);
 
 // Initialize UI
 updateAuthUI();
@@ -1331,8 +1344,7 @@ updateAuthUI();
 // Check for existing authentication on load
 async function checkExistingAuth() {
   try {
-    const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
-    const user = await supabaseAuth.getCurrentUser();
+    const user = await window.supabaseAuth.getCurrentUser();
     if (user) {
       isAuthenticated = true;
       currentUser = user;
@@ -1353,8 +1365,7 @@ setupCrossFrameAuthSync();
 window.refreshAuthState = async function() {
     console.log('Manually refreshing authentication state...');
     try {
-        const { supabaseAuth } = await import("chrome://browser/content/assistant/assistant.bundle.js");
-        const user = await supabaseAuth.getCurrentUser();
+        const user = await window.supabaseAuth.getCurrentUser();
         console.log('Current user from Supabase:', user);
         
         if (user) {
