@@ -1,6 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
-import { routeRemote } from "./proxyClient";
+import { routeRemote, chatRemote } from "./proxyClient";
+import SupabaseAuth from "./services/supabase";
 
 // Local command implementations (tabs / groups)
 import {
@@ -18,6 +19,10 @@ import {
   Command,
   CmdResult,
 } from "./commands";
+
+// Expose Supabase auth for UI
+const supabaseAuth = SupabaseAuth.getInstance();
+(window as any).supabaseAuth = supabaseAuth;
 
 /* ========= Ephemeral chat history per session ========= */
 const SESSIONS = new Map<string, BaseMessage[]>();
@@ -107,58 +112,39 @@ async function buildGraph(commands: Command[]) {
   }
 
   // ---------- Supervisor with routing rules + few-shots ----------
-  const ROUTING_GUIDELINES = `
-  Pick exactly ONE next worker from {options}. If the task needs multiple steps,
-  choose the earliest step first; you'll be invoked again after that worker runs.
+  const systemTemplate = `You are a supervisor managing a team of specialist workers.
+Your goal is to choose the best worker for the job based on the user's request.
+The available workers are:
+{members}
 
-  Route by intent:
-  - open/go/navigate to a URL or site name → open_tab
-  - list/show current tabs → list_tabs
-  - close the current tab or "tab N" → close_tab
-  - move/detach a tab to a new window → move_tab_to_new_window
-  - copy/export/share/collect all tab URLs → copy_tab_urls
+Each worker has a specific job description.
+Based on the user's request, choose the worker that is the best fit for the job.
+The user's request will be forwarded to the worker you choose.
 
-Hubs:
-- "create hub", "new group" → create_hub
-- "delete/remove hub <name>" → delete_hub
-- "list hubs" → list_hubs
-- "rename hub <old> to <new>" → rename_hub
-- "add this tab to <hub>" → add_tab_to_hub
-- "open/switch to hub <name>" → open_hub
+Your output MUST be a JSON object with a single key "next" and the value being the name of the worker you are choosing.
+Example:
+{
+"next": "worker_name"
+}
 
-Do not ask for confirmation; act directly when possible.
-If uncertain, prefer list_tabs. If unsupported, FINISH.
-`.trim();
+The available workers are: {options}
+If no worker is a good fit, you can choose to "FINISH".
 
-  const FEWSHOTS = [
-    `- "show my tabs" → list_tabs`,
-    `- "open https://example.com" → open_tab`,
-    `- "go to youtube" → open_tab`,
-    `- "close this tab" → close_tab`,
-    `- "move this tab to a new window" → move_tab_to_new_window`,
-    `- "copy all tab urls" → copy_tab_urls`,
-    `- "create hub Work" → create_hub`,
-    `- "add this tab to Work" → add_tab_to_hub`,
-    `- "rename hub Work to Projects" → rename_hub`,
-    `- "open github then list tabs" → open_tab  (next turn will route to list_tabs)`,
-  ].join("\n");
-
-  const systemTemplate = `You are a supervisor managing: {members}.
-Given the user request and conversation so far, choose who should act next.
-Return only {"next": "<one of: {options}>"}.
-Use FINISH if done.
-
-${ROUTING_GUIDELINES}
-
-Routing examples:
-${FEWSHOTS}`.trim();
+Here are the job descriptions for each worker:
+{members}`.trim();
 
   const MAX_REPEAT = 2;
+
+  const chatNode = async (state: typeof GraphState.State) => {
+    const CHAT_PROMPT = "You are a helpful assistant.";
+    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
+    return { messages: [new AIMessage(res.content)] };
+  };
 
   const supervisorNode = async (s: typeof GraphState.State) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
 
-    const options = [END, ...memberNames];
+    const options = [END, ...memberNames, "chat"];
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
@@ -173,6 +159,8 @@ ${FEWSHOTS}`.trim();
     workflow.addNode(name, toolAgents[name]);
     workflow.addEdge(name as any, "supervisor" as any);
   }
+  workflow.addNode("chat", chatNode);
+  workflow.addEdge("chat" as any, END as any);
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor" as any, (x: typeof GraphState.State) => x.next);
   workflow.addEdge(START, "supervisor" as any);
@@ -182,44 +170,18 @@ ${FEWSHOTS}`.trim();
 
 // ---------- Public APIs ----------
 
-// Non-streaming (kept for compatibility)
-// export async function runAssistant(prompt: string): Promise<string> {
-//   const commands: Command[] = [
-//     new ListTabsCommand(),
-//     new OpenTabCommand(),
-//     new CloseTabCommand(),
-//     new MoveTabToNewWindowCommand(),
-//     new CopyTabUrlsCommand(),
-//   ];
-//   const graph = await buildGraph(commands);
-//   const stream = await graph.stream(
-//     { messages: [new HumanMessage({ content: prompt })] },
-//     { recursionLimit: 16 }
-//   );
-
-//   const outputs: string[] = [];
-//   for await (const state of stream as any) {
-//     if ("__end__" in state) break;
-//     const step = Object.entries(state).find(([k]) => k !== "__end");
-//     if (step?.[1] && "messages" in (step[1] as any)) {
-//       const lastMsg = (step[1] as any).messages.at(-1);
-//       if (lastMsg?.content) outputs.push(
-//         typeof lastMsg.content === "string"
-//           ? lastMsg.content
-//           : Array.isArray(lastMsg.content)
-//           ? lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("")
-//           : String(lastMsg.content)
-//       );
-//     }
-//   }
-//   return outputs.join("\n\n") || "(no output)";
-// }
-
 // Streaming variant used by the UI for live updates
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void
 ): Promise<string> {
+  const isAuthenticated = await supabaseAuth.isAuthenticated();
+  if (!isAuthenticated) {
+    const msg = "Please sign in to use the assistant.";
+    onChunk(msg);
+    return msg;
+  }
+
   const commands: Command[] = [
     // Tabs
     new ListTabsCommand(),

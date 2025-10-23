@@ -3,7 +3,7 @@ import { createClient, SupabaseClient, User, Session, AuthError } from '@supabas
 import { ENV } from '../config/env';
 import { UserProfile, UserSession, AuthState } from '../types/auth';
 
-export class SupabaseAuth {
+export default class SupabaseAuth {
     private static instance: SupabaseAuth;
     private supabase: SupabaseClient;
     private currentSession: UserSession | null = null;
@@ -431,4 +431,3 @@ export class SupabaseAuth {
 
 // Export singleton instance
 export const supabaseAuth = SupabaseAuth.getInstance();
-

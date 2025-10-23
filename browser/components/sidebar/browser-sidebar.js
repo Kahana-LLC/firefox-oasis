@@ -13,6 +13,7 @@ const { DeferredTask } = ChromeUtils.importESModule(
 );
 
 const toolsNameMap = {
+  viewOasisAssistantSidebar: "oasis-assistant",
   viewGenaiChatSidebar: "aichat",
   viewGenaiPageAssistSidebar: "aipageassist",
   viewGenaiSmartAssistSidebar: "aismartassist",
@@ -168,6 +169,21 @@ var SidebarController = {
         }),
       ],
     ]);
+
+    this.registerPrefSidebar(
+      "browser.sidebar.oasis_assistant.enabled",
+      "viewOasisAssistantSidebar",
+      {
+        name: "oasis-assistant",
+        elementId: "sidebar-switcher-oasis-assistant",
+        url: "chrome://browser/content/assistant/assistant.xhtml",
+        keyId: "viewOasisAssistantSidebarKb",
+        menuId: "menu_oasisAssistantSidebar",
+        menuL10nId: "menu-view-oasis-assistant",
+        revampL10nId: "oasis-assistant",
+        iconUrl: "chrome://global/skin/icons/highlights.svg",
+      }
+    );
 
     this.registerPrefSidebar(
       "browser.ml.chat.enabled",
