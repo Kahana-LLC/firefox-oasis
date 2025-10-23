@@ -54364,6 +54364,10 @@ async function routeRemote(system, messages, options) {
   await checkAuthentication();
   return postSigned("route", { system, messages, options });
 }
+async function chatRemote(system, messages) {
+  await checkAuthentication();
+  return postSigned("chat", { system, messages });
+}
 
 // src/hubs.ts
 function getChrome() {
@@ -54866,7 +54870,9 @@ If uncertain, prefer list_tabs. If unsupported, FINISH.
     `- "create hub Work" \u2192 create_hub`,
     `- "add this tab to Work" \u2192 add_tab_to_hub`,
     `- "rename hub Work to Projects" \u2192 rename_hub`,
-    `- "open github then list tabs" \u2192 open_tab  (next turn will route to list_tabs)`
+    `- "open github then list tabs" \u2192 open_tab  (next turn will route to list_tabs)`,
+    `- "who are you" \u2192 chat`,
+    `- "tell me a joke" \u2192 chat`
   ].join("\n");
   const systemTemplate = `You are a supervisor managing: {members}.
 Given the user request and conversation so far, choose who should act next.
@@ -54878,9 +54884,14 @@ ${ROUTING_GUIDELINES}
 Routing examples:
 ${FEWSHOTS}`.trim();
   const MAX_REPEAT = 2;
+  const chatNode = async (state) => {
+    const CHAT_PROMPT = "You are a helpful assistant.";
+    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
+    return { messages: [new AIMessage(res)] };
+  };
   const supervisorNode = async (s) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
-    const options = [END, ...memberNames];
+    const options = [END, ...memberNames, "chat"];
     const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", ")).replace("{options}", options.join(", "));
     const out = await routeRemote(systemPrompt, toWire(s.messages), options);
     const nxt = out?.next && options.includes(out.next) ? out.next : END;
@@ -54891,6 +54902,8 @@ ${FEWSHOTS}`.trim();
     workflow.addNode(name, toolAgents[name]);
     workflow.addEdge(name, "supervisor");
   }
+  workflow.addNode("chat", chatNode);
+  workflow.addEdge("chat", END);
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor", (x) => x.next);
   workflow.addEdge(START, "supervisor");

@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
-import { routeRemote } from "./proxyClient";
+import { routeRemote, chatRemote } from "./proxyClient";
 import SupabaseAuth from "./services/supabase";
 
 // Local command implementations (tabs / groups)
@@ -146,6 +146,8 @@ If uncertain, prefer list_tabs. If unsupported, FINISH.
     `- "add this tab to Work" → add_tab_to_hub`,
     `- "rename hub Work to Projects" → rename_hub`,
     `- "open github then list tabs" → open_tab  (next turn will route to list_tabs)`,
+    `- "who are you" → chat`,
+    `- "tell me a joke" → chat`,
   ].join("\n");
 
   const systemTemplate = `You are a supervisor managing: {members}.
@@ -160,10 +162,16 @@ ${FEWSHOTS}`.trim();
 
   const MAX_REPEAT = 2;
 
+  const chatNode = async (state: typeof GraphState.State) => {
+    const CHAT_PROMPT = "You are a helpful assistant.";
+    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
+    return { messages: [new AIMessage(res)] };
+  };
+
   const supervisorNode = async (s: typeof GraphState.State) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
 
-    const options = [END, ...memberNames];
+    const options = [END, ...memberNames, "chat"];
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
@@ -178,6 +186,8 @@ ${FEWSHOTS}`.trim();
     workflow.addNode(name, toolAgents[name]);
     workflow.addEdge(name as any, "supervisor" as any);
   }
+  workflow.addNode("chat", chatNode);
+  workflow.addEdge("chat" as any, END as any);
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor" as any, (x: typeof GraphState.State) => x.next);
   workflow.addEdge(START, "supervisor" as any);
