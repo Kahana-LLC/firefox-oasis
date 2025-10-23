@@ -21,6 +21,10 @@ export async function postSigned(op: "route" | "chat", payload: Record<string, a
   };
 
   const res = await fetch(functionUrl, { method: "POST", headers, body });
-  if (!res.ok) throw new Error(`Lambda ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("Lambda Error:", errorBody);
+    throw new Error(`Lambda ${res.status} ${errorBody}`);
+  }
   return res.json();
 }

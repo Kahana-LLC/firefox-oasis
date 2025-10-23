@@ -54347,7 +54347,11 @@ async function postSigned(op, payload) {
     Authorization: `Bearer ${token}`
   };
   const res = await fetch(functionUrl, { method: "POST", headers, body });
-  if (!res.ok) throw new Error(`Lambda ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("Lambda Error:", errorBody);
+    throw new Error(`Lambda ${res.status} ${errorBody}`);
+  }
   return res.json();
 }
 
@@ -54838,56 +54842,31 @@ async function buildGraph(commands) {
     toolAgents[command.commandName] = node;
     memberNames.push(command.commandName);
   }
-  const ROUTING_GUIDELINES = `
-  Pick exactly ONE next worker from {options}. If the task needs multiple steps,
-  choose the earliest step first; you'll be invoked again after that worker runs.
+  const systemTemplate = `You are a supervisor managing a team of specialist workers.
+Your goal is to choose the best worker for the job based on the user's request.
+The available workers are:
+{members}
 
-  Route by intent:
-  - open/go/navigate to a URL or site name \u2192 open_tab
-  - list/show current tabs \u2192 list_tabs
-  - close the current tab or "tab N" \u2192 close_tab
-  - move/detach a tab to a new window \u2192 move_tab_to_new_window
-  - copy/export/share/collect all tab URLs \u2192 copy_tab_urls
+Each worker has a specific job description.
+Based on the user's request, choose the worker that is the best fit for the job.
+The user's request will be forwarded to the worker you choose.
 
-Hubs:
-- "create hub", "new group" \u2192 create_hub
-- "delete/remove hub <name>" \u2192 delete_hub
-- "list hubs" \u2192 list_hubs
-- "rename hub <old> to <new>" \u2192 rename_hub
-- "add this tab to <hub>" \u2192 add_tab_to_hub
-- "open/switch to hub <name>" \u2192 open_hub
+Your output MUST be a JSON object with a single key "next" and the value being the name of the worker you are choosing.
+Example:
+{
+"next": "worker_name"
+}
 
-Do not ask for confirmation; act directly when possible.
-If uncertain, prefer list_tabs. If unsupported, FINISH.
-`.trim();
-  const FEWSHOTS = [
-    `- "show my tabs" \u2192 list_tabs`,
-    `- "open https://example.com" \u2192 open_tab`,
-    `- "go to youtube" \u2192 open_tab`,
-    `- "close this tab" \u2192 close_tab`,
-    `- "move this tab to a new window" \u2192 move_tab_to_new_window`,
-    `- "copy all tab urls" \u2192 copy_tab_urls`,
-    `- "create hub Work" \u2192 create_hub`,
-    `- "add this tab to Work" \u2192 add_tab_to_hub`,
-    `- "rename hub Work to Projects" \u2192 rename_hub`,
-    `- "open github then list tabs" \u2192 open_tab  (next turn will route to list_tabs)`,
-    `- "who are you" \u2192 chat`,
-    `- "tell me a joke" \u2192 chat`
-  ].join("\n");
-  const systemTemplate = `You are a supervisor managing: {members}.
-Given the user request and conversation so far, choose who should act next.
-Return only {"next": "<one of: {options}>"}.
-Use FINISH if done.
+The available workers are: {options}
+If no worker is a good fit, you can choose to "FINISH".
 
-${ROUTING_GUIDELINES}
-
-Routing examples:
-${FEWSHOTS}`.trim();
+Here are the job descriptions for each worker:
+{members}`.trim();
   const MAX_REPEAT = 2;
   const chatNode = async (state) => {
     const CHAT_PROMPT = "You are a helpful assistant.";
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
-    return { messages: [new AIMessage(res)] };
+    return { messages: [new AIMessage(res.content)] };
   };
   const supervisorNode = async (s) => {
     if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
