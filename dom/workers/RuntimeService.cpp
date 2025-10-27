@@ -20,12 +20,10 @@
 #include "js/experimental/CTypes.h"  // JS::CTypesActivityType, JS::SetCTypesActivityCallback
 #include "js/friend/ErrorMessages.h"  // js::GetErrorMessage, JSMSG_*
 #include "jsfriendapi.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/Atomics.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/CycleCollectedJSContext.h"
 #include "mozilla/CycleCollectedJSRuntime.h"
-#include "mozilla/DebugOnly.h"
 #include "mozilla/FlowMarkers.h"
 #include "mozilla/Monitor.h"
 #include "mozilla/Preferences.h"

@@ -24,7 +24,6 @@
 #include "nsXULAppAPI.h"
 
 #include "mozilla/AppShutdown.h"
-#include "mozilla/Attributes.h"
 #include "mozilla/BinarySearch.h"
 #include "mozilla/Likely.h"
 #include "mozilla/MemoryReporting.h"
@@ -664,10 +663,8 @@ bool gfxPlatformFontList::InitFontList() {
 
   InitializeCodepointsWithNoFonts();
 
-  // Try to initialize the cross-process shared font list if enabled by prefs,
-  // but not if we're running in Safe Mode.
-  if (StaticPrefs::gfx_e10s_font_list_shared_AtStartup() &&
-      !gfxPlatform::InSafeMode()) {
+  // Try to initialize the cross-process shared font list if enabled by prefs.
+  if (StaticPrefs::gfx_e10s_font_list_shared_AtStartup()) {
     for (const auto& entry : mFontEntries.Values()) {
       if (!entry) {
         continue;

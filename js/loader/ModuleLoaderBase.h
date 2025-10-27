@@ -488,7 +488,9 @@ class ModuleLoaderBase : public nsISupports {
                                      Handle<JSScript*> aReferrer,
                                      Handle<JSObject*> aModuleRequest,
                                      Handle<Value> aHostDefined,
-                                     Handle<Value> aPayload);
+                                     Handle<Value> aPayload,
+                                     uint32_t aLineNumber,
+                                     JS::ColumnNumberOneOrigin aColumnNumber);
   static bool FinishLoadingImportedModule(JSContext* aCx,
                                           ModuleLoadRequest* aRequest);
 
@@ -522,10 +524,6 @@ class ModuleLoaderBase : public nsISupports {
 
  private:
   ModuleScript* GetFetchedModule(const ModuleMapKey& moduleMapKey) const;
-
-  nsresult ResolveRequestedModules(
-      ModuleLoadRequest* aRequest,
-      nsTArray<ModuleMapKey>* aRequestedModulesOut);
 
   already_AddRefed<LoadingRequest> SetModuleFetchFinishedAndGetWaitingRequests(
       ModuleLoadRequest* aRequest, nsresult aResult);

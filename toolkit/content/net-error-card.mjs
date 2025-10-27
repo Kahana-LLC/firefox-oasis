@@ -6,6 +6,7 @@
 
 import {
   gIsCertError,
+  isCaptive,
   getCSSClass,
   getHostName,
   getSubjectAltNames,
@@ -43,6 +44,7 @@ export class NetErrorCard extends MozLitElement {
     "MOZILLA_PKIX_ERROR_SELF_SIGNED_CERT",
     "SEC_ERROR_EXPIRED_CERTIFICATE",
     "SEC_ERROR_EXPIRED_ISSUER_CERTIFICATE",
+    "SSL_ERROR_NO_CYPHER_OVERLAP",
   ]);
 
   constructor() {
@@ -87,6 +89,17 @@ export class NetErrorCard extends MozLitElement {
     document.dispatchEvent(
       new CustomEvent("AboutNetErrorLoad", { bubbles: true })
     );
+
+    // Record telemetry when the error page loads
+    if (gIsCertError && !isCaptive()) {
+      if (this.failedCertInfo) {
+        recordSecurityUITelemetry(
+          "securityUiCerterror",
+          "loadAboutcerterror",
+          this.failedCertInfo
+        );
+      }
+    }
   }
 
   init() {
@@ -126,6 +139,11 @@ export class NetErrorCard extends MozLitElement {
       case "SEC_ERROR_EXPIRED_ISSUER_CERTIFICATE":
         return html`<p
           data-l10n-id="fp-certerror-expired-intro"
+          data-l10n-args='{"hostname": "${this.hostname}"}'
+        ></p>`;
+      case "SSL_ERROR_NO_CYPHER_OVERLAP":
+        return html`<p
+          data-l10n-id="fp-neterror-connection-intro"
           data-l10n-args='{"hostname": "${this.hostname}"}'
         ></p>`;
     }
@@ -240,6 +258,19 @@ export class NetErrorCard extends MozLitElement {
           viewCert: true,
           viewDateTime: true,
           proceedButton: true,
+        });
+        break;
+      }
+      case "SSL_ERROR_NO_CYPHER_OVERLAP": {
+        content = this.advancedSectionTemplate({
+          whyDangerousL10nId: "fp-neterror-cypher-overlap-why-dangerous-body",
+          whatCanYouDoL10nId: "fp-neterror-cypher-overlap-what-can-you-do-body",
+          learnMoreL10nId: "fp-cert-error-code",
+          learnMoreL10nArgs: {
+            error: this.errorInfo.errorCodeString,
+          },
+          learnMoreSupportPage: "connection-not-secure",
+          proceedButton: false,
         });
         break;
       }

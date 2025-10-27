@@ -16,14 +16,12 @@
 #  include <unistd.h>  // for getpid()
 #endif
 
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/Casting.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/Components.h"
-#include "mozilla/DebugOnly.h"
 #include "mozilla/Encoding.h"
 #include "mozilla/EventStateManager.h"
 #include "mozilla/HTMLEditor.h"
@@ -3205,6 +3203,11 @@ nsresult nsDocShell::LoadURI(nsIURI* aURI,
     return NS_ERROR_FAILURE;
   }
 
+  // Set the captive portal tab flag on the browsing context if requested
+  if (loadState->GetIsCaptivePortalTab()) {
+    (void)mBrowsingContext->SetIsCaptivePortalTab(true);
+  }
+
   return LoadURI(loadState, true);
 }
 
@@ -3266,6 +3269,11 @@ nsresult nsDocShell::FixupAndLoadURIString(
 
   if (NS_FAILED(rv) || !loadState) {
     return NS_ERROR_FAILURE;
+  }
+
+  // Set the captive portal tab flag on the browsing context if requested
+  if (loadState->GetIsCaptivePortalTab()) {
+    (void)mBrowsingContext->SetIsCaptivePortalTab(true);
   }
 
   return LoadURI(loadState, true);

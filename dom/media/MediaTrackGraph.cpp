@@ -1306,8 +1306,8 @@ void MediaTrackGraphImpl::ProduceDataForTracksBlockByBlock(
     }
     mProcessedTime = next;
   }
-  NS_ASSERTION(mProcessedTime == mStateComputedTime,
-               "Something went wrong with rounding to block boundaries");
+  MOZ_ASSERT(mProcessedTime == mStateComputedTime,
+             "Something went wrong with rounding to block boundaries");
 }
 
 void MediaTrackGraphImpl::RunMessageAfterProcessing(
@@ -1678,14 +1678,13 @@ auto MediaTrackGraphImpl::OneIterationImpl(
     NS_ProcessPendingEvents(nullptr);
   }
 
-  GraphTime stateTime = std::min(aStateTime, GraphTime(mEndTime));
-  UpdateGraph(stateTime);
+  UpdateGraph(aStateTime);
 
-  mStateComputedTime = stateTime;
+  mStateComputedTime = aStateTime;
 
   GraphTime oldProcessedTime = mProcessedTime;
   Process(aMixerReceiver);
-  MOZ_ASSERT(mProcessedTime == stateTime);
+  MOZ_ASSERT(mProcessedTime == aStateTime);
 
   UpdateCurrentTimeForTracks(oldProcessedTime);
 
@@ -3508,8 +3507,7 @@ void MediaTrackGraphImpl::Init(GraphDriverType aDriverRequested,
     LOG(LogLevel::Debug, ("%p: document title: %s", this, streamName.get()));
     mDriver->SetStreamName(streamName);
   } else {
-    mDriver =
-        new OfflineClockDriver(this, mSampleRate, MEDIA_GRAPH_TARGET_PERIOD_MS);
+    mDriver = new OfflineClockDriver(this, mSampleRate);
   }
 
   mLastMainThreadUpdate = TimeStamp::Now();
@@ -4125,25 +4123,17 @@ void MediaTrackGraph::StartNonRealtimeProcessing(uint32_t aTicksToProcess) {
   MediaTrackGraphImpl* graph = static_cast<MediaTrackGraphImpl*>(this);
   NS_ASSERTION(!graph->mRealtime, "non-realtime only");
 
-  class Message : public ControlMessage {
-   public:
-    explicit Message(MediaTrackGraphImpl* aGraph, uint32_t aTicksToProcess)
-        : ControlMessage(nullptr),
-          mGraph(aGraph),
-          mTicksToProcess(aTicksToProcess) {}
-    void Run() override {
-      TRACE("MTG::StartNonRealtimeProcessing ControlMessage");
-      MOZ_ASSERT(mGraph->mEndTime == 0,
-                 "StartNonRealtimeProcessing should be called only once");
-      mGraph->mEndTime = mGraph->RoundUpToEndOfAudioBlock(
-          mGraph->mStateComputedTime + mTicksToProcess);
-    }
-    // The graph owns this message.
-    MediaTrackGraphImpl* MOZ_NON_OWNING_REF mGraph;
-    uint32_t mTicksToProcess;
-  };
-
-  graph->AppendMessage(MakeUnique<Message>(graph, aTicksToProcess));
+  graph->QueueControlMessageWithNoShutdown([graph = RefPtr{graph},
+                                            aTicksToProcess]() {
+    TRACE("MTG::StartNonRealtimeProcessing ControlMessage");
+    MOZ_ASSERT(graph->mStateComputedTime == 0);
+    MOZ_ASSERT(graph->mEndTime == 0,
+               "StartNonRealtimeProcessing should be called only once");
+    graph->mEndTime = aTicksToProcess;
+    OfflineClockDriver* driver = graph->CurrentDriver()->AsOfflineClockDriver();
+    MOZ_ASSERT(driver);
+    driver->SetTickCountToRender(aTicksToProcess);
+  });
 }
 
 void MediaTrackGraphImpl::InterruptJS() {

@@ -37,12 +37,12 @@
 #include <string_view>
 
 // #include "memory_hooks.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/AutoProfilerLabel.h"
 #include "mozilla/BaseAndGeckoProfilerDetail.h"
 #include "mozilla/BaseProfilerDetail.h"
 #include "mozilla/DoubleConversion.h"
 #include "mozilla/Printf.h"
+#include "mozilla/PodOperations.h"
 #include "mozilla/ProfilerBufferSize.h"
 #include "mozilla/ProfileBufferChunkManagerSingle.h"
 #include "mozilla/ProfileBufferChunkManagerWithLocalLimit.h"

@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.compose.content
 import androidx.navigation.fragment.findNavController
 import org.mozilla.fenix.components.StoreProvider
+import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.theme.FirefoxTheme
 
 /**
@@ -25,16 +26,12 @@ class SettingsSearchFragment : Fragment() {
 
     lateinit var settingsSearchStore: SettingsSearchStore
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        settingsSearchStore = buildSettingsSearchStore()
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?,
     ): View = content {
+        settingsSearchStore = buildSettingsSearchStore()
         (activity as? AppCompatActivity)?.supportActionBar?.hide()
         FirefoxTheme {
             SettingsSearchScreen(
@@ -58,8 +55,9 @@ class SettingsSearchFragment : Fragment() {
                 middleware = listOf(
                     SettingsSearchMiddleware(
                         SettingsSearchMiddleware.Companion.Dependencies(
-                            context = requireContext(),
+                            navController = findNavController(),
                          ),
+                        fenixSettingsIndexer = requireContext().components.settingsIndexer,
                     ),
                 ),
             )

@@ -19,11 +19,11 @@
 #include "LulCommonExt.h"
 #include "LulElfExt.h"
 #include "LulMainInt.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/MemoryChecking.h"
+#include "mozilla/PodOperations.h"
 #include "mozilla/Sprintf.h"
 #include "mozilla/UniquePtr.h"
 

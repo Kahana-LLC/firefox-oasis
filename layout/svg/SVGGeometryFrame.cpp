@@ -14,7 +14,6 @@
 #include "gfxContext.h"
 #include "gfxPlatform.h"
 #include "gfxUtils.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/SVGContentUtils.h"
@@ -284,8 +283,9 @@ void SVGGeometryFrame::ReflowSVG() {
     flags |= SVGUtils::eBBoxIncludeStrokeGeometry;
   }
 
-  gfxRect extent = GetBBoxContribution({}, flags).ToThebesRect();
-  mRect = nsLayoutUtils::RoundGfxRectToAppRect(extent, AppUnitsPerCSSPixel());
+  SVGBBox extent = GetBBoxContribution({}, flags).ToThebesRect();
+  mRect = nsLayoutUtils::RoundGfxRectToAppRect((const Rect&)extent,
+                                               AppUnitsPerCSSPixel());
 
   if (HasAnyStateBits(NS_FRAME_FIRST_REFLOW)) {
     // Make sure we have our filter property (if any) before calling

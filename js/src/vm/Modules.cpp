@@ -403,57 +403,6 @@ JS_PUBLIC_API bool JS::ThrowOnModuleEvaluationFailure(
   return OnModuleEvaluationFailure(cx, evaluationPromise, errorBehaviour);
 }
 
-JS_PUBLIC_API uint32_t
-JS::GetRequestedModulesCount(JSContext* cx, Handle<JSObject*> moduleRecord) {
-  AssertHeapIsIdle();
-  CHECK_THREAD(cx);
-  cx->check(moduleRecord);
-
-  return moduleRecord->as<ModuleObject>().requestedModules().Length();
-}
-
-JS_PUBLIC_API JSString* JS::GetRequestedModuleSpecifier(
-    JSContext* cx, Handle<JSObject*> moduleRecord, uint32_t index) {
-  AssertHeapIsIdle();
-  CHECK_THREAD(cx);
-  cx->check(moduleRecord);
-
-  auto* moduleRequest = moduleRecord->as<ModuleObject>()
-                            .requestedModules()[index]
-                            .moduleRequest();
-
-  // This implements step 7.1.1 in HostLoadImportedModule.
-  // https://html.spec.whatwg.org/multipage/webappapis.html#hostloadimportedmodule
-  //
-  // If moduleRequest.[[Attributes]] contains a Record entry such that
-  // entry.[[Key]] is not "type",
-  if (moduleRequest->hasFirstUnsupportedAttributeKey()) {
-    UniqueChars printableKey = AtomToPrintableString(
-        cx, moduleRequest->getFirstUnsupportedAttributeKey());
-    JS_ReportErrorNumberASCII(
-        cx, GetErrorMessage, nullptr,
-        JSMSG_IMPORT_ATTRIBUTES_STATIC_IMPORT_UNSUPPORTED_ATTRIBUTE,
-        printableKey ? printableKey.get() : "");
-    return nullptr;
-  }
-
-  return moduleRequest->specifier();
-}
-
-JS_PUBLIC_API void JS::GetRequestedModuleSourcePos(
-    JSContext* cx, Handle<JSObject*> moduleRecord, uint32_t index,
-    uint32_t* lineNumber, JS::ColumnNumberOneOrigin* columnNumber) {
-  AssertHeapIsIdle();
-  CHECK_THREAD(cx);
-  cx->check(moduleRecord);
-  MOZ_ASSERT(lineNumber);
-  MOZ_ASSERT(columnNumber);
-
-  auto& module = moduleRecord->as<ModuleObject>();
-  *lineNumber = module.requestedModules()[index].lineNumber();
-  *columnNumber = module.requestedModules()[index].columnNumber();
-}
-
 JS_PUBLIC_API JS::ModuleType JS::GetRequestedModuleType(
     JSContext* cx, Handle<JSObject*> moduleRecord, uint32_t index) {
   AssertHeapIsIdle();
@@ -813,7 +762,8 @@ static void ThrowUnexpectedModuleStatus(JSContext* cx, ModuleStatus status) {
 bool js::HostLoadImportedModule(JSContext* cx, Handle<JSScript*> referrer,
                                 Handle<JSObject*> moduleRequest,
                                 Handle<Value> hostDefined,
-                                Handle<Value> payload) {
+                                Handle<Value> payload, uint32_t lineNumber,
+                                JS::ColumnNumberOneOrigin columnNumber) {
   MOZ_ASSERT(moduleRequest);
   MOZ_ASSERT(!payload.isUndefined());
 
@@ -823,7 +773,8 @@ bool js::HostLoadImportedModule(JSContext* cx, Handle<JSScript*> referrer,
     return false;
   }
 
-  bool ok = moduleLoadHook(cx, referrer, moduleRequest, hostDefined, payload);
+  bool ok = moduleLoadHook(cx, referrer, moduleRequest, hostDefined, payload,
+                           lineNumber, columnNumber);
 
   if (!ok) {
     MOZ_ASSERT(JS_IsExceptionPending(cx));
@@ -1561,7 +1512,8 @@ static bool InnerModuleLoading(JSContext* cx,
         Rooted<Value> hostDefined(cx, state->hostDefined());
         Rooted<Value> payload(cx, ObjectValue(*state));
         if (!HostLoadImportedModule(cx, referrer, moduleRequest, hostDefined,
-                                    payload)) {
+                                    payload, request.lineNumber(),
+                                    request.columnNumber())) {
           return false;
         }
       }

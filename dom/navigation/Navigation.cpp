@@ -13,7 +13,6 @@
 #include "mozilla/HoldDropJSObjects.h"
 #include "mozilla/Logging.h"
 #include "mozilla/StaticPrefs_dom.h"
-#include "mozilla/UniquePtr.h"
 #include "mozilla/dom/DOMException.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/ErrorEvent.h"
@@ -35,14 +34,19 @@
 #include "nsCycleCollectionParticipant.h"
 #include "nsDocShell.h"
 #include "nsGlobalWindowInner.h"
+#include "nsIMultiPartChannel.h"
 #include "nsIPrincipal.h"
 #include "nsISHistory.h"
+#include "nsIScriptChannel.h"
 #include "nsIStructuredCloneContainer.h"
 #include "nsIXULRuntime.h"
 #include "nsNetUtil.h"
 #include "nsTHashtable.h"
 
 mozilla::LazyLogModule gNavigationAPILog("NavigationAPI");
+
+#define LOG_FMTE(format, ...) \
+  MOZ_LOG_FMT(gNavigationAPILog, LogLevel::Error, format, ##__VA_ARGS__);
 
 #define LOG_FMTW(format, ...) \
   MOZ_LOG_FMT(gNavigationAPILog, LogLevel::Warning, format, ##__VA_ARGS__);
@@ -279,6 +283,12 @@ NavigationTransition* Navigation::GetTransition() const { return mTransition; }
 
 NavigationActivation* Navigation::GetActivation() const { return mActivation; }
 
+template <typename I>
+bool SupportsInterface(nsISupports* aSupports) {
+  nsCOMPtr<I> ptr = do_QueryInterface(aSupports);
+  return ptr;
+}
+
 // https://html.spec.whatwg.org/#has-entries-and-events-disabled
 bool Navigation::HasEntriesAndEventsDisabled() const {
   Document* doc = GetAssociatedDocument();
@@ -286,7 +296,16 @@ bool Navigation::HasEntriesAndEventsDisabled() const {
          doc->GetInitialStatus() == Document::InitialStatus::IsInitial ||
          doc->GetInitialStatus() ==
              Document::InitialStatus::IsInitialButExplicitlyOpened ||
-         doc->GetPrincipal()->GetIsNullPrincipal();
+         doc->GetPrincipal()->GetIsNullPrincipal() ||
+         // We explicitly disallow documents loaded through multipart and script
+         // channels from having events or entries. See bug 1996218 and bug
+         // 1996221
+         SupportsInterface<nsIMultiPartChannel>(doc->GetChannel()) ||
+         SupportsInterface<nsIScriptChannel>(doc->GetChannel()) ||
+         // We also disallow documents embedded using <object>/<embed>. See bug
+         // 1996215.
+         !doc->GetBrowsingContext() ||
+         doc->GetBrowsingContext()->IsEmbedderTypeObjectOrEmbed();
 }
 
 // https://html.spec.whatwg.org/#initialize-the-navigation-api-entries-for-a-new-document
@@ -356,6 +375,7 @@ void Navigation::UpdateEntriesForSameDocumentNavigation(
     case NavigationType::Replace:
       MOZ_LOG(gNavigationAPILog, LogLevel::Debug, ("Replace navigation"));
       if (!oldCurrentEntry) {
+        LOG_FMTE("No current entry.");
         MOZ_ASSERT(false, "FIXME");
         return;
       }
@@ -1941,3 +1961,5 @@ void Navigation::CreateNavigationActivationFrom(
 #undef LOG_FMTV
 #undef LOG_FMTD
 #undef LOG_FMTI
+#undef LOG_FMTW
+#undef LOG_FMTE

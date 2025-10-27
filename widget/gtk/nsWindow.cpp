@@ -28,7 +28,6 @@
 #include "GtkCompositorWidget.h"
 #include "imgIContainer.h"
 #include "InputData.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/Components.h"
 #include "mozilla/GRefPtr.h"
@@ -68,7 +67,6 @@
 #include "mozilla/TextEventDispatcher.h"
 #include "mozilla/TextEvents.h"
 #include "mozilla/TimeStamp.h"
-#include "mozilla/UniquePtrExtensions.h"
 #include "mozilla/WidgetUtils.h"
 #include "mozilla/WritingModes.h"
 #ifdef MOZ_X11

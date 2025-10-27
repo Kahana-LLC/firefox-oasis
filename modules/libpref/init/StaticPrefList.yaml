@@ -1917,6 +1917,13 @@
   value: false
   mirror: always
 
+# Whether to restore windows to the virtual desktop (aka workspace)
+# they were on when they were closed.
+- name: browser.sessionstore.restore_windows_to_virtual_desktop
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
+
 # If set, when a link is opened to a new tab, do not switch to the new tab.
 #
 # This pref is used when the link is opened with "Open Link in New Tab",
@@ -6781,38 +6788,11 @@
   value: 0x7fff
   mirror: always
 
-- name: gfx.canvas.remote
-  type: bool
-#if defined(XP_WIN)
-  value: true
-#else
-  value: false
-#endif
-  mirror: once
-
-- name: gfx.canvas.remote.allow-in-parent
-  type: bool
-  value: false
-  mirror: once
-
 # Whether OffscreenCanvas can use remote canvas
 - name: gfx.canvas.remote.allow-offscreen
   type: RelaxedAtomicBool
   value: true
   mirror: always
-
-# How many worker threads spawned for remote canvas
-#  -1 - Calculate based on processor cores
-#   0 - No worker threads spawned, will do work on CanvasRenderThread
-#  >0 - Create worker thread pool with given size
-- name: gfx.canvas.remote.worker-threads
-  type: int32_t
-#if defined(XP_WIN)
-  value: -1
-#else
-  value: 0
-#endif
-  mirror: once
 
 # Default size of the shmem buffers used for recording
 - name: gfx.canvas.remote.default-buffer-size
@@ -6857,7 +6837,7 @@
 
 - name: gfx.canvas.remote.use-draw-image-fast-path-d3d
   type: RelaxedAtomicBool
-  value: true
+  value: false
   mirror: always
 
 - name: gfx.canvas.remote.recycle-used-data-surface
@@ -7021,24 +7001,6 @@
   value: -1
   mirror: once
 
-
-# Whether to disable the automatic detection and use of direct2d.
-- name: gfx.direct2d.disabled
-  type: bool
-  value: true
-  mirror: once
-
-# Whether to attempt to enable Direct2D regardless of automatic detection or
-# blacklisting.
-- name: gfx.direct2d.force-enabled
-  type: bool
-  value: false
-  mirror: once
-
-- name: gfx.direct2d.target-independent-rasterization.disabled
-  type: bool
-  value: false
-  mirror: once
 
 - name: gfx.direct3d11.reuse-decoder-device
   type: bool
@@ -9048,12 +9010,6 @@
   mirror: always
   set_spidermonkey_pref: always
 
-- name: javascript.options.experimental.json_parse_with_source
-  type: bool
-  value: true
-  mirror: always
-  set_spidermonkey_pref: always
-
 # Dictionary Teleporting
 - name: javascript.options.experimental.dictionary_teleporting
   type: bool
@@ -9169,7 +9125,7 @@
 -   name: javascript.options.wasm_relaxed_simd
     type: bool
 #if defined(ENABLE_WASM_RELAXED_SIMD)
-    value: @IS_NIGHTLY_BUILD@
+    value: true
 #else
     value: false
 #endif
@@ -9550,12 +9506,10 @@
 
 - name: layers.gpu-process.enabled
   type: bool
-#if defined(XP_WIN) || defined(MOZ_WIDGET_ANDROID)
+#if defined(XP_WIN) || defined(MOZ_WIDGET_ANDROID) || defined(XP_MACOSX)
   value: true
 #elif defined(MOZ_X11)
   value: false  # we'd like this to be @IS_NIGHTLY_BUILD@, see Bug 1927058
-#elif defined(XP_MACOSX)
-  value: @IS_NIGHTLY_BUILD@
 #else
   value: false
 #endif
@@ -9627,7 +9581,7 @@
 
 - name: layers.gpu-process.startup_timeout_ms
   type: int32_t
-  value: 5000
+  value: 10000
   mirror: once
 
 - name: layers.gpu-process.crash-also-crashes-browser
@@ -11932,6 +11886,11 @@
     value: true
     mirror: always
 
+-   name: media.wmf.encoder.realtime.wait-for-output
+    type: RelaxedAtomicBool
+    value: @IS_NIGHTLY_BUILD@
+    mirror: always
+
 # Using Windows Media Foundation Media Engine for encrypted playback
 # 0 : disable, 1 : enable for encrypted and clear,
 # 2 : enable for encrypted only, 3 : enable for clear only
@@ -12162,7 +12121,7 @@
 # When modifying this pref, please update the test_peerConnection_glean.html tests as well.
 - name: media.webrtc.send_mlkem_keyshare
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 # This pref controls whether dispatch testing-only events.

@@ -27,10 +27,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "adler"
-version = "1.0.2"
+name = "adler2"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aho-corasick"
@@ -334,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "authenticator"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82d71e457dc518a15eecc90d3b0660dee4b51623b34ac4262c9326e0d7e0f8e2"
+checksum = "bbd6f57365675990f2db272a6560b28945df74cf3749c70aafd9b1c7829edebc"
 dependencies = [
  "base64 0.21.999",
  "bitflags 1.999.999",
@@ -2057,9 +2057,9 @@ checksum = "cda653ca797810c02f7ca4b804b40b8b95ae046eb989d356bce17919a8c25499"
 
 [[package]]
 name = "flate2"
-version = "1.0.30"
+version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f54427cfd1c7829e2a139fcefea601bf088ebca651d2bf53ebc600eac295dae"
+checksum = "dc5a4e564e38c699f2880d3fda590bedc2e69f3f84cd48b457bd892ce61d0aa9"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
@@ -2713,9 +2713,9 @@ dependencies = [
 
 [[package]]
 name = "glean"
-version = "65.2.2"
+version = "66.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "895946f5a54f9d54c24175af3a064c9ecf8b4f9374afb26132b583f179fc6be2"
+checksum = "3acc348bbf540abeedf7c271daf952b1e24311e2ea1c1f8ac172a5cedf37ac91"
 dependencies = [
  "crossbeam-channel",
  "glean-core",
@@ -2728,9 +2728,9 @@ dependencies = [
 
 [[package]]
 name = "glean-core"
-version = "65.2.2"
+version = "66.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b22a5ae2c3fd542fb8388da0de68542748f466c8df9a815c8b9cc274894ab919"
+checksum = "540e40007a01e43b73904d1ee8f7efd4782f1a7f4a20ef1dd6d2c00fc18d54b6"
 dependencies = [
  "android_logger",
  "bincode",
@@ -3391,7 +3391,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.999",
+ "hashbrown 0.16.0",
  "serde",
  "serde_core",
 ]
@@ -4283,11 +4283,12 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.7.1"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7810e0be55b428ada41041c41f32c9f1a42817901b4ccf45fa3d4b6561e74c7"
+checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
- "adler",
+ "adler2",
+ "simd-adler32",
 ]
 
 [[package]]
@@ -4713,7 +4714,7 @@ dependencies = [
 [[package]]
 name = "mtu"
 version = "0.2.9"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "bindgen 0.69.999",
  "cfg_aliases",
@@ -4757,8 +4758,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-bin"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -4781,8 +4782,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-common"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "enum-map",
  "env_logger",
@@ -4795,8 +4796,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-crypto"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "bindgen 0.69.999",
  "enum-map",
@@ -4813,8 +4814,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-http3"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "enumset",
  "log",
@@ -4832,8 +4833,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-qpack"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "log",
  "neqo-common",
@@ -4846,8 +4847,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-transport"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "enum-map",
  "enumset",
@@ -4866,8 +4867,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-udp"
-version = "0.16.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.16.1#b3d8f0d21db5657ebafb14f9b60c8892d2eb3aa9"
+version = "0.17.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.17.0#0f8a822da1766cd397a4b0687f23da096d762733"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -6422,6 +6423,12 @@ version = "0.1.0"
 dependencies = [
  "hashlink",
 ]
+
+[[package]]
+name = "simd-adler32"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "siphasher"
@@ -8304,9 +8311,9 @@ dependencies = [
 
 [[package]]
 name = "zeitstempel"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94652f036694517fa67509942c3b60a51a19e1cd9cfd0f456eeb830ae8798d3d"
+checksum = "f523a0d9326c4f3242ad3a9d306baa7fe4572fd532cc891cabecfb714c786c1e"
 dependencies = [
  "cfg-if",
  "libc",

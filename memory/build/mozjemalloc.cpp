@@ -138,7 +138,6 @@
 
 #include "mozilla/Atomics.h"
 #include "mozilla/Alignment.h"
-#include "mozilla/ArrayUtils.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/DebugOnly.h"
@@ -153,7 +152,6 @@
 // instead of the one defined here; use only MozTagAnonymousMemory().
 #include "mozilla/TaggedAnonymousMemory.h"
 #include "mozilla/ThreadLocal.h"
-#include "mozilla/UniquePtr.h"
 #include "mozilla/XorShift128PlusRNG.h"
 #include "mozilla/fallible.h"
 #include "RadixTree.h"

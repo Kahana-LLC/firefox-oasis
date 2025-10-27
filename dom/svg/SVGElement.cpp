@@ -27,8 +27,6 @@
 #include "SVGMotionSMILAttr.h"
 #include "mozAutoDocUpdate.h"
 #include "mozilla/AlreadyAddRefed.h"
-#include "mozilla/ArrayUtils.h"
-#include "mozilla/DebugOnly.h"
 #include "mozilla/DeclarationBlock.h"
 #include "mozilla/EventListenerManager.h"
 #include "mozilla/PresShell.h"
