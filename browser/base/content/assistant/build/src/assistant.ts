@@ -65,6 +65,10 @@ const GraphState = Annotation.Root({
     reducer: (x, y) => (typeof y === "number" ? y : (x ?? 0)),
     default: () => 0,
   }),
+  args: Annotation<Record<string, any>>({
+    reducer: (x, y) => (y ? { ...(x || {}), ...y } : x),
+    default: () => ({}),
+  }),
 });
 
 /* ========= Helpers ========= */
@@ -90,20 +94,16 @@ async function buildGraph(commands: Command[]) {
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    // Node: take the last human content as input; run the command; emit AI text.
+    // Node: run the command and emit a message that clearly identifies the tool's output.
     const node = async (state: typeof GraphState.State) => {
-      const msgs = state.messages;
-      const lastHuman = [...msgs].reverse().find(m => (m as any)?._getType?.() === "human");
-      const input = msgText(lastHuman);
-
-      const result: CmdResult = await command.execute(input);
-      const nextRepeat =
-        state.lastWorker === command.commandName ? (state.repeatCount ?? 0) + 1 : 1;
-
+      const result: CmdResult = await command.execute(state.args);
+      const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
-        messages: [new AIMessage({ content: result.message, name: command.commandName })],
-        lastWorker: command.commandName,
-        repeatCount: nextRepeat,
+        messages: [new AIMessage({ content, name: command.commandName })],
+        // Clear state to prevent re-running the same tool
+        lastWorker: "",
+        repeatCount: 0,
+        args: {},
       };
     };
 
@@ -112,28 +112,60 @@ async function buildGraph(commands: Command[]) {
   }
 
   // ---------- Supervisor with routing rules + few-shots ----------
-  const systemTemplate = `You are a supervisor managing a team of specialist workers.
-Your goal is to choose the best worker for the job based on the user's request.
-The available workers are:
+  const systemTemplate = `You are a supervisor agent that manages a team of workers.
+Your job is to intelligently route the user's request to the appropriate worker.
+You will be given the user's request and the conversation history.
+
+**Workers**
+You have the following workers available:
 {members}
 
-Each worker has a specific job description.
-Based on the user's request, choose the worker that is the best fit for the job.
-The user's request will be forwarded to the worker you choose.
+**Rules**
+1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
+2.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
+3.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
+4.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
+5.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
 
-Your output MUST be a JSON object with a single key "next" and the value being the name of the worker you are choosing.
-Example:
+**Output Format**
+You MUST respond with a JSON object that follows this schema:
+\`\`\`json
 {
-"next": "worker_name"
+  "next": "<name of the chosen worker>",
+  "args": {
+    "<argument_name>": "<argument_value>"
+  }
 }
+\`\`\`
 
-The available workers are: {options}
-If no worker is a good fit, you can choose to "FINISH".
+**Example**
+User request: "Open a new tab to google.com and then tell me what tabs I have open."
 
-Here are the job descriptions for each worker:
-{members}`.trim();
+*First Turn*
+\`\`\`json
+{
+  "next": "open_tab",
+  "args": { "url": "google.com" }
+}
+\`\`\`
 
-  const MAX_REPEAT = 2;
+*Second Turn (after the tab is opened)*
+\`\`\`json
+{
+  "next": "list_tabs",
+  "args": {}
+}
+\`\`\`
+
+*Third Turn (after the tabs are listed)*
+\`\`\`json
+{
+  "next": "FINISH",
+  "args": {}
+}
+\`\`\`
+
+The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
     const CHAT_PROMPT = "You are a helpful assistant.";
@@ -142,16 +174,29 @@ Here are the job descriptions for each worker:
   };
 
   const supervisorNode = async (s: typeof GraphState.State) => {
-    if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
-
     const options = [END, ...memberNames, "chat"];
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
 
-    const out = await routeRemote(systemPrompt, toWire(s.messages), options);
-    const nxt = out?.next && options.includes(out.next) ? out.next : END;
-    return { next: nxt };
+    // Use only the messages from the current graph execution for routing decisions.
+    const messages = s.messages;
+    const out = await routeRemote(systemPrompt, toWire(messages), options);
+    const nextTool = out?.next;
+    const nextArgs = out?.args || {};
+
+    // The supervisor can return "FINISH" to end the conversation.
+    if (nextTool === "FINISH") {
+      return { next: END };
+    }
+
+    // If the supervisor selected a valid tool, use it.
+    if (nextTool && memberNames.includes(nextTool)) {
+      return { next: nextTool, args: nextArgs };
+    }
+
+    // Otherwise, fall back to chat. This handles conversational replies.
+    return { next: "chat", args: {} };
   };
 
   const workflow = new StateGraph(GraphState);
@@ -175,7 +220,7 @@ export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void
 ): Promise<string> {
-  const isAuthenticated = await supabaseAuth.isAuthenticated();
+  const isAuthenticated = await supabaseAuth. isAuthenticated();
   if (!isAuthenticated) {
     const msg = "Please sign in to use the assistant.";
     onChunk(msg);

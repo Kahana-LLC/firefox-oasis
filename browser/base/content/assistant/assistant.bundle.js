@@ -54581,8 +54581,8 @@ function getChrome2() {
 }
 var ListTabsCommand = class {
   commandName = "list_tabs";
-  description = "List titles of tabs in the current window.";
-  async execute() {
+  description = "List titles of tabs in the current window. Accepts no arguments.";
+  async execute(_args) {
     const { gBrowser } = getChrome2();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
     const titles = Array.from(gBrowser.tabs).map(
@@ -54594,11 +54594,11 @@ var ListTabsCommand = class {
 };
 var OpenTabCommand = class {
   commandName = "open_tab";
-  description = "Open a new tab with a given URL. Input can be a string or { url: string }.";
-  async execute(input) {
+  description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
+  async execute(args) {
     const { topWin } = getChrome2();
-    const url = typeof input === "string" ? input : input?.url;
-    if (!url) return { message: "Missing 'url'." };
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
     topWin.openTrustedLinkIn(url, "tab");
     return { message: `Opened ${url}` };
@@ -54606,12 +54606,12 @@ var OpenTabCommand = class {
 };
 var CloseTabCommand = class {
   commandName = "close_tab";
-  description = "Close the active tab (or a tab by index via { index: number }, 1-based).";
-  async execute(input) {
+  description = "Close the active tab (or a tab by index). Accepts arguments: { index?: number } (1-based).";
+  async execute(args) {
     const { gBrowser } = getChrome2();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
     let tab = gBrowser.selectedTab;
-    const idx = typeof input === "object" && typeof input.index === "number" ? input.index : null;
+    const idx = args?.index;
     if (idx != null) {
       const i = Math.max(1, Math.floor(idx));
       if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
@@ -54624,12 +54624,12 @@ var CloseTabCommand = class {
 };
 var MoveTabToNewWindowCommand = class {
   commandName = "move_tab_to_new_window";
-  description = "Move the active tab (or { index }) to a new window.";
-  async execute(input) {
+  description = "Move the active tab (or a tab by index) to a new window. Accepts arguments: { index?: number } (1-based).";
+  async execute(args) {
     const { topWin, gBrowser } = getChrome2();
     if (!gBrowser || !topWin) return { message: "Browser UI not available." };
     let tab = gBrowser.selectedTab;
-    const idx = typeof input === "object" && typeof input.index === "number" ? input.index : null;
+    const idx = args?.index;
     if (idx != null) {
       const i = Math.max(1, Math.floor(idx));
       if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
@@ -54644,8 +54644,8 @@ var MoveTabToNewWindowCommand = class {
 };
 var CopyTabUrlsCommand = class {
   commandName = "copy_tab_urls";
-  description = "Copy all tab URLs in the current window to the clipboard (one per line).";
-  async execute() {
+  description = "Copy all tab URLs in the current window to the clipboard (one per line). Accepts no arguments.";
+  async execute(_args) {
     const { gBrowser } = getChrome2();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
     const urls = Array.from(gBrowser.tabs).map((t) => t.linkedBrowser?.currentURI?.spec).filter(Boolean);
@@ -54659,54 +54659,23 @@ ${text}` };
     }
   }
 };
-function extractQuoted(input) {
-  const m = input.match(/"([^"]+)"/) || input.match(/'([^']+)'/);
-  return m?.[1]?.trim() || null;
-}
-function extractHubName(input) {
-  if (!input) return "";
-  if (typeof input === "string") {
-    const q = extractQuoted(input);
-    if (q) return q;
-    const mm = input.match(/\b(?:hub|group)\b\s+(.+)$/i);
-    if (mm?.[1]) return mm[1].trim();
-    return input.trim();
-  }
-  return String(input?.name || input?.hub || input?.group || "").trim();
-}
-function extractInclude(input) {
-  const s = (typeof input === "string" ? input : String(input?.include || "")).toLowerCase();
-  if (/all/.test(s)) return "all";
-  if (/current|this/.test(s)) return "current";
-  return "none";
-}
-function extractCloseTabs(input) {
-  if (typeof input === "object" && typeof input.closeTabs === "boolean") return input.closeTabs;
-  const s = (typeof input === "string" ? input : String(input?.closeTabs ?? input?.close ?? "")).toLowerCase();
-  return /true|yes|close\s+tabs|delete\s+tabs/.test(s);
-}
-function extractOpenWhere(input) {
-  const s = (typeof input === "string" ? input : String(input?.where || "")).toLowerCase();
-  if (/window|new\s+window/.test(s)) return "window";
-  return "tabs";
-}
 var CreateHubCommand = class {
   commandName = "create_hub";
-  description = "Create a hub (tab group). Input can be a string name or { name, include: 'none'|'current'|'all' }.";
-  async execute(input) {
-    const name = extractHubName(input) || "";
-    const include = extractInclude(input);
+  description = "Create a hub (tab group). Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
+  async execute(args) {
+    const name = args?.name || "";
+    const include = args?.include || "none";
     const res = hubs.create(name, { include });
     return { message: `Created hub "${res.name}" (${res.count} items).` };
   }
 };
 var DeleteHubCommand = class {
   commandName = "delete_hub";
-  description = "Delete a hub by name. Input can be a string name or { name, closeTabs?: boolean }.";
-  async execute(input) {
-    const name = extractHubName(input);
+  description = "Delete a hub by name. Accepts arguments: { name: string, closeTabs?: boolean }.";
+  async execute(args) {
+    const name = args?.name;
     if (!name) return { message: "Which hub should I delete?" };
-    const closeTabs = extractCloseTabs(input);
+    const closeTabs = args?.closeTabs || false;
     const res = hubs.delete(name, { closeTabs });
     if (res.removed === 0) return { message: `No hub named "${name}".` };
     return { message: `Deleted hub "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
@@ -54714,8 +54683,8 @@ var DeleteHubCommand = class {
 };
 var ListHubsCommand = class {
   commandName = "list_hubs";
-  description = "List all hubs with counts.";
-  async execute() {
+  description = "List all hubs with counts. Accepts no arguments.";
+  async execute(_args) {
     const items = hubs.list();
     if (!items.length) return { message: "No hubs yet." };
     return { message: items.map((h) => `\u2022 ${h.name} (${h.count})`).join("\n") };
@@ -54723,28 +54692,10 @@ var ListHubsCommand = class {
 };
 var RenameHubCommand = class {
   commandName = "rename_hub";
-  description = `Rename a hub. Input can be { from, to } or a string like "rename hub 'Old' to 'New'".`;
-  async execute(input) {
-    let from = "", to = "";
-    if (typeof input === "string") {
-      const q = input.match(/rename\s+(?:hub|group)\s+(['"].+?['"]|[^\s]+)\s+to\s+(['"].+?['"]|.+)$/i);
-      if (q) {
-        const unq = (s) => s.replace(/^['"]|['"]$/g, "").trim();
-        from = unq(q[1]);
-        to = unq(q[2]);
-      } else {
-        const parts = input.split(/\bto\b/i);
-        if (parts.length === 2) {
-          const left = extractHubName(parts[0]);
-          const right = extractHubName(parts[1]);
-          from = left;
-          to = right;
-        }
-      }
-    } else {
-      from = String(input?.from || input?.old || "").trim();
-      to = String(input?.to || input?.name || input?.new || "").trim();
-    }
+  description = "Rename a hub. Accepts arguments: { from: string, to: string }.";
+  async execute(args) {
+    const from = args?.from;
+    const to = args?.to;
     if (!from || !to) return { message: "Please provide old and new hub names." };
     const r = hubs.rename(from, to);
     return { message: r.ok ? `Renamed hub "${from}" \u2192 "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
@@ -54752,19 +54703,9 @@ var RenameHubCommand = class {
 };
 var AddTabToHubCommand = class {
   commandName = "add_tab_to_hub";
-  description = "Add the current tab to a hub. Input can be a string hub name or { name }.";
-  async execute(input) {
-    let name = "";
-    if (typeof input === "string") {
-      const q = extractQuoted(input);
-      if (q) name = q;
-      else {
-        const m = input.match(/\bto\b\s+(.+)$/i);
-        name = (m?.[1] || input).replace(/^(hub|group)\s+/i, "").trim();
-      }
-    } else {
-      name = String(input?.name || input?.hub || "").trim();
-    }
+  description = "Add the current tab to a hub. Accepts arguments: { name: string }.";
+  async execute(args) {
+    const name = args?.name;
     if (!name) return { message: "Which hub should I add this tab to?" };
     const r = hubs.addCurrentTab(name);
     return { message: r.ok ? `Added current tab to "${name}".` : "Failed to add tab." };
@@ -54772,11 +54713,11 @@ var AddTabToHubCommand = class {
 };
 var OpenHubCommand = class {
   commandName = "open_hub";
-  description = "Open all items from a hub in tabs or a new window. Input can be a string name or { name, where: 'tabs'|'window' }.";
-  async execute(input) {
-    const name = extractHubName(input);
+  description = "Open all items from a hub in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
+  async execute(args) {
+    const name = args?.name;
     if (!name) return { message: "Which hub should I open?" };
-    const where = extractOpenWhere(input);
+    const where = args?.where || "tabs";
     const r = hubs.openHub(name, where);
     return { message: r.ok ? `Opened hub "${name}" in ${where}.` : `Failed to open "${name}".` };
   }
@@ -54808,6 +54749,10 @@ var GraphState = Annotation.Root({
   repeatCount: Annotation({
     reducer: (x, y) => typeof y === "number" ? y : x ?? 0,
     default: () => 0
+  }),
+  args: Annotation({
+    reducer: (x, y) => y ? { ...x || {}, ...y } : x,
+    default: () => ({})
   })
 });
 function msgText(m) {
@@ -54828,53 +54773,92 @@ async function buildGraph(commands) {
   const memberNames = [];
   for (const command of commands) {
     const node = async (state) => {
-      const msgs = state.messages;
-      const lastHuman = [...msgs].reverse().find((m) => m?._getType?.() === "human");
-      const input = msgText(lastHuman);
-      const result = await command.execute(input);
-      const nextRepeat = state.lastWorker === command.commandName ? (state.repeatCount ?? 0) + 1 : 1;
+      const result = await command.execute(state.args);
+      const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
-        messages: [new AIMessage({ content: result.message, name: command.commandName })],
-        lastWorker: command.commandName,
-        repeatCount: nextRepeat
+        messages: [new AIMessage({ content, name: command.commandName })],
+        // Clear state to prevent re-running the same tool
+        lastWorker: "",
+        repeatCount: 0,
+        args: {}
       };
     };
     toolAgents[command.commandName] = node;
     memberNames.push(command.commandName);
   }
-  const systemTemplate = `You are a supervisor managing a team of specialist workers.
-Your goal is to choose the best worker for the job based on the user's request.
-The available workers are:
+  const systemTemplate = `You are a supervisor agent that manages a team of workers.
+Your job is to intelligently route the user's request to the appropriate worker.
+You will be given the user's request and the conversation history.
+
+**Workers**
+You have the following workers available:
 {members}
 
-Each worker has a specific job description.
-Based on the user's request, choose the worker that is the best fit for the job.
-The user's request will be forwarded to the worker you choose.
+**Rules**
+1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
+2.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
+3.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
+4.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
+5.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
 
-Your output MUST be a JSON object with a single key "next" and the value being the name of the worker you are choosing.
-Example:
+**Output Format**
+You MUST respond with a JSON object that follows this schema:
+\`\`\`json
 {
-"next": "worker_name"
+  "next": "<name of the chosen worker>",
+  "args": {
+    "<argument_name>": "<argument_value>"
+  }
 }
+\`\`\`
 
-The available workers are: {options}
-If no worker is a good fit, you can choose to "FINISH".
+**Example**
+User request: "Open a new tab to google.com and then tell me what tabs I have open."
 
-Here are the job descriptions for each worker:
-{members}`.trim();
-  const MAX_REPEAT = 2;
+*First Turn*
+\`\`\`json
+{
+  "next": "open_tab",
+  "args": { "url": "google.com" }
+}
+\`\`\`
+
+*Second Turn (after the tab is opened)*
+\`\`\`json
+{
+  "next": "list_tabs",
+  "args": {}
+}
+\`\`\`
+
+*Third Turn (after the tabs are listed)*
+\`\`\`json
+{
+  "next": "FINISH",
+  "args": {}
+}
+\`\`\`
+
+The available workers are: {options}`.trim();
   const chatNode = async (state) => {
     const CHAT_PROMPT = "You are a helpful assistant.";
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
     return { messages: [new AIMessage(res.content)] };
   };
   const supervisorNode = async (s) => {
-    if ((s.repeatCount ?? 0) >= MAX_REPEAT) return { next: END };
     const options = [END, ...memberNames, "chat"];
     const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", ")).replace("{options}", options.join(", "));
-    const out = await routeRemote(systemPrompt, toWire(s.messages), options);
-    const nxt = out?.next && options.includes(out.next) ? out.next : END;
-    return { next: nxt };
+    const messages = s.messages;
+    const out = await routeRemote(systemPrompt, toWire(messages), options);
+    const nextTool = out?.next;
+    const nextArgs = out?.args || {};
+    if (nextTool === "FINISH") {
+      return { next: END };
+    }
+    if (nextTool && memberNames.includes(nextTool)) {
+      return { next: nextTool, args: nextArgs };
+    }
+    return { next: "chat", args: {} };
   };
   const workflow = new StateGraph(GraphState);
   for (const name of memberNames) {
