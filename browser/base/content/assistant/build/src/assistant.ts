@@ -25,26 +25,29 @@ const supabaseAuth = SupabaseAuth.getInstance();
 (window as any).supabaseAuth = supabaseAuth;
 
 /* ========= Ephemeral chat history per session ========= */
-const SESSIONS = new Map<string, BaseMessage[]>();
+// Automatically managed - one session per sidebar instance
+let CURRENT_SESSION: BaseMessage[] = [];
 const MAX_TURNS = 12; // keep last 12 user/assistant pairs
 
-function getSessionMessages(id: string) {
-  if (!SESSIONS.has(id)) SESSIONS.set(id, []);
-  return SESSIONS.get(id)!;
-}
-function pushTurn(id: string, user: string, assistant: string) {
-  const msgs = getSessionMessages(id);
-  msgs.push(new HumanMessage(user));
-  msgs.push(new AIMessage(assistant));
-  const cap = MAX_TURNS * 2;
-  if (msgs.length > cap) msgs.splice(0, msgs.length - cap);
+function getCurrentSessionMessages(): BaseMessage[] {
+  return CURRENT_SESSION;
 }
 
-export function resetAssistantSession(id = "default") {
-  SESSIONS.delete(id);
+function pushCurrentTurn(user: string, assistant: string) {
+  CURRENT_SESSION.push(new HumanMessage(user));
+  CURRENT_SESSION.push(new AIMessage(assistant));
+  const cap = MAX_TURNS * 2;
+  if (CURRENT_SESSION.length > cap) {
+    CURRENT_SESSION.splice(0, CURRENT_SESSION.length - cap);
+  }
 }
-export function getAssistantHistory(id = "default"): BaseMessage[] {
-  return [...(SESSIONS.get(id) || [])];
+
+export function resetAssistantSession() {
+  CURRENT_SESSION = [];
+}
+
+export function getAssistantHistory(): BaseMessage[] {
+  return [...CURRENT_SESSION];
 }
 
 /* ========= LangGraph state ========= */
@@ -120,12 +123,26 @@ You will be given the user's request and the conversation history.
 You have the following workers available:
 {members}
 
+**Worker Arguments**
+- **list_tabs**: No arguments needed
+- **open_tab**: { url: string } - the website URL to open
+- **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
+- **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
+- **copy_tab_urls**: No arguments needed
+- **create_hub**: { name: string, include?: "none"|"current"|"all" }
+- **delete_hub**: { name: string, closeTabs?: boolean }
+- **list_hubs**: No arguments needed
+- **rename_hub**: { from: string, to: string }
+- **add_tab_to_hub**: { name: string }
+- **open_hub**: { name: string, where?: "tabs"|"window" }
+
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
-2.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
-3.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
-4.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
-5.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
+2.  **Extract Arguments:** When the user mentions tab numbers (e.g., "tab 2", "the first tab", "second one"), convert to { index: N } where N is 1-based.
+3.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
+4.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
+5.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
+6.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -138,37 +155,51 @@ You MUST respond with a JSON object that follows this schema:
 }
 \`\`\`
 
-**Example**
-User request: "Open a new tab to google.com and then tell me what tabs I have open."
+**Examples**
+User: "Open a new tab to google.com"
+→ { "next": "open_tab", "args": { "url": "google.com" } }
 
-*First Turn*
-\`\`\`json
-{
-  "next": "open_tab",
-  "args": { "url": "google.com" }
-}
-\`\`\`
+User: "Close tab 3"
+→ { "next": "close_tab", "args": { "index": 3 } }
 
-*Second Turn (after the tab is opened)*
-\`\`\`json
-{
-  "next": "list_tabs",
-  "args": {}
-}
-\`\`\`
+User: "Close the second tab"
+→ { "next": "close_tab", "args": { "index": 2 } }
 
-*Third Turn (after the tabs are listed)*
-\`\`\`json
-{
-  "next": "FINISH",
-  "args": {}
-}
-\`\`\`
+User: "List all tabs" then "close the first one"
+→ First: { "next": "list_tabs", "args": {} }
+→ Then: { "next": "close_tab", "args": { "index": 1 } }
 
 The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
-    const CHAT_PROMPT = "You are a helpful assistant.";
+    const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
+
+**Important:** You have access to the complete conversation history, including:
+- All previous user requests
+- Commands that were executed (marked as [Tool Output for ...])
+- Results from those commands
+
+**When answering questions:**
+1. If asked to summarize or recall: Review the conversation history and list what happened
+2. If asked general questions: Answer helpfully based on what you know
+3. You can see everything that happened in this conversation - use that context!
+
+**Example:**
+If the history shows:
+  - User: "list tabs"
+  - Tool Output: "1. Google, 2. CNN"
+  - User: "close the first tab"
+  - Tool Output: "Closed: Google"
+  
+And user asks "what have we done?", you should respond:
+"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
+
+Remember: You ARE stateful within this conversation. The history is right there in your context!`;
+    
+    // Debug: Log what messages the chat node receives
+    console.log(`💬 Chat node received ${state.messages.length} messages:`, 
+      state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
+    
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
     return { messages: [new AIMessage(res.content)] };
   };
@@ -243,14 +274,35 @@ export async function runAssistantStream(
     new OpenHubCommand(),
   ];
   const graph = await buildGraph(commands);
+  
+  // Get conversation history for context - automatically managed
+  const sessionHistory = getCurrentSessionMessages();
+  
+  // Debug: Log how many messages are in context
+  console.log(`📚 Session context: ${sessionHistory.length} messages in history`);
+  
   const stream = await graph.stream(
-    { messages: [new HumanMessage({ content: prompt })] },
+    { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
     { recursionLimit: 16 }
   );
 
   let lastFull = "";
+  let stepCount = 0;
   for await (const state of stream as any) {
-    if ("__end__" in state) break;
+    stepCount++;
+    console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
+    
+    if ("__end__" in state) {
+      // Save conversation turn automatically
+      console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
+      if (lastFull) {
+        console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+        pushCurrentTurn(prompt, lastFull);
+      } else {
+        console.log(`⚠️ NOT saving turn - lastFull is empty!`);
+      }
+      break;
+    }
     const step = Object.entries(state).find(([k]) => k !== "__end");
     if (step?.[1] && "messages" in (step[1] as any)) {
       const lastMsg = (step[1] as any).messages.at(-1);
@@ -264,8 +316,17 @@ export async function runAssistantStream(
         const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
         onChunk(delta);
         lastFull = text;
+        console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
       }
     }
   }
+  console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
+  
+  // SAFETY: Always save the turn even if we didn't hit __end__
+  if (lastFull) {
+    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+    pushCurrentTurn(prompt, lastFull);
+  }
+  
   return lastFull || "(no output)";
 }

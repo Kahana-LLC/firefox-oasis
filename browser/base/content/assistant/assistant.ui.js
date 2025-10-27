@@ -1,4 +1,4 @@
-import { runAssistantStream } from "./assistant.bundle.js";
+import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
 
 // SupabaseAuth should be available from the bundle
 // The bundle now exposes window.supabaseAuth directly
@@ -36,6 +36,17 @@ const stop = document.createElement("button");
 stop.textContent = "Stop";
 stop.disabled = true;
 bar.appendChild(stop);
+
+// Clear context button
+const clearContext = document.createElement("button");
+clearContext.textContent = "Clear Context";
+clearContext.style.marginLeft = "8px";
+clearContext.title = "Clear conversation history (start fresh)";
+bar.appendChild(clearContext);
+clearContext.addEventListener("click", () => {
+  resetAssistantSession();
+  append("\n🔄 Conversation context cleared. Starting fresh!\n");
+});
 
 // Authentication state
 let isAuthenticated = false;
@@ -1300,6 +1311,7 @@ async function send() {
       throw new Error('Authentication lost during request. Please sign in again.');
     }
     
+    // Session context is automatically managed
     await runAssistantStream(prompt, (chunk) => {
       if (!stopped) {
         append(chunk);
