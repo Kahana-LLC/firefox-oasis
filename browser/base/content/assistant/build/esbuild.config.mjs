@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 
 const OASIS_API_BASE = "https://segvax3qd7tkhcckzrijydbz6m0cijdu.lambda-url.us-east-2.on.aws/";
+const OASIS_TRANSCRIBE_URL = "https://uzfhm4tjnp7k5lpf2vkyqmrpxq0pxxed.lambda-url.us-east-2.on.aws/"; // Add your transcription lambda URL here
 const AWS_REGION = "us-east-2";
 const COGNITO_IDENTITY_POOL_ID = "us-east-2:21ce1894-9a97-48ac-8741-b69f7eafea1c";
 const SUPABASE_URL = "https://wvclepquxxczgrukfqyr.supabase.co";
@@ -17,6 +18,7 @@ await esbuild.build({
   logLevel: "info",
   define: {
     "process.env.OASIS_API_BASE": JSON.stringify(OASIS_API_BASE),
+    "process.env.OASIS_TRANSCRIBE_URL": JSON.stringify(OASIS_TRANSCRIBE_URL),
     "process.env.AWS_REGION": JSON.stringify(AWS_REGION),
     "process.env.COGNITO_IDENTITY_POOL_ID": JSON.stringify(COGNITO_IDENTITY_POOL_ID),
     "process.env.SUPABASE_URL": JSON.stringify(SUPABASE_URL),

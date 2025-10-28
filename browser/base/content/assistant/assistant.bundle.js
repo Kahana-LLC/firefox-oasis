@@ -54333,9 +54333,11 @@ var supabaseAuth = SupabaseAuth.getInstance();
 
 // src/awsSignedFetch.ts
 var functionUrl = "https://segvax3qd7tkhcckzrijydbz6m0cijdu.lambda-url.us-east-2.on.aws/".replace(/\/+$/, "/");
+var transcribeUrl = "https://uzfhm4tjnp7k5lpf2vkyqmrpxq0pxxed.lambda-url.us-east-2.on.aws/";
 var supabaseAuth2 = SupabaseAuth.getInstance();
 async function postSigned(op, payload) {
-  const url = new URL(functionUrl);
+  const endpoint = op === "transcribe" || op === "tts" ? transcribeUrl : functionUrl;
+  const url = new URL(endpoint);
   const body = JSON.stringify({ op, ...payload });
   const session = await supabaseAuth2.getSession();
   const token = session?.access_token;
@@ -54343,10 +54345,16 @@ async function postSigned(op, payload) {
     throw new Error("Authentication required: No JWT found");
   }
   const headers = {
-    "content-type": "application/json",
-    Authorization: `Bearer ${token}`
+    "content-type": "application/json"
   };
-  const res = await fetch(functionUrl, { method: "POST", headers, body });
+  if (op === "route" || op === "chat") {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  console.log(`[postSigned] Calling ${op} at ${endpoint}`);
+  console.log(`[postSigned] Headers:`, headers);
+  console.log(`[postSigned] Body length:`, body.length);
+  const res = await fetch(endpoint, { method: "POST", headers, body });
+  console.log(`[postSigned] Response status:`, res.status);
   if (!res.ok) {
     const errorBody = await res.text();
     console.error("Lambda Error:", errorBody);
@@ -54372,6 +54380,95 @@ async function chatRemote(system, messages) {
   await checkAuthentication();
   return postSigned("chat", { system, messages });
 }
+async function transcribeAudio(audioBlob) {
+  await checkAuthentication();
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const base64Audio = btoa(
+    new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+  );
+  const result = await postSigned("transcribe", { audio: base64Audio, mimeType: audioBlob.type });
+  return result;
+}
+
+// src/services/voiceInput.ts
+var VoiceInputService = class {
+  mediaRecorder = null;
+  audioChunks = [];
+  stream = null;
+  async startRecording() {
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = this.getSupportedMimeType();
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
+      this.audioChunks = [];
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+      this.mediaRecorder.start();
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      throw new Error("Failed to access microphone. Please check permissions.");
+    }
+  }
+  async stopRecording() {
+    return new Promise((resolve, reject) => {
+      if (!this.mediaRecorder) {
+        reject(new Error("No active recording"));
+        return;
+      }
+      this.mediaRecorder.onstop = async () => {
+        try {
+          if (this.stream) {
+            this.stream.getTracks().forEach((track) => track.stop());
+          }
+          const mimeType = this.mediaRecorder?.mimeType || "audio/webm";
+          const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+          const result = await transcribeAudio(audioBlob);
+          resolve(result.transcript || "");
+        } catch (error) {
+          console.error("Error transcribing audio:", error);
+          reject(error);
+        } finally {
+          this.mediaRecorder = null;
+          this.audioChunks = [];
+          this.stream = null;
+        }
+      };
+      this.mediaRecorder.stop();
+    });
+  }
+  isRecording() {
+    return this.mediaRecorder?.state === "recording";
+  }
+  cancelRecording() {
+    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+      this.mediaRecorder.stop();
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => track.stop());
+    }
+    this.mediaRecorder = null;
+    this.audioChunks = [];
+    this.stream = null;
+  }
+  getSupportedMimeType() {
+    const types = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4"
+    ];
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
+    }
+    return "";
+  }
+};
+var voiceInput_default = new VoiceInputService();
 
 // src/hubs.ts
 function getChrome() {
@@ -54726,6 +54823,7 @@ var OpenHubCommand = class {
 // src/assistant.ts
 var supabaseAuth4 = SupabaseAuth.getInstance();
 window.supabaseAuth = supabaseAuth4;
+window.voiceInputService = voiceInput_default;
 var CURRENT_SESSION = [];
 var MAX_TURNS = 12;
 function getCurrentSessionMessages() {

@@ -2,6 +2,7 @@ import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote, chatRemote } from "./proxyClient";
 import SupabaseAuth from "./services/supabase";
+import voiceInputService from "./services/voiceInput";
 
 // Local command implementations (tabs / groups)
 import {
@@ -23,6 +24,9 @@ import {
 // Expose Supabase auth for UI
 const supabaseAuth = SupabaseAuth.getInstance();
 (window as any).supabaseAuth = supabaseAuth;
+
+// Expose voice input service for UI
+(window as any).voiceInputService = voiceInputService;
 
 /* ========= Ephemeral chat history per session ========= */
 // Automatically managed - one session per sidebar instance
@@ -321,7 +325,7 @@ export async function runAssistantStream(
     }
   }
   console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
-  
+
   // SAFETY: Always save the turn even if we didn't hit __end__
   if (lastFull) {
     console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);

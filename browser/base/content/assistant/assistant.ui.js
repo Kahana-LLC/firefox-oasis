@@ -1,5 +1,14 @@
 import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
 
+// Import voice input service - it will be bundled
+let voiceInputService = null;
+try {
+  // The voice input service will be available in the bundle
+  voiceInputService = window.voiceInputService;
+} catch (e) {
+  console.warn("Voice input service not available:", e);
+}
+
 // SupabaseAuth should be available from the bundle
 // The bundle now exposes window.supabaseAuth directly
 console.log('SupabaseAuth available:', !!window.supabaseAuth);
@@ -46,6 +55,78 @@ bar.appendChild(clearContext);
 clearContext.addEventListener("click", () => {
   resetAssistantSession();
   append("\n🔄 Conversation context cleared. Starting fresh!\n");
+});
+
+// Microphone button
+const micButton = document.createElement("button");
+micButton.innerHTML = "🎤";
+micButton.style.cssText = `
+  margin-left: 8px;
+  padding: 8px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+`;
+micButton.title = "Click to start voice input";
+bar.appendChild(micButton);
+
+let isRecording = false;
+
+micButton.addEventListener("click", async () => {
+  if (!isAuthenticated) {
+    append("\n❌ Please sign in to use voice input.\n");
+    return;
+  }
+
+  if (!voiceInputService) {
+    append("\n❌ Voice input service not available.\n");
+    return;
+  }
+
+  if (isRecording) {
+    // Stop recording
+    micButton.innerHTML = "⏳";
+    micButton.disabled = true;
+    micButton.style.background = "#f3f4f6";
+    
+    try {
+      const transcribedText = await voiceInputService.stopRecording();
+      
+      if (transcribedText && transcribedText.trim()) {
+        q.value = transcribedText;
+        append(`\n🎤 Transcribed: ${transcribedText}\n`);
+      } else {
+        append("\n⚠️ No speech detected.\n");
+      }
+    } catch (error) {
+      console.error("Transcription error:", error);
+      append(`\n❌ Transcription failed: ${error.message}\n`);
+    } finally {
+      isRecording = false;
+      micButton.innerHTML = "🎤";
+      micButton.disabled = false;
+      micButton.style.background = "white";
+      micButton.style.borderColor = "#e5e7eb";
+      micButton.title = "Click to start voice input";
+    }
+  } else {
+    // Start recording
+    try {
+      await voiceInputService.startRecording();
+      isRecording = true;
+      micButton.innerHTML = "⏹️";
+      micButton.style.background = "#fee2e2";
+      micButton.style.borderColor = "#ef4444";
+      micButton.title = "Click to stop recording";
+      append("\n🎤 Recording... Click again to stop.\n");
+    } catch (error) {
+      console.error("Recording error:", error);
+      append(`\n❌ Failed to start recording: ${error.message}\n`);
+    }
+  }
 });
 
 // Authentication state
