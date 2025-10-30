@@ -2688,11 +2688,26 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
   using mozilla::TimeDuration;
   using mozilla::TimeStamp;
 
-  if (aRequest->IsBytecode()) {
-    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: IsBytecode",
+  if (aRequest->GetScriptLoadContext()->mIsInline) {
+    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: Inline script",
          aRequest));
-    aRequest->MarkSkippedAllCaching();
+    aRequest->MarkNotCacheable();
     MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
+    // NOTE: An inline script tag can have an SRI, but we don't calculate it
+    //       for this case.
+    MOZ_ASSERT(aRequest->SRIAndBytecode().empty());
+    return;
+  }
+
+  if (!aRequest->URI()->SchemeIs("http") &&
+      !aRequest->URI()->SchemeIs("https")) {
+    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: Unsupported scheme",
+         aRequest));
+    // Internal resources can be exposed to the web content, but they don't
+    // have to be cached.
+    aRequest->MarkNotCacheable();
+    MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
+    MOZ_ASSERT(aRequest->SRIAndBytecode().empty());
     return;
   }
 
@@ -2700,9 +2715,27 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
       aRequest->AsModuleRequest()->mModuleType != JS::ModuleType::JavaScript) {
     LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: JSON module",
          aRequest));
-    aRequest->MarkSkippedAllCaching();
+    aRequest->MarkNotCacheable();
     MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
     MOZ_ASSERT_IF(aRequest->IsSource(), aRequest->SRIAndBytecode().empty());
+    return;
+  }
+
+  if (!aRequest->IsCachedStencil() && aRequest->ExpirationTime().IsExpired()) {
+    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: Expired",
+         aRequest));
+    // NOTE: The expiration for in-memory-cached case should be handled by
+    //       SharedScriptCache.
+    aRequest->MarkSkippedAllCaching();
+    aRequest->getLoadedScript()->DropDiskCacheReferenceAndSRI();
+    return;
+  }
+
+  if (aRequest->IsBytecode()) {
+    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: IsBytecode",
+         aRequest));
+    aRequest->MarkSkippedAllCaching();
+    MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
     return;
   }
 
@@ -3238,18 +3271,7 @@ ScriptLoader::CacheBehavior ScriptLoader::GetCacheBehavior(
     return CacheBehavior::DoNothing;
   }
 
-  if (aRequest->GetScriptLoadContext()->mIsInline) {
-    return CacheBehavior::DoNothing;
-  }
-
-  if (!aRequest->URI()->SchemeIs("http") &&
-      !aRequest->URI()->SchemeIs("https")) {
-    // Internal resources can be exposed to the web content, but they don't
-    // have to be cached.
-    return CacheBehavior::DoNothing;
-  }
-
-  if (!aRequest->IsCacheable()) {
+  if (aRequest->ExpirationTime().IsExpired()) {
     return CacheBehavior::Evict;
   }
 
@@ -3278,6 +3300,12 @@ ScriptLoader::CacheBehavior ScriptLoader::GetCacheBehavior(
 
 void ScriptLoader::TryCacheRequest(ScriptLoadRequest* aRequest) {
   MOZ_ASSERT(aRequest->HasStencil());
+
+  if (aRequest->IsMarkedNotCacheable()) {
+    aRequest->ClearStencil();
+    return;
+  }
+
   CacheBehavior cacheBehavior = GetCacheBehavior(aRequest);
 
   if (cacheBehavior == CacheBehavior::DoNothing) {
@@ -3342,8 +3370,13 @@ nsresult ScriptLoader::MaybePrepareForDiskCacheAfterExecute(
 
     // For in-memory cached requests, the disk cache references are necessary
     // for later load.
-    MOZ_ASSERT_IF(!aRequest->PassedConditionForMemoryCache(),
-                  !aRequest->getLoadedScript()->HasDiskCacheReference());
+    if (aRequest->HasStencil()) {
+      MOZ_ASSERT_IF(!aRequest->PassedConditionForMemoryCache(),
+                    !aRequest->getLoadedScript()->HasDiskCacheReference());
+    } else {
+      // This hits compile error.
+      aRequest->getLoadedScript()->DropDiskCacheReferenceAndSRI();
+    }
 
     return aRv;
   }

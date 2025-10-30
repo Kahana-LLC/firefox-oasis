@@ -1,4 +1,4 @@
-/** Test for Bug 766694 **/
+/** Test for Bug 766694 */
 
 // This is a list of all interfaces that are exposed to every webpage.
 // Please only add things to this list with great care and proper review
@@ -1011,6 +1011,12 @@ let interfaceNamesInGlobalScope = [
   { name: "NavigationDestination", insecureContext: true, disabled: true },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "NavigationHistoryEntry", insecureContext: true, disabled: true },
+  // IMPORTANT: Do not change this list without review from a DOM peer!
+  {
+    name: "NavigationPrecommitController",
+    insecureContext: true,
+    disabled: true,
+  },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   "NavigationPreloadManager",
   // IMPORTANT: Do not change this list without review from a DOM peer!

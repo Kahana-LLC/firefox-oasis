@@ -13,11 +13,32 @@ const lazy = XPCOMUtils.declareLazy({
 const { TRANSPARENT_PROXY_RESOLVES_HOST } = Ci.nsIProxyInfo;
 const failOverTimeout = 10; // seconds
 
+const MODE_PREF = "browser.ipProtection.mode";
+
+export const IPPMode = Object.freeze({
+  MODE_FULL: 0,
+  MODE_PB: 1,
+  MODE_TRACKER: 2,
+});
+
+const TRACKING_FLAGS =
+  Ci.nsIClassifiedChannel.CLASSIFIED_TRACKING |
+  Ci.nsIClassifiedChannel.CLASSIFIED_TRACKING_AD |
+  Ci.nsIClassifiedChannel.CLASSIFIED_TRACKING_ANALYTICS |
+  Ci.nsIClassifiedChannel.CLASSIFIED_TRACKING_SOCIAL |
+  Ci.nsIClassifiedChannel.CLASSIFIED_TRACKING_CONTENT;
+
 const DEFAULT_EXCLUDED_URL_PREFS = [
   "browser.ipProtection.guardian.endpoint",
   "identity.fxaccounts.remote.profile.uri",
   "identity.fxaccounts.auth.uri",
   "identity.fxaccounts.remote.profile.uri",
+];
+
+const ESSENTIAL_URL_PREFS = [
+  "toolkit.telemetry.server",
+  "network.trr.uri",
+  "network.trr.default_provider_uri",
 ];
 
 /**
@@ -37,6 +58,15 @@ export class IPPChannelFilter {
    */
   static create(excludedPages = []) {
     return new IPPChannelFilter(excludedPages);
+  }
+
+  /**
+   * Sets the IPP Mode.
+   *
+   * @param {IPPMode} [mode] - the new mode
+   */
+  static setMode(mode) {
+    Services.prefs.setIntPref(MODE_PREF, mode);
   }
 
   /**
@@ -82,12 +112,30 @@ export class IPPChannelFilter {
     excludedPages.forEach(url => {
       this.addPageExclusion(url);
     });
+
     DEFAULT_EXCLUDED_URL_PREFS.forEach(pref => {
       const prefValue = Services.prefs.getStringPref(pref, "");
       if (prefValue) {
         this.addPageExclusion(prefValue);
       }
     });
+
+    // Get origins essential to starting the proxy and exclude
+    // them prior to connecting
+    this.#essentialOrigins = new Set();
+    ESSENTIAL_URL_PREFS.forEach(pref => {
+      const prefValue = Services.prefs.getStringPref(pref, "");
+      if (prefValue) {
+        this.addEssentialExclusion(prefValue);
+      }
+    });
+
+    XPCOMUtils.defineLazyPreferenceGetter(
+      this,
+      "mode",
+      MODE_PREF,
+      IPPMode.MODE_FULL
+    );
   }
 
   /**
@@ -102,7 +150,7 @@ export class IPPChannelFilter {
    */
   applyFilter(channel, _defaultProxyInfo, proxyFilter) {
     // If this channel should be excluded (origin match), do nothing
-    if (this.shouldExclude(channel)) {
+    if (!this.#matchMode(channel) || this.shouldExclude(channel)) {
       // Calling this with "null" will enforce a non-proxy connection
       proxyFilter.onProxyFilterResult(null);
       return;
@@ -120,6 +168,23 @@ export class IPPChannelFilter {
     this.#observers.forEach(observer => {
       observer(channel);
     });
+  }
+
+  #matchMode(channel) {
+    switch (this.mode) {
+      case IPPMode.MODE_PB:
+        return !!channel.loadInfo.originAttributes.privateBrowsingId;
+
+      case IPPMode.MODE_TRACKER:
+        return (
+          TRACKING_FLAGS &
+          channel.loadInfo.triggeringThirdPartyClassificationFlags
+        );
+
+      case IPPMode.MODE_FULL:
+      default:
+        return true;
+    }
   }
 
   /**
@@ -140,6 +205,11 @@ export class IPPChannelFilter {
       }
 
       const origin = uri.prePath; // scheme://host[:port]
+
+      if (!this.proxyInfo && this.#essentialOrigins.has(origin)) {
+        return true;
+      }
+
       return this.#excludedOrigins.has(origin);
     } catch (_) {
       return true;
@@ -150,15 +220,25 @@ export class IPPChannelFilter {
    * Adds a page URL to the exclusion list.
    *
    * @param {string} url - The URL to exclude.
+   * @param {Set<string>} [list] - The exclusion list to add the URL to.
    */
-  addPageExclusion(url) {
+  addPageExclusion(url, list = this.#excludedOrigins) {
     try {
       const uri = Services.io.newURI(url);
       // prePath is scheme://host[:port]
-      this.#excludedOrigins.add(uri.prePath);
+      list.add(uri.prePath);
     } catch (_) {
       // ignore bad entries
     }
+  }
+
+  /**
+   * Adds a URL to the essential exclusion list.
+   *
+   * @param {string} url - The URL to exclude.
+   */
+  addEssentialExclusion(url) {
+    this.addPageExclusion(url, this.#essentialOrigins);
   }
 
   /**
@@ -285,6 +365,7 @@ export class IPPChannelFilter {
   #observers = [];
   #active = false;
   #excludedOrigins = new Set();
+  #essentialOrigins = new Set();
   #pendingChannels = [];
 
   static makeIsolationKey() {
