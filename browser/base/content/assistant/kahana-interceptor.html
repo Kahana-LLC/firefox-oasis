@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oasis Browser - Authentication Handler</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            color: #51cf66;
+            font-weight: 600;
+        }
+        .error {
+            color: #ff6b6b;
+            font-weight: 600;
+        }
+        .info {
+            color: #74c0fc;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <div id="status">Processing authentication...</div>
+        <div id="details" style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;"></div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        // Check for error
+        const error = urlParams.get('error') || hashParams.get('error');
+        const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
+        
+        // Check for success
+        const accessToken = urlParams.get('access_token') || hashParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token');
+        const code = urlParams.get('code') || hashParams.get('code');
+        
+        const statusDiv = document.getElementById('status');
+        const detailsDiv = document.getElementById('details');
+        
+        if (error) {
+            // Handle error
+            statusDiv.innerHTML = `<div class="error">Authentication Failed</div>`;
+            detailsDiv.innerHTML = `Error: ${error}<br>${errorDescription || ''}`;
+            
+            // Store error in localStorage for the assistant to pick up
+            localStorage.setItem('oasis_auth_error', JSON.stringify({
+                error: error,
+                description: errorDescription,
+                timestamp: new Date().toISOString()
+            }));
+            
+            // Try to redirect to assistant after a delay
+            setTimeout(() => {
+                try {
+                    window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+                } catch (e) {
+                    detailsDiv.innerHTML += '<br><br>Please return to the Oasis Browser assistant manually.';
+                }
+            }, 3000);
+            
+        } else if (accessToken || code) {
+            // Handle success
+            statusDiv.innerHTML = `<div class="success">Authentication Successful!</div>`;
+            detailsDiv.innerHTML = 'Redirecting to Oasis Browser...';
+            
+            // Store auth data in localStorage for the assistant to pick up
+            const authData = {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                code: code,
+                timestamp: new Date().toISOString(),
+                source: 'kahana-interceptor'
+            };
+            
+            localStorage.setItem('oasis_auth_success', JSON.stringify(authData));
+            
+            // Also try to send a message to the assistant if it's listening
+            try {
+                window.opener?.postMessage({
+                    type: 'oasis_auth_success',
+                    data: authData
+                }, '*');
+            } catch (e) {
+                console.log('Could not send message to opener:', e);
+            }
+            
+            // Redirect to assistant immediately
+            setTimeout(() => {
+                try {
+                    window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+                } catch (e) {
+                    detailsDiv.innerHTML = 'Please return to the Oasis Browser assistant manually.';
+                }
+            }, 2000);
+            
+        } else {
+            // No auth parameters found
+            statusDiv.innerHTML = `<div class="info">No Authentication Data</div>`;
+            detailsDiv.innerHTML = 'This page is used to handle OAuth callbacks for Oasis Browser.<br>If you reached this page by mistake, please return to the assistant.';
+            
+            setTimeout(() => {
+                try {
+                    window.location.href = 'chrome://browser/content/assistant/assistant.xhtml';
+                } catch (e) {
+                    detailsDiv.innerHTML += '<br><br>Please return to the Oasis Browser assistant manually.';
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

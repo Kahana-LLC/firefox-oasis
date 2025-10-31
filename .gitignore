@@ -17,6 +17,7 @@ tags
 *.gcov
 *.tsbuildinfo
 compile_commands.json
+*.env
 
 # emacs backup files in any directory.
 # lint-ignore-next-line: syntax-difference
@@ -380,3 +381,6 @@ toolkit/crashreporter/minidump-analyzer/target/
 
 # Ignore mozperftest artifacts folder
 /artifacts/
+# Distribution packages (generated files)
+Oasis-Browser-*.dmg
+Oasis-Browser-*.zip

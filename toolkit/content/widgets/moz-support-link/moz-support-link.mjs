@@ -102,6 +102,23 @@ export default class MozSupportLink extends HTMLAnchorElement {
 
   #setHref() {
     let supportPage = this.getAttribute("support-page") ?? "";
+    
+    // Handle custom Kahana support pages
+    if (supportPage === "kahana-media-keyboard-control") {
+      this.href = "https://kahana.co/docs/media-keyboard-control";
+      return;
+    }
+    
+    if (supportPage === "kahana-improve-oasis-suggest") {
+      this.href = "https://kahana.co/docs/improve-oasis-suggest";
+      return;
+    }
+    
+    if (supportPage === "kahana-global-privacy-control") {
+      this.href = "https://kahana.co/docs/global-privacy-control";
+      return;
+    }
+    
     let base = MozSupportLink.SUPPORT_URL + supportPage;
     this.href = this.hasAttribute("utm-content")
       ? formatUTMParams(this.getAttribute("utm-content"), base)

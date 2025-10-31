@@ -1307,7 +1307,7 @@ let SETTINGS_CONFIG = {
       {
         id: "mediaControlToggleEnabled",
         l10nId: "browsing-media-control",
-        supportPage: "media-keyboard-control",
+        supportPage: "kahana-media-keyboard-control",
       },
       {
         id: "cfrRecommendations",
@@ -1438,7 +1438,7 @@ let SETTINGS_CONFIG = {
       {
         id: "gpcEnabled",
         l10nId: "global-privacy-control-description",
-        supportPage: "global-privacy-control",
+        supportPage: "kahana-global-privacy-control",
         controlAttrs: {
           "search-l10n-ids": "global-privacy-control-search",
         },

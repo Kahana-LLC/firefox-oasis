@@ -1,0 +1,31 @@
+{
+  "exclude": [
+    "obj-x86_64-apple-darwin22.6.0",
+    "target",
+    "third_party",
+    "tools",
+    "testing",
+    "modules",
+    "mobile",
+    "intl",
+    "gfx",
+    "dom",
+    "accessible",
+    "browser/components",
+    "browser/extensions",
+    "browser/locales",
+    "browser/themes",
+    "devtools",
+    "security",
+    "services",
+    "storage",
+    "widget",
+    "xpcom"
+  ],
+  "include": [
+    "browser/branding",
+    "browser/app",
+    "browser/base",
+    "browser/config"
+  ]
+}

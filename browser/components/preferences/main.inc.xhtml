@@ -121,8 +121,8 @@
                   data-l10n-id="browser-containers-enabled"
                   preference="privacy.userContext.enabled"/>
         <html:a
-          is="moz-support-link"
-          support-page="containers"
+          href="https://kahana.co/docs/containers"
+          target="_blank"
           data-l10n-id="browser-containers-learn-more"
         />
         <spacer flex="1"/>
@@ -443,9 +443,9 @@
   <hbox align="center">
     <checkbox id="playDRMContent" preference="media.eme.enabled"
               class="tail-with-learn-more" data-l10n-id="play-drm-content" />
-    <html:a is="moz-support-link"
+    <html:a href="https://kahana.co/docs/drm-content"
+      target="_blank"
       data-l10n-id="play-drm-content-learn-more"
-      support-page="drm-content"
     />
   </hbox>
 </groupbox>
@@ -631,6 +631,43 @@
 <groupbox id="performanceGroup" data-category="paneGeneral" hidden="true">
   <label class="search-header section-heading" hidden="true"><html:h2 data-l10n-id="performance-title"/></label>
   <html:setting-group groupid="performance" />
+
+  <hbox align="center">
+    <checkbox id="useRecommendedPerformanceSettings"
+              class="tail-with-learn-more"
+              data-l10n-id="performance-use-recommended-settings-checkbox"
+              preference="browser.preferences.defaultPerformanceSettings.enabled"/>
+    <html:a href="https://kahana.co/docs/performance"
+      target="_blank"
+      data-l10n-id="performance-settings-learn-more"
+      />
+  </hbox>
+  <description class="indent tip-caption" data-l10n-id="performance-use-recommended-settings-desc"/>
+
+  <vbox id="performanceSettings" class="indent" hidden="true">
+    <checkbox id="allowHWAccel"
+              data-l10n-id="performance-allow-hw-accel"
+              preference="layers.acceleration.disabled"/>
+    <hbox align="center">
+      <label id="limitContentProcess" data-l10n-id="performance-limit-content-process-option" control="contentProcessCount"/>
+      <menulist id="contentProcessCount" preference="dom.ipc.processCount">
+        <menupopup>
+          <menuitem label="1" value="1"/>
+          <menuitem label="2" value="2"/>
+          <menuitem label="3" value="3"/>
+          <menuitem label="4" value="4"/>
+          <menuitem label="5" value="5"/>
+          <menuitem label="6" value="6"/>
+          <menuitem label="7" value="7"/>
+          <menuitem label="8" value="8"/>
+        </menupopup>
+      </menulist>
+    </hbox>
+    <description id="contentProcessCountEnabledDescription" class="tip-caption" data-l10n-id="performance-limit-content-process-enabled-desc"/>
+    <description id="contentProcessCountDisabledDescription" class="tip-caption" data-l10n-id="performance-limit-content-process-blocked-desc">
+      <html:a class="text-link" data-l10n-name="learn-more" href="https://wiki.mozilla.org/Electrolysis"/>
+    </description>
+  </vbox>
 </groupbox>
 
 <hbox id="browsingCategory"

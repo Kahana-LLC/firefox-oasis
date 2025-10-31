@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8"/>
+  <title>Assistant</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font: 13px system-ui, sans-serif; background: Canvas; color: CanvasText; }
+    main { height: 100vh; display:flex; flex-direction:column; }
+    #log { flex:1; padding:12px; overflow:auto; white-space:pre-wrap; }
+    #bar { display:flex; gap:8px; padding:10px; border-top: 1px solid rgba(128,128,128,.3); }
+    #q { flex:1; padding:8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="log"></div>
+    <div id="bar">
+      <input id="q" placeholder="Ask me anything…"/>
+      <button id="go">Send</button>
+    </div>
+  </main>
+
+  <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
+  <script src="chrome://browser/content/assistant/auth-guard.js"></script>
+  <script type="module" src="chrome://browser/content/assistant/assistant.ui.js"></script>
+
+</body>
+</html>

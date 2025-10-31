@@ -1540,7 +1540,7 @@ pref("toolkit.datacollection.infoURL",
 pref("app.support.baseURL", "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/");
 
 // base url for web-based feedback pages
-pref("app.feedback.baseURL", "https://ideas.mozilla.org/");
+pref("app.feedback.baseURL", "https://kahana.co/oasis-feedback-survey");
 
 pref("security.certerrors.permanentOverride", true);
 pref("security.certerrors.mitm.priming.enabled", true);
@@ -2188,6 +2188,7 @@ pref("sidebar.animation.expand-on-hover.delay-duration-ms", 200);
 pref("sidebar.main.tools", "");
 pref("sidebar.installed.extensions", "");
 pref("sidebar.verticalTabs", false);
+pref("browser.sidebar.oasis_assistant.enabled", true);
 pref("sidebar.verticalTabs.dragToPinPromo.dismissed", false);
 pref("sidebar.visibility", "always-show");
 // Sidebar UI state is stored per-window via session restore. Use this pref
@@ -3510,7 +3511,12 @@ pref("browser.ipProtection.log", false);
 pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");
 pref("browser.ipProtection.added", false);
 
-// Pref to enable aboug:glean redesign.
+
+// Oasis Assistant defaults
+pref("oasis.assistant.anthropic_api_key", "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");
+pref("oasis.assistant.model", "claude-3-5-sonnet-20240620");
+pref("oasis.assistant.temperature", "0.3");
+pref("oasis.assistant.maxTokens", "200");
 pref("about.glean.redesign.enabled", false);
 
 // Forward Rust component logs to the JS console (comma separate list of crate names)

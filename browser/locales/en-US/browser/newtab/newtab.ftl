@@ -27,11 +27,11 @@ newtab-search-box-handoff-text-no-engine = Search or enter address
 # Variables:
 #   $engine (string) - The name of the user's default search engine
 newtab-search-box-handoff-input =
-    .placeholder = Search with { $engine } or enter address
+    .placeholder = 🔍 Search the web or enter a URL
     .title = Search with { $engine } or enter address
     .aria-label = Search with { $engine } or enter address
 newtab-search-box-handoff-input-no-engine =
-    .placeholder = Search or enter address
+    .placeholder = 🔍 Search the web or enter a URL
     .title = Search or enter address
     .aria-label = Search or enter address
 
@@ -196,7 +196,7 @@ newtab-section-menu-privacy-notice = Privacy Notice
 
 newtab-section-header-topsites = Top Sites
 newtab-section-header-recent-activity = Recent activity
-newtab-section-header-stories = Thought-provoking stories
+newtab-section-header-stories = Recommended for you
 # "picks" refers to recommended articles
 newtab-section-header-todays-picks = Today’s picks for you
 
@@ -252,7 +252,10 @@ newtab-custom-row-selector =
         }
 newtab-custom-stories-toggle =
   .label = Recommended stories
+
   .description = Exceptional content curated by the { -brand-product-name } family
+
+
 newtab-custom-stories-personalized-toggle =
   .label = Stories
 newtab-custom-stories-personalized-checkbox-label = Personalized stories based on your activity
@@ -636,8 +639,8 @@ newtab-widget-message-copy = From quick reminders to daily to-dos, focus session
 
 # Strings for the default promo card
 
-newtab-promo-card-title = Support { -brand-product-name }
-newtab-promo-card-body = Our sponsors support our mission to build a better web
+newtab-promo-card-title = Support { -vendor-short-name }
+newtab-promo-card-body = { -vendor-short-name } sponsors support our mission to build a better web
 newtab-promo-card-cta = Learn more
 newtab-promo-card-dismiss-button =
     .title = Dismiss

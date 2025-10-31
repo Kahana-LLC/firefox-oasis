@@ -1,0 +1,24 @@
+{
+  "name": "assistant-bundle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.1",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-s3": "^3.896.0",
+    "@aws-sdk/credential-provider-cognito-identity": "^3.901.0",
+    "@aws-sdk/protocol-http": "^3.370.0",
+    "@aws-sdk/signature-v4": "^3.370.0",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.6",
+    "@supabase/supabase-js": "^2.45.4",
+    "zod": "^3.25.76"
+  }
+}

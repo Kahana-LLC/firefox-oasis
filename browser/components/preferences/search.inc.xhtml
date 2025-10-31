@@ -54,7 +54,7 @@
                   data-l10n-id="search-show-suggestions-private-windows"/>
         <hbox align="center" id="showTrendingSuggestionsBox">
           <checkbox id="showTrendingSuggestions" data-l10n-id="addressbar-locbar-showtrendingsuggestions-option" preference="browser.urlbar.suggest.trending" class="tail-with-learn-more" />
-          <html:a is="moz-support-link" support-page="google-trending-searches-on-awesomebar" />
+          <html:a href="https://kahana.co/docs/google-trending-search-firefox-address-bar" target="_blank" />
         </hbox>
         <hbox id="urlBarSuggestionPermanentPBLabel"
               align="center" class="indent">
@@ -77,11 +77,11 @@
                    data-l10n-id="addressbar-suggest-1"
         />
         <html:a hidden="true"
-                is="moz-support-link"
+                href="https://kahana.co/docs/oasis-suggest"
                 id="firefoxSuggestLearnMore"
                 class="learnMore firefoxSuggestLearnMore"
                 data-l10n-id="addressbar-locbar-firefox-suggest-learn-more"
-                support-page="firefox-suggest"
+                target="_blank"
         />
       </description>
       <checkbox id="historySuggestion" data-l10n-id="addressbar-locbar-history-option"
@@ -102,10 +102,10 @@
                   class="tail-with-learn-more"
                   data-l10n-id="addressbar-locbar-quickactions-option"
                   preference="browser.urlbar.suggest.quickactions" />
-        <html:a is="moz-support-link"
+        <html:a href="https://kahana.co/docs/quick-actions"
                 id="quickActionsLink"
                 data-l10n-id="addressbar-quickactions-learn-more"
-                support-page="quick-actions-firefox-search-bar"
+                target="_blank"
         />
       </hbox>
       <vbox id="firefoxSuggestContainer" hidden="true">
@@ -114,7 +114,20 @@
                   preference="browser.urlbar.suggest.quicksuggest.all"
         />
         <description class="indent tip-caption"
-                      data-l10n-id="addressbar-locbar-suggest-all-option-desc"
+                      data-l10n-id="addressbar-locbar-suggest-nonsponsored-desc"
+        />
+        <checkbox id="firefoxSuggestSponsored"
+                  data-l10n-id="addressbar-locbar-suggest-sponsored-option"
+                  preference="browser.urlbar.suggest.quicksuggest.sponsored"
+        />
+        <description class="indent tip-caption"
+                      data-l10n-id="addressbar-locbar-suggest-sponsored-desc"
+        />
+        <html:moz-toggle id="firefoxSuggestDataCollectionSearchToggle"
+                         preference="browser.urlbar.quicksuggest.dataCollection.enabled"
+                         data-l10n-id="addressbar-firefox-suggest-data-collection"
+                         data-l10n-attrs="label, description"
+                         support-page="kahana-improve-oasis-suggest"
         />
         <vbox class="indent">
           <checkbox id="firefoxSuggestSponsored"
