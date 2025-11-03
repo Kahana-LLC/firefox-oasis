@@ -1173,28 +1173,14 @@ export class BackupService extends EventTarget {
   }
 
   /**
-   * Attempts to find the right folder to write the single-file archive to, and
-   * if it does not exist, to create it.
-   *
-   * If the configured destination's parent folder does not exist and cannot
-   * be recreated, we will fall back to the `defaultParentDirPath`. If
-   * `defaultParentDirPath` happens to not exist or cannot be created, we will
-   * fall back to the home directory. If _that_ folder does not exist and cannot
-   * be recreated, this method will reject.
+   * Attempts to find the right folder to write the single-file archive to, creating
+   * it if it does not exist yet.
    *
    * @param {string} configuredDestFolderPath
    *   The currently configured destination folder for the archive.
    * @returns {Promise<string, Error>}
    */
   async resolveArchiveDestFolderPath(configuredDestFolderPath) {
-    lazy.logConsole.log(
-      "Resolving configured archive destination folder: ",
-      configuredDestFolderPath
-    );
-
-    // Try to create the configured folder ancestry. If that fails, we clear
-    // configuredDestFolderPath so that we can try the fallback paths, as
-    // if the folder was never set.
     try {
       await IOUtils.makeDirectory(configuredDestFolderPath, {
         createAncestors: true,
@@ -1203,89 +1189,11 @@ export class BackupService extends EventTarget {
       return configuredDestFolderPath;
     } catch (e) {
       lazy.logConsole.warn("Could not create configured destination path: ", e);
-    }
-    lazy.logConsole.warn(
-      "The destination directory was invalid. Attempting to fall back to " +
-        "default parent folder: ",
-      BackupService.DEFAULT_PARENT_DIR_PATH
-    );
-    let fallbackFolderPath = PathUtils.join(
-      BackupService.DEFAULT_PARENT_DIR_PATH,
-      BackupService.BACKUP_DIR_NAME
-    );
-    try {
-      await IOUtils.makeDirectory(fallbackFolderPath, {
-        createAncestors: true,
-        ignoreExisting: true,
-      });
-      return fallbackFolderPath;
-    } catch (e) {
-      lazy.logConsole.warn("Could not create fallback destination path: ", e);
-    }
-
-    let homeDirPath = PathUtils.join(
-      Services.dirsvc.get("Home", Ci.nsIFile).path,
-      BackupService.BACKUP_DIR_NAME
-    );
-    lazy.logConsole.warn(
-      "The destination directory was invalid. Attempting to fall back to " +
-        "Home folder: ",
-      homeDirPath
-    );
-    try {
-      await IOUtils.makeDirectory(homeDirPath, {
-        createAncestors: true,
-        ignoreExisting: true,
-      });
-      return homeDirPath;
-    } catch (e) {
-      lazy.logConsole.warn("Could not create Home destination path: ", e);
       throw new BackupError(
         "Could not resolve to a writable destination folder path.",
         ERRORS.FILE_SYSTEM_ERROR
       );
     }
-  }
-
-  /**
-   * Attempts to resolve an existing folder path to use for archives,
-   * following the same fallback order as `resolveArchiveDestFolderPath`.
-   *
-   * Order of resolution:
-   * 1. Configured destination folder
-   * 2. Default parent folder
-   * 3. Home directory
-   *
-   * @param {string} configuredDestFolderPath
-   * @returns {Promise<string, Error>}
-   */
-  async resolveExistingArchiveDestFolderPath(configuredDestFolderPath) {
-    if (
-      configuredDestFolderPath &&
-      (await IOUtils.exists(configuredDestFolderPath))
-    ) {
-      return configuredDestFolderPath;
-    }
-
-    let fallbackFolderPath = PathUtils.join(
-      BackupService.DEFAULT_PARENT_DIR_PATH,
-      BackupService.BACKUP_DIR_NAME
-    );
-    if (await IOUtils.exists(fallbackFolderPath)) {
-      return fallbackFolderPath;
-    }
-
-    let homeDirPath = PathUtils.join(
-      Services.dirsvc.get("Home", Ci.nsIFile).path,
-      BackupService.BACKUP_DIR_NAME
-    );
-    if (await IOUtils.exists(homeDirPath)) {
-      return homeDirPath;
-    }
-
-    throw new Error("Could not resolve an existing destination folder path.", {
-      cause: ERRORS.FILE_SYSTEM_ERROR,
-    });
   }
 
   /**
@@ -3089,41 +2997,6 @@ export class BackupService extends EventTarget {
   }
 
   /**
-   * Make sure the legacy telemetry client ID exists and write telemetry files
-   * to the profile we are recovering into.
-   *
-   * @param {string} profilePath The path of the newly recovered profile
-   */
-  async #writeTelemetryFiles(profilePath) {
-    // Make sure that a legacy telemetry client ID exists and is written to
-    // disk.
-    let clientID = await lazy.ClientID.getClientID();
-    lazy.logConsole.debug("Current client ID: ", clientID);
-    // Next, copy over the legacy telemetry client ID state from the currently
-    // running profile. The newly created profile that we're recovering into
-    // should inherit this client ID.
-    const TELEMETRY_STATE_FILENAME = "state.json";
-    const TELEMETRY_STATE_FOLDER = "datareporting";
-    await IOUtils.makeDirectory(
-      PathUtils.join(profilePath, TELEMETRY_STATE_FOLDER)
-    );
-    await IOUtils.copy(
-      /* source */
-      PathUtils.join(
-        PathUtils.profileDir,
-        TELEMETRY_STATE_FOLDER,
-        TELEMETRY_STATE_FILENAME
-      ),
-      /* destination */
-      PathUtils.join(
-        profilePath,
-        TELEMETRY_STATE_FOLDER,
-        TELEMETRY_STATE_FILENAME
-      )
-    );
-  }
-
-  /**
    * If the encState exists, write the encrypted state object to the
    * ARCHIVE_ENCRYPTION_STATE_FILE.
    *
@@ -3237,8 +3110,6 @@ export class BackupService extends EventTarget {
         profile.rootDir.path
       );
 
-      await this.#writeTelemetryFiles(profile.rootDir.path);
-
       await this.#maybeWriteEncryptedStateObject(
         encState,
         profile.rootDir.path
@@ -3342,12 +3213,6 @@ export class BackupService extends EventTarget {
         recoveryPath,
         profile.path
       );
-
-      // We don't want to copy the client ID if this is a copied profile
-      // because this profile will be a new profile in the profile group.
-      if (!copiedProfile) {
-        await this.#writeTelemetryFiles(profile.path);
-      }
 
       await this.#maybeWriteEncryptedStateObject(encState, profile.path);
 
@@ -4302,19 +4167,9 @@ export class BackupService extends EventTarget {
     }
 
     try {
-      // Check if the default folder exists
-      let archiveDestPath = await this.resolveExistingArchiveDestFolderPath(
-        this.#_state.backupDirPath
-      );
-
-      let dirExists = await this.#infalliblePathExists(archiveDestPath);
-      if (!dirExists) {
-        return {
-          multipleBackupsFound: false,
-        };
-      }
-
-      let files = await IOUtils.getChildren(archiveDestPath);
+      let files = await IOUtils.getChildren(this.#_state.backupDirPath, {
+        ignoreAbsent: true,
+      });
       // filtering is an O(N) operation, we can return early if there's too many files
       // in this folder to filter to avoid a performance bottleneck
       if (speedUpHeuristic && files && files.length > 1000) {

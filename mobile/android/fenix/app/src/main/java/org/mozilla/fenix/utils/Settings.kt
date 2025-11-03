@@ -1458,7 +1458,6 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     /**
      * Indicates if the user have enabled trending search in search suggestions.
      */
-    @VisibleForTesting
     internal var trendingSearchSuggestionsEnabled by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_show_trending_search_suggestions),
         default = true,
@@ -2719,6 +2718,14 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     var tabManagerEnhancementsEnabled by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_tab_manager_enhancements),
         default = { DefaultTabManagementFeatureHelper.enhancementsEnabled },
+    )
+
+    /**
+     * Whether the Tab Manager opening animation is enabled.
+     */
+    var tabManagerOpeningAnimationEnabled by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_tab_manager_opening_animation),
+        default = { DefaultTabManagementFeatureHelper.openingAnimationEnabled },
     )
 
     /**
