@@ -188,7 +188,6 @@ for (const type of [
   "NEW_TAB_STATE_REQUEST_STARTUPCACHE",
   "NEW_TAB_STATE_REQUEST_WITHOUT_STARTUPCACHE",
   "NEW_TAB_UNLOAD",
-  "OPEN_ABOUT_FAKESPOT",
   "OPEN_DOWNLOAD_FILE",
   "OPEN_LINK",
   "OPEN_NEW_WINDOW",
@@ -3708,78 +3707,68 @@ class _DSCard extends (external_React_default()).PureComponent {
   onLinkClick() {
     const matchesSelectedTopic = this.doesLinkTopicMatchSelectedTopic();
     if (this.props.dispatch) {
-      if (this.props.isFakespot) {
-        this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-          event: "FAKESPOT_CLICK",
-          value: {
-            product_id: this.props.id,
-            category: this.props.category || ""
-          }
-        }));
-      } else {
-        this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-          event: "CLICK",
-          source: this.props.type.toUpperCase(),
-          action_position: this.props.pos,
-          value: {
-            event_source: "card",
-            card_type: this.props.flightId ? "spoc" : "organic",
-            recommendation_id: this.props.recommendation_id,
-            tile_id: this.props.id,
-            ...(this.props.shim && this.props.shim.click ? {
-              shim: this.props.shim.click
-            } : {}),
-            fetchTimestamp: this.props.fetchTimestamp,
-            firstVisibleTimestamp: this.props.firstVisibleTimestamp,
-            corpus_item_id: this.props.corpus_item_id,
-            scheduled_corpus_item_id: this.props.scheduled_corpus_item_id,
-            recommended_at: this.props.recommended_at,
-            received_rank: this.props.received_rank,
-            topic: this.props.topic,
-            features: this.props.features,
-            matches_selected_topic: matchesSelectedTopic,
-            selected_topics: this.props.selectedTopics,
-            ...(this.props.format ? {
-              format: this.props.format
-            } : {
-              format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, this.props.flightId)
-            }),
-            ...(this.props.section ? {
-              section: this.props.section,
-              section_position: this.props.sectionPosition,
-              is_section_followed: this.props.sectionFollowed,
-              layout_name: this.props.sectionLayoutName
-            } : {})
-          }
-        }));
-        this.props.dispatch(actionCreators.ImpressionStats({
-          source: this.props.type.toUpperCase(),
-          click: 0,
-          window_inner_width: this.props.windowObj.innerWidth,
-          window_inner_height: this.props.windowObj.innerHeight,
-          tiles: [{
-            id: this.props.id,
-            pos: this.props.pos,
-            ...(this.props.shim && this.props.shim.click ? {
-              shim: this.props.shim.click
-            } : {}),
-            type: this.props.flightId ? "spoc" : "organic",
-            recommendation_id: this.props.recommendation_id,
-            topic: this.props.topic,
-            selected_topics: this.props.selectedTopics,
-            ...(this.props.format ? {
-              format: this.props.format
-            } : {
-              format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, this.props.flightId)
-            }),
-            ...(this.props.section ? {
-              section: this.props.section,
-              section_position: this.props.sectionPosition,
-              is_section_followed: this.props.sectionFollowed
-            } : {})
-          }]
-        }));
-      }
+      this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
+        event: "CLICK",
+        source: this.props.type.toUpperCase(),
+        action_position: this.props.pos,
+        value: {
+          event_source: "card",
+          card_type: this.props.flightId ? "spoc" : "organic",
+          recommendation_id: this.props.recommendation_id,
+          tile_id: this.props.id,
+          ...(this.props.shim && this.props.shim.click ? {
+            shim: this.props.shim.click
+          } : {}),
+          fetchTimestamp: this.props.fetchTimestamp,
+          firstVisibleTimestamp: this.props.firstVisibleTimestamp,
+          corpus_item_id: this.props.corpus_item_id,
+          scheduled_corpus_item_id: this.props.scheduled_corpus_item_id,
+          recommended_at: this.props.recommended_at,
+          received_rank: this.props.received_rank,
+          topic: this.props.topic,
+          features: this.props.features,
+          matches_selected_topic: matchesSelectedTopic,
+          selected_topics: this.props.selectedTopics,
+          ...(this.props.format ? {
+            format: this.props.format
+          } : {
+            format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, this.props.flightId)
+          }),
+          ...(this.props.section ? {
+            section: this.props.section,
+            section_position: this.props.sectionPosition,
+            is_section_followed: this.props.sectionFollowed,
+            layout_name: this.props.sectionLayoutName
+          } : {})
+        }
+      }));
+      this.props.dispatch(actionCreators.ImpressionStats({
+        source: this.props.type.toUpperCase(),
+        click: 0,
+        window_inner_width: this.props.windowObj.innerWidth,
+        window_inner_height: this.props.windowObj.innerHeight,
+        tiles: [{
+          id: this.props.id,
+          pos: this.props.pos,
+          ...(this.props.shim && this.props.shim.click ? {
+            shim: this.props.shim.click
+          } : {}),
+          type: this.props.flightId ? "spoc" : "organic",
+          recommendation_id: this.props.recommendation_id,
+          topic: this.props.topic,
+          selected_topics: this.props.selectedTopics,
+          ...(this.props.format ? {
+            format: this.props.format
+          } : {
+            format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, this.props.flightId)
+          }),
+          ...(this.props.section ? {
+            section: this.props.section,
+            section_position: this.props.sectionPosition,
+            is_section_followed: this.props.sectionFollowed
+          } : {})
+        }]
+      }));
     }
   }
   onThumbsUpClick(event) {
@@ -4067,7 +4056,6 @@ class _DSCard extends (external_React_default()).PureComponent {
       isRecentSave,
       DiscoveryStream,
       Prefs,
-      isFakespot,
       mayHaveSectionsCards,
       format
     } = this.props;
@@ -4199,18 +4187,11 @@ class _DSCard extends (external_React_default()).PureComponent {
         } : {})
       }],
       dispatch: this.props.dispatch,
-      isFakespot: isFakespot,
       source: this.props.type,
       firstVisibleTimestamp: this.props.firstVisibleTimestamp
     }), ctaButtonVariant === "variant-b" && /*#__PURE__*/external_React_default().createElement("div", {
       className: "cta-header"
-    }, "Shop Now"), isFakespot ? /*#__PURE__*/external_React_default().createElement("div", {
-      className: "meta"
-    }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "info-wrap"
-    }, /*#__PURE__*/external_React_default().createElement("h3", {
-      className: "title clamp"
-    }, this.props.title))) : /*#__PURE__*/external_React_default().createElement(DefaultMeta, {
+    }, "Shop Now"), /*#__PURE__*/external_React_default().createElement(DefaultMeta, {
       source: source,
       title: this.props.title,
       excerpt: excerpt,
@@ -4238,7 +4219,7 @@ class _DSCard extends (external_React_default()).PureComponent {
       className: "card-stp-button-hover-background"
     }, /*#__PURE__*/external_React_default().createElement("div", {
       className: "card-stp-button-position-wrapper"
-    }, !isFakespot && /*#__PURE__*/external_React_default().createElement(DSLinkMenu, {
+    }, /*#__PURE__*/external_React_default().createElement(DSLinkMenu, {
       id: this.props.id,
       index: this.props.pos,
       dispatch: this.props.dispatch,
@@ -12958,6 +12939,27 @@ const formatTime = seconds => {
 };
 
 /**
+ * Validates that the inputs in the timer only allow numerical digits (0-9)
+ *
+ * @param input - The character being input
+ * @returns boolean - true if valid numeric input, false otherwise
+ */
+const isNumericValue = input => {
+  // Check for null/undefined input or non-numeric characters
+  return input && /^\d+$/.test(input);
+};
+
+/**
+ * Validates if adding a new digit would exceed the 2-character limit
+ *
+ * @param currentValue - The current value in the field
+ * @returns boolean - true if at 2-character limit, false otherwise
+ */
+const isAtMaxLength = currentValue => {
+  return currentValue.length >= 2;
+};
+
+/**
  * Converts a polar coordinate (angle on circle) into a percentage-based [x,y] position for clip-path
  *
  * @param cx
@@ -13264,13 +13266,9 @@ const FocusTimer = ({
     const values = e.target.innerText.trim();
 
     // only allow numerical digits 0–9 for time input
-    if (!/^\d+$/.test(input)) {
+    if (!isNumericValue(input)) {
       e.preventDefault();
-    }
-
-    // only allow 2 values each for minutes and seconds
-    if (values.length >= 2) {
-      e.preventDefault();
+      return;
     }
     const selection = window.getSelection();
     const selectedText = selection.toString();
@@ -13288,6 +13286,12 @@ const FocusTimer = ({
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
+      return;
+    }
+
+    // only allow 2 values each for minutes and seconds
+    if (isAtMaxLength(values)) {
+      e.preventDefault();
     }
   };
   const handleFocus = e => {
@@ -13513,7 +13517,6 @@ const PREF_WIDGETS_LISTS_ENABLED = "widgets.lists.enabled";
 const PREF_WIDGETS_SYSTEM_LISTS_ENABLED = "widgets.system.lists.enabled";
 const PREF_WIDGETS_TIMER_ENABLED = "widgets.focusTimer.enabled";
 const PREF_WIDGETS_SYSTEM_TIMER_ENABLED = "widgets.system.focusTimer.enabled";
-const PREF_FEEDS_SECTION_TOPSTORIES = "feeds.section.topstories";
 
 // resets timer to default values (exported for testing)
 // In practice, this logic runs inside a useEffect when
@@ -13556,7 +13559,6 @@ function Widgets() {
   const nimbusTimerTrainhopEnabled = prefs.trainhopConfig?.widgets?.timerEnabled;
   const listsEnabled = (nimbusListsTrainhopEnabled || nimbusListsEnabled || prefs[PREF_WIDGETS_SYSTEM_LISTS_ENABLED]) && prefs[PREF_WIDGETS_LISTS_ENABLED];
   const timerEnabled = (nimbusTimerTrainhopEnabled || nimbusTimerEnabled || prefs[PREF_WIDGETS_SYSTEM_TIMER_ENABLED]) && prefs[PREF_WIDGETS_TIMER_ENABLED];
-  const recommendedStoriesEnabled = prefs[PREF_FEEDS_SECTION_TOPSTORIES];
 
   // track previous timerEnabled state to detect when it becomes disabled
   const prevTimerEnabledRef = (0,external_React_namespaceObject.useRef)(timerEnabled);
@@ -13595,11 +13597,6 @@ function Widgets() {
   }), timerEnabled && /*#__PURE__*/external_React_default().createElement(FocusTimer, {
     dispatch: dispatch,
     handleUserInteraction: handleUserInteraction
-  })), recommendedStoriesEnabled && /*#__PURE__*/external_React_default().createElement("div", {
-    className: "widgets-scroll-message fade-in",
-    "aria-live": "polite"
-  }, /*#__PURE__*/external_React_default().createElement("p", {
-    "data-l10n-id": "newtab-widget-keep-scrolling"
   })), messageData?.content?.messageType === "WidgetMessage" && /*#__PURE__*/external_React_default().createElement(MessageWrapper, {
     dispatch: dispatch
   }, /*#__PURE__*/external_React_default().createElement(WidgetsFeatureHighlight, {
@@ -14401,6 +14398,10 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
         break;
       case "solid-colors":
         fluent_id = "newtab-wallpaper-category-title-colors";
+        break;
+      case "firefox":
+        fluent_id = "newtab-wallpaper-category-title-firefox";
+        break;
     }
     this.setState({
       activeCategoryFluentID: fluent_id
@@ -14632,6 +14633,10 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
           break;
         case "solid-colors":
           fluent_id = "newtab-wallpaper-category-title-colors";
+          break;
+        case "firefox":
+          fluent_id = "newtab-wallpaper-category-title-firefox";
+          break;
       }
       let style = {};
       if (thumbnail?.wallpaperUrl) {

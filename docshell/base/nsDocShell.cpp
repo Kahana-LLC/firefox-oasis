@@ -4791,56 +4791,10 @@ nsDocShell::GetVisibility(bool* aVisibility) {
   }
 
   PresShell* presShell = GetPresShell();
-  if (!presShell) {
+  if (!presShell || presShell->IsUnderHiddenEmbedderElement()) {
+    // NOTE(emilio): IsUnderHiddenEmbedderElement() accounts for ancestors as
+    // well.
     return NS_OK;
-  }
-
-  // get the view manager
-  nsViewManager* vm = presShell->GetViewManager();
-  NS_ENSURE_TRUE(vm, NS_ERROR_FAILURE);
-
-  // get the root view
-  nsView* view = vm->GetRootView();  // views are not ref counted
-  NS_ENSURE_TRUE(view, NS_ERROR_FAILURE);
-
-  // if our root view is hidden, we are not visible
-  if (view->GetVisibility() == ViewVisibility::Hide) {
-    return NS_OK;
-  }
-
-  // otherwise, we must walk up the document and view trees checking
-  // for a hidden view, unless we're an off screen browser, which
-  // would make this test meaningless.
-
-  RefPtr<nsDocShell> docShell = this;
-  RefPtr<nsDocShell> parentItem = docShell->GetInProcessParentDocshell();
-  while (parentItem) {
-    // Null-check for crash in bug 267804
-    if (!parentItem->GetPresShell()) {
-      MOZ_ASSERT_UNREACHABLE("parent docshell has null pres shell");
-      return NS_OK;
-    }
-
-    vm = docShell->GetPresShell()->GetViewManager();
-    if (vm) {
-      view = vm->GetRootView();
-    }
-
-    if (view) {
-      view = view->GetParent();  // anonymous inner view
-      if (view) {
-        view = view->GetParent();  // subdocumentframe's view
-      }
-    }
-
-    nsIFrame* frame = view ? view->GetFrame() : nullptr;
-    if (frame && !frame->IsVisibleConsideringAncestors(
-                     nsIFrame::VISIBILITY_CROSS_CHROME_CONTENT_BOUNDARY)) {
-      return NS_OK;
-    }
-
-    docShell = parentItem;
-    parentItem = docShell->GetInProcessParentDocshell();
   }
 
   nsCOMPtr<nsIBaseWindow> treeOwnerAsWin(do_QueryInterface(mTreeOwner));
@@ -9348,6 +9302,9 @@ nsresult nsDocShell::HandleSameDocumentNavigation(
       }
 
       if (LOAD_TYPE_HAS_FLAGS(mLoadType, LOAD_FLAGS_REPLACE_HISTORY)) {
+        if (previousActiveEntry) {
+          mActiveEntry->NavigationKey() = previousActiveEntry->NavigationKey();
+        }
         mBrowsingContext->ReplaceActiveSessionHistoryEntry(mActiveEntry.get());
       } else {
         mBrowsingContext->IncrementHistoryEntryCountForBrowsingContext();
@@ -12600,6 +12557,7 @@ void nsDocShell::UpdateActiveEntry(
   mActiveEntry->SetScrollRestorationIsManual(aScrollRestorationIsManual);
 
   if (replace) {
+    mActiveEntry->NavigationKey() = previousActiveEntry->NavigationKey();
     mBrowsingContext->ReplaceActiveSessionHistoryEntry(mActiveEntry.get());
   } else {
     mBrowsingContext->IncrementHistoryEntryCountForBrowsingContext();
@@ -13598,6 +13556,7 @@ nsresult nsDocShell::OnLinkClick(
   loadState->SetUserNavigationInvolvement(aUserInvolvement);
   loadState->SetTriggeringClassificationFlags(
       ownerDoc->GetScriptTrackingFlags());
+  loadState->SetHistoryBehavior(NavigationHistoryBehavior::Auto);
 
   nsCOMPtr<nsIRunnable> ev = new OnLinkClickEvent(
       this, aContent, loadState, noOpenerImplied, aTriggeringPrincipal);

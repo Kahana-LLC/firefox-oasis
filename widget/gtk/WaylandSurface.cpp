@@ -87,10 +87,19 @@ WaylandSurface::WaylandSurface(RefPtr<WaylandSurface> aParent,
   LOGWAYLAND("WaylandSurface::WaylandSurface(), parent [%p] size [%d x %d]",
              mParent ? mParent->GetLoggingWidget() : nullptr, mSizeScaled.width,
              mSizeScaled.height);
+  struct wl_compositor* compositor = WaylandDisplayGet()->GetCompositor();
+  mSurface = wl_compositor_create_surface(compositor);
+  MOZ_RELEASE_ASSERT(mSurface, "Can't create wl_surface!");
 }
 
 WaylandSurface::~WaylandSurface() {
   LOGWAYLAND("WaylandSurface::~WaylandSurface()");
+
+  wl_egl_window* tmp = nullptr;
+  mEGLWindow.exchange(tmp);
+  MozClearPointer(tmp, wl_egl_window_destroy);
+  MozClearPointer(mSurface, wl_surface_destroy);
+
   MOZ_RELEASE_ASSERT(!mIsMapped, "We can't release mapped WaylandSurface!");
   MOZ_RELEASE_ASSERT(!mSurfaceLock, "We can't release locked WaylandSurface!");
   MOZ_RELEASE_ASSERT(mBufferTransactions.Length() == 0,
@@ -130,7 +139,7 @@ void WaylandSurface::ReadyToDrawFrameCallbackHandler(
     WaylandSurfaceLock lock(this);
     MozClearPointer(mReadyToDrawFrameCallback, wl_callback_destroy);
     // It's possible that we're already unmapped so quit in such case.
-    if (!mSurface) {
+    if (!mIsMapped) {
       LOGWAYLAND("  WaylandSurface is unmapped, quit.");
       if (!mReadyToDrawCallbacks.empty()) {
         NS_WARNING("Unmapping WaylandSurface with active draw callback!");
@@ -173,13 +182,6 @@ void WaylandSurface::AddReadyToDrawCallbackLocked(
     const std::function<void(void)>& aDrawCB) {
   LOGVERBOSE("WaylandSurface::AddReadyToDrawCallbackLocked()");
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-
-  if (mIsReadyToDraw && !mSurface) {
-    NS_WARNING(
-        "WaylandSurface::AddReadyToDrawCallbackLocked():"
-        " ready to draw without wayland surface!");
-  }
-  MOZ_DIAGNOSTIC_ASSERT(!mIsReadyToDraw || !mSurface);
   mReadyToDrawCallbacks.push_back(aDrawCB);
 }
 
@@ -187,12 +189,7 @@ void WaylandSurface::AddOrFireReadyToDrawCallback(
     const std::function<void(void)>& aDrawCB) {
   {
     WaylandSurfaceLock lock(this);
-    if (mIsReadyToDraw && !mSurface) {
-      NS_WARNING(
-          "WaylandSurface::AddOrFireReadyToDrawCallback(): ready to draw "
-          "without wayland surface!");
-    }
-    if (!mIsReadyToDraw || !mSurface) {
+    if (!mIsReadyToDraw) {
       LOGVERBOSE(
           "WaylandSurface::AddOrFireReadyToDrawCallback() callback stored");
       mReadyToDrawCallbacks.push_back(aDrawCB);
@@ -281,17 +278,6 @@ void WaylandSurface::FrameCallbackHandler(struct wl_callback* aCallback,
   }
 }
 
-static void FrameCallbackHandler(void* aWaylandSurface,
-                                 struct wl_callback* aCallback,
-                                 uint32_t aTime) {
-  RefPtr waylandSurface = static_cast<WaylandSurface*>(aWaylandSurface);
-  waylandSurface->FrameCallbackHandler(aCallback, aTime,
-                                       /* aRoutedFromChildSurface */ false);
-}
-
-static const struct wl_callback_listener sWaylandSurfaceFrameListener = {
-    ::FrameCallbackHandler};
-
 void WaylandSurface::RequestFrameCallbackLocked(
     const WaylandSurfaceLock& aProofOfLock) {
   LOGVERBOSE(
@@ -317,18 +303,23 @@ void WaylandSurface::RequestFrameCallbackLocked(
         }};
     mOpaqueRegionFrameCallback = wl_surface_frame(mSurface);
     wl_callback_add_listener(mOpaqueRegionFrameCallback, &listener, this);
+    mSurfaceNeedsCommit = true;
   }
 
   if (!mFrameCallbackEnabled || !mFrameCallbackHandler.IsSet()) {
     return;
   }
 
-  MOZ_DIAGNOSTIC_ASSERT(mSurface, "Missing mapped surface!");
-
   if (!mFrameCallback) {
+    static const struct wl_callback_listener listener{
+        [](void* aData, struct wl_callback* callback, uint32_t time) {
+          RefPtr waylandSurface = static_cast<WaylandSurface*>(aData);
+          waylandSurface->FrameCallbackHandler(
+              callback, time,
+              /* aRoutedFromChildSurface */ false);
+        }};
     mFrameCallback = wl_surface_frame(mSurface);
-    wl_callback_add_listener(mFrameCallback, &sWaylandSurfaceFrameListener,
-                             this);
+    wl_callback_add_listener(mFrameCallback, &listener, this);
     mSurfaceNeedsCommit = true;
   }
 
@@ -490,7 +481,7 @@ bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
   MOZ_DIAGNOSTIC_ASSERT(!mIsMapped, "Already mapped?");
   MOZ_DIAGNOSTIC_ASSERT(!(aParentWLSurface && aParentWaylandSurfaceLock),
                         "Only one parent can be used.");
-  MOZ_DIAGNOSTIC_ASSERT(!mSurface && !mSubsurface, "Already mapped?");
+  MOZ_DIAGNOSTIC_ASSERT(!mSubsurface, "Already mapped?");
 
   if (aParentWLSurface) {
     LOGWAYLAND(" parent wl_surface [%p]", aParentWLSurface);
@@ -509,17 +500,9 @@ bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
   mBufferAttached = false;
   mLatestAttachedBuffer = 0;
 
-  struct wl_compositor* compositor = WaylandDisplayGet()->GetCompositor();
-  mSurface = wl_compositor_create_surface(compositor);
-  if (!mSurface) {
-    LOGWAYLAND("    Failed - can't create surface!");
-    return false;
-  }
-
   mSubsurface = wl_subcompositor_get_subsurface(
       WaylandDisplayGet()->GetSubcompositor(), mSurface, mParentSurface);
   if (!mSubsurface) {
-    MozClearPointer(mSurface, wl_surface_destroy);
     LOGWAYLAND("    Failed - can't create sub-surface!");
     return false;
   }
@@ -596,7 +579,6 @@ void WaylandSurface::RunUnmapCallback() {
 void WaylandSurface::GdkCleanUpLocked(const WaylandSurfaceLock& aProofOfLock) {
   LOGWAYLAND("WaylandSurface::GdkCleanUp()");
   AssertIsOnMainThread();
-  MOZ_DIAGNOSTIC_ASSERT(mSurface);
   if (mGdkWindow) {
     RemoveOpaqueSurfaceHandlerLocked(aProofOfLock);
     mGdkWindow = nullptr;
@@ -604,9 +586,6 @@ void WaylandSurface::GdkCleanUpLocked(const WaylandSurfaceLock& aProofOfLock) {
   MozClearHandleID(mEmulatedFrameCallbackTimerID, g_source_remove);
 
   mIsPendingGdkCleanup = false;
-  if (!mIsMapped) {
-    MozClearPointer(mSurface, wl_surface_destroy);
-  }
 }
 
 void WaylandSurface::ReleaseAllWaylandTransactionsLocked(
@@ -637,9 +616,6 @@ void WaylandSurface::UnmapLocked(WaylandSurfaceLock& aSurfaceLock) {
   mViewportDestinationSize = gfx::IntSize(-1, -1);
   mViewportSourceRect = gfx::Rect(-1, -1, -1, -1);
 
-  wl_egl_window* tmp = nullptr;
-  mEGLWindow.exchange(tmp);
-  MozClearPointer(tmp, wl_egl_window_destroy);
   MozClearPointer(mFractionalScaleListener, wp_fractional_scale_v1_destroy);
   MozClearPointer(mSubsurface, wl_subsurface_destroy);
   MozClearPointer(mColorSurface, wp_color_management_surface_v1_destroy);
@@ -651,12 +627,6 @@ void WaylandSurface::UnmapLocked(WaylandSurfaceLock& aSurfaceLock) {
 
   MozClearPointer(mPendingOpaqueRegion, wl_region_destroy);
   MozClearPointer(mOpaqueRegionFrameCallback, wl_callback_destroy);
-
-  // We can't release mSurface if it's used by Gdk for frame callback routing,
-  // it will be released at GdkCleanUpLocked().
-  if (!mIsPendingGdkCleanup) {
-    MozClearPointer(mSurface, wl_surface_destroy);
-  }
 
   mIsReadyToDraw = false;
   mBufferAttached = false;
@@ -681,8 +651,7 @@ void WaylandSurface::Commit(WaylandSurfaceLock* aProofOfLock, bool aForceCommit,
                             bool aForceDisplayFlush) {
   MOZ_DIAGNOSTIC_ASSERT(aProofOfLock == mSurfaceLock);
 
-  // mSurface may be already deleted, see WaylandSurface::Unmap();
-  if (mSurface && (aForceCommit || mSurfaceNeedsCommit)) {
+  if (aForceCommit || mSurfaceNeedsCommit) {
     LOGVERBOSE(
         "WaylandSurface::Commit() allowed [%d] needs commit %d, force commit "
         "%d flush %d",
@@ -741,16 +710,17 @@ bool WaylandSurface::DisableUserInputLocked(
 void WaylandSurface::OpaqueCallbackHandler() {
   WaylandSurfaceLock lock(this);
   if (mPendingOpaqueRegion) {
-    LOGVERBOSE("WaylandSurface::OpaqueCallbackHandler()");
+    LOGVERBOSE("WaylandSurface::SetOpaqueRegionCallbackHandler()");
     wl_surface_set_opaque_region(mSurface, mPendingOpaqueRegion);
     MozClearPointer(mPendingOpaqueRegion, wl_region_destroy);
     mSurfaceNeedsCommit = true;
   }
+  MozClearPointer(mOpaqueRegionFrameCallback, wl_callback_destroy);
 }
 
 void WaylandSurface::SetOpaqueLocked(const WaylandSurfaceLock& aProofOfLock) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-  if (!mSurface || !IsOpaqueRegionEnabled()) {
+  if (!IsOpaqueRegionEnabled()) {
     return;
   }
   LOGVERBOSE("WaylandSurface::SetOpaqueLocked()");
@@ -764,11 +734,9 @@ void WaylandSurface::SetOpaqueLocked(const WaylandSurfaceLock& aProofOfLock) {
 void WaylandSurface::SetOpaqueRegionLocked(
     const WaylandSurfaceLock& aProofOfLock, const gfx::IntRegion& aRegion) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-  if (!mSurface || !IsOpaqueRegionEnabled()) {
+  if (!IsOpaqueRegionEnabled()) {
     return;
   }
-
-  LOGVERBOSE("WaylandSurface::SetOpaqueRegionLocked()");
 
   // Region should be in surface-logical coordinates, so we need to divide by
   // the buffer scale. We use round-in in order to be safe with subpixels.
@@ -781,8 +749,9 @@ void WaylandSurface::SetOpaqueRegionLocked(
     const auto& rect = gfx::RoundedIn(iter.Get().ToUnknownRect() / scale);
     wl_region_add(mPendingOpaqueRegion, rect.x, rect.y, rect.Width(),
                   rect.Height());
-    LOGVERBOSE("  region [%d, %d] -> [%d x %d]", rect.x, rect.y, rect.Width(),
-               rect.Height());
+    LOGVERBOSE(
+        "WaylandSurface::SetOpaqueRegionLocked() region [%d, %d] -> [%d x %d]",
+        rect.x, rect.y, rect.Width(), rect.Height());
   }
   RequestFrameCallbackLocked(aProofOfLock);
 }
@@ -795,9 +764,6 @@ void WaylandSurface::SetOpaqueRegion(const gfx::IntRegion& aRegion) {
 void WaylandSurface::ClearOpaqueRegionLocked(
     const WaylandSurfaceLock& aProofOfLock) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-  if (!mSurface) {
-    return;
-  }
   LOGVERBOSE("WaylandSurface::ClearOpaqueLocked()");
   MozClearPointer(mPendingOpaqueRegion, wl_region_destroy);
   mPendingOpaqueRegion =
@@ -963,18 +929,16 @@ wl_surface* WaylandSurface::Lock(WaylandSurfaceLock* aWaylandSurfaceLock)
   mMutex.Lock();
   MOZ_DIAGNOSTIC_ASSERT(!mSurfaceLock);
   mSurfaceLock = aWaylandSurfaceLock;
-  return mIsReadyToDraw ? mSurface : nullptr;
+  return mSurface;
 }
 
 void WaylandSurface::Unlock(struct wl_surface** aSurface,
                             WaylandSurfaceLock* aWaylandSurfaceLock) {
-  MOZ_DIAGNOSTIC_ASSERT(*aSurface == nullptr || mSurface == nullptr ||
-                        *aSurface == mSurface);
+  MOZ_DIAGNOSTIC_ASSERT(*aSurface);
+  MOZ_DIAGNOSTIC_ASSERT(*aSurface == mSurface);
   MOZ_DIAGNOSTIC_ASSERT(mSurfaceLock == aWaylandSurfaceLock);
   mMutex.AssertCurrentThreadOwns();
-  if (*aSurface) {
-    *aSurface = nullptr;
-  }
+  *aSurface = nullptr;
   mSurfaceLock = nullptr;
   mMutex.Unlock();
 }
@@ -1037,11 +1001,9 @@ bool WaylandSurface::RemoveOpaqueSurfaceHandlerLocked(
     return false;
   }
   AssertIsOnMainThread();
-  if (mSurface) {
-    LOGWAYLAND("WaylandSurface::RemoveOpaqueSurfaceHandlerLocked()");
-    sGdkWaylandWindowRemoveCallbackSurface(mGdkWindow, mSurface);
-    mIsOpaqueSurfaceHandlerSet = false;
-  }
+  LOGWAYLAND("WaylandSurface::RemoveOpaqueSurfaceHandlerLocked()");
+  sGdkWaylandWindowRemoveCallbackSurface(mGdkWindow, mSurface);
+  mIsOpaqueSurfaceHandlerSet = false;
   if (mGdkAfterPaintId) {
     GdkFrameClock* frameClock = gdk_window_get_frame_clock(mGdkWindow);
     // If we're already unmapped frameClock is nullptr
@@ -1053,20 +1015,15 @@ bool WaylandSurface::RemoveOpaqueSurfaceHandlerLocked(
   return true;
 }
 
-wl_egl_window* WaylandSurface::GetEGLWindow(nsIntSize aUnscaledSize) {
+wl_egl_window* WaylandSurface::GetEGLWindow(DesktopIntSize aSize) {
   LOGWAYLAND("WaylandSurface::GetEGLWindow() eglwindow %p", (void*)mEGLWindow);
 
   WaylandSurfaceLock lock(this);
-  if (!mSurface || !mIsReadyToDraw) {
-    LOGWAYLAND("  quit, mSurface %p mIsReadyToDraw %d", mSurface,
-               (bool)mIsReadyToDraw);
-    return nullptr;
-  }
+  MOZ_DIAGNOSTIC_ASSERT(mSurface, "Missing wl_surface!");
 
-  auto scale = GetScale();
-  // TODO: Correct size rounding
-  nsIntSize scaledSize((int)floor(aUnscaledSize.width * scale),
-                       (int)floor(aUnscaledSize.height * scale));
+  auto scaledSize = LayoutDeviceIntSize::Round(
+      aSize * DesktopToLayoutDeviceScale(GetScale()));
+
   if (!mEGLWindow) {
     mEGLWindow =
         wl_egl_window_create(mSurface, scaledSize.width, scaledSize.height);
@@ -1080,7 +1037,7 @@ wl_egl_window* WaylandSurface::GetEGLWindow(nsIntSize aUnscaledSize) {
   }
 
   if (mEGLWindow) {
-    SetSizeLocked(lock, scaledSize, aUnscaledSize);
+    SetSizeLocked(lock, scaledSize.ToUnknownSize(), aSize.ToUnknownSize());
   }
 
   return mEGLWindow;
@@ -1088,30 +1045,26 @@ wl_egl_window* WaylandSurface::GetEGLWindow(nsIntSize aUnscaledSize) {
 
 // Return false if scale factor doesn't match buffer size.
 // We need to skip painting in such case do avoid Wayland compositor freaking.
-bool WaylandSurface::SetEGLWindowSize(nsIntSize aScaledSize) {
+bool WaylandSurface::SetEGLWindowSize(LayoutDeviceIntSize aSize) {
   WaylandSurfaceLock lock(this);
 
   // We may be called after unmap so we're missing egl window completelly.
   // In such case don't return false which would block compositor.
   // We return true here and don't block flush WebRender queue.
   // We'll be repainted if our window become visible again anyway.
-  if (!mEGLWindow) {
-    return true;
-  }
+  MOZ_DIAGNOSTIC_ASSERT(mEGLWindow, "Missing ELG window?");
 
-  auto scale = GetScale();
-  // TODO: Avoid precision lost here? Load coordinates from window?
-  nsIntSize unscaledSize((int)round(aScaledSize.width / scale),
-                         (int)round(aScaledSize.height / scale));
+  auto unscaledSize =
+      DesktopIntSize::Round(aSize / DesktopToLayoutDeviceScale(GetScale()));
 
   LOGVERBOSE(
       "WaylandSurface::SetEGLWindowSize() scaled [%d x %d] unscaled [%d x %d] "
       "scale %f",
-      aScaledSize.width, aScaledSize.height, unscaledSize.width,
-      unscaledSize.height, scale);
+      aSize.width, aSize.height, unscaledSize.width, unscaledSize.height,
+      GetScale());
 
-  wl_egl_window_resize(mEGLWindow, aScaledSize.width, aScaledSize.height, 0, 0);
-  SetSizeLocked(lock, aScaledSize, unscaledSize);
+  wl_egl_window_resize(mEGLWindow, aSize.width, aSize.height, 0, 0);
+  SetSizeLocked(lock, aSize.ToUnknownSize(), unscaledSize.ToUnknownSize());
   return true;
 }
 
@@ -1130,8 +1083,6 @@ void WaylandSurface::InvalidateRegionLocked(
 
 void WaylandSurface::InvalidateLocked(const WaylandSurfaceLock& aProofOfLock) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-  MOZ_DIAGNOSTIC_ASSERT(mSurface);
-
   wl_surface_damage_buffer(mSurface, 0, 0, INT32_MAX, INT32_MAX);
   mSurfaceNeedsCommit = true;
 }
@@ -1199,7 +1150,6 @@ bool WaylandSurface::IsBufferAttached(WaylandBuffer* aBuffer) {
 bool WaylandSurface::AttachLocked(const WaylandSurfaceLock& aSurfaceLock,
                                   RefPtr<WaylandBuffer> aBuffer) {
   MOZ_DIAGNOSTIC_ASSERT(&aSurfaceLock == mSurfaceLock);
-  MOZ_DIAGNOSTIC_ASSERT(mSurface);
 
   auto scale = GetScale();
   LayoutDeviceIntSize bufferSize = aBuffer->GetSize();
@@ -1230,7 +1180,6 @@ bool WaylandSurface::AttachLocked(const WaylandSurfaceLock& aSurfaceLock,
 void WaylandSurface::RemoveAttachedBufferLocked(
     const WaylandSurfaceLock& aSurfaceLock) {
   MOZ_DIAGNOSTIC_ASSERT(&aSurfaceLock == mSurfaceLock);
-  MOZ_DIAGNOSTIC_ASSERT(mSurface);
 
   LOGWAYLAND("WaylandSurface::RemoveAttachedBufferLocked()");
 
@@ -1258,9 +1207,7 @@ void WaylandSurface::PlaceAboveLocked(const WaylandSurfaceLock& aProofOfLock,
 
   // It's possible that lowerSurface becomed unmapped. In such rare case
   // just skip the operation, we may be deleted anyway.
-  if (lowerSurface->mSurface) {
-    wl_subsurface_place_above(mSubsurface, lowerSurface->mSurface);
-  }
+  wl_subsurface_place_above(mSubsurface, lowerSurface->mSurface);
   mSurfaceNeedsCommit = true;
 }
 
@@ -1271,8 +1218,6 @@ void WaylandSurface::SetTransformFlippedLocked(
       aFlippedY == mBufferTransformFlippedY) {
     return;
   }
-
-  MOZ_RELEASE_ASSERT(mSurface);
 
   mBufferTransformFlippedX = aFlippedX;
   mBufferTransformFlippedY = aFlippedY;

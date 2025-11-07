@@ -53,7 +53,6 @@
 #include "nsTArray.h"
 #include "nsThreadUtils.h"
 #include "nsUserIdleService.h"
-#include "nsViewManager.h"
 #include "nsWidgetsCID.h"
 #include "nsWindow.h"
 
@@ -130,9 +129,7 @@ static mozilla::LazyLogModule sGVSupportLog("GeckoViewSupport");
 // All the toplevel windows that have been created; these are in
 // stacking order, so the window at gTopLevelWindows[0] is the topmost
 // one.
-MOZ_RUNINIT static nsTArray<nsWindow*> gTopLevelWindows;
-
-static bool sFailedToCreateGLContext = false;
+MOZ_CONSTINIT static nsTArray<nsWindow*> gTopLevelWindows;
 
 static const double kTouchResampleVsyncAdjustMs = 5.0;
 
@@ -2697,15 +2694,13 @@ void nsWindow::CreateLayerManager() {
               }
             });
       }
-
       return;
     }
-
-    // If we get here, then off main thread compositing failed to initialize.
-    sFailedToCreateGLContext = true;
   }
 
-  if (!ComputeShouldAccelerate() || sFailedToCreateGLContext) {
+  if (ComputeShouldAccelerate()) {
+    mWindowRenderer = CreateBackgroundedFallbackRenderer();
+  } else {
     printf_stderr(" -- creating basic, not accelerated\n");
     mWindowRenderer = CreateFallbackRenderer();
   }

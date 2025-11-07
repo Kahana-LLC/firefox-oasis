@@ -71,6 +71,7 @@
 
 #if defined(XP_WIN)
 #  include "gfxWindowsPlatform.h"
+#  include "mozilla/gfx/DeviceManagerDx.h"
 #endif
 
 namespace mozilla {
@@ -106,7 +107,6 @@ GPUProcessManager::GPUProcessManager()
       mAppInForeground(true),
       mProcess(nullptr),
       mProcessToken(0),
-      mProcessStable(true),
       mGPUChild(nullptr) {
   MOZ_COUNT_CTOR(GPUProcessManager);
 
@@ -173,12 +173,9 @@ void GPUProcessManager::NotifyObserve(const char* aTopic,
   } else if (!strcmp(aTopic, "nsPref:changed")) {
     OnPreferenceChange(aData);
   } else if (!strcmp(aTopic, "application-foreground")) {
-    mAppInForeground = true;
-    if (!mProcess && gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
-      (void)LaunchGPUProcess();
-    }
+    SetAppInForeground(true);
   } else if (!strcmp(aTopic, "application-background")) {
-    mAppInForeground = false;
+    SetAppInForeground(false);
   } else if (!strcmp(aTopic, "screen-information-changed")) {
     ScreenInformationChanged();
   }
@@ -421,7 +418,24 @@ nsresult GPUProcessManager::EnsureGPUReady() {
     return NS_ERROR_ILLEGAL_DURING_SHUTDOWN;
   }
 
-  do {
+  while (true) {
+    // We allow the GPU process to launch if we are:
+    // 1) in the foreground, as the application is being actively used.
+    // 2) if we have no launch failures, because even if we are backgrounded, we
+    //    can try once to secure it. This is useful for geckoview-junit tests.
+    // 3) if our pref is set to allow background launches; this is false by
+    //    default on Android due to its issues with keeping the GPU process
+    //    alive in the background, and true on all other platforms.
+    //
+    // If we are not in a position to try launching and/or waiting for the GPU
+    // process, then we should just abort for now. The higher levels will fail
+    // to create the content process, but all of this should get recreated when
+    // the app comes back into the foreground.
+    if (!mAppInForeground && mLaunchProcessAttempts > 0 &&
+        !StaticPrefs::layers_gpu_process_launch_in_background()) {
+      return NS_ERROR_ABORT;
+    }
+
     // Launch the GPU process if it is enabled but hasn't been (re-)launched
     // yet, and wait for it to complete the handshake. As part of WaitForLaunch,
     // we know that OnProcessLaunchComplete has been called. If it succeeds,
@@ -431,13 +445,18 @@ nsresult GPUProcessManager::EnsureGPUReady() {
     nsresult rv = LaunchGPUProcess();
     if (NS_SUCCEEDED(rv) && mProcess->WaitForLaunch() && mGPUChild) {
       MOZ_DIAGNOSTIC_ASSERT(mGPUChild->IsGPUReady());
-      return NS_OK;
+      break;
     }
 
     MOZ_RELEASE_ASSERT(rv != NS_ERROR_ILLEGAL_DURING_SHUTDOWN);
     MOZ_RELEASE_ASSERT(!mProcess);
     MOZ_RELEASE_ASSERT(!mGPUChild);
-  } while (gfxConfig::IsEnabled(Feature::GPU_PROCESS));
+    MOZ_DIAGNOSTIC_ASSERT(mLaunchProcessAttempts > 0);
+
+    if (!gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
+      break;
+    }
+  }
 
   return NS_OK;
 }
@@ -571,7 +590,8 @@ void GPUProcessManager::OnProcessLaunchComplete(GPUProcessHost* aHost) {
   // we did not get to the point where we are using the features, we should just
   // follow the same fallback procedure.
   auto* gpuChild = mProcess->GetActor();
-  if (!mProcess->IsConnected() || !gpuChild || !gpuChild->EnsureGPUReady()) {
+  if (NS_WARN_IF(!mProcess->IsConnected()) || NS_WARN_IF(!gpuChild) ||
+      NS_WARN_IF(!gpuChild->EnsureGPUReady())) {
     ++mLaunchProcessAttempts;
     if (mLaunchProcessAttempts >
         uint32_t(StaticPrefs::layers_gpu_process_max_launch_attempts())) {
@@ -714,24 +734,9 @@ bool GPUProcessManager::FallbackFromAcceleration(wr::WebRenderError aError,
   }
 }
 
-bool GPUProcessManager::DisableWebRenderConfig(wr::WebRenderError aError,
+void GPUProcessManager::DisableWebRenderConfig(wr::WebRenderError aError,
                                                const nsCString& aMsg) {
-  // If we have a stable compositor process, this may just be due to an OOM or
-  // bad driver state. In that case, we should consider restarting the GPU
-  // process, or simulating a device reset to teardown the compositors to
-  // hopefully alleviate the situation.
-  if (IsProcessStable(TimeStamp::Now()) || (kIsAndroid && !mAppInForeground)) {
-    if (mProcess) {
-      mProcess->KillProcess(/* aGenerateMinidump */ false);
-    } else {
-      SimulateDeviceReset();
-    }
-
-    mLastError = Some(aError);
-    mLastErrorMsg = Some(aMsg);
-    return false;
-  }
-
+  // Clear out any cached errors from a remote device reset.
   mLastError.reset();
   mLastErrorMsg.reset();
 
@@ -755,20 +760,17 @@ bool GPUProcessManager::DisableWebRenderConfig(wr::WebRenderError aError,
     mUnstableProcessAttempts = 1;
     mGPUChild->EnsureGPUReady(/* aForceSync */ true);
   }
-
-  return true;
 }
 
 void GPUProcessManager::DisableWebRender(wr::WebRenderError aError,
                                          const nsCString& aMsg) {
-  if (DisableWebRenderConfig(aError, aMsg)) {
-    if (mProcess) {
-      DestroyRemoteCompositorSessions();
-    } else {
-      DestroyInProcessCompositorSessions();
-    }
-    NotifyListenersOnCompositeDeviceReset();
+  DisableWebRenderConfig(aError, aMsg);
+  if (mProcess) {
+    DestroyRemoteCompositorSessions();
+  } else {
+    DestroyInProcessCompositorSessions();
   }
+  NotifyListenersOnCompositeDeviceReset();
 }
 
 void GPUProcessManager::NotifyWebRenderError(wr::WebRenderError aError) {
@@ -797,7 +799,18 @@ void GPUProcessManager::NotifyWebRenderError(wr::WebRenderError aError) {
   }
 #endif
 
-  DisableWebRender(aError, nsCString());
+  // If we have a stable GPU process, this may just be due to an OOM or bad
+  // driver state. In that case, we should consider restarting the GPU process
+  // to hopefully alleviate the situation.
+  if (mProcess && (IsProcessStable(TimeStamp::Now()) ||
+                   (kIsAndroid && !mAppInForeground))) {
+    mProcess->KillProcess(/* aGenerateMinidump */ false);
+    mLastError = Some(aError);
+    mLastErrorMsg = Some(""_ns);
+    return;
+  }
+
+  DisableWebRender(aError, ""_ns);
 }
 
 /* static */
@@ -814,29 +827,39 @@ void GPUProcessManager::RecordDeviceReset(DeviceResetReason aReason) {
 /* static */
 void GPUProcessManager::NotifyDeviceReset(DeviceResetReason aReason,
                                           DeviceResetDetectPlace aPlace) {
-  if (XRE_IsGPUProcess()) {
-    if (!GPUParent::GetSingleton()) {
-      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
-      return;
-    }
-    // End up to GPUProcessManager::OnRemoteProcessDeviceReset()
-    GPUParent::GetSingleton()->NotifyDeviceReset(aReason, aPlace);
-  } else {
-    if (!GPUProcessManager::Get()) {
-      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
-      return;
-    }
+  if (!NS_IsMainThread()) {
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "gfx::GPUProcessManager::NotifyDeviceReset",
+        [aReason, aPlace]() -> void {
+          gfx::GPUProcessManager::NotifyDeviceReset(aReason, aPlace);
+        }));
+    return;
+  }
 
-    if (NS_IsMainThread()) {
-      GPUProcessManager::Get()->OnInProcessDeviceReset(aReason, aPlace);
+#ifdef XP_WIN
+  // Reset and reinitialize the compositor devices
+  if (auto* deviceManager = DeviceManagerDx::Get()) {
+    deviceManager->MaybeResetAndReacquireDevices();
+  }
+#else
+  gfx::GPUProcessManager::RecordDeviceReset(aReason);
+#endif
+
+  if (XRE_IsGPUProcess()) {
+    if (auto* gpuParent = GPUParent::GetSingleton()) {
+      // End up to GPUProcessManager::OnRemoteProcessDeviceReset()
+      gpuParent->NotifyDeviceReset(aReason, aPlace);
     } else {
-      NS_DispatchToMainThread(NS_NewRunnableFunction(
-          "gfx::GPUProcessManager::OnInProcessDeviceReset",
-          [aReason, aPlace]() -> void {
-            gfx::GPUProcessManager::Get()->OnInProcessDeviceReset(aReason,
-                                                                  aPlace);
-          }));
+      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
     }
+    return;
+  }
+
+  MOZ_ASSERT(XRE_IsParentProcess());
+  if (auto* gpm = GPUProcessManager::Get()) {
+    gpm->OnInProcessDeviceReset(aReason, aPlace);
+  } else {
+    MOZ_ASSERT_UNREACHABLE("unexpected to be called");
   }
 }
 
@@ -897,10 +920,19 @@ void GPUProcessManager::OnRemoteProcessDeviceReset(
   gfxCriticalNote << "Detect DeviceReset " << aReason << " " << aPlace
                   << " in GPU process";
 
-  if (OnDeviceReset(/* aTrackThreshold */ true) &&
-      !DisableWebRenderConfig(wr::WebRenderError::EXCESSIVE_RESETS,
-                              nsCString())) {
-    return;
+  if (OnDeviceReset(/* aTrackThreshold */ true)) {
+    // If we have a stable GPU process, this may just be due to an OOM or bad
+    // driver state. In that case, we should consider restarting the GPU process
+    // to hopefully alleviate the situation.
+    if (mProcess && (IsProcessStable(TimeStamp::Now()) ||
+                     (kIsAndroid && !mAppInForeground))) {
+      mProcess->KillProcess(/* aGenerateMinidump */ false);
+      mLastError = Some(wr::WebRenderError::EXCESSIVE_RESETS);
+      mLastErrorMsg = Some(""_ns);
+      return;
+    }
+
+    DisableWebRenderConfig(wr::WebRenderError::EXCESSIVE_RESETS, ""_ns);
   }
 
   DestroyRemoteCompositorSessions();
@@ -908,7 +940,9 @@ void GPUProcessManager::OnRemoteProcessDeviceReset(
 }
 
 void GPUProcessManager::NotifyListenersOnCompositeDeviceReset() {
-  for (const auto& listener : mListeners) {
+  nsTArray<RefPtr<GPUProcessListener>> listeners;
+  listeners.AppendElements(mListeners);
+  for (const auto& listener : listeners) {
     listener->OnCompositorDeviceReset();
   }
 }
@@ -1072,7 +1106,14 @@ void GPUProcessManager::ReinitializeRendering() {
   // Notify content. This will ensure that each content process re-establishes
   // a connection to the compositor thread (whether it's in-process or in a
   // newly launched GPU process).
-  for (const auto& listener : mListeners) {
+  nsTArray<RefPtr<GPUProcessListener>> listeners;
+  listeners.AppendElements(mListeners);
+  // Make sure any fallback renderers get destroyed first.
+  for (const auto& listener : listeners) {
+    listener->OnCompositorDestroyBackgrounded();
+  }
+  // Then do the recreations.
+  for (const auto& listener : listeners) {
     listener->OnCompositorUnexpectedShutdown();
   }
 
@@ -1783,6 +1824,13 @@ void GPUProcessManager::SetAppInForeground(bool aInForeground) {
 #if defined(XP_WIN)
   SetProcessIsForeground();
 #endif
+
+  // If we moved into the foreground, then we need to make sure the GPU process
+  // completes its launch. Otherwise listeners may be left dangling from
+  // previous calls that returned NS_ERROR_ABORT due to being in the background.
+  if (aInForeground && gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
+    (void)LaunchGPUProcess();
+  }
 }
 
 #if defined(XP_WIN)

@@ -96,7 +96,6 @@
 #include "nsShmImage.h"
 #include "nsString.h"
 #include "nsWidgetsCID.h"
-#include "nsViewManager.h"
 #include "nsXPLookAndFeel.h"
 #include "prlink.h"
 #include "Screen.h"
@@ -126,7 +125,6 @@
 #  include <gdk/gdkwayland.h>
 #  include <gdk/gdkkeysyms-compat.h>
 #  include "nsIClipboard.h"
-#  include "nsView.h"
 #  include "WaylandVsyncSource.h"
 #endif
 
@@ -438,7 +436,8 @@ nsWindow::nsWindow()
       mUndecorated(false),
       mPopupTrackInHierarchy(false),
       mPopupTrackInHierarchyConfigured(false),
-      mHiddenPopupPositioned(false),
+      mX11HiddenPopupPositioned(false),
+      mWaylandApplyPopupPositionBeforeShow(true),
       mHasAlphaVisual(false),
       mPopupAnchored(false),
       mPopupContextMenu(false),
@@ -2327,6 +2326,9 @@ void nsWindow::NativeMoveResizeWaylandPopup(bool aMove, bool aResize) {
         mLastSizeRequest.width, mLastSizeRequest.height);
     return;
   }
+
+  // It's safe to expect the popup position is handled onwards.
+  mWaylandApplyPopupPositionBeforeShow = false;
 
   // We expect all Wayland popus have zero margin. If not, just position
   // it as is and throw an error message.
@@ -6457,8 +6459,6 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
     // on Wayland as we place Wayland popup on show.
     if (GdkIsX11Display()) {
       NativeMoveResize(/* move */ true, /* resize */ false);
-    } else if (AreBoundsSane()) {
-      mPopupPosition = {mClientArea.x, mClientArea.y};
     }
   } else {  // must be WindowType::TopLevel
     mGtkWindowRoleName = "Toplevel";
@@ -6826,6 +6826,7 @@ void nsWindow::NativeMoveResize(bool aMoved, bool aResized) {
     auto cr = frameRect;
     // In CSD mode gtk_window_move() / gtk_window_resize() expects coordinates
     // without CSD frame so remove it.
+    // Note that popups should have zero margin.
     cr.Deflate(mClientMargin);
     // SSD mode expects coordinates with decorations (outer frame)
     // so put the margin offset back.
@@ -6865,7 +6866,7 @@ void nsWindow::NativeMoveResize(bool aMoved, bool aResized) {
   // and move it when it's shown.
   if (aMoved && GdkIsX11Display() && IsPopup() &&
       !gtk_widget_get_visible(GTK_WIDGET(mShell))) {
-    mHiddenPopupPositioned = true;
+    mX11HiddenPopupPositioned = true;
     mPopupPosition = {moveResizeRect.x, moveResizeRect.y};
     mClientArea.MoveTo(mLastMoveRequest);
     LOG("  store position of hidden popup window [%d, %d]", mPopupPosition.x,
@@ -6987,6 +6988,9 @@ void nsWindow::NativeShow(bool aAction) {
           return;
         }
       }
+      if (mWaylandApplyPopupPositionBeforeShow) {
+        NativeMoveResize(/* move */ true, /* resize */ false);
+      }
     }
     // Set up usertime/startupID metadata for the created window.
     // On X11 we use gtk_window_set_startup_id() so we need to call it
@@ -7015,11 +7019,11 @@ void nsWindow::NativeShow(bool aAction) {
       }
 #endif
     }
-    if (mHiddenPopupPositioned && IsPopup()) {
+    if (mX11HiddenPopupPositioned) {
       LOG("  re-position hidden popup window [%d, %d]", mPopupPosition.x,
           mPopupPosition.y);
       gtk_window_move(GTK_WINDOW(mShell), mPopupPosition.x, mPopupPosition.y);
-      mHiddenPopupPositioned = false;
+      mX11HiddenPopupPositioned = false;
     }
   } else {
     LOG("nsWindow::NativeShow hide\n");
@@ -9974,7 +9978,7 @@ bool nsWindow::SetEGLNativeWindowSize(
     }
   }
 #  endif
-  return mSurface->SetEGLWindowSize(aEGLWindowSize.ToUnknownSize());
+  return mSurface->SetEGLWindowSize(aEGLWindowSize);
 }
 #endif
 

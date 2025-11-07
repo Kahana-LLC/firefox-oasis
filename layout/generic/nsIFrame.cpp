@@ -2910,8 +2910,9 @@ static void UpdateCurrentHitTestInfo(nsDisplayListBuilder* aBuilder,
 
   CheckForApzAwareEventHandlers(aBuilder, aFrame);
 
-  const CompositorHitTestInfo info = aFrame->GetCompositorHitTestInfo(aBuilder);
-  aBuilder->SetCompositorHitTestInfo(info);
+  const CompositorHitTestInfo info =
+      aFrame->GetCompositorHitTestInfoWithoutPointerEvents(aBuilder);
+  aBuilder->SetInheritedCompositorHitTestInfo(info);
 }
 
 /**
@@ -7907,33 +7908,32 @@ nsIWidget* nsIFrame::GetNearestWidget() const {
 nsIWidget* nsIFrame::GetNearestWidget(nsPoint& aOffset) const {
   aOffset.MoveTo(0, 0);
   nsIFrame* frame = const_cast<nsIFrame*>(this);
+  const auto targetAPD = PresContext()->AppUnitsPerDevPixel();
+  auto curAPD = targetAPD;
   do {
     if (frame->IsMenuPopupFrame()) {
       return static_cast<nsMenuPopupFrame*>(frame)->GetWidget();
     }
     if (auto* view = frame->GetView()) {
-      // NOTE(emilio): NS_FRAME_IN_POPUP gets propagated across documents, so we
-      // just need to be careful to not jump to the view hierarchy in this case,
-      // since popups are not part of it.
-      if (!frame->HasAnyStateBits(NS_FRAME_IN_POPUP)) {
-        nsPoint offsetToWidget;
-        nsIWidget* widget = view->GetNearestWidget(&offsetToWidget);
-        aOffset += offsetToWidget;
+      if (auto* widget = view->GetWidget()) {
+        aOffset += view->ViewToWidgetOffset();
+        aOffset = aOffset.ScaleToOtherAppUnits(curAPD, targetAPD);
         return widget;
       }
-      MOZ_ASSERT(!view->GetWidget(),
-                 "Shouldn't have a nested widget inside a popup");
     }
     aOffset += frame->GetPosition();
     nsPoint crossDocOffset;
     frame =
         nsLayoutUtils::GetCrossDocParentFrameInProcess(frame, &crossDocOffset);
-    aOffset += crossDocOffset;
-    MOZ_ASSERT(frame, "Root frame should have a widget");
     if (!frame) {
       break;
     }
+    auto newAPD = frame->PresContext()->AppUnitsPerDevPixel();
+    aOffset = aOffset.ScaleToOtherAppUnits(curAPD, newAPD);
+    aOffset += crossDocOffset;
+    curAPD = newAPD;
   } while (true);
+  aOffset = aOffset.ScaleToOtherAppUnits(curAPD, targetAPD);
   return PresContext()->GetRootWidget();
 }
 
@@ -12023,6 +12023,16 @@ nsRect nsIFrame::GetCompositorHitTestArea(nsDisplayListBuilder* aBuilder) {
 CompositorHitTestInfo nsIFrame::GetCompositorHitTestInfo(
     nsDisplayListBuilder* aBuilder) {
   CompositorHitTestInfo result = CompositorHitTestInvisibleToHit;
+  if (Style()->PointerEvents() == StylePointerEvents::None) {
+    return result;
+  }
+  return GetCompositorHitTestInfoWithoutPointerEvents(aBuilder);
+}
+
+CompositorHitTestInfo nsIFrame::GetCompositorHitTestInfoWithoutPointerEvents(
+    nsDisplayListBuilder* aBuilder) {
+  CompositorHitTestInfo result = CompositorHitTestInvisibleToHit;
+
   if (aBuilder->IsInsidePointerEventsNoneDoc() ||
       aBuilder->IsInViewTransitionCapture()) {
     // Somewhere up the parent document chain is a subdocument with pointer-
@@ -12033,9 +12043,6 @@ CompositorHitTestInfo nsIFrame::GetCompositorHitTestInfo(
     MOZ_ASSERT(IsViewportFrame());
     // Viewport frames are never event targets, other frames, like canvas
     // frames, are the event targets for any regions viewport frames may cover.
-    return result;
-  }
-  if (Style()->PointerEvents() == StylePointerEvents::None) {
     return result;
   }
   if (!StyleVisibility()->IsVisible()) {
@@ -12077,7 +12084,8 @@ CompositorHitTestInfo nsIFrame::GetCompositorHitTestInfo(
     // that code, but woven into the top-down recursive display list building
     // process.
     CompositorHitTestInfo inheritedTouchAction =
-        aBuilder->GetCompositorHitTestInfo() & CompositorHitTestTouchActionMask;
+        aBuilder->GetInheritedCompositorHitTestInfo() &
+        CompositorHitTestTouchActionMask;
 
     nsIFrame* touchActionFrame = this;
     if (ScrollContainerFrame* scrollContainerFrame =

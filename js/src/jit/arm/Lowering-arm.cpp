@@ -309,11 +309,6 @@ template void LIRGeneratorARM::lowerForShiftInt64(LRotateI64* ins,
                                                   MDefinition* rhs);
 
 void LIRGeneratorARM::lowerDivI(MDiv* div) {
-  if (div->isUnsigned()) {
-    lowerUDiv(div);
-    return;
-  }
-
   // Division instructions are slow. Division by constant denominators can be
   // rewritten to use other instructions.
   if (div->rhs()->isConstant()) {
@@ -374,11 +369,6 @@ void LIRGeneratorARM::lowerMulI(MMul* mul, MDefinition* lhs, MDefinition* rhs) {
 }
 
 void LIRGeneratorARM::lowerModI(MMod* mod) {
-  if (mod->isUnsigned()) {
-    lowerUMod(mod);
-    return;
-  }
-
   if (mod->rhs()->isConstant()) {
     int32_t rhs = mod->rhs()->toConstant()->toInt32();
     int32_t shift = FloorLog2(rhs);
@@ -576,9 +566,7 @@ void LIRGeneratorARM::lowerUDiv(MDiv* div) {
   MDefinition* rhs = div->getOperand(1);
 
   if (ARMFlags::HasIDIV()) {
-    LUDiv* lir = new (alloc()) LUDiv;
-    lir->setOperand(0, useRegister(lhs));
-    lir->setOperand(1, useRegister(rhs));
+    auto* lir = new (alloc()) LUDiv(useRegister(lhs), useRegister(rhs));
     if (div->fallible()) {
       assignSnapshot(lir, div->bailoutKind());
     }
@@ -586,7 +574,7 @@ void LIRGeneratorARM::lowerUDiv(MDiv* div) {
     return;
   }
 
-  LSoftUDivOrMod* lir = new (alloc())
+  auto* lir = new (alloc())
       LSoftUDivOrMod(useFixedAtStart(lhs, r0), useFixedAtStart(rhs, r1));
 
   if (div->fallible()) {
@@ -601,9 +589,7 @@ void LIRGeneratorARM::lowerUMod(MMod* mod) {
   MDefinition* rhs = mod->getOperand(1);
 
   if (ARMFlags::HasIDIV()) {
-    LUMod* lir = new (alloc()) LUMod;
-    lir->setOperand(0, useRegister(lhs));
-    lir->setOperand(1, useRegister(rhs));
+    auto* lir = new (alloc()) LUMod(useRegister(lhs), useRegister(rhs));
     if (mod->fallible()) {
       assignSnapshot(lir, mod->bailoutKind());
     }
@@ -611,7 +597,7 @@ void LIRGeneratorARM::lowerUMod(MMod* mod) {
     return;
   }
 
-  LSoftUDivOrMod* lir = new (alloc())
+  auto* lir = new (alloc())
       LSoftUDivOrMod(useFixedAtStart(lhs, r0), useFixedAtStart(rhs, r1));
 
   if (mod->fallible()) {

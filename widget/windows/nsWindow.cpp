@@ -129,7 +129,6 @@
 #include "nsXULPopupManager.h"
 #include "nsWindowsDllInterceptor.h"
 #include "nsLayoutUtils.h"
-#include "nsView.h"
 #include "nsWindowGfx.h"
 #include "gfxWindowsPlatform.h"
 #include "gfxDWriteFonts.h"
@@ -255,7 +254,7 @@ static const wchar_t kUser32LibName[] = L"user32.dll";
 
 uint32_t nsWindow::sInstanceCount = 0;
 bool nsWindow::sIsOleInitialized = false;
-MOZ_RUNINIT nsIWidget::Cursor nsWindow::sCurrentCursor = {};
+MOZ_CONSTINIT nsIWidget::Cursor nsWindow::sCurrentCursor = {};
 nsWindow* nsWindow::sCurrentWindow = nullptr;
 bool nsWindow::sJustGotDeactivate = false;
 bool nsWindow::sJustGotActivate = false;
@@ -8124,7 +8123,7 @@ bool nsWindow::OnPenPointerEvents(uint32_t aPointerId, UINT aMsg,
   if (StaticPrefs::widget_windows_pen_tilt_override_enabled() ||
       StaticPrefs::widget_windows_pen_twist_override_enabled()) {
     static uint32_t sPendingToUpdate =
-        StaticPrefs::widget_widnows_pen_override_number_of_preserver_value();
+        StaticPrefs::widget_windows_pen_override_number_of_preserver_value();
     if (StaticPrefs::widget_windows_pen_tilt_override_enabled()) {
       static int32_t sOverrideTiltX = 30;
       static int32_t sOverrideTiltY = 0;
@@ -8163,7 +8162,7 @@ bool nsWindow::OnPenPointerEvents(uint32_t aPointerId, UINT aMsg,
       sPendingToUpdate--;
     } else {
       sPendingToUpdate =
-          StaticPrefs::widget_widnows_pen_override_number_of_preserver_value();
+          StaticPrefs::widget_windows_pen_override_number_of_preserver_value();
     }
   }
 

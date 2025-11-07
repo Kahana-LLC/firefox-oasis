@@ -118,7 +118,6 @@
 #include "nsThreadManager.h"
 #include "nsThreadUtils.h"
 #include "nsVariant.h"
-#include "nsViewManager.h"
 #include "nsWebBrowser.h"
 #include "nsWindowWatcher.h"
 
@@ -3065,12 +3064,11 @@ mozilla::ipc::IPCResult BrowserChild::RecvRenderLayers(const bool& aEnabled) {
   if (nsContentUtils::IsSafeToRunScript()) {
     WebWidget()->PaintNowIfNeeded();
   } else {
-    RefPtr<nsViewManager> vm = presShell->GetViewManager();
-    if (nsView* view = vm->GetRootView()) {
-      presShell->PaintAndRequestComposite(
-          view->GetFrame(), view->GetWidget()->GetWindowRenderer(),
-          PaintFlags::None);
-    }
+    // NOTE: We want to call in even without a root frame (we might paint the
+    // canvas background in that case).
+    presShell->PaintAndRequestComposite(presShell->GetRootFrame(),
+                                        mPuppetWidget->GetWindowRenderer(),
+                                        PaintFlags::None);
   }
   presShell->SuppressDisplayport(false);
   return IPC_OK();

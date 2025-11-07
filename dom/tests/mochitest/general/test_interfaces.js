@@ -272,7 +272,7 @@ let interfaceNamesInGlobalScope = [
   // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "CSSRuleList", insecureContext: true },
   // IMPORTANT: Do not change this list without review from a DOM peer!
-  { name: "CSSScopeRule", insecureContext: true, nightly: true },
+  { name: "CSSScopeRule", insecureContext: true },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "CSSStartingStyleRule", insecureContext: true },
   // IMPORTANT: Do not change this list without review from a DOM peer!
@@ -999,49 +999,49 @@ let interfaceNamesInGlobalScope = [
   {
     name: "NavigateEvent",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "Navigation",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "NavigationActivation",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "NavigationCurrentEntryChangeEvent",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "NavigationDestination",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "NavigationHistoryEntry",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   {
     name: "NavigationPrecommitController",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
@@ -1050,7 +1050,7 @@ let interfaceNamesInGlobalScope = [
   {
     name: "NavigationTransition",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
@@ -1820,7 +1820,7 @@ let interfaceNamesInGlobalScope = [
   {
     name: "navigation",
     insecureContext: true,
-    nightly: true,
+    earlyBetaOrEarlier: true,
     sessionHistoryInParent: true,
   },
   // IMPORTANT: Do not change this list without review from a DOM peer!
