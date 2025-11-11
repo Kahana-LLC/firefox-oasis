@@ -54474,23 +54474,33 @@ var voiceInput_default = new VoiceInputService();
 function getChrome() {
   const topWin = window.top;
   const gBrowser = topWin?.gBrowser;
-  return { topWin, gBrowser };
+  const PlacesUtils = topWin?.PlacesUtils;
+  const PlacesTransactions = topWin?.PlacesTransactions;
+  return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
 }
-var STORE_KEY = "oasis.hubs.v1";
-function readStore() {
+var ROOT_FOLDER_NAME = "Oasis Hubs";
+async function getRootFolder() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    if (obj && typeof obj === "object") return obj;
-  } catch {
-  }
-  return {};
-}
-function writeStore(obj) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(obj));
-  } catch {
+    const { PlacesUtils } = getChrome();
+    if (!PlacesUtils) throw new Error("PlacesUtils not available");
+    const bookmarks = await PlacesUtils.bookmarks.search({ title: ROOT_FOLDER_NAME });
+    const existing = bookmarks.find(
+      (b) => b.type === PlacesUtils.bookmarks.TYPE_FOLDER && b.parentGuid === PlacesUtils.bookmarks.unfiledGuid
+    );
+    if (existing) {
+      console.log("Found existing Oasis Hubs folder:", existing.guid);
+      return existing.guid;
+    }
+    const root2 = await PlacesUtils.bookmarks.insert({
+      title: ROOT_FOLDER_NAME,
+      type: PlacesUtils.bookmarks.TYPE_FOLDER,
+      parentGuid: PlacesUtils.bookmarks.unfiledGuid
+    });
+    console.log("Created new Oasis Hubs folder:", root2.guid);
+    return root2.guid;
+  } catch (e) {
+    console.error("Failed to get/create root folder:", e);
+    throw e;
   }
 }
 function hostOf(u) {
@@ -54500,113 +54510,244 @@ function hostOf(u) {
     return "";
   }
 }
+async function getBookmarkChildren(guid) {
+  const { PlacesUtils } = getChrome();
+  if (!PlacesUtils) return [];
+  try {
+    const parent = await PlacesUtils.bookmarks.fetch(guid);
+    if (!parent) return [];
+    const children = [];
+    await PlacesUtils.bookmarks.fetch({ parentGuid: guid }, (bookmark) => {
+      children.push({
+        guid: bookmark.guid,
+        title: bookmark.title,
+        type: bookmark.type,
+        uri: bookmark.url
+      });
+    });
+    return children;
+  } catch (e) {
+    console.error("Failed to get bookmark children:", e);
+    return [];
+  }
+}
+async function createBookmark(details) {
+  const { PlacesUtils } = getChrome();
+  if (!PlacesUtils) throw new Error("PlacesUtils not available");
+  return await PlacesUtils.bookmarks.insert({
+    parentGuid: details.parentGuid,
+    title: details.title,
+    url: details.url,
+    type: details.type || (details.url ? PlacesUtils.bookmarks.TYPE_BOOKMARK : PlacesUtils.bookmarks.TYPE_FOLDER)
+  });
+}
+async function removeBookmark(guid) {
+  const { PlacesUtils } = getChrome();
+  if (!PlacesUtils) return;
+  await PlacesUtils.bookmarks.remove(guid);
+}
+async function updateBookmark(guid, changes) {
+  const { PlacesUtils } = getChrome();
+  if (!PlacesUtils) throw new Error("PlacesUtils not available");
+  return await PlacesUtils.bookmarks.update(guid, changes);
+}
 var HubManager = class {
-  data = readStore();
   wired = false;
-  save() {
-    writeStore(this.data);
+  rootFolderId = null;
+  async ensureRootFolder() {
+    if (this.rootFolderId) return this.rootFolderId;
+    this.rootFolderId = await getRootFolder();
+    return this.rootFolderId;
   }
-  ensure(name) {
-    const n2 = (name || "").trim();
-    if (!n2) throw new Error("Missing hub name");
-    if (!this.data[n2]) this.data[n2] = [];
-    return n2;
-  }
-  list() {
-    return Object.entries(this.data).map(([name, items]) => ({ name, count: items.length }));
-  }
-  getAll() {
-    return Object.entries(this.data).map(([name, items]) => ({ name, items: [...items] }));
-  }
-  create(name, opts) {
-    name = (name || "").trim() || this.suggestName();
-    this.ensure(name);
-    const include = opts?.include || "none";
-    const { gBrowser } = getChrome();
-    if (gBrowser) {
-      if (include === "current") {
-        const tab = gBrowser.selectedTab;
-        this.addTabInternal(name, tab);
-      } else if (include === "all") {
-        for (const t of Array.from(gBrowser.tabs)) this.addTabInternal(name, t);
+  async list() {
+    try {
+      const rootId = await this.ensureRootFolder();
+      console.log("Listing hubs under root folder:", rootId);
+      const children = await getBookmarkChildren(rootId);
+      console.log("Found children:", children.length, children.map((c) => ({ title: c.title, type: c.type, guid: c.guid })));
+      const { PlacesUtils } = getChrome();
+      const folders = children.filter((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER);
+      console.log("Filtered folders:", folders.length, folders.map((f2) => f2.title));
+      const result = [];
+      for (const folder of folders) {
+        const items = await getBookmarkChildren(folder.guid);
+        result.push({ name: folder.title || "Untitled", count: items.length });
       }
+      return result;
+    } catch (e) {
+      console.error("Failed to list hubs:", e);
+      return [];
     }
-    this.save();
-    this.updateAllTabMarkers();
-    return { name, count: this.data[name].length };
   }
-  delete(name, opts) {
-    name = (name || "").trim();
-    const items = this.data[name] || [];
-    if (!items.length) {
-      delete this.data[name];
-      this.save();
-      this.updateAllTabMarkers();
-      return { name, removed: 0 };
+  async getAll() {
+    try {
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome();
+      const folders = children.filter((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER);
+      const result = [];
+      for (const folder of folders) {
+        const bookmarks = await getBookmarkChildren(folder.guid);
+        const items = bookmarks.filter((b) => b.uri).map((b) => ({
+          id: b.guid,
+          url: b.uri,
+          title: b.title,
+          host: hostOf(b.uri)
+        }));
+        result.push({ name: folder.title || "Untitled", items });
+      }
+      return result;
+    } catch (e) {
+      console.error("Failed to get all hubs:", e);
+      return [];
     }
-    if (opts?.closeTabs) {
+  }
+  async create(name, opts) {
+    try {
+      name = (name || "").trim() || this.suggestName();
+      const rootId = await this.ensureRootFolder();
+      const folder = await createBookmark({
+        parentGuid: rootId,
+        title: name
+      });
+      const include = opts?.include || "none";
       const { gBrowser } = getChrome();
+      let count = 0;
       if (gBrowser) {
-        const hostSet = new Set(items.map((i) => i.host));
-        for (const t of Array.from(gBrowser.tabs)) {
-          const u = t?.linkedBrowser?.currentURI?.spec || "";
-          if (hostSet.has(hostOf(u))) {
-            try {
-              gBrowser.removeTab(t);
-            } catch {
+        if (include === "current") {
+          const tab = gBrowser.selectedTab;
+          await this.addTabToFolder(folder.guid, tab);
+          count = 1;
+        } else if (include === "all") {
+          for (const t of Array.from(gBrowser.tabs)) {
+            await this.addTabToFolder(folder.guid, t);
+          }
+          const items = await getBookmarkChildren(folder.guid);
+          count = items.length;
+        }
+      }
+      this.updateAllTabMarkers();
+      return { name, count };
+    } catch (e) {
+      console.error("Failed to create hub:", e);
+      throw e;
+    }
+  }
+  async delete(name, opts) {
+    try {
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome();
+      const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
+      if (!folder) {
+        return { name, removed: 0 };
+      }
+      const items = await getBookmarkChildren(folder.guid);
+      const bookmarks = items.filter((b) => b.uri);
+      if (opts?.closeTabs) {
+        const { gBrowser } = getChrome();
+        if (gBrowser) {
+          const hostSet = new Set(bookmarks.map((b) => hostOf(b.uri)));
+          for (const t of Array.from(gBrowser.tabs)) {
+            const u = t?.linkedBrowser?.currentURI?.spec || "";
+            if (hostSet.has(hostOf(u))) {
+              try {
+                gBrowser.removeTab(t);
+              } catch {
+              }
             }
           }
         }
       }
+      await removeBookmark(folder.guid);
+      this.updateAllTabMarkers();
+      return { name, removed: bookmarks.length };
+    } catch (e) {
+      console.error("Failed to delete hub:", e);
+      return { name, removed: 0 };
     }
-    delete this.data[name];
-    this.save();
-    this.updateAllTabMarkers();
-    return { name, removed: items.length };
   }
-  rename(oldName, newName) {
-    oldName = (oldName || "").trim();
-    newName = (newName || "").trim();
-    if (!oldName || !newName || !this.data[oldName]) return { ok: false };
-    if (this.data[newName]) return { ok: false, msg: "Target exists" };
-    this.data[newName] = this.data[oldName];
-    delete this.data[oldName];
-    this.save();
-    this.updateAllTabMarkers();
-    return { ok: true };
-  }
-  addCurrentTab(name) {
-    const { gBrowser } = getChrome();
-    if (!gBrowser) return { ok: false, msg: "Browser UI unavailable" };
-    this.addTabInternal(name, gBrowser.selectedTab);
-    this.save();
-    this.updateAllTabMarkers();
-    return { ok: true };
-  }
-  removeUrl(name, url) {
-    name = (name || "").trim();
-    if (!this.data[name]) return { ok: false };
-    const before = this.data[name].length;
-    this.data[name] = this.data[name].filter((i) => i.url !== url);
-    const removed = before - this.data[name].length;
-    this.save();
-    this.updateAllTabMarkers();
-    return { ok: removed > 0 };
-  }
-  openHub(name, where = "tabs") {
-    name = (name || "").trim();
-    const items = this.data[name] || [];
-    const { topWin } = getChrome();
-    if (!topWin?.openTrustedLinkIn) return { ok: false };
-    if (where === "window") {
-      const w = topWin.OpenBrowserWindow();
-      setTimeout(() => {
-        for (const it of items) w.openTrustedLinkIn(it.url, "tab");
-      }, 250);
-    } else {
-      for (const it of items) topWin.openTrustedLinkIn(it.url, "tab");
+  async rename(oldName, newName) {
+    try {
+      oldName = (oldName || "").trim();
+      newName = (newName || "").trim();
+      if (!oldName || !newName) return { ok: false };
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome();
+      const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === oldName);
+      if (!folder) return { ok: false };
+      const existing = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === newName);
+      if (existing) return { ok: false, msg: "Target exists" };
+      await updateBookmark(folder.guid, { title: newName });
+      this.updateAllTabMarkers();
+      return { ok: true };
+    } catch (e) {
+      console.error("Failed to rename hub:", e);
+      return { ok: false };
     }
-    return { ok: true };
+  }
+  async addCurrentTab(name) {
+    try {
+      const { gBrowser, PlacesUtils } = getChrome();
+      if (!gBrowser) return { ok: false, msg: "Browser UI unavailable" };
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
+      if (!folder) return { ok: false, msg: "Hub not found" };
+      await this.addTabToFolder(folder.guid, gBrowser.selectedTab);
+      this.updateAllTabMarkers();
+      return { ok: true };
+    } catch (e) {
+      console.error("Failed to add tab to hub:", e);
+      return { ok: false };
+    }
+  }
+  async removeUrl(name, url) {
+    try {
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome();
+      const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
+      if (!folder) return { ok: false };
+      const bookmarks = await getBookmarkChildren(folder.guid);
+      const toRemove = bookmarks.filter((b) => b.uri === url);
+      for (const bookmark of toRemove) {
+        await removeBookmark(bookmark.guid);
+      }
+      this.updateAllTabMarkers();
+      return { ok: toRemove.length > 0 };
+    } catch (e) {
+      console.error("Failed to remove URL from hub:", e);
+      return { ok: false };
+    }
+  }
+  async openHub(name, where = "tabs") {
+    try {
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils, topWin } = getChrome();
+      const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
+      if (!folder) return { ok: false };
+      const bookmarks = await getBookmarkChildren(folder.guid);
+      const items = bookmarks.filter((b) => b.uri);
+      if (!topWin?.openTrustedLinkIn) return { ok: false };
+      if (where === "window") {
+        const w = topWin.OpenBrowserWindow();
+        setTimeout(() => {
+          for (const it of items) w.openTrustedLinkIn(it.uri, "tab");
+        }, 250);
+      } else {
+        for (const it of items) topWin.openTrustedLinkIn(it.uri, "tab");
+      }
+      return { ok: true };
+    } catch (e) {
+      console.error("Failed to open hub:", e);
+      return { ok: false };
+    }
   }
   // ---- badges on tabs (first matched hub name; count if >1 hubs match) ----
   wireTabObservers() {
@@ -54628,7 +54769,7 @@ var HubManager = class {
     if (!gBrowser) return;
     for (const t of Array.from(gBrowser.tabs)) this.updateMarkerForTab(t);
   }
-  updateMarkerForTab(tab) {
+  async updateMarkerForTab(tab) {
     try {
       const u = tab?.linkedBrowser?.currentURI?.spec || "";
       const h = hostOf(u);
@@ -54637,9 +54778,10 @@ var HubManager = class {
         tab.removeAttribute("oasis-hub-count");
         return;
       }
+      const all = await this.getAll();
       const names = [];
-      for (const [name, items] of Object.entries(this.data)) {
-        if (items.some((it) => it.host === h)) names.push(name);
+      for (const hub of all) {
+        if (hub.items.some((it) => it.host === h)) names.push(hub.name);
       }
       if (names.length) {
         tab.setAttribute("oasis-hub", names[0]);
@@ -54651,19 +54793,22 @@ var HubManager = class {
     } catch {
     }
   }
-  addTabInternal(name, tab) {
-    name = this.ensure(name);
+  async addTabToFolder(folderGuid, tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
     if (!url) return;
     const title = tab?.label || tab?.linkedBrowser?.contentTitle || tab?.linkedBrowser?.currentURI?.spec || "";
-    const h = hostOf(url);
-    const items = this.data[name];
-    if (!items.some((i) => i.url === url)) items.push({ url, title, host: h, addedAt: Date.now() });
+    const existing = await getBookmarkChildren(folderGuid);
+    const alreadyExists = existing.some((b) => b.uri === url);
+    if (alreadyExists) return;
+    await createBookmark({
+      parentGuid: folderGuid,
+      title,
+      url
+    });
   }
   suggestName() {
     const base = "Hub";
     let i = 1;
-    while (this.data[`${base} ${i}`]) i++;
     return `${base} ${i}`;
   }
 };
@@ -54758,65 +54903,120 @@ ${text}` };
 };
 var CreateHubCommand = class {
   commandName = "create_hub";
-  description = "Create a hub (tab group). Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
+  description = "Create a bookmark folder hub. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
   async execute(args) {
     const name = args?.name || "";
     const include = args?.include || "none";
-    const res = hubs.create(name, { include });
-    return { message: `Created hub "${res.name}" (${res.count} items).` };
+    const res = await hubs.create(name, { include });
+    return { message: `Created bookmark folder "${res.name}" (${res.count} items).` };
   }
 };
 var DeleteHubCommand = class {
   commandName = "delete_hub";
-  description = "Delete a hub by name. Accepts arguments: { name: string, closeTabs?: boolean }.";
+  description = "Delete a bookmark folder hub by name. Accepts arguments: { name: string, closeTabs?: boolean }.";
   async execute(args) {
     const name = args?.name;
     if (!name) return { message: "Which hub should I delete?" };
     const closeTabs = args?.closeTabs || false;
-    const res = hubs.delete(name, { closeTabs });
+    const res = await hubs.delete(name, { closeTabs });
     if (res.removed === 0) return { message: `No hub named "${name}".` };
-    return { message: `Deleted hub "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
+    return { message: `Deleted bookmark folder "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
   }
 };
 var ListHubsCommand = class {
   commandName = "list_hubs";
-  description = "List all hubs with counts. Accepts no arguments.";
+  description = "List all bookmark folder hubs. Accepts no arguments.";
   async execute(_args) {
-    const items = hubs.list();
-    if (!items.length) return { message: "No hubs yet." };
+    const items = await hubs.list();
+    if (!items.length) return { message: "No bookmark folder hubs yet." };
     return { message: items.map((h) => `\u2022 ${h.name} (${h.count})`).join("\n") };
   }
 };
 var RenameHubCommand = class {
   commandName = "rename_hub";
-  description = "Rename a hub. Accepts arguments: { from: string, to: string }.";
+  description = "Rename a bookmark folder hub. Accepts arguments: { from: string, to: string }.";
   async execute(args) {
     const from = args?.from;
     const to = args?.to;
     if (!from || !to) return { message: "Please provide old and new hub names." };
-    const r = hubs.rename(from, to);
-    return { message: r.ok ? `Renamed hub "${from}" \u2192 "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
+    const r = await hubs.rename(from, to);
+    return { message: r.ok ? `Renamed bookmark folder "${from}" \u2192 "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
   }
 };
 var AddTabToHubCommand = class {
   commandName = "add_tab_to_hub";
-  description = "Add the current tab to a hub. Accepts arguments: { name: string }.";
+  description = "Add the current tab to a bookmark folder hub. Accepts arguments: { name: string }.";
   async execute(args) {
     const name = args?.name;
     if (!name) return { message: "Which hub should I add this tab to?" };
-    const r = hubs.addCurrentTab(name);
-    return { message: r.ok ? `Added current tab to "${name}".` : "Failed to add tab." };
+    const r = await hubs.addCurrentTab(name);
+    return { message: r.ok ? `Added current tab to bookmark folder "${name}".` : "Failed to add tab." };
   }
 };
 var OpenHubCommand = class {
   commandName = "open_hub";
-  description = "Open all items from a hub in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
+  description = "Open all bookmarks from a hub folder in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
   async execute(args) {
     const name = args?.name;
     if (!name) return { message: "Which hub should I open?" };
     const where = args?.where || "tabs";
-    const r = hubs.openHub(name, where);
-    return { message: r.ok ? `Opened hub "${name}" in ${where}.` : `Failed to open "${name}".` };
+    const r = await hubs.openHub(name, where);
+    return { message: r.ok ? `Opened bookmark folder "${name}" in ${where}.` : `Failed to open "${name}".` };
+  }
+};
+var SplitTabsCommand = class {
+  commandName = "split_tabs";
+  description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
+  async execute(args) {
+    const { topWin, gBrowser } = getChrome2();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+    const indices = args?.indices;
+    if (!indices || !Array.isArray(indices) || indices.length < 2) {
+      return { message: "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] })." };
+    }
+    const tabs = [];
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) {
+        return { message: `No tab ${i}.` };
+      }
+      tabs.push(gBrowser.tabs[i - 1]);
+    }
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numTabs = tabs.length;
+    const windows = [];
+    for (let i = 0; i < numTabs; i++) {
+      const tab = tabs[i];
+      const title = tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)";
+      const newWin = topWin.OpenBrowserWindow();
+      windows.push({ win: newWin, tab, title });
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    for (let i = 0; i < numTabs; i++) {
+      const { win, tab, title } = windows[i];
+      const windowWidth = Math.floor(availWidth / numTabs);
+      const windowHeight = availHeight;
+      const xPos = availLeft + windowWidth * i;
+      const yPos = availTop;
+      win.resizeTo(windowWidth, windowHeight);
+      win.moveTo(xPos, yPos);
+      try {
+        const sidebar = win.document.getElementById("sidebar-box");
+        if (sidebar && !sidebar.hidden) {
+          win.SidebarController?.hide();
+        }
+      } catch (e) {
+        console.warn("Failed to close sidebar:", e);
+      }
+      win.gBrowser.adoptTab(tab, 0);
+    }
+    const tabTitles = windows.map((w) => w.title).join(", ");
+    return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
   }
 };
 
@@ -54910,6 +55110,7 @@ You have the following workers available:
 - **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
 - **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
 - **copy_tab_urls**: No arguments needed
+- **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows (e.g., "split tab 1 and 2" = { indices: [1, 2] })
 - **create_hub**: { name: string, include?: "none"|"current"|"all" }
 - **delete_hub**: { name: string, closeTabs?: boolean }
 - **list_hubs**: No arguments needed
@@ -54945,6 +55146,12 @@ User: "Close tab 3"
 
 User: "Close the second tab"
 \u2192 { "next": "close_tab", "args": { "index": 2 } }
+
+User: "Split tab 1 and 2"
+\u2192 { "next": "split_tabs", "args": { "indices": [1, 2] } }
+
+User: "Split tabs 1, 2, and 3"
+\u2192 { "next": "split_tabs", "args": { "indices": [1, 2, 3] } }
 
 User: "List all tabs" then "close the first one"
 \u2192 First: { "next": "list_tabs", "args": {} }
@@ -55023,6 +55230,7 @@ async function runAssistantStream(prompt, onChunk) {
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
+    new SplitTabsCommand(),
     // Hubs
     new CreateHubCommand(),
     new DeleteHubCommand(),

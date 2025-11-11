@@ -11,6 +11,7 @@ import {
   CloseTabCommand,
   MoveTabToNewWindowCommand,
   CopyTabUrlsCommand,
+  SplitTabsCommand,
   CreateHubCommand,
   DeleteHubCommand,
   ListHubsCommand,
@@ -133,6 +134,7 @@ You have the following workers available:
 - **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
 - **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
 - **copy_tab_urls**: No arguments needed
+- **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows (e.g., "split tab 1 and 2" = { indices: [1, 2] })
 - **create_hub**: { name: string, include?: "none"|"current"|"all" }
 - **delete_hub**: { name: string, closeTabs?: boolean }
 - **list_hubs**: No arguments needed
@@ -168,6 +170,12 @@ User: "Close tab 3"
 
 User: "Close the second tab"
 → { "next": "close_tab", "args": { "index": 2 } }
+
+User: "Split tab 1 and 2"
+→ { "next": "split_tabs", "args": { "indices": [1, 2] } }
+
+User: "Split tabs 1, 2, and 3"
+→ { "next": "split_tabs", "args": { "indices": [1, 2, 3] } }
 
 User: "List all tabs" then "close the first one"
 → First: { "next": "list_tabs", "args": {} }
@@ -269,6 +277,7 @@ export async function runAssistantStream(
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
+    new SplitTabsCommand(),
     // Hubs
     new CreateHubCommand(),
     new DeleteHubCommand(),
