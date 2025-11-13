@@ -3326,6 +3326,7 @@ void nsIFrame::BuildDisplayListForStackingContext(
 
   const bool useStickyPosition =
       disp->mPosition == StylePositionProperty::Sticky;
+  bool shouldFlattenStickyItem = true;
 
   const bool useFixedPosition =
       disp->mPosition == StylePositionProperty::Fixed &&
@@ -3364,7 +3365,7 @@ void nsIFrame::BuildDisplayListForStackingContext(
   // NOTE(emilio): The order of these RAII objects is quite subtle.
   nsDisplayListBuilder::AutoEnterViewTransitionCapture
       inViewTransitionCaptureSetter(aBuilder, capturedByViewTransition);
-  nsDisplayListBuilder::AutoContainerASRTracker contASRTracker(aBuilder);
+  RefPtr<const ActiveScrolledRoot> stickyASR = nullptr;
   nsDisplayListBuilder::AutoCurrentActiveScrolledRootSetter asrSetter(aBuilder);
   if (aBuilder->IsInViewTransitionCapture()) {
     // View transition contents shouldn't scroll along our ASR. They get
@@ -3372,6 +3373,28 @@ void nsIFrame::BuildDisplayListForStackingContext(
     // anyways).
     asrSetter.SetCurrentActiveScrolledRoot(nullptr);
   }
+  if (useStickyPosition) {
+    StickyScrollContainer* stickyScrollContainer =
+        StickyScrollContainer::GetOrCreateForFrame(this);
+    if (stickyScrollContainer) {
+      if (aBuilder->IsPaintingToWindow() &&
+          stickyScrollContainer->ScrollContainer()
+              ->IsMaybeAsynchronouslyScrolled()) {
+        shouldFlattenStickyItem = false;
+      }
+      stickyScrollContainer->SetShouldFlatten(shouldFlattenStickyItem);
+    }
+
+    if (shouldFlattenStickyItem) {
+      stickyASR = aBuilder->CurrentActiveScrolledRoot();
+    } else {
+      stickyASR = aBuilder->AllocateActiveScrolledRootForSticky(
+          aBuilder->CurrentActiveScrolledRoot(), this);
+      asrSetter.SetCurrentActiveScrolledRoot(stickyASR);
+    }
+  }
+
+  nsDisplayListBuilder::AutoContainerASRTracker contASRTracker(aBuilder);
 
   auto cssClip = GetClipPropClipRect(disp, effects, GetSize());
   auto ApplyClipProp = [&](DisplayListClipState::AutoSaveRestore& aClipState) {
@@ -3450,6 +3473,7 @@ void nsIFrame::BuildDisplayListForStackingContext(
 
   nsDisplayListCollection set(aBuilder);
   Maybe<nsRect> clipForMask;
+
   {
     DisplayListClipState::AutoSaveRestore nestedClipState(aBuilder);
     nsDisplayListBuilder::AutoInTransformSetter inTransformSetter(aBuilder,
@@ -3458,6 +3482,11 @@ void nsIFrame::BuildDisplayListForStackingContext(
                                                           usingFilter);
     nsDisplayListBuilder::AutoInEventsOnly inEventsSetter(
         aBuilder, opacityItemForEventsOnly);
+
+    DisplayListClipState::AutoSaveRestore stickyItemNestedClipState(aBuilder);
+    if (useStickyPosition && !shouldFlattenStickyItem) {
+      stickyItemNestedClipState.MaybeRemoveDisplayportClip();
+    }
 
     // If we have a mask, compute a clip to bound the masked content.
     // This is necessary in case the content moves with an ancestor
@@ -3895,19 +3924,17 @@ void nsIFrame::BuildDisplayListForStackingContext(
     // that on the display item as the "container ASR" (i.e. the normal ASR of
     // the container item, excluding the special behaviour induced by fixed
     // descendants).
-    const ActiveScrolledRoot* stickyASR = ActiveScrolledRoot::PickAncestor(
+    DisplayListClipState::AutoSaveRestore stickyItemClipState(aBuilder);
+    stickyItemClipState.MaybeRemoveDisplayportClip();
+    const ActiveScrolledRoot* stickyItemASR = ActiveScrolledRoot::PickAncestor(
         containerItemASR, aBuilder->CurrentActiveScrolledRoot());
 
     auto* stickyItem = MakeDisplayItem<nsDisplayStickyPosition>(
-        aBuilder, this, &resultList, stickyASR,
+        aBuilder, this, &resultList, stickyItemASR,
         nsDisplayItem::ContainerASRType::AncestorOfContained,
-        aBuilder->CurrentActiveScrolledRoot(),
-        clipState.IsClippedToDisplayPort());
+        aBuilder->CurrentActiveScrolledRoot());
 
-    auto* ssc = StickyScrollContainer::GetOrCreateForFrame(this);
-    const bool shouldFlatten =
-        !ssc || !ssc->ScrollContainer()->IsMaybeAsynchronouslyScrolled();
-    stickyItem->SetShouldFlatten(shouldFlatten);
+    stickyItem->SetShouldFlatten(shouldFlattenStickyItem);
 
     resultList.AppendToTop(stickyItem);
     createdContainer = true;
@@ -3915,9 +3942,11 @@ void nsIFrame::BuildDisplayListForStackingContext(
     // If the sticky element is inside a filter, annotate the scroll frame that
     // scrolls the filter as having out-of-flow content inside a filter (this
     // inhibits paint skipping).
-    if (aBuilder->GetFilterASR() && aBuilder->GetFilterASR() == stickyASR) {
+    if (aBuilder->GetFilterASR() && aBuilder->GetFilterASR() == stickyItemASR) {
       aBuilder->GetFilterASR()
-          ->mScrollContainerFrame->SetHasOutOfFlowContentInsideFilter();
+          ->GetNearestScrollASR()
+          ->ScrollFrame()
+          ->SetHasOutOfFlowContentInsideFilter();
     }
   }
 
