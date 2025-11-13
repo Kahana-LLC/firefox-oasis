@@ -114,69 +114,149 @@ export class CopyTabUrlsCommand implements Command {
 
 export class CreateHubCommand implements Command {
   commandName = "create_hub";
-  description = "Create a hub (tab group). Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
+  description = "Create a bookmark folder hub. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name || "";
     const include = args?.include || "none";
-    const res = hubs.create(name, { include });
-    return { message: `Created hub "${res.name}" (${res.count} items).` };
+    const res = await hubs.create(name, { include });
+    return { message: `Created bookmark folder "${res.name}" (${res.count} items).` };
   }
 }
 
 export class DeleteHubCommand implements Command {
   commandName = "delete_hub";
-  description = "Delete a hub by name. Accepts arguments: { name: string, closeTabs?: boolean }.";
+  description = "Delete a bookmark folder hub by name. Accepts arguments: { name: string, closeTabs?: boolean }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
     if (!name) return { message: "Which hub should I delete?" };
     const closeTabs = args?.closeTabs || false;
-    const res = hubs.delete(name, { closeTabs });
+    const res = await hubs.delete(name, { closeTabs });
     if (res.removed === 0) return { message: `No hub named "${name}".` };
-    return { message: `Deleted hub "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
+    return { message: `Deleted bookmark folder "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
   }
 }
 
 export class ListHubsCommand implements Command {
   commandName = "list_hubs";
-  description = "List all hubs with counts. Accepts no arguments.";
+  description = "List all bookmark folder hubs. Accepts no arguments.";
   async execute(_args: any): Promise<CmdResult> {
-    const items = hubs.list();
-    if (!items.length) return { message: "No hubs yet." };
+    const items = await hubs.list();
+    if (!items.length) return { message: "No bookmark folder hubs yet." };
     return { message: items.map(h => `• ${h.name} (${h.count})`).join("\n") };
   }
 }
 
 export class RenameHubCommand implements Command {
   commandName = "rename_hub";
-  description = "Rename a hub. Accepts arguments: { from: string, to: string }.";
+  description = "Rename a bookmark folder hub. Accepts arguments: { from: string, to: string }.";
   async execute(args: any): Promise<CmdResult> {
     const from = args?.from;
     const to = args?.to;
     if (!from || !to) return { message: "Please provide old and new hub names." };
-    const r = hubs.rename(from, to);
-    return { message: r.ok ? `Renamed hub "${from}" → "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
+    const r = await hubs.rename(from, to);
+    return { message: r.ok ? `Renamed bookmark folder "${from}" → "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
   }
 }
 
 export class AddTabToHubCommand implements Command {
   commandName = "add_tab_to_hub";
-  description = "Add the current tab to a hub. Accepts arguments: { name: string }.";
+  description = "Add the current tab to a bookmark folder hub. Accepts arguments: { name: string }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
     if (!name) return { message: "Which hub should I add this tab to?" };
-    const r = hubs.addCurrentTab(name);
-    return { message: r.ok ? `Added current tab to "${name}".` : "Failed to add tab." };
+    const r = await hubs.addCurrentTab(name);
+    return { message: r.ok ? `Added current tab to bookmark folder "${name}".` : "Failed to add tab." };
   }
 }
 
 export class OpenHubCommand implements Command {
   commandName = "open_hub";
-  description = "Open all items from a hub in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
+  description = "Open all bookmarks from a hub folder in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
     if (!name) return { message: "Which hub should I open?" };
     const where = args?.where || "tabs";
-    const r = hubs.openHub(name, where);
-    return { message: r.ok ? `Opened hub "${name}" in ${where}.` : `Failed to open "${name}".` };
+    const r = await hubs.openHub(name, where);
+    return { message: r.ok ? `Opened bookmark folder "${name}" in ${where}.` : `Failed to open "${name}".` };
+  }
+}
+
+export class SplitTabsCommand implements Command {
+  commandName = "split_tabs";
+  description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin, gBrowser } = getChrome();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+
+    const indices = args?.indices;
+    if (!indices || !Array.isArray(indices) || indices.length < 2) {
+      return { message: "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] })." };
+    }
+
+    // Validate all indices first
+    const tabs: any[] = [];
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) {
+        return { message: `No tab ${i}.` };
+      }
+      tabs.push(gBrowser.tabs[i - 1]);
+    }
+
+    // Get screen dimensions
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+
+    const numTabs = tabs.length;
+    const windows: any[] = [];
+
+    // Create windows for each tab
+    for (let i = 0; i < numTabs; i++) {
+      const tab = tabs[i];
+      const title = tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)";
+      
+      // Create new window
+      const newWin = topWin.OpenBrowserWindow();
+      windows.push({ win: newWin, tab, title });
+      
+      // Small delay to ensure window is created
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    // Give windows time to fully initialize
+    await new Promise(r => setTimeout(r, 300));
+
+    // Position and resize windows, then move tabs
+    for (let i = 0; i < numTabs; i++) {
+      const { win, tab, title } = windows[i];
+      
+      // Horizontal layout (side-by-side, left to right)
+      const windowWidth = Math.floor(availWidth / numTabs);
+      const windowHeight = availHeight;
+      const xPos = availLeft + (windowWidth * i);
+      const yPos = availTop;
+      
+      win.resizeTo(windowWidth, windowHeight);
+      win.moveTo(xPos, yPos);
+      
+      // Close the sidebar if it's open (since session storage isn't implemented yet)
+      try {
+        const sidebar = win.document.getElementById("sidebar-box");
+        if (sidebar && !sidebar.hidden) {
+          win.SidebarController?.hide();
+        }
+      } catch (e) {
+        console.warn("Failed to close sidebar:", e);
+      }
+      
+      // Move the tab to the new window
+      win.gBrowser.adoptTab(tab, 0);
+    }
+
+    const tabTitles = windows.map(w => w.title).join(", ");
+    return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
   }
 }
