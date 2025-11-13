@@ -38,6 +38,77 @@ const NEW_TAB_KEY = "newTabURL";
 
 const BLANK_HOMEPAGE_URL = "chrome://browser/content/blanktab.html";
 
+// New Prefs UI: we need to check for this setting before registering prefs
+// so that old-style prefs continue working
+if (Services.prefs.getBoolPref("browser.settings-redesign.enabled")) {
+  Preferences.addAll([
+    { id: "browser.newtabpage.activity-stream.showSearch", type: "bool" },
+    {
+      id: "browser.newtabpage.activity-stream.system.showWeather",
+      type: "bool",
+    },
+    { id: "browser.newtabpage.activity-stream.showWeather", type: "bool" },
+    {
+      id: "browser.newtabpage.activity-stream.widgets.system.lists.enabled",
+      type: "bool",
+    },
+    {
+      id: "browser.newtabpage.activity-stream.widgets.lists.enabled",
+      type: "bool",
+    },
+    {
+      id: "browser.newtabpage.activity-stream.widgets.system.focusTimer.enabled",
+      type: "bool",
+    },
+    {
+      id: "browser.newtabpage.activity-stream.widgets.focusTimer.enabled",
+      type: "bool",
+    },
+  ]);
+
+  // Search
+  Preferences.addSetting({
+    id: "webSearch",
+    pref: "browser.newtabpage.activity-stream.showSearch",
+  });
+
+  // Weather
+  Preferences.addSetting({
+    id: "showWeather",
+    pref: "browser.newtabpage.activity-stream.system.showWeather",
+  });
+  Preferences.addSetting({
+    id: "weather",
+    pref: "browser.newtabpage.activity-stream.showWeather",
+    deps: ["showWeather"],
+    visible: ({ showWeather }) => showWeather.value,
+  });
+
+  // Widgets: lists
+  Preferences.addSetting({
+    id: "listsEnabled",
+    pref: "browser.newtabpage.activity-stream.widgets.system.lists.enabled",
+  });
+  Preferences.addSetting({
+    id: "lists",
+    pref: "browser.newtabpage.activity-stream.widgets.lists.enabled",
+    deps: ["listsEnabled"],
+    visible: ({ listsEnabled }) => listsEnabled.value,
+  });
+
+  // Widgets: timer
+  Preferences.addSetting({
+    id: "timerEnabled",
+    pref: "browser.newtabpage.activity-stream.widgets.system.focusTimer.enabled",
+  });
+  Preferences.addSetting({
+    id: "timer",
+    pref: "browser.newtabpage.activity-stream.widgets.focusTimer.enabled",
+    deps: ["timerEnabled"],
+    visible: ({ timerEnabled }) => timerEnabled.value,
+  });
+}
+
 var gHomePane = {
   HOME_MODE_FIREFOX_HOME: "0",
   HOME_MODE_BLANK: "1",
@@ -135,6 +206,7 @@ var gHomePane = {
 
   /**
    *  _updateMenuInterface: adds items to or removes them from the menulists
+   *
    * @param {string} selectId Optional Id of the menulist to add or remove items from.
    *                          If not included this will update both home and newtab menus.
    */
@@ -285,6 +357,7 @@ var gHomePane = {
   /**
    * _renderCustomSettings: Hides or shows the UI for setting a custom
    * homepage URL
+   *
    * @param {obj} options
    * @param {bool} options.shouldShow Should the custom UI be shown?
    * @param {bool} options.isControlled Is an extension controlling the home page?
@@ -325,6 +398,7 @@ var gHomePane = {
 
   /**
    * _isHomePageDefaultValue
+   *
    * @returns {bool} Is the homepage set to the default pref value?
    */
   _isHomePageDefaultValue() {
@@ -336,6 +410,7 @@ var gHomePane = {
 
   /**
    * isHomePageBlank
+   *
    * @returns {bool} Is the homepage set to about:blank?
    */
   isHomePageBlank() {
@@ -348,6 +423,7 @@ var gHomePane = {
 
   /**
    * _isTabAboutPreferencesOrSettings: Is a given tab set to about:preferences or about:settings?
+   *
    * @param {Element} aTab A tab element
    * @returns {bool} Is the linkedBrowser of aElement set to about:preferences or about:settings?
    */
@@ -360,6 +436,7 @@ var gHomePane = {
 
   /**
    * _getTabsForHomePage
+   *
    * @returns {Array} An array of current tabs
    */
   _getTabsForHomePage() {
@@ -660,6 +737,8 @@ var gHomePane = {
   },
 
   init() {
+    initSettingGroup("home");
+
     // Event Listeners
     document
       .getElementById("homePageUrl")

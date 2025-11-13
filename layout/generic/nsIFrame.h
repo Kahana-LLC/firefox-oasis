@@ -664,8 +664,6 @@ enum class LayoutFrameClassFlags : uint32_t {
   BlockFormattingContext = 1 << 14,
   // Whether we're a SVG rendering observer container.
   SVGRenderingObserverContainer = 1 << 15,
-  // Whether this frame type may store an nsView
-  MayHaveView = 1 << 16,
 };
 
 MOZ_MAKE_ENUM_CLASS_BITWISE_OPERATORS(LayoutFrameClassFlags)
@@ -2277,8 +2275,7 @@ class nsIFrame : public nsQueryFrame {
    * Event handling of GUI events.
    *
    * @param aEvent event structure describing the type of event and rge widget
-   * where the event originated. The |point| member of this is in the coordinate
-   * system of the view returned by GetOffsetFromView.
+   * where the event originated.
    *
    * @param aEventStatus a return value indicating whether the event was
    * handled and whether default processing should be done
@@ -2579,6 +2576,9 @@ class nsIFrame : public nsQueryFrame {
   bool IsPrimaryFrame() const { return mIsPrimaryFrame; }
 
   void SetIsPrimaryFrame(bool aIsPrimary) {
+    if (mIsPrimaryFrame == aIsPrimary) {
+      return;
+    }
     mIsPrimaryFrame = aIsPrimary;
     if (aIsPrimary) {
       InitPrimaryFrame();
@@ -3156,28 +3156,20 @@ class nsIFrame : public nsQueryFrame {
   virtual void Reflow(nsPresContext* aPresContext, ReflowOutput& aReflowOutput,
                       const ReflowInput& aReflowInput, nsReflowStatus& aStatus);
 
-  // Option flags for ReflowChild(), FinishReflowChild(), and
-  // SyncFrameViewAfterReflow().
+  // Option flags for ReflowChild(), FinishReflowChild()
   enum class ReflowChildFlags : uint32_t {
     Default = 0,
 
-    // Don't position the frame's view. Set this if you don't want to
-    // automatically sync the frame and view.
-    NoMoveView = 1 << 0,
-
-    // Don't move the frame. Also implies NoMoveView.
-    NoMoveFrame = (1 << 1) | NoMoveView,
-
-    // Don't size the frame's view.
-    NoSizeView = 1 << 2,
+    // Don't move the frame.
+    NoMoveFrame = (1 << 0),
 
     // Only applies to ReflowChild; if true, don't delete the next-in-flow, even
     // if the reflow is fully complete.
-    NoDeleteNextInFlowChild = 1 << 3,
+    NoDeleteNextInFlowChild = 1 << 1,
 
     // Only applies to FinishReflowChild.  Tell it to call
     // ApplyRelativePositioning.
-    ApplyRelativePositioning = 1 << 4,
+    ApplyRelativePositioning = 1 << 2,
   };
 
   /**
@@ -3322,37 +3314,18 @@ class nsIFrame : public nsQueryFrame {
   }
 
  protected:
-  virtual nsView* GetViewInternal() const {
-    MOZ_ASSERT_UNREACHABLE("method should have been overridden by subclass");
-    return nullptr;
-  }
-  virtual void SetViewInternal(nsView* aView) {
-    MOZ_ASSERT_UNREACHABLE("method should have been overridden by subclass");
-  }
+  nsView* DoGetView() const;
 
  public:
+  // Gets the widget owned by this frame.
+  nsIWidget* GetOwnWidget() const;
+
   nsView* GetView() const {
-    if (MOZ_LIKELY(!MayHaveView())) {
+    if (MOZ_LIKELY(!IsViewportFrame())) {
       return nullptr;
     }
-    return GetViewInternal();
+    return DoGetView();
   }
-  void SetView(nsView* aView);
-
-  /**
-   * Find the closest view (on |this| or an ancestor).
-   * If aOffset is non-null, it will be set to the offset of |this|
-   * from the returned view.
-   */
-  nsView* GetClosestView(nsPoint* aOffset = nullptr) const;
-
-  /**
-   * Sets the view's attributes from the frame style.
-   * Call this for nsChangeHint_SyncFrameView style changes or when the view
-   * has just been created.
-   * @param aView the frame's view or use GetView() if nullptr is given
-   */
-  void SyncFrameViewProperties(nsView* aView = nullptr);
 
   /**
    * Get the offset between the coordinate systems of |this| and aOther.
@@ -3371,6 +3344,9 @@ class nsIFrame : public nsQueryFrame {
    * aOther.
    */
   nsPoint GetOffsetTo(const nsIFrame* aOther) const;
+
+  // GetOffsetTo() to the root of this document.
+  nsPoint GetOffsetToRootFrame() const;
 
   /**
    * Just like GetOffsetTo, but treats all scrollframes as scrolled to
@@ -3419,12 +3395,6 @@ class nsIFrame : public nsQueryFrame {
    * @return the app unit rect of the frame in screen coordinates.
    */
   nsRect GetScreenRectInAppUnits() const;
-
-  /**
-   * Returns the offset from this frame to the closest geometric parent that
-   * has a view. Also returns the containing view or null in case of error
-   */
-  void GetOffsetFromView(nsPoint& aOffset, nsView** aView) const;
 
   /**
    * Returns the nearest widget containing this frame. If this frame has a
@@ -3590,7 +3560,6 @@ class nsIFrame : public nsQueryFrame {
   CLASS_FLAG_METHOD(IsBidiInlineContainer, BidiInlineContainer);
   CLASS_FLAG_METHOD(IsLineParticipant, LineParticipant);
   CLASS_FLAG_METHOD(HasReplacedSizing, ReplacedSizing);
-  CLASS_FLAG_METHOD(MayHaveView, MayHaveView);
   CLASS_FLAG_METHOD(IsTablePart, TablePart);
   CLASS_FLAG_METHOD0(CanContainOverflowContainers)
   CLASS_FLAG_METHOD0(SupportsCSSTransforms);

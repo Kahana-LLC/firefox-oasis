@@ -317,12 +317,6 @@ uint64_t LocalAccessible::VisibilityState() const {
   // scrolled out.
   nsIFrame* curFrame = frame;
   do {
-    if (nsView* view = curFrame->GetView()) {
-      if (view->GetVisibility() == ViewVisibility::Hide) {
-        return states::INVISIBLE;
-      }
-    }
-
     if (nsMenuPopupFrame* popup = do_QueryFrame(curFrame)) {
       return popup->IsOpen() ? 0 : states::INVISIBLE;
     }
@@ -1276,7 +1270,7 @@ already_AddRefed<AccAttributes> LocalAccessible::NativeAttributes() {
   }
 
   const ComputedStyle& style = *f->Style();
-  auto Atomize = [&](nsCSSPropertyID aId) -> RefPtr<nsAtom> {
+  auto Atomize = [&](NonCustomCSSPropertyId aId) -> RefPtr<nsAtom> {
     nsAutoCString value;
     style.GetComputedPropertyValue(aId, value);
     return NS_Atomize(value);
@@ -4258,7 +4252,7 @@ void LocalAccessible::MaybeQueueCacheUpdateForStyleChanges() {
     const auto overflowProps =
         nsCSSPropertyIDSet({eCSSProperty_overflow_x, eCSSProperty_overflow_y});
 
-    for (nsCSSPropertyID overflowProp : overflowProps) {
+    for (NonCustomCSSPropertyId overflowProp : overflowProps) {
       nsAutoCString oldOverflow, newOverflow;
       mOldComputedStyle->GetComputedPropertyValue(overflowProp, oldOverflow);
       newStyle->GetComputedPropertyValue(overflowProp, newOverflow);

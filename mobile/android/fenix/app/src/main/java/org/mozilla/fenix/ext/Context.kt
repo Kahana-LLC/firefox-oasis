@@ -20,7 +20,7 @@ import androidx.annotation.StringRes
 import mozilla.components.compose.base.theme.layout.AcornWindowSize
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.locale.LocaleManager
-import mozilla.components.support.utils.ext.getPackageInfoCompat
+import mozilla.components.support.utils.ext.packageManagerCompatHelper
 import org.mozilla.fenix.FenixApplication
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.Components
@@ -167,6 +167,35 @@ fun Context.tabsClosedUndoMessage(private: Boolean): String =
  */
 fun Context.isLargeWindow(): Boolean = AcornWindowSize.isLargeWindow(this)
 
+internal const val TALL_SCREEN_HEIGHT_DP = 480
+internal const val WIDE_SCREEN_WIDTH_DP = 600
+
+/**
+ * Helper function to determine whether the app's current window height
+ * is at least more than [TALL_SCREEN_HEIGHT_DP].
+ *
+ * This is useful when navigation bar should only be enabled on
+ * taller screens (e.g., to avoid crowding content vertically).
+ *
+ * @return true if the window height size is more than [TALL_SCREEN_HEIGHT_DP].
+ */
+fun Context.isTallWindow(): Boolean {
+    return resources.configuration.screenHeightDp > TALL_SCREEN_HEIGHT_DP
+}
+
+/**
+ * Helper function to determine whether the app's current window width
+ * is at least more than [WIDE_SCREEN_WIDTH_DP].
+ *
+ * This is useful when navigation bar should only be enabled on
+ * wider screens (e.g., to avoid crowding content horizontally).
+ *
+ * @return true if the window width size is more than [WIDE_SCREEN_WIDTH_DP].
+ */
+fun Context.isWideWindow(): Boolean {
+    return resources.configuration.screenWidthDp > WIDE_SCREEN_WIDTH_DP
+}
+
 /**
  *  This will record an event in the Nimbus internal event store. Used for behavioral targeting.
  */
@@ -196,7 +225,7 @@ fun Context.pixelSizeFor(@DimenRes resId: Int) = resources.getDimensionPixelSize
  * @return The installation time in milliseconds since epoch, or `0L` if unavailable.
  */
 fun Context.getApplicationInstalledTime(logger: Logger): Long = try {
-    packageManager.getPackageInfoCompat(packageName, 0).firstInstallTime
+    packageManagerCompatHelper.getPackageInfoCompat(packageName, 0).firstInstallTime
 } catch (e: PackageManager.NameNotFoundException) {
     logger.warn("Unable to retrieve package info for $packageName", e)
     0L

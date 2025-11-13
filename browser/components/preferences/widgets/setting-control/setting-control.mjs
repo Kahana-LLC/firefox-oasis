@@ -22,6 +22,7 @@ import {
 
 /**
  * Properties that represent a nested HTML element that will be a direct descendant of this setting control element
+ *
  * @typedef {object} SettingNestedElementOption
  * @property {Array<SettingNestedElementOption>} [options]
  * @property {string} control - The {@link HTMLElement#localName} of any HTML element
@@ -31,6 +32,7 @@ import {
 /**
  * Mapping of parent control tag names to the literal tag name for their
  * expected children. eg. "moz-radio-group"->literal`moz-radio`.
+ *
  * @type Map<string, literal>
  */
 const KNOWN_OPTIONS = new Map([
@@ -43,6 +45,7 @@ const KNOWN_OPTIONS = new Map([
  * Mapping of parent control tag names to the expected slot for their children.
  * If there's no entry here for a control then it's expected that its children
  * should go in the default slot.
+ *
  * @type Map<string, string>
  */
 const ITEM_SLOT_BY_PARENT = new Map([
@@ -199,11 +202,14 @@ export class SettingControl extends SettingElement {
 
   /**
    * The default properties for an option.
+   *
    * @param {PreferencesSettingConfigNestedControlOption | SettingNestedElementOption} config
    */
   getOptionPropertyMapping(config) {
     const props = this.getCommonPropertyMapping(config);
     props[".value"] = config.value;
+    props[".disabled"] = config.disabled;
+    props[".hidden"] = config.hidden;
     return props;
   }
 
@@ -285,6 +291,7 @@ export class SettingControl extends SettingElement {
 
   /**
    * Prepare nested item config and settings.
+   *
    * @param {PreferencesSettingConfigNestedControlOption} config
    * @returns {Array<string>}
    */
@@ -311,6 +318,7 @@ export class SettingControl extends SettingElement {
 
   /**
    * Prepares any children (and any of its children's children) that this element may need.
+   *
    * @param {PreferencesSettingConfigNestedControlOption | SettingNestedElementOption} config
    * @returns {Array<string>}
    */
@@ -327,6 +335,10 @@ export class SettingControl extends SettingElement {
           ${spread(this.getOptionPropertyMapping(opt))}
         >${"items" in opt ? this.itemsTemplate(opt) : this.optionsTemplate(opt)}</${optionTag}>`;
     });
+  }
+
+  get extensionSupportPage() {
+    return this.setting.controllingExtensionInfo.supportPage;
   }
 
   render() {
@@ -351,11 +363,19 @@ export class SettingControl extends SettingElement {
     // there are no extensions controlling the setting.
     if (this.isControlledByExtension()) {
       let args = { name: this.extensionName };
+      let supportPage = this.extensionSupportPage;
       messageBar = html`<moz-message-bar
         class="extension-controlled-message-bar"
         .messageL10nId=${this.extensionMessageId}
         .messageL10nArgs=${args}
       >
+        ${supportPage
+          ? html`<a
+              is="moz-support-link"
+              slot="support-link"
+              support-page=${supportPage}
+            ></a>`
+          : ""}
         <moz-button
           slot="actions"
           @click=${this.disableExtension}

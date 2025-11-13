@@ -50,6 +50,7 @@
 #include "mozilla/TextControlElement.h"
 #include "mozilla/ToString.h"
 #include "mozilla/Try.h"
+#include "mozilla/ViewportFrame.h"
 #include "mozilla/ViewportUtils.h"
 #include "mozilla/WritingModes.h"
 #include "mozilla/dom/AncestorIterator.h"
@@ -121,6 +122,7 @@
 #include "nsRegion.h"
 #include "nsStyleChangeList.h"
 #include "nsSubDocumentFrame.h"
+#include "nsViewportInfo.h"
 #include "nsWindowSizes.h"
 
 #ifdef ACCESSIBILITY
@@ -344,11 +346,6 @@ bool nsIFrame::IsVisibleConsideringAncestors(uint32_t aFlags) const {
 
   const nsIFrame* frame = this;
   while (frame) {
-    nsView* view = frame->GetView();
-    if (view && view->GetVisibility() == ViewVisibility::Hide) {
-      return false;
-    }
-
     // Checking mMozSubtreeHiddenOnlyVisually is relatively slow because it
     // involves loading more memory. It's only allowed in chrome sheets so let's
     // only support it in the parent process so we can mostly optimize this out
@@ -1521,26 +1518,6 @@ void nsIFrame::AssertNewStyleIsSane(ComputedStyle& aNewStyle) {
        aNewStyle.GetPseudoType() == PseudoStyleType::mozText));
 }
 #endif
-
-void nsIFrame::SyncFrameViewProperties(nsView* aView) {
-  if (!aView) {
-    aView = GetView();
-    if (!aView) {
-      return;
-    }
-  }
-
-  nsViewManager* vm = aView->GetViewManager();
-
-  // Make sure visibility is correct. This only affects nsSubDocumentFrame.
-  if (!SupportsVisibilityHidden()) {
-    // See if the view should be hidden or visible
-    ComputedStyle* sc = Style();
-    vm->SetViewVisibility(aView, sc->StyleVisibility()->IsVisible()
-                                     ? ViewVisibility::Show
-                                     : ViewVisibility::Hide);
-  }
-}
 
 /* virtual */
 nsMargin nsIFrame::GetUsedMargin() const {
@@ -3583,14 +3560,15 @@ void nsIFrame::BuildDisplayListForStackingContext(
       // We don't need to isolate the root frame.
       return reasons;
     }
-    // Elements with a view-transition name also form a backdrop-root.
+    // Elements with a view-transition name also form a backdrop-root. Same for
+    // masks / clip-path.
     // See https://www.w3.org/TR/css-view-transitions-1/#named-and-transitioning
     // and https://github.com/w3c/csswg-drafts/issues/11772
     const bool hasViewTransitionName =
         style.StyleUIReset()->HasViewTransitionName() &&
         !style.IsRootElementStyle();
     if ((disp->mWillChange.bits & StyleWillChangeBits::BACKDROP_ROOT) ||
-        hasViewTransitionName) {
+        hasViewTransitionName || usingMask) {
       reasons |= StackingContextBits::ContainsBackdropFilter;
     }
     if (!combines3DTransformWithAncestors) {
@@ -3686,9 +3664,8 @@ void nsIFrame::BuildDisplayListForStackingContext(
           clipForMask.isSome()
               ? nsDisplayItem::ContainerASRType::Constant
               : nsDisplayItem::ContainerASRType::AncestorOfContained,
-          usingBackdropFilter);
+          usingBackdropFilter, ShouldForceIsolation());
       createdContainer = true;
-      MarkAsIsolated();
     }
 
     // TODO(miko): We could probably create a wraplist here and avoid creating
@@ -7736,25 +7713,19 @@ nsIFrame* nsIFrame::GetTailContinuation() {
   return frame;
 }
 
-// Associated view object
-void nsIFrame::SetView(nsView* aView) {
-  if (aView) {
-    MOZ_ASSERT(MayHaveView(), "Only specific frame types can have an nsView");
-    aView->SetFrame(this);
-
-    // Store the view on the frame.
-    SetViewInternal(aView);
-
-    // Let all of the ancestors know they have a descendant with a view.
-    for (nsIFrame* f = GetParent();
-         f && !f->HasAnyStateBits(NS_FRAME_HAS_CHILD_WITH_VIEW);
-         f = f->GetParent()) {
-      f->AddStateBits(NS_FRAME_HAS_CHILD_WITH_VIEW);
-    }
-  } else {
-    MOZ_ASSERT_UNREACHABLE("Destroying a view while the frame is alive?");
-    SetViewInternal(nullptr);
+nsIWidget* nsIFrame::GetOwnWidget() const {
+  if (auto* view = GetView()) {
+    return view->GetWidget();
   }
+  if (IsMenuPopupFrame()) {
+    return static_cast<const nsMenuPopupFrame*>(this)->GetWidget();
+  }
+  return nullptr;
+}
+
+nsView* nsIFrame::DoGetView() const {
+  MOZ_ASSERT(IsViewportFrame());
+  return static_cast<const ViewportFrame*>(this)->GetViewportFrameView();
 }
 
 template <nsPoint (nsIFrame::*PositionGetter)() const>
@@ -7785,6 +7756,10 @@ static nsPoint OffsetCalculator(const nsIFrame* aThis, const nsIFrame* aOther) {
 
 nsPoint nsIFrame::GetOffsetTo(const nsIFrame* aOther) const {
   return OffsetCalculator<&nsIFrame::GetPosition>(this, aOther);
+}
+
+nsPoint nsIFrame::GetOffsetToRootFrame() const {
+  return GetOffsetTo(PresShell()->GetRootFrame());
 }
 
 nsPoint nsIFrame::GetOffsetToIgnoringScrolling(const nsIFrame* aOther) const {
@@ -7876,27 +7851,6 @@ nsRect nsIFrame::GetScreenRectInAppUnits() const {
   return nsRect(rootScreenPos + GetOffsetTo(rootFrame), GetSize());
 }
 
-// Returns the offset from this frame to the closest geometric parent that
-// has a view. Also returns the containing view or null in case of error
-void nsIFrame::GetOffsetFromView(nsPoint& aOffset, nsView** aView) const {
-  MOZ_ASSERT(aView, "null OUT parameter pointer");
-  nsIFrame* frame = const_cast<nsIFrame*>(this);
-
-  *aView = nullptr;
-  aOffset.MoveTo(0, 0);
-  while (true) {
-    aOffset += frame->GetPosition();
-    frame = frame->GetParent();
-    if (!frame) {
-      break;
-    }
-    if (auto* view = frame->GetView()) {
-      *aView = view;
-      break;
-    }
-  }
-}
-
 nsIWidget* nsIFrame::GetNearestWidget() const {
   if (!HasAnyStateBits(NS_FRAME_IN_POPUP)) {
     return PresContext()->GetRootWidget();
@@ -7916,7 +7870,6 @@ nsIWidget* nsIFrame::GetNearestWidget(nsPoint& aOffset) const {
     }
     if (auto* view = frame->GetView()) {
       if (auto* widget = view->GetWidget()) {
-        aOffset += view->ViewToWidgetOffset();
         aOffset = aOffset.ScaleToOtherAppUnits(curAPD, targetAPD);
         return widget;
       }
@@ -8544,12 +8497,6 @@ bool nsIFrame::UpdateOverflow() {
   UnionChildOverflow(overflowAreas);
 
   if (FinishAndStoreOverflow(overflowAreas, GetSize())) {
-    if (nsView* view = GetView()) {
-      // Make sure the frame's view is properly sized.
-      nsViewManager* vm = view->GetViewManager();
-      vm->ResizeView(view, overflowAreas.InkOverflow());
-    }
-
     return true;
   }
 
@@ -9306,9 +9253,7 @@ static nsresult GetNextPrevLineFromBlockFrame(PeekOffsetStruct* aPos,
         farStoppingFrame = firstFrame;
       }
     }
-    nsPoint offset;
-    nsView* view;  // used for call of get offset from view
-    aBlockFrame->GetOffsetFromView(offset, &view);
+    nsPoint offset = aBlockFrame->GetOffsetToRootFrame();
     nsPoint newDesiredPos =
         aPos->mDesiredCaretPos -
         offset;  // get desired position into blockframe coords
@@ -9369,12 +9314,7 @@ static nsresult GetNextPrevLineFromBlockFrame(PeekOffsetStruct* aPos,
       while (!found) {
         nsPoint point;
         nsRect tempRect = resultFrame->GetRect();
-        nsPoint offset;
-        nsView* view;  // used for call of get offset from view
-        resultFrame->GetOffsetFromView(offset, &view);
-        if (!view) {
-          return NS_ERROR_FAILURE;
-        }
+        nsPoint offset = resultFrame->GetOffsetToRootFrame();
         if (resultFrame->GetWritingMode().IsVertical()) {
           point.y = aPos->mDesiredCaretPos.y;
           point.x = tempRect.width + offset.x;
@@ -9383,10 +9323,8 @@ static nsresult GetNextPrevLineFromBlockFrame(PeekOffsetStruct* aPos,
           point.x = aPos->mDesiredCaretPos.x;
         }
 
-        if (!resultFrame->GetView()) {
-          nsView* view;
-          nsPoint offset;
-          resultFrame->GetOffsetFromView(offset, &view);
+        if (!resultFrame->IsViewportFrame()) {
+          nsPoint offset = resultFrame->GetOffsetToRootFrame();
           nsIFrame::ContentOffsets offsets =
               resultFrame->GetContentOffsetsFromPoint(
                   point - offset, nsIFrame::IGNORE_NATIVE_ANONYMOUS_SUBTREE);
@@ -9427,9 +9365,7 @@ static nsresult GetNextPrevLineFromBlockFrame(PeekOffsetStruct* aPos,
       }
       while (!found) {
         nsPoint point = aPos->mDesiredCaretPos;
-        nsView* view;
-        nsPoint offset;
-        resultFrame->GetOffsetFromView(offset, &view);
+        nsPoint offset = resultFrame->GetOffsetToRootFrame();
         nsIFrame::ContentOffsets offsets =
             resultFrame->GetContentOffsetsFromPoint(
                 point - offset, nsIFrame::IGNORE_NATIVE_ANONYMOUS_SUBTREE);
@@ -10488,22 +10424,6 @@ nsIFrame::SelectablePeekReport nsIFrame::GetFrameFromDirection(
                                aPos.mAncestorLimiter);
 }
 
-nsView* nsIFrame::GetClosestView(nsPoint* aOffset) const {
-  nsPoint offset(0, 0);
-  for (const nsIFrame* f = this; f; f = f->GetParent()) {
-    if (auto* view = f->GetView()) {
-      if (aOffset) {
-        *aOffset = offset;
-      }
-      return view;
-    }
-    offset += f->GetPosition();
-  }
-
-  MOZ_ASSERT_UNREACHABLE("No view on any parent?  How did that happen?");
-  return nullptr;
-}
-
 /* virtual */
 void nsIFrame::ChildIsDirty(nsIFrame* aChild) {
   MOZ_ASSERT_UNREACHABLE(
@@ -10802,8 +10722,7 @@ static void ComputeAndIncludeOutlineArea(nsIFrame* aFrame,
     pc->Theme()->GetWidgetOverflow(pc->DeviceContext(), aFrame,
                                    StyleAppearance::FocusOutline, &outerRect);
   } else {
-    const nscoord width = outline->GetOutlineWidth();
-    outerRect.Inflate(width);
+    outerRect.Inflate(outline->mOutlineWidth);
   }
 
   nsRect& vo = aOverflowAreas.InkOverflow();
@@ -11715,12 +11634,8 @@ void nsIFrame::SetParent(nsContainerFrame* aParent) {
   MOZ_ASSERT(!mParent || PresShell() == mParent->PresShell());
 
   nsFrameState flagsToPropagateSameDoc =
-      GetStateBits() &
-      (NS_FRAME_HAS_CHILD_WITH_VIEW | NS_FRAME_CONTAINS_RELATIVE_BSIZE |
-       NS_FRAME_DESCENDANT_INTRINSIC_ISIZE_DEPENDS_ON_BSIZE);
-  if (GetView()) {
-    flagsToPropagateSameDoc |= NS_FRAME_HAS_CHILD_WITH_VIEW;
-  }
+      GetStateBits() & (NS_FRAME_CONTAINS_RELATIVE_BSIZE |
+                        NS_FRAME_DESCENDANT_INTRINSIC_ISIZE_DEPENDS_ON_BSIZE);
   if (flagsToPropagateSameDoc) {
     for (nsIFrame* f = aParent; f; f = f->GetParent()) {
       if (f->HasAllStateBits(flagsToPropagateSameDoc)) {

@@ -11,7 +11,6 @@
 #include "nsCOMPtr.h"
 #include "nsCRT.h"
 #include "nsTArray.h"
-#include "nsDeviceContext.h"
 #include "nsTArray.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/EventForwards.h"
@@ -19,7 +18,6 @@
 class nsIWidget;
 struct nsRect;
 class nsRegion;
-class nsDeviceContext;
 
 namespace mozilla {
 class PresShell;
@@ -36,7 +34,7 @@ class nsViewManager final {
 
   NS_INLINE_DECL_REFCOUNTING(nsViewManager)
 
-  explicit nsViewManager(nsDeviceContext* aContext);
+  nsViewManager();
 
   /**
    * Initialize the ViewManager
@@ -44,24 +42,16 @@ class nsViewManager final {
    * because it holds a reference to this instance.
    * @result The result of the initialization, NS_OK if no errors
    */
-  nsresult Init(nsDeviceContext* aContext);
+  nsresult Init();
 
   /**
    * Create an ordinary view
-   * @param aBounds initial bounds for view
+   * @param aSize initial size for view
    *        XXX We should eliminate this parameter; you can set the bounds
    *        after CreateView
-   * @param aParent intended parent for view. this is not actually set in the
-   *        nsView through this method. it is only used by the initialization
-   *        code to walk up the view tree, if necessary, to find resources.
-   *        XXX We should eliminate this parameter!
-   * @param aVisibilityFlag initial visibility state of view
-   *        XXX We should eliminate this parameter; you can set it after
-   *        CreateView
    * @result The new view.  Never null.
    */
-  nsView* CreateView(const nsRect& aBounds, nsView* aParent,
-                     ViewVisibility aVisibilityFlag = ViewVisibility::Show);
+  nsView* CreateView(const nsSize& aSize);
 
   /**
    * Get the root of the view tree.
@@ -101,18 +91,6 @@ class nsViewManager final {
   void FlushDelayedResize();
 
   /**
-   * Called to inform the view manager that the entire area of a view
-   * is dirty and needs to be redrawn.
-   * @param aView view to paint. should be root view
-   */
-  void InvalidateView(nsView* aView);
-
-  /**
-   * Called to inform the view manager that it should invalidate all views.
-   */
-  void InvalidateAllViews();
-
-  /**
    * Called to dispatch an event to the appropriate view. Often called
    * as a result of receiving a mouse or keyboard event from the widget
    * event system.
@@ -123,44 +101,6 @@ class nsViewManager final {
   MOZ_CAN_RUN_SCRIPT
   void DispatchEvent(mozilla::WidgetGUIEvent* aEvent, nsView* aViewTarget,
                      nsEventStatus* aStatus);
-
-  /**
-   * Given a parent view, insert another view as its child.
-   * aSibling and aAbove control the "document order" for the insertion.
-   * If aSibling is null, the view is inserted at the end of the document order
-   * if aAfter is true, otherwise it is inserted at the beginning.
-   * If aSibling is non-null, then if aAfter is true, the view is inserted
-   * after the sibling in document order (appearing above the sibling unless
-   * overriden by z-order).
-   * If it is false, the view is inserted before the sibling.
-   * The view manager generates the appopriate dirty regions.
-   * @param aParent parent view
-   * @param aChild child view
-   * @param aSibling sibling view
-   * @param aAfter after or before in the document order
-   */
-  void InsertChild(nsView* aParent, nsView* aChild, nsView* aSibling,
-                   bool aAfter);
-
-  /**
-   * Remove a specific child view from its parent. This will NOT remove its
-   * placeholder if there is one. The view manager generates the appropriate
-   * dirty regions.
-   * @param aParent parent view
-   * @param aChild child view
-   */
-  void RemoveChild(nsView* aChild);
-
-  /**
-   * Move a view to the specified position, provided in parent coordinates.
-   * The new position is the (0, 0) origin for the view's coordinate system.
-   * The view's bounds may extend above or to the left of this point.
-   * The view manager generates the appropriate dirty regions.
-   * @param aView view to move
-   * @param aX x value for new view position
-   * @param aY y value for new view position
-   */
-  void MoveViewTo(nsView* aView, nscoord aX, nscoord aY);
 
   /**
    * Resize a view. In addition to setting the width and height, you can
@@ -174,19 +114,6 @@ class nsViewManager final {
   void ResizeView(nsView* aView, const nsRect& aRect);
 
   /**
-   * Set the visibility of a view. Hidden views have the effect of hiding
-   * their descendants as well. This does not affect painting, so layout
-   * is responsible for ensuring that content in hidden views is not
-   * painted nor handling events. It does affect the visibility of widgets;
-   * if a view is hidden, descendant views with widgets have their widgets
-   * hidden.
-   * The view manager generates the appropriate dirty regions.
-   * @param aView view to change visibility state of
-   * @param visible new visibility state
-   */
-  void SetViewVisibility(nsView* aView, ViewVisibility aVisible);
-
-  /**
    * Set the presshell associated with this manager
    * @param aPresShell - new presshell
    */
@@ -197,18 +124,7 @@ class nsViewManager final {
    */
   mozilla::PresShell* GetPresShell() const { return mPresShell; }
 
-  /**
-   * Get the device context associated with this manager
-   */
-  nsDeviceContext* GetDeviceContext() const { return mContext; }
-
  public:
-  /**
-   * Retrieve the widget at the root of the nearest enclosing
-   * view manager whose root view has a widget.
-   */
-  nsIWidget* GetRootWidget() const;
-
   /**
    * Indicate whether the viewmanager is currently painting
    *
@@ -225,12 +141,6 @@ class nsViewManager final {
   static uint32_t GetLastUserEventTime() { return gLastUserEventTime; }
 
   /**
-   * Find the nearest display root view for the view aView. This is the view for
-   * the nearest enclosing popup or the root view for the root document.
-   */
-  static nsView* GetDisplayRootFor(nsView* aView);
-
-  /**
    * Flush the accumulated dirty region to the widget and update widget
    * geometry.
    */
@@ -241,15 +151,9 @@ class nsViewManager final {
    */
   MOZ_CAN_RUN_SCRIPT void UpdateWidgetGeometry();
 
-  int32_t AppUnitsPerDevPixel() const {
-    return mContext->AppUnitsPerDevPixel();
-  }
-
  private:
   static uint32_t gLastUserEventTime;
 
-  /* Update the cached RootViewManager pointer on this view manager. */
-  void InvalidateHierarchy();
   void FlushPendingInvalidates();
 
   MOZ_CAN_RUN_SCRIPT
@@ -260,7 +164,6 @@ class nsViewManager final {
   MOZ_CAN_RUN_SCRIPT
   void ProcessPendingUpdatesPaint(nsIWidget* aWidget);
 
-  void FlushDirtyRegionToWidget(nsView* aView);
   /**
    * Call WillPaint() on all view observers under this vm root.
    */
@@ -268,25 +171,9 @@ class nsViewManager final {
   static void CollectVMsForWillPaint(nsView* aView, nsViewManager* aParentVM,
                                      nsTArray<RefPtr<nsViewManager>>& aVMs);
 
-  void InvalidateWidgetArea(nsView* aWidgetView,
-                            const nsRegion& aDamagedRegion);
-
-  void InvalidateViews(nsView* aView);
-
   // aView is the view for aWidget and aRegion is relative to aWidget.
   MOZ_CAN_RUN_SCRIPT
   void Refresh(nsView* aView, const LayoutDeviceIntRegion& aRegion);
-
-  // Utilities
-
-  bool IsViewInserted(nsView* aView);
-
-  /**
-   * Intersects aRect with aView's bounds and then transforms it from aView's
-   * coordinate system to the coordinate system of the widget attached to
-   * aView.
-   */
-  LayoutDeviceIntRect ViewToWidget(nsView* aView, const nsRect& aRect) const;
 
   MOZ_CAN_RUN_SCRIPT_BOUNDARY
   void DoSetWindowDimensions(nscoord aWidth, nscoord aHeight);
@@ -296,11 +183,9 @@ class nsViewManager final {
 
   void SetPainting(bool aPainting) { RootViewManager()->mPainting = aPainting; }
 
-  nsViewManager* RootViewManager() const {
-    return mRootViewManager ? mRootViewManager.get()
-                            : const_cast<nsViewManager*>(this);
-  }
-  bool IsRootVM() const { return !mRootViewManager; }
+  nsViewManager* RootViewManager() const;
+  nsViewManager* GetParentViewManager() const;
+  bool IsRootVM() const { return !GetParentViewManager(); }
 
   MOZ_CAN_RUN_SCRIPT void WillPaintWindow(nsIWidget* aWidget);
   MOZ_CAN_RUN_SCRIPT
@@ -311,7 +196,6 @@ class nsViewManager final {
   // pending updates.
   void PostPendingUpdate();
 
-  RefPtr<nsDeviceContext> mContext;
   mozilla::PresShell* mPresShell;
 
   // The size for a resize that we delayed until the root view becomes
@@ -320,18 +204,11 @@ class nsViewManager final {
 
   nsView* mRootView;
 
-  // mRootViewManager is a strong reference to the root view manager, unless
-  // |this| is the root, in which case mRootViewManager is null.  Callers
-  // should use RootViewManager() (which handles that case) rather than using
-  // mRootViewManager directly.
-  RefPtr<nsViewManager> mRootViewManager;
-
   // The following members should not be accessed directly except by
   // the root view manager.  Some have accessor functions to enforce
   // this, as noted.
   // Use IsPainting() and SetPainting() to access mPainting.
   bool mPainting;
-  bool mRecursiveRefreshPending;
   bool mHasPendingWidgetGeometryChanges;
 
   // from here to public should be static and locked... MMP

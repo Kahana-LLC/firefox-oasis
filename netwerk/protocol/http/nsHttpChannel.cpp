@@ -2027,7 +2027,7 @@ nsresult nsHttpChannel::SetupChannelForTransaction() {
     rv = mRequestHead.SetHeader(nsHttp::Upgrade, mUpgradeProtocol, false);
     MOZ_ASSERT(NS_SUCCEEDED(rv));
     rv = mRequestHead.SetHeaderOnce(nsHttp::Connection, nsHttp::Upgrade.get(),
-                                    true);
+                                    false);
     MOZ_ASSERT(NS_SUCCEEDED(rv));
     mCaps |= NS_HTTP_STICKY_CONNECTION;
     mCaps &= ~NS_HTTP_ALLOW_KEEPALIVE;
@@ -10568,10 +10568,14 @@ nsHttpChannel::IsFromCache(bool* value) {
 }
 
 NS_IMETHODIMP
+nsHttpChannel::HasCacheEntry(bool* value) {
+  *value = !!mCacheEntry;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 nsHttpChannel::GetCacheEntryId(uint64_t* aCacheEntryId) {
-  bool fromCache = false;
-  if (NS_FAILED(IsFromCache(&fromCache)) || !fromCache || !mCacheEntry ||
-      NS_FAILED(mCacheEntry->GetCacheEntryId(aCacheEntryId))) {
+  if (!mCacheEntry || NS_FAILED(mCacheEntry->GetCacheEntryId(aCacheEntryId))) {
     return NS_ERROR_NOT_AVAILABLE;
   }
 

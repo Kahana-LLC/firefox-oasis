@@ -162,8 +162,6 @@
 #include "nsTableWrapperFrame.h"
 #include "nsTextFrame.h"
 #include "nsTransitionManager.h"
-#include "nsView.h"
-#include "nsViewManager.h"
 #include "nsXULPopupManager.h"
 #include "prenv.h"
 
@@ -418,15 +416,15 @@ static Array<MinAndMaxScale, 2> GetMinAndMaxScaleForAnimationProperty(
         anim->GetEffect() ? anim->GetEffect()->AsKeyframeEffect() : nullptr;
     MOZ_ASSERT(effect, "A playing animation should have a keyframe effect");
     for (const AnimationProperty& prop : effect->Properties()) {
-      if (prop.mProperty.mID != eCSSProperty_transform &&
-          prop.mProperty.mID != eCSSProperty_scale) {
+      if (prop.mProperty.mId != eCSSProperty_transform &&
+          prop.mProperty.mId != eCSSProperty_scale) {
         continue;
       }
 
       // 0: eCSSProperty_transform.
       // 1: eCSSProperty_scale.
       MinAndMaxScale& scales =
-          minAndMaxScales[prop.mProperty.mID == eCSSProperty_transform ? 0 : 1];
+          minAndMaxScales[prop.mProperty.mId == eCSSProperty_transform ? 0 : 1];
 
       // We need to factor in the scale of the base style if the base style
       // will be used on the compositor.
@@ -1211,37 +1209,6 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
 }
 
 // static
-nsView* nsLayoutUtils::FindSiblingViewFor(nsView* aParentView,
-                                          nsIFrame* aFrame) {
-  nsIFrame* parentViewFrame = aParentView->GetFrame();
-  nsIContent* parentViewContent =
-      parentViewFrame ? parentViewFrame->GetContent() : nullptr;
-  for (nsView* insertBefore = aParentView->GetFirstChild(); insertBefore;
-       insertBefore = insertBefore->GetNextSibling()) {
-    nsIFrame* f = insertBefore->GetFrame();
-    if (!f) {
-      // this view could be some anonymous view attached to a meaningful parent
-      for (nsView* searchView = insertBefore->GetParent(); searchView;
-           searchView = searchView->GetParent()) {
-        f = searchView->GetFrame();
-        if (f) {
-          break;
-        }
-      }
-      NS_ASSERTION(f, "Can't find a frame anywhere!");
-    }
-    if (!f || !aFrame->GetContent() || !f->GetContent() ||
-        nsContentUtils::CompareTreePosition<TreeKind::Flat>(
-            aFrame->GetContent(), f->GetContent(), parentViewContent) > 0) {
-      // aFrame's content is after f's content (or we just don't know),
-      // so put our view before f's view
-      return insertBefore;
-    }
-  }
-  return nullptr;
-}
-
-// static
 ScrollContainerFrame* nsLayoutUtils::GetScrollContainerFrameFor(
     const nsIFrame* aScrolledFrame) {
   nsIFrame* frame = aScrolledFrame->GetParent();
@@ -1480,25 +1447,13 @@ nsPoint GetEventCoordinatesRelativeTo(nsIWidget* aWidget,
     return nsPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
   }
 
-  nsView* view = frame->GetView();
-  if (view || frame->IsMenuPopupFrame()) {
-    nsIWidget* frameWidget =
-        view ? view->GetWidget()
-             : static_cast<const nsMenuPopupFrame*>(frame)->GetWidget();
-    if (frameWidget == aWidget) {
-      MOZ_ASSERT_IF(!view, frameWidget->GetPopupFrame() ==
-                               static_cast<const nsMenuPopupFrame*>(frame));
-      // Special case this cause it happens a lot.
-      // This also fixes bug 664707, events in the extra-special case of select
-      // dropdown popups that are transformed.
-      nsPresContext* presContext = frame->PresContext();
-      nsPoint pt(presContext->DevPixelsToAppUnits(aPoint.x),
-                 presContext->DevPixelsToAppUnits(aPoint.y));
-      if (view) {
-        pt -= view->ViewToWidgetOffset();
-      }
-      return pt;
-    }
+  if (frame->GetOwnWidget() == aWidget) {
+    // Special case this cause it happens a lot.
+    // This also fixes bug 664707, events in the extra-special case of select
+    // dropdown popups that are transformed.
+    nsPresContext* presContext = frame->PresContext();
+    return nsPoint(presContext->DevPixelsToAppUnits(aPoint.x),
+                   presContext->DevPixelsToAppUnits(aPoint.y));
   }
 
   /* If we walk up the frame tree and discover that any of the frames are
@@ -1516,36 +1471,32 @@ nsPoint GetEventCoordinatesRelativeTo(nsIWidget* aWidget,
     rootFrame = f;
   }
 
-  nsView* rootView = rootFrame->GetView();
-  if (!rootView) {
+  auto rootToWidget = nsLayoutUtils::FrameToWidgetOffset(rootFrame, aWidget);
+  if (!rootToWidget) {
     return nsPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
   }
 
-  nsPoint widgetToView = nsLayoutUtils::TranslateWidgetToView(
-      rootFrame->PresContext(), aWidget, aPoint, rootView);
-
-  if (widgetToView == nsPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE)) {
-    return nsPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
-  }
+  const int32_t rootAPD = rootFrame->PresContext()->AppUnitsPerDevPixel();
+  nsPoint widgetToRoot =
+      LayoutDeviceIntPoint::ToAppUnits(aPoint, rootAPD) - *rootToWidget;
 
   // Convert from root document app units to app units of the document aFrame
   // is in.
-  int32_t rootAPD = rootFrame->PresContext()->AppUnitsPerDevPixel();
-  int32_t localAPD = frame->PresContext()->AppUnitsPerDevPixel();
-  widgetToView = widgetToView.ScaleToOtherAppUnits(rootAPD, localAPD);
+  const int32_t localAPD = frame->PresContext()->AppUnitsPerDevPixel();
+  widgetToRoot = widgetToRoot.ScaleToOtherAppUnits(rootAPD, localAPD);
 
   /* If we encountered a transform, we can't do simple arithmetic to figure
    * out how to convert back to aFrame's coordinates and must use the CTM.
    */
   if (transformFound || frame->IsInSVGTextSubtree()) {
     return nsLayoutUtils::TransformRootPointToFrame(ViewportType::Visual,
-                                                    aFrame, widgetToView);
+                                                    aFrame, widgetToRoot);
   }
 
   /* Otherwise, all coordinate systems are translations of one another,
    * so we can just subtract out the difference.
    */
-  return widgetToView - frame->GetOffsetToCrossDoc(rootFrame);
+  return widgetToRoot - frame->GetOffsetToCrossDoc(rootFrame);
 }
 
 nsPoint nsLayoutUtils::GetEventCoordinatesRelativeTo(
@@ -2384,6 +2335,19 @@ nsRect nsLayoutUtils::TransformFrameRectToAncestor(
       result, aAncestor.mFrame->PresContext()->AppUnitsPerDevPixel());
 }
 
+Maybe<nsPoint> nsLayoutUtils::FrameToWidgetOffset(const nsIFrame* aFrame,
+                                                  nsIWidget* aWidget) {
+  nsPoint toNearestOffset;
+  auto* nearest = aFrame->GetNearestWidget(toNearestOffset);
+  if (!nearest) {
+    return {};
+  }
+  return Some(toNearestOffset +
+              LayoutDeviceIntPoint::ToAppUnits(
+                  WidgetToWidgetOffset(nearest, aWidget),
+                  aFrame->PresContext()->AppUnitsPerDevPixel()));
+}
+
 LayoutDeviceIntPoint nsLayoutUtils::WidgetToWidgetOffset(nsIWidget* aFrom,
                                                          nsIWidget* aTo) {
   if (aFrom == aTo) {
@@ -2392,44 +2356,6 @@ LayoutDeviceIntPoint nsLayoutUtils::WidgetToWidgetOffset(nsIWidget* aFrom,
   auto fromOffset = aFrom->WidgetToScreenOffset();
   auto toOffset = aTo->WidgetToScreenOffset();
   return fromOffset - toOffset;
-}
-
-nsPoint nsLayoutUtils::TranslateWidgetToView(nsPresContext* aPresContext,
-                                             nsIWidget* aWidget,
-                                             const LayoutDeviceIntPoint& aPt,
-                                             nsView* aView) {
-  nsPoint viewOffset;
-  nsIWidget* viewWidget = aView->GetNearestWidget(&viewOffset);
-  if (!viewWidget) {
-    return nsPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
-  }
-
-  LayoutDeviceIntPoint widgetPoint =
-      aPt + WidgetToWidgetOffset(aWidget, viewWidget);
-  nsPoint widgetAppUnits(aPresContext->DevPixelsToAppUnits(widgetPoint.x),
-                         aPresContext->DevPixelsToAppUnits(widgetPoint.y));
-  return widgetAppUnits - viewOffset;
-}
-
-LayoutDeviceIntPoint nsLayoutUtils::TranslateViewToWidget(
-    nsPresContext* aPresContext, nsView* aView, nsPoint aPt,
-    ViewportType aViewportType, nsIWidget* aWidget) {
-  nsPoint viewOffset;
-  nsIWidget* viewWidget = aView->GetNearestWidget(&viewOffset);
-  if (!viewWidget) {
-    return LayoutDeviceIntPoint(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
-  }
-
-  nsPoint pt = (aPt + viewOffset);
-  // The target coordinates are visual, so perform a layout-to-visual
-  // conversion if the incoming coordinates are layout.
-  if (aViewportType == ViewportType::Layout && aPresContext->GetPresShell()) {
-    pt = ViewportUtils::LayoutToVisual(pt, aPresContext->GetPresShell());
-  }
-  LayoutDeviceIntPoint relativeToViewWidget(
-      aPresContext->AppUnitsToDevPixels(pt.x),
-      aPresContext->AppUnitsToDevPixels(pt.y));
-  return relativeToViewWidget + WidgetToWidgetOffset(viewWidget, aWidget);
 }
 
 UsedClear nsLayoutUtils::CombineClearType(UsedClear aOrigClearType,
@@ -4577,7 +4503,6 @@ static nsSize MeasureIntrinsicContentSize(
 
   const nsIFrame::ReflowChildFlags flags =
       nsIFrame::ReflowChildFlags::NoMoveFrame |
-      nsIFrame::ReflowChildFlags::NoSizeView |
       nsIFrame::ReflowChildFlags::NoDeleteNextInFlowChild;
   nsContainerFrame::FinishReflowChild(aFrame, pc, reflowOutput, &reflowInput,
                                       childWM, LogicalPoint(parentWM), nsSize(),

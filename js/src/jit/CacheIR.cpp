@@ -4043,8 +4043,7 @@ AttachDecision HasPropIRGenerator::tryAttachSmallObjectVariableKey(
       return AttachDecision::NoAction;
     }
 
-    RootedValue key(cx_, StringValue(iter->key().toAtom()));
-    if (!keyListObj->append(cx_, key)) {
+    if (!keyListObj->append(cx_, StringValue(iter->key().toAtom()))) {
       cx_->recoverFromOutOfMemory();
       return AttachDecision::NoAction;
     }
@@ -5479,12 +5478,13 @@ bool SetPropIRGenerator::canAttachAddSlotStub(HandleObject obj, HandleId id) {
       return false;
     }
   } else {
-    // Normal Case: If property exists this isn't an "add"
+    // Normal Case: If property exists or is an OOB typed array index, this
+    // isn't an "add".
     PropertyResult prop;
     if (!LookupOwnPropertyPure(cx_, nobj, id, &prop)) {
       return false;
     }
-    if (prop.isFound()) {
+    if (prop.isFound() || prop.isTypedArrayOutOfRange()) {
       return false;
     }
   }
@@ -5588,6 +5588,10 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
   }
 
   JSObject* obj = &lhsVal_.toObject();
+  if (!obj->is<NativeObject>()) {
+    return AttachDecision::NoAction;
+  }
+  NativeObject* nobj = &obj->as<NativeObject>();
 
   PropertyResult prop;
   if (!LookupOwnPropertyPure(cx_, obj, id, &prop)) {
@@ -5597,11 +5601,7 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
     return AttachDecision::NoAction;
   }
 
-  if (!obj->is<NativeObject>()) {
-    return AttachDecision::NoAction;
-  }
-  auto* nobj = &obj->as<NativeObject>();
-
+  MOZ_RELEASE_ASSERT(prop.isNativeProperty());
   PropertyInfo propInfo = prop.propertyInfo();
   NativeObject* holder = nobj;
 
@@ -5613,6 +5613,7 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
 
   // The property must be the last added property of the object.
   SharedShape* newShape = holder->sharedShape();
+  MOZ_RELEASE_ASSERT(oldShape != newShape);
   MOZ_RELEASE_ASSERT(newShape->lastProperty() == propInfo);
 
 #ifdef DEBUG

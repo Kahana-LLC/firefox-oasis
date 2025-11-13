@@ -327,6 +327,25 @@ bool CycleCollectedJSContext::getHostDefinedGlobal(
   return true;
 }
 
+void CycleCollectedJSContext::traceNonGCThingMicroTask(JSTracer* trc,
+                                                       JS::Value* valuePtr) {
+  // This hook is called for non-JSObject microtask values.
+  // In Gecko, the microtask queue should only contain JSObjects (JS microtasks)
+  // or Private values (Gecko MicroTaskRunnables). Private values are
+  // indistinguishable from doubles at the bit level, so if this hook is called,
+  // we know it's not an object, and by design it must be a Private value
+  // containing a MicroTaskRunnable pointer that was enqueued via
+  // EnqueueMicroTask.
+
+  MOZ_ASSERT(!valuePtr->isObject(),
+             "This hook should only be called for non-objects");
+  if (void* ptr = valuePtr->toPrivate()) {
+    // The pointer is a MicroTaskRunnable that may have GC-reachable data
+    auto* runnable = static_cast<MicroTaskRunnable*>(ptr);
+    runnable->TraceMicroTask(trc);
+  }
+}
+
 bool CycleCollectedJSContext::getHostDefinedData(
     JSContext* aCx, JS::MutableHandle<JSObject*> aData) const {
   nsIGlobalObject* global = mozilla::dom::GetIncumbentGlobal();
@@ -833,9 +852,9 @@ void CycleCollectedJSContext::AddPendingIDBTransaction(
 //
 // - This means runnables in the queue have their refcounts stay above zero for
 // the duration of the time they are in the queue.
-JS::MicroTask RunnableToMicroTask(
+JS::GenericMicroTask RunnableToMicroTask(
     already_AddRefed<MicroTaskRunnable>& aRunnable) {
-  JS::MicroTask v;
+  JS::GenericMicroTask v;
   auto* r = aRunnable.take();
   MOZ_ASSERT(r);
   v.setPrivate(r);
@@ -845,13 +864,13 @@ JS::MicroTask RunnableToMicroTask(
 bool EnqueueMicroTask(JSContext* aCx,
                       already_AddRefed<MicroTaskRunnable> aRunnable) {
   MOZ_ASSERT(StaticPrefs::javascript_options_use_js_microtask_queue());
-  JS::MicroTask v = RunnableToMicroTask(aRunnable);
+  JS::GenericMicroTask v = RunnableToMicroTask(aRunnable);
   return JS::EnqueueMicroTask(aCx, v);
 }
 bool EnqueueDebugMicroTask(JSContext* aCx,
                            already_AddRefed<MicroTaskRunnable> aRunnable) {
   MOZ_ASSERT(StaticPrefs::javascript_options_use_js_microtask_queue());
-  JS::MicroTask v = RunnableToMicroTask(aRunnable);
+  JS::GenericMicroTask v = RunnableToMicroTask(aRunnable);
   return JS::EnqueueDebugMicroTask(aCx, v);
 }
 

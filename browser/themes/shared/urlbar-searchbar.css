@@ -430,7 +430,8 @@
 /* The page actions menu is hidden by default, it is only shown in small
    windows as the overflow target of multiple page action buttons */
 #pageActionButton {
-  visibility: collapse;
+  /* TODO: display: none fixes browser_startup_images.js but breaks some tests. */
+  display: none;
 }
 
 /* 680px is just below half of popular 1366px wide screens, so when putting two
@@ -444,7 +445,7 @@
     display: none;
   }
   #pageActionButton[multiple-children] {
-    visibility: visible;
+    display: revert;
   }
 }
 
@@ -1192,8 +1193,13 @@
   overflow: hidden;
   white-space: nowrap;
   max-width: var(--search-engine-name-max-width);
+  margin-inline-end: var(--urlbar-searchmodeswitcher-inline-padding);
 
   &:empty {
+    display: none;
+  }
+
+  #searchbar-new & {
     display: none;
   }
 }
@@ -1201,7 +1207,7 @@
 .searchmode-switcher-close {
   appearance: none;
   pointer-events: all;
-  margin-inline: var(--urlbar-searchmodeswitcher-inline-padding);
+  margin-inline-end: var(--urlbar-searchmodeswitcher-inline-padding);
 
   .urlbar[searchmode] & {
     display: inline-flex;
@@ -1209,6 +1215,10 @@
 }
 
 .searchmode-switcher-dropmarker {
+  @media (prefers-reduced-motion: no-preference) {
+    transition: 120ms transform ease-out;
+  }
+
   .urlbar[searchmode] & {
     display: none;
   }

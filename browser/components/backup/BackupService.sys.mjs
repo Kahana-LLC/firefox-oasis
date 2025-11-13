@@ -888,20 +888,11 @@ export class BackupService extends EventTarget {
    * @returns {string} The path of the default parent directory
    */
   static get DEFAULT_PARENT_DIR_PATH() {
-    let path = "";
-    try {
-      path =
-        BackupService.oneDriveFolderPath?.path ||
-        Services.dirsvc.get("Docs", Ci.nsIFile).path;
-    } catch (e) {
-      // If this errors, we can safely return an empty string
-      lazy.logConsole.error(
-        "There was an error when getting the Default Parent Directory: ",
-        e
-      );
-    }
-
-    return path;
+    return (
+      BackupService.oneDriveFolderPath?.path ||
+      BackupService.docsDirFolderPath?.path ||
+      ""
+    );
   }
 
   /**
@@ -1139,6 +1130,24 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Gets the user's Documents folder.
+   * If it doesn't exist, return null.
+   *
+   * @returns {nsIFile|null} The Documents folder or null
+   */
+  static get docsDirFolderPath() {
+    try {
+      return Services.dirsvc.get("Docs", Ci.nsIFile);
+    } catch (e) {
+      lazy.logConsole.warn(
+        "There was an error while trying to get the Document's directory",
+        e
+      );
+    }
+    return null;
+  }
+
+  /**
    * Returns a reference to a BackupService singleton. If this is the first time
    * that this getter is accessed, this causes the BackupService singleton to be
    * be instantiated.
@@ -1195,13 +1204,13 @@ export class BackupService extends EventTarget {
     this.#postRecoveryResolver = resolve;
     this.#backupWriteAbortController = new AbortController();
     this.#regenerationDebouncer = new lazy.DeferredTask(async () => {
-      if (!this.#backupWriteAbortController.signal.aborted) {
-        await this.deleteLastBackup();
-        if (lazy.scheduledBackupsPref) {
-          await this.createBackupOnIdleDispatch({
-            reason: "user deleted some data",
-          });
-        }
+      if (
+        !this.#backupWriteAbortController.signal.aborted &&
+        this.archiveEnabledStatus.enabled
+      ) {
+        await this.createBackupOnIdleDispatch({
+          reason: "user deleted some data",
+        });
       }
     }, BackupService.REGENERATION_DEBOUNCE_RATE_MS);
   }
@@ -1226,15 +1235,16 @@ export class BackupService extends EventTarget {
    * @type {object}
    */
   get state() {
-    if (!Object.keys(this.#_state.defaultParent).length) {
+    if (
+      !Object.keys(this.#_state.defaultParent).length ||
+      !this.#_state.defaultParent.path
+    ) {
       let defaultPath = BackupService.DEFAULT_PARENT_DIR_PATH;
-      if (defaultPath) {
-        this.#_state.defaultParent = {
-          path: defaultPath,
-          fileName: PathUtils.filename(defaultPath),
-          iconURL: this.getIconFromFilePath(defaultPath),
-        };
-      }
+      this.#_state.defaultParent = {
+        path: defaultPath,
+        fileName: defaultPath ? PathUtils.filename(defaultPath) : "",
+        iconURL: defaultPath ? this.getIconFromFilePath(defaultPath) : "",
+      };
     }
 
     return Object.freeze(structuredClone(this.#_state));
@@ -3938,14 +3948,14 @@ export class BackupService extends EventTarget {
     // immediately reflect across any observers, instead of waiting on idle.
     this.#statusPrefObserver = () => {
       // Wrap in an arrow function so 'this' is preserved.
-      this.#notifyStatusObservers();
+      this.#handleStatusChange();
     };
 
     for (let pref of BackupService.STATUS_OBSERVER_PREFS) {
       Services.prefs.addObserver(pref, this.#statusPrefObserver);
     }
     lazy.NimbusFeatures.backupService.onUpdate(this.#statusPrefObserver);
-    this.#notifyStatusObservers();
+    this.#handleStatusChange();
   }
 
   /**
@@ -3967,10 +3977,30 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Performs tasks required whenever archive or restore change their status
+   *
+   * 1. Notifies any observers that a change has taken place
+   * 2. If archive is disabled, clean up any backup files
+   */
+  #handleStatusChange() {
+    this.#notifyStatusObservers();
+
+    if (!this.archiveEnabledStatus.enabled) {
+      // We won't wait for this promise to accept/reject since rejections are
+      // ignored anyways
+      this.cleanupBackupFiles();
+    }
+  }
+
+  /**
    * Notify any listeners about the availability of the backup service, then
    * update relevant telemetry metrics.
    */
   #notifyStatusObservers() {
+    lazy.logConsole.log(
+      "Notifying observers about a BackupService state change"
+    );
+
     Services.obs.notifyObservers(null, "backup-service-status-updated");
 
     let status = this.archiveEnabledStatus;
@@ -3992,6 +4022,22 @@ export class BackupService extends EventTarget {
     }
   }
 
+  async cleanupBackupFiles() {
+    lazy.logConsole.debug("Cleaning up backup data");
+    try {
+      if (this.state.encryptionEnabled) {
+        await this.disableEncryption();
+      }
+      this.deleteLastBackup();
+    } catch (e) {
+      // Ignore any exceptions
+      lazy.logConsole.error(
+        "There was an error when cleaning up backup files: ",
+        e
+      );
+    }
+  }
+
   /**
    * Called when the last known backup should be deleted and a new one
    * created. This uses the #regenerationDebouncer to debounce clusters of
@@ -4007,14 +4053,14 @@ export class BackupService extends EventTarget {
    * not been sent to the application for at least
    * IDLE_THRESHOLD_SECONDS_PREF_NAME seconds.
    */
-  onIdle() {
+  async onIdle() {
     lazy.logConsole.debug("Saw idle callback");
     if (!this.#takenMeasurements) {
       this.takeMeasurements();
       this.#takenMeasurements = true;
     }
 
-    if (lazy.scheduledBackupsPref) {
+    if (lazy.scheduledBackupsPref && this.archiveEnabledStatus.enabled) {
       lazy.logConsole.debug("Scheduled backups enabled.");
       let now = Math.floor(Date.now() / 1000);
       let lastBackupDate = this.#_state.lastBackupDate;
@@ -4053,12 +4099,19 @@ export class BackupService extends EventTarget {
         // loop in the parent process isn't so busy with higher priority things.
         let expectedBackupTime =
           lastBackupDate + lazy.minimumTimeBetweenBackupsSeconds;
-        this.createBackupOnIdleDispatch({
-          reason:
-            expectedBackupTime < this._startupTimeUnixSeconds
-              ? "missed"
-              : "idle",
-        });
+        try {
+          await this.createBackupOnIdleDispatch({
+            reason:
+              expectedBackupTime < this._startupTimeUnixSeconds
+                ? "missed"
+                : "idle",
+          });
+        } catch (e) {
+          lazy.logConsole.error(
+            "createBackupOnIdleDispatch promise rejected",
+            e
+          );
+        }
       } else {
         lazy.logConsole.debug(
           "Last backup was too recent. Not creating one for now."
@@ -4082,10 +4135,11 @@ export class BackupService extends EventTarget {
    * is not busy with higher priority events. This is intentionally broken out
    * into its own method to make it easier to stub out in tests.
    *
-   * @param {...*} args
-   *   Arguments to pass through to createBackup.
+   * @param {object} [options]
+   * @param {boolean} [options.deletePreviousBackup]
+   * @param {string} [options.reason]
    */
-  createBackupOnIdleDispatch(...args) {
+  createBackupOnIdleDispatch({ deletePreviousBackup = true, reason }) {
     let now = Math.floor(Date.now() / 1000);
     let errorStateDebugInfo = Services.prefs.getStringPref(
       BACKUP_DEBUG_INFO_PREF_NAME,
@@ -4104,15 +4158,27 @@ export class BackupService extends EventTarget {
       lazy.logConsole.debug(
         `We've already retried in the last ${lazy.minimumTimeBetweenBackupsSeconds}s. Waiting for next valid idleDispatch to try again.`
       );
-      return;
+      return Promise.resolve();
     }
+    // Determine path to old backup file
+    const oldBackupFile = this.#_state.lastBackupFileName;
+    const isScheduledBackupsEnabled = lazy.scheduledBackupsPref;
 
-    ChromeUtils.idleDispatch(() => {
+    let { backupPromise, resolve } = Promise.withResolvers();
+    ChromeUtils.idleDispatch(async () => {
       lazy.logConsole.debug(
         "idleDispatch fired. Attempting to create a backup."
       );
+      let oldBackupFilePath;
+      if (await this.#infalliblePathExists(lazy.backupDirPref)) {
+        oldBackupFilePath = PathUtils.join(lazy.backupDirPref, oldBackupFile);
+      }
 
-      this.createBackup(...args).catch(e => {
+      try {
+        if (isScheduledBackupsEnabled) {
+          await this.createBackup({ reason });
+        }
+      } catch (e) {
         lazy.logConsole.debug(
           `There was an error creating backup on idle dispatch: ${e}`
         );
@@ -4123,8 +4189,22 @@ export class BackupService extends EventTarget {
           Services.prefs.setBoolPref(DISABLED_ON_IDLE_RETRY_PREF_NAME, true);
           Glean.browserBackup.backupThrottled.record();
         }
-      });
+      } finally {
+        // Now delete the old backup file, if it exists
+        if (deletePreviousBackup && oldBackupFilePath) {
+          lazy.logConsole.log(
+            "Attempting to delete last backup file at ",
+            oldBackupFilePath
+          );
+          await IOUtils.remove(oldBackupFilePath, {
+            ignoreAbsent: true,
+            retryReadonly: true,
+          });
+          resolve();
+        }
+      }
     });
+    return backupPromise;
   }
 
   /**
@@ -4277,9 +4357,19 @@ export class BackupService extends EventTarget {
     }
 
     try {
-      let files = await IOUtils.getChildren(this.#_state.backupDirPath, {
-        ignoreAbsent: true,
-      });
+      // During the first startup, the browser's backup location is often left
+      // unconfigured; therefore, it defaults to predefined locations to look
+      // for existing backup files.
+      let defaultPath = PathUtils.join(
+        BackupService.DEFAULT_PARENT_DIR_PATH,
+        BackupService.BACKUP_DIR_NAME
+      );
+      let files = await IOUtils.getChildren(
+        this.#_state.backupDirPath ? this.#_state.backupDirPath : defaultPath,
+        {
+          ignoreAbsent: true,
+        }
+      );
       // filtering is an O(N) operation, we can return early if there's too many files
       // in this folder to filter to avoid a performance bottleneck
       if (speedUpHeuristic && files && files.length > 1000) {

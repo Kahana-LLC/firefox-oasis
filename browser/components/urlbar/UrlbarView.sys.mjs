@@ -540,9 +540,7 @@ export class UrlbarView {
       return;
     }
 
-    this.#inputWidthOnLastClose = getBoundsWithoutFlushing(
-      this.input.textbox
-    ).width;
+    this.#inputWidthOnLastClose = getBoundsWithoutFlushing(this.input).width;
 
     // We exit search mode preview on close since the result previewing it is
     // implicitly unselected.
@@ -656,8 +654,7 @@ export class UrlbarView {
     if (
       this.#rows.firstElementChild &&
       this.#queryContext.searchString == this.input.value &&
-      this.#inputWidthOnLastClose ==
-        getBoundsWithoutFlushing(this.input.textbox).width
+      this.#inputWidthOnLastClose == getBoundsWithoutFlushing(this.input).width
     ) {
       // We can reuse the current rows.
       queryOptions.allowAutofill = this.#queryContext.allowAutofill;
@@ -1740,11 +1737,14 @@ export class UrlbarView {
       this.#addRowButton(item, {
         name: "result-menu",
         classList: ["urlbarView-button-menu"],
-        l10n: {
-          id: result.showFeedbackMenu
-            ? "urlbar-result-menu-button-feedback"
-            : "urlbar-result-menu-button",
-        },
+        l10n: result.showFeedbackMenu
+          ? {
+              id: "urlbar-result-menu-button-feedback",
+              cacheable: true,
+            }
+          : {
+              id: "urlbar-result-menu-button",
+            },
         attributes: lazy.UrlbarPrefs.get("resultMenu.keyboardAccessible")
           ? null
           : {
@@ -2340,7 +2340,7 @@ export class UrlbarView {
       }
       if (update.l10n) {
         this.#l10nCache.setElementL10n(node, update.l10n);
-      } else if (update.textContent) {
+      } else if (update.hasOwnProperty("textContent")) {
         lazy.UrlbarUtils.addTextContentWithHighlights(
           node,
           update.textContent,
@@ -3239,7 +3239,7 @@ export class UrlbarView {
   }
 
   #enableOrDisableRowWrap() {
-    let wrap = getBoundsWithoutFlushing(this.input.textbox).width < 650;
+    let wrap = getBoundsWithoutFlushing(this.input).width < 650;
     this.#rows.toggleAttribute("wrap", wrap);
     this.oneOffSearchButtons?.container.toggleAttribute("wrap", wrap);
   }

@@ -20,7 +20,6 @@ MOZ_SRC_FILES += [
     "SearchModeSwitcher.sys.mjs",
     "UrlbarController.sys.mjs",
     "UrlbarEventBufferer.sys.mjs",
-    "UrlbarInput.sys.mjs",
     "UrlbarMuxerStandard.sys.mjs",
     "UrlbarPrefs.sys.mjs",
     "UrlbarProviderAboutPages.sys.mjs",
@@ -75,6 +74,7 @@ MOZ_SRC_FILES += [
     "private/MDNSuggestions.sys.mjs",
     "private/MLSuggest.sys.mjs",
     "private/RealtimeSuggestProvider.sys.mjs",
+    "private/SportsSuggestions.sys.mjs",
     "private/SuggestBackendMerino.sys.mjs",
     "private/SuggestBackendMl.sys.mjs",
     "private/SuggestBackendRust.sys.mjs",
@@ -107,3 +107,5 @@ XPCSHELL_TESTS_MANIFESTS += [
 ]
 
 SPHINX_TREES["/browser/urlbar"] = "docs"
+
+JAR_MANIFESTS += ["jar.mn"]

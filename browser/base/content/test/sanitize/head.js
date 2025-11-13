@@ -516,7 +516,6 @@ function promiseSanitizationComplete() {
  *          "browser" by default
  *        checkingDataSizes: boolean check if we should wait for the data sizes
  *          to load
- *
  */
 function ClearHistoryDialogHelper({
   mode = "browser",
@@ -668,6 +667,8 @@ ClearHistoryDialogHelper.prototype = {
         clearDialogOpenButtonId = "clearDataSettings";
       }
       // open dialog
+      // Wait a tick for the button to be initialized.œ
+      await new Promise(resolve => requestAnimationFrame(resolve));
       tabWindow.document.getElementById(clearDialogOpenButtonId).click();
     }
     // We open the dialog in the chrome context in other cases

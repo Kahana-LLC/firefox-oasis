@@ -24,6 +24,8 @@
 #include "nsLayoutUtils.h"
 #include "nsPlaceholderFrame.h"
 #include "nsSubDocumentFrame.h"
+#include "nsView.h"
+#include "nsViewManager.h"
 
 using namespace mozilla;
 
@@ -337,6 +339,25 @@ void ViewportFrame::RemoveFrame(DestroyContext& aContext, ChildListID aListID,
 }
 #endif
 
+void ViewportFrame::SetView(nsView* aView) {
+  MOZ_ASSERT(!mView, "Should not swap views");
+  if (aView) {
+    aView->SetFrame(this);
+  }
+  mView = aView;
+}
+
+void ViewportFrame::Destroy(DestroyContext& aContext) {
+  // Prevent event dispatch during destruction.
+  if (mView) {
+    mView->SetFrame(nullptr);
+  }
+  if (PresShell()->IsDestroying()) {
+    PresShell::ClearMouseCapture(this);
+  }
+  nsContainerFrame::Destroy(aContext);
+}
+
 nscoord ViewportFrame::IntrinsicISize(const IntrinsicSizeInput& aInput,
                                       IntrinsicISizeType aType) {
   return mFrames.IsEmpty()
@@ -487,6 +508,11 @@ void ViewportFrame::Reflow(nsPresContext* aPresContext,
   // Clipping is handled by the document container (e.g., nsSubDocumentFrame),
   // so we don't need to change our overflow areas.
   FinishAndStoreOverflow(&aDesiredSize);
+
+  if (mView) {
+    mView->GetViewManager()->ResizeView(
+        mView, nsRect(nsPoint(), aDesiredSize.PhysicalSize()));
+  }
 
   NS_FRAME_TRACE_REFLOW_OUT("ViewportFrame::Reflow", aStatus);
 }

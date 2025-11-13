@@ -36,6 +36,7 @@ import mozilla.components.browser.state.action.ShareResourceAction
 import mozilla.components.browser.state.action.TabListAction.AddTabAction
 import mozilla.components.browser.state.action.TabListAction.RemoveTabAction
 import mozilla.components.browser.state.action.TrackingProtectionAction
+import mozilla.components.browser.state.engine.EngineMiddleware
 import mozilla.components.browser.state.ext.getUrl
 import mozilla.components.browser.state.search.RegionState
 import mozilla.components.browser.state.search.SearchEngine
@@ -75,6 +76,8 @@ import mozilla.components.compose.browser.toolbar.store.EnvironmentCleared
 import mozilla.components.compose.browser.toolbar.store.EnvironmentRehydrated
 import mozilla.components.compose.browser.toolbar.store.ProgressBarConfig
 import mozilla.components.compose.browser.toolbar.ui.BrowserToolbarQuery
+import mozilla.components.concept.engine.Engine
+import mozilla.components.concept.engine.EngineSession
 import mozilla.components.concept.engine.EngineSession.LoadUrlFlags
 import mozilla.components.concept.engine.cookiehandling.CookieBannersStorage
 import mozilla.components.concept.engine.permission.SitePermissionsStorage
@@ -164,7 +167,7 @@ import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.directionsEq
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.helpers.FenixGleanTestRule
-import org.mozilla.fenix.settings.ToolbarShortcutPreference
+import org.mozilla.fenix.settings.ShortcutType
 import org.mozilla.fenix.tabstray.Page
 import org.mozilla.fenix.tabstray.TabsTrayAccessPoint
 import org.mozilla.fenix.utils.Settings
@@ -1733,12 +1736,15 @@ class BrowserToolbarMiddlewareTest {
         every { settings.shouldUseBottomToolbar } returns false
         val currentTab = createTab("test.com", private = false)
         val captureMiddleware = CaptureActionsMiddleware<BrowserState, BrowserAction>()
+        val engine = mockk<Engine>(relaxed = true)
+        val session = mockk<EngineSession>(relaxed = true)
+        every { engine.createSession() } returns session
         val browserStore = BrowserStore(
             initialState = BrowserState(
                 tabs = listOf(currentTab),
                 selectedTabId = currentTab.id,
             ),
-            middleware = listOf(captureMiddleware),
+            middleware = listOf(captureMiddleware) + EngineMiddleware.create(engine),
         )
         val middleware = buildMiddleware(appStore, browserStore = browserStore)
         val toolbarStore = buildStore(middleware)
@@ -1774,7 +1780,7 @@ class BrowserToolbarMiddlewareTest {
                 tabs = listOf(currentTab),
                 selectedTabId = currentTab.id,
             ),
-            middleware = listOf(captureMiddleware),
+            middleware = listOf(captureMiddleware) + EngineMiddleware.create(mockk()),
         )
         val middleware = buildMiddleware(appStore, browserStore = browserStore)
         val toolbarStore = buildStore(middleware)
@@ -2892,7 +2898,7 @@ class BrowserToolbarMiddlewareTest {
         }
         every { mockContext.resources.configuration } returns configuration
         every { settings.isTabStripEnabled } returns false
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.SHARE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.SHARE
         val browserScreenStore = buildBrowserScreenStore()
         val middleware = buildMiddleware(appStore, browserScreenStore, browserStore)
         val toolbarStore = buildStore(middleware, browsingModeManager = browsingModeManager, navController = navController)
@@ -2909,7 +2915,7 @@ class BrowserToolbarMiddlewareTest {
         }
         every { mockContext.resources.configuration } returns configuration
         every { settings.isTabStripEnabled } returns false
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.TRANSLATE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.TRANSLATE
         val browserScreenStore = buildBrowserScreenStore()
         val middleware = buildMiddleware(appStore, browserScreenStore, browserStore)
         val toolbarStore = buildStore(middleware, browsingModeManager = browsingModeManager, navController = navController)
@@ -2939,7 +2945,7 @@ class BrowserToolbarMiddlewareTest {
             )
         } answers { browserAnimatorActionCaptor.captured.invoke(true) }
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.HOMEPAGE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.HOMEPAGE
 
         val middleware = buildMiddleware()
         val toolbarStore = buildStore(
@@ -2956,7 +2962,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN homepage as new tab is enabled WHEN clicking the homepage button THEN navigate to homepage`() = runTest {
         every { settings.enableHomepageAsNewTab } returns true
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.HOMEPAGE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.HOMEPAGE
 
         val middleware = buildMiddleware()
         val toolbarStore = buildStore(
@@ -2972,7 +2978,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use add bookmark shortcut AND the current page is not bookmarked WHEN initializing toolbar THEN show Bookmark in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.BOOKMARK
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.BOOKMARK
         val toolbarStore = buildStore()
 
         val bookmarkButton = toolbarStore.state.displayState.browserActionsEnd[0] as ActionButtonRes
@@ -2982,7 +2988,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use add bookmark shortcut AND the current page is bookmarked WHEN initializing toolbar THEN show ACTIVE EditBookmark in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.BOOKMARK
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.BOOKMARK
 
         val tab = createTab("https://example.com")
         val browserStore = BrowserStore(
@@ -3011,7 +3017,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use translate shortcut AND current page is not translated WHEN initializing toolbar THEN show Translate in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.TRANSLATE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.TRANSLATE
 
         val pageTranslationStatus: PageTranslationStatus = mockk(relaxed = true) {
             every { isTranslationPossible } returns true
@@ -3030,7 +3036,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use translate shortcut AND current page is translated WHEN initializing toolbar THEN show ACTIVE Translate in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.TRANSLATE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.TRANSLATE
 
         val pageTranslationStatus: PageTranslationStatus = mockk(relaxed = true) {
             every { isTranslationPossible } returns true
@@ -3049,7 +3055,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use homepage shortcut WHEN initializing toolbar THEN show Homepage in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.HOMEPAGE
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.HOMEPAGE
 
         val toolbarStore = buildStore()
 
@@ -3060,7 +3066,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use back shortcut AND current page has no history WHEN initializing toolbar THEN show DISABLED Back in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.BACK
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.BACK
 
         val toolbarStore = buildStore()
 
@@ -3071,7 +3077,7 @@ class BrowserToolbarMiddlewareTest {
     @Test
     fun `GIVEN simple toolbar use back shortcut AND current page has history WHEN initializing toolbar THEN show ACTIVE Back in end browser actions`() = runTest {
         every { settings.shouldShowToolbarCustomization } returns true
-        every { settings.toolbarShortcutKey } returns ToolbarShortcutPreference.Keys.BACK
+        every { settings.toolbarSimpleShortcutKey } returns ShortcutType.BACK
 
         val tab = createTab(url = "https://example.com").let {
             it.copy(content = it.content.copy(canGoBack = true))
@@ -3093,41 +3099,165 @@ class BrowserToolbarMiddlewareTest {
     }
 
     @Test
-    fun `mapShortcutToAction maps keys to actions and falls back to NewTab`() {
+    fun `GIVEN expanded toolbar use translate shortcut AND current page is not translated WHEN initializing toolbar THEN show Translate in navigation actions`() = runTest {
+        every { settings.shouldShowToolbarCustomization } returns true
+        every { settings.shouldUseExpandedToolbar } returns true
+        every { settings.toolbarExpandedShortcutKey } returns ShortcutType.TRANSLATE
+
+        val pageTranslationStatus: PageTranslationStatus = mockk(relaxed = true) {
+            every { isTranslationPossible } returns true
+            every { isTranslated } returns false
+            every { isTranslateProcessing } returns false
+        }
+
+        every { browserScreenState.pageTranslationStatus } returns pageTranslationStatus
+
+        val toolbarStore = buildStore()
+
+        val translateButton = toolbarStore.state.displayState.navigationActions.first() as ActionButtonRes
+        assertEquals(expectedTranslateButton(), translateButton)
+    }
+
+    @Test
+    fun `GIVEN expanded toolbar use translate shortcut AND current page is translated WHEN initializing toolbar THEN show ACTIVE Translate in navigation actions`() = runTest {
+        every { settings.shouldShowToolbarCustomization } returns true
+        every { settings.shouldUseExpandedToolbar } returns true
+        every { settings.toolbarExpandedShortcutKey } returns ShortcutType.TRANSLATE
+
+        val pageTranslationStatus: PageTranslationStatus = mockk(relaxed = true) {
+            every { isTranslationPossible } returns true
+            every { isTranslated } returns true
+            every { isTranslateProcessing } returns false
+        }
+
+        every { browserScreenState.pageTranslationStatus } returns pageTranslationStatus
+
+        val toolbarStore = buildStore()
+
+        val translateButton = toolbarStore.state.displayState.navigationActions.first() as ActionButtonRes
+        assertEquals(expectedTranslateButton(isActive = true), translateButton)
+    }
+
+    @Test
+    fun `GIVEN expanded toolbar use homepage shortcut WHEN initializing toolbar THEN show Homepage in navigation actions`() = runTest {
+        every { settings.shouldUseExpandedToolbar } returns true
+        every { settings.shouldShowToolbarCustomization } returns true
+        every { settings.toolbarExpandedShortcutKey } returns ShortcutType.HOMEPAGE
+
+        val toolbarStore = buildStore()
+
+        val homepageButton = toolbarStore.state.displayState.navigationActions.first() as ActionButtonRes
+        assertEquals(expectedHomepageButton(source = Source.NavigationBar), homepageButton)
+    }
+
+    @Test
+    fun `GIVEN expanded toolbar use back shortcut AND current page has no history WHEN initializing toolbar THEN show DISABLED Back in navigation actions`() = runTest {
+        every { settings.shouldUseExpandedToolbar } returns true
+        every { settings.shouldShowToolbarCustomization } returns true
+        every { settings.toolbarExpandedShortcutKey } returns ShortcutType.BACK
+
+        val toolbarStore = buildStore()
+
+        val backButton = toolbarStore.state.displayState.navigationActions.first() as ActionButtonRes
+        assertEquals(expectedGoBackButton(isActive = false), backButton)
+    }
+
+    @Test
+    fun `GIVEN expanded toolbar use back shortcut AND current page has history WHEN initializing toolbar THEN show ACTIVE Back in navigation actions`() = runTest {
+        every { settings.shouldUseExpandedToolbar } returns true
+        every { settings.shouldShowToolbarCustomization } returns true
+        every { settings.toolbarExpandedShortcutKey } returns ShortcutType.BACK
+
+        val tab = createTab(url = "https://example.com").let {
+            it.copy(content = it.content.copy(canGoBack = true))
+        }
+        val browserStore = BrowserStore(
+            BrowserState(
+                tabs = listOf(tab),
+                selectedTabId = tab.id,
+            ),
+        )
+        val middleware = buildMiddleware(
+            browserStore = browserStore,
+        )
+        val toolbarStore = buildStore(middleware)
+        mainLooperRule.idle()
+
+        val backButton = toolbarStore.state.displayState.navigationActions.first() as ActionButtonRes
+        assertEquals(expectedGoBackButton(), backButton)
+    }
+
+    @Test
+    fun `mapShortcutToAction maps keys to actions and falls back to default set`() {
         assertEquals(
             ToolbarAction.NewTab,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.NEW_TAB),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.NEW_TAB,
+                default = ToolbarAction.NewTab,
+            ),
         )
         assertEquals(
             ToolbarAction.Share,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.SHARE),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.SHARE,
+                default = ToolbarAction.NewTab,
+            ),
         )
         assertEquals(
             ToolbarAction.Bookmark,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.BOOKMARK),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.BOOKMARK,
+                default = ToolbarAction.NewTab,
+                isBookmarked = false,
+            ),
         )
         assertEquals(
             ToolbarAction.EditBookmark,
             BrowserToolbarMiddleware.mapShortcutToAction(
-                ToolbarShortcutPreference.Keys.BOOKMARK,
-                true,
+                key = ShortcutType.BOOKMARK,
+                default = ToolbarAction.NewTab,
+                isBookmarked = true,
             ),
         )
         assertEquals(
             ToolbarAction.Translate,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.TRANSLATE),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.TRANSLATE,
+                default = ToolbarAction.NewTab,
+            ),
         )
         assertEquals(
             ToolbarAction.Homepage,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.HOMEPAGE),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.HOMEPAGE,
+                default = ToolbarAction.NewTab,
+            ),
         )
         assertEquals(
             ToolbarAction.Back,
-            BrowserToolbarMiddleware.mapShortcutToAction(ToolbarShortcutPreference.Keys.BACK),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = ShortcutType.BACK,
+                default = ToolbarAction.NewTab,
+            ),
         )
         assertEquals(
             ToolbarAction.NewTab,
-            BrowserToolbarMiddleware.mapShortcutToAction("does_not_exist"),
+            BrowserToolbarMiddleware.mapShortcutToAction(
+                key = "does_not_exist",
+                default = ToolbarAction.NewTab,
+            ),
+        )
+    }
+
+    @Test
+    fun `getBookmarkAction returns correct action based on isBookmarked flag`() {
+        assertEquals(
+            ToolbarAction.Bookmark,
+            BrowserToolbarMiddleware.getBookmarkAction(isBookmarked = false),
+        )
+        assertEquals(
+            ToolbarAction.EditBookmark,
+            BrowserToolbarMiddleware.getBookmarkAction(isBookmarked = true),
         )
     }
 

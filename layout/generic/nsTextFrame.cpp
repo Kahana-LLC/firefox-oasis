@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <type_traits>
 
 #include "MathMLTextRunFactory.h"
 #include "PresShellInlines.h"
@@ -3563,20 +3562,16 @@ static int32_t GetFrameLineNum(nsIFrame* aFrame, nsILineIterator* aLineIter) {
   if (!aLineIter) {
     return -1;
   }
-  int32_t n = aLineIter->FindLineContaining(aFrame);
-  if (n >= 0) {
-    return n;
-  }
-  // If we didn't find the frame directly, but its parent is an inline,
-  // we want the line that the inline ancestor is on.
-  nsIFrame* ancestor = aFrame->GetParent();
-  while (ancestor && ancestor->IsInlineFrame()) {
-    n = aLineIter->FindLineContaining(ancestor);
+  // If we don't find the frame directly, but its parent is an inline or other
+  // "line participant" (e.g. nsFirstLineFrame), we want the line that the
+  // inline ancestor is on.
+  do {
+    int32_t n = aLineIter->FindLineContaining(aFrame);
     if (n >= 0) {
       return n;
     }
-    ancestor = ancestor->GetParent();
-  }
+    aFrame = aFrame->GetParent();
+  } while (aFrame && aFrame->IsLineParticipant());
   return -1;
 }
 

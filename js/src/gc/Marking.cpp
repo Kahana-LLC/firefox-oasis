@@ -547,17 +547,9 @@ template void js::TraceSameZoneCrossCompartmentEdge(
 template <typename T>
 void js::TraceWeakMapKeyEdgeInternal(JSTracer* trc, Zone* weakMapZone,
                                      T** thingp, const char* name) {
-  // We can't use ShouldTraceCrossCompartment here because that assumes the
-  // source of the edge is a CCW object which could be used to delay gray
-  // marking. Instead, assert that the weak map zone is in the same marking
-  // state as the target thing's zone and therefore we can go ahead and mark it.
-#ifdef DEBUG
-  auto thing = *thingp;
-  if (trc->isMarkingTracer()) {
-    MOZ_ASSERT(weakMapZone->isGCMarking());
-    MOZ_ASSERT(weakMapZone->gcState() == thing->zone()->gcState());
-  }
-#endif
+  // We'd like to assert that the the thing's zone is currently being marked but
+  // that's not always true when tracing debugger weak maps which have keys in
+  // other compartments.
 
   // Clear expected compartment for cross-compartment edge.
   AutoClearTracingSource acts(trc);
@@ -2905,6 +2897,17 @@ void UnmarkGrayTracer::onChild(JS::GCCellPtr thing, const char* name) {
   TenuredCell& tenured = cell->asTenured();
   Zone* zone = tenured.zoneFromAnyThread();
 
+  // As well as updating the mark bits, we may need to update the color in the
+  // atom marking bitmap for symbols to record that |sourceZone| now has a black
+  // edge to |thing|.
+  if (zone->isAtomsZone() && sourceZone) {
+    GCRuntime* gc = &runtime()->gc;
+    if (tenured.is<JS::Symbol>()) {
+      JS::Symbol* symbol = tenured.as<JS::Symbol>();
+      gc->atomMarking.maybeUnmarkGrayAtomically(sourceZone, symbol);
+    }
+  }
+
   // If the cell is in a zone whose mark bits are being cleared, then it will
   // end up being marked black by GC marking.
   if (zone->isGCPreparing()) {
@@ -2930,15 +2933,6 @@ void UnmarkGrayTracer::onChild(JS::GCCellPtr thing, const char* name) {
     if (!stack.append(thing)) {
       oom = true;
     }
-  }
-
-  // As well as updating the mark bits, we may need to update the color in the
-  // atom marking bitmap to record that |zone| now has a black edge to |thing|.
-  if (zone->isAtomsZone() && sourceZone) {
-    MOZ_ASSERT(tenured.is<JS::Symbol>());
-    GCRuntime* gc = &runtime()->gc;
-    JS::Symbol* symbol = tenured.as<JS::Symbol>();
-    gc->atomMarking.maybeUnmarkGrayAtomically(sourceZone, symbol);
   }
 
   unmarkedAny = true;

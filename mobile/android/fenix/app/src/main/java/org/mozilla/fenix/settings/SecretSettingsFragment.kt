@@ -140,6 +140,12 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
+        requirePreference<SwitchPreference>(R.string.pref_key_use_scroll_data_for_dynamic_toolbar).apply {
+            isVisible = Config.channel.isNightlyOrDebug
+            isChecked = context.settings().useNewDynamicToolbarBehaviour
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreference>(R.string.pref_key_enable_address_sync).apply {
             isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().isAddressSyncEnabled
@@ -169,6 +175,11 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
+        requirePreference<SwitchPreference>(R.string.pref_key_enable_mozilla_ads_client).apply {
+            isChecked = context.settings().enableMozillaAdsClient
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreference>(R.string.pref_key_enable_discover_more_stories).apply {
             isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().enableDiscoverMoreStories
@@ -182,7 +193,6 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
         }
 
         requirePreference<SwitchPreference>(R.string.pref_key_enable_unified_trust_panel).apply {
-            isVisible = true
             isChecked = context.settings().enableUnifiedTrustPanel
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }

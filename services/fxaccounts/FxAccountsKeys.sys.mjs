@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 import { CommonUtils } from "resource://services-common/utils.sys.mjs";
 
 import { CryptoUtils } from "moz-src:///services/crypto/modules/utils.sys.mjs";
@@ -26,20 +25,6 @@ const DEPRECATED_DERIVED_KEYS_NAMES = [
   "ecosystemUserId",
   "ecosystemAnonId",
 ];
-
-const lazy = {};
-
-XPCOMUtils.defineLazyPreferenceGetter(
-  lazy,
-  "oauthEnabled",
-  "identity.fxaccounts.oauth.enabled",
-  true
-);
-
-// Is key fetching enabled/possible in the current configuration?
-function keyFetchingEnabled() {
-  return !lazy.oauthEnabled;
-}
 
 // This scope and its associated key material were used by the old Kinto webextension
 // storage backend, but has since been decommissioned. It's here entirely so that we
@@ -110,25 +95,7 @@ export class FxAccountsKeys {
         log.info("Can't get keys; user is not verified");
         return false;
       }
-
-      if (userData.scopedKeys && userData.scopedKeys.hasOwnProperty(scope)) {
-        return true;
-      }
-
-      // If we have a `keyFetchToken` we can fetch `kB`.
-      if (userData.keyFetchToken) {
-        // this is a kind of defense-in-depth for our oauth flows in case something is confused.
-        if (!keyFetchingEnabled()) {
-          log.error(
-            "Key management confusion: we should never have a keyFetchToken in oauth flows; ignoring it"
-          );
-          return false;
-        }
-        return true;
-      }
-
-      log.info("Can't get keys; no key material or tokens available");
-      return false;
+      return userData.scopedKeys && userData.scopedKeys.hasOwnProperty(scope);
     });
   }
 
@@ -146,7 +113,6 @@ export class FxAccountsKeys {
    *          k: Derived key material
    *          kty: Always "oct" for scoped keys
    *        }
-   *
    */
   async getKeyForScope(scope) {
     const { scopedKeys } = await this._loadOrFetchKeys();
@@ -308,6 +274,7 @@ export class FxAccountsKeys {
 
   /**
    * Set externally derived scoped keys in internal storage
+   *
    * @param { Object } scopedKeys: The scoped keys object derived by the oauth flow
    *
    * @return { Promise }: A promise that resolves if the keys were successfully stored,

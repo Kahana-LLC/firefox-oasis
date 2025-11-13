@@ -5,6 +5,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ContextId: "moz-src:///browser/modules/ContextId.sys.mjs",
+  DEFAULT_SECTION_LAYOUT: "resource://newtab/lib/SectionsLayoutManager.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   ObliviousHTTP: "resource://gre/modules/ObliviousHTTP.sys.mjs",
@@ -123,6 +124,8 @@ const PREF_VISIBLE_SECTIONS =
   "discoverystream.sections.interestPicker.visibleSections";
 const PREF_PRIVATE_PING_ENABLED = "telemetry.privatePing.enabled";
 const PREF_SURFACE_ID = "telemetry.surfaceId";
+const PREF_CLIENT_LAYOUT_ENABLED =
+  "discoverystream.sections.clientLayout.enabled";
 
 let getHardcodedLayout;
 
@@ -557,6 +560,7 @@ export class DiscoveryStreamFeed {
 
   /**
    * Returns true if data in the cache for a particular key has expired or is missing.
+   *
    * @param {object} cachedData data returned from cache.get()
    * @param {string} key a cache key
    * @param {string?} url for "feed" only, the URL of the feed.
@@ -873,8 +877,8 @@ export class DiscoveryStreamFeed {
   }
 
   /**
-   * buildFeedPromise - Adds the promise result to newFeeds and
-   *                    pushes a promise to newsFeedsPromises.
+   * Adds the promise result to newFeeds and pushes a promise to newsFeedsPromises.
+   *
    * @param {Object} Has both newFeedsPromises (Array) and newFeeds (Object)
    * @param {Boolean} isStartup We have different cache handling for startup.
    * @returns {Function} We return a function so we can contain
@@ -949,8 +953,9 @@ export class DiscoveryStreamFeed {
   }
 
   /**
-   * reduceFeedComponents - Filters out components with no feeds, and combines
-   *                        all feeds on this component with the feeds from other components.
+   * Filters out components with no feeds, and combines all feeds on this component
+   * with the feeds from other components.
+   *
    * @param {Boolean} isStartup We have different cache handling for startup.
    * @returns {Function} We return a function so we can contain the scope for isStartup.
    *                     Reduces feeds into promises and feed data.
@@ -965,8 +970,8 @@ export class DiscoveryStreamFeed {
   }
 
   /**
-   * buildFeedPromises - Filters out rows with no components,
-   *                     and gets us a promise for each unique feed.
+   * Filters out rows with no components, and gets us a promise for each unique feed.
+   *
    * @param {Object} layout This is the Discovery Stream layout object.
    * @param {Boolean} isStartup We have different cache handling for startup.
    * @returns {Object} An object with newFeedsPromises (Array) and newFeeds (Object),
@@ -1875,6 +1880,9 @@ export class DiscoveryStreamFeed {
         }));
 
         if (sectionsEnabled) {
+          const useClientLayout =
+            this.store.getState().Prefs.values[PREF_CLIENT_LAYOUT_ENABLED];
+
           for (const [sectionKey, sectionData] of Object.entries(
             feedResponse.feeds
           )) {
@@ -1901,6 +1909,7 @@ export class DiscoveryStreamFeed {
                   isTimeSensitive: item.isTimeSensitive,
                 });
               }
+
               sections.push({
                 sectionKey,
                 title: sectionData.title,
@@ -1912,6 +1921,19 @@ export class DiscoveryStreamFeed {
                 visible: sectionData.isInitiallyVisible,
               });
             }
+          }
+
+          if (useClientLayout || sections.some(s => !s.layout)) {
+            sections.sort((a, b) => a.receivedRank - b.receivedRank);
+
+            sections.forEach((section, index) => {
+              if (useClientLayout || !section.layout) {
+                section.layout =
+                  lazy.DEFAULT_SECTION_LAYOUT[
+                    index % lazy.DEFAULT_SECTION_LAYOUT.length
+                  ];
+              }
+            });
           }
         }
 

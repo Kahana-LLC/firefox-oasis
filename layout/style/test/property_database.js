@@ -7082,13 +7082,11 @@ var gCSSProperties = {
     initial_values: [
       "none",
       "medium",
-      "thin",
-      // XXX Should be invert, but currently currentcolor.
-      //"invert", "none medium invert"
       "currentColor",
       "none medium currentcolor",
     ],
     other_values: [
+      "thin",
       "solid",
       "medium solid",
       "green solid",
@@ -10311,6 +10309,9 @@ var gCSSProperties = {
       "calc(3em / 100% * 3em)",
       "calc(3em * (3em / 100%))",
       "calc(3em * 3em / 100%)",
+      "anchor-size()",
+      "anchor-size(--a width)",
+      "anchor-size(--a width, 10px)",
     ],
   },
   "flex-direction": {

@@ -132,7 +132,6 @@
     <string name="pref_key_show_clipboard_suggestions" translatable="false">pref_key_show_clipboard_suggestions</string>
     <string name="pref_key_search_browsing_history" translatable="false">pref_key_search_browsing_history</string>
     <string name="pref_key_search_bookmarks" translatable="false">pref_key_search_bookmarks</string>
-    <string name="pref_key_show_shortcuts_suggestions" translatable="false">pref_key_show_shortcuts_suggestions</string>
     <string name="pref_key_search_synced_tabs" translatable="false">pref_key_search_synced_tabs</string>
     <string name="pref_key_show_search_suggestions_in_private" translatable="false">pref_key_show_search_suggestions_in_private</string>
     <string name="pref_key_show_search_suggestions_in_private_onboarding" translatable="false">pref_key_show_search_suggestions_in_privateonboarding</string>
@@ -197,6 +196,7 @@
     <string name="pref_key_tab_strip_show" translatable="false">pref_key_tab_strip_show</string>
     <string name="pref_key_tab_strip_message" translatable="false">pref_key_tab_strip_message</string>
     <string name="pref_key_dynamic_toolbar" translatable="false">pref_key_dynamic_toolbar</string>
+    <string name="pref_key_use_scroll_data_for_dynamic_toolbar" translatable="false">pref_key_use_scroll_data_for_dynamic_toolbar</string>
     <string name="pref_key_swipe_toolbar_switch_tabs" translatable="false">pref_key_swipe_toolbar_switch_tabs</string>
     <string name="pref_key_swipe_toolbar_show_tabs" translatable="false">pref_key_swipe_toolbar_show_tabs</string>
     <string name="pref_key_recent_tabs" translatable="false">pref_key_recent_tabs</string>
@@ -204,8 +204,10 @@
     <string name="pref_key_customization_category_toolbar" translatable="false">pref_key_customization_category_toolbar</string>
     <string name="pref_key_customization_category_toolbar_layout" translatable="false">pref_key_customization_category_toolbar_layout</string>
     <string name="pref_key_customization_category_app_icon" translatable="false">pref_key_customization_category_app_icon</string>
-    <string name="pref_key_customization_category_toolbar_shortcut" translatable="false">pref_key_customization_category_toolbar_shortcut</string>
-    <string name="pref_key_toolbar_shortcut" translatable="false">pref_key_toolbar_shortcut</string>
+    <string name="pref_key_customization_category_toolbar_simple_shortcut" translatable="false">pref_key_customization_category_toolbar_simple_shortcut</string>
+    <string name="pref_key_customization_category_toolbar_expanded_shortcut" translatable="false">pref_key_customization_category_toolbar_expanded_shortcut</string>
+    <string name="pref_key_toolbar_simple_shortcut" translatable="false">pref_key_toolbar_simple_shortcut</string>
+    <string name="pref_key_toolbar_expanded_shortcut" translatable="false">pref_key_toolbar_expanded_shortcut</string>
 
     <!-- HTTPS Only Settings -->
     <string name="pref_key_https_only_settings" translatable="false">pref_key_https_only_settings</string>
@@ -230,8 +232,10 @@
     <string name="pref_key_tracking_protection_exceptions" translatable="false">pref_key_tracking_protection_exceptions</string>
     <string name="pref_key_tracking_protection_standard_option" translatable="false">pref_key_tracking_protection_standard_option</string>
     <string name="pref_key_tracking_protection_strict_default" translatable="false">pref_key_tracking_protection_strict_default</string>
+    <string name="pref_key_tracking_protection_strict_allow_list_subheader" translatable="false">pref_key_tracking_protection_strict_allow_list_subheader</string>
     <string name="pref_key_tracking_protection_strict_allow_list_baseline" translatable="false">pref_key_tracking_protection_strict_allow_list_baseline</string>
     <string name="pref_key_tracking_protection_strict_allow_list_convenience" translatable="false">pref_key_tracking_protection_strict_allow_list_convenience</string>
+    <string name="pref_key_tracking_protection_custom_allow_list_subheader" translatable="false">pref_key_tracking_protection_custom_allow_list_subheader</string>
     <string name="pref_key_tracking_protection_custom_allow_list_baseline" translatable="false">pref_key_tracking_protection_custom_allow_list_baseline</string>
     <string name="pref_key_tracking_protection_custom_allow_list_convenience" translatable="false">pref_key_tracking_protection_custom_allow_list_convenience</string>
     <string name="pref_key_tracking_protection_custom_option" translatable="false">pref_key_tracking_protection_custom_option</string>
@@ -433,6 +437,7 @@
     <string name="pref_key_enable_homepage_as_new_tab" translatable="false">pref_key_enable_homepage_as_new_tab</string>
     <string name="pref_key_enable_discover_more_stories" translatable="false">pref_key_enable_discover_more_stories</string>
     <string name="pref_key_enable_private_browsing_mode_redesign" translatable="false">pref_key_enable_private_browsing_mode_redesign</string>
+    <string name="pref_key_enable_mozilla_ads_client" translatable="false">pref_key_enable_mozilla_ads_client</string>
     <string name="pref_key_enable_unified_trust_panel" translatable="false">pref_key_enable_unified_trust_panel</string>
     <string name="pref_key_enable_composable_toolbar" translatable="false">pref_key_enable_composable_toolbar</string>"
     <string name="pref_key_enable_toolbar_redesign" translatable="false">pref_key_enable_toolbar_redesign</string>"

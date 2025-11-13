@@ -2,54 +2,102 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>CSS Gap Decorations: rule-outset sets longhands</title>
-<link rel="help" href="https://www.w3.org/TR/css-gaps-1/#propdef-rule-outset">
-<meta name="assert" content="rule-outset supports the full grammar '<length-percentage>'.">
+<title>CSS Gap Decorations: rule-inset shorthands</title>
+<link rel="help" href="https://www.w3.org/TR/css-gaps-1/#propdef-rule-inset">
+<meta name="assert"
+    content="rule-inset supports the full grammar '<length-percentage> <length-percentage>? /[<length-percentage> <length-percentage>?]?'.">
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
 <script src="/css/support/shorthand-testcommon.js"></script>
 </head>
 <body>
-<script>
-const rule_properties = {
-    'rule-outset': ['column-rule-outset',
-                    'row-rule-outset'],
-};
+    <script>
+        const rule_properties = {
+            'column-rule-inset': ['column-rule-edge-start-inset', 'column-rule-edge-end-inset',
+                'column-rule-interior-start-inset', 'column-rule-interior-end-inset'],
+            'row-rule-inset': ['row-rule-edge-start-inset', 'row-rule-edge-end-inset',
+                'row-rule-interior-start-inset', 'row-rule-interior-end-inset']
+        };
+        const testCases = [
+            {
+                input: '0px',
+                expected: {
+                    ruleEdgeStartInset: '0px',
+                    ruleEdgeEndInset: '0px',
+                    ruleInteriorStartInset: '0px',
+                    ruleInteriorEndInset: '0px',
+                }
+            },
+            {
+                input: '10px',
+                expected: {
+                    ruleEdgeStartInset: '10px',
+                    ruleEdgeEndInset: '10px',
+                    ruleInteriorStartInset: '10px',
+                    ruleInteriorEndInset: '10px'
+                }
+            },
+            {
+                input: '50%',
+                expected: {
+                    ruleEdgeStartInset: '50%',
+                    ruleEdgeEndInset: '50%',
+                    ruleInteriorStartInset: '50%',
+                    ruleInteriorEndInset: '50%',
+                }
+            },
+            {
+                input: '10px 20px',
+                expected: {
+                    ruleEdgeStartInset: '10px',
+                    ruleEdgeEndInset: '20px',
+                    ruleInteriorStartInset: '10px',
+                    ruleInteriorEndInset: '20px',
+                }
+            },
+            {
+                input: '10px 20px / 30px',
+                expected: {
+                    ruleEdgeStartInset: '10px',
+                    ruleEdgeEndInset: '20px',
+                    ruleInteriorStartInset: '30px',
+                    ruleInteriorEndInset: '30px',
+                }
+            },
+            {
+                input: '10px / 20px 30px',
+                expected: {
+                    ruleEdgeStartInset: '10px',
+                    ruleEdgeEndInset: '10px',
+                    ruleInteriorStartInset: '20px',
+                    ruleInteriorEndInset: '30px',
+                }
+            },
+            {
+                input: '10px 20px / 30px 40px',
+                expected: {
+                    ruleEdgeStartInset: '10px',
+                    ruleEdgeEndInset: '20px',
+                    ruleInteriorStartInset: '30px',
+                    ruleInteriorEndInset: '40px',
+                }
+            },
+        ];
 
-const testCases = [
-    {
-        input: '0px',
-        expected: {
-            column: '0px',
-            row: '0px'
-        }
-    },
-    {
-        input: '10px',
-        expected: {
-            column: '10px',
-            row: '10px'
-        }
-    },
-    {
-        input: '50%',
-        expected: {
-            column: '50%',
-            row: '50%'
-        }
-    },
-  ];
 
-for(rule_property in rule_properties) {
-    const [column, row] = rule_properties[rule_property];
+        for (rule_property in rule_properties) {
+            const test_cases = testCases;
 
-    for (const { input, expected } of testCases) {
-            test_shorthand_value(rule_property, input, {
-                [column]: expected.column,
-                [row]: expected.row
-            });
-    }
-}
-</script>
+            for (const { input, expected } of test_cases) {
+                const [ruleEdgeStartInset, ruleEdgeEndInset, ruleInteriorStartInset, ruleInteriorEndInset] = rule_properties[rule_property];
+                test_shorthand_value(rule_property, input, {
+                    [ruleEdgeStartInset]: expected.ruleEdgeStartInset,
+                    [ruleEdgeEndInset]: expected.ruleEdgeEndInset,
+                    [ruleInteriorStartInset]: expected.ruleInteriorStartInset,
+                    [ruleInteriorEndInset]: expected.ruleInteriorEndInset,
+                });
+            }
+        }
+    </script>
 </body>
 </html>

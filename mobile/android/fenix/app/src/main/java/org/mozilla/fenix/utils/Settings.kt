@@ -60,7 +60,6 @@ import org.mozilla.fenix.nimbus.CookieBannersSection
 import org.mozilla.fenix.nimbus.DefaultBrowserPrompt
 import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.nimbus.HomeScreenSection
-import org.mozilla.fenix.nimbus.Mr2022Section
 import org.mozilla.fenix.nimbus.QueryParameterStrippingSection
 import org.mozilla.fenix.nimbus.QueryParameterStrippingSection.QUERY_PARAMETER_STRIPPING
 import org.mozilla.fenix.nimbus.QueryParameterStrippingSection.QUERY_PARAMETER_STRIPPING_ALLOW_LIST
@@ -204,11 +203,20 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     )
 
     /**
-     * Indicates what toolbar shortcut key is currently selected.
+     * Indicates what simple toolbar shortcut key is currently selected.
      */
-    var toolbarShortcutKey: String by stringPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_toolbar_shortcut),
+    var toolbarSimpleShortcutKey: String by stringPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_toolbar_simple_shortcut),
         default = { "new_tab" },
+        persistDefaultIfNotExists = true,
+    )
+
+    /**
+     * Indicates what expanded toolbar shortcut key is currently selected.
+     */
+    var toolbarExpandedShortcutKey: String by stringPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_toolbar_expanded_shortcut),
+        default = { "bookmark" },
         persistDefaultIfNotExists = true,
     )
 
@@ -241,6 +249,12 @@ class Settings(private val appContext: Context) : PreferencesHolder {
      */
     val collections: Boolean
         get() = FxNimbus.features.homescreen.value().sectionsEnabled[HomeScreenSection.COLLECTIONS] == true
+
+    /**
+     * Indicates whether or not the Firefox Japan Guide default site should be shown.
+     */
+    val showFirefoxJpGuideDefaultSite: Boolean
+        get() = FxNimbus.features.firefoxJpGuideDefaultSite.value().enabled
 
     /**
      * Indicates whether or not the homepage header should be shown.
@@ -452,10 +466,9 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     /**
      * Indicates if the wallpaper onboarding dialog should be shown.
      */
-    var showWallpaperOnboarding by lazyFeatureFlagPreference(
+    var showWallpaperOnboarding by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_wallpapers_onboarding),
-        featureFlag = true,
-        default = { mr2022Sections[Mr2022Section.WALLPAPERS_SELECTION_TOOL] == true },
+        default = true,
     )
 
     var openLinksInAPrivateTab by booleanPreference(
@@ -714,14 +727,6 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     val shouldShowBookmarkSuggestions by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_search_bookmarks),
         default = true,
-    )
-
-    /**
-     * Indicates if the user has enabled shortcuts in Firefox Suggest.
-     */
-    val shortcutSuggestionsEnabled by booleanPreference(
-        appContext.getPreferenceKey(R.string.pref_key_show_shortcuts_suggestions),
-        default = false,
     )
 
     val shouldShowSyncedTabsSuggestions by booleanPreference(
@@ -1186,9 +1191,6 @@ class Settings(private val appContext: Context) : PreferencesHolder {
         default = true,
     )
 
-    val enabledTotalCookieProtection: Boolean
-        get() = mr2022Sections[Mr2022Section.TCP_FEATURE] == true
-
     /**
      * Indicates if the cookie banners CRF should be shown.
      */
@@ -1210,11 +1212,7 @@ class Settings(private val appContext: Context) : PreferencesHolder {
 
     val blockCookiesSelectionInCustomTrackingProtection by stringPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_tracking_protection_custom_cookies_select),
-        default = if (enabledTotalCookieProtection) {
-            appContext.getString(R.string.total_protection)
-        } else {
-            appContext.getString(R.string.social)
-        },
+        default = appContext.getString(R.string.total_protection),
     )
 
     val blockTrackingContentInCustomTrackingProtection by booleanPreference(
@@ -1916,6 +1914,10 @@ class Settings(private val appContext: Context) : PreferencesHolder {
         default = true,
     )
 
+    var useNewDynamicToolbarBehaviour by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_use_scroll_data_for_dynamic_toolbar),
+        default = false,
+    )
     var isSwipeToolbarToSwitchTabsEnabled by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_swipe_toolbar_switch_tabs),
         default = true,
@@ -1962,10 +1964,6 @@ class Settings(private val appContext: Context) : PreferencesHolder {
         val featureGate = RegionAddressFeatureGate(locale, debugRepository)
         return featureGate.isAddressFeatureEnabled()
     }
-
-    private val mr2022Sections: Map<Mr2022Section, Boolean>
-        get() =
-            FxNimbus.features.mr2022.value().sectionsEnabled
 
     private val cookieBannersSection: Map<CookieBannersSection, Int>
         get() =
@@ -2273,6 +2271,14 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     var enablePrivateBrowsingModeRedesign by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_private_browsing_mode_redesign),
         default = FeatureFlags.PRIVATE_BROWSING_MODE_REDESIGN,
+    )
+
+    /**
+     * Indicates if the Mozilla Ads Client is enabled.
+     */
+    var enableMozillaAdsClient by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_enable_mozilla_ads_client),
+        default = FeatureFlags.MOZILLA_ADS_CLIENT_ENABLED,
     )
 
     /**

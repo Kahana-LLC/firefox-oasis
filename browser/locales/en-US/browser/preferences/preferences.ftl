@@ -744,8 +744,9 @@ choose-bookmark =
 
 ## Home Section - Oasis Home Content Customization
 
+home-prefs-content-header =
+    .label = { -firefox-home-brand-name }
 home-prefs-content-header2 = { -firefox-home-brand-name } Content
-home-prefs-content-header3 = { -firefox-home-brand-name }
 home-prefs-content-description2 = Choose what content you want on your { -firefox-home-brand-name } screen.
 
 home-prefs-search-header =
@@ -787,9 +788,13 @@ home-prefs-weather-header =
 home-prefs-weather-description = Today’s forecast at a glance
 home-prefs-weather-learn-more-link = Learn more
 
-home-prefs-trending-search-header =
-    .label = Trending searches
-home-prefs-trending-search-description = Popular and frequently searched topics
+# Lists is a widget on New Tab, similar to a to-do widget
+home-prefs-lists-header =
+    .label = Lists
+
+# Timer is a widget on New Tab, similar to the Pomodoro timer.
+home-prefs-timer-header =
+    .label = Timer
 
 # "Support" here means to help sustain or contribute to something, especially through funding or sponsorship.
 home-prefs-support-firefox-header =
@@ -1218,8 +1223,14 @@ history-remember-option-never =
 history-remember-option-custom =
     .label = Use custom settings for history
 
-history-remember-description = { -brand-short-name } will remember your browsing, download, form, and search history.
-history-dontremember-description = { -brand-short-name } will use the same settings as private browsing, and will not remember any history as you browse the Web.
+history-remember-description2 =
+    .description ={ -brand-short-name } will remember your browsing, download, form, and search history.
+
+history-dontremember-description2 =
+    .description = { -brand-short-name } will use the same settings as private browsing, and will not remember any history as you browse the Web.
+
+history-custom-description =
+    .description = { -brand-short-name } will use custom settings for your browsing, download, form and search history.
 
 history-private-browsing-permanent =
     .label = Always use private browsing mode

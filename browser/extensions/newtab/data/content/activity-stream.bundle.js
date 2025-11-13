@@ -2553,6 +2553,7 @@ const PREF_SYSTEM_STORIES_ENABLED = "feeds.system.topstories";
  * A custom react hook that sets up an IntersectionObserver to observe a single
  * or list of elements and triggers a callback when the element comes into the viewport
  * Note: The refs used should be an array type
+ *
  * @function useIntersectionObserver
  * @param {function} callback - The function to call when an element comes into the viewport
  * @param {Object} options - Options object passed to Intersection Observer:
@@ -2560,9 +2561,6 @@ const PREF_SYSTEM_STORIES_ENABLED = "feeds.system.topstories";
  * @param {Boolean} [isSingle = false] Boolean if the elements are an array or single element
  *
  * @returns {React.MutableRefObject} a ref containing an array of elements or single element
- *
- *
- *
  */
 function useIntersectionObserver(callback, threshold = 0.3) {
   const elementsRef = (0,external_React_namespaceObject.useRef)([]);
@@ -2593,6 +2591,7 @@ function useIntersectionObserver(callback, threshold = 0.3) {
 
 /**
  * Determines which column layout is active based on the screen width
+ *
  * @param {number} screenWidth - The current window width (in pixels)
  * @returns {string} The active column layout (e.g. "col-3", "col-2", "col-1")
  */
@@ -3460,6 +3459,7 @@ const PREF_FAVICONS_ENABLED = "discoverystream.publisherFavicon.enabled";
 
 /**
  * READ TIME FROM WORD COUNT
+ *
  * @param {int} wordCount number of words in an article
  * @returns {int} number of words per minute in minutes
  */
@@ -9754,6 +9754,7 @@ function topSiteIconType(link) {
 
 /**
  * Iterates through TopSites and counts types of images.
+ *
  * @param acc Accumulator for reducer.
  * @param topsite Entry in TopSites.
  */
@@ -13947,7 +13948,8 @@ function SectionsMgmtPanel_extends() { return SectionsMgmtPanel_extends = Object
 
 function SectionsMgmtPanel({
   exitEventFired,
-  pocketEnabled
+  pocketEnabled,
+  onSubpanelToggle
 }) {
   const [showPanel, setShowPanel] = (0,external_React_namespaceObject.useState)(false); // State management with useState
   const {
@@ -14066,6 +14068,13 @@ function SectionsMgmtPanel({
       setShowPanel(false);
     }
   }, [exitEventFired]);
+
+  // Notify parent menu when subpanel opens/closes
+  (0,external_React_namespaceObject.useEffect)(() => {
+    if (onSubpanelToggle) {
+      onSubpanelToggle(showPanel);
+    }
+  }, [showPanel, onSubpanelToggle]);
   const togglePanel = () => {
     setShowPanel(prevShowPanel => !prevShowPanel);
 
@@ -14385,6 +14394,11 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       activeCategory: event.target.id
     });
     this.handleUserEvent(actionTypes.WALLPAPER_CATEGORY_CLICK, event.target.id);
+
+    // Notify parent menu when subpanel opens
+    if (this.props.onSubpanelToggle) {
+      this.props.onSubpanelToggle(true);
+    }
     let fluent_id;
     switch (event.target.id) {
       case "abstracts":
@@ -14482,6 +14496,11 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     this.setState({
       activeCategory: null
     }, () => {
+      // Notify parent menu when subpanel closes
+      if (this.props.onSubpanelToggle) {
+        this.props.onSubpanelToggle(false);
+      }
+
       // Wait for the category grid to be back in the DOM
       requestAnimationFrame(() => {
         this.focusCategory(this.state.focusedCategoryIndex);
@@ -14862,7 +14881,8 @@ class ContentSection extends (external_React_default()).PureComponent {
       activeWallpaper,
       setPref,
       mayHaveTopicSections,
-      exitEventFired
+      exitEventFired,
+      onSubpanelToggle
     } = this.props;
     const {
       topSitesEnabled,
@@ -14883,7 +14903,8 @@ class ContentSection extends (external_React_default()).PureComponent {
     }, /*#__PURE__*/external_React_default().createElement(WallpaperCategories, {
       setPref: setPref,
       activeWallpaper: activeWallpaper,
-      exitEventFired: exitEventFired
+      exitEventFired: exitEventFired,
+      onSubpanelToggle: onSubpanelToggle
     })), !mayHaveWidgets && /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
@@ -15041,7 +15062,8 @@ class ContentSection extends (external_React_default()).PureComponent {
       "data-l10n-id": "newtab-custom-stories-personalized-checkbox-label"
     })), mayHaveTopicSections && /*#__PURE__*/external_React_default().createElement(SectionsMgmtPanel, {
       exitEventFired: exitEventFired,
-      pocketEnabled: pocketEnabled
+      pocketEnabled: pocketEnabled,
+      onSubpanelToggle: onSubpanelToggle
     }))))))), /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
@@ -15068,9 +15090,16 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
     super(props);
     this.onEntered = this.onEntered.bind(this);
     this.onExited = this.onExited.bind(this);
+    this.onSubpanelToggle = this.onSubpanelToggle.bind(this);
     this.state = {
-      exitEventFired: false
+      exitEventFired: false,
+      subpanelOpen: false
     };
+  }
+  onSubpanelToggle(isOpen) {
+    this.setState({
+      subpanelOpen: isOpen
+    });
   }
   onEntered() {
     this.setState({
@@ -15104,12 +15133,12 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
         }
       },
       ref: c => this.openButton = c
-    }, /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("img", {
+    }, /*#__PURE__*/external_React_default().createElement("label", {
+      "data-l10n-id": "newtab-customize-panel-icon-button-label"
+    }), /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("img", {
       role: "presentation",
       src: "chrome://global/skin/icons/edit-outline.svg"
-    })), /*#__PURE__*/external_React_default().createElement("label", {
-      "data-l10n-id": "newtab-customize-panel-icon-button-label"
-    }))), /*#__PURE__*/external_React_default().createElement(external_ReactTransitionGroup_namespaceObject.CSSTransition, {
+    })))), /*#__PURE__*/external_React_default().createElement(external_ReactTransitionGroup_namespaceObject.CSSTransition, {
       timeout: 250,
       classNames: "customize-animate",
       in: this.props.showing,
@@ -15117,7 +15146,9 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       onExited: this.onExited,
       appear: true
     }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "customize-menu",
+      className: "customize-menu-animate-wrapper"
+    }, /*#__PURE__*/external_React_default().createElement("div", {
+      className: `customize-menu ${this.state.subpanelOpen ? "subpanel-open" : ""}`,
       role: "dialog",
       "data-l10n-id": "newtab-settings-dialog-label"
     }, /*#__PURE__*/external_React_default().createElement("div", {
@@ -15145,8 +15176,9 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       mayHaveTimerWidget: this.props.mayHaveTimerWidget,
       mayHaveListsWidget: this.props.mayHaveListsWidget,
       dispatch: this.props.dispatch,
-      exitEventFired: this.state.exitEventFired
-    }))));
+      exitEventFired: this.state.exitEventFired,
+      onSubpanelToggle: this.onSubpanelToggle
+    })))));
   }
 }
 const CustomizeMenu = (0,external_ReactRedux_namespaceObject.connect)(state => ({

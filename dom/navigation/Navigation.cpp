@@ -1139,13 +1139,27 @@ nsresult Navigation::FireEvent(const nsAString& aName) {
 
 static void ExtractErrorInformation(JSContext* aCx,
                                     JS::Handle<JS::Value> aError,
-                                    ErrorEventInit& aErrorEventInitDict) {
+                                    ErrorEventInit& aErrorEventInitDict,
+                                    NavigateEvent* aEvent) {
   nsContentUtils::ExtractErrorValues(
       aCx, aError, aErrorEventInitDict.mFilename, &aErrorEventInitDict.mLineno,
       &aErrorEventInitDict.mColno, aErrorEventInitDict.mMessage);
   aErrorEventInitDict.mError = aError;
   aErrorEventInitDict.mBubbles = false;
   aErrorEventInitDict.mCancelable = false;
+
+  if (!aErrorEventInitDict.mFilename.IsEmpty()) {
+    return;
+  }
+
+  RefPtr document = aEvent->GetAssociatedDocument();
+  if (!document) {
+    return;
+  }
+
+  if (auto* uri = document->GetDocumentURI()) {
+    uri->GetSpec(aErrorEventInitDict.mFilename);
+  }
 }
 
 nsresult Navigation::FireErrorEvent(const nsAString& aName,
@@ -1227,9 +1241,7 @@ struct NavigationWaitForAllScope final : public nsISupports,
     // 5. Abort event given reason.
     if (AutoJSAPI jsapi; !NS_WARN_IF(!jsapi.Init(mEvent->GetParentObject()))) {
       RefPtr navigation = mNavigation;
-      navigation->AbortNavigateEvent(
-          jsapi.cx(), event, aRejectionReason,
-          /*aIsCalledFromNavigateFiringFailureSteps=*/true);
+      navigation->AbortNavigateEvent(jsapi.cx(), event, aRejectionReason);
     }
   }
   // https://html.spec.whatwg.org/#commit-a-navigate-event
@@ -1811,28 +1823,21 @@ void Navigation::AbortOngoingNavigation(JSContext* aCx,
   }
 
   // Step 7
-  AbortNavigateEvent(aCx, event, error,
-                     /*aIsCalledFromNavigateFiringFailureSteps=*/false);
+  AbortNavigateEvent(aCx, event, error);
 }
 
 // https://html.spec.whatwg.org/#abort-a-navigateevent
-void Navigation::AbortNavigateEvent(
-    JSContext* aCx, NavigateEvent* aEvent, JS::Handle<JS::Value> aReason,
-    bool aIsCalledFromNavigateFiringFailureSteps) {
+void Navigation::AbortNavigateEvent(JSContext* aCx, NavigateEvent* aEvent,
+                                    JS::Handle<JS::Value> aReason) {
   // 1. Let navigation be event's relevant global object's navigation API.
   // Omitted since this is called from a Navigation object.
 
   // 2. Signal abort on event's abort controller given reason.
-  if (!aIsCalledFromNavigateFiringFailureSteps ||
-      aEvent->InterceptionState() ==
-          NavigateEvent::InterceptionState::Intercepted) {
-    // https://github.com/whatwg/html/issues/11831
-    aEvent->AbortController()->Abort(aCx, aReason);
-  }
+  aEvent->AbortController()->Abort(aCx, aReason);
 
   // 3. Let errorInfo be the result of extracting error information from reason.
   RootedDictionary<ErrorEventInit> init(aCx);
-  ExtractErrorInformation(aCx, aReason, init);
+  ExtractErrorInformation(aCx, aReason, init, aEvent);
 
   // 4. Set navigation's ongoing navigate event to null.
   mOngoingNavigateEvent = nullptr;

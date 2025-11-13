@@ -3,6 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+const { CustomKeys } = ChromeUtils.importESModule(
+  "resource:///modules/CustomKeys.sys.mjs"
+);
+
 let _resolveDelayedStartup;
 var delayedStartupPromise = new Promise(resolve => {
   _resolveDelayedStartup = resolve;
@@ -154,6 +158,10 @@ var gBrowserInit = {
 
     gBrowser = new window.Tabbrowser();
     gBrowser.init();
+    gURLBar.addGBrowserListeners();
+    if (Services.prefs.getBoolPref("browser.search.widget.new", false)) {
+      document.getElementById("searchbar-new")?.addGBrowserListeners();
+    }
 
     BrowserUtils.callModulesFromCategory(
       { categoryName: "browser-window-domcontentloaded" },
@@ -163,13 +171,6 @@ var gBrowserInit = {
     FirefoxViewHandler.init();
 
     gURLBar.initPlaceHolder();
-
-    if (Services.prefs.getBoolPref("browser.search.widget.new", false)) {
-      new UrlbarInput({
-        textbox: document.getElementById("searchbar-new"),
-        sapName: "searchbar",
-      });
-    }
 
     // Hack to ensure that the various initial pages favicon is loaded
     // instantaneously, to avoid flickering and improve perceived performance.
@@ -268,6 +269,7 @@ var gBrowserInit = {
     if (gToolbarKeyNavEnabled) {
       ToolbarKeyboardNavigator.init();
     }
+    CustomKeys.initWindow(window);
 
     // Update UI if browser is under remote control.
     gRemoteControl.updateVisualCue();
@@ -428,6 +430,9 @@ var gBrowserInit = {
 
     BookmarkingUI.init();
     gURLBar.delayedStartupInit();
+    if (Services.prefs.getBoolPref("browser.search.widget.new", false)) {
+      document.getElementById("searchbar-new")?.delayedStartupInit();
+    }
     gProtectionsHandler.init();
     gTrustPanelHandler.init();
 
@@ -1083,6 +1088,7 @@ var gBrowserInit = {
     if (gToolbarKeyNavEnabled) {
       ToolbarKeyboardNavigator.uninit();
     }
+    CustomKeys.uninitWindow(window);
 
     // Bug 1952900 to allow switching to unload category without leaking
     ChromeUtils.importESModule(

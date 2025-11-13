@@ -50,6 +50,8 @@ export default class BackupSettings extends MozLitElement {
   static get queries() {
     return {
       scheduledBackupsButtonEl: "#backup-toggle-scheduled-button",
+      archiveSectionEl: "#scheduled-backups",
+      restoreSectionEl: "#restore-from-backup",
       triggerBackupButtonEl: "#backup-trigger-button",
       changePasswordButtonEl: "#backup-change-password-button",
       disableBackupEncryptionEl: "disable-backup-encryption",
@@ -75,6 +77,16 @@ export default class BackupSettings extends MozLitElement {
       backupErrorBarEl: "#create-backup-error",
       backupInProgressMessageBarEl: "#backup-in-progress-message",
     };
+  }
+
+  get dialogs() {
+    return [
+      this.disableBackupEncryptionDialogEl,
+      this.enableBackupEncryptionDialogEl,
+      this.turnOnScheduledBackupsDialogEl,
+      this.turnOffScheduledBackupsDialogEl,
+      this.restoreFromBackupDialogEl,
+    ];
   }
 
   /**
@@ -154,16 +166,8 @@ export default class BackupSettings extends MozLitElement {
   handleEvent(event) {
     switch (event.type) {
       case "dialogCancel":
-        if (this.turnOnScheduledBackupsDialogEl.open) {
-          this.turnOnScheduledBackupsDialogEl.close();
-        } else if (this.turnOffScheduledBackupsDialogEl.open) {
-          this.turnOffScheduledBackupsDialogEl.close();
-        } else if (this.restoreFromBackupDialogEl.open) {
-          this.restoreFromBackupDialogEl.close();
-        } else if (this.disableBackupEncryptionDialogEl.open) {
-          this.disableBackupEncryptionDialogEl.close();
-        } else if (this.enableBackupEncryptionDialogEl.open) {
-          this.enableBackupEncryptionDialogEl.close();
+        for (let dialog of this.dialogs) {
+          dialog?.close();
         }
         break;
       case "restoreFromBackupConfirm":
