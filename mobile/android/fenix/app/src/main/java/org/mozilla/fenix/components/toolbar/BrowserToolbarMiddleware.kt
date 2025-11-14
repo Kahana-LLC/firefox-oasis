@@ -774,7 +774,7 @@ class BrowserToolbarMiddleware(
         val isTallWindow = environment?.fragment?.isTallWindow() == true
         val tabStripEnabled = settings.isTabStripEnabled
         val shouldUseExpandedToolbar = settings.shouldUseExpandedToolbar
-        val useCustomPrimary = settings.shouldShowToolbarCustomization && !shouldUseExpandedToolbar
+        val useCustomPrimary = settings.shouldShowToolbarCustomization
         val primarySlotAction = mapShortcutToAction(
             settings.toolbarSimpleShortcutKey,
             ToolbarAction.NewTab,
@@ -818,7 +818,7 @@ class BrowserToolbarMiddleware(
         val isWideWindow = environment.fragment.isWideWindow()
         val isTallWindow = environment.fragment.isTallWindow()
         val shouldUseExpandedToolbar = settings.shouldUseExpandedToolbar
-        val useCustomPrimary = settings.shouldShowToolbarCustomization && shouldUseExpandedToolbar
+        val useCustomPrimary = settings.shouldShowToolbarCustomization
         val primarySlotAction = mapShortcutToAction(
             settings.toolbarExpandedShortcutKey,
             getBookmarkAction(isBookmarked),
@@ -1025,9 +1025,13 @@ class BrowserToolbarMiddleware(
         browserScreenStore.observeWhileActive {
             distinctUntilChangedBy { it.pageTranslationStatus }
             .collect {
-                updateEndBrowserActions(context)
                 updateEndPageActions(context)
-                updateNavigationActions(context)
+                if (settings.toolbarSimpleShortcutKey == ShortcutType.TRANSLATE) {
+                    updateEndBrowserActions(context)
+                }
+                if (settings.toolbarExpandedShortcutKey == ShortcutType.TRANSLATE) {
+                    updateNavigationActions(context)
+                }
             }
         }
     }
