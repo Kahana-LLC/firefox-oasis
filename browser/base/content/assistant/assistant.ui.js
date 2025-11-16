@@ -1,5 +1,8 @@
 import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
 
+window.__OASIS_DEBUG__ = true;
+console.debug('[DEBUG] assistant.ui.js loaded');
+
 // Import voice input service - it will be bundled
 let voiceInputService = null;
 try {
@@ -39,6 +42,543 @@ const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
 
+// Theme setup (primary accent: #2c532d)
+const THEME = {
+  primary: "#2c532d",
+  primaryText: "#ffffff",
+  assistantBg: "#F3FAF5",
+  surface: "#F0F6F1",
+  border: "#E5E7EB",
+  softText: "#6B7280",
+  hardText: "#111827"
+};
+
+function applyTheme() {
+  const root = document.documentElement;
+  root.style.setProperty("--oasis-primary", THEME.primary);
+  root.style.setProperty("--oasis-primary-text", THEME.primaryText);
+  root.style.setProperty("--oasis-assistant-card-bg", THEME.assistantBg);
+  root.style.setProperty("--oasis-surface", THEME.surface);
+  root.style.setProperty("--oasis-border", THEME.border);
+  root.style.setProperty("--oasis-soft-text", THEME.softText);
+  root.style.setProperty("--oasis-hard-text", THEME.hardText);
+}
+applyTheme();
+
+// Utility: shade a hex color by percentage (negative to darken)
+function shadeColor(hex, percent) {
+  try {
+    let h = hex.replace('#','');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const r = parseInt(h.slice(0,2), 16);
+    const g = parseInt(h.slice(2,4), 16);
+    const b = parseInt(h.slice(4,6), 16);
+    const f = 1 + (percent / 100);
+    const toHex = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+    return `#${toHex(r * f)}${toHex(g * f)}${toHex(b * f)}`;
+  } catch {
+    return hex;
+  }
+}
+
+// Enhance the main log area into a card-based feed container
+let feed = null;
+let tasksPanel = null;
+let tasksState = [];
+let header = null;
+// Make the whole assistant UI float and draggable
+function enableFloatingPanel() {
+  const main = document.querySelector("main");
+  if (!main || main.dataset.floating === "1") return;
+
+  // Create overlay container
+  const overlay = document.createElement("div");
+  overlay.id = "assistantOverlay";
+  overlay.style.cssText = `
+    position: fixed;
+    top: 96px;
+    right: 24px;
+    width: min(90vw, 760px);
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--oasis-surface);
+    border: 1px solid var(--oasis-border);
+    border-radius: 14px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+    overflow: hidden;
+    z-index: 2147483646;
+  `;
+
+  // Mount into document and move the existing main inside
+  document.body.appendChild(overlay);
+  overlay.appendChild(main);
+  main.dataset.floating = "1";
+  // Tidy main within overlay
+  main.style.height = "100%";
+  main.style.display = "flex";
+  main.style.flexDirection = "column";
+  main.style.margin = "0";
+  main.style.width = "100%";
+
+  // Make log scrollable with reasonable height
+  const logEl = document.getElementById("log");
+  if (logEl) {
+    logEl.style.flex = "1 1 auto";
+    logEl.style.height = "auto";
+    logEl.style.overflow = "auto";
+  }
+
+  // Restore previous position if any
+  try {
+    const saved = JSON.parse(localStorage.getItem("assistantOverlayPos") || "{}");
+    if (Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      overlay.style.left = `${saved.left}px`;
+      overlay.style.top = `${saved.top}px`;
+      overlay.style.right = "auto";
+    }
+  } catch {}
+
+  // Restore saved size, if available
+  try {
+    const savedSize = JSON.parse(localStorage.getItem("assistantOverlaySize") || "{}");
+    if (Number.isFinite(savedSize.width)) overlay.style.width = `${savedSize.width}px`;
+    if (Number.isFinite(savedSize.height)) overlay.style.height = `${savedSize.height}px`;
+  } catch {}
+
+  // Dragging support (use header if available, fall back to overlay)
+  const getHandle = () => document.getElementById("oasis-header") || overlay;
+  let handle = getHandle();
+  if (handle) handle.style.cursor = "grab";
+
+  let dragging = false;
+  let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const onDown = (e) => {
+    // Disable dragging in fullscreen mode
+    if (overlay.dataset.fullscreen === "1") return;
+    // Ignore clicks on interactive header buttons
+    if (e.target.closest && e.target.closest("button")) return;
+    dragging = true;
+    const rect = overlay.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    const touch = e.touches && e.touches[0];
+    startX = touch ? touch.clientX : e.clientX;
+    startY = touch ? touch.clientY : e.clientY;
+    overlay.style.right = "auto";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
+    if (handle) handle.style.cursor = "grabbing";
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    const touch = e.touches && e.touches[0];
+    const x = touch ? touch.clientX : e.clientX;
+    const y = touch ? touch.clientY : e.clientY;
+    if (x == null || y == null) return;
+    const dx = x - startX;
+    const dy = y - startY;
+    const left = clamp(startLeft + dx, 0, window.innerWidth - overlay.offsetWidth);
+    const top = clamp(startTop + dy, 0, window.innerHeight - Math.min(overlay.offsetHeight, window.innerHeight));
+    overlay.style.left = `${left}px`;
+    overlay.style.top = `${top}px`;
+    overlay.style.right = "auto";
+    e.preventDefault();
+  };
+  const onUp = () => {
+    dragging = false;
+    if (handle) handle.style.cursor = "grab";
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onUp);
+    try {
+      const rect = overlay.getBoundingClientRect();
+      localStorage.setItem("assistantOverlayPos", JSON.stringify({ left: rect.left, top: rect.top }));
+    } catch {}
+  };
+
+  // Attach listeners
+  handle.addEventListener("mousedown", onDown);
+  handle.addEventListener("touchstart", onDown, { passive: true });
+
+  // Double-click header to toggle compact/expanded width
+  handle.addEventListener("dblclick", () => {
+    if (overlay.dataset.fullscreen === "1") return; // disable in fullscreen
+    const current = overlay.getBoundingClientRect().width;
+    const expanded = Math.min(window.innerWidth * 0.9, 760);
+    const compact = 420;
+    const target = current < (expanded - 40) ? expanded : compact;
+    overlay.style.width = `${target}px`;
+    try { localStorage.setItem("assistantOverlaySize", JSON.stringify({ width: target, height: overlay.getBoundingClientRect().height })); } catch {}
+  });
+
+  // Resize handle (bottom-right corner)
+  const grip = document.createElement("div");
+  grip.title = "Drag to resize";
+  grip.style.cssText = `
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 14px; height: 14px;
+    border-right: 2px solid var(--oasis-border);
+    border-bottom: 2px solid var(--oasis-border);
+    opacity: .8;
+    cursor: nwse-resize;
+  `;
+  overlay.appendChild(grip);
+
+  let resizing = false;
+  let startW = 0, startH = 0;
+  const onResizeStart = (e) => {
+    // Disable resizing in fullscreen mode
+    if (overlay.dataset.fullscreen === "1") return;
+    resizing = true;
+    const rect = overlay.getBoundingClientRect();
+    startW = rect.width;
+    startH = rect.height;
+    const touch = e.touches && e.touches[0];
+    startX = touch ? touch.clientX : e.clientX;
+    startY = touch ? touch.clientY : e.clientY;
+    document.addEventListener("mousemove", onResizing);
+    document.addEventListener("mouseup", onResizeEnd);
+    document.addEventListener("touchmove", onResizing, { passive: false });
+    document.addEventListener("touchend", onResizeEnd);
+    e.preventDefault();
+  };
+  const onResizing = (e) => {
+    if (!resizing) return;
+    const touch = e.touches && e.touches[0];
+    const x = touch ? touch.clientX : e.clientX;
+    const y = touch ? touch.clientY : e.clientY;
+    const dx = x - startX;
+    const dy = y - startY;
+    const minW = 360, minH = 240;
+    const maxW = Math.floor(window.innerWidth * 0.95);
+    const maxH = Math.floor(window.innerHeight * 0.95);
+    const w = clamp(startW + dx, minW, maxW);
+    const h = clamp(startH + dy, minH, maxH);
+    overlay.style.width = `${w}px`;
+    overlay.style.height = `${h}px`;
+    e.preventDefault();
+  };
+  const onResizeEnd = () => {
+    resizing = false;
+    document.removeEventListener("mousemove", onResizing);
+    document.removeEventListener("mouseup", onResizeEnd);
+    document.removeEventListener("touchmove", onResizing);
+    document.removeEventListener("touchend", onResizeEnd);
+    try {
+      const rect = overlay.getBoundingClientRect();
+      localStorage.setItem("assistantOverlaySize", JSON.stringify({ width: rect.width, height: rect.height }));
+    } catch {}
+  };
+
+  // Toggle fullscreen when clicking the expand button in the header
+  const expandBtn = document.querySelector('#oasis-header button[aria-label="Expand"]');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      const isFull = overlay.dataset.fullscreen === "1";
+      if (!isFull) {
+        overlay.dataset.fullscreen = "1";
+        // Cover the entire viewport with a dark scrim
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.right = '0';
+        overlay.style.bottom = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(17,24,39,0.92)'; // near-black
+        overlay.style.border = '0';
+        overlay.style.borderRadius = '0';
+        overlay.style.boxShadow = 'none';
+        overlay.style.zIndex = '2147483646';
+
+        // Center the assistant card inside the scrim
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.padding = '0 24px';
+
+        // Style the main container like a modal card
+        main.style.margin = 'auto';
+        main.style.maxWidth = '760px';
+        main.style.width = 'min(760px, 95vw)';
+        main.style.maxHeight = '90vh';
+        main.style.borderRadius = '14px';
+        main.style.boxShadow = '0 20px 40px rgba(0,0,0,0.40)';
+      } else {
+        overlay.dataset.fullscreen = "0";
+        // Restore original floating panel styles
+        overlay.style.top = '96px';
+        overlay.style.right = '24px';
+        overlay.style.left = 'auto';
+        overlay.style.bottom = 'auto';
+        overlay.style.width = 'min(90vw, 760px)';
+        overlay.style.height = '';
+        overlay.style.background = 'var(--oasis-surface)';
+        overlay.style.border = '1px solid var(--oasis-border)';
+        overlay.style.borderRadius = '14px';
+        overlay.style.boxShadow = '0 20px 40px rgba(0,0,0,0.25)';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = '';
+        overlay.style.justifyContent = '';
+        overlay.style.padding = '';
+
+        main.style.margin = '0';
+        main.style.maxWidth = '';
+        main.style.width = '100%';
+        main.style.maxHeight = '';
+        main.style.borderRadius = '';
+        main.style.boxShadow = '';
+      }
+    });
+  }
+  grip.addEventListener("mousedown", onResizeStart);
+  grip.addEventListener("touchstart", onResizeStart, { passive: false });
+
+  // If header is added later, update handle
+  const mo = new MutationObserver(() => {
+    const maybe = getHandle();
+    if (maybe !== handle) {
+      // Detach from old
+      if (handle) {
+        handle.removeEventListener("mousedown", onDown);
+        handle.removeEventListener("touchstart", onDown);
+      }
+      handle = maybe;
+      if (handle) {
+        handle.style.cursor = "grab";
+        handle.addEventListener("mousedown", onDown);
+        handle.addEventListener("touchstart", onDown, { passive: true });
+      }
+    }
+  });
+  mo.observe(main, { childList: true, subtree: true });
+}
+function initFeed() {
+  if (!log) return;
+  log.innerHTML = "";
+  log.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: var(--oasis-feed-bg, transparent);
+  `;
+
+  // Header block similar to screenshot
+  header = document.createElement("div");
+  header.id = "oasis-header";
+  header.style.cssText = `
+    display:flex; align-items:center; justify-content:space-between;
+    background: var(--oasis-surface);
+    border: 1px solid var(--oasis-border);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  `;
+  // Allow absolute-positioned dropdowns relative to header
+  header.style.position = "relative";
+  const left = document.createElement("div");
+  left.style.cssText = "display:flex; align-items:center; gap:10px;";
+  const avatar = document.createElement("div");
+  avatar.textContent = "S";
+  avatar.style.cssText = `width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; background: var(--oasis-primary); color: var(--oasis-primary-text); font-weight:700;`;
+  const title = document.createElement("div");
+  title.textContent = "Sloth AI";
+  title.style.cssText = "color: var(--oasis-hard-text); font-weight:700;";
+  left.appendChild(avatar);
+  left.appendChild(title);
+  const debugBadge = document.createElement("span");
+  debugBadge.textContent = "DEBUG";
+  debugBadge.style.cssText = "margin-left:8px; padding:2px 8px; border-radius:999px; background:#dc2626; color:#fff; font-size:11px; font-weight:700;";
+  left.appendChild(debugBadge);
+
+  const right = document.createElement("div");
+  right.style.cssText = "display:flex; align-items:center; gap:12px; color: var(--oasis-soft-text);";
+  // Consistent SVG icon buttons: profile, bell, settings, close
+  function svgFor(type) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    // 1.3x original size (18 -> ~24)
+    svg.setAttribute("width", "24");
+    svg.setAttribute("height", "24");
+    svg.style.cssText = "display:block; color:currentColor;";
+
+    const NS = "http://www.w3.org/2000/svg";
+    const make = (name) => document.createElementNS(NS, name);
+    const group = make("g");
+    group.setAttribute("fill", "none");
+    group.setAttribute("stroke", "currentColor");
+    group.setAttribute("stroke-width", "2.4");
+    group.setAttribute("stroke-linecap", "round");
+    group.setAttribute("stroke-linejoin", "round");
+
+    if (type === "profile") {
+      const head = make("circle");
+      head.setAttribute("cx", "12"); head.setAttribute("cy", "8"); head.setAttribute("r", "3.5");
+      const body = make("path");
+      body.setAttribute("d", "M4 20c0-4.2 3.8-7.5 8-7.5s8 3.3 8 7.5");
+      group.appendChild(head); group.appendChild(body);
+    } else if (type === "bubble") {
+      const rect = make("path");
+      rect.setAttribute("d", "M4 6h14a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9l-4 3v-3H5a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z");
+      group.appendChild(rect);
+    } else if (type === "expand") {
+      const p1 = make("path"); p1.setAttribute("d", "M21 8V3h-5");
+      const p2 = make("path"); p2.setAttribute("d", "M21 3l-8 8");
+      // Add opposite bottom-left arrow to form a full expand icon
+      const p3 = make("path"); p3.setAttribute("d", "M3 16v5h5");
+      const p4 = make("path"); p4.setAttribute("d", "M3 21l8-8");
+      group.appendChild(p1); group.appendChild(p2); group.appendChild(p3); group.appendChild(p4);
+    } else if (type === "close") {
+      const x1 = make("path"); x1.setAttribute("d", "M6 6l12 12");
+      const x2 = make("path"); x2.setAttribute("d", "M18 6l-12 12");
+      group.appendChild(x1); group.appendChild(x2);
+    }
+
+    svg.appendChild(group);
+    return svg;
+  }
+
+  function createIconButton(type, label, opts = {}) {
+    const { variant = "ghost", color = null } = opts;
+    const b = document.createElement("button");
+    b.setAttribute("aria-label", label);
+    const base = `display:flex; align-items:center; justify-content:center; cursor:pointer; transition: border-color .15s ease, background .15s ease, color .15s ease, transform .05s ease;`;
+    if (variant === "pill") {
+      // ~1.3x hit area (28 -> ~36)
+      b.style.cssText = `${base} background:#F3F4F6; border:1px solid var(--oasis-border); color:${color || 'var(--oasis-hard-text)'}; border-radius:999px; width:36px; height:36px;`;
+    } else {
+      b.style.cssText = `${base} background:transparent; border:0; color:${color || 'var(--oasis-hard-text)'}; width:36px; height:36px; border-radius:999px;`;
+    }
+    b.appendChild(svgFor(type));
+    b.addEventListener("mouseenter", () => {
+      if (variant === "pill") {
+        b.style.borderColor = "var(--oasis-primary)";
+        b.style.background = "#EAF3EC";
+        b.style.color = color || "var(--oasis-primary)";
+      } else {
+        b.style.background = "#F3F4F6";
+        b.style.color = color || "var(--oasis-primary)";
+      }
+    });
+    b.addEventListener("mouseleave", () => {
+      if (variant === "pill") {
+        b.style.borderColor = "var(--oasis-border)";
+        b.style.background = "#F3F4F6";
+        b.style.color = color || "var(--oasis-hard-text)";
+      } else {
+        b.style.background = "transparent";
+        b.style.color = color || "var(--oasis-hard-text)";
+      }
+    });
+    b.addEventListener("mousedown", () => { b.style.transform = "scale(0.97)"; });
+    b.addEventListener("mouseup", () => { b.style.transform = "none"; });
+    return b;
+  }
+
+  right.appendChild(createIconButton("profile", "Account", { variant: "pill" }));
+  right.appendChild(createIconButton("bubble", "Messages", { variant: "ghost", color: "var(--oasis-primary)" }));
+  right.appendChild(createIconButton("expand", "Expand", { variant: "ghost" }));
+  right.appendChild(createIconButton("close", "Close", { variant: "ghost" }));
+  header.appendChild(left);
+  header.appendChild(right);
+  log.appendChild(header);
+  // Tasks panel container
+  tasksPanel = document.createElement("div");
+  tasksPanel.id = "tasksPanel";
+  tasksPanel.style.cssText = `
+    background: var(--oasis-surface);
+    border: 1px solid var(--oasis-border);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  `;
+  const tpHeader = document.createElement("div");
+  tpHeader.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:8px;";
+  const tpTitle = document.createElement("span");
+  tpTitle.textContent = "TASKS RUNNING";
+  tpTitle.style.cssText = "font-weight:700; font-size:12px; color: var(--oasis-soft-text);";
+  tpHeader.appendChild(tpTitle);
+  tasksPanel.appendChild(tpHeader);
+  const tpBody = document.createElement("div");
+  tpBody.className = "tasks-body";
+  tpBody.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+  tasksPanel.appendChild(tpBody);
+
+  const empty = document.createElement("div");
+  empty.className = "tasks-empty";
+  empty.textContent = "No tasks running";
+  empty.style.cssText = "color: var(--oasis-soft-text); font-size:12px;";
+  tpBody.appendChild(empty);
+
+  function refreshTasks() {
+    tpBody.innerHTML = "";
+    if (tasksState.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No tasks running";
+      empty.style.cssText = "color: var(--oasis-soft-text); font-size:12px;";
+      tpBody.appendChild(empty);
+      return;
+    }
+    for (const t of tasksState) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; color: var(--oasis-hard-text); padding:6px 4px;";
+      const left = document.createElement("div");
+      left.style.cssText = "display:flex; align-items:center; gap:8px;";
+      const chevron = document.createElement("span");
+      chevron.textContent = "›";
+      chevron.style.cssText = "color: var(--oasis-soft-text); font-weight:700;";
+      const label = document.createElement("span");
+      label.textContent = t.title;
+      left.appendChild(chevron);
+      left.appendChild(label);
+
+      const refresh = document.createElement("button");
+      refresh.setAttribute("aria-label", "Refresh task");
+      refresh.style.cssText = `
+        width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+        background: var(--oasis-surface); border: 1px solid var(--oasis-border); color: var(--oasis-soft-text);
+        cursor:pointer; transition: all .15s ease;
+      `;
+      refresh.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9"/><path d="M3 12a9 9 0 0 0 9 9"/><polyline points="3 12 6 9 9 12"/></svg>';
+      refresh.addEventListener("mouseenter", () => {
+        refresh.style.borderColor = "var(--oasis-primary)";
+        refresh.style.background = "#EAF3EC";
+        refresh.style.color = "var(--oasis-primary)";
+      });
+      refresh.addEventListener("mouseleave", () => {
+        refresh.style.borderColor = "var(--oasis-border)";
+        refresh.style.background = "var(--oasis-surface)";
+        refresh.style.color = "var(--oasis-soft-text)";
+      });
+
+      row.appendChild(left);
+      row.appendChild(refresh);
+      tpBody.appendChild(row);
+    }
+  }
+
+  tasksPanel.refresh = refreshTasks;
+
+  log.appendChild(tasksPanel);
+  feed = document.createElement("div");
+  feed.id = "feed";
+  feed.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  `;
+  log.appendChild(feed);
+}
+initFeed();
+enableFloatingPanel();
+
 // Stop button
 const bar = document.getElementById("bar") || q.parentElement;
 const stop = document.createElement("button");
@@ -59,17 +599,38 @@ clearContext.addEventListener("click", () => {
 
 // Microphone button
 const micButton = document.createElement("button");
-micButton.innerHTML = "🎤";
+function micSvg(state = "idle") {
+  if (state === "idle") {
+    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='3' width='6' height='10' rx='3'/><path d='M5 10a7 7 0 0 0 14 0'/><path d='M12 17v4'/><path d='M8 21h8'/></svg>`;
+  }
+  if (state === "loading") {
+    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9' opacity='.25'/><path d='M12 3a9 9 0 0 1 9 9' /></svg>`;
+  }
+  if (state === "recording") {
+    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9' /><rect x='9' y='9' width='6' height='6' fill='currentColor' stroke='none' /></svg>`;
+  }
+  return micSvg("idle");
+}
+micButton.innerHTML = micSvg("idle");
 micButton.style.cssText = `
-  margin-left: 8px;
-  padding: 8px 12px;
-  border: 2px solid #e5e7eb;
-  border-radius: 6px;
-  background: white;
+  margin-left: 6px;
+  padding: 0;
+  width: 32px; height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--oasis-hard-text);
   cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 32px; min-width: 32px; min-height: 32px; aspect-ratio: 1 / 1; flex-shrink: 0;
+  transition: color .15s ease, background .15s ease, transform .05s ease;
 `;
+micButton.addEventListener("mouseenter", () => {
+  micButton.style.color = "var(--oasis-primary)";
+});
+micButton.addEventListener("mouseleave", () => {
+  micButton.style.color = "var(--oasis-soft-text)";
+});
 micButton.title = "Click to start voice input";
 bar.appendChild(micButton);
 
@@ -88,9 +649,9 @@ micButton.addEventListener("click", async () => {
 
   if (isRecording) {
     // Stop recording
-    micButton.innerHTML = "⏳";
-    micButton.disabled = true;
-    micButton.style.background = "#f3f4f6";
+  micButton.innerHTML = micSvg("loading");
+  micButton.disabled = true;
+  micButton.style.background = "transparent";
     
     try {
       const transcribedText = await voiceInputService.stopRecording();
@@ -106,10 +667,9 @@ micButton.addEventListener("click", async () => {
       append(`\n❌ Transcription failed: ${error.message}\n`);
     } finally {
       isRecording = false;
-      micButton.innerHTML = "🎤";
-      micButton.disabled = false;
-      micButton.style.background = "white";
-      micButton.style.borderColor = "#e5e7eb";
+  micButton.innerHTML = micSvg("idle");
+  micButton.disabled = false;
+  micButton.style.background = "transparent";
       micButton.title = "Click to start voice input";
     }
   } else {
@@ -117,9 +677,8 @@ micButton.addEventListener("click", async () => {
     try {
       await voiceInputService.startRecording();
       isRecording = true;
-      micButton.innerHTML = "⏹️";
-      micButton.style.background = "#fee2e2";
-      micButton.style.borderColor = "#ef4444";
+  micButton.innerHTML = micSvg("recording");
+  micButton.style.background = "transparent";
       micButton.title = "Click to stop recording";
       append("\n🎤 Recording... Click again to stop.\n");
     } catch (error) {
@@ -437,7 +996,96 @@ window.addEventListener('message', async (event) => {
 });
 
 // Add a simple "Check Authentication" button for after OAuth
+// Expose the manual auth check flow so it can be reused from the profile menu
+async function runManualAuthCheck() {
+    const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
+        
+The URL should look like:
+https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
+
+Or just paste the access_token part if you prefer:`;
+
+    const input = prompt(instructions);
+    if (input && input.trim()) {
+        try {
+            console.log('Processing OAuth data manually...');
+            let authData = {};
+
+            // Check if it's a full URL or just a token
+            if (input.includes('#')) {
+                // Full URL, parse hash fragment
+                const url = new URL(input);
+                const hashParams = new URLSearchParams(url.hash.substring(1));
+                authData = {
+                    access_token: hashParams.get('access_token'),
+                    refresh_token: hashParams.get('refresh_token'),
+                    expires_at: hashParams.get('expires_at'),
+                    expires_in: hashParams.get('expires_in'),
+                    token_type: hashParams.get('token_type'),
+                    timestamp: Date.now(),
+                    source: 'manual_url'
+                };
+            } else {
+                // Minimal token-only input
+                authData = {
+                    access_token: input.trim(),
+                    refresh_token: '',
+                    timestamp: Date.now(),
+                    source: 'manual_token'
+                };
+            }
+
+            console.log('Auth data:', authData);
+
+            // Try to set the session directly with Supabase
+            if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
+                console.log('Setting session with auth data...');
+                const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
+                    access_token: authData.access_token,
+                    refresh_token: authData.refresh_token || ''
+                });
+
+                if (error) {
+                    console.error('Failed to set session:', error.message);
+                    showAuthError(`Authentication failed: ${error.message}`);
+                } else {
+                    console.log('Session set successfully for user:', data.user?.id);
+                    showAuthSuccess('Authentication successful! You are now signed in.');
+                    updateAuthUI(true, data.user);
+                    setTimeout(() => { window.location.reload(); }, 2000);
+                }
+                return;
+            }
+
+            // Fallback: Use the OAuth callback handler if available
+            if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+                const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
+                if (result.success) {
+                    showAuthSuccess('Authentication successful! You are now signed in.');
+                    // Refresh UI based on current user fetched after success
+                    try {
+                        const user = await window.supabaseAuth.getCurrentUser?.();
+                        updateAuthUI(true, user || null);
+                    } catch {}
+                    setTimeout(() => { window.location.reload(); }, 2000);
+                } else {
+                    showAuthError(`Authentication failed: ${result.error}`);
+                }
+            } else {
+                showAuthError('Authentication service not available.');
+            }
+        } catch (error) {
+            console.error('Error processing OAuth data:', error);
+            showAuthError('Error processing OAuth data. Please try again.');
+        }
+    }
+}
+
 function addAuthCheckButton() {
+    // If the profile menu or header exists, show auth controls there instead
+    if (document.getElementById('profileAuthMenu') || document.getElementById('oasis-header')) {
+        return;
+    }
     // Check if button already exists
     if (document.getElementById('checkAuthBtn')) {
         return;
@@ -480,100 +1128,7 @@ function addAuthCheckButton() {
         font-weight: 500;
     `;
     
-    checkAuthBtn.addEventListener('click', async () => {
-        // Create a more detailed input dialog for the full OAuth data
-        const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
-        
-The URL should look like:
-https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
-
-Or just paste the access_token part if you prefer:`;
-        
-        const input = prompt(instructions);
-        if (input && input.trim()) {
-            try {
-                console.log('Processing OAuth data manually...');
-                
-                let authData = {};
-                
-                // Check if it's a full URL or just a token
-                if (input.includes('#')) {
-                    // It's a full URL, parse it
-                    const url = new URL(input);
-                    const hashParams = new URLSearchParams(url.hash.substring(1));
-                    
-                    authData = {
-                        access_token: hashParams.get('access_token'),
-                        refresh_token: hashParams.get('refresh_token'),
-                        expires_at: hashParams.get('expires_at'),
-                        expires_in: hashParams.get('expires_in'),
-                        token_type: hashParams.get('token_type'),
-                        timestamp: Date.now(),
-                        source: 'manual_url'
-                    };
-                } else {
-                    // It's just a token, create minimal auth data
-                    authData = {
-                        access_token: input.trim(),
-                        refresh_token: '', // We'll need to handle this differently
-                        timestamp: Date.now(),
-                        source: 'manual_token'
-                    };
-                }
-                
-                console.log('Auth data:', authData);
-                
-                // Try to set the session with the auth data
-                if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
-                    console.log('Setting session with auth data...');
-                    const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
-                        access_token: authData.access_token,
-                        refresh_token: authData.refresh_token || ''
-                    });
-                    
-                    if (error) {
-                        console.error('Failed to set session:', error.message);
-                        showAuthError(`Authentication failed: ${error.message}`);
-                    } else {
-                        console.log('Session set successfully for user:', data.user?.id);
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    }
-                    return;
-                }
-                
-                // Fallback: Use the OAuth callback handler
-                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                    const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
-                    if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    } else {
-                        showAuthError(`Authentication failed: ${result.error}`);
-                    }
-                } else {
-                    showAuthError('Authentication service not available.');
-                }
-            } catch (error) {
-                console.error('Error processing OAuth data:', error);
-                showAuthError('Error processing OAuth data. Please try again.');
-            }
-        }
-    });
+    checkAuthBtn.addEventListener('click', () => { runManualAuthCheck(); });
     
     authHeader.appendChild(checkAuthBtn);
 }
@@ -662,18 +1217,22 @@ function showAuthError(message) {
 
 // Create a clean authentication header
 const authHeader = document.createElement("div");
-authHeader.style.cssText = `
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 500;
-`;
-bar.parentElement.insertBefore(authHeader, bar);
+const gradStart = THEME.primary;
+const gradEnd = shadeColor(THEME.primary, -18);
+  authHeader.style.cssText = `
+    background: linear-gradient(135deg, ${gradStart} 0%, ${gradEnd} 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+  `;
+  bar.parentElement.insertBefore(authHeader, bar);
+  // Move auth actions to profile icon; keep header DOM but hide it
+  authHeader.style.display = "none";
 
 // Auth status display
 const authStatus = document.createElement("div");
@@ -683,7 +1242,77 @@ authStatus.innerHTML = `
   <span style="font-size: 16px;">🔒</span>
   <span>Not Authenticated</span>
 `;
-authHeader.appendChild(authStatus);
+  authHeader.appendChild(authStatus);
+
+  // Profile icon dropdown for Sign In / Sign Up
+  const profileBtn = header && header.querySelector('button[aria-label="Account"]');
+  if (profileBtn) {
+    const profileMenu = document.createElement("div");
+    profileMenu.id = "profileAuthMenu";
+    profileMenu.style.cssText = `
+      display: none;
+      position: absolute;
+      top: 48px;
+      right: 12px;
+      background-color: white;
+      border: 1px solid var(--oasis-border);
+      border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+      z-index: 1000;
+      padding: 8px;
+      min-width: 160px;
+    `;
+    header.appendChild(profileMenu);
+
+    function addMenuItem(text, handler, variant) {
+      const item = document.createElement("button");
+      item.textContent = text;
+      item.style.cssText = `
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        border: 0;
+        background: ${variant === 'primary' ? '#EAF3EC' : 'transparent'};
+        color: ${variant === 'primary' ? 'var(--oasis-primary)' : 'var(--oasis-hard-text)'};
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      `;
+      item.addEventListener("mouseenter", () => {
+        item.style.background = variant === 'primary' ? '#DCEDE0' : '#F3F4F6';
+      });
+      item.addEventListener("mouseleave", () => {
+        item.style.background = variant === 'primary' ? '#EAF3EC' : 'transparent';
+      });
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        profileMenu.style.display = "none";
+        handler();
+      });
+      profileMenu.appendChild(item);
+    }
+
+    // Wire to existing handlers without changing functionality
+    addMenuItem("Sign In", showLoginForm, "default");
+    addMenuItem("Sign Up", showSignupForm, "primary");
+    addMenuItem("Check Authentication", () => {
+      // Use the same manual flow as the legacy button for parity
+      runManualAuthCheck();
+    }, "default");
+
+    profileBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Toggle visibility
+      const isOpen = profileMenu.style.display === "block";
+      profileMenu.style.display = isOpen ? "none" : "block";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!profileMenu.contains(e.target) && e.target !== profileBtn) {
+        profileMenu.style.display = "none";
+      }
+    });
+  }
 
 // Auth buttons container
 const authButtons = document.createElement("div");
@@ -717,7 +1346,7 @@ signupButton.textContent = "Sign Up";
 signupButton.className = "signup-btn";
 signupButton.style.cssText = `
   background: rgba(255,255,255,0.9);
-  color: #667eea;
+  color: var(--oasis-primary);
   border: none;
   padding: 6px 12px;
   border-radius: 4px;
@@ -811,12 +1440,173 @@ function setBusy(v) {
   q.disabled = v;
   go.disabled = v;
   stop.disabled = !v;
-  go.textContent = v ? "…" : "Send";
+  // Keep the circular icon button shape regardless of busy state.
+  // Do not switch to text content, which can make the button look flat/pill.
+  // When busy, simply disable the button and keep the send arrow icon.
+  // If a future loading indicator is needed, we can swap to a spinner SVG
+  // of the same size, but for now, preserve the icon for consistent visuals.
+  go.style.opacity = v ? 0.85 : 1;
+  go.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" style="color:#fff" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
 }
 
-function append(text) {
-  log.textContent += text;
+// ---- Card-based rendering helpers ----
+function createCard({ role = "system", title = "", compact = false } = {}) {
+  const card = document.createElement("div");
+  card.className = `oasis-card oasis-${role}`;
+  card.style.cssText = `
+    background: ${role === "assistant" ? "var(--oasis-assistant-card-bg)" : role === "user" ? "#F9FAFB" : "#F3F4F6"};
+    border: 1px solid var(--oasis-border);
+    border-radius: 12px;
+    padding: ${compact ? "10px" : "14px"};
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  `;
+
+  const header = document.createElement("div");
+  header.style.cssText = `display:flex; align-items:center; gap:8px; margin-bottom:${compact ? "6px" : "10px"}; color: var(--oasis-soft-text); font-size:12px;`;
+  const badge = document.createElement("span");
+  badge.textContent = role === "assistant" ? "Assistant" : role === "user" ? "You" : "System";
+  badge.style.cssText = `
+    display:inline-block; padding:2px 6px; border-radius:999px; background:${role === "assistant" ? "#EAF3EC" : role === "user" ? "#F3F4F6" : "#E5E7EB"};
+    color:${role === "assistant" ? "var(--oasis-primary)" : "#374151"}; font-weight:600;
+  `;
+  header.appendChild(badge);
+  if (title) {
+    const ht = document.createElement("span");
+    ht.textContent = title;
+    header.appendChild(ht);
+  }
+
+  // Optional thinking-as row and chips for assistant cards
+  if (role === "assistant" && !compact) {
+    const thinking = document.createElement("div");
+    thinking.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:8px; color: var(--oasis-soft-text); font-size:12px;";
+    const prefix = document.createElement("span"); prefix.textContent = "Thinking as";
+    const pill = document.createElement("span"); pill.textContent = "@Invest Analyst"; pill.style.cssText = "padding:2px 8px; border-radius:999px; border:1px solid var(--oasis-border); background:#fff; color: var(--oasis-hard-text);";
+    thinking.appendChild(prefix); thinking.appendChild(pill);
+
+    const chips = document.createElement("div");
+    chips.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;";
+    for (const tag of ["sagemount.com", "linkedin.com"]) {
+      const chip = document.createElement("span");
+      chip.textContent = tag;
+      chip.style.cssText = "padding:4px 8px; border-radius:999px; border:1px solid var(--oasis-border); background:#fff; color: var(--oasis-hard-text); font-size:12px;";
+      chips.appendChild(chip);
+    }
+    card.appendChild(thinking);
+    card.appendChild(chips);
+  }
+
+  const body = document.createElement("div");
+  body.className = "oasis-card-body";
+  body.style.cssText = `white-space:pre-wrap; color: var(--oasis-hard-text); font-size:13px; line-height:1.5;`;
+
+  card.appendChild(header);
+  card.appendChild(body);
+  feed?.appendChild(card);
+  // auto-scroll
   log.scrollTop = log.scrollHeight;
+  return { card, body };
+}
+
+// Legacy append now writes a compact system card
+function append(text) {
+  const { body } = createCard({ role: "system", compact: true });
+  body.textContent = text;
+}
+
+// Render user message card
+function renderUserMessage(prompt) {
+  const { body } = createCard({ role: "user" });
+  body.textContent = prompt;
+}
+
+// Streaming assistant card management
+let currentAssistantCard = null;
+function startAssistantStreamCard() {
+  currentAssistantCard = createCard({ role: "assistant" });
+}
+function appendAssistantChunk(chunk) {
+  if (!currentAssistantCard) startAssistantStreamCard();
+  const body = currentAssistantCard.body;
+  body.textContent += chunk;
+  // keep scrolling
+  log.scrollTop = log.scrollHeight;
+}
+function finalizeAssistantStream() {
+  // Format the assistant text into simple sections and paragraphs
+  if (currentAssistantCard) {
+    const raw = currentAssistantCard.body.textContent;
+    const html = formatAssistantText(raw);
+    currentAssistantCard.body.innerHTML = html;
+  }
+  currentAssistantCard = null;
+}
+
+function formatAssistantText(text) {
+  const lines = text.split(/\r?\n/);
+  const parts = [];
+
+  function humanizeOpenTab(rawUrl) {
+    try {
+      const url = rawUrl.trim();
+      const hasProto = /^https?:\/\//i.test(url);
+      const u = new URL(hasProto ? url : `https://${url}`);
+      const host = u.hostname.replace(/^www\./, "");
+      const sp = u.searchParams;
+      // Known patterns
+      if (host.includes("youtube.com") && (u.pathname.includes("/results") || sp.has("search_query"))) {
+        const q = sp.get("search_query") || sp.get("q") || "";
+        return `Opened YouTube search for '${escapeHtml(q)}' in a new tab.`;
+      }
+      if (host.includes("google.") && sp.has("q")) {
+        const q = sp.get("q") || "";
+        return `Opened Google results for '${escapeHtml(q)}' in a new tab.`;
+      }
+      // Default
+      const path = u.pathname && u.pathname !== "/" ? u.pathname : "";
+      return `Opened ${escapeHtml(host + path)} in a new tab.`;
+    } catch {
+      return `Opened ${escapeHtml(rawUrl)} in a new tab.`;
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Headings
+    if (/^(Overview|Investment Strategy|Summary)\b/i.test(line)) {
+      parts.push(`<h3 style="margin:8px 0 6px; font-size:14px; font-weight:700; color:var(--oasis-hard-text);">${escapeHtml(line)}</h3>`);
+      continue;
+    }
+
+    // Tool output: open_tab → friendlier phrasing
+    const mOpen = line.match(/^\[Tool Output for open_tab\]:\s*Opened\s+(.+?)\s+in a new tab\.?$/i);
+    if (mOpen) {
+      parts.push(`<p style="margin:0 0 8px; color:var(--oasis-hard-text);">${humanizeOpenTab(mOpen[1])}</p>`);
+      continue;
+    }
+
+    // Default paragraph
+    parts.push(`<p style="margin:0 0 8px; color:var(--oasis-hard-text);">${escapeHtml(line)}</p>`);
+  }
+  return parts.join("");
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ---- Lightweight tasks tracking (UI-only) ----
+function addTask(title) {
+  tasksState.push({ title, done: false });
+  tasksPanel?.refresh?.();
+}
+function completeLastTask() {
+  if (tasksState.length > 0) {
+    tasksState[tasksState.length - 1].done = true;
+    tasksPanel?.refresh?.();
+  }
 }
 
 
@@ -1382,9 +2172,11 @@ async function send() {
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
-  append(`\n> ${prompt}\n`);
+  renderUserMessage(prompt);
   stopped = false;
   setBusy(true);
+  // UI-only: show a running task corresponding to the prompt
+  addTask(prompt.length > 60 ? `${prompt.substring(0,57)}…` : prompt);
 
   try {
     // Double-check authentication before making the API call
@@ -1393,21 +2185,21 @@ async function send() {
     }
     
     // Session context is automatically managed
+    startAssistantStreamCard();
     await runAssistantStream(prompt, (chunk) => {
       if (!stopped) {
-        append(chunk);
-        // Forward the chunk to iframe if it exists
+        appendAssistantChunk(chunk);
         if (typeof window.notifyIframeCommandResult === 'function') {
           window.notifyIframeCommandResult(chunk);
         }
       }
     });
     if (!stopped) {
-      append("\n");
-      // Forward completion to iframe
+      finalizeAssistantStream();
       if (typeof window.notifyIframeCommandResult === 'function') {
         window.notifyIframeCommandResult("\n");
       }
+      completeLastTask();
     }
   } catch (e) {
     const errorMessage = e?.message?.includes('Authentication required') 
@@ -1483,3 +2275,54 @@ window.forceUpdateUI = function() {
     console.log('Current state:', { isAuthenticated, currentUser: currentUser?.email });
     updateAuthUI(isAuthenticated, currentUser);
 };
+// Composer styling to match target
+function styleComposer() {
+  const bar = document.getElementById("bar");
+  if (!bar) return;
+  bar.style.cssText = "display:flex; align-items:center; gap:8px; background:#fff; border-top:1px solid var(--oasis-border); padding:12px; flex-wrap:nowrap;";
+
+  // Build rounded composer box with inline icons
+  const box = document.createElement("div");
+  box.style.cssText = "flex:1 1 320px; min-width:220px; display:flex; align-items:center; gap:10px; border:1px solid var(--oasis-border); background:#fff; border-radius:12px; padding:8px 10px;";
+
+  const leftIcons = document.createElement("div");
+  leftIcons.style.cssText = "display:flex; align-items:center; gap:10px; color:var(--oasis-hard-text); opacity:0.9;";
+  leftIcons.innerHTML = `
+    <svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20l9-9-7-7-9 9v7h7z'/></svg>
+    <svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M21 8v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5z'/><path d='M7 12h10'/></svg>
+    <svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='4' width='16' height='16' rx='3'/><path d='M7 12h10'/></svg>
+  `;
+
+  // Move the existing input into the box and restyle
+  q.placeholder = "Mention @Page and ask anything...";
+  q.style.cssText = "flex:1 1 auto; min-width:0; padding:8px 0; border:none; outline:none; background:transparent; color:var(--oasis-hard-text);";
+  box.appendChild(leftIcons);
+  box.appendChild(q);
+
+  const rightIcons = document.createElement("div");
+  rightIcons.style.cssText = "display:flex; align-items:center; gap:10px; color:var(--oasis-soft-text);";
+  // No mic inside the box; keep area available for future indicators
+  box.appendChild(rightIcons);
+
+  // Insert the box before the buttons
+  if (bar.firstChild) {
+    bar.insertBefore(box, bar.firstChild);
+  } else {
+    bar.appendChild(box);
+  }
+
+  // Place mic next to the send button on the right
+  if (typeof micButton !== "undefined" && micButton) {
+    bar.insertBefore(micButton, go);
+  }
+
+  // Round send button on the right
+  go.style.cssText = "width:36px; height:36px; border-radius:999px; background: var(--oasis-primary); color: #ffffff; border:none; display:flex; align-items:center; justify-content:center; flex:0 0 36px; min-width:36px; min-height:36px; aspect-ratio:1 / 1; flex-shrink:0; line-height:0;";
+  go.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" style="color:#fff" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+
+  // Hide stop button in preview to match screenshot if present
+  const stop = document.getElementById("stop");
+  if (stop) stop.style.display = "none";
+}
+
+styleComposer();

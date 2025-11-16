@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Oasis Assistant Preview</title>
+    <style>
+      :root { --oasis-primary: #2c532d; --oasis-primary-text: #ffffff; --oasis-border: #E5E7EB; --oasis-soft-text: #6B7280; --oasis-hard-text: #111827; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #f4f7f4; color: #111827; }
+      main { width: 760px; max-width: 100%; margin: 24px auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.10); overflow: hidden; border: 1px solid #E5E7EB; }
+      #bar { display: flex; gap: 8px; align-items: center; padding: 12px; background: #ffffff; border-top: 1px solid #E5E7EB; }
+      #log { height: 520px; overflow: auto; background: #ffffff; }
+      #q { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--oasis-border); background: #ffffff; color: var(--oasis-hard-text); }
+      #go { background: var(--oasis-primary); color: var(--oasis-primary-text); border: none; }
+      #stop { background: #f3f4f6; color: #111827; border: 1px solid var(--oasis-border); }
+      button { padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+      #debug-badge { position: fixed; top: 8px; right: 8px; background: #dc2626; color: #fff; font-weight: 700; font-size: 12px; padding: 4px 8px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 2147483647; }
+    </style>
+  </head>
+  <body>
+    <div id="debug-badge">DEBUG</div>
+    <main>
+      <div id="log"></div>
+      <div id="bar">
+        <input id="q" placeholder="Ask me anything…" />
+        <button id="go">Send</button>
+        <button id="stop">Stop</button>
+      </div>
+    </main>
+
+    <script>
+      // Minimal stubs so assistant.ui.js can operate in preview
+      window.resetAssistantSession = function(){};
+      window.notifyIframeCommandResult = function(){};
+      window.supabaseAuth = {
+        isSignedIn: () => false,
+        getProfileEmail: () => null,
+        signInWithGoogle: async () => ({ ok: false, error: null }),
+        signInWithEmail: async () => ({ ok: false, error: null })
+      };
+      window.runAssistantStream = async function(prompt, onChunk) {
+        const text = `find companies matching Sagemount criteria\n\nBregal Sagemount is a private equity and growth capital firm ...\n\nOverview\nBregal Sagemount has committed capital of $7.5b ...\n`;
+        const demo = `This is a streaming demo for: ${prompt}\n\n` + text;
+        for (const ch of demo) {
+          await new Promise(r => setTimeout(r, 5));
+          onChunk(ch);
+        }
+      };
+    </script>
+    <script type="module" src="./assistant.ui.js"></script>
+  </body>
+  </html>
