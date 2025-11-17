@@ -12,7 +12,8 @@ export interface Command {
 function getChrome() {
   const topWin = (window.top as any);
   const gBrowser = topWin?.gBrowser;
-  return { topWin, gBrowser };
+  const browser = topWin?.browser;
+  return { topWin, gBrowser, browser };
 }
 
 /* ===========================
@@ -32,6 +33,78 @@ export class ListTabsCommand implements Command {
       ? titles.slice(0, 50).map((t, i) => `${i + 1}. ${t}`).join("\n")
       : "No tabs.";
     return { message: out };
+  }
+}
+
+/* ===========================
+ * Window Commands
+ * =========================== */
+
+export class NewWindowCommand implements Command {
+  commandName = "new_window";
+  description = "Open a new browser window.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    topWin.OpenBrowserWindow();
+    return { message: "Opened a new window." };
+  }
+}
+
+export class OrganizeWindowsCommand implements Command {
+  commandName = "organize_windows";
+  description = "Arrange two or more windows side-by-side.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    const windowManager = topWin.getServices().ww;
+    const windows = windowManager.getWindowEnumerator();
+    const browserWindows = [];
+
+    while (windows.hasMoreElements()) {
+      const win = windows.getNext();
+      if (win.document.documentElement.getAttribute("windowtype") === "navigator:browser") {
+        browserWindows.push(win);
+      }
+    }
+
+    if (browserWindows.length < 2) {
+      return { message: "You need at least two windows to organize." };
+    }
+
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numWindows = browserWindows.length;
+    const windowWidth = Math.floor(availWidth / numWindows);
+
+    for (let i = 0; i < numWindows; i++) {
+      const win = browserWindows[i];
+      const xPos = availLeft + (windowWidth * i);
+      win.resizeTo(windowWidth, availHeight);
+      win.moveTo(xPos, availTop);
+    }
+
+    return { message: `Organized ${numWindows} windows.` };
+  }
+}
+
+export class ShowURLCommand implements Command {
+  commandName = "show_url";
+  description = "Open a URL in a new tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
+
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened ${url}` };
   }
 }
 
@@ -160,12 +233,27 @@ export class RenameHubCommand implements Command {
 
 export class AddTabToHubCommand implements Command {
   commandName = "add_tab_to_hub";
-  description = "Add the current tab to a bookmark folder hub. Accepts arguments: { name: string }.";
+  description = "Add the current tab to a hub. Accepts arguments: { name: string }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
     if (!name) return { message: "Which hub should I add this tab to?" };
-    const r = await hubs.addCurrentTab(name);
-    return { message: r.ok ? `Added current tab to bookmark folder "${name}".` : "Failed to add tab." };
+
+    const { gBrowser, browser } = getChrome();
+    if (!gBrowser || !browser) return { message: "Browser UI not available." };
+
+    const groups = await browser.tabGroups.query({ title: name });
+    const currentTab = gBrowser.selectedTab;
+    const currentTabId = gBrowser.getTabId(currentTab);
+
+    if (groups.length > 0) {
+      const groupId = groups[0].id;
+      await browser.tabs.group({ tabIds: [currentTabId], groupId });
+      return { message: `Added current tab to hub "${name}".` };
+    } else {
+      const groupId = await browser.tabs.group({ tabIds: [currentTabId] });
+      await browser.tabGroups.update(groupId, { title: name });
+      return { message: `Created new hub "${name}" with the current tab.` };
+    }
   }
 }
 
