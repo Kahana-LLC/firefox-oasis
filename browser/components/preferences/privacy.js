@@ -279,10 +279,14 @@ Preferences.addAll([
   { id: "network.trr.uri", type: "string" },
   { id: "network.trr.default_provider_uri", type: "string" },
   { id: "network.trr.custom_uri", type: "string" },
+  { id: "network.trr_ui.fallback_was_checked", type: "bool" },
   { id: "doh-rollout.disable-heuristics", type: "bool" },
 
   // Local Network Access
   { id: "network.lna.blocking", type: "bool" },
+
+  // Permissions
+  { id: "media.setsinkid.enabled", type: "bool" },
 ]);
 
 if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
@@ -564,58 +568,73 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
     pref: "browser.contentblocking.category",
     get: prefValue => prefValue == "strict",
   });
-  Preferences.addSetting({
-    id: "trackerCount",
-    cachedValue: null,
-    async setup(emitChange) {
-      const now = Date.now();
-      const aMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-      const events = await lazy.TrackingDBService.getEventsByDateRange(
-        now,
-        aMonthAgo
-      );
-      const total = events.reduce((acc, day) => {
-        return acc + day.getResultByName("count");
-      }, 0);
-      this.cachedValue = total;
-      emitChange();
-    },
-    get() {
-      return this.cachedValue;
-    },
-  });
-  Preferences.addSetting({
-    id: "appUpdateStatus",
-    cachedValue: AppUpdater.STATUS.NO_UPDATER,
-    async setup(emitChange) {
-      if (AppConstants.MOZ_UPDATER && !gIsPackagedApp) {
-        let appUpdater = new AppUpdater();
-        let listener = (status, ..._args) => {
-          this.cachedValue = status;
-          emitChange();
-        };
-        appUpdater.addListener(listener);
-        await appUpdater.check();
-        return () => {
-          appUpdater.removeListener(listener);
-          appUpdater.stop();
-        };
-      }
-      return () => {};
-    },
-    get() {
-      return this.cachedValue;
-    },
-    set(value) {
-      this.cachedValue = value;
-    },
-  });
+  Preferences.addSetting(
+    /** @type {{ cachedValue: number, loadTrackerCount: (emitChange: SettingEmitChange) => Promise<void> } & SettingConfig} */ ({
+      id: "trackerCount",
+      cachedValue: null,
+      async loadTrackerCount(emitChange) {
+        const now = Date.now();
+        const aMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        /** @type {{ getResultByName: (_: string) => number }[]} */
+        const events = await lazy.TrackingDBService.getEventsByDateRange(
+          now,
+          aMonthAgo
+        );
+
+        const total = events.reduce((acc, day) => {
+          return acc + day.getResultByName("count");
+        }, 0);
+        this.cachedValue = total;
+        emitChange();
+      },
+      setup(emitChange) {
+        this.loadTrackerCount(emitChange);
+      },
+      get() {
+        return this.cachedValue;
+      },
+    })
+  );
+  Preferences.addSetting(
+    /** @type {{ cachedValue: any } & SettingConfig} */ ({
+      id: "appUpdateStatus",
+      cachedValue: AppUpdater.STATUS.NO_UPDATER,
+      setup(emitChange) {
+        if (AppConstants.MOZ_UPDATER && !gIsPackagedApp) {
+          let appUpdater = new AppUpdater();
+          /**
+           * @param {number} status
+           * @param {any[]} _args
+           */
+          let listener = (status, ..._args) => {
+            this.cachedValue = status;
+            emitChange();
+          };
+          appUpdater.addListener(listener);
+          appUpdater.check();
+          return () => {
+            appUpdater.removeListener(listener);
+            appUpdater.stop();
+          };
+        }
+        return () => {};
+      },
+      get() {
+        return this.cachedValue;
+      },
+      set(value) {
+        this.cachedValue = value;
+      },
+    })
+  );
 }
 /**
  * This class is used to create Settings that are used to warn the user about
  * potential misconfigurations. It should be passed into Preferences.addSetting
  * to create the Preference for a <moz-box-item> because it creates
  * separate members on pref.config
+ *
+ * @implements {SettingConfig}
  */
 class WarningSettingConfig {
   /**
@@ -685,9 +704,9 @@ class WarningSettingConfig {
    * This initializes the Setting created with this config, starting listeners for all dependent
    * Preferences and providing a cleanup callback to remove them
    *
-   * @param {Function} emitChange - a callback to be invoked any time that the Setting created
+   * @param {() => any} emitChange - a callback to be invoked any time that the Setting created
    * with this config is changed
-   * @returns {Function} a function that cleans up the state from this Setting, namely pref change listeners.
+   * @returns {() => any} a function that cleans up the state from this Setting, namely pref change listeners.
    */
   setup(emitChange) {
     for (let [getter, prefId] of Object.entries(this.prefMapping)) {
@@ -706,7 +725,7 @@ class WarningSettingConfig {
    * "dismiss" action depending on the target, and those callbacks are defined
    * in this class.
    *
-   * @param {Event} event - The event for the user click
+   * @param {PointerEvent} event - The event for the user click
    */
   onUserClick(event) {
     switch (event.target.id) {
@@ -1108,6 +1127,7 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
   );
 }
 
+/** @type {SettingControlConfig[]} */
 const SECURITY_WARNINGS = [
   {
     l10nId: "security-privacy-issue-warning-test",
@@ -1203,39 +1223,41 @@ const SECURITY_WARNINGS = [
   },
 ];
 
-Preferences.addSetting({
-  id: "securityWarningsGroup",
-  makeSecurityWarningItems() {
-    return SECURITY_WARNINGS.map(({ id, l10nId }) => ({
-      id,
-      l10nId,
-      control: "moz-box-item",
-      options: [
-        {
-          control: "moz-button",
-          l10nId: "issue-card-reset-button",
-          controlAttrs: { slot: "actions", size: "small", id: "reset" },
-        },
-        {
-          control: "moz-button",
-          l10nId: "issue-card-dismiss-button",
-          controlAttrs: {
-            slot: "actions",
-            size: "small",
-            iconsrc: "chrome://global/skin/icons/close.svg",
-            id: "dismiss",
+Preferences.addSetting(
+  /** @type {{ makeSecurityWarningItems: () => SettingControlConfig[] } & SettingConfig} */ ({
+    id: "securityWarningsGroup",
+    makeSecurityWarningItems() {
+      return SECURITY_WARNINGS.map(({ id, l10nId }) => ({
+        id,
+        l10nId,
+        control: "moz-box-item",
+        options: [
+          {
+            control: "moz-button",
+            l10nId: "issue-card-reset-button",
+            controlAttrs: { slot: "actions", size: "small", id: "reset" },
           },
-        },
-      ],
-    }));
-  },
-  getControlConfig(config) {
-    if (!config.items) {
-      return { ...config, items: this.makeSecurityWarningItems() };
-    }
-    return config;
-  },
-});
+          {
+            control: "moz-button",
+            l10nId: "issue-card-dismiss-button",
+            controlAttrs: {
+              slot: "actions",
+              size: "small",
+              iconsrc: "chrome://global/skin/icons/close.svg",
+              id: "dismiss",
+            },
+          },
+        ],
+      }));
+    },
+    getControlConfig(config) {
+      if (!config.items) {
+        return { ...config, items: this.makeSecurityWarningItems() };
+      }
+      return config;
+    },
+  })
+);
 
 Preferences.addSetting({
   id: "privacyCard",
@@ -1504,7 +1526,7 @@ Preferences.addSetting({
     deps.blockUnwantedDownloads.value = value;
 
     let malwareTable = Preferences.get("urlclassifier.malwareTable");
-    let malware = malwareTable.value
+    let malware = /** @type {string} */ (malwareTable.value)
       .split(",")
       .filter(
         x =>
@@ -1541,61 +1563,68 @@ Preferences.addSetting({
 Preferences.addSetting({
   id: "manageDataSettingsGroup",
 });
-Preferences.addSetting({
-  id: "siteDataSize",
-  setup(emitChange) {
-    let onUsageChanged = async () => {
-      let [siteDataUsage, cacheUsage] = await Promise.all([
-        SiteDataManager.getTotalUsage(),
-        SiteDataManager.getCacheSize(),
-      ]);
-      let totalUsage = siteDataUsage + cacheUsage;
-      let [value, unit] = DownloadUtils.convertByteUnits(totalUsage);
-      this.usage = { value, unit };
+Preferences.addSetting(
+  /** @type {{ isUpdatingSites: boolean, usage: { value: number, unit: string } | void } & SettingConfig} */ ({
+    id: "siteDataSize",
+    usage: null,
+    isUpdatingSites: false,
+    setup(emitChange) {
+      let onUsageChanged = async () => {
+        let [siteDataUsage, cacheUsage] = await Promise.all([
+          SiteDataManager.getTotalUsage(),
+          SiteDataManager.getCacheSize(),
+        ]);
+        let totalUsage = siteDataUsage + cacheUsage;
+        let [value, unit] = DownloadUtils.convertByteUnits(totalUsage);
+        this.usage = { value, unit };
 
-      this.isUpdatingSites = false;
-      emitChange();
-    };
+        this.isUpdatingSites = false;
+        emitChange();
+      };
 
-    let onUpdatingSites = () => {
-      this.isUpdatingSites = true;
-      emitChange();
-    };
+      let onUpdatingSites = () => {
+        this.isUpdatingSites = true;
+        emitChange();
+      };
 
-    Services.obs.addObserver(onUsageChanged, "sitedatamanager:sites-updated");
-    Services.obs.addObserver(onUpdatingSites, "sitedatamanager:updating-sites");
-
-    return () => {
-      Services.obs.removeObserver(
-        onUsageChanged,
-        "sitedatamanager:sites-updated"
-      );
-      Services.obs.removeObserver(
+      Services.obs.addObserver(onUsageChanged, "sitedatamanager:sites-updated");
+      Services.obs.addObserver(
         onUpdatingSites,
         "sitedatamanager:updating-sites"
       );
-    };
-  },
-  getControlConfig(config) {
-    if (this.isUpdatingSites || !this.usage) {
-      // Data not retrieved yet, show a loading state.
+
+      return () => {
+        Services.obs.removeObserver(
+          onUsageChanged,
+          "sitedatamanager:sites-updated"
+        );
+        Services.obs.removeObserver(
+          onUpdatingSites,
+          "sitedatamanager:updating-sites"
+        );
+      };
+    },
+    getControlConfig(config) {
+      if (this.isUpdatingSites || !this.usage) {
+        // Data not retrieved yet, show a loading state.
+        return {
+          ...config,
+          l10nId: "sitedata-total-size-calculating",
+        };
+      }
+
+      let { value, unit } = this.usage;
       return {
         ...config,
-        l10nId: "sitedata-total-size-calculating",
+        l10nId: "sitedata-total-size2",
+        l10nArgs: {
+          value,
+          unit,
+        },
       };
-    }
-
-    let { value, unit } = this.usage;
-    return {
-      ...config,
-      l10nId: "sitedata-total-size2",
-      l10nArgs: {
-        value,
-        unit,
-      },
-    };
-  },
-});
+    },
+  })
+);
 
 Preferences.addSetting({
   id: "deleteOnCloseInfo",
@@ -1605,91 +1634,104 @@ Preferences.addSetting({
   },
 });
 
-Preferences.addSetting({
-  id: "clearSiteDataButton",
-  setup(emitChange) {
-    let onSitesUpdated = async () => {
-      this.isUpdatingSites = false;
-      emitChange();
-    };
+Preferences.addSetting(
+  /** @type {{ isUpdatingSites: boolean } & SettingConfig} */ ({
+    id: "clearSiteDataButton",
+    isUpdatingSites: false,
+    setup(emitChange) {
+      let onSitesUpdated = async () => {
+        this.isUpdatingSites = false;
+        emitChange();
+      };
 
-    let onUpdatingSites = () => {
-      this.isUpdatingSites = true;
-      emitChange();
-    };
+      let onUpdatingSites = () => {
+        this.isUpdatingSites = true;
+        emitChange();
+      };
 
-    Services.obs.addObserver(onSitesUpdated, "sitedatamanager:sites-updated");
-    Services.obs.addObserver(onUpdatingSites, "sitedatamanager:updating-sites");
-
-    return () => {
-      Services.obs.removeObserver(
-        onSitesUpdated,
-        "sitedatamanager:sites-updated"
-      );
-      Services.obs.removeObserver(
+      Services.obs.addObserver(onSitesUpdated, "sitedatamanager:sites-updated");
+      Services.obs.addObserver(
         onUpdatingSites,
         "sitedatamanager:updating-sites"
       );
-    };
-  },
-  onUserClick() {
-    let uri;
-    if (useOldClearHistoryDialog) {
-      uri = "chrome://browser/content/preferences/dialogs/clearSiteData.xhtml";
-    } else {
-      uri = "chrome://browser/content/sanitize_v2.xhtml";
-    }
 
-    gSubDialog.open(
-      uri,
-      {
-        features: "resizable=no",
-      },
-      {
-        mode: "clearSiteData",
+      return () => {
+        Services.obs.removeObserver(
+          onSitesUpdated,
+          "sitedatamanager:sites-updated"
+        );
+        Services.obs.removeObserver(
+          onUpdatingSites,
+          "sitedatamanager:updating-sites"
+        );
+      };
+    },
+    onUserClick() {
+      let uri;
+      if (useOldClearHistoryDialog) {
+        uri =
+          "chrome://browser/content/preferences/dialogs/clearSiteData.xhtml";
+      } else {
+        uri = "chrome://browser/content/sanitize_v2.xhtml";
       }
-    );
-  },
-  disabled() {
-    return this.isUpdatingSites;
-  },
-});
-Preferences.addSetting({
-  id: "siteDataSettings",
-  setup(emitChange) {
-    let onSitesUpdated = async () => {
-      this.isUpdatingSites = false;
-      emitChange();
-    };
 
-    let onUpdatingSites = () => {
-      this.isUpdatingSites = true;
-      emitChange();
-    };
-
-    Services.obs.addObserver(onSitesUpdated, "sitedatamanager:sites-updated");
-    Services.obs.addObserver(onUpdatingSites, "sitedatamanager:updating-sites");
-
-    return () => {
-      Services.obs.removeObserver(
-        onSitesUpdated,
-        "sitedatamanager:sites-updated"
+      gSubDialog.open(
+        uri,
+        {
+          features: "resizable=no",
+        },
+        {
+          mode: "clearSiteData",
+        }
       );
-      Services.obs.removeObserver(
+    },
+    disabled() {
+      return this.isUpdatingSites;
+    },
+  })
+);
+Preferences.addSetting(
+  /** @type {{ isUpdatingSites: boolean } & SettingConfig} */ ({
+    id: "siteDataSettings",
+    isUpdatingSites: false,
+    setup(emitChange) {
+      let onSitesUpdated = async () => {
+        this.isUpdatingSites = false;
+        emitChange();
+      };
+
+      let onUpdatingSites = () => {
+        this.isUpdatingSites = true;
+        emitChange();
+      };
+
+      Services.obs.addObserver(onSitesUpdated, "sitedatamanager:sites-updated");
+      Services.obs.addObserver(
         onUpdatingSites,
         "sitedatamanager:updating-sites"
       );
-    };
-  },
-  onUserClick() {
-    gSubDialog.open(
-      "chrome://browser/content/preferences/dialogs/siteDataSettings.xhtml"
-    );
-  },
-  disabled() {
-    return this.isUpdatingSites;
-  },
-});
+
+      return () => {
+        Services.obs.removeObserver(
+          onSitesUpdated,
+          "sitedatamanager:sites-updated"
+        );
+        Services.obs.removeObserver(
+          onUpdatingSites,
+          "sitedatamanager:updating-sites"
+        );
+      };
+    },
+    onUserClick() {
+      gSubDialog.open(
+        "chrome://browser/content/preferences/dialogs/siteDataSettings.xhtml"
+      );
+    },
+    disabled() {
+      return this.isUpdatingSites;
+    },
+  })
+);
 Preferences.addSetting({
   id: "cookieExceptions",
   onUserClick() {
@@ -2099,6 +2141,508 @@ Preferences.addSetting({
       typeof Services.policies.getActivePolicies()?.Certificates
         ?.ImportEnterpriseRoots == "undefined"
     );
+  },
+});
+
+Preferences.addSetting({
+  id: "permissionBox",
+});
+Preferences.addSetting({
+  id: "popupPolicy",
+  pref: "dom.disable_open_during_load",
+});
+Preferences.addSetting({
+  id: "popupPolicyButton",
+  deps: ["popupPolicy"],
+  onUserClick: () => gPrivacyPane.showPopupExceptions(),
+  disabled: ({ popupPolicy }) => {
+    return !popupPolicy.value || popupPolicy.locked;
+  },
+});
+Preferences.addSetting({
+  id: "warnAddonInstall",
+  pref: "xpinstall.whitelist.required",
+});
+Preferences.addSetting({
+  id: "addonExceptions",
+  deps: ["warnAddonInstall"],
+  onUserClick: () => gPrivacyPane.showAddonExceptions(),
+  disabled: ({ warnAddonInstall }) => {
+    return !warnAddonInstall.value || warnAddonInstall.locked;
+  },
+});
+Preferences.addSetting({
+  id: "notificationsDoNotDisturb",
+  get: () => {
+    return AlertsServiceDND?.manualDoNotDisturb ?? false;
+  },
+  set: value => {
+    if (AlertsServiceDND) {
+      AlertsServiceDND.manualDoNotDisturb = value;
+    }
+  },
+  visible: () => {
+    return AlertsServiceDND != undefined;
+  },
+});
+Preferences.addSetting({
+  id: "locationSettingsButton",
+  onUserClick: () => gPrivacyPane.showLocationExceptions(),
+});
+Preferences.addSetting({
+  id: "cameraSettingsButton",
+  onUserClick: () => gPrivacyPane.showCameraExceptions(),
+});
+Preferences.addSetting({
+  id: "enabledLNA",
+  pref: "network.lna.blocking",
+});
+Preferences.addSetting({
+  id: "localNetworkSettingsButton",
+  onUserClick: () => gPrivacyPane.showLocalNetworkExceptions(),
+  deps: ["enabledLNA"],
+  visible: deps => {
+    return deps.enabledLNA.value;
+  },
+});
+Preferences.addSetting({
+  id: "localHostSettingsButton",
+  onUserClick: () => gPrivacyPane.showLocalHostExceptions(),
+  deps: ["enabledLNA"],
+  visible: deps => {
+    return deps.enabledLNA.value;
+  },
+});
+Preferences.addSetting({
+  id: "microphoneSettingsButton",
+  onUserClick: () => gPrivacyPane.showMicrophoneExceptions(),
+});
+Preferences.addSetting({
+  id: "enabledSpeakerControl",
+  pref: "media.setsinkid.enabled",
+});
+Preferences.addSetting({
+  id: "speakerSettingsButton",
+  onUserClick: () => gPrivacyPane.showSpeakerExceptions(),
+  deps: ["enabledSpeakerControl"],
+  visible: ({ enabledSpeakerControl }) => {
+    return enabledSpeakerControl.value;
+  },
+});
+Preferences.addSetting({
+  id: "notificationSettingsButton",
+  onUserClick: () => gPrivacyPane.showNotificationExceptions(),
+});
+Preferences.addSetting({
+  id: "autoplaySettingsButton",
+  onUserClick: () => gPrivacyPane.showAutoplayMediaExceptions(),
+});
+Preferences.addSetting({
+  id: "xrSettingsButton",
+  onUserClick: () => gPrivacyPane.showXRExceptions(),
+});
+
+Preferences.addSetting({
+  id: "dohBox",
+});
+
+Preferences.addSetting({
+  id: "dohAdvancedButton",
+  onUserClick(e) {
+    e.preventDefault();
+    gotoPref("paneDnsOverHttps");
+  },
+});
+
+Preferences.addSetting({
+  id: "dohExceptionsButton",
+  onUserClick: () => gPrivacyPane.showDoHExceptions(),
+});
+
+Preferences.addSetting({
+  id: "dohMode",
+  pref: "network.trr.mode",
+  setup(emitChange) {
+    Services.obs.addObserver(emitChange, "network:trr-mode-changed");
+    Services.obs.addObserver(emitChange, "network:trr-confirmation");
+    return () => {
+      Services.obs.removeObserver(emitChange, "network:trr-mode-changed");
+      Services.obs.removeObserver(emitChange, "network:trr-confirmation");
+    };
+  },
+});
+
+Preferences.addSetting({
+  id: "dohURL",
+  pref: "network.trr.uri",
+  setup(emitChange) {
+    Services.obs.addObserver(emitChange, "network:trr-uri-changed");
+    Services.obs.addObserver(emitChange, "network:trr-confirmation");
+    return () => {
+      Services.obs.removeObserver(emitChange, "network:trr-uri-changed");
+      Services.obs.removeObserver(emitChange, "network:trr-confirmation");
+    };
+  },
+});
+
+Preferences.addSetting({
+  id: "dohDefaultURL",
+  pref: "network.trr.default_provider_uri",
+});
+
+Preferences.addSetting({
+  id: "dohDisableHeuristics",
+  pref: "doh-rollout.disable-heuristics",
+});
+
+Preferences.addSetting({
+  id: "dohModeBoxItem",
+  deps: ["dohMode"],
+  getControlConfig: (config, deps) => {
+    let l10nId = "preferences-doh-overview-off";
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_NATIVEONLY) {
+      l10nId = "preferences-doh-overview-default";
+    } else if (
+      deps.dohMode.value == Ci.nsIDNSService.MODE_TRRFIRST ||
+      deps.dohMode.value == Ci.nsIDNSService.MODE_TRRONLY
+    ) {
+      l10nId = "preferences-doh-overview-custom";
+    }
+    return {
+      ...config,
+      l10nId,
+    };
+  },
+});
+
+Preferences.addSetting({
+  id: "dohStatusBox",
+  deps: ["dohMode", "dohURL"],
+  getControlConfig: config => {
+    let l10nId = "preferences-doh-status-item-off";
+    let l10nArgs = {};
+    let supportPage = "";
+    let controlAttrs = { type: "info" };
+
+    let trrURI = Services.dns.currentTrrURI;
+    let hostname = URL.parse(trrURI)?.hostname;
+
+    let name = hostname || trrURI;
+    let nameFound = false;
+    let steering = false;
+    for (let resolver of DoHConfigController.currentConfig.providerList) {
+      if (resolver.uri == trrURI) {
+        name = resolver.UIName || name;
+        nameFound = true;
+        break;
+      }
+    }
+    if (!nameFound) {
+      for (let resolver of DoHConfigController.currentConfig.providerSteering
+        .providerList) {
+        if (resolver.uri == trrURI) {
+          steering = true;
+          name = resolver.UIName || name;
+          break;
+        }
+      }
+    }
+
+    let mode = Services.dns.currentTrrMode;
+    if (
+      (mode == Ci.nsIDNSService.MODE_TRRFIRST ||
+        mode == Ci.nsIDNSService.MODE_TRRONLY) &&
+      lazy.gParentalControlsService?.parentalControlsEnabled
+    ) {
+      l10nId = "preferences-doh-status-item-not-active";
+      supportPage = "doh-status";
+      l10nArgs = {
+        reason: Services.dns.getTRRSkipReasonName(
+          Ci.nsITRRSkipReason.TRR_PARENTAL_CONTROL
+        ),
+        name,
+      };
+    } else {
+      let confirmationState = Services.dns.currentTrrConfirmationState;
+      if (
+        mode != Ci.nsIDNSService.MODE_TRRFIRST &&
+        mode != Ci.nsIDNSService.MODE_TRRONLY
+      ) {
+        l10nId = "preferences-doh-status-item-off";
+      } else if (
+        confirmationState == Ci.nsIDNSService.CONFIRM_TRYING_OK ||
+        confirmationState == Ci.nsIDNSService.CONFIRM_OK ||
+        confirmationState == Ci.nsIDNSService.CONFIRM_DISABLED
+      ) {
+        if (steering) {
+          l10nId = "preferences-doh-status-item-active-local";
+          controlAttrs = { type: "success" };
+        } else {
+          l10nId = "preferences-doh-status-item-active";
+          controlAttrs = { type: "success" };
+        }
+      } else if (steering) {
+        l10nId = "preferences-doh-status-item-not-active-local";
+        supportPage = "doh-status";
+        controlAttrs = { type: "warning" };
+      } else {
+        l10nId = "preferences-doh-status-item-not-active";
+        supportPage = "doh-status";
+        controlAttrs = { type: "warning" };
+      }
+
+      let confirmationStatus = Services.dns.lastConfirmationStatus;
+      if (confirmationStatus != Cr.NS_OK) {
+        l10nArgs = {
+          reason: ChromeUtils.getXPCOMErrorName(confirmationStatus),
+          name,
+        };
+      } else {
+        l10nArgs = {
+          reason: Services.dns.getTRRSkipReasonName(
+            Services.dns.lastConfirmationSkipReason
+          ),
+          name,
+        };
+        if (
+          Services.dns.lastConfirmationSkipReason ==
+            Ci.nsITRRSkipReason.TRR_BAD_URL ||
+          !name
+        ) {
+          l10nId = "preferences-doh-status-item-not-active-bad-url";
+          supportPage = "doh-status";
+          controlAttrs = { type: "warning" };
+        }
+      }
+    }
+
+    return {
+      ...config,
+      l10nId,
+      l10nArgs,
+      supportPage,
+      controlAttrs,
+    };
+  },
+});
+
+Preferences.addSetting({
+  id: "dohRadioGroup",
+  // These deps are complicated:
+  // this radio group, along with dohFallbackIfCustom controls the mode and URL.
+  // Therefore, we set dohMode and dohURL as deps here. This is a smell, but needed
+  // for the mismatch of control-to-pref.
+  deps: ["dohFallbackIfCustom", "dohMode", "dohURL"],
+  onUserChange: (val, deps) => {
+    let value = null;
+    if (val == "default") {
+      value = "dohDefaultRadio";
+    } else if (val == "off") {
+      value = "dohOffRadio";
+    } else if (val == "custom" && deps.dohFallbackIfCustom.value) {
+      value = "dohEnabledRadio";
+    } else if (val == "custom" && !deps.dohFallbackIfCustom.value) {
+      value = "dohStrictRadio";
+    }
+    if (value) {
+      Glean.securityDohSettings.modeChangedButton.record({
+        value,
+      });
+    }
+  },
+  get: (_val, deps) => {
+    switch (deps.dohMode.value) {
+      case Ci.nsIDNSService.MODE_NATIVEONLY:
+        return "default";
+      case Ci.nsIDNSService.MODE_TRRFIRST:
+      case Ci.nsIDNSService.MODE_TRRONLY:
+        return "custom";
+      case Ci.nsIDNSService.MODE_TRROFF:
+      case Ci.nsIDNSService.MODE_RESERVED1:
+      case Ci.nsIDNSService.MODE_RESERVED4:
+      default:
+        return "off";
+    }
+  },
+  set: (val, deps) => {
+    if (val == "custom") {
+      if (deps.dohFallbackIfCustom.value) {
+        deps.dohMode.value = Ci.nsIDNSService.MODE_TRRFIRST;
+      } else {
+        deps.dohMode.value = Ci.nsIDNSService.MODE_TRRONLY;
+      }
+    } else if (val == "off") {
+      deps.dohMode.value = Ci.nsIDNSService.MODE_TRROFF;
+    } else {
+      deps.dohMode.value = Ci.nsIDNSService.MODE_NATIVEONLY;
+    }
+
+    // When the mode is set to 0 we need to clear the URI so
+    // doh-rollout can kick in.
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_NATIVEONLY) {
+      deps.dohURL.pref.value = undefined;
+      Services.prefs.clearUserPref("doh-rollout.disable-heuristics");
+    }
+
+    // Bug 1861285
+    // When the mode is set to 2 or 3, we need to check if network.trr.uri is a empty string.
+    // In this case, we need to update network.trr.uri to default to fallbackProviderURI.
+    // This occurs when the mode is previously set to 0 (Default Protection).
+    if (
+      deps.dohMode.value == Ci.nsIDNSService.MODE_TRRFIRST ||
+      deps.dohMode.value == Ci.nsIDNSService.MODE_TRRONLY
+    ) {
+      if (!deps.dohURL.value) {
+        deps.dohURL.value =
+          DoHConfigController.currentConfig.fallbackProviderURI;
+      }
+    }
+
+    // Bug 1900672
+    // When the mode is set to 5, clear the pref to ensure that
+    // network.trr.uri is set to fallbackProviderURIwhen the mode is set to 2 or 3 afterwards
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_TRROFF) {
+      deps.dohURL.pref.value = undefined;
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "dohFallbackIfCustom",
+  pref: "network.trr_ui.fallback_was_checked",
+  // These deps are complicated:
+  // this checkbox, along with dohRadioGroup controls the mode and URL.
+  // Therefore, we set dohMode as a dep here. This is a smell, but needed
+  // for the mismatch of control-to-pref.
+  deps: ["dohMode"],
+  onUserChange: val => {
+    if (val) {
+      Glean.securityDohSettings.modeChangedButton.record({
+        value: "dohEnabledRadio",
+      });
+    } else {
+      Glean.securityDohSettings.modeChangedButton.record({
+        value: "dohStrictRadio",
+      });
+    }
+  },
+  get: (val, deps) => {
+    // If we are in a custom mode, we need to get the value from the Setting
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_TRRFIRST) {
+      return true;
+    }
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_TRRONLY) {
+      return false;
+    }
+
+    // Propagate the preference otherwise
+    return val;
+  },
+  set: (val, deps) => {
+    // Toggle the preference that controls the setting if are in a custom mode
+    // This should be the only case where the checkbox is enabled, but we can be
+    // careful and test.
+    if (deps.dohMode.value == Ci.nsIDNSService.MODE_TRRFIRST && !val) {
+      deps.dohMode.value = Ci.nsIDNSService.MODE_TRRONLY;
+    } else if (deps.dohMode.value == Ci.nsIDNSService.MODE_TRRONLY && val) {
+      deps.dohMode.value = Ci.nsIDNSService.MODE_TRRFIRST;
+    }
+    // Propagate to the real preference
+    return val;
+  },
+});
+
+Preferences.addSetting({
+  id: "dohCustomProvider",
+  deps: ["dohProviderSelect", "dohURL"],
+  _value: null,
+  visible: deps => {
+    return deps.dohProviderSelect.value == "custom";
+  },
+  get(_val, deps) {
+    if (this._value === null) {
+      return deps.dohURL.value;
+    }
+    return this._value;
+  },
+  set(val, deps) {
+    this._value = val;
+    if (val == "") {
+      val = " ";
+    }
+    deps.dohURL.value = val;
+  },
+});
+
+Preferences.addSetting({
+  id: "dohProviderSelect",
+  deps: ["dohURL", "dohDefaultURL"],
+  _custom: false,
+  onUserChange: value => {
+    Glean.securityDohSettings.providerChoiceValue.record({
+      value,
+    });
+  },
+  getControlConfig(config, deps) {
+    let options = [];
+
+    let resolvers = DoHConfigController.currentConfig.providerList;
+    // if there's no default, we'll hold its position with an empty string
+    let defaultURI = DoHConfigController.currentConfig.fallbackProviderURI;
+    let defaultFound = resolvers.some(p => p.uri == defaultURI);
+    if (!defaultFound && defaultURI) {
+      // the default value for the pref isn't included in the resolvers list
+      // so we'll make a stub for it. Without an id, we'll have to use the url as the label
+      resolvers.unshift({ uri: defaultURI });
+    }
+    let currentURI = deps.dohURL.value;
+    if (currentURI && !resolvers.some(p => p.uri == currentURI)) {
+      this._custom = true;
+    }
+
+    options = resolvers.map(resolver => {
+      let option = {
+        value: resolver.uri,
+        l10nArgs: {
+          name: resolver.UIName || resolver.uri,
+        },
+      };
+      if (resolver.uri == defaultURI) {
+        option.l10nId = "connection-dns-over-https-url-item-default";
+      } else {
+        option.l10nId = "connection-dns-over-https-url-item";
+      }
+      return option;
+    });
+    options.push({
+      value: "custom",
+      l10nId: "connection-dns-over-https-url-custom",
+    });
+
+    return {
+      options,
+      ...config,
+    };
+  },
+  get(_val, deps) {
+    if (this._custom) {
+      return "custom";
+    }
+    let currentURI = deps.dohURL.value;
+    if (!currentURI) {
+      currentURI = deps.dohDefaultURL.value;
+    }
+    return currentURI;
+  },
+  set(val, deps, setting) {
+    if (val != "custom") {
+      this._custom = false;
+      deps.dohURL.value = val;
+    } else {
+      this._custom = true;
+    }
+    setting.emit("change");
+    return val;
   },
 });
 
@@ -2660,6 +3204,9 @@ var gPrivacyPane = {
     initSettingGroup("certificates");
     initSettingGroup("ipprotection");
     initSettingGroup("history");
+    initSettingGroup("permissions");
+    initSettingGroup("dnsOverHttps");
+    initSettingGroup("dnsOverHttpsAdvanced");
 
     /* Initialize Content Blocking */
     this.initContentBlocking();
@@ -2730,11 +3277,6 @@ var gPrivacyPane = {
       gPrivacyPane.changeMasterPassword
     );
     setEventListener("showPasswords", "command", gPrivacyPane.showPasswords);
-    setEventListener(
-      "addonExceptions",
-      "command",
-      gPrivacyPane.showAddonExceptions
-    );
 
     this._pane = document.getElementById("panePrivacy");
 
@@ -2744,64 +3286,6 @@ var gPrivacyPane = {
     this._initOSAuthentication();
 
     this.initListenersForExtensionControllingPasswordManager();
-
-    setEventListener(
-      "autoplaySettingsButton",
-      "command",
-      gPrivacyPane.showAutoplayMediaExceptions
-    );
-    setEventListener(
-      "notificationSettingsButton",
-      "command",
-      gPrivacyPane.showNotificationExceptions
-    );
-    setEventListener(
-      "locationSettingsButton",
-      "command",
-      gPrivacyPane.showLocationExceptions
-    );
-    setEventListener(
-      "localHostSettingsButton",
-      "command",
-      gPrivacyPane.showLocalHostExceptions
-    );
-    setEventListener(
-      "localNetworkSettingsButton",
-      "command",
-      gPrivacyPane.showLocalNetworkExceptions
-    );
-    setEventListener(
-      "xrSettingsButton",
-      "command",
-      gPrivacyPane.showXRExceptions
-    );
-    setEventListener(
-      "cameraSettingsButton",
-      "command",
-      gPrivacyPane.showCameraExceptions
-    );
-    setEventListener(
-      "microphoneSettingsButton",
-      "command",
-      gPrivacyPane.showMicrophoneExceptions
-    );
-    document.getElementById("speakerSettingsRow").hidden =
-      !Services.prefs.getBoolPref("media.setsinkid.enabled", false);
-    setEventListener(
-      "speakerSettingsButton",
-      "command",
-      gPrivacyPane.showSpeakerExceptions
-    );
-    setEventListener(
-      "popupPolicyButton",
-      "command",
-      gPrivacyPane.showPopupExceptions
-    );
-    setEventListener(
-      "notificationsDoNotDisturb",
-      "command",
-      gPrivacyPane.toggleDoNotDisturbNotifications
-    );
 
     setSyncFromPrefListener("contentBlockingBlockCookiesCheckbox", () =>
       this.readBlockCookies()
@@ -2817,13 +3301,6 @@ var gPrivacyPane = {
     );
 
     setSyncFromPrefListener("savePasswords", () => this.readSavePasswords());
-
-    setSyncFromPrefListener("popupPolicy", () =>
-      this.updateButtons("popupPolicyButton", "dom.disable_open_during_load")
-    );
-    setSyncFromPrefListener("warnAddonInstall", () =>
-      this.readWarnAddonInstall()
-    );
 
     if (AlertsServiceDND) {
       let notificationsDoNotDisturbBox = document.getElementById(
@@ -2895,12 +3372,6 @@ var gPrivacyPane = {
     this.initDoH();
 
     this.initWebAuthn();
-
-    Preferences.get("network.lna.blocking").on(
-      "change",
-      this.setUpLocalNetworkAccessPermissionUI
-    );
-    this.setUpLocalNetworkAccessPermissionUI();
 
     // Notify observers that the UI is now ready
     Services.obs.notifyObservers(window, "privacy-pane-loaded");
@@ -3600,10 +4071,6 @@ var gPrivacyPane = {
     return sanitizeOnShutdownPrefsArray.some(
       pref => Preferences.get(pref).value
     );
-  },
-
-  toggleDoNotDisturbNotifications(event) {
-    AlertsServiceDND.manualDoNotDisturb = event.target.checked;
   },
 
   /**
@@ -4338,20 +4805,6 @@ var gPrivacyPane = {
   },
 
   /**
-   * Enables/disables the add-ons Exceptions button depending on whether
-   * or not add-on installation warnings are displayed.
-   */
-  readWarnAddonInstall() {
-    var warn = Preferences.get("xpinstall.whitelist.required");
-    var exceptions = document.getElementById("addonExceptions");
-
-    exceptions.disabled = !warn.value || warn.locked;
-
-    // don't override the preference value
-    return undefined;
-  },
-
-  /**
    * Displays the exceptions lists for add-on installation warnings.
    */
   showAddonExceptions() {
@@ -4559,12 +5012,6 @@ var gPrivacyPane = {
       SelectableProfileService.off("enableChanged", listener)
     );
     this.updateProfilesPrivacyInfo();
-  },
-
-  setUpLocalNetworkAccessPermissionUI() {
-    const isLNADisabled = !Preferences.get("network.lna.blocking").value;
-    document.getElementById("localHostSettingsRow").hidden = isLNADisabled;
-    document.getElementById("localNetworkSettingsRow").hidden = isLNADisabled;
   },
 
   updateProfilesPrivacyInfo() {

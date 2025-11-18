@@ -7861,7 +7861,6 @@ interface nsICookieManager extends nsISupports {
   getCookieBehavior(aIsPrivate: boolean): u32;
   remove(aHost: string, aName: string, aPath: string, aOriginAttributes: any): void;
   add(aHost: string, aPath: string, aName: string, aValue: string, aIsSecure: boolean, aIsHttpOnly: boolean, aIsSession: boolean, aExpiry: i64, aOriginAttributes: any, aSameSite: i32, aSchemeMap: nsICookie.schemeType, aIsPartitioned?: boolean): nsICookieValidation;
-  addForAddOn(aHost: string, aPath: string, aName: string, aValue: string, aIsSecure: boolean, aIsHttpOnly: boolean, aIsSession: boolean, aExpiry: i64, aOriginAttributes: any, aSameSite: i32, aSchemeMap: nsICookie.schemeType, aIsPartitioned?: boolean): nsICookieValidation;
   cookieExists(aHost: string, aPath: string, aName: string, aOriginAttributes: any): boolean;
   countCookiesFromHost(aHost: string): u32;
   getCookiesFromHost(aHost: string, aOriginAttributes: any, aSorted?: boolean): nsICookie[];
@@ -10333,6 +10332,28 @@ interface mozISandboxSettings extends nsISupports {
   readonly contentWin32kLockdownStateString: string;
 }
 
+// https://searchfox.org/mozilla-central/source/security/sandbox/linux/interfaces/mozISandboxReporter.idl
+
+interface mozISandboxReport extends nsISupports {
+  readonly msecAgo: u64;
+  readonly pid: i32;
+  readonly tid: i32;
+  readonly procType: string;
+  readonly syscall: u32;
+  readonly numArgs: u32;
+  getArg(aIndex: u32): string;
+}
+
+interface mozISandboxReportArray extends nsISupports {
+  readonly begin: u64;
+  readonly end: u64;
+  getElement(aIndex: u64): mozISandboxReport;
+}
+
+interface mozISandboxReporter extends nsISupports {
+  snapshot(): mozISandboxReportArray;
+}
+
 // https://searchfox.org/mozilla-central/source/toolkit/components/satchel/nsIFormFillController.idl
 
 interface nsIFormFillController extends nsISupports {
@@ -11689,12 +11710,11 @@ interface nsISearchService extends nsISupports, Enums<typeof nsISearchService_Op
   getEngines(): Promise<any>;
   getVisibleEngines(): Promise<any>;
   getAppProvidedEngines(): Promise<any>;
-  getEnginesByExtensionID(extensionID: string): Promise<any>;
   findContextualSearchEngineByHost(host: string): Promise<any>;
   shouldShowInstallPrompt(engine: any): Promise<any>;
   addSearchEngine(engine: any): Promise<any>;
   moveEngine(engine: nsISearchEngine, newIndex: i32): Promise<any>;
-  removeEngine(engine: nsISearchEngine): Promise<any>;
+  removeEngine(engine: nsISearchEngine, changeReason?: u16): Promise<any>;
   removeWebExtensionEngine(id: string): Promise<any>;
   readonly appDefaultEngine: nsISearchEngine;
   readonly appPrivateDefaultEngine: nsISearchEngine;
@@ -12871,7 +12891,6 @@ interface nsIBaseWindow extends nsISupports {
   getSize(cx: OutParam<i32>, cy: OutParam<i32>): void;
   setPositionAndSize(x: i32, y: i32, cx: i32, cy: i32, flags: u32): void;
   getPositionAndSize(x: OutParam<i32>, y: OutParam<i32>, cx: OutParam<i32>, cy: OutParam<i32>): void;
-  repaint(force: boolean): void;
   readonly nativeHandle: string;
   visibility: boolean;
   enabled: boolean;
@@ -13642,6 +13661,12 @@ interface nsITabUnloader extends nsISupports {
 interface nsIAvailableMemoryWatcherBase extends nsISupports {
   registerTabUnloader(aTabUnloader: nsITabUnloader): void;
   onUnloadAttemptCompleted(aResult: nsresult): void;
+}
+
+// https://searchfox.org/mozilla-central/source/xpcom/base/nsIAvailableMemoryWatcherTestingLinux.idl
+
+interface nsIAvailableMemoryWatcherTestingLinux extends nsISupports {
+  setPSIPathForTesting(aPSIPath: string): void;
 }
 
 // https://searchfox.org/mozilla-central/source/xpcom/base/nsIConsoleListener.idl
@@ -16198,6 +16223,9 @@ interface nsIXPCComponents_Interfaces {
   nsIApplicationReputationQuery: nsJSIID<nsIApplicationReputationQuery>;
   nsIApplicationReputationCallback: nsJSIID<nsIApplicationReputationCallback>;
   mozISandboxSettings: nsJSIID<mozISandboxSettings>;
+  mozISandboxReport: nsJSIID<mozISandboxReport>;
+  mozISandboxReportArray: nsJSIID<mozISandboxReportArray>;
+  mozISandboxReporter: nsJSIID<mozISandboxReporter>;
   nsIFormFillController: nsJSIID<nsIFormFillController>;
   nsIFormFillCompleteObserver: nsJSIID<nsIFormFillCompleteObserver>;
   mozIBridgedSyncEngineCallback: nsJSIID<mozIBridgedSyncEngineCallback>;
@@ -16433,6 +16461,7 @@ interface nsIXPCComponents_Interfaces {
   nsIWindowWatcher: nsJSIID<nsIWindowWatcher>;
   nsITabUnloader: nsJSIID<nsITabUnloader>;
   nsIAvailableMemoryWatcherBase: nsJSIID<nsIAvailableMemoryWatcherBase>;
+  nsIAvailableMemoryWatcherTestingLinux: nsJSIID<nsIAvailableMemoryWatcherTestingLinux>;
   nsIConsoleListener: nsJSIID<nsIConsoleListener>;
   nsIConsoleMessage: nsJSIID<nsIConsoleMessage>;
   nsIConsoleService: nsJSIID<nsIConsoleService, typeof nsIConsoleService_OutputMode>;

@@ -877,11 +877,6 @@
   value: false
   mirror: always
 
-- name: apz.windows.use_direct_manipulation
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-
 - name: apz.windows.check_for_pan_gesture_conversion
   type: RelaxedAtomicBool
   value: true
@@ -3456,6 +3451,14 @@
   value: false
   mirror: always
 #endif
+
+# This controls whether JS IPC messages are sent from child to parent using
+# the typeable JSIPCValue encoding, or simply sent using structured cloning.
+# This being true is necessary to type check messages.
+- name: dom.jsipc.send_typed
+  type: bool
+  value: false
+  mirror: always
 
 # Support for input type=month, type=week. By default, disabled.
 - name: dom.forms.datetime.others
@@ -7710,7 +7713,7 @@
 - name: gfx.webrender.layer-compositor
   type: bool
 #if defined(XP_WIN)
-  value: @IS_NIGHTLY_BUILD@
+  value: true
 #else
   value: false
 #endif
@@ -10167,17 +10170,6 @@
 #endif
   mirror: always
   rust: true
-
-# Enable the new multi-pass grid track sizing algorithm.
-# This features implements two aspects from the CSS Grid Level 2 spec:
-# 1. Percent-valued row track size re-resolution:
-#    https://drafts.csswg.org/css-grid-2/#track-sizes
-# 2. Multi-pass grid sizing algorithm:
-#    https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
-- name: layout.css.grid-multi-pass-track-sizing.enabled
-  type: bool
-  value: true
-  mirror: always
 
 # Is support for :heading and :heading() pseudo classes enabled?
 - name: layout.css.heading-selector.enabled
@@ -13285,6 +13277,13 @@
   value: true
   mirror: always
 
+# Default buffer size for buffered stream operations. The actual value used will
+# be floored to the nearest power of two.
+- name: network.buffer.default_size
+  type: RelaxedAtomicUint32
+  value: 65536
+  mirror: always
+
 # See the full list of values in nsICookieService.idl.
 - name: network.cookie.cookieBehavior
   type: RelaxedAtomicInt32
@@ -15254,6 +15253,13 @@
   value: true
   mirror: always
   rust: true
+
+# Fallback to H2 if mHttp3Connection->Fetch returns an error in
+# Http3Session::TryActivating
+- name: network.http.http3.fallback_to_h2_on_error
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
 
 # Maximum number of UDP segments in a single UDP GSO send. Noop if
 # network.http.http3.use_nspr_for_io is true.

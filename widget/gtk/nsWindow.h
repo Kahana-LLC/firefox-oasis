@@ -167,9 +167,6 @@ class nsWindow final : public nsIWidget {
 
   NS_INLINE_DECL_REFCOUNTING_INHERITED(nsWindow, nsIWidget)
 
-  nsresult DispatchEvent(mozilla::WidgetGUIEvent* aEvent,
-                         nsEventStatus& aStatus) override;
-
   // called when we are destroyed
   void OnDestroy() override;
 
@@ -570,7 +567,6 @@ class nsWindow final : public nsIWidget {
 
   bool GetDragInfo(mozilla::WidgetMouseEvent* aMouseEvent, GdkWindow** aWindow,
                    gint* aButton, gint* aRootX, gint* aRootY);
-  nsIWidgetListener* GetListener();
 
   nsWindow* GetTransientForWindowIfPopup();
   bool IsHandlingTouchSequence(GdkEventSequence* aSequence);

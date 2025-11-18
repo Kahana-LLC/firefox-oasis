@@ -943,7 +943,6 @@ void nsIFrame::Destroy(DestroyContext& aContext) {
   }
 
   if (nsView* view = GetView()) {
-    view->SetFrame(nullptr);
     view->Destroy();
   }
 
@@ -1260,7 +1259,7 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
 
   const bool isRootElementStyle = Style()->IsRootElementStyle();
   if (isRootElementStyle) {
-    PresShell()->SyncWindowProperties(/* aSync = */ false);
+    PresShell()->SetNeedsWindowPropertiesSync();
   }
 
   const nsStyleImageLayers* oldLayers =
@@ -3378,6 +3377,7 @@ void nsIFrame::BuildDisplayListForStackingContext(
         StickyScrollContainer::GetOrCreateForFrame(this);
     if (stickyScrollContainer) {
       if (aBuilder->IsPaintingToWindow() &&
+          !aBuilder->IsInViewTransitionCapture() &&
           stickyScrollContainer->ScrollContainer()
               ->IsMaybeAsynchronouslyScrolled()) {
         shouldFlattenStickyItem = false;
@@ -3905,9 +3905,11 @@ void nsIFrame::BuildDisplayListForStackingContext(
     // item as well.
     const ActiveScrolledRoot* fixedASR = ActiveScrolledRoot::PickAncestor(
         containerItemASR, aBuilder->CurrentActiveScrolledRoot());
+    const ActiveScrolledRoot* scrollTargetASR =
+        containerItemASR ? containerItemASR->GetNearestScrollASR() : nullptr;
     resultList.AppendNewToTop<nsDisplayFixedPosition>(
         aBuilder, this, &resultList, fixedASR,
-        nsDisplayItem::ContainerASRType::AncestorOfContained, containerItemASR,
+        nsDisplayItem::ContainerASRType::AncestorOfContained, scrollTargetASR,
         ShouldForceIsolation());
     createdContainer = true;
   } else if (useStickyPosition && !capturedByViewTransition) {
@@ -6602,7 +6604,7 @@ nsIFrame::SizeComputationResult nsIFrame::ComputeSize(
   // isAutoBSize is true, or styleBSize is of type LengthPercentage()).
   const auto styleBSize = [&] {
     auto styleBSizeConsideringOverrides =
-        (aSizeOverrides.mStyleBSize)
+        aSizeOverrides.mStyleBSize
             ? AnchorResolvedSizeHelper::Overridden(*aSizeOverrides.mStyleBSize)
             : stylePos->BSize(aWM, anchorResolutionParams);
     if (styleBSizeConsideringOverrides->BehavesLikeStretchOnBlockAxis() &&
@@ -7349,8 +7351,41 @@ nsIFrame::ISizeComputationResult nsIFrame::ComputeISizeValue(
     if (nsLayoutUtils::IsAutoBSize(aStyleBSize, aCBSize.BSize(aWM))) {
       return Nothing();
     }
+
+    // Helper used below to resolve aStyleBSize if it's 'stretch' or an alias.
+    // XXXdholbert Really we should be resolving 'stretch' and its aliases
+    // sooner; see bug 2000035.
+    auto ResolveStretchBSize = [&]() {
+      MOZ_ASSERT(aStyleBSize.BehavesLikeStretchOnBlockAxis(),
+                 "Only call me for 'stretch'-like BSizes");
+      MOZ_ASSERT(aCBSize.BSize(aWM) != NS_UNCONSTRAINEDSIZE,
+                 "If aStyleBSize is stretch-like, then unconstrained "
+                 "aCBSize.BSize should make us return via the IsAutoBSize "
+                 "check above");
+
+      // NOTE: the borderPadding and margin variables might be zero-filled
+      // instead of having the true values, if those values haven't been
+      // stashed in our property-table yet (e.g. if we're in the midst of
+      // setting up a ReflowInput for our first reflow). So ideally, we should
+      // be resolving 'stretch' **in our callers** rather than here, if those
+      // callers have more up-to-date resolved margin/border/padding values.
+      // We'll still make a best-effort attempt to resolve 'stretch' here,
+      // though, for the benefit of callers that might not have handled it, to
+      // be sure we don't abort in aStyleBSize.AsLengthPercentage(). Ultimately
+      // this all can be removed when we fix bug 2000035.
+      const auto borderPadding = GetLogicalUsedBorderAndPadding(aWM);
+      const auto margin = GetLogicalUsedMargin(aWM);
+      nscoord stretchBSize = nsLayoutUtils::ComputeStretchBSize(
+          aCBSize.BSize(aWM), margin.BStartEnd(aWM),
+          borderPadding.BStartEnd(aWM), StylePosition()->mBoxSizing);
+      return LengthPercentage::FromAppUnits(stretchBSize);
+    };
+
     return Some(ComputeISizeValueFromAspectRatio(
-        aWM, aCBSize, aContentEdgeToBoxSizing, aStyleBSize.AsLengthPercentage(),
+        aWM, aCBSize, aContentEdgeToBoxSizing,
+        aStyleBSize.BehavesLikeStretchOnBlockAxis()
+            ? ResolveStretchBSize()
+            : aStyleBSize.AsLengthPercentage(),
         aAspectRatio));
   }();
 

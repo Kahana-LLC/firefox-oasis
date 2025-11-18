@@ -48,7 +48,6 @@ import mozilla.components.compose.browser.toolbar.store.BrowserToolbarMenuItem.B
 import mozilla.components.compose.browser.toolbar.store.BrowserToolbarStore
 import mozilla.components.compose.browser.toolbar.store.EnvironmentCleared
 import mozilla.components.compose.browser.toolbar.store.EnvironmentRehydrated
-import mozilla.components.support.test.ext.joinBlocking
 import mozilla.components.support.test.mock
 import mozilla.components.support.test.robolectric.testContext
 import mozilla.components.support.test.rule.MainLooperTestRule
@@ -86,7 +85,7 @@ import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.helpers.FenixGleanTestRule
-import org.mozilla.fenix.home.toolbar.BrowserToolbarMiddleware.Companion.mapShortcutToAction
+import org.mozilla.fenix.home.toolbar.BrowserToolbarMiddleware.Companion.toHomeToolbarAction
 import org.mozilla.fenix.home.toolbar.BrowserToolbarMiddleware.HomeToolbarAction
 import org.mozilla.fenix.home.toolbar.DisplayActions.FakeClicked
 import org.mozilla.fenix.home.toolbar.DisplayActions.MenuClicked
@@ -126,7 +125,7 @@ class BrowserToolbarMiddlewareTest {
         every { testContext.settings().isTabStripEnabled } returns false
         every { testContext.settings().tabManagerEnhancementsEnabled } returns false
         every { testContext.settings().shouldShowToolbarCustomization } returns false
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BOOKMARK
+        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BOOKMARK.value
 
         fragment = spyk(Fragment()).apply {
             every { context } returns mockContext
@@ -235,7 +234,7 @@ class BrowserToolbarMiddlewareTest {
             screenWidthDp = 700
         }
         every { mockContext.resources.configuration } returns configuration
-        appStore.dispatch(AppAction.OrientationChange(Landscape)).joinBlocking()
+        appStore.dispatch(AppAction.OrientationChange(Landscape))
         mainLooperRule.idle()
 
         navigationActions = toolbarStore.state.displayState.navigationActions
@@ -342,7 +341,7 @@ class BrowserToolbarMiddlewareTest {
             screenWidthDp = 700
         }
         every { mockContext.resources.configuration } returns configuration
-        appStore.dispatch(AppAction.OrientationChange(Landscape)).joinBlocking()
+        appStore.dispatch(AppAction.OrientationChange(Landscape))
         mainLooperRule.idle()
 
         toolbarBrowserActions = toolbarStore.state.displayState.browserActionsEnd
@@ -371,7 +370,7 @@ class BrowserToolbarMiddlewareTest {
             screenWidthDp = 400
         }
         every { mockContext.resources.configuration } returns configuration
-        appStore.dispatch(AppAction.OrientationChange(Portrait)).joinBlocking()
+        appStore.dispatch(AppAction.OrientationChange(Portrait))
         mainLooperRule.idle()
 
         toolbarBrowserActions = toolbarStore.state.displayState.browserActionsEnd
@@ -404,7 +403,7 @@ class BrowserToolbarMiddlewareTest {
             screenWidthDp = 700
         }
         every { mockContext.resources.configuration } returns configuration
-        appStore.dispatch(AppAction.OrientationChange(Portrait)).joinBlocking()
+        appStore.dispatch(AppAction.OrientationChange(Portrait))
         mainLooperRule.idle()
 
         navigationActions = toolbarStore.state.displayState.navigationActions
@@ -432,8 +431,8 @@ class BrowserToolbarMiddlewareTest {
 
         val newNormalTab = createTab("test.com", private = false)
         val newPrivateTab = createTab("test.com", private = true)
-        browserStore.dispatch(AddTabAction(newNormalTab)).joinBlocking()
-        browserStore.dispatch(AddTabAction(newPrivateTab)).joinBlocking()
+        browserStore.dispatch(AddTabAction(newNormalTab))
+        browserStore.dispatch(AddTabAction(newPrivateTab))
         mainLooperRule.idle()
 
         toolbarBrowserActions = toolbarStore.state.displayState.browserActionsEnd
@@ -463,7 +462,7 @@ class BrowserToolbarMiddlewareTest {
         var tabCounterButton = toolbarBrowserActions[0] as TabCounterAction
         assertEqualsToolbarButton(expectedToolbarButton(1, true), tabCounterButton)
 
-        browserStore.dispatch(RemoveTabAction(initialPrivateTab.id)).joinBlocking()
+        browserStore.dispatch(RemoveTabAction(initialPrivateTab.id))
         mainLooperRule.idle()
 
         toolbarBrowserActions = toolbarStore.state.displayState.browserActionsEnd
@@ -674,7 +673,7 @@ class BrowserToolbarMiddlewareTest {
         val toolbarStore = buildStore(middleware)
         val newSearchEngine = SearchEngine("test", "Test", mock(), type = APPLICATION)
 
-        appStore.dispatch(SearchEngineSelected(newSearchEngine, true)).joinBlocking()
+        appStore.dispatch(SearchEngineSelected(newSearchEngine, true))
         shadowOf(Looper.getMainLooper()).idle() // wait for observing and processing the search engine update
 
         assertSearchSelectorEquals(
@@ -697,7 +696,7 @@ class BrowserToolbarMiddlewareTest {
         val middleware = BrowserToolbarMiddleware(appStore, browserStore, mockk(), mockk())
         val toolbarStore = buildStore(middleware)
 
-        browserStore.dispatch(ApplicationSearchEnginesLoaded(listOf(otherSearchEngine))).joinBlocking()
+        browserStore.dispatch(ApplicationSearchEnginesLoaded(listOf(otherSearchEngine)))
 
         assertNotEquals(
             appStore.state.searchState.selectedSearchEngine?.searchEngine,
@@ -771,7 +770,7 @@ class BrowserToolbarMiddlewareTest {
             AppAction.MenuNotification.AddMenuNotification(
                 SupportedMenuNotifications.Downloads,
             ),
-        ).joinBlocking()
+        )
         mainLooperRule.idle()
         val updatedMenuButton = toolbarStore.state.displayState.browserActionsEnd[1] as ActionButtonRes
         assertEquals(expectedMenuButton(true), updatedMenuButton)
@@ -795,7 +794,7 @@ class BrowserToolbarMiddlewareTest {
             AppAction.MenuNotification.RemoveMenuNotification(
                 SupportedMenuNotifications.Downloads,
             ),
-        ).joinBlocking()
+        )
         mainLooperRule.idle()
         val updatedMenuButton = toolbarStore.state.displayState.browserActionsEnd[1] as ActionButtonRes
         assertEquals(expectedMenuButton(), updatedMenuButton)
@@ -820,7 +819,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use translate shortcut WHEN initializing toolbar THEN show DISABLED Translate in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.TRANSLATE
+        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.TRANSLATE.value
 
         val middleware = BrowserToolbarMiddleware(
             appStore,
@@ -838,7 +837,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use homepage shortcut WHEN initializing toolbar THEN show DISABLED Homepage in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.HOMEPAGE
+        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.HOMEPAGE.value
 
         val middleware = BrowserToolbarMiddleware(
             appStore,
@@ -856,7 +855,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use back shortcut WHEN initializing toolbar THEN show DISABLED Back in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BACK
+        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BACK.value
 
         val middleware = BrowserToolbarMiddleware(
             appStore,
@@ -871,26 +870,30 @@ class BrowserToolbarMiddlewareTest {
     }
 
     @Test
-    fun `mapShortcutToAction maps keys to actions and falls back to fake bookmark action`() {
+    fun `toHomeToolbarAction maps ShortcutType to HomeToolbarAction`() {
+        assertEquals(
+            HomeToolbarAction.NewTab,
+            ShortcutType.NEW_TAB.toHomeToolbarAction(),
+        )
+        assertEquals(
+            HomeToolbarAction.FakeShare,
+            ShortcutType.SHARE.toHomeToolbarAction(),
+        )
         assertEquals(
             HomeToolbarAction.FakeBookmark,
-            mapShortcutToAction(key = ShortcutType.BOOKMARK),
+            ShortcutType.BOOKMARK.toHomeToolbarAction(),
         )
         assertEquals(
             HomeToolbarAction.FakeTranslate,
-            mapShortcutToAction(key = ShortcutType.TRANSLATE),
+            ShortcutType.TRANSLATE.toHomeToolbarAction(),
         )
         assertEquals(
             HomeToolbarAction.FakeHomepage,
-            mapShortcutToAction(key = ShortcutType.HOMEPAGE),
+            ShortcutType.HOMEPAGE.toHomeToolbarAction(),
         )
         assertEquals(
             HomeToolbarAction.FakeBack,
-            mapShortcutToAction(key = ShortcutType.BACK),
-        )
-        assertEquals(
-            HomeToolbarAction.FakeBookmark,
-            mapShortcutToAction(key = "does_not_exist"),
+            ShortcutType.BACK.toHomeToolbarAction(),
         )
     }
 

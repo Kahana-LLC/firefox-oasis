@@ -187,9 +187,19 @@ struct ActiveScrolledRoot {
   // TODO: Just have one function with an extra ASRKind parameter
   static already_AddRefed<ActiveScrolledRoot> CreateASRForFrame(
       const ActiveScrolledRoot* aParent,
-      ScrollContainerFrame* aScrollContainerFrame);
+      ScrollContainerFrame* aScrollContainerFrame
+#ifdef DEBUG
+      ,
+      const nsTArray<RefPtr<ActiveScrolledRoot>>& aActiveScrolledRoots
+#endif
+  );
   static already_AddRefed<ActiveScrolledRoot> CreateASRForStickyFrame(
-      const ActiveScrolledRoot* aParent, nsIFrame* aStickyFrame);
+      const ActiveScrolledRoot* aParent, nsIFrame* aStickyFrame
+#ifdef DEBUG
+      ,
+      const nsTArray<RefPtr<ActiveScrolledRoot>>& aActiveScrolledRoots
+#endif
+  );
 
   static const ActiveScrolledRoot* PickAncestor(
       const ActiveScrolledRoot* aOne, const ActiveScrolledRoot* aTwo) {
@@ -1696,6 +1706,10 @@ class nsDisplayListBuilder {
 
   bool ShouldRebuildDisplayListDueToPrefChange();
 
+  bool ShouldActivateAllScrollFrames() const {
+    return mShouldActivateAllScrollFrames;
+  }
+
   /**
    * Represents a region composed of frame/rect pairs.
    * WeakFrames are used to track whether a rect still belongs to the region.
@@ -2025,6 +2039,9 @@ class nsDisplayListBuilder {
   // over that page, we set this flag to avoid building potentially duplicate
   // display items.
   bool mAvoidBuildingDuplicateOofs = false;
+
+  // Cached copy so we don't have to get the root presshell repeatedly.
+  bool mShouldActivateAllScrollFrames = false;
 
   Maybe<layers::ScrollDirection> mCurrentScrollbarDirection;
 };

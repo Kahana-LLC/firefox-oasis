@@ -102,7 +102,7 @@
 // #include "nsWidgetsCID.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
-#include "mozilla/AnimatedPropertyID.h"
+#include "mozilla/CSSPropertyId.h"
 #include "mozilla/CycleCollectedJSContext.h"
 #include "mozilla/DisplayPortUtils.h"
 #include "mozilla/IMEContentObserver.h"
@@ -428,7 +428,7 @@ nsDOMWindowUtils::UpdateLayerTree() {
     if (nsView* view = vm->GetRootView()) {
       nsAutoScriptBlocker scriptBlocker;
       presShell->PaintAndRequestComposite(
-          view->GetFrame(), view->GetWidget()->GetWindowRenderer(),
+          presShell->GetRootFrame(), view->GetWidget()->GetWindowRenderer(),
           PaintFlags::PaintSyncDecodeImages);
       presShell->GetWindowRenderer()->WaitOnTransactionProcessed();
     }
@@ -770,9 +770,7 @@ nsDOMWindowUtils::SendWheelEvent(float aX, float aY, double aDeltaX,
       StaticPrefs::test_events_async_enabled()) {
     widget->DispatchInputEvent(&wheelEvent);
   } else {
-    nsEventStatus status = nsEventStatus_eIgnore;
-    nsresult rv = widget->DispatchEvent(&wheelEvent, status);
-    NS_ENSURE_SUCCESS(rv, rv);
+    widget->DispatchEvent(&wheelEvent);
   }
 
   // The callback ID may be cleared when the event also needs to be dispatched
@@ -942,7 +940,7 @@ nsresult nsDOMWindowUtils::SendTouchEventCommon(
              StaticPrefs::test_events_async_enabled()) {
     status = widget->DispatchInputEvent(&event).mContentStatus;
   } else {
-    MOZ_TRY(widget->DispatchEvent(&event, status));
+    status = widget->DispatchEvent(&event);
   }
   if (aPreventDefault) {
     *aPreventDefault = (status == nsEventStatus_eConsumeNoDefault);
@@ -1469,8 +1467,8 @@ nsDOMWindowUtils::SendSimpleGestureEvent(const nsAString& aType, float aX,
   event.mRefPoint =
       nsContentUtils::ToWidgetPoint(CSSPoint(aX, aY), offset, presContext);
 
-  nsEventStatus status;
-  return widget->DispatchEvent(&event, status);
+  widget->DispatchEvent(&event);
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -2526,9 +2524,7 @@ nsDOMWindowUtils::SendQueryContentEvent(uint32_t aType, int64_t aOffset,
       break;
   }
 
-  nsEventStatus status;
-  nsresult rv = targetWidget->DispatchEvent(&queryEvent, status);
-  NS_ENSURE_SUCCESS(rv, rv);
+  targetWidget->DispatchEvent(&queryEvent);
 
   auto* result = new nsQueryContentEventResult(std::move(queryEvent));
   result->SetEventResult(widget);
@@ -2557,9 +2553,7 @@ nsDOMWindowUtils::SendSelectionSetEvent(uint32_t aOffset, uint32_t aLength,
   selectionEvent.mUseNativeLineBreak =
       !(aAdditionalFlags & SELECTION_SET_FLAG_USE_XP_LINE_BREAK);
 
-  nsEventStatus status;
-  nsresult rv = widget->DispatchEvent(&selectionEvent, status);
-  NS_ENSURE_SUCCESS(rv, rv);
+  widget->DispatchEvent(&selectionEvent);
 
   *aResult = selectionEvent.mSucceeded;
   return NS_OK;
@@ -2612,8 +2606,8 @@ nsDOMWindowUtils::SendContentCommandEvent(const nsAString& aType,
     event.mTransferable = aTransferable;
   }
 
-  nsEventStatus status;
-  return widget->DispatchEvent(&event, status);
+  widget->DispatchEvent(&event);
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -3256,16 +3250,15 @@ nsDOMWindowUtils::ComputeAnimationDistance(Element* aElement,
                                            double* aResult) {
   NS_ENSURE_ARG_POINTER(aElement);
 
-  NonCustomCSSPropertyId propertyId =
-      nsCSSProps::LookupProperty(NS_ConvertUTF16toUTF8(aProperty));
+  NS_ConvertUTF16toUTF8 prop(aProperty);
+
+  NonCustomCSSPropertyId propertyId = nsCSSProps::LookupProperty(prop);
   if (propertyId == eCSSProperty_UNKNOWN ||
       nsCSSProps::IsShorthand(propertyId)) {
     return NS_ERROR_ILLEGAL_VALUE;
   }
 
-  AnimatedPropertyID property = propertyId == eCSSPropertyExtra_variable
-                                    ? AnimatedPropertyID(NS_Atomize(aProperty))
-                                    : AnimatedPropertyID(propertyId);
+  auto property = CSSPropertyId::FromIdOrCustomProperty(propertyId, prop);
 
   AnimationValue v1 = AnimationValue::FromString(
       property, NS_ConvertUTF16toUTF8(aValue1), aElement);
@@ -3289,17 +3282,15 @@ nsDOMWindowUtils::GetUnanimatedComputedStyle(Element* aElement,
     return NS_ERROR_INVALID_ARG;
   }
 
-  NonCustomCSSPropertyId propertyId =
-      nsCSSProps::LookupProperty(NS_ConvertUTF16toUTF8(aProperty));
+  NS_ConvertUTF16toUTF8 prop(aProperty);
+
+  NonCustomCSSPropertyId propertyId = nsCSSProps::LookupProperty(prop);
   if (propertyId == eCSSProperty_UNKNOWN ||
       nsCSSProps::IsShorthand(propertyId)) {
     return NS_ERROR_INVALID_ARG;
   }
-  AnimatedPropertyID property =
-      propertyId == eCSSPropertyExtra_variable
-          ? AnimatedPropertyID(
-                NS_Atomize(Substring(aProperty, 2, aProperty.Length() - 2)))
-          : AnimatedPropertyID(propertyId);
+
+  auto property = CSSPropertyId::FromIdOrCustomProperty(propertyId, prop);
 
   switch (aFlushType) {
     case FLUSH_NONE:

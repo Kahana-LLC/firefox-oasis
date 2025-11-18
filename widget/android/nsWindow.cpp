@@ -62,6 +62,7 @@
 #include "nsIPrintSettings.h"
 #include "nsIPrintSettingsService.h"
 
+#include "mozilla/PresShell.h"
 #include "mozilla/Logging.h"
 #include "mozilla/MiscEvents.h"
 #include "mozilla/MouseEvents.h"
@@ -2321,10 +2322,8 @@ mozilla::widget::EventDispatcher* nsWindow::GetEventDispatcher() const {
 }
 
 void nsWindow::RedrawAll() {
-  if (mAttachedWidgetListener) {
-    mAttachedWidgetListener->RequestRepaint();
-  } else if (mWidgetListener) {
-    mWidgetListener->RequestRepaint();
+  if (auto* ps = GetPresShell()) {
+    ps->SchedulePaint();
   }
 }
 
@@ -2623,21 +2622,6 @@ LayoutDeviceIntPoint nsWindow::WidgetToScreenOffset() {
     }
   }
   return p;
-}
-
-nsresult nsWindow::DispatchEvent(WidgetGUIEvent* aEvent,
-                                 nsEventStatus& aStatus) {
-  aStatus = DispatchEvent(aEvent);
-  return NS_OK;
-}
-
-nsEventStatus nsWindow::DispatchEvent(WidgetGUIEvent* aEvent) {
-  if (mAttachedWidgetListener) {
-    return mAttachedWidgetListener->HandleEvent(aEvent, mUseAttachedEvents);
-  } else if (mWidgetListener) {
-    return mWidgetListener->HandleEvent(aEvent, mUseAttachedEvents);
-  }
-  return nsEventStatus_eIgnore;
 }
 
 nsresult nsWindow::MakeFullScreen(bool aFullScreen) {
@@ -2962,8 +2946,7 @@ void nsWindow::DispatchHitTest(const WidgetTouchEvent& aEvent) {
     WidgetMouseEvent hittest(true, eMouseHitTest, this,
                              WidgetMouseEvent::eReal);
     hittest.mRefPoint = aEvent.mTouches[0]->mRefPoint;
-    nsEventStatus status;
-    DispatchEvent(&hittest, status);
+    DispatchEvent(&hittest);
   }
 }
 

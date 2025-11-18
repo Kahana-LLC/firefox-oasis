@@ -956,8 +956,7 @@ void nsWindow::RecreateDirectManipulationIfNeeded() {
     return;
   }
 
-  if (!(StaticPrefs::apz_allow_zooming() ||
-        StaticPrefs::apz_windows_use_direct_manipulation()) ||
+  if (!StaticPrefs::apz_allow_zooming() ||
       StaticPrefs::apz_windows_force_disable_direct_manipulation()) {
     return;
   }
@@ -3999,34 +3998,6 @@ WidgetEventTime nsWindow::CurrentMessageWidgetEventTime() const {
  *
  **************************************************************/
 
-// Main event dispatch. Invokes callback and ProcessEvent method on
-// Event Listener object. Part of nsIWidget.
-nsresult nsWindow::DispatchEvent(WidgetGUIEvent* event,
-                                 nsEventStatus& aStatus) {
-#ifdef WIDGET_DEBUG_OUTPUT
-  debug_DumpEvent(stdout, event->mWidget, event, "something", (int32_t)mWnd);
-#endif  // WIDGET_DEBUG_OUTPUT
-
-  aStatus = nsEventStatus_eIgnore;
-
-  // Top level windows can have a view attached which requires events be sent
-  // to the underlying base window and the view. Added when we combined the
-  // base chrome window with the main content child for nc client area (title
-  // bar) rendering.
-  if (mAttachedWidgetListener) {
-    aStatus = mAttachedWidgetListener->HandleEvent(event, mUseAttachedEvents);
-  } else if (mWidgetListener) {
-    aStatus = mWidgetListener->HandleEvent(event, mUseAttachedEvents);
-  }
-
-  // the window can be destroyed during processing of seemingly innocuous events
-  // like, say, mousedowns due to the magic of scripting. mousedowns will return
-  // nsEventStatus_eIgnore, which causes problems with the deleted window.
-  // therefore:
-  if (mOnDestroyCalled) aStatus = nsEventStatus_eConsumeNoDefault;
-  return NS_OK;
-}
-
 bool nsWindow::DispatchStandardEvent(EventMessage aMsg) {
   WidgetGUIEvent event(true, aMsg, this);
   InitEvent(event);
@@ -4041,8 +4012,7 @@ bool nsWindow::DispatchKeyboardEvent(WidgetKeyboardEvent* event) {
 }
 
 bool nsWindow::DispatchContentCommandEvent(WidgetContentCommandEvent* aEvent) {
-  nsEventStatus status;
-  DispatchEvent(aEvent, status);
+  nsEventStatus status = DispatchEvent(aEvent);
   return ConvertStatus(status);
 }
 
@@ -5863,8 +5833,7 @@ bool nsWindow::ProcessMessageInternal(UINT msg, WPARAM& wParam, LPARAM& lParam,
       WidgetGestureNotifyEvent gestureNotifyEvent(true, eGestureNotify, this);
       gestureNotifyEvent.mRefPoint =
           LayoutDeviceIntPoint::FromUnknownPoint(touchPoint);
-      nsEventStatus status;
-      DispatchEvent(&gestureNotifyEvent, status);
+      DispatchEvent(&gestureNotifyEvent);
       mDisplayPanFeedback = gestureNotifyEvent.mDisplayPanFeedback;
       if (!mTouchWindow) {
         mGesture.SetWinGestureSupport(mWnd, gestureNotifyEvent.mPanDirection);
@@ -6812,8 +6781,6 @@ bool nsWindow::OnGesture(WPARAM wParam, LPARAM lParam) {
     if (!mGesture.ProcessPanMessage(mWnd, wParam, lParam))
       return false;  // ignore
 
-    nsEventStatus status;
-
     WidgetWheelEvent wheelEvent(true, eWheel, this);
 
     ModifierKeyState modifierKeyState;
@@ -6826,7 +6793,7 @@ bool nsWindow::OnGesture(WPARAM wParam, LPARAM lParam) {
     bool endFeedback = true;
 
     if (mGesture.PanDeltaToPixelScroll(wheelEvent)) {
-      DispatchEvent(&wheelEvent, status);
+      DispatchEvent(&wheelEvent);
     }
 
     if (mDisplayPanFeedback) {
@@ -6857,8 +6824,7 @@ bool nsWindow::OnGesture(WPARAM wParam, LPARAM lParam) {
   event.mTimeStamp = GetMessageTimeStamp(::GetMessageTime());
   event.mInputSource = MouseEvent_Binding::MOZ_SOURCE_TOUCH;
 
-  nsEventStatus status;
-  DispatchEvent(&event, status);
+  nsEventStatus status = DispatchEvent(&event);
   if (status == nsEventStatus_eIgnore) {
     return false;  // Ignored, fall through
   }
