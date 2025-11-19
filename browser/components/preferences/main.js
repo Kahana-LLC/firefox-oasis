@@ -18,6 +18,8 @@ ChromeUtils.defineESModuleGetters(this, {
   TranslationsParent: "resource://gre/actors/TranslationsParent.sys.mjs",
   WindowsLaunchOnLogin: "resource://gre/modules/WindowsLaunchOnLogin.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
+  FormAutofillPreferences:
+    "resource://autofill/FormAutofillPreferences.sys.mjs",
 });
 
 // Constants & Enumeration Values
@@ -532,6 +534,23 @@ Preferences.addSetting({
     AppConstants.platform == "win" ||
     AppConstants.platform == "macosx" ||
     AppConstants.MOZ_WIDGET_GTK,
+});
+Preferences.addSetting({
+  id: "playDRMContent",
+  pref: "media.eme.enabled",
+  visible: () => {
+    if (!Services.prefs.getBoolPref("browser.eme.ui.enabled", false)) {
+      return false;
+    }
+    if (AppConstants.platform == "win") {
+      try {
+        return parseFloat(Services.sysinfo.get("version")) >= 6;
+      } catch (ex) {
+        return false;
+      }
+    }
+    return true;
+  },
 });
 Preferences.addSetting({
   id: "cfrRecommendations",
@@ -1127,6 +1146,69 @@ Preferences.addSetting({
   },
 });
 
+Preferences.addSetting({
+  id: "payment-item",
+  async onUserClick(e) {
+    const action = e.target.getAttribute("action");
+    const guid = e.target.getAttribute("guid");
+    if (action === "remove") {
+      let [title, confirm, cancel] = await document.l10n.formatValues([
+        { id: "payments-remove-payment-prompt-title" },
+        { id: "payments-remove-payment-prompt-confirm-button" },
+        { id: "payments-remove-payment-prompt-cancel-button" },
+      ]);
+      FormAutofillPreferences.prototype.openRemovePaymentDialog(
+        guid,
+        window.browsingContext.topChromeWindow.browsingContext,
+        title,
+        confirm,
+        cancel
+      );
+    } else if (action === "edit") {
+      FormAutofillPreferences.prototype.openEditCreditCardDialog(guid, window);
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "add-payment-button",
+  onUserClick: ({ target }) => {
+    target.ownerGlobal.gSubDialog.open(
+      "chrome://formautofill/content/editCreditCard.xhtml"
+    );
+  },
+});
+
+Preferences.addSetting({
+  id: "payments-list-header",
+});
+
+Preferences.addSetting(
+  class extends Preferences.AsyncSetting {
+    static id = "payments-list";
+
+    async getPaymentMethods() {
+      await FormAutofillPreferences.prototype.initializePaymentsStorage();
+      return FormAutofillPreferences.prototype.makePaymentsListItems();
+    }
+
+    async getControlConfig() {
+      return {
+        items: await this.getPaymentMethods(),
+      };
+    }
+
+    setup() {
+      Services.obs.addObserver(this.emitChange, "formautofill-storage-changed");
+      return () =>
+        Services.obs.removeObserver(
+          this.emitChange,
+          "formautofill-storage-changed"
+        );
+    }
+  }
+);
+
 SettingGroupManager.registerGroups({
   containers: {
     // This section is marked as in progress for testing purposes
@@ -1456,6 +1538,16 @@ SettingGroupManager.registerGroups({
       {
         id: "deletePrivate",
         l10nId: "download-private-browsing-delete",
+      },
+    ],
+  },
+  drm: {
+    subcategory: "drm",
+    items: [
+      {
+        id: "playDRMContent",
+        l10nId: "play-drm-content",
+        supportPage: "drm-content",
       },
     ],
   },
@@ -1843,6 +1935,111 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  passwords: {
+    inProgress: true,
+    id: "passwordsGroup",
+    l10nId: "forms-passwords-header",
+    headingLevel: 2,
+    items: [
+      {
+        id: "savePasswords",
+        l10nId: "forms-ask-to-save-passwords",
+        items: [
+          {
+            id: "managePasswordExceptions",
+            l10nId: "forms-manage-password-exceptions",
+            control: "moz-box-button",
+            controlAttrs: {
+              "search-l10n-ids":
+                "permissions-address,permissions-exceptions-saved-passwords-window.title,permissions-exceptions-saved-passwords-desc,",
+            },
+          },
+          {
+            id: "fillUsernameAndPasswords",
+            l10nId: "forms-fill-usernames-and-passwords-2",
+            controlAttrs: {
+              "search-l10n-ids": "forms-saved-passwords-searchkeywords",
+            },
+          },
+          {
+            id: "suggestStrongPasswords",
+            l10nId: "forms-suggest-passwords",
+            supportPage: "how-generate-secure-password-firefox",
+          },
+        ],
+      },
+      {
+        id: "requireOSAuthForPasswords",
+        l10nId: "forms-os-reauth",
+      },
+      {
+        id: "manageSavedPasswords",
+        l10nId: "forms-saved-passwords-2",
+        control: "moz-box-button",
+      },
+      {
+        id: "additionalProtectionsGroup",
+        l10nId: "forms-additional-protections-header",
+        control: "moz-fieldset",
+        controlAttrs: {
+          headingLevel: 2,
+        },
+        items: [
+          {
+            id: "primaryPasswordNotSet",
+            control: "moz-box-group",
+            items: [
+              {
+                id: "usePrimaryPassword",
+                l10nId: "forms-primary-pw-use",
+                control: "moz-box-item",
+                supportPage: "primary-password-stored-logins",
+              },
+              {
+                id: "addPrimaryPassword",
+                l10nId: "forms-primary-pw-set",
+                control: "moz-box-button",
+              },
+            ],
+          },
+          {
+            id: "primaryPasswordSet",
+            control: "moz-box-group",
+            items: [
+              {
+                id: "statusPrimaryPassword",
+                l10nId: "forms-primary-pw-on",
+                control: "moz-box-item",
+                controlAttrs: {
+                  iconsrc: "chrome://global/skin/icons/check-filled.svg",
+                },
+                options: [
+                  {
+                    id: "turnOffPrimaryPassword",
+                    l10nId: "forms-primary-pw-turn-off",
+                    control: "moz-button",
+                    controlAttrs: {
+                      slot: "actions",
+                    },
+                  },
+                ],
+              },
+              {
+                id: "changePrimaryPassword",
+                l10nId: "forms-primary-pw-change-2",
+                control: "moz-box-button",
+              },
+            ],
+          },
+          {
+            id: "breachAlerts",
+            l10nId: "forms-breach-alerts",
+            supportPage: "lockwise-alerts",
+          },
+        ],
+      },
+    ],
+  },
   history: {
     items: [
       {
@@ -2134,6 +2331,24 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  managePayments: {
+    items: [
+      {
+        id: "add-payment-button",
+        control: "moz-button",
+        l10nId: "autofill-payment-methods-add-button",
+      },
+      {
+        id: "payments-list",
+        control: "moz-box-group",
+        l10nId: "payments-list-header",
+        controlAttrs: {
+          hasHeader: true,
+          type: "list",
+        },
+      },
+    ],
+  },
 });
 
 /**
@@ -2252,6 +2467,7 @@ var gMainPane = {
     // Initialize settings groups from the config object.
     initSettingGroup("appearance");
     initSettingGroup("downloads");
+    initSettingGroup("drm");
     initSettingGroup("browsing");
     initSettingGroup("zoom");
     initSettingGroup("performance");
@@ -2416,19 +2632,6 @@ var gMainPane = {
       fxtranslationRow.hidden = false;
     }
 
-    let emeUIEnabled = Services.prefs.getBoolPref("browser.eme.ui.enabled");
-    // Force-disable/hide on WinXP:
-    if (navigator.platform.toLowerCase().startsWith("win")) {
-      emeUIEnabled =
-        emeUIEnabled && parseFloat(Services.sysinfo.get("version")) >= 6;
-    }
-    if (!emeUIEnabled) {
-      // Don't want to rely on .hidden for the toplevel groupbox because
-      // of the pane hiding/showing code potentially interfering:
-      document
-        .getElementById("drmGroup")
-        .setAttribute("style", "display: none !important");
-    }
     // Initialize the Firefox Updates section.
     let version = AppConstants.MOZ_APP_VERSION_DISPLAY;
 
