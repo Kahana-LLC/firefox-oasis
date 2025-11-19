@@ -9,8 +9,27 @@
     body { margin:0; font: 13px system-ui, sans-serif; background: Canvas; color: CanvasText; }
     main { height: 100vh; display:flex; flex-direction:column; }
     #log { flex:1; padding:12px; overflow:auto; white-space:pre-wrap; }
-    #bar { display:flex; gap:8px; padding:10px; border-top: 1px solid rgba(128,128,128,.3); }
-    #q { flex:1; padding:8px; }
+    #bar { display:flex; gap:8px; padding:12px; border-top: 1px solid rgba(128,128,128,.2); background: Canvas; }
+    #q { 
+      flex:1; 
+      padding:10px 16px; 
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      background: Canvas;
+      color: CanvasText;
+    }
+    #q:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    #q:disabled {
+      background: #f3f4f6;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
   </style>
 </head>
 <body>

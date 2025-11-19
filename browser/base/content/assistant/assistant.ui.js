@@ -39,18 +39,128 @@ const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
 
+// Modernize the Send button
+go.style.cssText = `
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+`;
+go.addEventListener("mouseenter", () => {
+  go.style.transform = "translateY(-1px)";
+  go.style.boxShadow = "0 4px 8px rgba(102, 126, 234, 0.3)";
+});
+go.addEventListener("mouseleave", () => {
+  go.style.transform = "translateY(0)";
+  go.style.boxShadow = "0 2px 4px rgba(102, 126, 234, 0.2)";
+});
+
 // Stop button
 const bar = document.getElementById("bar") || q.parentElement;
 const stop = document.createElement("button");
 stop.textContent = "Stop";
 stop.disabled = true;
+stop.style.cssText = `
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  background: #ef4444;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: not-allowed;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+`;
 bar.appendChild(stop);
+
+// Define setBusy function with modern styling for stop button
+let busy = false;
+let stopped = false;
+
+function setBusy(v) {
+  busy = v;
+  q.disabled = v;
+  go.disabled = v;
+  stop.disabled = !v;
+  go.textContent = v ? "…" : "Send";
+  
+  // Update stop button styling based on state
+  if (v) {
+    stop.style.cssText = `
+      padding: 10px 20px;
+      border-radius: 12px;
+      border: none;
+      background: #ef4444;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      opacity: 1;
+      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+    `;
+    // Add hover effects when enabled
+    const stopHoverEnter = () => {
+      stop.style.transform = "translateY(-1px)";
+      stop.style.boxShadow = "0 4px 8px rgba(239, 68, 68, 0.3)";
+    };
+    const stopHoverLeave = () => {
+      stop.style.transform = "translateY(0)";
+      stop.style.boxShadow = "0 2px 4px rgba(239, 68, 68, 0.2)";
+    };
+    stop.addEventListener("mouseenter", stopHoverEnter);
+    stop.addEventListener("mouseleave", stopHoverLeave);
+  } else {
+    stop.style.cssText = `
+      padding: 10px 20px;
+      border-radius: 12px;
+      border: none;
+      background: #ef4444;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: not-allowed;
+      transition: all 0.2s ease;
+      opacity: 0.5;
+    `;
+  }
+}
 
 // Clear context button
 const clearContext = document.createElement("button");
 clearContext.textContent = "Clear Context";
-clearContext.style.marginLeft = "8px";
+clearContext.style.cssText = `
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #374151;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+`;
 clearContext.title = "Clear conversation history (start fresh)";
+clearContext.addEventListener("mouseenter", () => {
+  clearContext.style.background = "#f9fafb";
+  clearContext.style.borderColor = "#d1d5db";
+  clearContext.style.transform = "translateY(-1px)";
+  clearContext.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+});
+clearContext.addEventListener("mouseleave", () => {
+  clearContext.style.background = "white";
+  clearContext.style.borderColor = "#e5e7eb";
+  clearContext.style.transform = "translateY(0)";
+  clearContext.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
+});
 bar.appendChild(clearContext);
 clearContext.addEventListener("click", () => {
   resetAssistantSession();
@@ -61,16 +171,35 @@ clearContext.addEventListener("click", () => {
 const micButton = document.createElement("button");
 micButton.innerHTML = "🎤";
 micButton.style.cssText = `
-  margin-left: 8px;
-  padding: 8px 12px;
-  border: 2px solid #e5e7eb;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   background: white;
   cursor: pointer;
   font-size: 18px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 micButton.title = "Click to start voice input";
+micButton.addEventListener("mouseenter", () => {
+  if (!isRecording) {
+    micButton.style.background = "#f9fafb";
+    micButton.style.borderColor = "#d1d5db";
+    micButton.style.transform = "translateY(-1px)";
+    micButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+  }
+});
+micButton.addEventListener("mouseleave", () => {
+  if (!isRecording) {
+    micButton.style.background = "white";
+    micButton.style.borderColor = "#e5e7eb";
+    micButton.style.transform = "translateY(0)";
+    micButton.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
+  }
+});
 bar.appendChild(micButton);
 
 let isRecording = false;
@@ -88,9 +217,22 @@ micButton.addEventListener("click", async () => {
 
   if (isRecording) {
     // Stop recording
-    micButton.innerHTML = "⏳";
+    micButton.innerHTML = "⏹️";
     micButton.disabled = true;
-    micButton.style.background = "#f3f4f6";
+    micButton.style.cssText = `
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid #ef4444;
+      background: #fee2e2;
+      cursor: not-allowed;
+      font-size: 18px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.8;
+    `;
     
     try {
       const transcribedText = await voiceInputService.stopRecording();
@@ -108,8 +250,19 @@ micButton.addEventListener("click", async () => {
       isRecording = false;
       micButton.innerHTML = "🎤";
       micButton.disabled = false;
-      micButton.style.background = "white";
-      micButton.style.borderColor = "#e5e7eb";
+      micButton.style.cssText = `
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: white;
+        cursor: pointer;
+        font-size: 18px;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
       micButton.title = "Click to start voice input";
     }
   } else {
@@ -118,8 +271,19 @@ micButton.addEventListener("click", async () => {
       await voiceInputService.startRecording();
       isRecording = true;
       micButton.innerHTML = "⏹️";
-      micButton.style.background = "#fee2e2";
-      micButton.style.borderColor = "#ef4444";
+      micButton.style.cssText = `
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid #ef4444;
+        background: #fee2e2;
+        cursor: pointer;
+        font-size: 18px;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
       micButton.title = "Click to stop recording";
       append("\n🎤 Recording... Click again to stop.\n");
     } catch (error) {
@@ -436,157 +600,6 @@ window.addEventListener('message', async (event) => {
     }
 });
 
-// Add a simple "Check Authentication" button for after OAuth
-function addAuthCheckButton() {
-    // Check if button already exists
-    if (document.getElementById('checkAuthBtn')) {
-        return;
-    }
-    
-    // Try to find the auth header, if not found, add it to the log area
-    let authHeader = document.getElementById('authHeader');
-    if (!authHeader) {
-        // Create auth header in the log area
-        const log = document.getElementById('log');
-        if (log) {
-            authHeader = document.createElement('div');
-            authHeader.id = 'authHeader';
-            authHeader.style.cssText = `
-                background: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
-                padding: 12px;
-                margin: 8px 0;
-                text-align: center;
-            `;
-            log.appendChild(authHeader);
-        } else {
-            return;
-        }
-    }
-    
-    const checkAuthBtn = document.createElement('button');
-    checkAuthBtn.id = 'checkAuthBtn';
-    checkAuthBtn.textContent = 'Check Authentication';
-    checkAuthBtn.style.cssText = `
-        background: #10b981;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-size: 12px;
-        cursor: pointer;
-        margin-left: 10px;
-        font-weight: 500;
-    `;
-    
-    checkAuthBtn.addEventListener('click', async () => {
-        // Create a more detailed input dialog for the full OAuth data
-        const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
-        
-The URL should look like:
-https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
-
-Or just paste the access_token part if you prefer:`;
-        
-        const input = prompt(instructions);
-        if (input && input.trim()) {
-            try {
-                console.log('Processing OAuth data manually...');
-                
-                let authData = {};
-                
-                // Check if it's a full URL or just a token
-                if (input.includes('#')) {
-                    // It's a full URL, parse it
-                    const url = new URL(input);
-                    const hashParams = new URLSearchParams(url.hash.substring(1));
-                    
-                    authData = {
-                        access_token: hashParams.get('access_token'),
-                        refresh_token: hashParams.get('refresh_token'),
-                        expires_at: hashParams.get('expires_at'),
-                        expires_in: hashParams.get('expires_in'),
-                        token_type: hashParams.get('token_type'),
-                        timestamp: Date.now(),
-                        source: 'manual_url'
-                    };
-                } else {
-                    // It's just a token, create minimal auth data
-                    authData = {
-                        access_token: input.trim(),
-                        refresh_token: '', // We'll need to handle this differently
-                        timestamp: Date.now(),
-                        source: 'manual_token'
-                    };
-                }
-                
-                console.log('Auth data:', authData);
-                
-                // Try to set the session with the auth data
-                if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
-                    console.log('Setting session with auth data...');
-                    const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
-                        access_token: authData.access_token,
-                        refresh_token: authData.refresh_token || ''
-                    });
-                    
-                    if (error) {
-                        console.error('Failed to set session:', error.message);
-                        showAuthError(`Authentication failed: ${error.message}`);
-                    } else {
-                        console.log('Session set successfully for user:', data.user?.id);
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    }
-                    return;
-                }
-                
-                // Fallback: Use the OAuth callback handler
-                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                    const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
-                    if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    } else {
-                        showAuthError(`Authentication failed: ${result.error}`);
-                    }
-                } else {
-                    showAuthError('Authentication service not available.');
-                }
-            } catch (error) {
-                console.error('Error processing OAuth data:', error);
-                showAuthError('Error processing OAuth data. Please try again.');
-            }
-        }
-    });
-    
-    authHeader.appendChild(checkAuthBtn);
-}
-
-// Add the check authentication button
-setTimeout(addAuthCheckButton, 1000);
-
-// Also try to add it immediately
-addAuthCheckButton();
-
-// Try multiple times to ensure the button gets added
-setTimeout(addAuthCheckButton, 2000);
-setTimeout(addAuthCheckButton, 3000);
 
 // Handle successful authentication
 function handleAuthSuccess(authData) {
@@ -698,17 +711,24 @@ loginButton.style.cssText = `
   background: rgba(255,255,255,0.2);
   color: white;
   border: 1px solid rgba(255,255,255,0.3);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
 loginButton.addEventListener("mouseenter", () => {
   loginButton.style.background = "rgba(255,255,255,0.3)";
+  loginButton.style.transform = "translateY(-1px)";
+  loginButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
 });
 loginButton.addEventListener("mouseleave", () => {
   loginButton.style.background = "rgba(255,255,255,0.2)";
+  loginButton.style.transform = "translateY(0)";
+  loginButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
 });
 authButtons.appendChild(loginButton);
 
@@ -716,21 +736,26 @@ const signupButton = document.createElement("button");
 signupButton.textContent = "Sign Up";
 signupButton.className = "signup-btn";
 signupButton.style.cssText = `
-  background: rgba(255,255,255,0.9);
+  background: white;
   color: #667eea;
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
 signupButton.addEventListener("mouseenter", () => {
-  signupButton.style.background = "white";
+  signupButton.style.background = "#f9fafb";
+  signupButton.style.transform = "translateY(-1px)";
+  signupButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
 });
 signupButton.addEventListener("mouseleave", () => {
-  signupButton.style.background = "rgba(255,255,255,0.9)";
+  signupButton.style.background = "white";
+  signupButton.style.transform = "translateY(0)";
+  signupButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
 });
 authButtons.appendChild(signupButton);
 
@@ -739,14 +764,28 @@ const menuButton = document.createElement("button");
 menuButton.className = "menu-btn";
 menuButton.innerHTML = "&#8942;"; // Vertical ellipsis
 menuButton.style.cssText = `
-  background: transparent;
+  background: rgba(255,255,255,0.2);
   color: white;
-  border: none;
-  font-size: 20px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 12px;
+  font-size: 18px;
   cursor: pointer;
-  padding: 0 8px;
-  display: none; /* Hidden by default */
+  padding: 8px 12px;
+  display: none;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
+menuButton.addEventListener("mouseenter", () => {
+  menuButton.style.background = "rgba(255,255,255,0.3)";
+  menuButton.style.transform = "translateY(-1px)";
+  menuButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
+});
+menuButton.addEventListener("mouseleave", () => {
+  menuButton.style.background = "rgba(255,255,255,0.2)";
+  menuButton.style.transform = "translateY(0)";
+  menuButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+});
 authButtons.appendChild(menuButton);
 
 // Create dropdown menu
@@ -755,13 +794,15 @@ dropdownMenu.className = "dropdown-menu";
 dropdownMenu.style.cssText = `
   display: none;
   position: absolute;
-  top: 40px;
+  top: 48px;
   right: 10px;
   background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05);
   z-index: 1000;
+  overflow: hidden;
+  min-width: 160px;
 `;
 authHeader.appendChild(dropdownMenu);
 
@@ -778,13 +819,24 @@ dropdownItems.forEach(item => {
     menuItem.textContent = item.label;
     menuItem.style.cssText = `
         display: block;
-        padding: 8px 16px;
-        color: #333;
+        padding: 10px 16px;
+        color: #374151;
         text-decoration: none;
         cursor: pointer;
+        font-size: 14px;
+        transition: all 0.15s ease;
+        border-bottom: 1px solid #f3f4f6;
     `;
-    menuItem.addEventListener("mouseenter", () => menuItem.style.backgroundColor = "#f4f4f4");
-    menuItem.addEventListener("mouseleave", () => menuItem.style.backgroundColor = "white");
+    if (item.label === "Logout") {
+        menuItem.style.color = "#ef4444";
+        menuItem.style.borderBottom = "none";
+    }
+    menuItem.addEventListener("mouseenter", () => {
+        menuItem.style.backgroundColor = item.label === "Logout" ? "#fee2e2" : "#f9fafb";
+    });
+    menuItem.addEventListener("mouseleave", () => {
+        menuItem.style.backgroundColor = "transparent";
+    });
     menuItem.addEventListener("click", item.action);
     dropdownMenu.appendChild(menuItem);
 });
@@ -802,17 +854,6 @@ document.addEventListener("click", (event) => {
     }
 });
 
-
-let busy = false;
-let stopped = false;
-
-function setBusy(v) {
-  busy = v;
-  q.disabled = v;
-  go.disabled = v;
-  stop.disabled = !v;
-  go.textContent = v ? "…" : "Send";
-}
 
 function append(text) {
   log.textContent += text;
@@ -877,7 +918,7 @@ function showGoogleOAuthInstructions(oauthUrl) {
   });
   
   const note = document.createElement("p");
-  note.textContent = "After completing authentication, return here and click 'Check Authentication'";
+  note.textContent = "After completing authentication, return here and you will be automatically signed in.";
   note.style.cssText = "margin: 0; color: #6b7280; font-size: 14px; font-style: italic;";
   
   instructions.appendChild(title);
