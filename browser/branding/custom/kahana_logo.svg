@@ -1,121 +1,34 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <!-- Linear gradient for the outer ring -->
-    <linearGradient id="outerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#2ECC71"/>
-      <stop offset="50%" stop-color="#23B06B"/>
-      <stop offset="100%" stop-color="#1E88E5"/>
-    </linearGradient>
-
-    <!-- Subtle highlight gradient for segmented arcs -->
-    <linearGradient id="segmentLight" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.00"/>
-    </linearGradient>
-
-    <!-- Inner circle clip -->
-    <clipPath id="innerClip">
-      <circle cx="256" cy="256" r="150"/>
-    </clipPath>
-
-    <!-- Mask for ring -->
-    <mask id="ringMask">
-      <rect x="0" y="0" width="512" height="512" fill="white"/>
-      <circle cx="256" cy="256" r="150" fill="black"/>
-    </mask>
-
-    <!-- Warm sky gradient (top to horizon) -->
-    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FDF3D9"/>   <!-- warm light -->
-      <stop offset="55%" stop-color="#FBE8BA"/>
-      <stop offset="85%" stop-color="#EAF4FF"/>  <!-- cooler near horizon -->
-      <stop offset="100%" stop-color="#EAF4FF"/>
-    </linearGradient>
-
-    <!-- Sun glow -->
-    <radialGradient id="sunGlow" cx="50%" cy="58%" r="35%">
-      <stop offset="0%" stop-color="#FFF6D5" stop-opacity="1"/>
-      <stop offset="60%" stop-color="#FFE7A1" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#FFE7A1" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Distant water tint near horizon -->
-    <linearGradient id="horizonWater" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#CFE9FF"/>
-      <stop offset="100%" stop-color="#A7D4FA"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Outer ring -->
-  <circle cx="256" cy="256" r="230" fill="url(#outerGrad)" mask="url(#ringMask)"/>
-
-  <!-- Segmented overlays -->
-  <g mask="url(#ringMask)">
-    <path d="M 120 168
-             A 240 240 0 0 1 392 120
-             A 230 230 0 0 1 408 160
-             A 270 270 0 0 0 104 208
-             A 230 230 0 0 1 120 168 Z"
-          fill="url(#segmentLight)"/>
-    <path d="M 96 304
-             A 260 260 0 0 0 416 280
-             A 220 220 0 0 1 392 344
-             A 260 260 0 0 1 128 368
-             A 220 220 0 0 0 96 304 Z"
-          fill="url(#segmentLight)" opacity="0.6"/>
-    <path d="M 200 440
-             A 250 250 0 0 0 460 300
-             A 210 210 0 0 1 420 404
-             A 250 250 0 0 1 256 460
-             A 210 210 0 0 0 200 440 Z"
-          fill="url(#segmentLight)" opacity="0.4"/>
-  </g>
-
-  <!-- Inner scene -->
-  <g clip-path="url(#innerClip)">
-    <!-- Sky -->
-    <rect x="0" y="100" width="512" height="200" fill="url(#skyGrad)"/>
-    <!-- Sun glow centered slightly above horizon -->
-    <ellipse cx="256" cy="248" rx="180" ry="120" fill="url(#sunGlow)"/>
-
-    <!-- Suggestion of a curved horizon -->
-    <path d="M -30 255 C 90 245, 190 255, 256 255 C 322 255, 422 245, 542 255 L 542 270 L -30 270 Z"
-          fill="url(#horizonWater)"/>
-
-    <!-- Wave layers (lighter near horizon, darker foreground) -->
-    <path d="M -40 270
-             C 40 260, 120 280, 200 270
-             C 280 260, 360 280, 440 270
-             L 440 512 L -40 512 Z"
-          fill="#8CC8F8"/>
-
-    <path d="M -40 295
-             C 40 280, 120 305, 200 295
-             C 280 285, 360 305, 440 295
-             L 440 512 L -40 512 Z"
-          fill="#64B5F6"/>
-
-    <path d="M -40 320
-             C 40 305, 120 330, 200 320
-             C 280 310, 360 330, 440 320
-             L 440 512 L -40 512 Z"
-          fill="#3E8EE6"/>
-
-    <path d="M -40 350
-             C 40 335, 120 360, 200 350
-             C 280 340, 360 360, 440 350
-             L 440 512 L -40 512 Z"
-          fill="#1E6FCC"/>
-
-    <!-- Subtle crest highlights -->
-    <path d="M -35 300
-             C 45 285, 125 308, 205 298
-             C 285 288, 365 308, 445 298" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="3" fill="none"/>
-    <path d="M -35 330
-             C 45 315, 125 338, 205 328
-             C 285 318, 365 338, 445 328" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3" fill="none"/>
-  </g>
-
-  <!-- Inner circle edge (keeps clean boundary) -->
-  <circle cx="256" cy="256" r="150" fill="none"/>
+<svg width="2059" height="2059" viewBox="0 0 2059 2059" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_3079_63)">
+<mask id="mask0_3079_63" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="2059" height="2059">
+<path d="M2059 0H0V2059H2059V0Z" fill="white"/>
+<path d="M1029.56 1632.72C1362.71 1632.72 1632.78 1362.65 1632.78 1029.5C1632.78 696.345 1362.71 426.273 1029.56 426.273C696.41 426.273 426.338 696.345 426.338 1029.5C426.338 1362.65 696.41 1632.72 1029.56 1632.72Z" fill="black"/>
+</mask>
+<g mask="url(#mask0_3079_63)">
+<path d="M1029.77 1859.37C1487.94 1859.37 1859.36 1487.95 1859.36 1029.78C1859.36 571.607 1487.94 200.187 1029.77 200.187C571.597 200.187 200.177 571.607 200.177 1029.78C200.177 1487.95 571.597 1859.37 1029.77 1859.37Z" fill="url(#paint0_linear_3079_63)"/>
+</g>
+<mask id="mask1_3079_63" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="482" y="334" width="1095" height="1204">
+<path d="M1029.53 1537.52C1331.47 1537.52 1576.25 1268.27 1576.25 936.139C1576.25 604.005 1331.47 334.757 1029.53 334.757C727.583 334.757 482.808 604.005 482.808 936.139C482.808 1268.27 727.583 1537.52 1029.53 1537.52Z" fill="white"/>
+</mask>
+<g mask="url(#mask1_3079_63)">
+<path d="M-436.769 1220.11C-1.32654 934.649 361.542 1220.11 601.035 1220.11C840.528 1220.11 1203.4 934.649 1638.84 1220.11V1648.31H-436.769V1220.11Z" fill="url(#paint1_linear_3079_63)"/>
+<path d="M-322.521 1250.92C112.921 1013.93 475.789 1250.92 715.282 1250.92C954.775 1250.92 1317.64 1013.93 1753.09 1250.92V1606.41H-322.521V1250.92Z" fill="url(#paint2_linear_3079_63)"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_3079_63" x1="1029.77" y1="200.187" x2="1029.77" y2="1859.37" gradientUnits="userSpaceOnUse">
+<stop stop-color="#788046"/>
+<stop offset="1" stop-color="#FFD779"/>
+</linearGradient>
+<linearGradient id="paint1_linear_3079_63" x1="-436.769" y1="1093.24" x2="-436.769" y2="56600.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#BEEEFF"/>
+</linearGradient>
+<linearGradient id="paint2_linear_3079_63" x1="822.389" y1="1116.26" x2="1655.89" y2="1605.97" gradientUnits="userSpaceOnUse">
+<stop stop-color="#98CFE3"/>
+<stop offset="0.801794" stop-color="#EDF5F8"/>
+</linearGradient>
+<clipPath id="clip0_3079_63">
+<rect width="2059" height="2059" fill="white"/>
+</clipPath>
+</defs>
 </svg>
