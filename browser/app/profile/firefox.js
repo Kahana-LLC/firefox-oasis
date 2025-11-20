@@ -1812,9 +1812,6 @@ pref("browser.topsites.useRemoteSetting", true);
 pref("browser.topsites.contile.enabled", true);
 pref("browser.topsites.contile.endpoint", "https://contile.services.mozilla.com/v1/tiles");
 
-// Whether to enable the Share-of-Voice feature for Sponsored Topsites via Contile.
-pref("browser.topsites.contile.sov.enabled", true);
-
 // The base URL for the Quick Suggest anonymizing proxy. To make a request to
 // the proxy, include a campaign ID in the path.
 pref("browser.partnerlink.attributionURL", "https://topsites.services.mozilla.com/cid/");
@@ -1965,7 +1962,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.placements.tiles.counts
 pref("browser.newtabpage.activity-stream.discoverystream.placements.contextualBanners", "");
 pref("browser.newtabpage.activity-stream.discoverystream.placements.contextualBanners.counts", "");
 
-pref("browser.newtabpage.activity-stream.discoverystream.spoc-topsites-positions", "2");
 // This is a 0-based index, for consistency with the other position CSVs,
 // but Contile positions are a 1-based index, so we end up adding 1 to these before using them.
 pref("browser.newtabpage.activity-stream.discoverystream.contile-topsites-positions", "0,1,2");
@@ -1976,9 +1972,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.spocs-endpoint-query", 
 // Changes the spoc content.
 pref("browser.newtabpage.activity-stream.discoverystream.spocAdTypes", "");
 pref("browser.newtabpage.activity-stream.discoverystream.spocZoneIds", "");
-pref("browser.newtabpage.activity-stream.discoverystream.spocTopsitesAdTypes", "");
-pref("browser.newtabpage.activity-stream.discoverystream.spocTopsitesZoneIds", "");
-pref("browser.newtabpage.activity-stream.discoverystream.spocTopsitesPlacement.enabled", true);
 pref("browser.newtabpage.activity-stream.discoverystream.spocSiteId", "");
 pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonSponsors", "");
 pref("browser.newtabpage.activity-stream.discoverystream.ctaButtonVariant", "");
@@ -2247,6 +2240,9 @@ pref("browser.ml.smartAssist.enabled", false);
 pref("browser.ml.smartAssist.endpoint", "");
 pref("browser.ml.smartAssist.model", "");
 pref("browser.ml.smartAssist.overrideNewTab", false);
+
+// AI Window Feature
+pref("browser.aiwindow.enabled", false);
 
 // Block insecure active content on https pages
 pref("security.mixed_content.block_active_content", true);
@@ -3509,7 +3505,9 @@ pref("browser.contextual-services.contextId.rust-component.enabled", true);
 pref("browser.ipProtection.enabled", false);
 // Pref to track whether the user has opted out of using IP Protection
 pref("browser.ipProtection.optedOut", false);
-// Pref to enable IP protection autostart
+// Pref to enable the autoStart feature
+pref("browser.ipProtection.features.autoStart", false);
+// Prefs to track the user turning on autostart preference
 pref("browser.ipProtection.autoStartEnabled", false);
 pref("browser.ipProtection.autoStartPrivateEnabled", false);
 // Pref to track whether the user has turned IP protection on
@@ -3518,6 +3516,8 @@ pref("browser.ipProtection.userEnabled", false);
 pref("browser.ipProtection.variant", "");
 // Pref to track number of times the VPN panel is opened
 pref("browser.ipProtection.panelOpenCount", 0);
+// Pref to enable support for site exceptions
+pref("browser.ipProtection.features.siteExceptions", false);
 pref("browser.ipProtection.exceptionsMode", "all");
 pref("browser.ipProtection.domainExclusions", "");
 pref("browser.ipProtection.domainInclusions", "");
@@ -3544,3 +3544,10 @@ pref("toolkit.rust-components.logging.internal-level", "Warn");
 
 // Settings Redesign 2025 prefs
 pref("browser.settings-redesign.enabled", false);
+
+// A preference that will be locked to reflect whether this build has support
+// for XDG Config Home handling. Mostly used to be able to keep tests around
+// in case of a backout of the feature
+#if defined(MOZ_WIDGET_GTK)
+pref("widget.support-xdg-config", true, locked);
+#endif

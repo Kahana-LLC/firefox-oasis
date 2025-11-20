@@ -14756,7 +14756,7 @@
 # If true, retry TRR for recoverable errors once.
 - name: network.trr.retry_on_recoverable_errors
   type: RelaxedAtomicBool
-  value: true
+  value: false
   mirror: always
 
 # If true, don't fallback to native DNS upon network errors.
@@ -15835,7 +15835,7 @@
 # to a fallback domain that hosts the same content.
 - name: network.essential_domains_fallback
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 # Enable HTTP Compression Dictionary support
