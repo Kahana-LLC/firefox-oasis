@@ -18,29 +18,29 @@ console.log('SupabaseAuth available:', !!window.supabaseAuth);
 
 // Check current authentication status on page load
 async function checkCurrentAuthStatus() {
-    if (window.supabaseAuth && window.supabaseAuth.supabase) {
-        try {
-            const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
-            if (user && !error) {
-                console.log('User is already authenticated:', user.email);
-                updateAuthUI(true, user);
-            } else {
-                console.log('User is not authenticated');
-                updateAuthUI(false);
-            }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
-            updateAuthUI(false);
-        }
+  if (window.supabaseAuth && window.supabaseAuth.supabase) {
+    try {
+      const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
+      if (user && !error) {
+        console.log('User is already authenticated:', user.email);
+        updateAuthUI(true, user);
+      } else {
+        console.log('User is not authenticated');
+        updateAuthUI(false);
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      updateAuthUI(false);
     }
+  }
 }
 
 // Check auth status after a short delay to ensure everything is loaded
 setTimeout(checkCurrentAuthStatus, 1000);
 
 const log = document.getElementById("log");
-const q   = document.getElementById("q");
-const go  = document.getElementById("go");
+const q = document.getElementById("q");
+const go = document.getElementById("go");
 
 // Theme setup (primary accent: #2c532d)
 const THEME = {
@@ -68,11 +68,11 @@ applyTheme();
 // Utility: shade a hex color by percentage (negative to darken)
 function shadeColor(hex, percent) {
   try {
-    let h = hex.replace('#','');
+    let h = hex.replace('#', '');
     if (h.length === 3) h = h.split('').map(c => c + c).join('');
-    const r = parseInt(h.slice(0,2), 16);
-    const g = parseInt(h.slice(2,4), 16);
-    const b = parseInt(h.slice(4,6), 16);
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
     const f = 1 + (percent / 100);
     const toHex = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
     return `#${toHex(r * f)}${toHex(g * f)}${toHex(b * f)}`;
@@ -138,14 +138,14 @@ function enableFloatingPanel() {
       overlay.style.top = `${saved.top}px`;
       overlay.style.right = "auto";
     }
-  } catch {}
+  } catch { }
 
   // Restore saved size, if available
   try {
     const savedSize = JSON.parse(localStorage.getItem("assistantOverlaySize") || "{}");
     if (Number.isFinite(savedSize.width)) overlay.style.width = `${savedSize.width}px`;
     if (Number.isFinite(savedSize.height)) overlay.style.height = `${savedSize.height}px`;
-  } catch {}
+  } catch { }
 
   // Dragging support (use header if available, fall back to overlay)
   const getHandle = () => document.getElementById("oasis-header") || overlay;
@@ -199,7 +199,7 @@ function enableFloatingPanel() {
     try {
       const rect = overlay.getBoundingClientRect();
       localStorage.setItem("assistantOverlayPos", JSON.stringify({ left: rect.left, top: rect.top }));
-    } catch {}
+    } catch { }
   };
 
   // Attach listeners
@@ -214,7 +214,7 @@ function enableFloatingPanel() {
     const compact = 420;
     const target = current < (expanded - 40) ? expanded : compact;
     overlay.style.width = `${target}px`;
-    try { localStorage.setItem("assistantOverlaySize", JSON.stringify({ width: target, height: overlay.getBoundingClientRect().height })); } catch {}
+    try { localStorage.setItem("assistantOverlaySize", JSON.stringify({ width: target, height: overlay.getBoundingClientRect().height })); } catch { }
   });
 
   // Resize handle (bottom-right corner)
@@ -275,7 +275,7 @@ function enableFloatingPanel() {
     try {
       const rect = overlay.getBoundingClientRect();
       localStorage.setItem("assistantOverlaySize", JSON.stringify({ width: rect.width, height: rect.height }));
-    } catch {}
+    } catch { }
   };
 
   // Toggle fullscreen when clicking the expand button in the header
@@ -292,7 +292,7 @@ function enableFloatingPanel() {
         overlay.style.bottom = '0';
         overlay.style.width = '100vw';
         overlay.style.height = '100vh';
-        overlay.style.background = 'rgba(17,24,39,0.92)'; // near-black
+        overlay.style.background = 'var(--oasis-surface)';
         overlay.style.border = '0';
         overlay.style.borderRadius = '0';
         overlay.style.boxShadow = 'none';
@@ -599,15 +599,20 @@ clearContext.addEventListener("click", () => {
 
 // Microphone button
 const micButton = document.createElement("button");
+// MODIFIED: Updated micSvg function to use solid fill for icons
 function micSvg(state = "idle") {
+  const primaryColor = 'var(--oasis-primary)';
+
   if (state === "idle") {
-    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='3' width='6' height='10' rx='3'/><path d='M5 10a7 7 0 0 0 14 0'/><path d='M12 17v4'/><path d='M8 21h8'/></svg>`;
+    // Outlined microphone icon to match send button style
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='display:block;'><path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/><path d='M19 10v2a7 7 0 0 1-14 0v-2'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/></svg>`;
   }
   if (state === "loading") {
-    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9' opacity='.25'/><path d='M12 3a9 9 0 0 1 9 9' /></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='${primaryColor}' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9' opacity='.25'/><path d='M12 3a9 9 0 0 1 9 9' /></svg>`;
   }
   if (state === "recording") {
-    return `<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9' /><rect x='9' y='9' width='6' height='6' fill='currentColor' stroke='none' /></svg>`;
+    // Solid fill for the recording state button (using the theme primary color)
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox='0 0 24 24' width='20' height='20' fill='currentColor' stroke='none' style='display:block;'><circle cx='12' cy='12' r='9' /><rect x='9' y='9' width='6' height='6' fill='currentColor' stroke='none' /></svg>`;
   }
   return micSvg("idle");
 }
@@ -649,13 +654,13 @@ micButton.addEventListener("click", async () => {
 
   if (isRecording) {
     // Stop recording
-  micButton.innerHTML = micSvg("loading");
-  micButton.disabled = true;
-  micButton.style.background = "transparent";
-    
+    micButton.innerHTML = micSvg("loading");
+    micButton.disabled = true;
+    micButton.style.background = "transparent";
+
     try {
       const transcribedText = await voiceInputService.stopRecording();
-      
+
       if (transcribedText && transcribedText.trim()) {
         q.value = transcribedText;
         append(`\n🎤 Transcribed: ${transcribedText}\n`);
@@ -667,9 +672,9 @@ micButton.addEventListener("click", async () => {
       append(`\n❌ Transcription failed: ${error.message}\n`);
     } finally {
       isRecording = false;
-  micButton.innerHTML = micSvg("idle");
-  micButton.disabled = false;
-  micButton.style.background = "transparent";
+      micButton.innerHTML = micSvg("idle");
+      micButton.disabled = false;
+      micButton.style.background = "transparent";
       micButton.title = "Click to start voice input";
     }
   } else {
@@ -677,8 +682,8 @@ micButton.addEventListener("click", async () => {
     try {
       await voiceInputService.startRecording();
       isRecording = true;
-  micButton.innerHTML = micSvg("recording");
-  micButton.style.background = "transparent";
+      micButton.innerHTML = micSvg("recording");
+      micButton.style.background = "transparent";
       micButton.title = "Click to stop recording";
       append("\n🎤 Recording... Click again to stop.\n");
     } catch (error) {
@@ -694,209 +699,209 @@ let currentUser = null;
 
 // Cross-frame authentication synchronization and command coordination
 function setupCrossFrameAuthSync() {
-    // Check if we're in an iframe (popup) or main window
-    const isInIframe = window !== window.top;
-    
-    // Listen for messages from parent window (if in iframe) or iframe (if parent)
-    window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'OASIS_AUTH_STATE_CHANGE') {
-            console.log('Received auth state change from parent:', event.data);
-            const { authenticated, user } = event.data;
-            updateAuthUI(authenticated, user);
-        } else if (event.data && event.data.type === 'OASIS_COMMAND_RESULT') {
-            // Handle command results from parent window (if in iframe)
-            console.log('Received command result from parent:', event.data);
-            const { result, error } = event.data;
-            if (error) {
-                append(`\nError: ${error}\n`);
-            } else if (result) {
-                append(`\n${result}\n`);
-            }
-        }
-    });
+  // Check if we're in an iframe (popup) or main window
+  const isInIframe = window !== window.top;
 
-    // Send authentication state to iframe (if we're the parent)
-    function notifyIframeAuthChange(authenticated, user) {
-        try {
-            const iframe = document.getElementById('oasis-assistant-frame');
-            if (iframe && iframe.contentWindow) {
-                iframe.contentWindow.postMessage({
-                    type: 'OASIS_AUTH_STATE_CHANGE',
-                    authenticated,
-                    user
-                }, '*');
-                console.log('Sent auth state change to iframe:', { authenticated, user: user?.email });
-            }
-        } catch (error) {
-            console.warn('Failed to notify iframe of auth change:', error);
-        }
+  // Listen for messages from parent window (if in iframe) or iframe (if parent)
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'OASIS_AUTH_STATE_CHANGE') {
+      console.log('Received auth state change from parent:', event.data);
+      const { authenticated, user } = event.data;
+      updateAuthUI(authenticated, user);
+    } else if (event.data && event.data.type === 'OASIS_COMMAND_RESULT') {
+      // Handle command results from parent window (if in iframe)
+      console.log('Received command result from parent:', event.data);
+      const { result, error } = event.data;
+      if (error) {
+        append(`\nError: ${error}\n`);
+      } else if (result) {
+        append(`\n${result}\n`);
+      }
     }
+  });
 
-    // Send command result to iframe (if we're the parent)
-    function notifyIframeCommandResult(result, error = null) {
-        try {
-            const iframe = document.getElementById('oasis-assistant-frame');
-            if (iframe && iframe.contentWindow) {
-                iframe.contentWindow.postMessage({
-                    type: 'OASIS_COMMAND_RESULT',
-                    result,
-                    error
-                }, '*');
-                console.log('Sent command result to iframe:', { result, error });
-            }
-        } catch (error) {
-            console.warn('Failed to notify iframe of command result:', error);
-        }
+  // Send authentication state to iframe (if we're the parent)
+  function notifyIframeAuthChange(authenticated, user) {
+    try {
+      const iframe = document.getElementById('oasis-assistant-frame');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          type: 'OASIS_AUTH_STATE_CHANGE',
+          authenticated,
+          user
+        }, '*');
+        console.log('Sent auth state change to iframe:', { authenticated, user: user?.email });
+      }
+    } catch (error) {
+      console.warn('Failed to notify iframe of auth change:', error);
     }
+  }
 
-    // Expose functions globally
-    window.notifyIframeAuthChange = notifyIframeAuthChange;
-    window.notifyIframeCommandResult = notifyIframeCommandResult;
-    window.isInIframe = isInIframe;
+  // Send command result to iframe (if we're the parent)
+  function notifyIframeCommandResult(result, error = null) {
+    try {
+      const iframe = document.getElementById('oasis-assistant-frame');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          type: 'OASIS_COMMAND_RESULT',
+          result,
+          error
+        }, '*');
+        console.log('Sent command result to iframe:', { result, error });
+      }
+    } catch (error) {
+      console.warn('Failed to notify iframe of command result:', error);
+    }
+  }
+
+  // Expose functions globally
+  window.notifyIframeAuthChange = notifyIframeAuthChange;
+  window.notifyIframeCommandResult = notifyIframeCommandResult;
+  window.isInIframe = isInIframe;
 }
 
 // Function to wait for an element to exist
 function waitForElement(selector, timeout = 1000) {
-    return new Promise((resolve, reject) => {
-        const element = document.querySelector(selector);
-        if (element) {
-            resolve(element);
-            return;
-        }
-        
-        const observer = new MutationObserver((mutations, obs) => {
-            const element = document.querySelector(selector);
-            if (element) {
-                obs.disconnect();
-                resolve(element);
-            }
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        setTimeout(() => {
-            observer.disconnect();
-            reject(new Error(`Element ${selector} not found within ${timeout}ms`));
-        }, timeout);
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      resolve(element);
+      return;
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        obs.disconnect();
+        resolve(element);
+      }
     });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+    }, timeout);
+  });
 }
 
 // Function to update the authentication UI
 function updateAuthUI(authenticated, user = null) {
-    console.log('updateAuthUI called with:', { authenticated, user: user?.email });
-    
-    isAuthenticated = authenticated;
-    currentUser = user;
-    
-    // Set global authentication state for the proxy client to access
-    window.oasisAuthState = {
-        isAuthenticated: authenticated,
-        user: user
-    };
-    
-    console.log('Global auth state set:', window.oasisAuthState);
-    
-    // Update the input field placeholder
-    const inputField = document.getElementById('q');
-    console.log('Input field found:', inputField);
-    if (inputField) {
-        if (authenticated) {
-            inputField.placeholder = 'Ask me anything...';
-            inputField.disabled = false;
-            console.log('Input field enabled for authenticated user');
-        } else {
-            inputField.placeholder = 'Please sign in first...';
-            inputField.disabled = true;
-            console.log('Input field disabled for unauthenticated user');
-        }
-    } else {
-        console.warn('Input field not found');
-    }
-    
-    // Update send button
-    const sendButton = document.getElementById('go');
-    if (sendButton) {
-        sendButton.disabled = !authenticated;
-    }
-    
-    // Update auth status display - wait for element to exist
-    waitForElement('#authStatus').then(authStatus => {
-        console.log('Auth status element found:', authStatus);
-        const statusSpan = authStatus.querySelector('span:last-child');
-        if (statusSpan) {
-            if (authenticated) {
-                statusSpan.textContent = `Signed in as ${user?.email || 'User'}`;
-                statusSpan.style.color = '#51cf66';
-                console.log('Updated auth status to authenticated');
-            } else {
-                statusSpan.textContent = 'Not Authenticated';
-                statusSpan.style.color = '#ff6b6b';
-                console.log('Updated auth status to not authenticated');
-            }
-        } else {
-            console.warn('Status span not found within authStatus');
-        }
-    }).catch(error => {
-        console.warn('Auth status element not found:', error.message);
-    });
-    
-    // Show/hide auth buttons - wait for element to exist
-    waitForElement('#authButtons').then(authButtons => {
-        console.log('Auth buttons container found:', authButtons);
-        const loginButton = authButtons.querySelector('.login-btn');
-        const signupButton = authButtons.querySelector('.signup-btn');
-        const menuButton = authButtons.querySelector('.menu-btn');
+  console.log('updateAuthUI called with:', { authenticated, user: user?.email });
 
-        if (loginButton) loginButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (signupButton) signupButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (menuButton) menuButton.style.display = authenticated ? 'inline-block' : 'none';
-        
-    }).catch(error => {
-        console.warn('Auth buttons container not found:', error.message);
-    });
-    
-    console.log('Auth UI updated:', { authenticated, user: user?.email });
-    
-    // Notify iframe of authentication state change (if we're the parent window)
-    if (typeof window.notifyIframeAuthChange === 'function') {
-        window.notifyIframeAuthChange(authenticated, user);
+  isAuthenticated = authenticated;
+  currentUser = user;
+
+  // Set global authentication state for the proxy client to access
+  window.oasisAuthState = {
+    isAuthenticated: authenticated,
+    user: user
+  };
+
+  console.log('Global auth state set:', window.oasisAuthState);
+
+  // Update the input field placeholder
+  const inputField = document.getElementById('q');
+  console.log('Input field found:', inputField);
+  if (inputField) {
+    if (authenticated) {
+      inputField.placeholder = 'Ask me anything...';
+      inputField.disabled = false;
+      console.log('Input field enabled for authenticated user');
+    } else {
+      inputField.placeholder = 'Please sign in first...';
+      inputField.disabled = true;
+      console.log('Input field disabled for unauthenticated user');
     }
+  } else {
+    console.warn('Input field not found');
+  }
+
+  // Update send button
+  const sendButton = document.getElementById('go');
+  if (sendButton) {
+    sendButton.disabled = !authenticated;
+  }
+
+  // Update auth status display - wait for element to exist
+  waitForElement('#authStatus').then(authStatus => {
+    console.log('Auth status element found:', authStatus);
+    const statusSpan = authStatus.querySelector('span:last-child');
+    if (statusSpan) {
+      if (authenticated) {
+        statusSpan.textContent = `Signed in as ${user?.email || 'User'}`;
+        statusSpan.style.color = '#51cf66';
+        console.log('Updated auth status to authenticated');
+      } else {
+        statusSpan.textContent = 'Not Authenticated';
+        statusSpan.style.color = '#ff6b6b';
+        console.log('Updated auth status to not authenticated');
+      }
+    } else {
+      console.warn('Status span not found within authStatus');
+    }
+  }).catch(error => {
+    console.warn('Auth status element not found:', error.message);
+  });
+
+  // Show/hide auth buttons - wait for element to exist
+  waitForElement('#authButtons').then(authButtons => {
+    console.log('Auth buttons container found:', authButtons);
+    const loginButton = authButtons.querySelector('.login-btn');
+    const signupButton = authButtons.querySelector('.signup-btn');
+    const menuButton = authButtons.querySelector('.menu-btn');
+
+    if (loginButton) loginButton.style.display = authenticated ? 'none' : 'inline-block';
+    if (signupButton) signupButton.style.display = authenticated ? 'none' : 'inline-block';
+    if (menuButton) menuButton.style.display = authenticated ? 'inline-block' : 'none';
+
+  }).catch(error => {
+    console.warn('Auth buttons container not found:', error.message);
+  });
+
+  console.log('Auth UI updated:', { authenticated, user: user?.email });
+
+  // Notify iframe of authentication state change (if we're the parent window)
+  if (typeof window.notifyIframeAuthChange === 'function') {
+    window.notifyIframeAuthChange(authenticated, user);
+  }
 }
 
 // Custom protocol handler for kahana:// URLs
 function handleKahanaProtocol(url) {
-    console.log('Received kahana:// protocol URL:', url);
-    
-    if (url.startsWith('kahana://auth-callback')) {
-        // Parse the URL to extract auth parameters
-        const urlObj = new URL(url);
-        const params = new URLSearchParams(urlObj.search);
-        
-        // Check for error
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
-        
-        // Check for success
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        const code = params.get('code');
-        
-        if (error) {
-            console.error('OAuth error:', error, errorDescription);
-            showAuthError(`Authentication failed: ${error}`);
-        } else if (accessToken || code) {
-            console.log('OAuth success, tokens received');
-            // The Supabase client should automatically handle the session
-            // We'll let the auth state change listener handle the rest
-            showAuthSuccess('Authentication successful!');
-        } else {
-            console.log('No auth parameters found in callback');
-            showAuthError('No authentication data received');
-        }
+  console.log('Received kahana:// protocol URL:', url);
+
+  if (url.startsWith('kahana://auth-callback')) {
+    // Parse the URL to extract auth parameters
+    const urlObj = new URL(url);
+    const params = new URLSearchParams(urlObj.search);
+
+    // Check for error
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    // Check for success
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const code = params.get('code');
+
+    if (error) {
+      console.error('OAuth error:', error, errorDescription);
+      showAuthError(`Authentication failed: ${error}`);
+    } else if (accessToken || code) {
+      console.log('OAuth success, tokens received');
+      // The Supabase client should automatically handle the session
+      // We'll let the auth state change listener handle the rest
+      showAuthSuccess('Authentication successful!');
+    } else {
+      console.log('No auth parameters found in callback');
+      showAuthError('No authentication data received');
     }
+  }
 }
 
 // Simple OAuth flow - no complex message handling needed
@@ -904,24 +909,24 @@ function handleKahanaProtocol(url) {
 
 // Check for auth callback data in localStorage
 function checkForAuthCallback() {
-    try {
-        const authData = localStorage.getItem('oasis_auth_callback');
-        if (authData) {
-            const parsed = JSON.parse(authData);
-            // Only process if it's recent (within last 30 seconds)
-            if (parsed.timestamp && (Date.now() - parsed.timestamp) < 30000) {
-                console.log('Found recent auth callback data:', parsed);
-                handleAuthSuccess(parsed);
-                // Clear the data after processing
-                localStorage.removeItem('oasis_auth_callback');
-            }
-        }
-    } catch (e) {
-        // Don't spam the console with localStorage errors
-        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
-            console.error('Error checking auth callback:', e);
-        }
+  try {
+    const authData = localStorage.getItem('oasis_auth_callback');
+    if (authData) {
+      const parsed = JSON.parse(authData);
+      // Only process if it's recent (within last 30 seconds)
+      if (parsed.timestamp && (Date.now() - parsed.timestamp) < 30000) {
+        console.log('Found recent auth callback data:', parsed);
+        handleAuthSuccess(parsed);
+        // Clear the data after processing
+        localStorage.removeItem('oasis_auth_callback');
+      }
     }
+  } catch (e) {
+    // Don't spam the console with localStorage errors
+    if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
+      console.error('Error checking auth callback:', e);
+    }
+  }
 }
 
 // Check for auth callback data when the page loads
@@ -932,35 +937,35 @@ checkForAuthCallback();
 
 // Check for OAuth callback data in localStorage (fallback for postMessage issues)
 function checkOAuthCallbackData() {
-    try {
-        const callbackData = localStorage.getItem('oasis_auth_callback');
-        if (callbackData) {
-            const authData = JSON.parse(callbackData);
-            console.log('Found OAuth callback data in localStorage:', authData);
-            
-            // Process the auth data
-            if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                window.supabaseAuth.handleOAuthCallbackData(authData).then(result => {
-                    if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        // Clear the localStorage data
-                        localStorage.removeItem('oasis_auth_callback');
-                        // Refresh the auth state
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showAuthError(`Authentication failed: ${result.error}`);
-                    }
-                });
-            }
-        }
-    } catch (e) {
-        // Don't spam the console with localStorage errors
-        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
-            console.error('Error checking OAuth callback data:', e);
-        }
+  try {
+    const callbackData = localStorage.getItem('oasis_auth_callback');
+    if (callbackData) {
+      const authData = JSON.parse(callbackData);
+      console.log('Found OAuth callback data in localStorage:', authData);
+
+      // Process the auth data
+      if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+        window.supabaseAuth.handleOAuthCallbackData(authData).then(result => {
+          if (result.success) {
+            showAuthSuccess('Authentication successful! You are now signed in.');
+            // Clear the localStorage data
+            localStorage.removeItem('oasis_auth_callback');
+            // Refresh the auth state
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            showAuthError(`Authentication failed: ${result.error}`);
+          }
+        });
+      }
     }
+  } catch (e) {
+    // Don't spam the console with localStorage errors
+    if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
+      console.error('Error checking OAuth callback data:', e);
+    }
+  }
 }
 
 // Check for OAuth callback data periodically (disabled due to localStorage issues)
@@ -968,138 +973,138 @@ function checkOAuthCallbackData() {
 
 // Listen for OAuth callback messages from the redirect page
 window.addEventListener('message', async (event) => {
-    // Only accept messages from our OAuth callback page
-    if (event.origin !== 'https://kahana.co') {
-        return;
+  // Only accept messages from our OAuth callback page
+  if (event.origin !== 'https://kahana.co') {
+    return;
+  }
+
+  if (event.data && event.data.type === 'oauth-success') {
+    console.log('Received OAuth success message:', event.data.data);
+
+    // Use the new OAuth callback handler
+    if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+      const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
+      if (result.success) {
+        showAuthSuccess('Authentication successful! You are now signed in.');
+        // Refresh the auth state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        showAuthError(`Authentication failed: ${result.error}`);
+      }
+    } else {
+      // Fallback to old method
+      handleAuthSuccess(event.data.data);
     }
-    
-    if (event.data && event.data.type === 'oauth-success') {
-        console.log('Received OAuth success message:', event.data.data);
-        
-        // Use the new OAuth callback handler
-        if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-            const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
-            if (result.success) {
-                showAuthSuccess('Authentication successful! You are now signed in.');
-                // Refresh the auth state
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            } else {
-                showAuthError(`Authentication failed: ${result.error}`);
-            }
-        } else {
-            // Fallback to old method
-            handleAuthSuccess(event.data.data);
-        }
-    }
+  }
 });
 
 // Add a simple "Check Authentication" button for after OAuth
 // Expose the manual auth check flow so it can be reused from the profile menu
 async function runManualAuthCheck() {
-    const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
+  const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
         
 The URL should look like:
 https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
 
 Or just paste the access_token part if you prefer:`;
 
-    const input = prompt(instructions);
-    if (input && input.trim()) {
-        try {
-            console.log('Processing OAuth data manually...');
-            let authData = {};
+  const input = prompt(instructions);
+  if (input && input.trim()) {
+    try {
+      console.log('Processing OAuth data manually...');
+      let authData = {};
 
-            // Check if it's a full URL or just a token
-            if (input.includes('#')) {
-                // Full URL, parse hash fragment
-                const url = new URL(input);
-                const hashParams = new URLSearchParams(url.hash.substring(1));
-                authData = {
-                    access_token: hashParams.get('access_token'),
-                    refresh_token: hashParams.get('refresh_token'),
-                    expires_at: hashParams.get('expires_at'),
-                    expires_in: hashParams.get('expires_in'),
-                    token_type: hashParams.get('token_type'),
-                    timestamp: Date.now(),
-                    source: 'manual_url'
-                };
-            } else {
-                // Minimal token-only input
-                authData = {
-                    access_token: input.trim(),
-                    refresh_token: '',
-                    timestamp: Date.now(),
-                    source: 'manual_token'
-                };
-            }
+      // Check if it's a full URL or just a token
+      if (input.includes('#')) {
+        // Full URL, parse hash fragment
+        const url = new URL(input);
+        const hashParams = new URLSearchParams(url.hash.substring(1));
+        authData = {
+          access_token: hashParams.get('access_token'),
+          refresh_token: hashParams.get('refresh_token'),
+          expires_at: hashParams.get('expires_at'),
+          expires_in: hashParams.get('expires_in'),
+          token_type: hashParams.get('token_type'),
+          timestamp: Date.now(),
+          source: 'manual_url'
+        };
+      } else {
+        // Minimal token-only input
+        authData = {
+          access_token: input.trim(),
+          refresh_token: '',
+          timestamp: Date.now(),
+          source: 'manual_token'
+        };
+      }
 
-            console.log('Auth data:', authData);
+      console.log('Auth data:', authData);
 
-            // Try to set the session directly with Supabase
-            if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
-                console.log('Setting session with auth data...');
-                const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
-                    access_token: authData.access_token,
-                    refresh_token: authData.refresh_token || ''
-                });
+      // Try to set the session directly with Supabase
+      if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
+        console.log('Setting session with auth data...');
+        const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
+          access_token: authData.access_token,
+          refresh_token: authData.refresh_token || ''
+        });
 
-                if (error) {
-                    console.error('Failed to set session:', error.message);
-                    showAuthError(`Authentication failed: ${error.message}`);
-                } else {
-                    console.log('Session set successfully for user:', data.user?.id);
-                    showAuthSuccess('Authentication successful! You are now signed in.');
-                    updateAuthUI(true, data.user);
-                    setTimeout(() => { window.location.reload(); }, 2000);
-                }
-                return;
-            }
-
-            // Fallback: Use the OAuth callback handler if available
-            if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
-                if (result.success) {
-                    showAuthSuccess('Authentication successful! You are now signed in.');
-                    // Refresh UI based on current user fetched after success
-                    try {
-                        const user = await window.supabaseAuth.getCurrentUser?.();
-                        updateAuthUI(true, user || null);
-                    } catch {}
-                    setTimeout(() => { window.location.reload(); }, 2000);
-                } else {
-                    showAuthError(`Authentication failed: ${result.error}`);
-                }
-            } else {
-                showAuthError('Authentication service not available.');
-            }
-        } catch (error) {
-            console.error('Error processing OAuth data:', error);
-            showAuthError('Error processing OAuth data. Please try again.');
+        if (error) {
+          console.error('Failed to set session:', error.message);
+          showAuthError(`Authentication failed: ${error.message}`);
+        } else {
+          console.log('Session set successfully for user:', data.user?.id);
+          showAuthSuccess('Authentication successful! You are now signed in.');
+          updateAuthUI(true, data.user);
+          setTimeout(() => { window.location.reload(); }, 2000);
         }
+        return;
+      }
+
+      // Fallback: Use the OAuth callback handler if available
+      if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+        const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
+        if (result.success) {
+          showAuthSuccess('Authentication successful! You are now signed in.');
+          // Refresh UI based on current user fetched after success
+          try {
+            const user = await window.supabaseAuth.getCurrentUser?.();
+            updateAuthUI(true, user || null);
+          } catch { }
+          setTimeout(() => { window.location.reload(); }, 2000);
+        } else {
+          showAuthError(`Authentication failed: ${result.error}`);
+        }
+      } else {
+        showAuthError('Authentication service not available.');
+      }
+    } catch (error) {
+      console.error('Error processing OAuth data:', error);
+      showAuthError('Error processing OAuth data. Please try again.');
     }
+  }
 }
 
 function addAuthCheckButton() {
-    // If the profile menu or header exists, show auth controls there instead
-    if (document.getElementById('profileAuthMenu') || document.getElementById('oasis-header')) {
-        return;
-    }
-    // Check if button already exists
-    if (document.getElementById('checkAuthBtn')) {
-        return;
-    }
-    
-    // Try to find the auth header, if not found, add it to the log area
-    let authHeader = document.getElementById('authHeader');
-    if (!authHeader) {
-        // Create auth header in the log area
-        const log = document.getElementById('log');
-        if (log) {
-            authHeader = document.createElement('div');
-            authHeader.id = 'authHeader';
-            authHeader.style.cssText = `
+  // If the profile menu or header exists, show auth controls there instead
+  if (document.getElementById('profileAuthMenu') || document.getElementById('oasis-header')) {
+    return;
+  }
+  // Check if button already exists
+  if (document.getElementById('checkAuthBtn')) {
+    return;
+  }
+
+  // Try to find the auth header, if not found, add it to the log area
+  let authHeader = document.getElementById('authHeader');
+  if (!authHeader) {
+    // Create auth header in the log area
+    const log = document.getElementById('log');
+    if (log) {
+      authHeader = document.createElement('div');
+      authHeader.id = 'authHeader';
+      authHeader.style.cssText = `
                 background: #f3f4f6;
                 border: 1px solid #d1d5db;
                 border-radius: 8px;
@@ -1107,16 +1112,16 @@ function addAuthCheckButton() {
                 margin: 8px 0;
                 text-align: center;
             `;
-            log.appendChild(authHeader);
-        } else {
-            return;
-        }
+      log.appendChild(authHeader);
+    } else {
+      return;
     }
-    
-    const checkAuthBtn = document.createElement('button');
-    checkAuthBtn.id = 'checkAuthBtn';
-    checkAuthBtn.textContent = 'Check Authentication';
-    checkAuthBtn.style.cssText = `
+  }
+
+  const checkAuthBtn = document.createElement('button');
+  checkAuthBtn.id = 'checkAuthBtn';
+  checkAuthBtn.textContent = 'Check Authentication';
+  checkAuthBtn.style.cssText = `
         background: #10b981;
         color: white;
         border: none;
@@ -1127,10 +1132,10 @@ function addAuthCheckButton() {
         margin-left: 10px;
         font-weight: 500;
     `;
-    
-    checkAuthBtn.addEventListener('click', () => { runManualAuthCheck(); });
-    
-    authHeader.appendChild(checkAuthBtn);
+
+  checkAuthBtn.addEventListener('click', () => { runManualAuthCheck(); });
+
+  authHeader.appendChild(checkAuthBtn);
 }
 
 // Add the check authentication button
@@ -1145,31 +1150,31 @@ setTimeout(addAuthCheckButton, 3000);
 
 // Handle successful authentication
 function handleAuthSuccess(authData) {
-    console.log('Handling auth success:', authData);
-    
-    // Show success message
-    showAuthSuccess('Authentication successful! Signing you in...');
-    
-    // The Supabase client should automatically detect the session change
-    // We'll let the auth state change listener handle the rest
-    // But we can also try to refresh the auth state manually
-    if (window.supabaseAuth) {
-        window.supabaseAuth.getCurrentUser().then(user => {
-            if (user) {
-                console.log('User authenticated:', user.email);
-                // Update the UI to show authenticated state
-                updateAuthUI(true, user);
-            }
-        }).catch(error => {
-            console.error('Error getting current user:', error);
-        });
-    }
+  console.log('Handling auth success:', authData);
+
+  // Show success message
+  showAuthSuccess('Authentication successful! Signing you in...');
+
+  // The Supabase client should automatically detect the session change
+  // We'll let the auth state change listener handle the rest
+  // But we can also try to refresh the auth state manually
+  if (window.supabaseAuth) {
+    window.supabaseAuth.getCurrentUser().then(user => {
+      if (user) {
+        console.log('User authenticated:', user.email);
+        // Update the UI to show authenticated state
+        updateAuthUI(true, user);
+      }
+    }).catch(error => {
+      console.error('Error getting current user:', error);
+    });
+  }
 }
 
 // Helper functions for auth feedback
 function showAuthSuccess(message) {
-    const successDiv = document.createElement('div');
-    successDiv.style.cssText = `
+  const successDiv = document.createElement('div');
+  successDiv.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
@@ -1181,19 +1186,19 @@ function showAuthSuccess(message) {
         font-weight: 500;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     `;
-    successDiv.textContent = message;
-    document.body.appendChild(successDiv);
-    
-    setTimeout(() => {
-        if (successDiv.parentNode) {
-            successDiv.parentNode.removeChild(successDiv);
-        }
-    }, 3000);
+  successDiv.textContent = message;
+  document.body.appendChild(successDiv);
+
+  setTimeout(() => {
+    if (successDiv.parentNode) {
+      successDiv.parentNode.removeChild(successDiv);
+    }
+  }, 3000);
 }
 
 function showAuthError(message) {
-    const errorDiv = document.createElement('div');
-    errorDiv.style.cssText = `
+  const errorDiv = document.createElement('div');
+  errorDiv.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
@@ -1205,21 +1210,21 @@ function showAuthError(message) {
         font-weight: 500;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     `;
-    errorDiv.textContent = message;
-    document.body.appendChild(errorDiv);
-    
-    setTimeout(() => {
-        if (errorDiv.parentNode) {
-            errorDiv.parentNode.removeChild(errorDiv);
-        }
-    }, 5000);
+  errorDiv.textContent = message;
+  document.body.appendChild(errorDiv);
+
+  setTimeout(() => {
+    if (errorDiv.parentNode) {
+      errorDiv.parentNode.removeChild(errorDiv);
+    }
+  }, 5000);
 }
 
 // Create a clean authentication header
 const authHeader = document.createElement("div");
 const gradStart = THEME.primary;
 const gradEnd = shadeColor(THEME.primary, -18);
-  authHeader.style.cssText = `
+authHeader.style.cssText = `
     background: linear-gradient(135deg, ${gradStart} 0%, ${gradEnd} 100%);
     color: white;
     padding: 12px 16px;
@@ -1230,9 +1235,9 @@ const gradEnd = shadeColor(THEME.primary, -18);
     font-size: 14px;
     font-weight: 500;
   `;
-  bar.parentElement.insertBefore(authHeader, bar);
-  // Move auth actions to profile icon; keep header DOM but hide it
-  authHeader.style.display = "none";
+bar.parentElement.insertBefore(authHeader, bar);
+// Move auth actions to profile icon; keep header DOM but hide it
+authHeader.style.display = "none";
 
 // Auth status display
 const authStatus = document.createElement("div");
@@ -1242,14 +1247,14 @@ authStatus.innerHTML = `
   <span style="font-size: 16px;">🔒</span>
   <span>Not Authenticated</span>
 `;
-  authHeader.appendChild(authStatus);
+authHeader.appendChild(authStatus);
 
-  // Profile icon dropdown for Sign In / Sign Up
-  const profileBtn = header && header.querySelector('button[aria-label="Account"]');
-  if (profileBtn) {
-    const profileMenu = document.createElement("div");
-    profileMenu.id = "profileAuthMenu";
-    profileMenu.style.cssText = `
+// Profile icon dropdown for Sign In / Sign Up
+const profileBtn = header && header.querySelector('button[aria-label="Account"]');
+if (profileBtn) {
+  const profileMenu = document.createElement("div");
+  profileMenu.id = "profileAuthMenu";
+  profileMenu.style.cssText = `
       display: none;
       position: absolute;
       top: 48px;
@@ -1262,12 +1267,12 @@ authStatus.innerHTML = `
       padding: 8px;
       min-width: 160px;
     `;
-    header.appendChild(profileMenu);
+  header.appendChild(profileMenu);
 
-    function addMenuItem(text, handler, variant) {
-      const item = document.createElement("button");
-      item.textContent = text;
-      item.style.cssText = `
+  function addMenuItem(text, handler, variant) {
+    const item = document.createElement("button");
+    item.textContent = text;
+    item.style.cssText = `
         width: 100%;
         text-align: left;
         padding: 8px 10px;
@@ -1278,41 +1283,41 @@ authStatus.innerHTML = `
         font-size: 13px;
         cursor: pointer;
       `;
-      item.addEventListener("mouseenter", () => {
-        item.style.background = variant === 'primary' ? '#DCEDE0' : '#F3F4F6';
-      });
-      item.addEventListener("mouseleave", () => {
-        item.style.background = variant === 'primary' ? '#EAF3EC' : 'transparent';
-      });
-      item.addEventListener("click", (e) => {
-        e.stopPropagation();
-        profileMenu.style.display = "none";
-        handler();
-      });
-      profileMenu.appendChild(item);
-    }
-
-    // Wire to existing handlers without changing functionality
-    addMenuItem("Sign In", showLoginForm, "default");
-    addMenuItem("Sign Up", showSignupForm, "primary");
-    addMenuItem("Check Authentication", () => {
-      // Use the same manual flow as the legacy button for parity
-      runManualAuthCheck();
-    }, "default");
-
-    profileBtn.addEventListener("click", (e) => {
+    item.addEventListener("mouseenter", () => {
+      item.style.background = variant === 'primary' ? '#DCEDE0' : '#F3F4F6';
+    });
+    item.addEventListener("mouseleave", () => {
+      item.style.background = variant === 'primary' ? '#EAF3EC' : 'transparent';
+    });
+    item.addEventListener("click", (e) => {
       e.stopPropagation();
-      // Toggle visibility
-      const isOpen = profileMenu.style.display === "block";
-      profileMenu.style.display = isOpen ? "none" : "block";
+      profileMenu.style.display = "none";
+      handler();
     });
-
-    document.addEventListener("click", (e) => {
-      if (!profileMenu.contains(e.target) && e.target !== profileBtn) {
-        profileMenu.style.display = "none";
-      }
-    });
+    profileMenu.appendChild(item);
   }
+
+  // Wire to existing handlers without changing functionality
+  addMenuItem("Sign In", showLoginForm, "default");
+  addMenuItem("Sign Up", showSignupForm, "primary");
+  addMenuItem("Check Authentication", () => {
+    // Use the same manual flow as the legacy button for parity
+    runManualAuthCheck();
+  }, "default");
+
+  profileBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Toggle visibility
+    const isOpen = profileMenu.style.display === "block";
+    profileMenu.style.display = isOpen ? "none" : "block";
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!profileMenu.contains(e.target) && e.target !== profileBtn) {
+      profileMenu.style.display = "none";
+    }
+  });
+}
 
 // Auth buttons container
 const authButtons = document.createElement("div");
@@ -1396,39 +1401,39 @@ authHeader.appendChild(dropdownMenu);
 
 // Dropdown items
 const dropdownItems = [
-    { label: "Account", action: () => alert("Account clicked") },
-    { label: "Subscription", action: () => alert("Subscription clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Logout", action: () => logout() }
+  { label: "Account", action: () => alert("Account clicked") },
+  { label: "Subscription", action: () => alert("Subscription clicked") },
+  { label: "Settings", action: () => alert("Settings clicked") },
+  { label: "Logout", action: () => logout() }
 ];
 
 dropdownItems.forEach(item => {
-    const menuItem = document.createElement("a");
-    menuItem.textContent = item.label;
-    menuItem.style.cssText = `
+  const menuItem = document.createElement("a");
+  menuItem.textContent = item.label;
+  menuItem.style.cssText = `
         display: block;
         padding: 8px 16px;
         color: #333;
         text-decoration: none;
         cursor: pointer;
     `;
-    menuItem.addEventListener("mouseenter", () => menuItem.style.backgroundColor = "#f4f4f4");
-    menuItem.addEventListener("mouseleave", () => menuItem.style.backgroundColor = "white");
-    menuItem.addEventListener("click", item.action);
-    dropdownMenu.appendChild(menuItem);
+  menuItem.addEventListener("mouseenter", () => menuItem.style.backgroundColor = "#f4f4f4");
+  menuItem.addEventListener("mouseleave", () => menuItem.style.backgroundColor = "white");
+  menuItem.addEventListener("click", item.action);
+  dropdownMenu.appendChild(menuItem);
 });
 
 // Toggle dropdown menu
 menuButton.addEventListener("click", () => {
-    const isDisplayed = dropdownMenu.style.display === "block";
-    dropdownMenu.style.display = isDisplayed ? "none" : "block";
+  const isDisplayed = dropdownMenu.style.display === "block";
+  dropdownMenu.style.display = isDisplayed ? "none" : "block";
 });
 
 // Hide dropdown if clicked outside
 document.addEventListener("click", (event) => {
-    if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
-        dropdownMenu.style.display = "none";
-    }
+  if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+    dropdownMenu.style.display = "none";
+  }
 });
 
 
@@ -1446,7 +1451,8 @@ function setBusy(v) {
   // If a future loading indicator is needed, we can swap to a spinner SVG
   // of the same size, but for now, preserve the icon for consistent visuals.
   go.style.opacity = v ? 0.85 : 1;
-  go.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" style="color:#fff" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+  // MODIFIED: Ensure the SVG for the send button is correctly formed for the final look
+  go.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
 }
 
 // ---- Card-based rendering helpers ----
@@ -1614,15 +1620,15 @@ function completeLastTask() {
 function showGoogleOAuthInstructions(oauthUrl) {
   const instructions = document.createElement("div");
   instructions.style.cssText = "display: flex; flex-direction: column; gap: 20px; text-align: center;";
-  
+
   const title = document.createElement("h3");
   title.textContent = "Complete Google Sign-In";
   title.style.cssText = "margin: 0; color: #1f2937; font-size: 20px; font-weight: 600;";
-  
+
   const description = document.createElement("p");
   description.textContent = "Click the button below to open Google sign-in in a new tab:";
   description.style.cssText = "margin: 0; color: #6b7280; font-size: 16px;";
-  
+
   const openButton = document.createElement("button");
   openButton.innerHTML = `
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
@@ -1648,7 +1654,7 @@ function showGoogleOAuthInstructions(oauthUrl) {
     margin: 0 auto;
     transition: background-color 0.2s;
   `;
-  
+
   openButton.addEventListener("click", () => {
     // Try to open in new tab
     try {
@@ -1665,16 +1671,16 @@ function showGoogleOAuthInstructions(oauthUrl) {
       });
     }
   });
-  
+
   const note = document.createElement("p");
   note.textContent = "After completing authentication, return here and click 'Check Authentication'";
   note.style.cssText = "margin: 0; color: #6b7280; font-size: 14px; font-style: italic;";
-  
+
   instructions.appendChild(title);
   instructions.appendChild(description);
   instructions.appendChild(openButton);
   instructions.appendChild(note);
-  
+
   const { modal } = createModal("Google Sign-In", instructions);
 }
 
@@ -1693,7 +1699,7 @@ function createModal(title, content) {
     align-items: center;
     z-index: 10000;
   `;
-  
+
   const dialog = document.createElement("div");
   dialog.style.cssText = `
     background: white;
@@ -1703,7 +1709,7 @@ function createModal(title, content) {
     max-width: 500px;
     box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
   `;
-  
+
   const header = document.createElement("div");
   header.style.cssText = `
     font-size: 18px;
@@ -1713,18 +1719,18 @@ function createModal(title, content) {
     text-align: center;
   `;
   header.textContent = title;
-  
+
   dialog.appendChild(header);
   dialog.appendChild(content);
   modal.appendChild(dialog);
-  
+
   // Close on background click
   modal.addEventListener("click", (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
     }
   });
-  
+
   document.body.appendChild(modal);
   return { modal, dialog };
 }
@@ -1732,7 +1738,7 @@ function createModal(title, content) {
 function showLoginForm() {
   const form = document.createElement("form");
   form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
-  
+
   const emailInput = document.createElement("input");
   emailInput.type = "email";
   emailInput.placeholder = "Enter your email";
@@ -1749,7 +1755,7 @@ function showLoginForm() {
   emailInput.addEventListener("blur", () => {
     emailInput.style.borderColor = "#e5e7eb";
   });
-  
+
   const passwordInput = document.createElement("input");
   passwordInput.type = "password";
   passwordInput.placeholder = "Enter your password";
@@ -1766,7 +1772,7 @@ function showLoginForm() {
   passwordInput.addEventListener("blur", () => {
     passwordInput.style.borderColor = "#e5e7eb";
   });
-  
+
   // Divider
   const divider = document.createElement("div");
   divider.style.cssText = `
@@ -1781,7 +1787,7 @@ function showLoginForm() {
     <span style="margin: 0 16px;">or</span>
     <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
   `;
-  
+
   // Google Sign-In button
   const googleButton = document.createElement("button");
   googleButton.type = "button";
@@ -1817,10 +1823,10 @@ function showLoginForm() {
     googleButton.style.borderColor = "#e5e7eb";
     googleButton.style.backgroundColor = "white";
   });
-  
+
   const buttonContainer = document.createElement("div");
   buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
-  
+
   const submitButton = document.createElement("button");
   submitButton.type = "submit";
   submitButton.textContent = "Sign In";
@@ -1842,7 +1848,7 @@ function showLoginForm() {
   submitButton.addEventListener("mouseleave", () => {
     submitButton.style.transform = "translateY(0)";
   });
-  
+
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "Cancel";
@@ -1863,30 +1869,30 @@ function showLoginForm() {
   cancelButton.addEventListener("mouseleave", () => {
     cancelButton.style.background = "#f3f4f6";
   });
-  
+
   buttonContainer.appendChild(submitButton);
   buttonContainer.appendChild(cancelButton);
-  
+
   form.appendChild(emailInput);
   form.appendChild(passwordInput);
   form.appendChild(divider);
   form.appendChild(googleButton);
   form.appendChild(buttonContainer);
-  
+
   const { modal } = createModal("Sign In to Oasis", form);
-  
+
   cancelButton.addEventListener("click", () => {
     document.body.removeChild(modal);
   });
-  
+
   googleButton.addEventListener("click", () => {
     document.body.removeChild(modal);
-    
+
     // Use Supabase auth from window
     window.supabaseAuth.signInWithGoogle().then(({ user, error }) => {
       if (error) {
         const errorMessage = window.supabaseAuth.handleAuthError(error);
-        
+
         // Check if this is the special OAuth URL case
         if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
           const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
@@ -1899,16 +1905,16 @@ function showLoginForm() {
       }
     });
   });
-  
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    
+
     if (!email || !password) return;
-    
+
     document.body.removeChild(modal);
-    
+
     // Use Supabase auth from window
     window.supabaseAuth.signInWithEmail(email, password).then(({ user, error }) => {
       if (error) {
@@ -1921,7 +1927,7 @@ function showLoginForm() {
       }
     });
   });
-  
+
   // Focus first input
   setTimeout(() => emailInput.focus(), 100);
 }
@@ -1929,7 +1935,7 @@ function showLoginForm() {
 function showSignupForm() {
   const form = document.createElement("form");
   form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
-  
+
   const nameInput = document.createElement("input");
   nameInput.type = "text";
   nameInput.placeholder = "Enter your name (optional)";
@@ -1946,7 +1952,7 @@ function showSignupForm() {
   nameInput.addEventListener("blur", () => {
     nameInput.style.borderColor = "#e5e7eb";
   });
-  
+
   const emailInput = document.createElement("input");
   emailInput.type = "email";
   emailInput.placeholder = "Enter your email";
@@ -1963,7 +1969,7 @@ function showSignupForm() {
   emailInput.addEventListener("blur", () => {
     emailInput.style.borderColor = "#e5e7eb";
   });
-  
+
   const passwordInput = document.createElement("input");
   passwordInput.type = "password";
   passwordInput.placeholder = "Enter your password (min 6 characters)";
@@ -1980,7 +1986,7 @@ function showSignupForm() {
   passwordInput.addEventListener("blur", () => {
     passwordInput.style.borderColor = "#e5e7eb";
   });
-  
+
   // Divider
   const divider = document.createElement("div");
   divider.style.cssText = `
@@ -1995,7 +2001,7 @@ function showSignupForm() {
     <span style="margin: 0 16px;">or</span>
     <div style="flex: 1; height: 1px; background: #e5e7eb;"></div>
   `;
-  
+
   // Google Sign-In button
   const googleButton = document.createElement("button");
   googleButton.type = "button";
@@ -2031,10 +2037,10 @@ function showSignupForm() {
     googleButton.style.borderColor = "#e5e7eb";
     googleButton.style.backgroundColor = "white";
   });
-  
+
   const buttonContainer = document.createElement("div");
   buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
-  
+
   const submitButton = document.createElement("button");
   submitButton.type = "submit";
   submitButton.textContent = "Create Account";
@@ -2056,7 +2062,7 @@ function showSignupForm() {
   submitButton.addEventListener("mouseleave", () => {
     submitButton.style.transform = "translateY(0)";
   });
-  
+
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "Cancel";
@@ -2077,31 +2083,31 @@ function showSignupForm() {
   cancelButton.addEventListener("mouseleave", () => {
     cancelButton.style.background = "#f3f4f6";
   });
-  
+
   buttonContainer.appendChild(submitButton);
   buttonContainer.appendChild(cancelButton);
-  
+
   form.appendChild(nameInput);
   form.appendChild(emailInput);
   form.appendChild(passwordInput);
   form.appendChild(divider);
   form.appendChild(googleButton);
   form.appendChild(buttonContainer);
-  
+
   const { modal } = createModal("Create Oasis Account", form);
-  
+
   cancelButton.addEventListener("click", () => {
     document.body.removeChild(modal);
   });
-  
+
   googleButton.addEventListener("click", () => {
     document.body.removeChild(modal);
-    
+
     // Use Supabase auth from window
     window.supabaseAuth.signInWithGoogle().then(({ user, error }) => {
       if (error) {
         const errorMessage = window.supabaseAuth.handleAuthError(error);
-        
+
         // Check if this is the special OAuth URL case
         if (errorMessage.startsWith('GOOGLE_OAUTH_URL:')) {
           const oauthUrl = errorMessage.replace('GOOGLE_OAUTH_URL:', '');
@@ -2114,17 +2120,17 @@ function showSignupForm() {
       }
     });
   });
-  
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    
+
     if (!email || !password) return;
-    
+
     document.body.removeChild(modal);
-    
+
     // Use Supabase auth from window
     window.supabaseAuth.signUp(email, password, name || undefined).then(({ user, error }) => {
       if (error) {
@@ -2140,7 +2146,7 @@ function showSignupForm() {
       append(`\n❌ Sign up error: ${err.message}\n`);
     });
   });
-  
+
   // Focus first input
   setTimeout(() => nameInput.focus(), 100);
 }
@@ -2148,7 +2154,7 @@ function showSignupForm() {
 async function logout() {
   // Use Supabase auth from window
   const { error } = await window.supabaseAuth.signOut();
-  
+
   if (error) {
     append(`\n❌ Logout failed: ${error.message}\n`);
   } else {
@@ -2161,14 +2167,14 @@ async function logout() {
 
 async function send() {
   if (busy) return;
-  
+
   // Check authentication - both local state and global state
   if (!isAuthenticated || !window.oasisAuthState?.isAuthenticated) {
     append("\n❌ Authentication required: Please sign in to use the AI assistant\n");
     append("🔒 This protects our API tokens from unauthorized usage\n");
     return;
   }
-  
+
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
@@ -2176,14 +2182,14 @@ async function send() {
   stopped = false;
   setBusy(true);
   // UI-only: show a running task corresponding to the prompt
-  addTask(prompt.length > 60 ? `${prompt.substring(0,57)}…` : prompt);
+  addTask(prompt.length > 60 ? `${prompt.substring(0, 57)}…` : prompt);
 
   try {
     // Double-check authentication before making the API call
     if (!window.oasisAuthState?.isAuthenticated) {
       throw new Error('Authentication lost during request. Please sign in again.');
     }
-    
+
     // Session context is automatically managed
     startAssistantStreamCard();
     await runAssistantStream(prompt, (chunk) => {
@@ -2202,12 +2208,12 @@ async function send() {
       completeLastTask();
     }
   } catch (e) {
-    const errorMessage = e?.message?.includes('Authentication required') 
+    const errorMessage = e?.message?.includes('Authentication required')
       ? `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`
       : `Error: ${e?.message || e}`;
-    
+
     append(`\n${errorMessage}\n`);
-    
+
     // Forward error to iframe if we're in main window
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
       window.notifyIframeCommandResult(null, errorMessage);
@@ -2247,33 +2253,33 @@ checkExistingAuth();
 setupCrossFrameAuthSync();
 
 // Add a function to manually refresh auth state (for debugging)
-window.refreshAuthState = async function() {
-    console.log('Manually refreshing authentication state...');
-    try {
-        const user = await window.supabaseAuth.getCurrentUser();
-        console.log('Current user from Supabase:', user);
-        
-        if (user) {
-            isAuthenticated = true;
-            currentUser = user;
-            updateAuthUI(true, user);
-            console.log('Updated UI to authenticated state');
-        } else {
-            isAuthenticated = false;
-            currentUser = null;
-            updateAuthUI(false);
-            console.log('Updated UI to unauthenticated state');
-        }
-    } catch (error) {
-        console.error('Error refreshing auth state:', error);
+window.refreshAuthState = async function () {
+  console.log('Manually refreshing authentication state...');
+  try {
+    const user = await window.supabaseAuth.getCurrentUser();
+    console.log('Current user from Supabase:', user);
+
+    if (user) {
+      isAuthenticated = true;
+      currentUser = user;
+      updateAuthUI(true, user);
+      console.log('Updated UI to authenticated state');
+    } else {
+      isAuthenticated = false;
+      currentUser = null;
+      updateAuthUI(false);
+      console.log('Updated UI to unauthenticated state');
     }
+  } catch (error) {
+    console.error('Error refreshing auth state:', error);
+  }
 };
 
 // Add a function to force update the UI (for debugging)
-window.forceUpdateUI = function() {
-    console.log('Force updating UI with current state...');
-    console.log('Current state:', { isAuthenticated, currentUser: currentUser?.email });
-    updateAuthUI(isAuthenticated, currentUser);
+window.forceUpdateUI = function () {
+  console.log('Force updating UI with current state...');
+  console.log('Current state:', { isAuthenticated, currentUser: currentUser?.email });
+  updateAuthUI(isAuthenticated, currentUser);
 };
 // Composer styling to match target
 function styleComposer() {
@@ -2283,7 +2289,8 @@ function styleComposer() {
 
   // Build rounded composer box with inline icons
   const box = document.createElement("div");
-  box.style.cssText = "flex:1 1 320px; min-width:220px; display:flex; align-items:center; gap:10px; border:1px solid var(--oasis-border); background:#fff; border-radius:12px; padding:8px 10px;";
+  // MODIFIED: Adjusted padding to make room for the mic button inside
+  box.style.cssText = "flex:1 1 320px; min-width:220px; display:flex; align-items:center; gap:10px; border:1px solid var(--oasis-border); background:#fff; border-radius:12px; padding:4px 10px 4px 14px;";
 
   const leftIcons = document.createElement("div");
   leftIcons.style.cssText = "display:flex; align-items:center; gap:10px; color:var(--oasis-hard-text); opacity:0.9;";
@@ -2300,8 +2307,45 @@ function styleComposer() {
   box.appendChild(q);
 
   const rightIcons = document.createElement("div");
-  rightIcons.style.cssText = "display:flex; align-items:center; gap:10px; color:var(--oasis-soft-text);";
-  // No mic inside the box; keep area available for future indicators
+  // MODIFIED: Add gap between mic and send button
+  rightIcons.style.cssText = "display:flex; align-items:center; gap:4px;";
+
+  // MODIFIED: Place micButton inside the input box and style it with primary color
+  if (typeof micButton !== "undefined" && micButton) {
+    // Remove it from its temporary placement in 'bar' if it was placed there
+    if (micButton.parentNode === bar) {
+      bar.removeChild(micButton);
+    }
+
+    micButton.style.cssText = `
+          padding: 0;
+          width: 36px; height: 36px;
+          border: 0;
+          border-radius: 999px;
+          background: transparent;
+          color: var(--oasis-primary); /* Set color to match send button */
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          flex: 0 0 36px; min-width: 36px; min-height: 36px; aspect-ratio: 1 / 1; flex-shrink: 0;
+          transition: color .15s ease, background .15s ease, transform .05s ease;
+      `;
+    // Ensure the mic icon color is changed on hover/leave
+    micButton.addEventListener("mouseenter", () => {
+      micButton.style.color = shadeColor(THEME.primary, 15); // Slightly lighter green on hover
+    });
+    micButton.addEventListener("mouseleave", () => {
+      micButton.style.color = "var(--oasis-primary)";
+    });
+    // Append mic button to the input box's right side
+    rightIcons.appendChild(micButton);
+  }
+
+  // Round send button on the right - add it inside the input box, after mic
+  go.style.cssText = "width:36px; height:36px; border-radius:999px; background: var(--oasis-primary); color: #ffffff; border:none; display:flex; align-items:center; justify-content:center; flex:0 0 36px; min-width:36px; min-height:36px; aspect-ratio:1 / 1; flex-shrink:0; line-height:0; cursor:pointer; transition:opacity 0.15s ease, transform 0.05s ease; padding:0;";
+  go.textContent = ""; // Clear any "Send" text
+  go.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+  rightIcons.appendChild(go);
+
   box.appendChild(rightIcons);
 
   // Insert the box before the buttons
@@ -2311,14 +2355,8 @@ function styleComposer() {
     bar.appendChild(box);
   }
 
-  // Place mic next to the send button on the right
-  if (typeof micButton !== "undefined" && micButton) {
-    bar.insertBefore(micButton, go);
-  }
-
-  // Round send button on the right
-  go.style.cssText = "width:36px; height:36px; border-radius:999px; background: var(--oasis-primary); color: #ffffff; border:none; display:flex; align-items:center; justify-content:center; flex:0 0 36px; min-width:36px; min-height:36px; aspect-ratio:1 / 1; flex-shrink:0; line-height:0;";
-  go.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" style="color:#fff" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+  // Hide the mic button's old spot (if it was added globally before styleComposer)
+  // This logic is now handled by moving the micButton to rightIcons above.
 
   // Hide stop button in preview to match screenshot if present
   const stop = document.getElementById("stop");
