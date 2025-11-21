@@ -55,7 +55,7 @@ export class SmartAssist extends MozLitElement {
     this._actions = {
       [ACTION_CHAT]: {
         label: "Submit",
-        icon: "chrome://browser/content/profiles/assets/20_plane.svg",
+        icon: "chrome://global/skin/icons/arrow-right.svg",
         run: this._actionChat,
       },
       [ACTION_SEARCH]: {
