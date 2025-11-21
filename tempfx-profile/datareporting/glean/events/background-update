@@ -1,0 +1,6 @@
+{"timestamp":16225215,"category":"nimbus_events","name":"enrollment","extra":{"glean_timestamp":"1761774919066","experiment":"fx-accounts-ping-release-rollout-2","branch":"control","experiment_type":"rollout"}}
+{"timestamp":16225432,"category":"nimbus_events","name":"enrollment","extra":{"experiment_type":"rollout","glean_timestamp":"1761774919283","branch":"control","experiment":"one-click-sponsored-settings"}}
+{"timestamp":16225504,"category":"nimbus_events","name":"enrollment","extra":{"experiment":"smart-tab-groups-rollout-beta","branch":"smart-tab-groups","experiment_type":"rollout","glean_timestamp":"1761774919356"}}
+{"timestamp":16225585,"category":"nimbus_events","name":"enrollment","extra":{"glean_timestamp":"1761774919436","experiment":"link-previews-all-channel-rollout-without-onboarding","experiment_type":"rollout","branch":"long-press-preview"}}
+{"timestamp":16227579,"category":"nimbus_events","name":"enrollment","extra":{"branch":"treatment-a-callout-badge","experiment_type":"rollout","glean_timestamp":"1761774921431","experiment":"ai-chatbot-page-summarization-mvp-treatment-a-callout-badge-rollout-v2"}}
+{"timestamp":16227855,"category":"nimbus_events","name":"enrollment","extra":{"experiment":"link-previews-all-channel-rollout-with-onboarding","glean_timestamp":"1761774921707","branch":"long-press-preview","experiment_type":"rollout"}}
