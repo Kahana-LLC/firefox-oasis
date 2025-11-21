@@ -106,8 +106,9 @@ export class SettingControl extends SettingElement {
     config: { type: Object },
     value: {},
     parentDisabled: { type: Boolean },
-    showEnableExtensionMessage: { type: Boolean },
     tabIndex: { type: Number, reflect: true },
+    showEnableExtensionMessage: { type: Boolean, state: true },
+    isDisablingExtension: { type: Boolean, state: true },
   };
 
   /**
@@ -144,6 +145,11 @@ export class SettingControl extends SettingElement {
      * @type {boolean}
      */
     this.showEnableExtensionMessage = false;
+
+    /**
+     * @type {boolean}
+     */
+    this.isDisablingExtension = false;
   }
 
   createRenderRoot() {
@@ -301,8 +307,10 @@ export class SettingControl extends SettingElement {
   }
 
   async disableExtension() {
-    await this.setting.disableControllingExtension();
+    this.isDisablingExtension = true;
     this.showEnableExtensionMessage = true;
+    await this.setting.disableControllingExtension();
+    this.isDisablingExtension = false;
   }
 
   isControlledByExtension() {
@@ -325,7 +333,7 @@ export class SettingControl extends SettingElement {
       event.preventDefault();
       // @ts-ignore
       let mainWindow = window.browsingContext.topChromeWindow;
-      mainWindow.BrowserAddonUI.openAddonsMgr("addons://list/theme");
+      mainWindow.BrowserAddonUI.openAddonsMgr("addons://list/extension");
     }
   }
 
@@ -379,11 +387,16 @@ export class SettingControl extends SettingElement {
       let optionTag = opt.control
         ? unsafeStatic(opt.control)
         : KNOWN_OPTIONS.get(control);
+      let spreadValues = spread(this.getOptionPropertyMapping(opt));
       let children =
         "items" in opt ? this.itemsTemplate(opt) : this.optionsTemplate(opt);
-      return staticHtml`<${optionTag}
-          ${spread(this.getOptionPropertyMapping(opt))}
-        >${children}</${optionTag}>`;
+      if (opt.control == "a" && opt.controlAttrs?.is == "moz-support-link") {
+        // The `is` attribute must be set when the element is first added to the
+        // DOM. We need to mark that up manually, since `spread()` uses
+        // `el.setAttribute()` to set attributes it receives.
+        return html`<a is="moz-support-link" ${spreadValues}>${children}</a>`;
+      }
+      return staticHtml`<${optionTag} ${spreadValues}>${children}</${optionTag}>`;
     });
   }
 
@@ -429,6 +442,7 @@ export class SettingControl extends SettingElement {
         <moz-button
           slot="actions"
           @click=${this.disableExtension}
+          ?disabled=${this.isDisablingExtension}
           data-l10n-id="disable-extension"
         ></moz-button>
       </moz-message-bar>`;
