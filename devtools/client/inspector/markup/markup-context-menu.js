@@ -278,7 +278,7 @@ class MarkupContextMenu {
   /**
    * Paste the contents of the clipboard as adjacent HTML to the selected Node.
    *
-   * @param  {String} position
+   * @param  {string} position
    *         The position as specified for Element.insertAdjacentHTML
    *         (i.e. "beforeBegin", "afterBegin", "beforeEnd", "afterEnd").
    */
@@ -683,8 +683,9 @@ class MarkupContextMenu {
     return pasteSubmenu;
   }
 
-  _getPseudoClassSubmenu(isElement) {
+  _getPseudoClassSubmenu() {
     const menu = new Menu();
+    const enabled = this.inspector.canTogglePseudoClassForSelectedNode();
 
     // Set the pseudo classes
     for (const name of PSEUDO_CLASSES) {
@@ -695,7 +696,7 @@ class MarkupContextMenu {
         click: () => this.inspector.togglePseudoClass(name),
       });
 
-      if (isElement) {
+      if (enabled) {
         const checked = this.selection.nodeFront.hasPseudoClassLock(name);
         menuitem.checked = checked;
       } else {
@@ -855,7 +856,7 @@ class MarkupContextMenu {
     menu.append(
       new MenuItem({
         label: INSPECTOR_L10N.getStr("inspectorPseudoClassSubmenu.label"),
-        submenu: this._getPseudoClassSubmenu(isElement),
+        submenu: this._getPseudoClassSubmenu(),
       })
     );
 

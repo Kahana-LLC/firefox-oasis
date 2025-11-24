@@ -1103,6 +1103,28 @@ bool nsLayoutUtils::IsProperAncestorFrame(const nsIFrame* aAncestorFrame,
 }
 
 // static
+bool nsLayoutUtils::IsProperAncestorFrameConsideringContinuations(
+    const nsIFrame* aAncestorFrame, const nsIFrame* aFrame,
+    const nsIFrame* aCommonAncestor) {
+  MOZ_ASSERT(aAncestorFrame);
+  const nsIFrame* ancestorFirstContinuation =
+      aAncestorFrame->FirstContinuation();
+  if (!aFrame || aFrame->FirstContinuation() == ancestorFirstContinuation) {
+    return false;
+  }
+  const nsIFrame* commonFirstContinuation =
+      aCommonAncestor ? aCommonAncestor->FirstContinuation() : nullptr;
+  const nsIFrame* f = aFrame;
+  for (; f && f->FirstContinuation() != commonFirstContinuation;
+       f = f->GetParent()) {
+    if (f->FirstContinuation() == ancestorFirstContinuation) {
+      return true;
+    }
+  }
+  return f && commonFirstContinuation == ancestorFirstContinuation;
+}
+
+// static
 const nsIFrame* nsLayoutUtils::FillAncestors(
     const nsIFrame* aFrame, const nsIFrame* aStopAtAncestor,
     nsTArray<const nsIFrame*>* aAncestors) {
@@ -3062,6 +3084,12 @@ void nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
       DL_LOGI("Partial updates are disabled");
       metrics->mPartialUpdateResult = PartialUpdateResult::Failed;
       metrics->mPartialUpdateFailReason = PartialUpdateFailReason::Disabled;
+
+      // Now that we've decided to do a full rebuild make sure to clear the
+      // disable partial updates bool so that we can maybe attempt a partial
+      // update on the paint after this one (if it doesn't get disabled again
+      // during this paint).
+      builder->SetDisablePartialUpdates(false);
     }
 
     // Rebuild the full display list if the partial display list build failed.

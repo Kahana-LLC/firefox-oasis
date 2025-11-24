@@ -737,14 +737,6 @@ features:
         type: Int
         default: 0
 
-  bookmarks:
-    description: Feature for Bookmarks
-    variables:
-      new-compose-ui:
-        description: if true, enable new compose based UI
-        type: Boolean
-        default: false
-
   networking:
     description: Enables networking features
     variables:
@@ -961,6 +953,16 @@ features:
   lna-blocking:
     description: Feature that allows blocking local network or device access.
     variables:
+      blocking:
+        description: >
+          Whether or not to block LNA requests
+        type: Boolean
+        default: false
+      block-trackers:
+        description: >
+          Whether or not to block trackers
+        type: Boolean
+        default: false
       enabled:
         description: >
           Whether or not to turn on local network / device access blocking

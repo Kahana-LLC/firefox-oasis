@@ -81,7 +81,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * @param {AnimationsActor} The main AnimationsActor instance
    * @param {AnimationPlayer} The player object returned by getAnimationPlayers
-   * @param {Number} Time which animation created
+   * @param {number} Time which animation created
    */
   constructor(animationsActor, player, createdTime) {
     super(animationsActor.conn, animationPlayerSpec);
@@ -224,7 +224,7 @@ class AnimationPlayerActor extends Actor {
    * property if it was set, or the keyframe rule name or the transition
    * property.
    *
-   * @return {String}
+   * @return {string}
    */
   getName() {
     if (this.player.id) {
@@ -241,7 +241,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation duration from this player, in milliseconds.
    *
-   * @return {Number}
+   * @return {number}
    */
   getDuration() {
     return this.player.effect.getComputedTiming().duration;
@@ -250,7 +250,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation delay from this player, in milliseconds.
    *
-   * @return {Number}
+   * @return {number}
    */
   getDelay() {
     return this.player.effect.getComputedTiming().delay;
@@ -259,7 +259,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation endDelay from this player, in milliseconds.
    *
-   * @return {Number}
+   * @return {number}
    */
   getEndDelay() {
     return this.player.effect.getComputedTiming().endDelay;
@@ -269,7 +269,7 @@ class AnimationPlayerActor extends Actor {
    * Get the animation iteration count for this player. That is, how many times
    * is the animation scheduled to run.
    *
-   * @return {Number} The number of iterations, or null if the animation repeats
+   * @return {number} The number of iterations, or null if the animation repeats
    * infinitely.
    */
   getIterationCount() {
@@ -281,7 +281,7 @@ class AnimationPlayerActor extends Actor {
    * Get the animation iterationStart from this player, in ratio.
    * That is offset of starting position of the animation.
    *
-   * @return {Number}
+   * @return {number}
    */
   getIterationStart() {
     return this.player.effect.getComputedTiming().iterationStart;
@@ -290,7 +290,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation easing from this player.
    *
-   * @return {String}
+   * @return {string}
    */
   getEasing() {
     return this.player.effect.getComputedTiming().easing;
@@ -299,7 +299,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation fill mode from this player.
    *
-   * @return {String}
+   * @return {string}
    */
   getFill() {
     return this.player.effect.getComputedTiming().fill;
@@ -308,7 +308,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get the animation direction from this player.
    *
-   * @return {String}
+   * @return {string}
    */
   getDirection() {
     return this.player.effect.getComputedTiming().direction;
@@ -317,21 +317,16 @@ class AnimationPlayerActor extends Actor {
   /**
    * Get animation-timing-function from animated element if CSS Animations.
    *
-   * @return {String}
+   * @return {string}
    */
   getAnimationTimingFunction() {
     if (!this.isCssAnimation()) {
       return null;
     }
 
-    let pseudo = null;
-    let target = this.player.effect.target;
-    if (target.type) {
-      // Animated element is a pseudo element.
-      pseudo = target.type;
-      target = target.element;
-    }
-    return this.window.getComputedStyle(target, pseudo).animationTimingFunction;
+    const { target, pseudoElement } = this.player.effect;
+    return this.window.getComputedStyle(target, pseudoElement)
+      .animationTimingFunction;
   }
 
   getPropertiesCompositorStatus() {
@@ -348,7 +343,7 @@ class AnimationPlayerActor extends Actor {
   /**
    * Return the current start of the Animation.
    *
-   * @return {Object}
+   * @return {object}
    */
   getState() {
     const compositorStatus = this.getPropertiesCompositorStatus();
@@ -398,7 +393,7 @@ class AnimationPlayerActor extends Actor {
    * case some properties haven't changed since last time (since the front can
    * reconstruct those). If you want the full state, use the getState method.
    *
-   * @return {Object}
+   * @return {object}
    */
   getCurrentState() {
     const newState = this.getState();
@@ -492,16 +487,10 @@ class AnimationPlayerActor extends Actor {
           return;
         }
         if (!underlyingValue) {
-          let pseudo = null;
-          let target = this.player.effect.target;
-          if (target.type) {
-            // This target is a pseudo element.
-            pseudo = target.type;
-            target = target.element;
-          }
+          const { target, pseudoElement } = this.player.effect;
           const value = DOMWindowUtils.getUnanimatedComputedStyle(
             target,
-            pseudo,
+            pseudoElement,
             property.name,
             DOMWindowUtils.FLUSH_NONE
           );
@@ -572,7 +561,7 @@ class AnimationPlayerActor extends Actor {
    * Get the animation types for a given list of CSS property names.
    *
    * @param {Array} propertyNames - CSS property names (e.g. background-color)
-   * @return {Object} Returns animation types (e.g. {"background-color": "rgb(0, 0, 0)"}.
+   * @return {object} Returns animation types (e.g. {"background-color": "rgb(0, 0, 0)"}.
    */
   getAnimationTypes(propertyNames) {
     const animationTypes = {};
@@ -585,11 +574,11 @@ class AnimationPlayerActor extends Actor {
   /**
    * Returns the distance of between value1, value2.
    *
-   * @param {Object} target - dom element
-   * @param {String} propertyName - e.g. transform
-   * @param {String} value1 - e.g. translate(0px)
-   * @param {String} value2 - e.g. translate(10px)
-   * @param {Object} DOMWindowUtils
+   * @param {object} target - dom element
+   * @param {string} propertyName - e.g. transform
+   * @param {string} value1 - e.g. translate(0px)
+   * @param {string} value2 - e.g. translate(10px)
+   * @param {object} DOMWindowUtils
    * @param {float} distance
    */
   getDistance(target, propertyName, value1, value2, DOMWindowUtils) {
@@ -840,11 +829,20 @@ exports.AnimationsActor = class AnimationsActor extends Actor {
    * @param {Array} actors A list of AnimationPlayerActor.
    */
   pauseSome(actors) {
-    for (const { player } of actors) {
-      this.pauseSync(player);
+    const handledActors = [];
+    for (const actor of actors) {
+      // The client could call this with actors that we no longer handle, as it might
+      // not have received the mutations event yet for removed animations.
+      // In such case, ignore the actor, as pausing the animation again might trigger a
+      // new mutation, which would cause problems here and on the client.
+      if (!this.actors.includes(actor)) {
+        continue;
+      }
+      this.pauseSync(actor.player);
+      handledActors.push(actor);
     }
 
-    return this.waitForNextFrame(actors);
+    return this.waitForNextFrame(handledActors);
   }
 
   /**
@@ -853,22 +851,39 @@ exports.AnimationsActor = class AnimationsActor extends Actor {
    * @param {Array} actors A list of AnimationPlayerActor.
    */
   playSome(actors) {
-    for (const { player } of actors) {
-      this.playSync(player);
+    const handledActors = [];
+    for (const actor of actors) {
+      // The client could call this with actors that we no longer handle, as it might
+      // not have received the mutations event yet for removed animations.
+      // In such case, ignore the actor, as playing the animation again might trigger a
+      // new mutation, which would cause problems here and on the client.
+      if (!this.actors.includes(actor)) {
+        continue;
+      }
+      this.playSync(actor.player);
+      handledActors.push(actor);
     }
 
-    return this.waitForNextFrame(actors);
+    return this.waitForNextFrame(handledActors);
   }
 
   /**
    * Set the current time of several animations at the same time.
    *
-   * @param {Array} players A list of AnimationPlayerActor.
-   * @param {Number} time The new currentTime.
-   * @param {Boolean} shouldPause Should the players be paused too.
+   * @param {Array} actors A list of AnimationPlayerActor.
+   * @param {number} time The new currentTime.
+   * @param {boolean} shouldPause Should the players be paused too.
    */
-  setCurrentTimes(players, time, shouldPause) {
-    for (const actor of players) {
+  setCurrentTimes(actors, time, shouldPause) {
+    const handledActors = [];
+    for (const actor of actors) {
+      // The client could call this with actors that we no longer handle, as it might
+      // not have received the mutations event yet for removed animations.
+      // In such case, ignore the actor, as setting the time might trigger a
+      // new mutation, which would cause problems here and on the client.
+      if (!this.actors.includes(actor)) {
+        continue;
+      }
       const player = actor.player;
 
       if (shouldPause) {
@@ -880,30 +895,38 @@ exports.AnimationsActor = class AnimationsActor extends Actor {
           ? time - actor.createdTime
           : actor.createdTime - time;
       player.currentTime = currentTime * Math.abs(player.playbackRate);
+      handledActors.push(actor);
     }
 
-    return this.waitForNextFrame(players);
+    return this.waitForNextFrame(handledActors);
   }
 
   /**
    * Set the playback rate of several animations at the same time.
    *
    * @param {Array} actors A list of AnimationPlayerActor.
-   * @param {Number} rate The new rate.
+   * @param {number} rate The new rate.
    */
-  setPlaybackRates(players, rate) {
-    return Promise.all(
-      players.map(({ player }) => {
-        player.updatePlaybackRate(rate);
-        return player.ready;
-      })
-    );
+  setPlaybackRates(actors, rate) {
+    const readyPromises = [];
+    for (const actor of actors) {
+      // The client could call this with actors that we no longer handle, as it might
+      // not have received the mutations event yet for removed animations.
+      // In such case, ignore the actor, as setting the playback rate might trigger a
+      // new mutation, which would cause problems here and on the client.
+      if (!this.actors.includes(actor)) {
+        continue;
+      }
+      actor.player.updatePlaybackRate(rate);
+      readyPromises.push(actor.player.ready);
+    }
+    return Promise.all(readyPromises);
   }
 
   /**
    * Pause given player synchronously.
    *
-   * @param {Object} player
+   * @param {object} player
    */
   pauseSync(player) {
     player.startTime = null;
@@ -912,7 +935,7 @@ exports.AnimationsActor = class AnimationsActor extends Actor {
   /**
    * Play given player synchronously.
    *
-   * @param {Object} player
+   * @param {object} player
    */
   playSync(player) {
     if (!player.playbackRate) {
@@ -929,7 +952,7 @@ exports.AnimationsActor = class AnimationsActor extends Actor {
   /**
    * Return created fime of given animaiton.
    *
-   * @param {Object} animation
+   * @param {object} animation
    */
   getCreatedTime(animation) {
     return (

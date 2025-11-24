@@ -3065,8 +3065,7 @@ delta = "0.9.1 -> 0.10.0"
 [[audits.hashlink]]
 who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
-delta = "0.10.0 -> 0.10.0@git:76dc47a12af5829c1e8bf4834e38b410dec2aeff"
-importable = false
+delta = "0.10.0 -> 0.11.0"
 
 [[audits.headers]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -4266,10 +4265,11 @@ criteria = "safe-to-deploy"
 delta = "0.2.6 -> 0.2.9"
 
 [[audits.mtu]]
-who = "Erich Gubler <erichdongubler@gmail.com>"
+who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
-delta = "0.2.9 -> 0.2.9@git:5bfb65919fb5804ec1dd68cc93e014cb9c830d94"
+delta = "0.2.9 -> 0.2.9@git:3dbba8ffc2b3c78713161d1925b2858bd2098548"
 importable = false
+notes = "mtu crate is now part of neqo and maintained by Mozilla employees"
 
 [[audits.naga]]
 who = "Dzmitry Malyshau <kvark@fastmail.com>"

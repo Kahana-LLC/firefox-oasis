@@ -321,6 +321,7 @@ FilenameTypeAndDetails nsContentSecurityUtils::FilenameToFilenameType(
   // These are strings because the Telemetry Events API only accepts strings
   static constexpr auto kChromeURI = "chromeuri"_ns;
   static constexpr auto kResourceURI = "resourceuri"_ns;
+  static constexpr auto kMozSrcURI = "mozsrcuri"_ns;
   static constexpr auto kBlobUri = "bloburi"_ns;
   static constexpr auto kDataUri = "dataurl"_ns;
   static constexpr auto kAboutUri = "abouturi"_ns;
@@ -371,6 +372,9 @@ FilenameTypeAndDetails nsContentSecurityUtils::FilenameToFilenameType(
                                     Some(StripQueryRef(fileName)));
     }
     return FilenameTypeAndDetails(kResourceURI, Some(StripQueryRef(fileName)));
+  }
+  if (StringBeginsWith(fileName, "moz-src://"_ns)) {
+    return FilenameTypeAndDetails(kMozSrcURI, Some(StripQueryRef(fileName)));
   }
 
   // blob: and data:
@@ -1326,6 +1330,7 @@ static nsLiteralCString sImgSrcMozRemoteImageAllowList[] = {
     "about:preferences"_ns,
     "about:settings"_ns,
     "chrome://browser/content/preferences/dialogs/applicationManager.xhtml"_ns,
+    "chrome://mozapps/content/handling/appChooser.xhtml"_ns,
 };
 // img-src data: blob:
 static nsLiteralCString sImgSrcDataBlobAllowList[] = {
@@ -1389,7 +1394,6 @@ static nsLiteralCString sImgSrcHttpsAllowList[] = {
     "chrome://devtools/content/framework/browser-toolbox/window.html"_ns,
     "chrome://devtools/content/framework/toolbox-window.xhtml"_ns,
     "chrome://global/content/alerts/alert.xhtml"_ns,
-    "chrome://mozapps/content/handling/appChooser.xhtml"_ns,
 };
 // img-src http:
 //  UNSAFE! Do not use.
@@ -1399,7 +1403,6 @@ static nsLiteralCString sImgSrcHttpAllowList[] = {
     "chrome://devtools/content/framework/browser-toolbox/window.html"_ns,
     "chrome://devtools/content/framework/toolbox-window.xhtml"_ns,
     "chrome://global/content/alerts/alert.xhtml"_ns,
-    "chrome://mozapps/content/handling/appChooser.xhtml"_ns,
     // STOP! Do not add anything to this list.
 };
 // img-src jar: file:

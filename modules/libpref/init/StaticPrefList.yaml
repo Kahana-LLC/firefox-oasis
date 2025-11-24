@@ -263,6 +263,13 @@
   value: true
   mirror: always
 
+# Whether to enable automatic details relationships for
+# anchor positioned content.
+- name: accessibility.anchorPositionedAsDetails.enabled
+  type: bool
+  value: false
+  mirror: always
+
 # Whether to enable all accessibility cache domains on startup.
 #  * false: enable domains as needed
 #  * true:  enable all domains regardless of need (cache everything)
@@ -1945,13 +1952,6 @@
   value: 2
   mirror: always
 
-# If set, use DocumentChannel to directly initiate loads entirely
-# from parent-process BrowsingContexts
-- name: browser.tabs.documentchannel.parent-controlled
-  type: bool
-  value: false
-  mirror: always
-
 # If set, middle clicking on a link opens the link in a new tab.
 - name: browser.tabs.opentabfor.middleclick
   type: bool
@@ -2953,26 +2953,12 @@
   value: true
   mirror: always
 
-# Control whether clipboard.read(), clipboard.write() and ClipboardItem are exposed
-# to content.
-- name: dom.events.asyncClipboard.clipboardItem
-  type: bool
-  value: true
-  mirror: always
-
 # Skips checking permission and user activation when accessing the clipboard.
 # Should only be enabled in tests.
 # Access with Clipboard::IsTestingPrefEnabled().
 - name: dom.events.testing.asyncClipboard
   type: bool
   value: false
-  mirror: always
-  do_not_use_directly: true
-
-# Control whether `navigator.clipboard.readText()` is exposed to content.
-- name: dom.events.asyncClipboard.readText
-  type: bool
-  value: true
   mirror: always
   do_not_use_directly: true
 
@@ -6624,12 +6610,6 @@
 # Prefs starting with "gfx."
 #---------------------------------------------------------------------------
 
-# Allow 24-bit colour when the hardware supports it.
-- name: gfx.android.rgb16.force
-  type: bool
-  value: false
-  mirror: once
-
 - name: gfx.apitrace.enabled
   type: bool
   value: false
@@ -6930,23 +6910,21 @@
   value: true # Match naive behavior, but hopefully we can stop soon!
   mirror: always
 
+#ifdef XP_MACOSX
 # Whether GL contexts can be migrated to a different GPU (to match the one the
 # OS is using for composition).
-#
-# 0 = force disable migration
-# 1 = use migration where in safe configurations (the default)
-# 2 = force enable migration (for testing)
 - name: gfx.compositor.gpu-migration
-  type: RelaxedAtomicInt32
-  value: 1
+  type: RelaxedAtomicBool
+  value: true
   mirror: always
+#endif
 
+#ifdef XP_DARWIN
 - name: gfx.core-animation.tint-opaque
   type: RelaxedAtomicBool
   value: false
   mirror: always
 
-#ifdef XP_DARWIN
   # Create specialized video-only layers for video content in
   # fullscreen windows. Consistently works well on Apple Silicon,
   # some issues remain on Intel hardware.
@@ -7034,7 +7012,7 @@
   value: -1
   mirror: once
 
-
+#ifdef XP_WIN
 - name: gfx.direct3d11.reuse-decoder-device
   type: bool
   value: true
@@ -7069,6 +7047,7 @@
   type: int32_t
   value: 0
   mirror: once
+#endif
 
 # Rate by which the frame rate is divided. I.e. at a number higher than 1 we
 # will only refresh every <x> frames.
@@ -7418,21 +7397,27 @@
   value: false
   mirror: once
 
+#ifdef XP_MACOSX
 - name: gfx.use-iosurface-textures
   type: bool
   value: false
   mirror: once
+#endif
 
+#ifdef XP_WIN
 - name: gfx.use-mutex-on-present
   type: bool
   value: false
   mirror: once
+#endif
 
+#ifdef MOZ_WIDGET_ANDROID
 # Use SurfaceTextures as preferred backend for TextureClient/Host.
 - name: gfx.use-surfacetexture-textures
   type: bool
   value: false
   mirror: once
+#endif
 
 - name: gfx.vsync.compositor.unobserve-count
   type: int32_t
@@ -8009,12 +7994,20 @@
   value: false
   mirror: once
 
+#ifdef XP_WIN
 # Whether to use the D3D11 RenderCompositor when using WebRender software backend
 - name: gfx.webrender.software.d3d11
   type: bool
   value: true
   mirror: once
 
+- name: gfx.webrender.software.d3d11.upload-mode
+  type: RelaxedAtomicInt32
+  value: 4
+  mirror: always
+#endif
+
+#if defined(MOZ_WIDGET_ANDROID) || defined(MOZ_WIDGET_GTK)
 - name: gfx.webrender.software.opengl
   type: bool
 #if defined(MOZ_WIDGET_ANDROID)
@@ -8023,11 +8016,7 @@
   value: false
 #endif
   mirror: once
-
-- name: gfx.webrender.software.d3d11.upload-mode
-  type: RelaxedAtomicInt32
-  value: 4
-  mirror: always
+#endif
 
 # Whether to force widgets to don't support acceleration to use WebRender
 # despite that
@@ -9689,10 +9678,12 @@
   value: true
   mirror: once
 
+#ifdef XP_DARWIN
 - name: layers.iosurfaceimage.recycle-limit
   type: RelaxedAtomicUint32
   value: 15
   mirror: always
+#endif
 
 #---------------------------------------------------------------------------
 # Prefs starting with "layout."
@@ -14357,19 +14348,23 @@
   value: false
   mirror: always
 
+#ifdef MOZ_WIDGET_ANDROID
 # When resolving a native HTTPS query with native APIs
 # the Android implementation has a max timeout
 - name: network.dns.native_https_timeout_android
   type: RelaxedAtomicInt32
   value: 20000
   mirror: always
+#endif
 
+#ifdef XP_MACOSX
 # When resolving a native HTTPS query with native APIs
 # the MacOS implementation has a max timeout
 - name: network.dns.native_https_timeout_mac_msec
   type: RelaxedAtomicInt32
   value: 5000
   mirror: always
+#endif
 
 # When this pref is true, we copy the host name to a fresh string before
 # calling into getaddrinfo.
@@ -17254,11 +17249,13 @@
   value: true
   mirror: always
 
+#ifdef XP_MACOSX
 # Dispatch WebAuthn requests to the macOS platform API
 - name: security.webauthn.enable_macos_passkeys
   type: RelaxedAtomicBool
   value: true
   mirror: always
+#endif
 
 # Dispatch WebAuthn requests to authenticator-rs
 - name: security.webauth.webauthn_enable_usbtoken

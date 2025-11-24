@@ -1170,7 +1170,7 @@ bool nsCocoaWindow::PreRender(WidgetRenderingContext* aContext)
   // composition is done, thus keeping the GL context locked forever.
   mCompositingLock.Lock();
 
-  if (aContext->mGL && gfxPlatform::CanMigrateMacGPUs()) {
+  if (aContext->mGL && StaticPrefs::gfx_compositor_gpu_migration()) {
     GLContextCGL::Cast(aContext->mGL)->MigrateToActiveGPU();
   }
 
@@ -6549,8 +6549,10 @@ void nsCocoaWindow::ReportMoveEvent() {
     DispatchSizeModeEvent();
   }
 
-  // Dispatch the move event to Gecko
-  NotifyWindowMoved(mBounds.x, mBounds.y);
+  // Dispatch the move event to Gecko, if we're visible.
+  if (IsVisible()) {
+    NotifyWindowMoved(mBounds.x, mBounds.y);
+  }
 
   mInReportMoveEvent = false;
 
