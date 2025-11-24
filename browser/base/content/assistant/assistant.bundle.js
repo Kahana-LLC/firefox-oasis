@@ -3806,7 +3806,7 @@ var require_dist = __commonJS({
     var timeoutError = new p_timeout_1.TimeoutError();
     var PQueue = class extends EventEmitter {
       constructor(options) {
-        var _a3, _b, _c, _d;
+        var _a2, _b, _c, _d;
         super();
         this._intervalCount = 0;
         this._intervalEnd = 0;
@@ -3815,7 +3815,7 @@ var require_dist = __commonJS({
         this._resolveIdle = empty;
         options = Object.assign({ carryoverConcurrencyCount: false, intervalCap: Infinity, interval: 0, concurrency: Infinity, autoStart: true, queueClass: priority_queue_1.default }, options);
         if (!(typeof options.intervalCap === "number" && options.intervalCap >= 1)) {
-          throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${(_b = (_a3 = options.intervalCap) === null || _a3 === void 0 ? void 0 : _a3.toString()) !== null && _b !== void 0 ? _b : ""}\` (${typeof options.intervalCap})`);
+          throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${(_b = (_a2 = options.intervalCap) === null || _a2 === void 0 ? void 0 : _a2.toString()) !== null && _b !== void 0 ? _b : ""}\` (${typeof options.intervalCap})`);
         }
         if (options.interval === void 0 || !(Number.isFinite(options.interval) && options.interval >= 0)) {
           throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${(_d = (_c = options.interval) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : ""}\` (${typeof options.interval})`);
@@ -18871,12 +18871,12 @@ var init_graph_mermaid = __esm({
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer2, params) {
   function init(inst, def) {
-    var _a3;
+    var _a2;
     Object.defineProperty(inst, "_zod", {
       value: inst._zod ?? {},
       enumerable: false
     });
-    (_a3 = inst._zod).traits ?? (_a3.traits = /* @__PURE__ */ new Set());
+    (_a2 = inst._zod).traits ?? (_a2.traits = /* @__PURE__ */ new Set());
     inst._zod.traits.add(name);
     initializer2(inst, def);
     for (const k in _.prototype) {
@@ -18891,10 +18891,10 @@ function $constructor(name, initializer2, params) {
   }
   Object.defineProperty(Definition, "name", { value: name });
   function _(def) {
-    var _a3;
+    var _a2;
     const inst = params?.Parent ? new Definition() : this;
     init(inst, def);
-    (_a3 = inst._zod).deferred ?? (_a3.deferred = []);
+    (_a2 = inst._zod).deferred ?? (_a2.deferred = []);
     for (const fn of inst._zod.deferred) {
       fn();
     }
@@ -19322,8 +19322,8 @@ function aborted(x, startIndex = 0) {
 }
 function prefixIssues(path, issues) {
   return issues.map((iss) => {
-    var _a3;
-    (_a3 = iss).path ?? (_a3.path = []);
+    var _a2;
+    (_a2 = iss).path ?? (_a2.path = []);
     iss.path.unshift(path);
     return iss;
   });
@@ -19594,7 +19594,7 @@ var init_schemas = __esm({
     init_versions();
     init_util2();
     $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
-      var _a3;
+      var _a2;
       inst ?? (inst = {});
       inst._zod.def = def;
       inst._zod.bag = inst._zod.bag || {};
@@ -19609,7 +19609,7 @@ var init_schemas = __esm({
         }
       }
       if (checks.length === 0) {
-        (_a3 = inst._zod).deferred ?? (_a3.deferred = []);
+        (_a2 = inst._zod).deferred ?? (_a2.deferred = []);
         inst._zod.deferred?.push(() => {
           inst._zod.run = inst._zod.parse;
         });
@@ -19952,7 +19952,7 @@ var init_to_json_schema = __esm({
         this.seen = /* @__PURE__ */ new Map();
       }
       process(schema, _params = { path: [], schemaPath: [] }) {
-        var _a3;
+        var _a2;
         const def = schema._zod.def;
         const formatMap = {
           guid: "uuid",
@@ -20414,7 +20414,7 @@ var init_to_json_schema = __esm({
           delete result.schema.default;
         }
         if (this.io === "input" && result.schema._prefault)
-          (_a3 = result.schema).default ?? (_a3.default = result.schema._prefault);
+          (_a2 = result.schema).default ?? (_a2.default = result.schema._prefault);
         delete result.schema._prefault;
         const _result = this.seen.get(schema);
         return _result.schema;
@@ -28845,531 +28845,6 @@ var init_base5 = __esm({
   }
 });
 
-// node_modules/tslib/tslib.es6.mjs
-var tslib_es6_exports = {};
-__export(tslib_es6_exports, {
-  __addDisposableResource: () => __addDisposableResource,
-  __assign: () => __assign,
-  __asyncDelegator: () => __asyncDelegator,
-  __asyncGenerator: () => __asyncGenerator,
-  __asyncValues: () => __asyncValues,
-  __await: () => __await,
-  __awaiter: () => __awaiter,
-  __classPrivateFieldGet: () => __classPrivateFieldGet,
-  __classPrivateFieldIn: () => __classPrivateFieldIn,
-  __classPrivateFieldSet: () => __classPrivateFieldSet,
-  __createBinding: () => __createBinding,
-  __decorate: () => __decorate,
-  __disposeResources: () => __disposeResources,
-  __esDecorate: () => __esDecorate,
-  __exportStar: () => __exportStar,
-  __extends: () => __extends,
-  __generator: () => __generator,
-  __importDefault: () => __importDefault,
-  __importStar: () => __importStar,
-  __makeTemplateObject: () => __makeTemplateObject,
-  __metadata: () => __metadata,
-  __param: () => __param,
-  __propKey: () => __propKey,
-  __read: () => __read,
-  __rest: () => __rest,
-  __rewriteRelativeImportExtension: () => __rewriteRelativeImportExtension,
-  __runInitializers: () => __runInitializers,
-  __setFunctionName: () => __setFunctionName,
-  __spread: () => __spread,
-  __spreadArray: () => __spreadArray,
-  __spreadArrays: () => __spreadArrays,
-  __values: () => __values,
-  default: () => tslib_es6_default
-});
-function __extends(d, b) {
-  if (typeof b !== "function" && b !== null)
-    throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-  extendStatics(d, b);
-  function __() {
-    this.constructor = d;
-  }
-  d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-}
-function __rest(s, e) {
-  var t = {};
-  for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-    t[p] = s[p];
-  if (s != null && typeof Object.getOwnPropertySymbols === "function")
-    for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-      if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-        t[p[i]] = s[p[i]];
-    }
-  return t;
-}
-function __decorate(decorators, target, key, desc) {
-  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-  if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-  else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-  return c > 3 && r && Object.defineProperty(target, key, r), r;
-}
-function __param(paramIndex, decorator) {
-  return function(target, key) {
-    decorator(target, key, paramIndex);
-  };
-}
-function __esDecorate(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
-  function accept(f2) {
-    if (f2 !== void 0 && typeof f2 !== "function") throw new TypeError("Function expected");
-    return f2;
-  }
-  var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
-  var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
-  var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
-  var _, done = false;
-  for (var i = decorators.length - 1; i >= 0; i--) {
-    var context = {};
-    for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
-    for (var p in contextIn.access) context.access[p] = contextIn.access[p];
-    context.addInitializer = function(f2) {
-      if (done) throw new TypeError("Cannot add initializers after decoration has completed");
-      extraInitializers.push(accept(f2 || null));
-    };
-    var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
-    if (kind === "accessor") {
-      if (result === void 0) continue;
-      if (result === null || typeof result !== "object") throw new TypeError("Object expected");
-      if (_ = accept(result.get)) descriptor.get = _;
-      if (_ = accept(result.set)) descriptor.set = _;
-      if (_ = accept(result.init)) initializers.unshift(_);
-    } else if (_ = accept(result)) {
-      if (kind === "field") initializers.unshift(_);
-      else descriptor[key] = _;
-    }
-  }
-  if (target) Object.defineProperty(target, contextIn.name, descriptor);
-  done = true;
-}
-function __runInitializers(thisArg, initializers, value) {
-  var useValue = arguments.length > 2;
-  for (var i = 0; i < initializers.length; i++) {
-    value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
-  }
-  return useValue ? value : void 0;
-}
-function __propKey(x) {
-  return typeof x === "symbol" ? x : "".concat(x);
-}
-function __setFunctionName(f2, name, prefix) {
-  if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
-  return Object.defineProperty(f2, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
-}
-function __metadata(metadataKey, metadataValue) {
-  if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
-}
-function __awaiter(thisArg, _arguments, P, generator) {
-  function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve) {
-      resolve(value);
-    });
-  }
-  return new (P || (P = Promise))(function(resolve, reject) {
-    function fulfilled(value) {
-      try {
-        step(generator.next(value));
-      } catch (e) {
-        reject(e);
-      }
-    }
-    function rejected(value) {
-      try {
-        step(generator["throw"](value));
-      } catch (e) {
-        reject(e);
-      }
-    }
-    function step(result) {
-      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-    }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
-  });
-}
-function __generator(thisArg, body) {
-  var _ = { label: 0, sent: function() {
-    if (t[0] & 1) throw t[1];
-    return t[1];
-  }, trys: [], ops: [] }, f2, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
-  return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() {
-    return this;
-  }), g;
-  function verb(n2) {
-    return function(v) {
-      return step([n2, v]);
-    };
-  }
-  function step(op) {
-    if (f2) throw new TypeError("Generator is already executing.");
-    while (g && (g = 0, op[0] && (_ = 0)), _) try {
-      if (f2 = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-      if (y = 0, t) op = [op[0] & 2, t.value];
-      switch (op[0]) {
-        case 0:
-        case 1:
-          t = op;
-          break;
-        case 4:
-          _.label++;
-          return { value: op[1], done: false };
-        case 5:
-          _.label++;
-          y = op[1];
-          op = [0];
-          continue;
-        case 7:
-          op = _.ops.pop();
-          _.trys.pop();
-          continue;
-        default:
-          if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) {
-            _ = 0;
-            continue;
-          }
-          if (op[0] === 3 && (!t || op[1] > t[0] && op[1] < t[3])) {
-            _.label = op[1];
-            break;
-          }
-          if (op[0] === 6 && _.label < t[1]) {
-            _.label = t[1];
-            t = op;
-            break;
-          }
-          if (t && _.label < t[2]) {
-            _.label = t[2];
-            _.ops.push(op);
-            break;
-          }
-          if (t[2]) _.ops.pop();
-          _.trys.pop();
-          continue;
-      }
-      op = body.call(thisArg, _);
-    } catch (e) {
-      op = [6, e];
-      y = 0;
-    } finally {
-      f2 = t = 0;
-    }
-    if (op[0] & 5) throw op[1];
-    return { value: op[0] ? op[1] : void 0, done: true };
-  }
-}
-function __exportStar(m, o) {
-  for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(o, p)) __createBinding(o, m, p);
-}
-function __values(o) {
-  var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
-  if (m) return m.call(o);
-  if (o && typeof o.length === "number") return {
-    next: function() {
-      if (o && i >= o.length) o = void 0;
-      return { value: o && o[i++], done: !o };
-    }
-  };
-  throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
-}
-function __read(o, n2) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n2 === void 0 || n2-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = { error };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-}
-function __spread() {
-  for (var ar = [], i = 0; i < arguments.length; i++)
-    ar = ar.concat(__read(arguments[i]));
-  return ar;
-}
-function __spreadArrays() {
-  for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-  for (var r = Array(s), k = 0, i = 0; i < il; i++)
-    for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-      r[k] = a[j];
-  return r;
-}
-function __spreadArray(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-}
-function __await(v) {
-  return this instanceof __await ? (this.v = v, this) : new __await(v);
-}
-function __asyncGenerator(thisArg, _arguments, generator) {
-  if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-  var g = generator.apply(thisArg, _arguments || []), i, q = [];
-  return i = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i[Symbol.asyncIterator] = function() {
-    return this;
-  }, i;
-  function awaitReturn(f2) {
-    return function(v) {
-      return Promise.resolve(v).then(f2, reject);
-    };
-  }
-  function verb(n2, f2) {
-    if (g[n2]) {
-      i[n2] = function(v) {
-        return new Promise(function(a, b) {
-          q.push([n2, v, a, b]) > 1 || resume(n2, v);
-        });
-      };
-      if (f2) i[n2] = f2(i[n2]);
-    }
-  }
-  function resume(n2, v) {
-    try {
-      step(g[n2](v));
-    } catch (e) {
-      settle(q[0][3], e);
-    }
-  }
-  function step(r) {
-    r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);
-  }
-  function fulfill(value) {
-    resume("next", value);
-  }
-  function reject(value) {
-    resume("throw", value);
-  }
-  function settle(f2, v) {
-    if (f2(v), q.shift(), q.length) resume(q[0][0], q[0][1]);
-  }
-}
-function __asyncDelegator(o) {
-  var i, p;
-  return i = {}, verb("next"), verb("throw", function(e) {
-    throw e;
-  }), verb("return"), i[Symbol.iterator] = function() {
-    return this;
-  }, i;
-  function verb(n2, f2) {
-    i[n2] = o[n2] ? function(v) {
-      return (p = !p) ? { value: __await(o[n2](v)), done: false } : f2 ? f2(v) : v;
-    } : f2;
-  }
-}
-function __asyncValues(o) {
-  if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-  var m = o[Symbol.asyncIterator], i;
-  return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
-    return this;
-  }, i);
-  function verb(n2) {
-    i[n2] = o[n2] && function(v) {
-      return new Promise(function(resolve, reject) {
-        v = o[n2](v), settle(resolve, reject, v.done, v.value);
-      });
-    };
-  }
-  function settle(resolve, reject, d, v) {
-    Promise.resolve(v).then(function(v2) {
-      resolve({ value: v2, done: d });
-    }, reject);
-  }
-}
-function __makeTemplateObject(cooked, raw) {
-  if (Object.defineProperty) {
-    Object.defineProperty(cooked, "raw", { value: raw });
-  } else {
-    cooked.raw = raw;
-  }
-  return cooked;
-}
-function __importStar(mod) {
-  if (mod && mod.__esModule) return mod;
-  var result = {};
-  if (mod != null) {
-    for (var k = ownKeys2(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-  }
-  __setModuleDefault(result, mod);
-  return result;
-}
-function __importDefault(mod) {
-  return mod && mod.__esModule ? mod : { default: mod };
-}
-function __classPrivateFieldGet(receiver, state, kind, f2) {
-  if (kind === "a" && !f2) throw new TypeError("Private accessor was defined without a getter");
-  if (typeof state === "function" ? receiver !== state || !f2 : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-  return kind === "m" ? f2 : kind === "a" ? f2.call(receiver) : f2 ? f2.value : state.get(receiver);
-}
-function __classPrivateFieldSet(receiver, state, value, kind, f2) {
-  if (kind === "m") throw new TypeError("Private method is not writable");
-  if (kind === "a" && !f2) throw new TypeError("Private accessor was defined without a setter");
-  if (typeof state === "function" ? receiver !== state || !f2 : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-  return kind === "a" ? f2.call(receiver, value) : f2 ? f2.value = value : state.set(receiver, value), value;
-}
-function __classPrivateFieldIn(state, receiver) {
-  if (receiver === null || typeof receiver !== "object" && typeof receiver !== "function") throw new TypeError("Cannot use 'in' operator on non-object");
-  return typeof state === "function" ? receiver === state : state.has(receiver);
-}
-function __addDisposableResource(env, value, async) {
-  if (value !== null && value !== void 0) {
-    if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
-    var dispose, inner;
-    if (async) {
-      if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
-      dispose = value[Symbol.asyncDispose];
-    }
-    if (dispose === void 0) {
-      if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
-      dispose = value[Symbol.dispose];
-      if (async) inner = dispose;
-    }
-    if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
-    if (inner) dispose = function() {
-      try {
-        inner.call(this);
-      } catch (e) {
-        return Promise.reject(e);
-      }
-    };
-    env.stack.push({ value, dispose, async });
-  } else if (async) {
-    env.stack.push({ async: true });
-  }
-  return value;
-}
-function __disposeResources(env) {
-  function fail(e) {
-    env.error = env.hasError ? new _SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
-    env.hasError = true;
-  }
-  var r, s = 0;
-  function next() {
-    while (r = env.stack.pop()) {
-      try {
-        if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
-        if (r.dispose) {
-          var result = r.dispose.call(r.value);
-          if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) {
-            fail(e);
-            return next();
-          });
-        } else s |= 1;
-      } catch (e) {
-        fail(e);
-      }
-    }
-    if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
-    if (env.hasError) throw env.error;
-  }
-  return next();
-}
-function __rewriteRelativeImportExtension(path, preserveJsx) {
-  if (typeof path === "string" && /^\.\.?\//.test(path)) {
-    return path.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m, tsx, d, ext, cm) {
-      return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : d + ext + "." + cm.toLowerCase() + "js";
-    });
-  }
-  return path;
-}
-var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys2, _SuppressedError, tslib_es6_default;
-var init_tslib_es6 = __esm({
-  "node_modules/tslib/tslib.es6.mjs"() {
-    extendStatics = function(d, b) {
-      extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
-        d2.__proto__ = b2;
-      } || function(d2, b2) {
-        for (var p in b2) if (Object.prototype.hasOwnProperty.call(b2, p)) d2[p] = b2[p];
-      };
-      return extendStatics(d, b);
-    };
-    __assign = function() {
-      __assign = Object.assign || function __assign2(t) {
-        for (var s, i = 1, n2 = arguments.length; i < n2; i++) {
-          s = arguments[i];
-          for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-        }
-        return t;
-      };
-      return __assign.apply(this, arguments);
-    };
-    __createBinding = Object.create ? (function(o, m, k, k2) {
-      if (k2 === void 0) k2 = k;
-      var desc = Object.getOwnPropertyDescriptor(m, k);
-      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m[k];
-        } };
-      }
-      Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
-      if (k2 === void 0) k2 = k;
-      o[k2] = m[k];
-    });
-    __setModuleDefault = Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
-    };
-    ownKeys2 = function(o) {
-      ownKeys2 = Object.getOwnPropertyNames || function(o2) {
-        var ar = [];
-        for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
-        return ar;
-      };
-      return ownKeys2(o);
-    };
-    _SuppressedError = typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
-      var e = new Error(message);
-      return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-    };
-    tslib_es6_default = {
-      __extends,
-      __assign,
-      __rest,
-      __decorate,
-      __param,
-      __esDecorate,
-      __runInitializers,
-      __propKey,
-      __setFunctionName,
-      __metadata,
-      __awaiter,
-      __generator,
-      __createBinding,
-      __exportStar,
-      __values,
-      __read,
-      __spread,
-      __spreadArrays,
-      __spreadArray,
-      __await,
-      __asyncGenerator,
-      __asyncDelegator,
-      __asyncValues,
-      __makeTemplateObject,
-      __importStar,
-      __importDefault,
-      __classPrivateFieldGet,
-      __classPrivateFieldSet,
-      __classPrivateFieldIn,
-      __addDisposableResource,
-      __disposeResources,
-      __rewriteRelativeImportExtension
-    };
-  }
-});
-
 // node_modules/@supabase/node-fetch/browser.js
 var browser_exports = {};
 __export(browser_exports, {
@@ -29426,20 +28901,22 @@ var require_PostgrestError = __commonJS({
 var require_PostgrestBuilder = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/PostgrestBuilder.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var node_fetch_1 = tslib_1.__importDefault((init_browser(), __toCommonJS(browser_exports)));
-    var PostgrestError_1 = tslib_1.__importDefault(require_PostgrestError());
+    var node_fetch_1 = __importDefault((init_browser(), __toCommonJS(browser_exports)));
+    var PostgrestError_1 = __importDefault(require_PostgrestError());
     var PostgrestBuilder2 = class {
       constructor(builder) {
-        var _a3, _b;
+        var _a2, _b;
         this.shouldThrowOnError = false;
         this.method = builder.method;
         this.url = builder.url;
         this.headers = new Headers(builder.headers);
         this.schema = builder.schema;
         this.body = builder.body;
-        this.shouldThrowOnError = (_a3 = builder.shouldThrowOnError) !== null && _a3 !== void 0 ? _a3 : false;
+        this.shouldThrowOnError = (_a2 = builder.shouldThrowOnError) !== null && _a2 !== void 0 ? _a2 : false;
         this.signal = builder.signal;
         this.isMaybeSingle = (_b = builder.isMaybeSingle) !== null && _b !== void 0 ? _b : false;
         if (builder.fetch) {
@@ -29485,7 +28962,7 @@ var require_PostgrestBuilder = __commonJS({
           body: JSON.stringify(this.body),
           signal: this.signal
         }).then(async (res2) => {
-          var _a3, _b, _c, _d;
+          var _a2, _b, _c, _d;
           let error = null;
           let data = null;
           let count = null;
@@ -29497,7 +28974,7 @@ var require_PostgrestBuilder = __commonJS({
               if (body === "") {
               } else if (this.headers.get("Accept") === "text/csv") {
                 data = body;
-              } else if (this.headers.get("Accept") && ((_a3 = this.headers.get("Accept")) === null || _a3 === void 0 ? void 0 : _a3.includes("application/vnd.pgrst.plan+text"))) {
+              } else if (this.headers.get("Accept") && ((_a2 = this.headers.get("Accept")) === null || _a2 === void 0 ? void 0 : _a2.includes("application/vnd.pgrst.plan+text"))) {
                 data = body;
               } else {
                 data = JSON.parse(body);
@@ -29567,10 +29044,10 @@ var require_PostgrestBuilder = __commonJS({
         });
         if (!this.shouldThrowOnError) {
           res = res.catch((fetchError) => {
-            var _a3, _b, _c;
+            var _a2, _b, _c;
             return {
               error: {
-                message: `${(_a3 = fetchError === null || fetchError === void 0 ? void 0 : fetchError.name) !== null && _a3 !== void 0 ? _a3 : "FetchError"}: ${fetchError === null || fetchError === void 0 ? void 0 : fetchError.message}`,
+                message: `${(_a2 = fetchError === null || fetchError === void 0 ? void 0 : fetchError.name) !== null && _a2 !== void 0 ? _a2 : "FetchError"}: ${fetchError === null || fetchError === void 0 ? void 0 : fetchError.message}`,
                 details: `${(_b = fetchError === null || fetchError === void 0 ? void 0 : fetchError.stack) !== null && _b !== void 0 ? _b : ""}`,
                 hint: "",
                 code: `${(_c = fetchError === null || fetchError === void 0 ? void 0 : fetchError.code) !== null && _c !== void 0 ? _c : ""}`
@@ -29627,9 +29104,11 @@ var require_PostgrestBuilder = __commonJS({
 var require_PostgrestTransformBuilder = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/PostgrestTransformBuilder.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var PostgrestBuilder_1 = tslib_1.__importDefault(require_PostgrestBuilder());
+    var PostgrestBuilder_1 = __importDefault(require_PostgrestBuilder());
     var PostgrestTransformBuilder2 = class extends PostgrestBuilder_1.default {
       /**
        * Perform a SELECT on the query result.
@@ -29790,7 +29269,7 @@ var require_PostgrestTransformBuilder = __commonJS({
        * or `"json"`
        */
       explain({ analyze = false, verbose = false, settings = false, buffers = false, wal = false, format: format2 = "text" } = {}) {
-        var _a3;
+        var _a2;
         const options = [
           analyze ? "analyze" : null,
           verbose ? "verbose" : null,
@@ -29798,7 +29277,7 @@ var require_PostgrestTransformBuilder = __commonJS({
           buffers ? "buffers" : null,
           wal ? "wal" : null
         ].filter(Boolean).join("|");
-        const forMediatype = (_a3 = this.headers.get("Accept")) !== null && _a3 !== void 0 ? _a3 : "application/json";
+        const forMediatype = (_a2 = this.headers.get("Accept")) !== null && _a2 !== void 0 ? _a2 : "application/json";
         this.headers.set("Accept", `application/vnd.pgrst.plan+${format2}; for="${forMediatype}"; options=${options};`);
         if (format2 === "json") {
           return this;
@@ -29844,10 +29323,11 @@ var require_PostgrestTransformBuilder = __commonJS({
 var require_PostgrestFilterBuilder = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/PostgrestFilterBuilder.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var PostgrestTransformBuilder_1 = tslib_1.__importDefault(require_PostgrestTransformBuilder());
-    var PostgrestReservedCharsRegexp = new RegExp("[,()]");
+    var PostgrestTransformBuilder_1 = __importDefault(require_PostgrestTransformBuilder());
     var PostgrestFilterBuilder2 = class extends PostgrestTransformBuilder_1.default {
       /**
        * Match only rows where `column` is equal to `value`.
@@ -29995,7 +29475,7 @@ var require_PostgrestFilterBuilder = __commonJS({
        */
       in(column, values) {
         const cleanedValues = Array.from(new Set(values)).map((s) => {
-          if (typeof s === "string" && PostgrestReservedCharsRegexp.test(s))
+          if (typeof s === "string" && new RegExp("[,()]").test(s))
             return `"${s}"`;
           else
             return `${s}`;
@@ -30209,9 +29689,11 @@ var require_PostgrestFilterBuilder = __commonJS({
 var require_PostgrestQueryBuilder = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/PostgrestQueryBuilder.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var PostgrestFilterBuilder_1 = tslib_1.__importDefault(require_PostgrestFilterBuilder());
+    var PostgrestFilterBuilder_1 = __importDefault(require_PostgrestFilterBuilder());
     var PostgrestQueryBuilder2 = class {
       constructor(url, { headers = {}, schema, fetch: fetch3 }) {
         this.url = url;
@@ -30292,7 +29774,7 @@ var require_PostgrestQueryBuilder = __commonJS({
        * inserts.
        */
       insert(values, { count, defaultToNull = true } = {}) {
-        var _a3;
+        var _a2;
         const method = "POST";
         if (count) {
           this.headers.append("Prefer", `count=${count}`);
@@ -30313,7 +29795,7 @@ var require_PostgrestQueryBuilder = __commonJS({
           headers: this.headers,
           schema: this.schema,
           body: values,
-          fetch: (_a3 = this.fetch) !== null && _a3 !== void 0 ? _a3 : fetch
+          fetch: (_a2 = this.fetch) !== null && _a2 !== void 0 ? _a2 : fetch
         });
       }
       /**
@@ -30355,7 +29837,7 @@ var require_PostgrestQueryBuilder = __commonJS({
        * `ignoreDuplicates: false`. This also only applies when doing bulk upserts.
        */
       upsert(values, { onConflict, ignoreDuplicates = false, count, defaultToNull = true } = {}) {
-        var _a3;
+        var _a2;
         const method = "POST";
         this.headers.append("Prefer", `resolution=${ignoreDuplicates ? "ignore" : "merge"}-duplicates`);
         if (onConflict !== void 0)
@@ -30379,7 +29861,7 @@ var require_PostgrestQueryBuilder = __commonJS({
           headers: this.headers,
           schema: this.schema,
           body: values,
-          fetch: (_a3 = this.fetch) !== null && _a3 !== void 0 ? _a3 : fetch
+          fetch: (_a2 = this.fetch) !== null && _a2 !== void 0 ? _a2 : fetch
         });
       }
       /**
@@ -30404,7 +29886,7 @@ var require_PostgrestQueryBuilder = __commonJS({
        * numbers.
        */
       update(values, { count } = {}) {
-        var _a3;
+        var _a2;
         const method = "PATCH";
         if (count) {
           this.headers.append("Prefer", `count=${count}`);
@@ -30415,7 +29897,7 @@ var require_PostgrestQueryBuilder = __commonJS({
           headers: this.headers,
           schema: this.schema,
           body: values,
-          fetch: (_a3 = this.fetch) !== null && _a3 !== void 0 ? _a3 : fetch
+          fetch: (_a2 = this.fetch) !== null && _a2 !== void 0 ? _a2 : fetch
         });
       }
       /**
@@ -30438,7 +29920,7 @@ var require_PostgrestQueryBuilder = __commonJS({
        * numbers.
        */
       delete({ count } = {}) {
-        var _a3;
+        var _a2;
         const method = "DELETE";
         if (count) {
           this.headers.append("Prefer", `count=${count}`);
@@ -30448,7 +29930,7 @@ var require_PostgrestQueryBuilder = __commonJS({
           url: this.url,
           headers: this.headers,
           schema: this.schema,
-          fetch: (_a3 = this.fetch) !== null && _a3 !== void 0 ? _a3 : fetch
+          fetch: (_a2 = this.fetch) !== null && _a2 !== void 0 ? _a2 : fetch
         });
       }
     };
@@ -30460,10 +29942,12 @@ var require_PostgrestQueryBuilder = __commonJS({
 var require_PostgrestClient = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/PostgrestClient.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var PostgrestQueryBuilder_1 = tslib_1.__importDefault(require_PostgrestQueryBuilder());
-    var PostgrestFilterBuilder_1 = tslib_1.__importDefault(require_PostgrestFilterBuilder());
+    var PostgrestQueryBuilder_1 = __importDefault(require_PostgrestQueryBuilder());
+    var PostgrestFilterBuilder_1 = __importDefault(require_PostgrestFilterBuilder());
     var PostgrestClient2 = class _PostgrestClient {
       // TODO: Add back shouldThrowOnError once we figure out the typings
       /**
@@ -30532,7 +30016,7 @@ var require_PostgrestClient = __commonJS({
        * numbers.
        */
       rpc(fn, args = {}, { head: head2 = false, get: get2 = false, count } = {}) {
-        var _a3;
+        var _a2;
         let method;
         const url = new URL(`${this.url}/rpc/${fn}`);
         let body;
@@ -30555,7 +30039,7 @@ var require_PostgrestClient = __commonJS({
           headers,
           schema: this.schemaName,
           body,
-          fetch: (_a3 = this.fetch) !== null && _a3 !== void 0 ? _a3 : fetch
+          fetch: (_a2 = this.fetch) !== null && _a2 !== void 0 ? _a2 : fetch
         });
       }
     };
@@ -30567,20 +30051,22 @@ var require_PostgrestClient = __commonJS({
 var require_cjs = __commonJS({
   "node_modules/@supabase/postgrest-js/dist/cjs/index.js"(exports) {
     "use strict";
+    var __importDefault = exports && exports.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PostgrestError = exports.PostgrestBuilder = exports.PostgrestTransformBuilder = exports.PostgrestFilterBuilder = exports.PostgrestQueryBuilder = exports.PostgrestClient = void 0;
-    var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var PostgrestClient_1 = tslib_1.__importDefault(require_PostgrestClient());
+    var PostgrestClient_1 = __importDefault(require_PostgrestClient());
     exports.PostgrestClient = PostgrestClient_1.default;
-    var PostgrestQueryBuilder_1 = tslib_1.__importDefault(require_PostgrestQueryBuilder());
+    var PostgrestQueryBuilder_1 = __importDefault(require_PostgrestQueryBuilder());
     exports.PostgrestQueryBuilder = PostgrestQueryBuilder_1.default;
-    var PostgrestFilterBuilder_1 = tslib_1.__importDefault(require_PostgrestFilterBuilder());
+    var PostgrestFilterBuilder_1 = __importDefault(require_PostgrestFilterBuilder());
     exports.PostgrestFilterBuilder = PostgrestFilterBuilder_1.default;
-    var PostgrestTransformBuilder_1 = tslib_1.__importDefault(require_PostgrestTransformBuilder());
+    var PostgrestTransformBuilder_1 = __importDefault(require_PostgrestTransformBuilder());
     exports.PostgrestTransformBuilder = PostgrestTransformBuilder_1.default;
-    var PostgrestBuilder_1 = tslib_1.__importDefault(require_PostgrestBuilder());
+    var PostgrestBuilder_1 = __importDefault(require_PostgrestBuilder());
     exports.PostgrestBuilder = PostgrestBuilder_1.default;
-    var PostgrestError_1 = tslib_1.__importDefault(require_PostgrestError());
+    var PostgrestError_1 = __importDefault(require_PostgrestError());
     exports.PostgrestError = PostgrestError_1.default;
     exports.default = {
       PostgrestClient: PostgrestClient_1.default,
@@ -46682,9 +46168,6 @@ var MessagesZodState = external_exports.object({
   messages: withLangGraph(external_exports.custom(), MessagesZodMeta)
 });
 
-// node_modules/@supabase/functions-js/dist/module/FunctionsClient.js
-init_tslib_es6();
-
 // node_modules/@supabase/functions-js/dist/module/helper.js
 var resolveFetch = (customFetch) => {
   let _fetch;
@@ -46741,6 +46224,33 @@ var FunctionRegion;
 })(FunctionRegion || (FunctionRegion = {}));
 
 // node_modules/@supabase/functions-js/dist/module/FunctionsClient.js
+var __awaiter = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var FunctionsClient = class {
   constructor(url, { headers = {}, customFetch, region = FunctionRegion.Any } = {}) {
     this.url = url;
@@ -46762,7 +46272,7 @@ var FunctionsClient = class {
    */
   invoke(functionName_1) {
     return __awaiter(this, arguments, void 0, function* (functionName, options = {}) {
-      var _a3;
+      var _a2;
       try {
         const { headers, method, body: functionArgs, signal } = options;
         let _headers = {};
@@ -46789,8 +46299,6 @@ var FunctionsClient = class {
             _headers["Content-Type"] = "application/json";
             body = JSON.stringify(functionArgs);
           }
-        } else {
-          body = functionArgs;
         }
         const response = yield this.fetch(url.toString(), {
           method: method || "POST",
@@ -46814,11 +46322,11 @@ var FunctionsClient = class {
         if (!response.ok) {
           throw new FunctionsHttpError(response);
         }
-        let responseType = ((_a3 = response.headers.get("Content-Type")) !== null && _a3 !== void 0 ? _a3 : "text/plain").split(";")[0].trim();
+        let responseType = ((_a2 = response.headers.get("Content-Type")) !== null && _a2 !== void 0 ? _a2 : "text/plain").split(";")[0].trim();
         let data;
         if (responseType === "application/json") {
           data = yield response.json();
-        } else if (responseType === "application/octet-stream" || responseType === "application/pdf") {
+        } else if (responseType === "application/octet-stream") {
           data = yield response.blob();
         } else if (responseType === "text/event-stream") {
           data = response;
@@ -46843,7 +46351,7 @@ var FunctionsClient = class {
 };
 
 // node_modules/@supabase/postgrest-js/dist/esm/wrapper.mjs
-var index = __toESM(require_cjs(), 1);
+var import_cjs = __toESM(require_cjs(), 1);
 var {
   PostgrestClient,
   PostgrestQueryBuilder,
@@ -46851,12 +46359,12 @@ var {
   PostgrestTransformBuilder,
   PostgrestBuilder,
   PostgrestError
-} = index.default || index;
+} = import_cjs.default;
 
 // node_modules/@supabase/realtime-js/dist/module/lib/websocket-factory.js
 var WebSocketFactory = class {
   static detectEnvironment() {
-    var _a3;
+    var _a2;
     if (typeof WebSocket !== "undefined") {
       return { type: "native", constructor: WebSocket };
     }
@@ -46873,7 +46381,7 @@ var WebSocketFactory = class {
         workaround: "Use Cloudflare Workers WebSocket API for server-side WebSocket handling, or deploy to a different runtime."
       };
     }
-    if (typeof globalThis !== "undefined" && globalThis.EdgeRuntime || typeof navigator !== "undefined" && ((_a3 = navigator.userAgent) === null || _a3 === void 0 ? void 0 : _a3.includes("Vercel-Edge"))) {
+    if (typeof globalThis !== "undefined" && globalThis.EdgeRuntime || typeof navigator !== "undefined" && ((_a2 = navigator.userAgent) === null || _a2 === void 0 ? void 0 : _a2.includes("Vercel-Edge"))) {
       return {
         type: "unsupported",
         error: "Edge runtime detected (Vercel Edge/Netlify Edge). WebSockets are not supported in edge functions.",
@@ -46929,7 +46437,7 @@ Suggested solution: ${env.workaround}`;
     try {
       const env = this.detectEnvironment();
       return env.type === "native" || env.type === "ws";
-    } catch (_a3) {
+    } catch (_a2) {
       return false;
     }
   }
@@ -46937,7 +46445,7 @@ Suggested solution: ${env.workaround}`;
 var websocket_factory_default = WebSocketFactory;
 
 // node_modules/@supabase/realtime-js/dist/module/lib/version.js
-var version2 = "2.78.0";
+var version2 = "2.75.0";
 
 // node_modules/@supabase/realtime-js/dist/module/lib/constants.js
 var DEFAULT_VERSION = `realtime-js/${version2}`;
@@ -47067,8 +46575,8 @@ var PostgresTypes;
   PostgresTypes2["tstzrange"] = "tstzrange";
 })(PostgresTypes || (PostgresTypes = {}));
 var convertChangeData = (columns, record, options = {}) => {
-  var _a3;
-  const skipTypes = (_a3 = options.skipTypes) !== null && _a3 !== void 0 ? _a3 : [];
+  var _a2;
+  const skipTypes = (_a2 = options.skipTypes) !== null && _a2 !== void 0 ? _a2 : [];
   if (!record) {
     return {};
   }
@@ -47191,15 +46699,10 @@ var toTimestampString = (value) => {
   return value;
 };
 var httpEndpointURL = (socketUrl) => {
-  const wsUrl = new URL(socketUrl);
-  wsUrl.protocol = wsUrl.protocol.replace(/^ws/i, "http");
-  wsUrl.pathname = wsUrl.pathname.replace(/\/+$/, "").replace(/\/socket\/websocket$/i, "").replace(/\/socket$/i, "").replace(/\/websocket$/i, "");
-  if (wsUrl.pathname === "" || wsUrl.pathname === "/") {
-    wsUrl.pathname = "/api/broadcast";
-  } else {
-    wsUrl.pathname = wsUrl.pathname + "/api/broadcast";
-  }
-  return wsUrl.href;
+  let url = socketUrl;
+  url = url.replace(/^ws/i, "http");
+  url = url.replace(/(\/socket\/websocket|\/socket|\/websocket)\/?$/i, "");
+  return url.replace(/\/+$/, "") + "/api/broadcast";
 };
 
 // node_modules/@supabase/realtime-js/dist/module/lib/push.js
@@ -47251,9 +46754,9 @@ var Push = class {
     this.payload = Object.assign(Object.assign({}, this.payload), payload);
   }
   receive(status, callback) {
-    var _a3;
+    var _a2;
     if (this._hasReceived(status)) {
-      callback((_a3 = this.receivedResp) === null || _a3 === void 0 ? void 0 : _a3.response);
+      callback((_a2 = this.receivedResp) === null || _a2 === void 0 ? void 0 : _a2.response);
     }
     this.recHooks.push({ status, callback });
     return this;
@@ -47436,8 +46939,8 @@ var RealtimePresence = class _RealtimePresence {
       };
     }
     this.map(joins, (key, newPresences) => {
-      var _a3;
-      const currentPresences = (_a3 = state[key]) !== null && _a3 !== void 0 ? _a3 : [];
+      var _a2;
+      const currentPresences = (_a2 = state[key]) !== null && _a2 !== void 0 ? _a2 : [];
       state[key] = this.cloneDeep(newPresences);
       if (currentPresences.length > 0) {
         const joinedPresenceRefs = state[key].map((m) => m.presence_ref);
@@ -47549,7 +47052,7 @@ var REALTIME_SUBSCRIBE_STATES;
 })(REALTIME_SUBSCRIBE_STATES || (REALTIME_SUBSCRIBE_STATES = {}));
 var RealtimeChannel = class _RealtimeChannel {
   constructor(topic, params = { config: {} }, socket) {
-    var _a3, _b;
+    var _a2, _b;
     this.topic = topic;
     this.params = params;
     this.socket = socket;
@@ -47608,19 +47111,19 @@ var RealtimeChannel = class _RealtimeChannel {
     this.presence = new RealtimePresence(this);
     this.broadcastEndpointURL = httpEndpointURL(this.socket.endPoint);
     this.private = this.params.config.private || false;
-    if (!this.private && ((_b = (_a3 = this.params.config) === null || _a3 === void 0 ? void 0 : _a3.broadcast) === null || _b === void 0 ? void 0 : _b.replay)) {
+    if (!this.private && ((_b = (_a2 = this.params.config) === null || _a2 === void 0 ? void 0 : _a2.broadcast) === null || _b === void 0 ? void 0 : _b.replay)) {
       throw `tried to use replay on public channel '${this.topic}'. It must be a private channel.`;
     }
   }
   /** Subscribe registers your client with the server */
   subscribe(callback, timeout = this.timeout) {
-    var _a3, _b, _c;
+    var _a2, _b, _c;
     if (!this.socket.isConnected()) {
       this.socket.connect();
     }
     if (this.state == CHANNEL_STATES.closed) {
       const { config: { broadcast, presence, private: isPrivate } } = this.params;
-      const postgres_changes = (_b = (_a3 = this.bindings.postgres_changes) === null || _a3 === void 0 ? void 0 : _a3.map((r) => r.filter)) !== null && _b !== void 0 ? _b : [];
+      const postgres_changes = (_b = (_a2 = this.bindings.postgres_changes) === null || _a2 === void 0 ? void 0 : _a2.map((r) => r.filter)) !== null && _b !== void 0 ? _b : [];
       const presence_enabled = !!this.bindings[REALTIME_LISTEN_TYPES.PRESENCE] && this.bindings[REALTIME_LISTEN_TYPES.PRESENCE].length > 0 || ((_c = this.params.config.presence) === null || _c === void 0 ? void 0 : _c.enabled) === true;
       const accessTokenPayload = {};
       const config2 = {
@@ -47638,14 +47141,14 @@ var RealtimeChannel = class _RealtimeChannel {
       this.joinedOnce = true;
       this._rejoin(timeout);
       this.joinPush.receive("ok", async ({ postgres_changes: postgres_changes2 }) => {
-        var _a4;
+        var _a3;
         this.socket.setAuth();
         if (postgres_changes2 === void 0) {
           callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.SUBSCRIBED);
           return;
         } else {
           const clientPostgresBindings = this.bindings.postgres_changes;
-          const bindingsLen = (_a4 = clientPostgresBindings === null || clientPostgresBindings === void 0 ? void 0 : clientPostgresBindings.length) !== null && _a4 !== void 0 ? _a4 : 0;
+          const bindingsLen = (_a3 = clientPostgresBindings === null || clientPostgresBindings === void 0 ? void 0 : clientPostgresBindings.length) !== null && _a3 !== void 0 ? _a3 : 0;
           const newPostgresBindings = [];
           for (let i = 0; i < bindingsLen; i++) {
             const clientPostgresBinding = clientPostgresBindings[i];
@@ -47699,53 +47202,6 @@ var RealtimeChannel = class _RealtimeChannel {
     return this._on(type, filter, callback);
   }
   /**
-   * Sends a broadcast message explicitly via REST API.
-   *
-   * This method always uses the REST API endpoint regardless of WebSocket connection state.
-   * Useful when you want to guarantee REST delivery or when gradually migrating from implicit REST fallback.
-   *
-   * @param event The name of the broadcast event
-   * @param payload Payload to be sent (required)
-   * @param opts Options including timeout
-   * @returns Promise resolving to object with success status, and error details if failed
-   */
-  async httpSend(event, payload, opts = {}) {
-    var _a3;
-    const authorization = this.socket.accessTokenValue ? `Bearer ${this.socket.accessTokenValue}` : "";
-    if (payload === void 0 || payload === null) {
-      return Promise.reject("Payload is required for httpSend()");
-    }
-    const options = {
-      method: "POST",
-      headers: {
-        Authorization: authorization,
-        apikey: this.socket.apiKey ? this.socket.apiKey : "",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            topic: this.subTopic,
-            event,
-            payload,
-            private: this.private
-          }
-        ]
-      })
-    };
-    const response = await this._fetchWithTimeout(this.broadcastEndpointURL, options, (_a3 = opts.timeout) !== null && _a3 !== void 0 ? _a3 : this.timeout);
-    if (response.status === 202) {
-      return { success: true };
-    }
-    let errorMessage = response.statusText;
-    try {
-      const errorBody = await response.json();
-      errorMessage = errorBody.error || errorBody.message || errorMessage;
-    } catch (_b) {
-    }
-    return Promise.reject(new Error(errorMessage));
-  }
-  /**
    * Sends a message into the channel.
    *
    * @param args Arguments to send to channel
@@ -47755,9 +47211,8 @@ var RealtimeChannel = class _RealtimeChannel {
    * @param opts Options to be used during the send process
    */
   async send(args, opts = {}) {
-    var _a3, _b;
+    var _a2, _b;
     if (!this._canPush() && args.type === "broadcast") {
-      console.warn("Realtime send() is automatically falling back to REST API. This behavior will be deprecated in the future. Please use httpSend() explicitly for REST delivery.");
       const { event, payload: endpoint_payload } = args;
       const authorization = this.socket.accessTokenValue ? `Bearer ${this.socket.accessTokenValue}` : "";
       const options = {
@@ -47779,7 +47234,7 @@ var RealtimeChannel = class _RealtimeChannel {
         })
       };
       try {
-        const response = await this._fetchWithTimeout(this.broadcastEndpointURL, options, (_a3 = opts.timeout) !== null && _a3 !== void 0 ? _a3 : this.timeout);
+        const response = await this._fetchWithTimeout(this.broadcastEndpointURL, options, (_a2 = opts.timeout) !== null && _a2 !== void 0 ? _a2 : this.timeout);
         await ((_b = response.body) === null || _b === void 0 ? void 0 : _b.cancel());
         return response.ok ? "ok" : "error";
       } catch (error) {
@@ -47791,9 +47246,9 @@ var RealtimeChannel = class _RealtimeChannel {
       }
     } else {
       return new Promise((resolve) => {
-        var _a4, _b2, _c;
+        var _a3, _b2, _c;
         const push2 = this._push(args.type, args, opts.timeout || this.timeout);
-        if (args.type === "broadcast" && !((_c = (_b2 = (_a4 = this.params) === null || _a4 === void 0 ? void 0 : _a4.config) === null || _b2 === void 0 ? void 0 : _b2.broadcast) === null || _c === void 0 ? void 0 : _c.ack)) {
+        if (args.type === "broadcast" && !((_c = (_b2 = (_a3 = this.params) === null || _a3 === void 0 ? void 0 : _a3.config) === null || _b2 === void 0 ? void 0 : _b2.broadcast) === null || _c === void 0 ? void 0 : _c.ack)) {
           resolve("ok");
         }
         push2.receive("ok", () => resolve("ok"));
@@ -47908,7 +47363,7 @@ var RealtimeChannel = class _RealtimeChannel {
   }
   /** @internal */
   _trigger(type, payload, ref) {
-    var _a3, _b;
+    var _a2, _b;
     const typeLower = type.toLocaleLowerCase();
     const { close, error, leave, join } = CHANNEL_EVENTS;
     const events = [close, error, leave, join];
@@ -47920,17 +47375,17 @@ var RealtimeChannel = class _RealtimeChannel {
       throw "channel onMessage callbacks must return the payload, modified or unmodified";
     }
     if (["insert", "update", "delete"].includes(typeLower)) {
-      (_a3 = this.bindings.postgres_changes) === null || _a3 === void 0 ? void 0 : _a3.filter((bind2) => {
-        var _a4, _b2, _c;
-        return ((_a4 = bind2.filter) === null || _a4 === void 0 ? void 0 : _a4.event) === "*" || ((_c = (_b2 = bind2.filter) === null || _b2 === void 0 ? void 0 : _b2.event) === null || _c === void 0 ? void 0 : _c.toLocaleLowerCase()) === typeLower;
+      (_a2 = this.bindings.postgres_changes) === null || _a2 === void 0 ? void 0 : _a2.filter((bind2) => {
+        var _a3, _b2, _c;
+        return ((_a3 = bind2.filter) === null || _a3 === void 0 ? void 0 : _a3.event) === "*" || ((_c = (_b2 = bind2.filter) === null || _b2 === void 0 ? void 0 : _b2.event) === null || _c === void 0 ? void 0 : _c.toLocaleLowerCase()) === typeLower;
       }).map((bind2) => bind2.callback(handledPayload, ref));
     } else {
       (_b = this.bindings[typeLower]) === null || _b === void 0 ? void 0 : _b.filter((bind2) => {
-        var _a4, _b2, _c, _d, _e, _f;
+        var _a3, _b2, _c, _d, _e, _f;
         if (["broadcast", "presence", "postgres_changes"].includes(typeLower)) {
           if ("id" in bind2) {
             const bindId = bind2.id;
-            const bindEvent = (_a4 = bind2.filter) === null || _a4 === void 0 ? void 0 : _a4.event;
+            const bindEvent = (_a3 = bind2.filter) === null || _a3 === void 0 ? void 0 : _a3.event;
             return bindId && ((_b2 = payload.ids) === null || _b2 === void 0 ? void 0 : _b2.includes(bindId)) && (bindEvent === "*" || (bindEvent === null || bindEvent === void 0 ? void 0 : bindEvent.toLocaleLowerCase()) === ((_c = payload.data) === null || _c === void 0 ? void 0 : _c.type.toLocaleLowerCase()));
           } else {
             const bindEvent = (_e = (_d = bind2 === null || bind2 === void 0 ? void 0 : bind2.filter) === null || _d === void 0 ? void 0 : _d.event) === null || _e === void 0 ? void 0 : _e.toLocaleLowerCase();
@@ -47998,8 +47453,8 @@ var RealtimeChannel = class _RealtimeChannel {
     const typeLower = type.toLocaleLowerCase();
     if (this.bindings[typeLower]) {
       this.bindings[typeLower] = this.bindings[typeLower].filter((bind2) => {
-        var _a3;
-        return !(((_a3 = bind2.type) === null || _a3 === void 0 ? void 0 : _a3.toLocaleLowerCase()) === typeLower && _RealtimeChannel.isEqual(bind2.filter, filter));
+        var _a2;
+        return !(((_a2 = bind2.type) === null || _a2 === void 0 ? void 0 : _a2.toLocaleLowerCase()) === typeLower && _RealtimeChannel.isEqual(bind2.filter, filter));
       });
     }
     return this;
@@ -48109,7 +47564,7 @@ var RealtimeClient = class {
    * @param options.workerUrl The URL of the worker script. Defaults to https://realtime.supabase.com/worker.js that includes a heartbeat event call to keep the connection alive.
    */
   constructor(endPoint, options) {
-    var _a3;
+    var _a2;
     this.accessTokenValue = null;
     this.apiKey = null;
     this.channels = new Array();
@@ -48152,7 +47607,7 @@ var RealtimeClient = class {
       }
       return (...args) => _fetch(...args);
     };
-    if (!((_a3 = options === null || options === void 0 ? void 0 : options.params) === null || _a3 === void 0 ? void 0 : _a3.apikey)) {
+    if (!((_a2 = options === null || options === void 0 ? void 0 : options.params) === null || _a2 === void 0 ? void 0 : _a2.apikey)) {
       throw new Error("API key is required to connect to Realtime");
     }
     this.apiKey = options.params.apikey;
@@ -48323,8 +47778,8 @@ Option 2: Install and provide the "ws" package:
     const { topic, event, payload, ref } = data;
     const callback = () => {
       this.encode(data, (result) => {
-        var _a3;
-        (_a3 = this.conn) === null || _a3 === void 0 ? void 0 : _a3.send(result);
+        var _a2;
+        (_a2 = this.conn) === null || _a2 === void 0 ? void 0 : _a2.send(result);
       });
     };
     this.log("push", `${topic} ${event} (${ref})`, payload);
@@ -48355,7 +47810,7 @@ Option 2: Install and provide the "ws" package:
    * Sends a heartbeat message if the socket is connected.
    */
   async sendHeartbeat() {
-    var _a3;
+    var _a2;
     if (!this.isConnected()) {
       try {
         this.heartbeatCallback("disconnected");
@@ -48373,11 +47828,11 @@ Option 2: Install and provide the "ws" package:
         this.log("error", "error in heartbeat callback", e);
       }
       this._wasManualDisconnect = false;
-      (_a3 = this.conn) === null || _a3 === void 0 ? void 0 : _a3.close(WS_CLOSE_NORMAL, "heartbeat timeout");
+      (_a2 = this.conn) === null || _a2 === void 0 ? void 0 : _a2.close(WS_CLOSE_NORMAL, "heartbeat timeout");
       setTimeout(() => {
-        var _a4;
+        var _a3;
         if (!this.isConnected()) {
-          (_a4 = this.reconnectTimer) === null || _a4 === void 0 ? void 0 : _a4.scheduleTimeout();
+          (_a3 = this.reconnectTimer) === null || _a3 === void 0 ? void 0 : _a3.scheduleTimeout();
         }
       }, CONNECTION_TIMEOUTS.HEARTBEAT_TIMEOUT_FALLBACK);
       return;
@@ -48470,12 +47925,12 @@ Option 2: Install and provide the "ws" package:
    * @internal
    */
   _clearTimer(timer) {
-    var _a3;
+    var _a2;
     if (timer === "heartbeat" && this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = void 0;
     } else if (timer === "reconnect") {
-      (_a3 = this.reconnectTimer) === null || _a3 === void 0 ? void 0 : _a3.reset();
+      (_a2 = this.reconnectTimer) === null || _a2 === void 0 ? void 0 : _a2.reset();
     }
   }
   /**
@@ -48562,13 +48017,13 @@ Option 2: Install and provide the "ws" package:
   }
   /** @internal */
   _onConnClose(event) {
-    var _a3;
+    var _a2;
     this._setConnectionState("disconnected");
     this.log("transport", "close", event);
     this._triggerChanError();
     this._clearTimer("heartbeat");
     if (!this._wasManualDisconnect) {
-      (_a3 = this.reconnectTimer) === null || _a3 === void 0 ? void 0 : _a3.scheduleTimeout();
+      (_a2 = this.reconnectTimer) === null || _a2 === void 0 ? void 0 : _a2.scheduleTimeout();
     }
     this._triggerStateCallbacks("close", event);
   }
@@ -48697,8 +48152,8 @@ Option 2: Install and provide the "ws" package:
    * @internal
    */
   _initializeOptions(options) {
-    var _a3, _b, _c, _d, _e, _f, _g, _h, _j;
-    this.transport = (_a3 = options === null || options === void 0 ? void 0 : options.transport) !== null && _a3 !== void 0 ? _a3 : null;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _j;
+    this.transport = (_a2 = options === null || options === void 0 ? void 0 : options.transport) !== null && _a2 !== void 0 ? _a2 : null;
     this.timeout = (_b = options === null || options === void 0 ? void 0 : options.timeout) !== null && _b !== void 0 ? _b : DEFAULT_TIMEOUT;
     this.heartbeatIntervalMs = (_c = options === null || options === void 0 ? void 0 : options.heartbeatIntervalMs) !== null && _c !== void 0 ? _c : CONNECTION_TIMEOUTS.HEARTBEAT_INTERVAL;
     this.worker = (_d = options === null || options === void 0 ? void 0 : options.worker) !== null && _d !== void 0 ? _d : false;
@@ -48727,9 +48182,6 @@ Option 2: Install and provide the "ws" package:
     }
   }
 };
-
-// node_modules/@supabase/storage-js/dist/module/packages/StorageFileApi.js
-init_tslib_es6();
 
 // node_modules/@supabase/storage-js/dist/module/lib/errors.js
 var StorageError = class extends Error {
@@ -48766,11 +48218,34 @@ var StorageUnknownError = class extends StorageError {
   }
 };
 
-// node_modules/@supabase/storage-js/dist/module/lib/fetch.js
-init_tslib_es6();
-
 // node_modules/@supabase/storage-js/dist/module/lib/helpers.js
-init_tslib_es6();
+var __awaiter2 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var resolveFetch2 = (customFetch) => {
   let _fetch;
   if (customFetch) {
@@ -48782,7 +48257,7 @@ var resolveFetch2 = (customFetch) => {
   }
   return (...args) => _fetch(...args);
 };
-var resolveResponse = () => __awaiter(void 0, void 0, void 0, function* () {
+var resolveResponse = () => __awaiter2(void 0, void 0, void 0, function* () {
   if (typeof Response === "undefined") {
     return (yield Promise.resolve().then(() => (init_browser(), browser_exports))).Response;
   }
@@ -48810,11 +48285,35 @@ var isPlainObject2 = (value) => {
 };
 
 // node_modules/@supabase/storage-js/dist/module/lib/fetch.js
-var _getErrorMessage = (err) => {
-  var _a3;
-  return err.msg || err.message || err.error_description || (typeof err.error === "string" ? err.error : (_a3 = err.error) === null || _a3 === void 0 ? void 0 : _a3.message) || JSON.stringify(err);
+var __awaiter3 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
 };
-var handleError = (error, reject, options) => __awaiter(void 0, void 0, void 0, function* () {
+var _getErrorMessage = (err) => err.msg || err.message || err.error_description || err.error || JSON.stringify(err);
+var handleError = (error, reject, options) => __awaiter3(void 0, void 0, void 0, function* () {
   const Res = yield resolveResponse();
   if (error instanceof Res && !(options === null || options === void 0 ? void 0 : options.noResolveJson)) {
     error.json().then((err) => {
@@ -48845,7 +48344,7 @@ var _getRequestParams = (method, options, parameters, body) => {
   return Object.assign(Object.assign({}, params), parameters);
 };
 function _handleRequest(fetcher, method, url, options, parameters, body) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return new Promise((resolve, reject) => {
       fetcher(url, _getRequestParams(method, options, parameters, body)).then((result) => {
         if (!result.ok)
@@ -48858,36 +48357,59 @@ function _handleRequest(fetcher, method, url, options, parameters, body) {
   });
 }
 function get(fetcher, url, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return _handleRequest(fetcher, "GET", url, options, parameters);
   });
 }
 function post(fetcher, url, body, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return _handleRequest(fetcher, "POST", url, options, parameters, body);
   });
 }
 function put(fetcher, url, body, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return _handleRequest(fetcher, "PUT", url, options, parameters, body);
   });
 }
 function head(fetcher, url, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return _handleRequest(fetcher, "HEAD", url, Object.assign(Object.assign({}, options), { noResolveJson: true }), parameters);
   });
 }
 function remove(fetcher, url, body, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
+  return __awaiter3(this, void 0, void 0, function* () {
     return _handleRequest(fetcher, "DELETE", url, options, parameters, body);
   });
 }
 
-// node_modules/@supabase/storage-js/dist/module/packages/BlobDownloadBuilder.js
-init_tslib_es6();
-
 // node_modules/@supabase/storage-js/dist/module/packages/StreamDownloadBuilder.js
-init_tslib_es6();
+var __awaiter4 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var StreamDownloadBuilder = class {
   constructor(downloadFn, shouldThrowOnError) {
     this.downloadFn = downloadFn;
@@ -48897,7 +48419,7 @@ var StreamDownloadBuilder = class {
     return this.execute().then(onfulfilled, onrejected);
   }
   execute() {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter4(this, void 0, void 0, function* () {
       try {
         const result = yield this.downloadFn();
         return {
@@ -48918,34 +48440,46 @@ var StreamDownloadBuilder = class {
 };
 
 // node_modules/@supabase/storage-js/dist/module/packages/BlobDownloadBuilder.js
-var _a2;
+var __awaiter5 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var BlobDownloadBuilder = class {
   constructor(downloadFn, shouldThrowOnError) {
     this.downloadFn = downloadFn;
     this.shouldThrowOnError = shouldThrowOnError;
-    this[_a2] = "BlobDownloadBuilder";
-    this.promise = null;
   }
   asStream() {
     return new StreamDownloadBuilder(this.downloadFn, this.shouldThrowOnError);
   }
   then(onfulfilled, onrejected) {
-    return this.getPromise().then(onfulfilled, onrejected);
-  }
-  catch(onrejected) {
-    return this.getPromise().catch(onrejected);
-  }
-  finally(onfinally) {
-    return this.getPromise().finally(onfinally);
-  }
-  getPromise() {
-    if (!this.promise) {
-      this.promise = this.execute();
-    }
-    return this.promise;
+    return this.execute().then(onfulfilled, onrejected);
   }
   execute() {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter5(this, void 0, void 0, function* () {
       try {
         const result = yield this.downloadFn();
         return {
@@ -48964,10 +48498,35 @@ var BlobDownloadBuilder = class {
     });
   }
 };
-_a2 = Symbol.toStringTag;
-var BlobDownloadBuilder_default = BlobDownloadBuilder;
 
 // node_modules/@supabase/storage-js/dist/module/packages/StorageFileApi.js
+var __awaiter6 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var DEFAULT_SEARCH_OPTIONS = {
   limit: 100,
   offset: 0,
@@ -49004,7 +48563,7 @@ var StorageFileApi = class {
    * @param fileBody The body of the file to be stored in the bucket.
    */
   uploadOrUpdate(method, path, fileBody, fileOptions) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         let body;
         const options = Object.assign(Object.assign({}, DEFAULT_FILE_OPTIONS), fileOptions);
@@ -49059,7 +48618,7 @@ var StorageFileApi = class {
    * @param fileBody The body of the file to be stored in the bucket.
    */
   upload(path, fileBody, fileOptions) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       return this.uploadOrUpdate("POST", path, fileBody, fileOptions);
     });
   }
@@ -49070,7 +48629,7 @@ var StorageFileApi = class {
    * @param fileBody The body of the file to be stored in the bucket.
    */
   uploadToSignedUrl(path, token, fileBody, fileOptions) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       const cleanPath = this._removeEmptyFolders(path);
       const _path = this._getFinalPath(cleanPath);
       const url = new URL(this.url + `/object/upload/sign/${_path}`);
@@ -49115,7 +48674,7 @@ var StorageFileApi = class {
    * @param options.upsert If set to true, allows the file to be overwritten if it already exists.
    */
   createSignedUploadUrl(path, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         let _path = this._getFinalPath(path);
         const headers = Object.assign({}, this.headers);
@@ -49147,7 +48706,7 @@ var StorageFileApi = class {
    * @param fileBody The body of the file to be stored in the bucket.
    */
   update(path, fileBody, fileOptions) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       return this.uploadOrUpdate("PUT", path, fileBody, fileOptions);
     });
   }
@@ -49159,7 +48718,7 @@ var StorageFileApi = class {
    * @param options The destination options.
    */
   move(fromPath, toPath, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const data = yield post(this.fetch, `${this.url}/object/move`, {
           bucketId: this.bucketId,
@@ -49187,7 +48746,7 @@ var StorageFileApi = class {
    * @param options The destination options.
    */
   copy(fromPath, toPath, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const data = yield post(this.fetch, `${this.url}/object/copy`, {
           bucketId: this.bucketId,
@@ -49216,7 +48775,7 @@ var StorageFileApi = class {
    * @param options.transform Transform the asset before serving it to the client.
    */
   createSignedUrl(path, expiresIn, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         let _path = this._getFinalPath(path);
         let data = yield post(this.fetch, `${this.url}/object/sign/${_path}`, Object.assign({ expiresIn }, (options === null || options === void 0 ? void 0 : options.transform) ? { transform: options.transform } : {}), { headers: this.headers });
@@ -49243,7 +48802,7 @@ var StorageFileApi = class {
    * @param options.download triggers the file as a download if set to true. Set this parameter as the name of the file if you want to trigger the download with a different filename.
    */
   createSignedUrls(paths, expiresIn, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const data = yield post(this.fetch, `${this.url}/object/sign/${this.bucketId}`, { expiresIn, paths }, { headers: this.headers });
         const downloadQueryParam = (options === null || options === void 0 ? void 0 : options.download) ? `&download=${options.download === true ? "" : options.download}` : "";
@@ -49278,14 +48837,14 @@ var StorageFileApi = class {
       headers: this.headers,
       noResolveJson: true
     });
-    return new BlobDownloadBuilder_default(downloadFn, this.shouldThrowOnError);
+    return new BlobDownloadBuilder(downloadFn, this.shouldThrowOnError);
   }
   /**
    * Retrieves the details of an existing file.
    * @param path
    */
   info(path) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       const _path = this._getFinalPath(path);
       try {
         const data = yield get(this.fetch, `${this.url}/object/info/${_path}`, {
@@ -49308,7 +48867,7 @@ var StorageFileApi = class {
    * @param path
    */
   exists(path) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       const _path = this._getFinalPath(path);
       try {
         yield head(this.fetch, `${this.url}/object/${_path}`, {
@@ -49364,7 +48923,7 @@ var StorageFileApi = class {
    * @param paths An array of files to delete, including the path and file name. For example [`'folder/image.png'`].
    */
   remove(paths) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const data = yield remove(this.fetch, `${this.url}/object/${this.bucketId}`, { prefixes: paths }, { headers: this.headers });
         return { data, error: null };
@@ -49444,7 +49003,7 @@ var StorageFileApi = class {
    * @param options Search options including limit (defaults to 100), offset, sortBy, and search
    */
   list(path, options, parameters) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const body = Object.assign(Object.assign(Object.assign({}, DEFAULT_SEARCH_OPTIONS), options), { prefix: path || "" });
         const data = yield post(this.fetch, `${this.url}/object/list/${this.bucketId}`, body, { headers: this.headers }, parameters);
@@ -49466,7 +49025,7 @@ var StorageFileApi = class {
    * @param parameters
    */
   listV2(options, parameters) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter6(this, void 0, void 0, function* () {
       try {
         const body = Object.assign({}, options);
         const data = yield post(this.fetch, `${this.url}/object/list-v2/${this.bucketId}`, body, { headers: this.headers }, parameters);
@@ -49518,18 +49077,40 @@ var StorageFileApi = class {
   }
 };
 
-// node_modules/@supabase/storage-js/dist/module/packages/StorageBucketApi.js
-init_tslib_es6();
-
 // node_modules/@supabase/storage-js/dist/module/lib/version.js
-var version3 = "2.78.0";
+var version3 = "2.75.0";
 
 // node_modules/@supabase/storage-js/dist/module/lib/constants.js
-var DEFAULT_HEADERS = {
-  "X-Client-Info": `storage-js/${version3}`
-};
+var DEFAULT_HEADERS = { "X-Client-Info": `storage-js/${version3}` };
 
 // node_modules/@supabase/storage-js/dist/module/packages/StorageBucketApi.js
+var __awaiter7 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var StorageBucketApi = class {
   constructor(url, headers = {}, fetch3, opts) {
     this.shouldThrowOnError = false;
@@ -49554,13 +49135,10 @@ var StorageBucketApi = class {
   /**
    * Retrieves the details of all Storage buckets within an existing project.
    */
-  listBuckets(options) {
-    return __awaiter(this, void 0, void 0, function* () {
+  listBuckets() {
+    return __awaiter7(this, void 0, void 0, function* () {
       try {
-        const queryString = this.listBucketOptionsToQueryString(options);
-        const data = yield get(this.fetch, `${this.url}/bucket${queryString}`, {
-          headers: this.headers
-        });
+        const data = yield get(this.fetch, `${this.url}/bucket`, { headers: this.headers });
         return { data, error: null };
       } catch (error) {
         if (this.shouldThrowOnError) {
@@ -49579,7 +49157,7 @@ var StorageBucketApi = class {
    * @param id The unique identifier of the bucket you would like to retrieve.
    */
   getBucket(id) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter7(this, void 0, void 0, function* () {
       try {
         const data = yield get(this.fetch, `${this.url}/bucket/${id}`, { headers: this.headers });
         return { data, error: null };
@@ -49610,7 +49188,7 @@ var StorageBucketApi = class {
    *   - default bucket type is `STANDARD`
    */
   createBucket(id_1) {
-    return __awaiter(this, arguments, void 0, function* (id, options = {
+    return __awaiter7(this, arguments, void 0, function* (id, options = {
       public: false
     }) {
       try {
@@ -49647,7 +49225,7 @@ var StorageBucketApi = class {
    * Each mime type specified can be a wildcard, e.g. image/*, or a specific mime type, e.g. image/png.
    */
   updateBucket(id, options) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter7(this, void 0, void 0, function* () {
       try {
         const data = yield put(this.fetch, `${this.url}/bucket/${id}`, {
           id,
@@ -49674,7 +49252,7 @@ var StorageBucketApi = class {
    * @param id The unique identifier of the bucket you would like to empty.
    */
   emptyBucket(id) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter7(this, void 0, void 0, function* () {
       try {
         const data = yield post(this.fetch, `${this.url}/bucket/${id}/empty`, {}, { headers: this.headers });
         return { data, error: null };
@@ -49696,7 +49274,7 @@ var StorageBucketApi = class {
    * @param id The unique identifier of the bucket you would like to delete.
    */
   deleteBucket(id) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter7(this, void 0, void 0, function* () {
       try {
         const data = yield remove(this.fetch, `${this.url}/bucket/${id}`, {}, { headers: this.headers });
         return { data, error: null };
@@ -49709,1317 +49287,6 @@ var StorageBucketApi = class {
         }
         throw error;
       }
-    });
-  }
-  listBucketOptionsToQueryString(options) {
-    const params = {};
-    if (options) {
-      if ("limit" in options) {
-        params.limit = String(options.limit);
-      }
-      if ("offset" in options) {
-        params.offset = String(options.offset);
-      }
-      if (options.search) {
-        params.search = options.search;
-      }
-      if (options.sortColumn) {
-        params.sortColumn = options.sortColumn;
-      }
-      if (options.sortOrder) {
-        params.sortOrder = options.sortOrder;
-      }
-    }
-    return Object.keys(params).length > 0 ? "?" + new URLSearchParams(params).toString() : "";
-  }
-};
-
-// node_modules/@supabase/storage-js/dist/module/packages/StorageAnalyticsApi.js
-init_tslib_es6();
-var StorageAnalyticsApi = class {
-  /**
-   * Creates a new StorageAnalyticsApi instance
-   * @param url - The base URL for the storage API
-   * @param headers - HTTP headers to include in requests
-   * @param fetch - Optional custom fetch implementation
-   */
-  constructor(url, headers = {}, fetch3) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = Object.assign(Object.assign({}, DEFAULT_HEADERS), headers);
-    this.fetch = resolveFetch2(fetch3);
-  }
-  /**
-   * Enable throwing errors instead of returning them in the response
-   * When enabled, failed operations will throw instead of returning { data: null, error }
-   *
-   * @returns This instance for method chaining
-   */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
-  }
-  /**
-   * Creates a new analytics bucket using Iceberg tables
-   * Analytics buckets are optimized for analytical queries and data processing
-   *
-   * @param name A unique name for the bucket you are creating
-   * @returns Promise with newly created bucket name or error
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await storage.analytics.createBucket('analytics-data')
-   * if (error) {
-   *   console.error('Failed to create analytics bucket:', error.message)
-   * } else {
-   *   console.log('Created bucket:', data.name)
-   * }
-   * ```
-   */
-  createBucket(name) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post(this.fetch, `${this.url}/bucket`, { name }, { headers: this.headers });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Retrieves the details of all Analytics Storage buckets within an existing project
-   * Only returns buckets of type 'ANALYTICS'
-   *
-   * @param options Query parameters for listing buckets
-   * @param options.limit Maximum number of buckets to return
-   * @param options.offset Number of buckets to skip
-   * @param options.sortColumn Column to sort by ('id', 'name', 'created_at', 'updated_at')
-   * @param options.sortOrder Sort order ('asc' or 'desc')
-   * @param options.search Search term to filter bucket names
-   * @returns Promise with list of analytics buckets or error
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await storage.analytics.listBuckets({
-   *   limit: 10,
-   *   offset: 0,
-   *   sortColumn: 'created_at',
-   *   sortOrder: 'desc',
-   *   search: 'analytics'
-   * })
-   * if (data) {
-   *   console.log('Found analytics buckets:', data.length)
-   *   data.forEach(bucket => console.log(`- ${bucket.name}`))
-   * }
-   * ```
-   */
-  listBuckets(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const queryParams = new URLSearchParams();
-        if ((options === null || options === void 0 ? void 0 : options.limit) !== void 0)
-          queryParams.set("limit", options.limit.toString());
-        if ((options === null || options === void 0 ? void 0 : options.offset) !== void 0)
-          queryParams.set("offset", options.offset.toString());
-        if (options === null || options === void 0 ? void 0 : options.sortColumn)
-          queryParams.set("sortColumn", options.sortColumn);
-        if (options === null || options === void 0 ? void 0 : options.sortOrder)
-          queryParams.set("sortOrder", options.sortOrder);
-        if (options === null || options === void 0 ? void 0 : options.search)
-          queryParams.set("search", options.search);
-        const queryString = queryParams.toString();
-        const url = queryString ? `${this.url}/bucket?${queryString}` : `${this.url}/bucket`;
-        const data = yield get(this.fetch, url, { headers: this.headers });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Deletes an existing analytics bucket
-   * A bucket can't be deleted with existing objects inside it
-   * You must first empty the bucket before deletion
-   *
-   * @param bucketId The unique identifier of the bucket you would like to delete
-   * @returns Promise with success message or error
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await analyticsApi.deleteBucket('old-analytics-bucket')
-   * if (error) {
-   *   console.error('Failed to delete bucket:', error.message)
-   * } else {
-   *   console.log('Bucket deleted successfully:', data.message)
-   * }
-   * ```
-   */
-  deleteBucket(bucketId) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield remove(this.fetch, `${this.url}/bucket/${bucketId}`, {}, { headers: this.headers });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/StorageVectorsClient.js
-init_tslib_es6();
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/VectorIndexApi.js
-init_tslib_es6();
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/constants.js
-var DEFAULT_HEADERS2 = {
-  "X-Client-Info": `storage-js/${version3}`,
-  "Content-Type": "application/json"
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/errors.js
-var StorageVectorsError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.__isStorageVectorsError = true;
-    this.name = "StorageVectorsError";
-  }
-};
-function isStorageVectorsError(error) {
-  return typeof error === "object" && error !== null && "__isStorageVectorsError" in error;
-}
-var StorageVectorsApiError = class extends StorageVectorsError {
-  constructor(message, status, statusCode) {
-    super(message);
-    this.name = "StorageVectorsApiError";
-    this.status = status;
-    this.statusCode = statusCode;
-  }
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      status: this.status,
-      statusCode: this.statusCode
-    };
-  }
-};
-var StorageVectorsUnknownError = class extends StorageVectorsError {
-  constructor(message, originalError) {
-    super(message);
-    this.name = "StorageVectorsUnknownError";
-    this.originalError = originalError;
-  }
-};
-var StorageVectorsErrorCode;
-(function(StorageVectorsErrorCode2) {
-  StorageVectorsErrorCode2["InternalError"] = "InternalError";
-  StorageVectorsErrorCode2["S3VectorConflictException"] = "S3VectorConflictException";
-  StorageVectorsErrorCode2["S3VectorNotFoundException"] = "S3VectorNotFoundException";
-  StorageVectorsErrorCode2["S3VectorBucketNotEmpty"] = "S3VectorBucketNotEmpty";
-  StorageVectorsErrorCode2["S3VectorMaxBucketsExceeded"] = "S3VectorMaxBucketsExceeded";
-  StorageVectorsErrorCode2["S3VectorMaxIndexesExceeded"] = "S3VectorMaxIndexesExceeded";
-})(StorageVectorsErrorCode || (StorageVectorsErrorCode = {}));
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/fetch.js
-init_tslib_es6();
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/helpers.js
-var resolveFetch3 = (customFetch) => {
-  let _fetch;
-  if (customFetch) {
-    _fetch = customFetch;
-  } else if (typeof fetch === "undefined") {
-    _fetch = (...args) => Promise.resolve().then(() => (init_browser(), browser_exports)).then(({ default: fetch3 }) => fetch3(...args));
-  } else {
-    _fetch = fetch;
-  }
-  return (...args) => _fetch(...args);
-};
-var isPlainObject3 = (value) => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in value) && !(Symbol.iterator in value);
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/fetch.js
-var _getErrorMessage2 = (err) => err.msg || err.message || err.error_description || err.error || JSON.stringify(err);
-var handleError2 = (error, reject, options) => __awaiter(void 0, void 0, void 0, function* () {
-  const isResponseLike = error && typeof error === "object" && "status" in error && "ok" in error && typeof error.status === "number";
-  if (isResponseLike && !(options === null || options === void 0 ? void 0 : options.noResolveJson)) {
-    const status = error.status || 500;
-    const responseError = error;
-    if (typeof responseError.json === "function") {
-      responseError.json().then((err) => {
-        const statusCode = (err === null || err === void 0 ? void 0 : err.statusCode) || (err === null || err === void 0 ? void 0 : err.code) || status + "";
-        reject(new StorageVectorsApiError(_getErrorMessage2(err), status, statusCode));
-      }).catch(() => {
-        const statusCode = status + "";
-        const message = responseError.statusText || `HTTP ${status} error`;
-        reject(new StorageVectorsApiError(message, status, statusCode));
-      });
-    } else {
-      const statusCode = status + "";
-      const message = responseError.statusText || `HTTP ${status} error`;
-      reject(new StorageVectorsApiError(message, status, statusCode));
-    }
-  } else {
-    reject(new StorageVectorsUnknownError(_getErrorMessage2(error), error));
-  }
-});
-var _getRequestParams2 = (method, options, parameters, body) => {
-  const params = { method, headers: (options === null || options === void 0 ? void 0 : options.headers) || {} };
-  if (method === "GET" || !body) {
-    return params;
-  }
-  if (isPlainObject3(body)) {
-    params.headers = Object.assign({ "Content-Type": "application/json" }, options === null || options === void 0 ? void 0 : options.headers);
-    params.body = JSON.stringify(body);
-  } else {
-    params.body = body;
-  }
-  return Object.assign(Object.assign({}, params), parameters);
-};
-function _handleRequest2(fetcher, method, url, options, parameters, body) {
-  return __awaiter(this, void 0, void 0, function* () {
-    return new Promise((resolve, reject) => {
-      fetcher(url, _getRequestParams2(method, options, parameters, body)).then((result) => {
-        if (!result.ok)
-          throw result;
-        if (options === null || options === void 0 ? void 0 : options.noResolveJson)
-          return result;
-        const contentType = result.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          return {};
-        }
-        return result.json();
-      }).then((data) => resolve(data)).catch((error) => handleError2(error, reject, options));
-    });
-  });
-}
-function post2(fetcher, url, body, options, parameters) {
-  return __awaiter(this, void 0, void 0, function* () {
-    return _handleRequest2(fetcher, "POST", url, options, parameters, body);
-  });
-}
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/VectorIndexApi.js
-var VectorIndexApi = class {
-  constructor(url, headers = {}, fetch3) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = Object.assign(Object.assign({}, DEFAULT_HEADERS2), headers);
-    this.fetch = resolveFetch3(fetch3);
-  }
-  /**
-   * Enable throwing errors instead of returning them in the response
-   * When enabled, failed operations will throw instead of returning { data: null, error }
-   *
-   * @returns This instance for method chaining
-   * @example
-   * ```typescript
-   * const client = new VectorIndexApi(url, headers)
-   * client.throwOnError()
-   * const { data } = await client.createIndex(options) // throws on error
-   * ```
-   */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
-  }
-  /**
-   * Creates a new vector index within a bucket
-   * Defines the schema for vectors including dimensionality, distance metric, and metadata config
-   *
-   * @param options - Index configuration
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Unique name for the index within the bucket
-   * @param options.dataType - Data type for vector components (currently only 'float32')
-   * @param options.dimension - Dimensionality of vectors (e.g., 384, 768, 1536)
-   * @param options.distanceMetric - Similarity metric ('cosine', 'euclidean', 'dotproduct')
-   * @param options.metadataConfiguration - Optional config for non-filterable metadata keys
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorConflictException` if index already exists (HTTP 409)
-   * - `S3VectorMaxIndexesExceeded` if quota exceeded (HTTP 400)
-   * - `S3VectorNotFoundException` if bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.createIndex({
-   *   vectorBucketName: 'embeddings-prod',
-   *   indexName: 'documents-openai-small',
-   *   dataType: 'float32',
-   *   dimension: 1536,
-   *   distanceMetric: 'cosine',
-   *   metadataConfiguration: {
-   *     nonFilterableMetadataKeys: ['raw_text', 'internal_id']
-   *   }
-   * })
-   * ```
-   */
-  createIndex(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/CreateIndex`, options, {
-          headers: this.headers
-        });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Retrieves metadata for a specific vector index
-   * Returns index configuration including dimension, distance metric, and metadata settings
-   *
-   * @param vectorBucketName - Name of the parent vector bucket
-   * @param indexName - Name of the index to retrieve
-   * @returns Promise with index metadata or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if index or bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.getIndex('embeddings-prod', 'documents-openai-small')
-   * if (data) {
-   *   console.log('Index dimension:', data.index.dimension)
-   *   console.log('Distance metric:', data.index.distanceMetric)
-   * }
-   * ```
-   */
-  getIndex(vectorBucketName, indexName) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/GetIndex`, { vectorBucketName, indexName }, { headers: this.headers });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Lists vector indexes within a bucket with optional filtering and pagination
-   * Supports prefix-based filtering and paginated results
-   *
-   * @param options - Listing options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.prefix - Filter indexes by name prefix
-   * @param options.maxResults - Maximum results per page (default: 100)
-   * @param options.nextToken - Pagination token from previous response
-   * @returns Promise with list of indexes and pagination token
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // List all indexes in a bucket
-   * const { data, error } = await client.listIndexes({
-   *   vectorBucketName: 'embeddings-prod',
-   *   prefix: 'documents-'
-   * })
-   * if (data) {
-   *   console.log('Found indexes:', data.indexes.map(i => i.indexName))
-   *   // Fetch next page if available
-   *   if (data.nextToken) {
-   *     const next = await client.listIndexes({
-   *       vectorBucketName: 'embeddings-prod',
-   *       nextToken: data.nextToken
-   *     })
-   *   }
-   * }
-   * ```
-   */
-  listIndexes(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/ListIndexes`, options, {
-          headers: this.headers
-        });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Deletes a vector index and all its data
-   * This operation removes the index schema and all vectors stored in the index
-   *
-   * @param vectorBucketName - Name of the parent vector bucket
-   * @param indexName - Name of the index to delete
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if index or bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // Delete an index and all its vectors
-   * const { error } = await client.deleteIndex('embeddings-prod', 'old-index')
-   * if (!error) {
-   *   console.log('Index deleted successfully')
-   * }
-   * ```
-   */
-  deleteIndex(vectorBucketName, indexName) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/DeleteIndex`, { vectorBucketName, indexName }, { headers: this.headers });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/VectorDataApi.js
-init_tslib_es6();
-var VectorDataApi = class {
-  constructor(url, headers = {}, fetch3) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = Object.assign(Object.assign({}, DEFAULT_HEADERS2), headers);
-    this.fetch = resolveFetch3(fetch3);
-  }
-  /**
-   * Enable throwing errors instead of returning them in the response
-   * When enabled, failed operations will throw instead of returning { data: null, error }
-   *
-   * @returns This instance for method chaining
-   * @example
-   * ```typescript
-   * const client = new VectorDataApi(url, headers)
-   * client.throwOnError()
-   * const { data } = await client.putVectors(options) // throws on error
-   * ```
-   */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
-  }
-  /**
-   * Inserts or updates vectors in batch (upsert operation)
-   * Accepts 1-500 vectors per request. Larger batches should be split
-   *
-   * @param options - Vector insertion options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Name of the target index
-   * @param options.vectors - Array of vectors to insert/update (1-500 items)
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorConflictException` if duplicate key conflict occurs (HTTP 409)
-   * - `S3VectorNotFoundException` if bucket or index doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.putVectors({
-   *   vectorBucketName: 'embeddings-prod',
-   *   indexName: 'documents-openai-small',
-   *   vectors: [
-   *     {
-   *       key: 'doc-1',
-   *       data: { float32: [0.1, 0.2, 0.3, ...] }, // 1536 dimensions
-   *       metadata: { title: 'Introduction', page: 1 }
-   *     },
-   *     {
-   *       key: 'doc-2',
-   *       data: { float32: [0.4, 0.5, 0.6, ...] },
-   *       metadata: { title: 'Conclusion', page: 42 }
-   *     }
-   *   ]
-   * })
-   * ```
-   */
-  putVectors(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        if (options.vectors.length < 1 || options.vectors.length > 500) {
-          throw new Error("Vector batch size must be between 1 and 500 items");
-        }
-        const data = yield post2(this.fetch, `${this.url}/PutVectors`, options, {
-          headers: this.headers
-        });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Retrieves vectors by their keys in batch
-   * Optionally includes vector data and/or metadata in response
-   * Additional permissions required when returning data or metadata
-   *
-   * @param options - Vector retrieval options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Name of the index
-   * @param options.keys - Array of vector keys to retrieve
-   * @param options.returnData - Whether to include vector embeddings (requires permission)
-   * @param options.returnMetadata - Whether to include metadata (requires permission)
-   * @returns Promise with array of vectors or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket or index doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.getVectors({
-   *   vectorBucketName: 'embeddings-prod',
-   *   indexName: 'documents-openai-small',
-   *   keys: ['doc-1', 'doc-2', 'doc-3'],
-   *   returnData: false,     // Don't return embeddings
-   *   returnMetadata: true   // Return metadata only
-   * })
-   * if (data) {
-   *   data.vectors.forEach(v => console.log(v.key, v.metadata))
-   * }
-   * ```
-   */
-  getVectors(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/GetVectors`, options, {
-          headers: this.headers
-        });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Lists/scans vectors in an index with pagination
-   * Supports parallel scanning via segment configuration for high-throughput scenarios
-   * Additional permissions required when returning data or metadata
-   *
-   * @param options - Vector listing options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Name of the index
-   * @param options.maxResults - Maximum results per page (default: 500, max: 1000)
-   * @param options.nextToken - Pagination token from previous response
-   * @param options.returnData - Whether to include vector embeddings (requires permission)
-   * @param options.returnMetadata - Whether to include metadata (requires permission)
-   * @param options.segmentCount - Total parallel segments (1-16) for distributed scanning
-   * @param options.segmentIndex - Zero-based segment index (0 to segmentCount-1)
-   * @returns Promise with array of vectors, pagination token, or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket or index doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // Simple pagination
-   * let nextToken: string | undefined
-   * do {
-   *   const { data, error } = await client.listVectors({
-   *     vectorBucketName: 'embeddings-prod',
-   *     indexName: 'documents-openai-small',
-   *     maxResults: 500,
-   *     nextToken,
-   *     returnMetadata: true
-   *   })
-   *   if (error) break
-   *   console.log('Batch:', data.vectors.length)
-   *   nextToken = data.nextToken
-   * } while (nextToken)
-   *
-   * // Parallel scanning (4 concurrent workers)
-   * const workers = [0, 1, 2, 3].map(async (segmentIndex) => {
-   *   const { data } = await client.listVectors({
-   *     vectorBucketName: 'embeddings-prod',
-   *     indexName: 'documents-openai-small',
-   *     segmentCount: 4,
-   *     segmentIndex,
-   *     returnMetadata: true
-   *   })
-   *   return data?.vectors || []
-   * })
-   * const results = await Promise.all(workers)
-   * ```
-   */
-  listVectors(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        if (options.segmentCount !== void 0) {
-          if (options.segmentCount < 1 || options.segmentCount > 16) {
-            throw new Error("segmentCount must be between 1 and 16");
-          }
-          if (options.segmentIndex !== void 0) {
-            if (options.segmentIndex < 0 || options.segmentIndex >= options.segmentCount) {
-              throw new Error(`segmentIndex must be between 0 and ${options.segmentCount - 1}`);
-            }
-          }
-        }
-        const data = yield post2(this.fetch, `${this.url}/ListVectors`, options, {
-          headers: this.headers
-        });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Queries for similar vectors using approximate nearest neighbor (ANN) search
-   * Returns top-K most similar vectors based on the configured distance metric
-   * Supports optional metadata filtering (requires GetVectors permission)
-   *
-   * @param options - Query options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Name of the index
-   * @param options.queryVector - Query embedding to find similar vectors
-   * @param options.topK - Number of nearest neighbors to return (default: 10)
-   * @param options.filter - Optional JSON filter for metadata (requires GetVectors permission)
-   * @param options.returnDistance - Whether to include similarity distances
-   * @param options.returnMetadata - Whether to include metadata (requires GetVectors permission)
-   * @returns Promise with array of similar vectors ordered by distance
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket or index doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // Semantic search with filtering
-   * const { data, error } = await client.queryVectors({
-   *   vectorBucketName: 'embeddings-prod',
-   *   indexName: 'documents-openai-small',
-   *   queryVector: { float32: [0.1, 0.2, 0.3, ...] }, // 1536 dimensions
-   *   topK: 5,
-   *   filter: {
-   *     category: 'technical',
-   *     published: true
-   *   },
-   *   returnDistance: true,
-   *   returnMetadata: true
-   * })
-   * if (data) {
-   *   data.matches.forEach(match => {
-   *     console.log(`${match.key}: distance=${match.distance}`)
-   *     console.log('Metadata:', match.metadata)
-   *   })
-   * }
-   * ```
-   */
-  queryVectors(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/QueryVectors`, options, {
-          headers: this.headers
-        });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Deletes vectors by their keys in batch
-   * Accepts 1-500 keys per request
-   *
-   * @param options - Vector deletion options
-   * @param options.vectorBucketName - Name of the parent vector bucket
-   * @param options.indexName - Name of the index
-   * @param options.keys - Array of vector keys to delete (1-500 items)
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket or index doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { error } = await client.deleteVectors({
-   *   vectorBucketName: 'embeddings-prod',
-   *   indexName: 'documents-openai-small',
-   *   keys: ['doc-1', 'doc-2', 'doc-3']
-   * })
-   * if (!error) {
-   *   console.log('Vectors deleted successfully')
-   * }
-   * ```
-   */
-  deleteVectors(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        if (options.keys.length < 1 || options.keys.length > 500) {
-          throw new Error("Keys batch size must be between 1 and 500 items");
-        }
-        const data = yield post2(this.fetch, `${this.url}/DeleteVectors`, options, {
-          headers: this.headers
-        });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/VectorBucketApi.js
-init_tslib_es6();
-var VectorBucketApi = class {
-  /**
-   * Creates a new VectorBucketApi instance
-   * @param url - The base URL for the storage vectors API
-   * @param headers - HTTP headers to include in requests
-   * @param fetch - Optional custom fetch implementation
-   */
-  constructor(url, headers = {}, fetch3) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = Object.assign(Object.assign({}, DEFAULT_HEADERS2), headers);
-    this.fetch = resolveFetch3(fetch3);
-  }
-  /**
-   * Enable throwing errors instead of returning them in the response
-   * When enabled, failed operations will throw instead of returning { data: null, error }
-   *
-   * @returns This instance for method chaining
-   * @example
-   * ```typescript
-   * const client = new VectorBucketApi(url, headers)
-   * client.throwOnError()
-   * const { data } = await client.createBucket('my-bucket') // throws on error
-   * ```
-   */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
-  }
-  /**
-   * Creates a new vector bucket
-   * Vector buckets are containers for vector indexes and their data
-   *
-   * @param vectorBucketName - Unique name for the vector bucket
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorConflictException` if bucket already exists (HTTP 409)
-   * - `S3VectorMaxBucketsExceeded` if quota exceeded (HTTP 400)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.createBucket('embeddings-prod')
-   * if (error) {
-   *   console.error('Failed to create bucket:', error.message)
-   * }
-   * ```
-   */
-  createBucket(vectorBucketName) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/CreateVectorBucket`, { vectorBucketName }, { headers: this.headers });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Retrieves metadata for a specific vector bucket
-   * Returns bucket configuration including encryption settings and creation time
-   *
-   * @param vectorBucketName - Name of the vector bucket to retrieve
-   * @returns Promise with bucket metadata or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorNotFoundException` if bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * const { data, error } = await client.getBucket('embeddings-prod')
-   * if (data) {
-   *   console.log('Bucket created at:', new Date(data.vectorBucket.creationTime! * 1000))
-   * }
-   * ```
-   */
-  getBucket(vectorBucketName) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/GetVectorBucket`, { vectorBucketName }, { headers: this.headers });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Lists vector buckets with optional filtering and pagination
-   * Supports prefix-based filtering and paginated results
-   *
-   * @param options - Listing options
-   * @param options.prefix - Filter buckets by name prefix
-   * @param options.maxResults - Maximum results per page (default: 100)
-   * @param options.nextToken - Pagination token from previous response
-   * @returns Promise with list of buckets and pagination token
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // List all buckets with prefix 'prod-'
-   * const { data, error } = await client.listBuckets({ prefix: 'prod-' })
-   * if (data) {
-   *   console.log('Found buckets:', data.buckets.length)
-   *   // Fetch next page if available
-   *   if (data.nextToken) {
-   *     const next = await client.listBuckets({ nextToken: data.nextToken })
-   *   }
-   * }
-   * ```
-   */
-  listBuckets() {
-    return __awaiter(this, arguments, void 0, function* (options = {}) {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/ListVectorBuckets`, options, {
-          headers: this.headers
-        });
-        return { data, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-  /**
-   * Deletes a vector bucket
-   * Bucket must be empty before deletion (all indexes must be removed first)
-   *
-   * @param vectorBucketName - Name of the vector bucket to delete
-   * @returns Promise with empty response on success or error
-   *
-   * @throws {StorageVectorsApiError} With code:
-   * - `S3VectorBucketNotEmpty` if bucket contains indexes (HTTP 400)
-   * - `S3VectorNotFoundException` if bucket doesn't exist (HTTP 404)
-   * - `InternalError` for server errors (HTTP 500)
-   *
-   * @example
-   * ```typescript
-   * // Delete all indexes first, then delete bucket
-   * const { error } = await client.deleteBucket('old-bucket')
-   * if (error?.statusCode === 'S3VectorBucketNotEmpty') {
-   *   console.error('Must delete all indexes first')
-   * }
-   * ```
-   */
-  deleteBucket(vectorBucketName) {
-    return __awaiter(this, void 0, void 0, function* () {
-      try {
-        const data = yield post2(this.fetch, `${this.url}/DeleteVectorBucket`, { vectorBucketName }, { headers: this.headers });
-        return { data: data || {}, error: null };
-      } catch (error) {
-        if (this.shouldThrowOnError) {
-          throw error;
-        }
-        if (isStorageVectorsError(error)) {
-          return { data: null, error };
-        }
-        throw error;
-      }
-    });
-  }
-};
-
-// node_modules/@supabase/storage-js/dist/module/lib/vectors/StorageVectorsClient.js
-var StorageVectorsClient = class extends VectorBucketApi {
-  constructor(url, options = {}) {
-    super(url, options.headers || {}, options.fetch);
-  }
-  /**
-   * Access operations for a specific vector bucket
-   * Returns a scoped client for index and vector operations within the bucket
-   *
-   * @param vectorBucketName - Name of the vector bucket
-   * @returns Bucket-scoped client with index and vector operations
-   *
-   * @example
-   * ```typescript
-   * const bucket = client.bucket('embeddings-prod')
-   *
-   * // Create an index in this bucket
-   * await bucket.createIndex({
-   *   indexName: 'documents-openai',
-   *   dataType: 'float32',
-   *   dimension: 1536,
-   *   distanceMetric: 'cosine'
-   * })
-   *
-   * // List indexes in this bucket
-   * const { data } = await bucket.listIndexes()
-   * ```
-   */
-  from(vectorBucketName) {
-    return new VectorBucketScope(this.url, this.headers, vectorBucketName, this.fetch);
-  }
-};
-var VectorBucketScope = class extends VectorIndexApi {
-  constructor(url, headers, vectorBucketName, fetch3) {
-    super(url, headers, fetch3);
-    this.vectorBucketName = vectorBucketName;
-  }
-  /**
-   * Creates a new vector index in this bucket
-   * Convenience method that automatically includes the bucket name
-   *
-   * @param options - Index configuration (vectorBucketName is automatically set)
-   * @returns Promise with empty response on success or error
-   *
-   * @example
-   * ```typescript
-   * const bucket = client.bucket('embeddings-prod')
-   * await bucket.createIndex({
-   *   indexName: 'documents-openai',
-   *   dataType: 'float32',
-   *   dimension: 1536,
-   *   distanceMetric: 'cosine',
-   *   metadataConfiguration: {
-   *     nonFilterableMetadataKeys: ['raw_text']
-   *   }
-   * })
-   * ```
-   */
-  createIndex(options) {
-    const _super = Object.create(null, {
-      createIndex: { get: () => super.createIndex }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.createIndex.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName }));
-    });
-  }
-  /**
-   * Lists indexes in this bucket
-   * Convenience method that automatically includes the bucket name
-   *
-   * @param options - Listing options (vectorBucketName is automatically set)
-   * @returns Promise with list of indexes or error
-   *
-   * @example
-   * ```typescript
-   * const bucket = client.bucket('embeddings-prod')
-   * const { data } = await bucket.listIndexes({ prefix: 'documents-' })
-   * ```
-   */
-  listIndexes() {
-    const _super = Object.create(null, {
-      listIndexes: { get: () => super.listIndexes }
-    });
-    return __awaiter(this, arguments, void 0, function* (options = {}) {
-      return _super.listIndexes.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName }));
-    });
-  }
-  /**
-   * Retrieves metadata for a specific index in this bucket
-   * Convenience method that automatically includes the bucket name
-   *
-   * @param indexName - Name of the index to retrieve
-   * @returns Promise with index metadata or error
-   *
-   * @example
-   * ```typescript
-   * const bucket = client.bucket('embeddings-prod')
-   * const { data } = await bucket.getIndex('documents-openai')
-   * console.log('Dimension:', data?.index.dimension)
-   * ```
-   */
-  getIndex(indexName) {
-    const _super = Object.create(null, {
-      getIndex: { get: () => super.getIndex }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.getIndex.call(this, this.vectorBucketName, indexName);
-    });
-  }
-  /**
-   * Deletes an index from this bucket
-   * Convenience method that automatically includes the bucket name
-   *
-   * @param indexName - Name of the index to delete
-   * @returns Promise with empty response on success or error
-   *
-   * @example
-   * ```typescript
-   * const bucket = client.bucket('embeddings-prod')
-   * await bucket.deleteIndex('old-index')
-   * ```
-   */
-  deleteIndex(indexName) {
-    const _super = Object.create(null, {
-      deleteIndex: { get: () => super.deleteIndex }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.deleteIndex.call(this, this.vectorBucketName, indexName);
-    });
-  }
-  /**
-   * Access operations for a specific index within this bucket
-   * Returns a scoped client for vector data operations
-   *
-   * @param indexName - Name of the index
-   * @returns Index-scoped client with vector data operations
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   *
-   * // Insert vectors
-   * await index.putVectors({
-   *   vectors: [
-   *     { key: 'doc-1', data: { float32: [...] }, metadata: { title: 'Intro' } }
-   *   ]
-   * })
-   *
-   * // Query similar vectors
-   * const { data } = await index.queryVectors({
-   *   queryVector: { float32: [...] },
-   *   topK: 5
-   * })
-   * ```
-   */
-  index(indexName) {
-    return new VectorIndexScope(this.url, this.headers, this.vectorBucketName, indexName, this.fetch);
-  }
-};
-var VectorIndexScope = class extends VectorDataApi {
-  constructor(url, headers, vectorBucketName, indexName, fetch3) {
-    super(url, headers, fetch3);
-    this.vectorBucketName = vectorBucketName;
-    this.indexName = indexName;
-  }
-  /**
-   * Inserts or updates vectors in this index
-   * Convenience method that automatically includes bucket and index names
-   *
-   * @param options - Vector insertion options (bucket and index names automatically set)
-   * @returns Promise with empty response on success or error
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   * await index.putVectors({
-   *   vectors: [
-   *     {
-   *       key: 'doc-1',
-   *       data: { float32: [0.1, 0.2, ...] },
-   *       metadata: { title: 'Introduction', page: 1 }
-   *     }
-   *   ]
-   * })
-   * ```
-   */
-  putVectors(options) {
-    const _super = Object.create(null, {
-      putVectors: { get: () => super.putVectors }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.putVectors.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName, indexName: this.indexName }));
-    });
-  }
-  /**
-   * Retrieves vectors by keys from this index
-   * Convenience method that automatically includes bucket and index names
-   *
-   * @param options - Vector retrieval options (bucket and index names automatically set)
-   * @returns Promise with array of vectors or error
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   * const { data } = await index.getVectors({
-   *   keys: ['doc-1', 'doc-2'],
-   *   returnMetadata: true
-   * })
-   * ```
-   */
-  getVectors(options) {
-    const _super = Object.create(null, {
-      getVectors: { get: () => super.getVectors }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.getVectors.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName, indexName: this.indexName }));
-    });
-  }
-  /**
-   * Lists vectors in this index with pagination
-   * Convenience method that automatically includes bucket and index names
-   *
-   * @param options - Listing options (bucket and index names automatically set)
-   * @returns Promise with array of vectors and pagination token
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   * const { data } = await index.listVectors({
-   *   maxResults: 500,
-   *   returnMetadata: true
-   * })
-   * ```
-   */
-  listVectors() {
-    const _super = Object.create(null, {
-      listVectors: { get: () => super.listVectors }
-    });
-    return __awaiter(this, arguments, void 0, function* (options = {}) {
-      return _super.listVectors.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName, indexName: this.indexName }));
-    });
-  }
-  /**
-   * Queries for similar vectors in this index
-   * Convenience method that automatically includes bucket and index names
-   *
-   * @param options - Query options (bucket and index names automatically set)
-   * @returns Promise with array of similar vectors ordered by distance
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   * const { data } = await index.queryVectors({
-   *   queryVector: { float32: [0.1, 0.2, ...] },
-   *   topK: 5,
-   *   filter: { category: 'technical' },
-   *   returnDistance: true,
-   *   returnMetadata: true
-   * })
-   * ```
-   */
-  queryVectors(options) {
-    const _super = Object.create(null, {
-      queryVectors: { get: () => super.queryVectors }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.queryVectors.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName, indexName: this.indexName }));
-    });
-  }
-  /**
-   * Deletes vectors by keys from this index
-   * Convenience method that automatically includes bucket and index names
-   *
-   * @param options - Deletion options (bucket and index names automatically set)
-   * @returns Promise with empty response on success or error
-   *
-   * @example
-   * ```typescript
-   * const index = client.bucket('embeddings-prod').index('documents-openai')
-   * await index.deleteVectors({
-   *   keys: ['doc-1', 'doc-2', 'doc-3']
-   * })
-   * ```
-   */
-  deleteVectors(options) {
-    const _super = Object.create(null, {
-      deleteVectors: { get: () => super.deleteVectors }
-    });
-    return __awaiter(this, void 0, void 0, function* () {
-      return _super.deleteVectors.call(this, Object.assign(Object.assign({}, options), { vectorBucketName: this.vectorBucketName, indexName: this.indexName }));
     });
   }
 };
@@ -51037,43 +49304,10 @@ var StorageClient = class extends StorageBucketApi {
   from(id) {
     return new StorageFileApi(this.url, this.headers, id, this.fetch);
   }
-  /**
-   * Access vector storage operations.
-   *
-   * @returns A StorageVectorsClient instance configured with the current storage settings.
-   */
-  get vectors() {
-    return new StorageVectorsClient(this.url + "/vector", {
-      headers: this.headers,
-      fetch: this.fetch
-    });
-  }
-  /**
-   * Access analytics storage operations using Iceberg tables.
-   *
-   * @returns A StorageAnalyticsApi instance configured with the current storage settings.
-   * @example
-   * ```typescript
-   * const client = createClient(url, key)
-   * const analytics = client.storage.analytics
-   *
-   * // Create an analytics bucket
-   * await analytics.createBucket('my-analytics-bucket')
-   *
-   * // List all analytics buckets
-   * const { data: buckets } = await analytics.listBuckets()
-   *
-   * // Delete an analytics bucket
-   * await analytics.deleteBucket('old-analytics-bucket')
-   * ```
-   */
-  get analytics() {
-    return new StorageAnalyticsApi(this.url + "/iceberg", this.headers, this.fetch);
-  }
 };
 
 // node_modules/@supabase/supabase-js/dist/module/lib/version.js
-var version4 = "2.78.0";
+var version4 = "2.75.0";
 
 // node_modules/@supabase/supabase-js/dist/module/lib/constants.js
 var JS_ENV = "";
@@ -51086,9 +49320,9 @@ if (typeof Deno !== "undefined") {
 } else {
   JS_ENV = "node";
 }
-var DEFAULT_HEADERS3 = { "X-Client-Info": `supabase-js-${JS_ENV}/${version4}` };
+var DEFAULT_HEADERS2 = { "X-Client-Info": `supabase-js-${JS_ENV}/${version4}` };
 var DEFAULT_GLOBAL_OPTIONS = {
-  headers: DEFAULT_HEADERS3
+  headers: DEFAULT_HEADERS2
 };
 var DEFAULT_DB_OPTIONS = {
   schema: "public"
@@ -51103,7 +49337,34 @@ var DEFAULT_REALTIME_OPTIONS = {};
 
 // node_modules/@supabase/supabase-js/dist/module/lib/fetch.js
 init_browser();
-var resolveFetch4 = (customFetch) => {
+var __awaiter8 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+var resolveFetch3 = (customFetch) => {
   let _fetch;
   if (customFetch) {
     _fetch = customFetch;
@@ -51121,11 +49382,11 @@ var resolveHeadersConstructor = () => {
   return Headers;
 };
 var fetchWithAuth = (supabaseKey, getAccessToken, customFetch) => {
-  const fetch3 = resolveFetch4(customFetch);
+  const fetch3 = resolveFetch3(customFetch);
   const HeadersConstructor = resolveHeadersConstructor();
-  return async (input, init) => {
-    var _a3;
-    const accessToken = (_a3 = await getAccessToken()) !== null && _a3 !== void 0 ? _a3 : supabaseKey;
+  return (input, init) => __awaiter8(void 0, void 0, void 0, function* () {
+    var _a2;
+    const accessToken = (_a2 = yield getAccessToken()) !== null && _a2 !== void 0 ? _a2 : supabaseKey;
     let headers = new HeadersConstructor(init === null || init === void 0 ? void 0 : init.headers);
     if (!headers.has("apikey")) {
       headers.set("apikey", supabaseKey);
@@ -51134,15 +49395,42 @@ var fetchWithAuth = (supabaseKey, getAccessToken, customFetch) => {
       headers.set("Authorization", `Bearer ${accessToken}`);
     }
     return fetch3(input, Object.assign(Object.assign({}, init), { headers }));
-  };
+  });
 };
 
 // node_modules/@supabase/supabase-js/dist/module/lib/helpers.js
+var __awaiter9 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 function ensureTrailingSlash(url) {
   return url.endsWith("/") ? url : url + "/";
 }
 function applySettingDefaults(options, defaults) {
-  var _a3, _b;
+  var _a2, _b;
   const { db: dbOptions, auth: authOptions, realtime: realtimeOptions, global: globalOptions } = options;
   const { db: DEFAULT_DB_OPTIONS2, auth: DEFAULT_AUTH_OPTIONS2, realtime: DEFAULT_REALTIME_OPTIONS2, global: DEFAULT_GLOBAL_OPTIONS2 } = defaults;
   const result = {
@@ -51150,8 +49438,10 @@ function applySettingDefaults(options, defaults) {
     auth: Object.assign(Object.assign({}, DEFAULT_AUTH_OPTIONS2), authOptions),
     realtime: Object.assign(Object.assign({}, DEFAULT_REALTIME_OPTIONS2), realtimeOptions),
     storage: {},
-    global: Object.assign(Object.assign(Object.assign({}, DEFAULT_GLOBAL_OPTIONS2), globalOptions), { headers: Object.assign(Object.assign({}, (_a3 = DEFAULT_GLOBAL_OPTIONS2 === null || DEFAULT_GLOBAL_OPTIONS2 === void 0 ? void 0 : DEFAULT_GLOBAL_OPTIONS2.headers) !== null && _a3 !== void 0 ? _a3 : {}), (_b = globalOptions === null || globalOptions === void 0 ? void 0 : globalOptions.headers) !== null && _b !== void 0 ? _b : {}) }),
-    accessToken: async () => ""
+    global: Object.assign(Object.assign(Object.assign({}, DEFAULT_GLOBAL_OPTIONS2), globalOptions), { headers: Object.assign(Object.assign({}, (_a2 = DEFAULT_GLOBAL_OPTIONS2 === null || DEFAULT_GLOBAL_OPTIONS2 === void 0 ? void 0 : DEFAULT_GLOBAL_OPTIONS2.headers) !== null && _a2 !== void 0 ? _a2 : {}), (_b = globalOptions === null || globalOptions === void 0 ? void 0 : globalOptions.headers) !== null && _b !== void 0 ? _b : {}) }),
+    accessToken: () => __awaiter9(this, void 0, void 0, function* () {
+      return "";
+    })
   };
   if (options.accessToken) {
     result.accessToken = options.accessToken;
@@ -51170,19 +49460,13 @@ function validateSupabaseUrl(supabaseUrl) {
   }
   try {
     return new URL(ensureTrailingSlash(trimmedUrl));
-  } catch (_a3) {
+  } catch (_a2) {
     throw Error("Invalid supabaseUrl: Provided URL is malformed.");
   }
 }
 
-// node_modules/@supabase/auth-js/dist/module/GoTrueAdminApi.js
-init_tslib_es6();
-
-// node_modules/@supabase/auth-js/dist/module/lib/fetch.js
-init_tslib_es6();
-
 // node_modules/@supabase/auth-js/dist/module/lib/version.js
-var version5 = "2.78.0";
+var version5 = "2.75.0";
 
 // node_modules/@supabase/auth-js/dist/module/lib/constants.js
 var AUTO_REFRESH_TICK_DURATION_MS = 30 * 1e3;
@@ -51190,7 +49474,7 @@ var AUTO_REFRESH_TICK_THRESHOLD = 3;
 var EXPIRY_MARGIN_MS = AUTO_REFRESH_TICK_THRESHOLD * AUTO_REFRESH_TICK_DURATION_MS;
 var GOTRUE_URL = "http://localhost:9999";
 var STORAGE_KEY = "supabase.auth.token";
-var DEFAULT_HEADERS4 = { "X-Client-Info": `gotrue-js/${version5}` };
+var DEFAULT_HEADERS3 = { "X-Client-Info": `gotrue-js/${version5}` };
 var API_VERSION_HEADER_NAME = "X-Supabase-Api-Version";
 var API_VERSIONS = {
   "2024-01-01": {
@@ -51531,7 +49815,7 @@ function parseParametersFromURL(href) {
   });
   return result;
 }
-var resolveFetch5 = (customFetch) => {
+var resolveFetch4 = (customFetch) => {
   let _fetch;
   if (customFetch) {
     _fetch = customFetch;
@@ -51555,7 +49839,7 @@ var getItemAsync = async (storage, key) => {
   }
   try {
     return JSON.parse(value);
-  } catch (_a3) {
+  } catch (_a2) {
     return value;
   }
 };
@@ -51738,46 +50022,37 @@ function userNotAvailableProxy() {
     }
   });
 }
-function insecureUserWarningProxy(user, suppressWarningRef) {
-  return new Proxy(user, {
-    get: (target, prop, receiver) => {
-      if (prop === "__isInsecureUserWarningProxy") {
-        return true;
-      }
-      if (typeof prop === "symbol") {
-        const sProp = prop.toString();
-        if (sProp === "Symbol(Symbol.toPrimitive)" || sProp === "Symbol(Symbol.toStringTag)" || sProp === "Symbol(util.inspect.custom)" || sProp === "Symbol(nodejs.util.inspect.custom)") {
-          return Reflect.get(target, prop, receiver);
-        }
-      }
-      if (!suppressWarningRef.value && typeof prop === "string") {
-        console.warn("Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.");
-        suppressWarningRef.value = true;
-      }
-      return Reflect.get(target, prop, receiver);
-    }
-  });
-}
 function deepClone2(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
 // node_modules/@supabase/auth-js/dist/module/lib/fetch.js
-var _getErrorMessage3 = (err) => err.msg || err.message || err.error_description || err.error || JSON.stringify(err);
+var __rest = function(s, e) {
+  var t = {};
+  for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+    t[p] = s[p];
+  if (s != null && typeof Object.getOwnPropertySymbols === "function")
+    for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+      if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+        t[p[i]] = s[p[i]];
+    }
+  return t;
+};
+var _getErrorMessage2 = (err) => err.msg || err.message || err.error_description || err.error || JSON.stringify(err);
 var NETWORK_ERROR_CODES = [502, 503, 504];
-async function handleError3(error) {
-  var _a3;
+async function handleError2(error) {
+  var _a2;
   if (!looksLikeFetchResponse(error)) {
-    throw new AuthRetryableFetchError(_getErrorMessage3(error), 0);
+    throw new AuthRetryableFetchError(_getErrorMessage2(error), 0);
   }
   if (NETWORK_ERROR_CODES.includes(error.status)) {
-    throw new AuthRetryableFetchError(_getErrorMessage3(error), error.status);
+    throw new AuthRetryableFetchError(_getErrorMessage2(error), error.status);
   }
   let data;
   try {
     data = await error.json();
   } catch (e) {
-    throw new AuthUnknownError(_getErrorMessage3(e), e);
+    throw new AuthUnknownError(_getErrorMessage2(e), e);
   }
   let errorCode = void 0;
   const responseAPIVersion = parseResponseAPIVersion(error);
@@ -51788,16 +50063,16 @@ async function handleError3(error) {
   }
   if (!errorCode) {
     if (typeof data === "object" && data && typeof data.weak_password === "object" && data.weak_password && Array.isArray(data.weak_password.reasons) && data.weak_password.reasons.length && data.weak_password.reasons.reduce((a, i) => a && typeof i === "string", true)) {
-      throw new AuthWeakPasswordError(_getErrorMessage3(data), error.status, data.weak_password.reasons);
+      throw new AuthWeakPasswordError(_getErrorMessage2(data), error.status, data.weak_password.reasons);
     }
   } else if (errorCode === "weak_password") {
-    throw new AuthWeakPasswordError(_getErrorMessage3(data), error.status, ((_a3 = data.weak_password) === null || _a3 === void 0 ? void 0 : _a3.reasons) || []);
+    throw new AuthWeakPasswordError(_getErrorMessage2(data), error.status, ((_a2 = data.weak_password) === null || _a2 === void 0 ? void 0 : _a2.reasons) || []);
   } else if (errorCode === "session_not_found") {
     throw new AuthSessionMissingError();
   }
-  throw new AuthApiError(_getErrorMessage3(data), error.status || 500, errorCode);
+  throw new AuthApiError(_getErrorMessage2(data), error.status || 500, errorCode);
 }
-var _getRequestParams3 = (method, options, parameters, body) => {
+var _getRequestParams2 = (method, options, parameters, body) => {
   const params = { method, headers: (options === null || options === void 0 ? void 0 : options.headers) || {} };
   if (method === "GET") {
     return params;
@@ -51807,7 +50082,7 @@ var _getRequestParams3 = (method, options, parameters, body) => {
   return Object.assign(Object.assign({}, params), parameters);
 };
 async function _request(fetcher, method, url, options) {
-  var _a3;
+  var _a2;
   const headers = Object.assign({}, options === null || options === void 0 ? void 0 : options.headers);
   if (!headers[API_VERSION_HEADER_NAME]) {
     headers[API_VERSION_HEADER_NAME] = API_VERSIONS["2024-01-01"].name;
@@ -51815,28 +50090,28 @@ async function _request(fetcher, method, url, options) {
   if (options === null || options === void 0 ? void 0 : options.jwt) {
     headers["Authorization"] = `Bearer ${options.jwt}`;
   }
-  const qs = (_a3 = options === null || options === void 0 ? void 0 : options.query) !== null && _a3 !== void 0 ? _a3 : {};
+  const qs = (_a2 = options === null || options === void 0 ? void 0 : options.query) !== null && _a2 !== void 0 ? _a2 : {};
   if (options === null || options === void 0 ? void 0 : options.redirectTo) {
     qs["redirect_to"] = options.redirectTo;
   }
   const queryString = Object.keys(qs).length ? "?" + new URLSearchParams(qs).toString() : "";
-  const data = await _handleRequest3(fetcher, method, url + queryString, {
+  const data = await _handleRequest2(fetcher, method, url + queryString, {
     headers,
     noResolveJson: options === null || options === void 0 ? void 0 : options.noResolveJson
   }, {}, options === null || options === void 0 ? void 0 : options.body);
   return (options === null || options === void 0 ? void 0 : options.xform) ? options === null || options === void 0 ? void 0 : options.xform(data) : { data: Object.assign({}, data), error: null };
 }
-async function _handleRequest3(fetcher, method, url, options, parameters, body) {
-  const requestParams = _getRequestParams3(method, options, parameters, body);
+async function _handleRequest2(fetcher, method, url, options, parameters, body) {
+  const requestParams = _getRequestParams2(method, options, parameters, body);
   let result;
   try {
     result = await fetcher(url, Object.assign({}, requestParams));
   } catch (e) {
     console.error(e);
-    throw new AuthRetryableFetchError(_getErrorMessage3(e), 0);
+    throw new AuthRetryableFetchError(_getErrorMessage2(e), 0);
   }
   if (!result.ok) {
-    await handleError3(result);
+    await handleError2(result);
   }
   if (options === null || options === void 0 ? void 0 : options.noResolveJson) {
     return result;
@@ -51844,11 +50119,11 @@ async function _handleRequest3(fetcher, method, url, options, parameters, body) 
   try {
     return await result.json();
   } catch (e) {
-    await handleError3(e);
+    await handleError2(e);
   }
 }
 function _sessionResponse(data) {
-  var _a3;
+  var _a2;
   let session = null;
   if (hasSession(data)) {
     session = Object.assign({}, data);
@@ -51856,7 +50131,7 @@ function _sessionResponse(data) {
       session.expires_at = expiresAt(data.expires_in);
     }
   }
-  const user = (_a3 = data.user) !== null && _a3 !== void 0 ? _a3 : data;
+  const user = (_a2 = data.user) !== null && _a2 !== void 0 ? _a2 : data;
   return { data: { session, user }, error: null };
 }
 function _sessionResponsePassword(data) {
@@ -51867,8 +50142,8 @@ function _sessionResponsePassword(data) {
   return response;
 }
 function _userResponse(data) {
-  var _a3;
-  const user = (_a3 = data.user) !== null && _a3 !== void 0 ? _a3 : data;
+  var _a2;
+  const user = (_a2 = data.user) !== null && _a2 !== void 0 ? _a2 : data;
   return { data: { user }, error: null };
 }
 function _ssoResponse(data) {
@@ -51903,11 +50178,22 @@ function hasSession(data) {
 var SIGN_OUT_SCOPES = ["global", "local", "others"];
 
 // node_modules/@supabase/auth-js/dist/module/GoTrueAdminApi.js
+var __rest2 = function(s, e) {
+  var t = {};
+  for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+    t[p] = s[p];
+  if (s != null && typeof Object.getOwnPropertySymbols === "function")
+    for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+      if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+        t[p[i]] = s[p[i]];
+    }
+  return t;
+};
 var GoTrueAdminApi = class {
   constructor({ url = "", headers = {}, fetch: fetch3 }) {
     this.url = url;
     this.headers = headers;
-    this.fetch = resolveFetch5(fetch3);
+    this.fetch = resolveFetch4(fetch3);
     this.mfa = {
       listFactors: this._listFactors.bind(this),
       deleteFactor: this._deleteFactor.bind(this)
@@ -51916,7 +50202,6 @@ var GoTrueAdminApi = class {
       listClients: this._listOAuthClients.bind(this),
       createClient: this._createOAuthClient.bind(this),
       getClient: this._getOAuthClient.bind(this),
-      updateClient: this._updateOAuthClient.bind(this),
       deleteClient: this._deleteOAuthClient.bind(this),
       regenerateClientSecret: this._regenerateOAuthClientSecret.bind(this)
     };
@@ -51973,7 +50258,7 @@ var GoTrueAdminApi = class {
    */
   async generateLink(params) {
     try {
-      const { options } = params, rest = __rest(params, ["options"]);
+      const { options } = params, rest = __rest2(params, ["options"]);
       const body = Object.assign(Object.assign({}, rest), options);
       if ("newEmail" in rest) {
         body.new_email = rest === null || rest === void 0 ? void 0 : rest.newEmail;
@@ -52024,14 +50309,14 @@ var GoTrueAdminApi = class {
    * @param params An object which supports `page` and `perPage` as numbers, to alter the paginated results.
    */
   async listUsers(params) {
-    var _a3, _b, _c, _d, _e, _f, _g;
+    var _a2, _b, _c, _d, _e, _f, _g;
     try {
       const pagination = { nextPage: null, lastPage: 0, total: 0 };
       const response = await _request(this.fetch, "GET", `${this.url}/admin/users`, {
         headers: this.headers,
         noResolveJson: true,
         query: {
-          page: (_b = (_a3 = params === null || params === void 0 ? void 0 : params.page) === null || _a3 === void 0 ? void 0 : _a3.toString()) !== null && _b !== void 0 ? _b : "",
+          page: (_b = (_a2 = params === null || params === void 0 ? void 0 : params.page) === null || _a2 === void 0 ? void 0 : _a2.toString()) !== null && _b !== void 0 ? _b : "",
           per_page: (_d = (_c = params === null || params === void 0 ? void 0 : params.perPage) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : ""
         },
         xform: _noResolveJsonResponse
@@ -52165,14 +50450,14 @@ var GoTrueAdminApi = class {
    * This function should only be called on a server. Never expose your `service_role` key in the browser.
    */
   async _listOAuthClients(params) {
-    var _a3, _b, _c, _d, _e, _f, _g;
+    var _a2, _b, _c, _d, _e, _f, _g;
     try {
       const pagination = { nextPage: null, lastPage: 0, total: 0 };
       const response = await _request(this.fetch, "GET", `${this.url}/admin/oauth/clients`, {
         headers: this.headers,
         noResolveJson: true,
         query: {
-          page: (_b = (_a3 = params === null || params === void 0 ? void 0 : params.page) === null || _a3 === void 0 ? void 0 : _a3.toString()) !== null && _b !== void 0 ? _b : "",
+          page: (_b = (_a2 = params === null || params === void 0 ? void 0 : params.page) === null || _a2 === void 0 ? void 0 : _a2.toString()) !== null && _b !== void 0 ? _b : "",
           per_page: (_d = (_c = params === null || params === void 0 ? void 0 : params.perPage) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : ""
         },
         xform: _noResolveJsonResponse
@@ -52242,28 +50527,6 @@ var GoTrueAdminApi = class {
     }
   }
   /**
-   * Updates an existing OAuth client.
-   * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-   *
-   * This function should only be called on a server. Never expose your `service_role` key in the browser.
-   */
-  async _updateOAuthClient(clientId, params) {
-    try {
-      return await _request(this.fetch, "PUT", `${this.url}/admin/oauth/clients/${clientId}`, {
-        body: params,
-        headers: this.headers,
-        xform: (client2) => {
-          return { data: client2, error: null };
-        }
-      });
-    } catch (error) {
-      if (isAuthError(error)) {
-        return { data: null, error };
-      }
-      throw error;
-    }
-  }
-  /**
    * Deletes an OAuth client.
    * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
    *
@@ -52271,11 +50534,12 @@ var GoTrueAdminApi = class {
    */
   async _deleteOAuthClient(clientId) {
     try {
-      await _request(this.fetch, "DELETE", `${this.url}/admin/oauth/clients/${clientId}`, {
+      return await _request(this.fetch, "DELETE", `${this.url}/admin/oauth/clients/${clientId}`, {
         headers: this.headers,
-        noResolveJson: true
+        xform: (client2) => {
+          return { data: client2, error: null };
+        }
       });
-      return { data: null, error: null };
     } catch (error) {
       if (isAuthError(error)) {
         return { data: null, error };
@@ -52425,7 +50689,7 @@ function toHex(value) {
   return "0x" + hex;
 }
 function createSiweMessage(parameters) {
-  var _a3;
+  var _a2;
   const { chainId, domain, expirationTime, issuedAt = /* @__PURE__ */ new Date(), nonce, notBefore, requestId, resources, scheme, uri: uri2, version: version6 } = parameters;
   {
     if (!Number.isInteger(chainId))
@@ -52438,7 +50702,7 @@ function createSiweMessage(parameters) {
       throw new Error(`@supabase/auth-js: Invalid SIWE message field "uri". URI must be provided.`);
     if (version6 !== "1")
       throw new Error(`@supabase/auth-js: Invalid SIWE message field "version". Version must be '1'. Provided value: ${version6}`);
-    if ((_a3 = parameters.statement) === null || _a3 === void 0 ? void 0 : _a3.includes("\n"))
+    if ((_a2 = parameters.statement) === null || _a2 === void 0 ? void 0 : _a2.includes("\n"))
       throw new Error(`@supabase/auth-js: Invalid SIWE message field "statement". Statement must not include '\\n'. Provided value: ${parameters.statement}`);
   }
   const address = getAddress(parameters.address);
@@ -52477,16 +50741,13 @@ Request ID: ${requestId}`;
 ${suffix}`;
 }
 
-// node_modules/@supabase/auth-js/dist/module/lib/webauthn.js
-init_tslib_es6();
-
 // node_modules/@supabase/auth-js/dist/module/lib/webauthn.errors.js
 var WebAuthnError = class extends Error {
   constructor({ message, code, cause, name }) {
-    var _a3;
+    var _a2;
     super(message, { cause });
     this.__isWebAuthnError = true;
-    this.name = (_a3 = name !== null && name !== void 0 ? name : cause instanceof Error ? cause.name : void 0) !== null && _a3 !== void 0 ? _a3 : "Unknown Error";
+    this.name = (_a2 = name !== null && name !== void 0 ? name : cause instanceof Error ? cause.name : void 0) !== null && _a2 !== void 0 ? _a2 : "Unknown Error";
     this.code = code;
   }
 };
@@ -52502,7 +50763,7 @@ var WebAuthnUnknownError = class extends WebAuthnError {
   }
 };
 function identifyRegistrationError({ error, options }) {
-  var _a3, _b, _c;
+  var _a2, _b, _c;
   const { publicKey } = options;
   if (!publicKey) {
     throw Error("options was missing required publicKey property");
@@ -52516,7 +50777,7 @@ function identifyRegistrationError({ error, options }) {
       });
     }
   } else if (error.name === "ConstraintError") {
-    if (((_a3 = publicKey.authenticatorSelection) === null || _a3 === void 0 ? void 0 : _a3.requireResidentKey) === true) {
+    if (((_a2 = publicKey.authenticatorSelection) === null || _a2 === void 0 ? void 0 : _a2.requireResidentKey) === true) {
       return new WebAuthnError({
         message: "Discoverable credentials were required but no available authenticator supported it",
         code: "ERROR_AUTHENTICATOR_MISSING_DISCOVERABLE_CREDENTIAL_SUPPORT",
@@ -52649,6 +50910,17 @@ function identifyAuthenticationError({ error, options }) {
 }
 
 // node_modules/@supabase/auth-js/dist/module/lib/webauthn.js
+var __rest3 = function(s, e) {
+  var t = {};
+  for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+    t[p] = s[p];
+  if (s != null && typeof Object.getOwnPropertySymbols === "function")
+    for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+      if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+        t[p[i]] = s[p[i]];
+    }
+  return t;
+};
 var WebAuthnAbortService = class {
   /**
    * Create an abort signal for a new WebAuthn operation.
@@ -52693,7 +50965,7 @@ function deserializeCredentialCreationOptions(options) {
       options
     );
   }
-  const { challenge: challengeStr, user: userOpts, excludeCredentials } = options, restOptions = __rest(
+  const { challenge: challengeStr, user: userOpts, excludeCredentials } = options, restOptions = __rest3(
     options,
     ["challenge", "user", "excludeCredentials"]
   );
@@ -52724,7 +50996,7 @@ function deserializeCredentialRequestOptions(options) {
   if (typeof PublicKeyCredential !== "undefined" && "parseRequestOptionsFromJSON" in PublicKeyCredential && typeof PublicKeyCredential.parseRequestOptionsFromJSON === "function") {
     return PublicKeyCredential.parseRequestOptionsFromJSON(options);
   }
-  const { challenge: challengeStr, allowCredentials } = options, restOptions = __rest(
+  const { challenge: challengeStr, allowCredentials } = options, restOptions = __rest3(
     options,
     ["challenge", "allowCredentials"]
   );
@@ -52745,7 +51017,7 @@ function deserializeCredentialRequestOptions(options) {
   return result;
 }
 function serializeCredentialCreationResponse(credential) {
-  var _a3;
+  var _a2;
   if ("toJSON" in credential && typeof credential.toJSON === "function") {
     return credential.toJSON();
   }
@@ -52760,11 +51032,11 @@ function serializeCredentialCreationResponse(credential) {
     type: "public-key",
     clientExtensionResults: credential.getClientExtensionResults(),
     // Convert null to undefined and cast to AuthenticatorAttachment type
-    authenticatorAttachment: (_a3 = credentialWithAttachment.authenticatorAttachment) !== null && _a3 !== void 0 ? _a3 : void 0
+    authenticatorAttachment: (_a2 = credentialWithAttachment.authenticatorAttachment) !== null && _a2 !== void 0 ? _a2 : void 0
   };
 }
 function serializeCredentialRequestResponse(credential) {
-  var _a3;
+  var _a2;
   if ("toJSON" in credential && typeof credential.toJSON === "function") {
     return credential.toJSON();
   }
@@ -52784,7 +51056,7 @@ function serializeCredentialRequestResponse(credential) {
     type: "public-key",
     clientExtensionResults,
     // Convert null to undefined and cast to AuthenticatorAttachment type
-    authenticatorAttachment: (_a3 = credentialWithAttachment.authenticatorAttachment) !== null && _a3 !== void 0 ? _a3 : void 0
+    authenticatorAttachment: (_a2 = credentialWithAttachment.authenticatorAttachment) !== null && _a2 !== void 0 ? _a2 : void 0
   };
 }
 function isValidDomain(hostname) {
@@ -52794,8 +51066,8 @@ function isValidDomain(hostname) {
   );
 }
 function browserSupportsWebAuthn() {
-  var _a3, _b;
-  return !!(isBrowser3() && "PublicKeyCredential" in window && window.PublicKeyCredential && "credentials" in navigator && typeof ((_a3 = navigator === null || navigator === void 0 ? void 0 : navigator.credentials) === null || _a3 === void 0 ? void 0 : _a3.create) === "function" && typeof ((_b = navigator === null || navigator === void 0 ? void 0 : navigator.credentials) === null || _b === void 0 ? void 0 : _b.get) === "function");
+  var _a2, _b;
+  return !!(isBrowser3() && "PublicKeyCredential" in window && window.PublicKeyCredential && "credentials" in navigator && typeof ((_a2 = navigator === null || navigator === void 0 ? void 0 : navigator.credentials) === null || _a2 === void 0 ? void 0 : _a2.create) === "function" && typeof ((_b = navigator === null || navigator === void 0 ? void 0 : navigator.credentials) === null || _b === void 0 ? void 0 : _b.get) === "function");
 }
 async function createCredential(options) {
   try {
@@ -53123,8 +51395,8 @@ var WebAuthnApi = class {
       });
       if (!factor) {
         await this.client.mfa.listFactors().then((factors) => {
-          var _a3;
-          return (_a3 = factors.data) === null || _a3 === void 0 ? void 0 : _a3.all.find((v) => v.factor_type === "webauthn" && v.friendly_name === friendlyName && v.status !== "unverified");
+          var _a2;
+          return (_a2 = factors.data) === null || _a2 === void 0 ? void 0 : _a2.all.find((v) => v.factor_type === "webauthn" && v.friendly_name === friendlyName && v.status !== "unverified");
         }).then((factor2) => factor2 ? this.client.mfa.unenroll({ factorId: factor2 === null || factor2 === void 0 ? void 0 : factor2.id }) : void 0);
         return { data: null, error: enrollError };
       }
@@ -53169,7 +51441,7 @@ var DEFAULT_OPTIONS = {
   autoRefreshToken: true,
   persistSession: true,
   detectSessionInUrl: true,
-  headers: DEFAULT_HEADERS4,
+  headers: DEFAULT_HEADERS3,
   flowType: "implicit",
   debug: false,
   hasCustomAuthorizationHeader: false
@@ -53183,15 +51455,15 @@ var GoTrueClient = class _GoTrueClient {
    * The JWKS used for verifying asymmetric JWTs
    */
   get jwks() {
-    var _a3, _b;
-    return (_b = (_a3 = GLOBAL_JWKS[this.storageKey]) === null || _a3 === void 0 ? void 0 : _a3.jwks) !== null && _b !== void 0 ? _b : { keys: [] };
+    var _a2, _b;
+    return (_b = (_a2 = GLOBAL_JWKS[this.storageKey]) === null || _a2 === void 0 ? void 0 : _a2.jwks) !== null && _b !== void 0 ? _b : { keys: [] };
   }
   set jwks(value) {
     GLOBAL_JWKS[this.storageKey] = Object.assign(Object.assign({}, GLOBAL_JWKS[this.storageKey]), { jwks: value });
   }
   get jwks_cached_at() {
-    var _a3, _b;
-    return (_b = (_a3 = GLOBAL_JWKS[this.storageKey]) === null || _a3 === void 0 ? void 0 : _a3.cachedAt) !== null && _b !== void 0 ? _b : Number.MIN_SAFE_INTEGER;
+    var _a2, _b;
+    return (_b = (_a2 = GLOBAL_JWKS[this.storageKey]) === null || _a2 === void 0 ? void 0 : _a2.cachedAt) !== null && _b !== void 0 ? _b : Number.MIN_SAFE_INTEGER;
   }
   set jwks_cached_at(value) {
     GLOBAL_JWKS[this.storageKey] = Object.assign(Object.assign({}, GLOBAL_JWKS[this.storageKey]), { cachedAt: value });
@@ -53200,7 +51472,7 @@ var GoTrueClient = class _GoTrueClient {
    * Create a new client for use in the browser.
    */
   constructor(options) {
-    var _a3, _b;
+    var _a2, _b;
     this.userStorage = null;
     this.memoryStorage = null;
     this.stateChangeEmitters = /* @__PURE__ */ new Map();
@@ -53235,14 +51507,14 @@ var GoTrueClient = class _GoTrueClient {
     });
     this.url = settings.url;
     this.headers = settings.headers;
-    this.fetch = resolveFetch5(settings.fetch);
+    this.fetch = resolveFetch4(settings.fetch);
     this.lock = settings.lock || lockNoOp;
     this.detectSessionInUrl = settings.detectSessionInUrl;
     this.flowType = settings.flowType;
     this.hasCustomAuthorizationHeader = settings.hasCustomAuthorizationHeader;
     if (settings.lock) {
       this.lock = settings.lock;
-    } else if (isBrowser3() && ((_a3 = globalThis === null || globalThis === void 0 ? void 0 : globalThis.navigator) === null || _a3 === void 0 ? void 0 : _a3.locks)) {
+    } else if (isBrowser3() && ((_a2 = globalThis === null || globalThis === void 0 ? void 0 : globalThis.navigator) === null || _a2 === void 0 ? void 0 : _a2.locks)) {
       this.lock = navigatorLock;
     } else {
       this.lock = lockNoOp;
@@ -53260,11 +51532,6 @@ var GoTrueClient = class _GoTrueClient {
       challengeAndVerify: this._challengeAndVerify.bind(this),
       getAuthenticatorAssuranceLevel: this._getAuthenticatorAssuranceLevel.bind(this),
       webauthn: new WebAuthnApi(this)
-    };
-    this.oauth = {
-      getAuthorizationDetails: this._getAuthorizationDetails.bind(this),
-      approveAuthorization: this._approveAuthorization.bind(this),
-      denyAuthorization: this._denyAuthorization.bind(this)
     };
     if (this.persistSession) {
       if (settings.storage) {
@@ -53326,7 +51593,7 @@ var GoTrueClient = class _GoTrueClient {
    *    the whole lifetime of the client
    */
   async _initialize() {
-    var _a3;
+    var _a2;
     try {
       const params = parseParametersFromURL(window.location.href);
       let callbackUrlType = "none";
@@ -53340,7 +51607,7 @@ var GoTrueClient = class _GoTrueClient {
         if (error) {
           this._debug("#_initialize()", "error detecting session from URL", error);
           if (isAuthImplicitGrantRedirectError(error)) {
-            const errorCode = (_a3 = error.details) === null || _a3 === void 0 ? void 0 : _a3.code;
+            const errorCode = (_a2 = error.details) === null || _a2 === void 0 ? void 0 : _a2.code;
             if (errorCode === "identity_already_exists" || errorCode === "identity_not_found" || errorCode === "single_identity_not_deletable") {
               return { error };
             }
@@ -53380,12 +51647,12 @@ var GoTrueClient = class _GoTrueClient {
    * @returns A session where the is_anonymous claim in the access token JWT set to true
    */
   async signInAnonymously(credentials) {
-    var _a3, _b, _c;
+    var _a2, _b, _c;
     try {
       const res = await _request(this.fetch, "POST", `${this.url}/signup`, {
         headers: this.headers,
         body: {
-          data: (_b = (_a3 = credentials === null || credentials === void 0 ? void 0 : credentials.options) === null || _a3 === void 0 ? void 0 : _a3.data) !== null && _b !== void 0 ? _b : {},
+          data: (_b = (_a2 = credentials === null || credentials === void 0 ? void 0 : credentials.options) === null || _a2 === void 0 ? void 0 : _a2.data) !== null && _b !== void 0 ? _b : {},
           gotrue_meta_security: { captcha_token: (_c = credentials === null || credentials === void 0 ? void 0 : credentials.options) === null || _c === void 0 ? void 0 : _c.captchaToken }
         },
         xform: _sessionResponse
@@ -53419,7 +51686,7 @@ var GoTrueClient = class _GoTrueClient {
    * @returns A user if the server has "autoconfirm" OFF
    */
   async signUp(credentials) {
-    var _a3, _b, _c;
+    var _a2, _b, _c;
     try {
       let res;
       if ("email" in credentials) {
@@ -53436,7 +51703,7 @@ var GoTrueClient = class _GoTrueClient {
           body: {
             email,
             password,
-            data: (_a3 = options === null || options === void 0 ? void 0 : options.data) !== null && _a3 !== void 0 ? _a3 : {},
+            data: (_a2 = options === null || options === void 0 ? void 0 : options.data) !== null && _a2 !== void 0 ? _a2 : {},
             gotrue_meta_security: { captcha_token: options === null || options === void 0 ? void 0 : options.captchaToken },
             code_challenge: codeChallenge,
             code_challenge_method: codeChallengeMethod
@@ -53539,9 +51806,9 @@ var GoTrueClient = class _GoTrueClient {
    * This method supports the PKCE flow.
    */
   async signInWithOAuth(credentials) {
-    var _a3, _b, _c, _d;
+    var _a2, _b, _c, _d;
     return await this._handleProviderSignIn(credentials.provider, {
-      redirectTo: (_a3 = credentials.options) === null || _a3 === void 0 ? void 0 : _a3.redirectTo,
+      redirectTo: (_a2 = credentials.options) === null || _a2 === void 0 ? void 0 : _a2.redirectTo,
       scopes: (_b = credentials.options) === null || _b === void 0 ? void 0 : _b.scopes,
       queryParams: (_c = credentials.options) === null || _c === void 0 ? void 0 : _c.queryParams,
       skipBrowserRedirect: (_d = credentials.options) === null || _d === void 0 ? void 0 : _d.skipBrowserRedirect
@@ -53575,7 +51842,7 @@ var GoTrueClient = class _GoTrueClient {
     }
   }
   async signInWithEthereum(credentials) {
-    var _a3, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     let message;
     let signature;
     if ("message" in credentials) {
@@ -53599,7 +51866,7 @@ var GoTrueClient = class _GoTrueClient {
           throw new Error(`@supabase/auth-js: No compatible Ethereum wallet interface on the window object (window.ethereum) detected. Make sure the user already has a wallet installed and connected for this app. Prefer passing the wallet interface object directly to signInWithWeb3({ chain: 'ethereum', wallet: resolvedUserWallet }) instead.`);
         }
       }
-      const url = new URL((_a3 = options === null || options === void 0 ? void 0 : options.url) !== null && _a3 !== void 0 ? _a3 : window.location.href);
+      const url = new URL((_a2 = options === null || options === void 0 ? void 0 : options.url) !== null && _a2 !== void 0 ? _a2 : window.location.href);
       const accounts = await resolvedWallet.request({
         method: "eth_requestAccounts"
       }).then((accs) => accs).catch(() => {
@@ -53668,7 +51935,7 @@ var GoTrueClient = class _GoTrueClient {
     }
   }
   async signInWithSolana(credentials) {
-    var _a3, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     let message;
     let signature;
     if ("message" in credentials) {
@@ -53692,7 +51959,7 @@ var GoTrueClient = class _GoTrueClient {
           throw new Error(`@supabase/auth-js: No compatible Solana wallet interface on the window object (window.solana) detected. Make sure the user already has a wallet installed and connected for this app. Prefer passing the wallet interface object directly to signInWithWeb3({ chain: 'solana', wallet: resolvedUserWallet }) instead.`);
         }
       }
-      const url = new URL((_a3 = options === null || options === void 0 ? void 0 : options.url) !== null && _a3 !== void 0 ? _a3 : window.location.href);
+      const url = new URL((_a2 = options === null || options === void 0 ? void 0 : options.url) !== null && _a2 !== void 0 ? _a2 : window.location.href);
       if ("signIn" in resolvedWallet && resolvedWallet.signIn) {
         const output = await resolvedWallet.signIn(Object.assign(Object.assign(Object.assign({ issuedAt: (/* @__PURE__ */ new Date()).toISOString() }, options === null || options === void 0 ? void 0 : options.signInWithSolana), {
           // non-overridable properties
@@ -53860,7 +52127,7 @@ var GoTrueClient = class _GoTrueClient {
    * This method supports PKCE when an email is passed.
    */
   async signInWithOtp(credentials) {
-    var _a3, _b, _c, _d, _e;
+    var _a2, _b, _c, _d, _e;
     try {
       if ("email" in credentials) {
         const { email, options } = credentials;
@@ -53874,7 +52141,7 @@ var GoTrueClient = class _GoTrueClient {
           headers: this.headers,
           body: {
             email,
-            data: (_a3 = options === null || options === void 0 ? void 0 : options.data) !== null && _a3 !== void 0 ? _a3 : {},
+            data: (_a2 = options === null || options === void 0 ? void 0 : options.data) !== null && _a2 !== void 0 ? _a2 : {},
             create_user: (_b = options === null || options === void 0 ? void 0 : options.shouldCreateUser) !== null && _b !== void 0 ? _b : true,
             gotrue_meta_security: { captcha_token: options === null || options === void 0 ? void 0 : options.captchaToken },
             code_challenge: codeChallenge,
@@ -53910,12 +52177,12 @@ var GoTrueClient = class _GoTrueClient {
    * Log in a user given a User supplied OTP or TokenHash received through mobile or email.
    */
   async verifyOtp(params) {
-    var _a3, _b;
+    var _a2, _b;
     try {
       let redirectTo = void 0;
       let captchaToken = void 0;
       if ("options" in params) {
-        redirectTo = (_a3 = params.options) === null || _a3 === void 0 ? void 0 : _a3.redirectTo;
+        redirectTo = (_a2 = params.options) === null || _a2 === void 0 ? void 0 : _a2.redirectTo;
         captchaToken = (_b = params.options) === null || _b === void 0 ? void 0 : _b.captchaToken;
       }
       const { data, error } = await _request(this.fetch, "POST", `${this.url}/verify`, {
@@ -53959,7 +52226,7 @@ var GoTrueClient = class _GoTrueClient {
    * organization's SSO Identity Provider UUID directly instead.
    */
   async signInWithSSO(params) {
-    var _a3, _b, _c;
+    var _a2, _b, _c;
     try {
       let codeChallenge = null;
       let codeChallengeMethod = null;
@@ -53968,7 +52235,7 @@ var GoTrueClient = class _GoTrueClient {
         [codeChallenge, codeChallengeMethod] = await getCodeChallengeAndMethod(this.storage, this.storageKey);
       }
       return await _request(this.fetch, "POST", `${this.url}/sso`, {
-        body: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, "providerId" in params ? { provider_id: params.providerId } : null), "domain" in params ? { domain: params.domain } : null), { redirect_to: (_b = (_a3 = params.options) === null || _a3 === void 0 ? void 0 : _a3.redirectTo) !== null && _b !== void 0 ? _b : void 0 }), ((_c = params === null || params === void 0 ? void 0 : params.options) === null || _c === void 0 ? void 0 : _c.captchaToken) ? { gotrue_meta_security: { captcha_token: params.options.captchaToken } } : null), { skip_http_redirect: true, code_challenge: codeChallenge, code_challenge_method: codeChallengeMethod }),
+        body: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, "providerId" in params ? { provider_id: params.providerId } : null), "domain" in params ? { domain: params.domain } : null), { redirect_to: (_b = (_a2 = params.options) === null || _a2 === void 0 ? void 0 : _a2.redirectTo) !== null && _b !== void 0 ? _b : void 0 }), ((_c = params === null || params === void 0 ? void 0 : params.options) === null || _c === void 0 ? void 0 : _c.captchaToken) ? { gotrue_meta_security: { captcha_token: params.options.captchaToken } } : null), { skip_http_redirect: true, code_challenge: codeChallenge, code_challenge_method: codeChallengeMethod }),
         headers: this.headers,
         xform: _ssoResponse
       });
@@ -54166,12 +52433,19 @@ var GoTrueClient = class _GoTrueClient {
             currentSession.user = userNotAvailableProxy();
           }
         }
-        if (this.storage.isServer && currentSession.user && !currentSession.user.__isUserNotAvailableProxy) {
-          const suppressWarningRef = { value: this.suppressGetSessionWarning };
-          currentSession.user = insecureUserWarningProxy(currentSession.user, suppressWarningRef);
-          if (suppressWarningRef.value) {
-            this.suppressGetSessionWarning = true;
-          }
+        if (this.storage.isServer && currentSession.user) {
+          let suppressWarning = this.suppressGetSessionWarning;
+          const proxySession = new Proxy(currentSession, {
+            get: (target, prop, receiver) => {
+              if (!suppressWarning && prop === "user") {
+                console.warn("Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.");
+                suppressWarning = true;
+                this.suppressGetSessionWarning = true;
+              }
+              return Reflect.get(target, prop, receiver);
+            }
+          });
+          currentSession = proxySession;
         }
         return { data: { session: currentSession }, error: null };
       }
@@ -54211,12 +52485,12 @@ var GoTrueClient = class _GoTrueClient {
         });
       }
       return await this._useSession(async (result) => {
-        var _a3, _b, _c;
+        var _a2, _b, _c;
         const { data, error } = result;
         if (error) {
           throw error;
         }
-        if (!((_a3 = data.session) === null || _a3 === void 0 ? void 0 : _a3.access_token) && !this.hasCustomAuthorizationHeader) {
+        if (!((_a2 = data.session) === null || _a2 === void 0 ? void 0 : _a2.access_token) && !this.hasCustomAuthorizationHeader) {
           return { data: { user: null }, error: new AuthSessionMissingError() };
         }
         return await _request(this.fetch, "GET", `${this.url}/user`, {
@@ -54356,13 +52630,13 @@ var GoTrueClient = class _GoTrueClient {
   async _refreshSession(currentSession) {
     try {
       return await this._useSession(async (result) => {
-        var _a3;
+        var _a2;
         if (!currentSession) {
           const { data, error: error2 } = result;
           if (error2) {
             throw error2;
           }
-          currentSession = (_a3 = data.session) !== null && _a3 !== void 0 ? _a3 : void 0;
+          currentSession = (_a2 = data.session) !== null && _a2 !== void 0 ? _a2 : void 0;
         }
         if (!(currentSession === null || currentSession === void 0 ? void 0 : currentSession.refresh_token)) {
           throw new AuthSessionMissingError();
@@ -54493,12 +52767,12 @@ var GoTrueClient = class _GoTrueClient {
   }
   async _signOut({ scope } = { scope: "global" }) {
     return await this._useSession(async (result) => {
-      var _a3;
+      var _a2;
       const { data, error: sessionError } = result;
       if (sessionError) {
         return { error: sessionError };
       }
-      const accessToken = (_a3 = data.session) === null || _a3 === void 0 ? void 0 : _a3.access_token;
+      const accessToken = (_a2 = data.session) === null || _a2 === void 0 ? void 0 : _a2.access_token;
       if (accessToken) {
         const { error } = await this.admin.signOut(accessToken, scope);
         if (error) {
@@ -54536,12 +52810,12 @@ var GoTrueClient = class _GoTrueClient {
   }
   async _emitInitialSession(id) {
     return await this._useSession(async (result) => {
-      var _a3, _b;
+      var _a2, _b;
       try {
         const { data: { session }, error } = result;
         if (error)
           throw error;
-        await ((_a3 = this.stateChangeEmitters.get(id)) === null || _a3 === void 0 ? void 0 : _a3.callback("INITIAL_SESSION", session));
+        await ((_a2 = this.stateChangeEmitters.get(id)) === null || _a2 === void 0 ? void 0 : _a2.callback("INITIAL_SESSION", session));
         this._debug("INITIAL_SESSION", "callback id", id, "session", session);
       } catch (err) {
         await ((_b = this.stateChangeEmitters.get(id)) === null || _b === void 0 ? void 0 : _b.callback("INITIAL_SESSION", null));
@@ -54591,12 +52865,12 @@ var GoTrueClient = class _GoTrueClient {
    * Gets all the identities linked to a user.
    */
   async getUserIdentities() {
-    var _a3;
+    var _a2;
     try {
       const { data, error } = await this.getUser();
       if (error)
         throw error;
-      return { data: { identities: (_a3 = data.user.identities) !== null && _a3 !== void 0 ? _a3 : [] }, error: null };
+      return { data: { identities: (_a2 = data.user.identities) !== null && _a2 !== void 0 ? _a2 : [] }, error: null };
     } catch (error) {
       if (isAuthError(error)) {
         return { data: null, error };
@@ -54611,15 +52885,15 @@ var GoTrueClient = class _GoTrueClient {
     return this.linkIdentityOAuth(credentials);
   }
   async linkIdentityOAuth(credentials) {
-    var _a3;
+    var _a2;
     try {
       const { data, error } = await this._useSession(async (result) => {
-        var _a4, _b, _c, _d, _e;
+        var _a3, _b, _c, _d, _e;
         const { data: data2, error: error2 } = result;
         if (error2)
           throw error2;
         const url = await this._getUrlForProvider(`${this.url}/user/identities/authorize`, credentials.provider, {
-          redirectTo: (_a4 = credentials.options) === null || _a4 === void 0 ? void 0 : _a4.redirectTo,
+          redirectTo: (_a3 = credentials.options) === null || _a3 === void 0 ? void 0 : _a3.redirectTo,
           scopes: (_b = credentials.options) === null || _b === void 0 ? void 0 : _b.scopes,
           queryParams: (_c = credentials.options) === null || _c === void 0 ? void 0 : _c.queryParams,
           skipBrowserRedirect: true
@@ -54631,7 +52905,7 @@ var GoTrueClient = class _GoTrueClient {
       });
       if (error)
         throw error;
-      if (isBrowser3() && !((_a3 = credentials.options) === null || _a3 === void 0 ? void 0 : _a3.skipBrowserRedirect)) {
+      if (isBrowser3() && !((_a2 = credentials.options) === null || _a2 === void 0 ? void 0 : _a2.skipBrowserRedirect)) {
         window.location.assign(data === null || data === void 0 ? void 0 : data.url);
       }
       return { data: { provider: credentials.provider, url: data === null || data === void 0 ? void 0 : data.url }, error: null };
@@ -54644,7 +52918,7 @@ var GoTrueClient = class _GoTrueClient {
   }
   async linkIdentityIdToken(credentials) {
     return await this._useSession(async (result) => {
-      var _a3;
+      var _a2;
       try {
         const { error: sessionError, data: { session } } = result;
         if (sessionError)
@@ -54652,7 +52926,7 @@ var GoTrueClient = class _GoTrueClient {
         const { options, provider, token, access_token, nonce } = credentials;
         const res = await _request(this.fetch, "POST", `${this.url}/token?grant_type=id_token`, {
           headers: this.headers,
-          jwt: (_a3 = session === null || session === void 0 ? void 0 : session.access_token) !== null && _a3 !== void 0 ? _a3 : void 0,
+          jwt: (_a2 = session === null || session === void 0 ? void 0 : session.access_token) !== null && _a2 !== void 0 ? _a2 : void 0,
           body: {
             provider,
             id_token: token,
@@ -54691,14 +52965,14 @@ var GoTrueClient = class _GoTrueClient {
   async unlinkIdentity(identity) {
     try {
       return await this._useSession(async (result) => {
-        var _a3, _b;
+        var _a2, _b;
         const { data, error } = result;
         if (error) {
           throw error;
         }
         return await _request(this.fetch, "DELETE", `${this.url}/user/identities/${identity.identity_id}`, {
           headers: this.headers,
-          jwt: (_b = (_a3 = data.session) === null || _a3 === void 0 ? void 0 : _a3.access_token) !== null && _b !== void 0 ? _b : void 0
+          jwt: (_b = (_a2 = data.session) === null || _a2 === void 0 ? void 0 : _a2.access_token) !== null && _b !== void 0 ? _b : void 0
         });
       });
     } catch (error) {
@@ -54763,7 +53037,7 @@ var GoTrueClient = class _GoTrueClient {
    * Note: this method is async to accommodate for AsyncStorage e.g. in React native.
    */
   async _recoverAndRefresh() {
-    var _a3, _b;
+    var _a2, _b;
     const debugName = "#_recoverAndRefresh()";
     this._debug(debugName, "begin");
     try {
@@ -54774,7 +53048,7 @@ var GoTrueClient = class _GoTrueClient {
           maybeUser = { user: currentSession.user };
           await setItemAsync(this.userStorage, this.storageKey + "-user", maybeUser);
         }
-        currentSession.user = (_a3 = maybeUser === null || maybeUser === void 0 ? void 0 : maybeUser.user) !== null && _a3 !== void 0 ? _a3 : userNotAvailableProxy();
+        currentSession.user = (_a2 = maybeUser === null || maybeUser === void 0 ? void 0 : maybeUser.user) !== null && _a2 !== void 0 ? _a2 : userNotAvailableProxy();
       } else if (currentSession && !currentSession.user) {
         if (!currentSession.user) {
           const separateUser = await getItemAsync(this.storage, this.storageKey + "-user");
@@ -54834,7 +53108,7 @@ var GoTrueClient = class _GoTrueClient {
     }
   }
   async _callRefreshToken(refreshToken) {
-    var _a3, _b;
+    var _a2, _b;
     if (!refreshToken) {
       throw new AuthSessionMissingError();
     }
@@ -54862,7 +53136,7 @@ var GoTrueClient = class _GoTrueClient {
         if (!isAuthRetryableFetchError(error)) {
           await this._removeSession();
         }
-        (_a3 = this.refreshingDeferred) === null || _a3 === void 0 ? void 0 : _a3.resolve(result);
+        (_a2 = this.refreshingDeferred) === null || _a2 === void 0 ? void 0 : _a2.resolve(result);
         return result;
       }
       (_b = this.refreshingDeferred) === null || _b === void 0 ? void 0 : _b.reject(error);
@@ -55138,14 +53412,14 @@ var GoTrueClient = class _GoTrueClient {
   async _unenroll(params) {
     try {
       return await this._useSession(async (result) => {
-        var _a3;
+        var _a2;
         const { data: sessionData, error: sessionError } = result;
         if (sessionError) {
           return { data: null, error: sessionError };
         }
         return await _request(this.fetch, "DELETE", `${this.url}/factors/${params.factorId}`, {
           headers: this.headers,
-          jwt: (_a3 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a3 === void 0 ? void 0 : _a3.access_token
+          jwt: (_a2 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a2 === void 0 ? void 0 : _a2.access_token
         });
       });
     } catch (error) {
@@ -55158,7 +53432,7 @@ var GoTrueClient = class _GoTrueClient {
   async _enroll(params) {
     try {
       return await this._useSession(async (result) => {
-        var _a3, _b;
+        var _a2, _b;
         const { data: sessionData, error: sessionError } = result;
         if (sessionError) {
           return { data: null, error: sessionError };
@@ -55167,7 +53441,7 @@ var GoTrueClient = class _GoTrueClient {
         const { data, error } = await _request(this.fetch, "POST", `${this.url}/factors`, {
           body,
           headers: this.headers,
-          jwt: (_a3 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a3 === void 0 ? void 0 : _a3.access_token
+          jwt: (_a2 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a2 === void 0 ? void 0 : _a2.access_token
         });
         if (error) {
           return { data: null, error };
@@ -55188,7 +53462,7 @@ var GoTrueClient = class _GoTrueClient {
     return this._acquireLock(-1, async () => {
       try {
         return await this._useSession(async (result) => {
-          var _a3;
+          var _a2;
           const { data: sessionData, error: sessionError } = result;
           if (sessionError) {
             return { data: null, error: sessionError };
@@ -55199,7 +53473,7 @@ var GoTrueClient = class _GoTrueClient {
           const { data, error } = await _request(this.fetch, "POST", `${this.url}/factors/${params.factorId}/verify`, {
             body,
             headers: this.headers,
-            jwt: (_a3 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a3 === void 0 ? void 0 : _a3.access_token
+            jwt: (_a2 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a2 === void 0 ? void 0 : _a2.access_token
           });
           if (error) {
             return { data: null, error };
@@ -55220,7 +53494,7 @@ var GoTrueClient = class _GoTrueClient {
     return this._acquireLock(-1, async () => {
       try {
         return await this._useSession(async (result) => {
-          var _a3;
+          var _a2;
           const { data: sessionData, error: sessionError } = result;
           if (sessionError) {
             return { data: null, error: sessionError };
@@ -55228,7 +53502,7 @@ var GoTrueClient = class _GoTrueClient {
           const response = await _request(this.fetch, "POST", `${this.url}/factors/${params.factorId}/challenge`, {
             body: params,
             headers: this.headers,
-            jwt: (_a3 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a3 === void 0 ? void 0 : _a3.access_token
+            jwt: (_a2 = sessionData === null || sessionData === void 0 ? void 0 : sessionData.session) === null || _a2 === void 0 ? void 0 : _a2.access_token
           });
           if (response.error) {
             return response;
@@ -55278,7 +53552,7 @@ var GoTrueClient = class _GoTrueClient {
    * {@see GoTrueMFAApi#listFactors}
    */
   async _listFactors() {
-    var _a3;
+    var _a2;
     const { data: { user }, error: userError } = await this.getUser();
     if (userError) {
       return { data: null, error: userError };
@@ -55289,7 +53563,7 @@ var GoTrueClient = class _GoTrueClient {
       totp: [],
       webauthn: []
     };
-    for (const factor of (_a3 = user === null || user === void 0 ? void 0 : user.factors) !== null && _a3 !== void 0 ? _a3 : []) {
+    for (const factor of (_a2 = user === null || user === void 0 ? void 0 : user.factors) !== null && _a2 !== void 0 ? _a2 : []) {
       data.all.push(factor);
       if (factor.status === "verified") {
         ;
@@ -55305,128 +53579,33 @@ var GoTrueClient = class _GoTrueClient {
    * {@see GoTrueMFAApi#getAuthenticatorAssuranceLevel}
    */
   async _getAuthenticatorAssuranceLevel() {
-    var _a3, _b;
-    const { data: { session }, error: sessionError } = await this.getSession();
-    if (sessionError) {
-      return { data: null, error: sessionError };
-    }
-    if (!session) {
-      return {
-        data: { currentLevel: null, nextLevel: null, currentAuthenticationMethods: [] },
-        error: null
-      };
-    }
-    const { payload } = decodeJWT(session.access_token);
-    let currentLevel = null;
-    if (payload.aal) {
-      currentLevel = payload.aal;
-    }
-    let nextLevel = currentLevel;
-    const verifiedFactors = (_b = (_a3 = session.user.factors) === null || _a3 === void 0 ? void 0 : _a3.filter((factor) => factor.status === "verified")) !== null && _b !== void 0 ? _b : [];
-    if (verifiedFactors.length > 0) {
-      nextLevel = "aal2";
-    }
-    const currentAuthenticationMethods = payload.amr || [];
-    return { data: { currentLevel, nextLevel, currentAuthenticationMethods }, error: null };
-  }
-  /**
-   * Retrieves details about an OAuth authorization request.
-   * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-   *
-   * Returns authorization details including client info, scopes, and user information.
-   * If the API returns a redirect_uri, it means consent was already given - the caller
-   * should handle the redirect manually if needed.
-   */
-  async _getAuthorizationDetails(authorizationId) {
-    try {
+    return this._acquireLock(-1, async () => {
       return await this._useSession(async (result) => {
+        var _a2, _b;
         const { data: { session }, error: sessionError } = result;
         if (sessionError) {
           return { data: null, error: sessionError };
         }
         if (!session) {
-          return { data: null, error: new AuthSessionMissingError() };
+          return {
+            data: { currentLevel: null, nextLevel: null, currentAuthenticationMethods: [] },
+            error: null
+          };
         }
-        return await _request(this.fetch, "GET", `${this.url}/oauth/authorizations/${authorizationId}`, {
-          headers: this.headers,
-          jwt: session.access_token,
-          xform: (data) => ({ data, error: null })
-        });
+        const { payload } = decodeJWT(session.access_token);
+        let currentLevel = null;
+        if (payload.aal) {
+          currentLevel = payload.aal;
+        }
+        let nextLevel = currentLevel;
+        const verifiedFactors = (_b = (_a2 = session.user.factors) === null || _a2 === void 0 ? void 0 : _a2.filter((factor) => factor.status === "verified")) !== null && _b !== void 0 ? _b : [];
+        if (verifiedFactors.length > 0) {
+          nextLevel = "aal2";
+        }
+        const currentAuthenticationMethods = payload.amr || [];
+        return { data: { currentLevel, nextLevel, currentAuthenticationMethods }, error: null };
       });
-    } catch (error) {
-      if (isAuthError(error)) {
-        return { data: null, error };
-      }
-      throw error;
-    }
-  }
-  /**
-   * Approves an OAuth authorization request.
-   * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-   */
-  async _approveAuthorization(authorizationId, options) {
-    try {
-      return await this._useSession(async (result) => {
-        const { data: { session }, error: sessionError } = result;
-        if (sessionError) {
-          return { data: null, error: sessionError };
-        }
-        if (!session) {
-          return { data: null, error: new AuthSessionMissingError() };
-        }
-        const response = await _request(this.fetch, "POST", `${this.url}/oauth/authorizations/${authorizationId}/consent`, {
-          headers: this.headers,
-          jwt: session.access_token,
-          body: { action: "approve" },
-          xform: (data) => ({ data, error: null })
-        });
-        if (response.data && response.data.redirect_url) {
-          if (isBrowser3() && !(options === null || options === void 0 ? void 0 : options.skipBrowserRedirect)) {
-            window.location.assign(response.data.redirect_url);
-          }
-        }
-        return response;
-      });
-    } catch (error) {
-      if (isAuthError(error)) {
-        return { data: null, error };
-      }
-      throw error;
-    }
-  }
-  /**
-   * Denies an OAuth authorization request.
-   * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-   */
-  async _denyAuthorization(authorizationId, options) {
-    try {
-      return await this._useSession(async (result) => {
-        const { data: { session }, error: sessionError } = result;
-        if (sessionError) {
-          return { data: null, error: sessionError };
-        }
-        if (!session) {
-          return { data: null, error: new AuthSessionMissingError() };
-        }
-        const response = await _request(this.fetch, "POST", `${this.url}/oauth/authorizations/${authorizationId}/consent`, {
-          headers: this.headers,
-          jwt: session.access_token,
-          body: { action: "deny" },
-          xform: (data) => ({ data, error: null })
-        });
-        if (response.data && response.data.redirect_url) {
-          if (isBrowser3() && !(options === null || options === void 0 ? void 0 : options.skipBrowserRedirect)) {
-            window.location.assign(response.data.redirect_url);
-          }
-        }
-        return response;
-      });
-    } catch (error) {
-      if (isAuthError(error)) {
-        return { data: null, error };
-      }
-      throw error;
-    }
+    });
   }
   async fetchJwk(kid, jwks = { keys: [] }) {
     let jwk = jwks.keys.find((key) => key.kid === kid);
@@ -55539,6 +53718,33 @@ var SupabaseAuthClient = class extends AuthClient_default {
 };
 
 // node_modules/@supabase/supabase-js/dist/module/SupabaseClient.js
+var __awaiter10 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
 var SupabaseClient = class {
   /**
    * Create a new client for use in the browser.
@@ -55554,7 +53760,7 @@ var SupabaseClient = class {
    * @param options.global.headers Any additional headers to send with each network request.
    */
   constructor(supabaseUrl, supabaseKey, options) {
-    var _a3, _b, _c;
+    var _a2, _b, _c;
     this.supabaseUrl = supabaseUrl;
     this.supabaseKey = supabaseKey;
     const baseUrl = validateSupabaseUrl(supabaseUrl);
@@ -55573,7 +53779,7 @@ var SupabaseClient = class {
       global: DEFAULT_GLOBAL_OPTIONS
     };
     const settings = applySettingDefaults(options !== null && options !== void 0 ? options : {}, DEFAULTS);
-    this.storageKey = (_a3 = settings.auth.storageKey) !== null && _a3 !== void 0 ? _a3 : "";
+    this.storageKey = (_a2 = settings.auth.storageKey) !== null && _a2 !== void 0 ? _a2 : "";
     this.headers = (_b = settings.global.headers) !== null && _b !== void 0 ? _b : {};
     if (!settings.accessToken) {
       this.auth = this._initSupabaseAuthClient((_c = settings.auth) !== null && _c !== void 0 ? _c : {}, this.headers, settings.global.fetch);
@@ -55687,13 +53893,15 @@ var SupabaseClient = class {
   removeAllChannels() {
     return this.realtime.removeAllChannels();
   }
-  async _getAccessToken() {
-    var _a3, _b;
-    if (this.accessToken) {
-      return await this.accessToken();
-    }
-    const { data } = await this.auth.getSession();
-    return (_b = (_a3 = data.session) === null || _a3 === void 0 ? void 0 : _a3.access_token) !== null && _b !== void 0 ? _b : this.supabaseKey;
+  _getAccessToken() {
+    return __awaiter10(this, void 0, void 0, function* () {
+      var _a2, _b;
+      if (this.accessToken) {
+        return yield this.accessToken();
+      }
+      const { data } = yield this.auth.getSession();
+      return (_b = (_a2 = data.session) === null || _a2 === void 0 ? void 0 : _a2.access_token) !== null && _b !== void 0 ? _b : this.supabaseKey;
+    });
   }
   _initSupabaseAuthClient({ autoRefreshToken, persistSession, detectSessionInUrl, storage, userStorage, storageKey, flowType, lock, debug }, headers, fetch3) {
     const authHeaders = {
@@ -56063,7 +54271,11 @@ var SupabaseAuth = class _SupabaseAuth {
         device_info: deviceInfo
       }).select().single();
       if (error) {
-        console.error("Error creating session:", error.message);
+        if (error.message.includes("row-level security policy")) {
+          console.warn("Session tracking skipped due to RLS policy (non-critical):", error.message);
+        } else {
+          console.error("Error creating session:", error.message);
+        }
       } else if (data) {
         this.currentSession = data;
         console.log("Session created:", data.session_id);
@@ -56268,7 +54480,8 @@ function getChrome() {
   const gBrowser = topWin?.gBrowser;
   const PlacesUtils = topWin?.PlacesUtils;
   const PlacesTransactions = topWin?.PlacesTransactions;
-  return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
+  const browser = topWin?.browser;
+  return { topWin, gBrowser, PlacesUtils, PlacesTransactions, browser };
 }
 var ROOT_FOLDER_NAME = "Oasis Hubs";
 async function getRootFolder() {
@@ -56521,19 +54734,46 @@ var HubManager = class {
       name = (name || "").trim();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils, topWin } = getChrome();
+      const { PlacesUtils, topWin, gBrowser, browser } = getChrome();
       const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
       if (!folder) return { ok: false };
       const bookmarks = await getBookmarkChildren(folder.guid);
       const items = bookmarks.filter((b) => b.uri);
-      if (!topWin?.openTrustedLinkIn) return { ok: false };
+      const urls = items.map((it) => it.uri);
+      if (urls.length === 0) return { ok: true };
+      let targetBrowser = gBrowser;
       if (where === "window") {
         const w = topWin.OpenBrowserWindow();
-        setTimeout(() => {
-          for (const it of items) w.openTrustedLinkIn(it.uri, "tab");
-        }, 250);
-      } else {
-        for (const it of items) topWin.openTrustedLinkIn(it.uri, "tab");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        targetBrowser = w.gBrowser;
+      }
+      if (!targetBrowser) return { ok: false };
+      const openedTabs = [];
+      for (const url of urls) {
+        const tab = await targetBrowser.addTab(url, { triggerPrimaryAction: false });
+        openedTabs.push(tab);
+      }
+      if (openedTabs.length > 0) {
+        targetBrowser.selectedTab = openedTabs[0];
+      }
+      if (browser?.tabs && openedTabs.length > 0) {
+        setTimeout(async () => {
+          try {
+            const allTabs = await browser.tabs.query({});
+            const tabIdsToGroup = [];
+            for (const openedTab of openedTabs) {
+              const url = openedTab.linkedBrowser.currentURI.spec;
+              const foundTab = allTabs.find((t) => t.url === url && !t.discarded);
+              if (foundTab) tabIdsToGroup.push(foundTab.id);
+            }
+            if (tabIdsToGroup.length > 0) {
+              const groupId = await browser.tabs.group({ tabIds: tabIdsToGroup });
+              await browser.tabGroups.update(groupId, { title: name });
+            }
+          } catch (e) {
+            console.error("Failed to group tabs", e);
+          }
+        }, 500);
       }
       return { ok: true };
     } catch (e) {
@@ -56624,6 +54864,62 @@ var ListTabsCommand = class {
     );
     const out = titles.length ? titles.slice(0, 50).map((t, i) => `${i + 1}. ${t}`).join("\n") : "No tabs.";
     return { message: out };
+  }
+};
+var NewWindowCommand = class {
+  commandName = "new_window";
+  description = "Open a new browser window.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    topWin.OpenBrowserWindow();
+    return { message: "Opened a new window." };
+  }
+};
+var OrganizeWindowsCommand = class {
+  commandName = "organize_windows";
+  description = "Arrange two or more windows side-by-side.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const { ChromeUtils } = topWin;
+    if (!ChromeUtils) return { message: "ChromeUtils not available." };
+    const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+    const windowManager = Services.wm;
+    const windows = windowManager.getEnumerator("navigator:browser");
+    const browserWindows = [];
+    while (windows.hasMoreElements()) {
+      browserWindows.push(windows.getNext());
+    }
+    if (browserWindows.length < 2) {
+      return { message: "You need at least two windows to organize." };
+    }
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numWindows = browserWindows.length;
+    const windowWidth = Math.floor(availWidth / numWindows);
+    for (let i = 0; i < numWindows; i++) {
+      const win = browserWindows[i];
+      const xPos = availLeft + windowWidth * i;
+      win.resizeTo(windowWidth, availHeight);
+      win.moveTo(xPos, availTop);
+    }
+    return { message: `Organized ${numWindows} windows.` };
+  }
+};
+var ShowURLCommand = class {
+  commandName = "show_url";
+  description = "Open a URL in a new tab.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened ${url}` };
   }
 };
 var OpenTabCommand = class {
@@ -56909,6 +55205,9 @@ You have the following workers available:
 - **rename_hub**: { from: string, to: string }
 - **add_tab_to_hub**: { name: string }
 - **open_hub**: { name: string, where?: "tabs"|"window" }
+- **new_window**: No arguments needed
+- **organize_windows**: No arguments needed
+- **show_url**: { url: string }
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
@@ -57029,7 +55328,10 @@ async function runAssistantStream(prompt, onChunk) {
     new ListHubsCommand(),
     new RenameHubCommand(),
     new AddTabToHubCommand(),
-    new OpenHubCommand()
+    new OpenHubCommand(),
+    new NewWindowCommand(),
+    new OrganizeWindowsCommand(),
+    new ShowURLCommand()
   ];
   const graph = await buildGraph(commands);
   const sessionHistory = getCurrentSessionMessages();

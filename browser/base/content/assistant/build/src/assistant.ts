@@ -18,6 +18,9 @@ import {
   RenameHubCommand,
   AddTabToHubCommand,
   OpenHubCommand,
+  NewWindowCommand,
+  OrganizeWindowsCommand,
+  ShowURLCommand,
   Command,
   CmdResult,
 } from "./commands";
@@ -141,6 +144,9 @@ You have the following workers available:
 - **rename_hub**: { from: string, to: string }
 - **add_tab_to_hub**: { name: string }
 - **open_hub**: { name: string, where?: "tabs"|"window" }
+- **new_window**: No arguments needed
+- **organize_windows**: No arguments needed
+- **show_url**: { url: string }
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
@@ -285,6 +291,9 @@ export async function runAssistantStream(
     new RenameHubCommand(),
     new AddTabToHubCommand(),
     new OpenHubCommand(),
+    new NewWindowCommand(),
+    new OrganizeWindowsCommand(),
+    new ShowURLCommand(),
   ];
   const graph = await buildGraph(commands);
   

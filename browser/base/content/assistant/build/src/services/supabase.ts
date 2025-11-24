@@ -362,7 +362,12 @@ export default class SupabaseAuth {
                 .single();
 
             if (error) {
-                console.error('Error creating session:', error.message);
+                // Ignore RLS errors as they might happen if the user is not fully synced yet
+                if (error.message.includes('row-level security policy')) {
+                    console.warn('Session tracking skipped due to RLS policy (non-critical):', error.message);
+                } else {
+                    console.error('Error creating session:', error.message);
+                }
             } else if (data) {
                 this.currentSession = data as UserSession;
                 console.log('Session created:', data.session_id);
