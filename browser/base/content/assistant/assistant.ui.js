@@ -17,22 +17,40 @@ console.log('SupabaseAuth available:', !!window.supabaseAuth);
 
 // Check current authentication status on page load
 async function checkCurrentAuthStatus() {
+    console.log('Checking current auth status...');
     // First try to load from secure storage
-    const restored = await securelyLoadSession();
-    if (restored) {
-        console.log('Session restored from secure storage');
-        // If we restored a session, we might want to verify it's still valid
-        // but for now we assume it is or that Supabase will handle the refresh
+    const restoredSession = await securelyLoadSession();
+    if (restoredSession) {
+        console.log('Session restored from secure storage', restoredSession.user?.email);
+        updateAuthUI(true, restoredSession.user);
+        
+        // Verify with Supabase (background check)
+        if (window.supabaseAuth && window.supabaseAuth.supabase) {
+            window.supabaseAuth.supabase.auth.getUser().then(({ data: { user }, error }) => {
+                if (error || !user) {
+                    console.warn('Restored session invalid, clearing:', error);
+                    securelyClearSession();
+                    updateAuthUI(false);
+                } else {
+                    console.log('Restored session verified valid');
+                    // Update session in storage if it changed
+                    window.supabaseAuth.supabase.auth.getSession().then(({ data: { session } }) => {
+                        if (session) securelySaveSession(session);
+                    });
+                }
+            });
+        }
+        return;
     }
 
     if (window.supabaseAuth && window.supabaseAuth.supabase) {
         try {
             const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
             if (user && !error) {
-                console.log('User is already authenticated:', user.email);
+                console.log('User is already authenticated (Supabase):', user.email);
                 updateAuthUI(true, user);
                 
-                // Ensure session is saved (in case it wasn't or was updated)
+                // Ensure session is saved
                 const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
                 if (session) {
                     securelySaveSession(session);
@@ -44,9 +62,15 @@ async function checkCurrentAuthStatus() {
         } catch (error) {
             console.error('Error checking auth status:', error);
             updateAuthUI(false);
+        } finally {
+            initialAuthCheckComplete = true;
+            console.log('Initial auth check completed');
         }
     }
 }
+
+// Flag to track if the initial auth check has completed
+let initialAuthCheckComplete = false;
 
 // Check auth status after a short delay to ensure everything is loaded
 setTimeout(checkCurrentAuthStatus, 1000);
@@ -57,10 +81,20 @@ const LOGIN_HOSTNAME = "https://kahana.co"; // Use the service domain
 const LOGIN_REALM = "Oasis Assistant";
 const LOGIN_USERNAME = "oasis_assistant_session"; // Fixed username for the session token
 
-function securelySaveSession(session) {
+async function securelySaveSession(session) {
     if (!session || !session.access_token) return;
 
     try {
+        // Remove existing login if any
+        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+        let existingLogin = null;
+        for (const login of logins) {
+            if (login.username === LOGIN_USERNAME) {
+                existingLogin = login;
+                Services.logins.removeLogin(login);
+            }
+        }
+
         const loginInfo = new Components.Constructor(
             "@mozilla.org/login-manager/loginInfo;1",
             Ci.nsILoginInfo,
@@ -80,17 +114,9 @@ function securelySaveSession(session) {
             ""  // passwordField
         );
 
-        // Remove existing login if any
-        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
-        for (const login of logins) {
-            if (login.username === LOGIN_USERNAME) {
-                Services.logins.removeLogin(login);
-            }
-        }
-
         // Add new login
-        Services.logins.addLogin(loginInfo);
-        console.log("Session securely saved to Password Manager");
+        await Services.logins.addLoginAsync(loginInfo);
+        console.log("Session securely saved to Password Manager (overwrote existing: " + !!existingLogin + ")");
     } catch (e) {
         console.error("Failed to save session securely:", e);
     }
@@ -99,11 +125,12 @@ function securelySaveSession(session) {
 async function securelyLoadSession() {
     try {
         const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+        console.log(`Found ${logins.length} logins for ${LOGIN_REALM}`);
         const login = logins.find(l => l.username === LOGIN_USERNAME);
 
         if (login) {
             const sessionData = JSON.parse(login.password);
-            console.log("Found secure session data");
+            console.log("Found secure session data for user:", sessionData.user?.email);
 
             if (window.supabaseAuth && window.supabaseAuth.supabase) {
                 const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
@@ -113,18 +140,20 @@ async function securelyLoadSession() {
 
                 if (!error && data.session) {
                     console.log("Supabase session restored successfully");
-                    return true;
+                    return data.session;
                 } else {
                     console.warn("Failed to restore Supabase session:", error);
                     // If restore fails (e.g. expired), clear it
                     securelyClearSession();
                 }
             }
+        } else {
+            console.log("No secure session found");
         }
     } catch (e) {
         console.error("Failed to load secure session:", e);
     }
-    return false;
+    return null;
 }
 
 function securelyClearSession() {
@@ -614,6 +643,7 @@ function handleKahanaProtocol(url) {
 // The user will complete OAuth in a new tab, then we'll check their auth status
 
 // Check for auth callback data in localStorage
+// Check for auth callback data in localStorage
 function checkForAuthCallback() {
     try {
         const authData = localStorage.getItem('oasis_auth_callback');
@@ -628,8 +658,13 @@ function checkForAuthCallback() {
             }
         }
     } catch (e) {
-        // Don't spam the console with localStorage errors
-        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
+        // Don't spam the console with localStorage errors (common in some contexts)
+        // Check for NS_ERROR_NOT_AVAILABLE (0x80040111)
+        if (e.name === 'NS_ERROR_NOT_AVAILABLE' || 
+            e.message?.includes('NS_ERROR_NOT_AVAILABLE') || 
+            e.result === 2147746065) {
+            // Silently ignore
+        } else {
             console.error('Error checking auth callback:', e);
         }
     }
@@ -637,6 +672,31 @@ function checkForAuthCallback() {
 
 // Check for auth callback data when the page loads
 checkForAuthCallback();
+
+// Subscribe to Supabase auth state changes
+if (window.supabaseAuth) {
+    console.log("Subscribing to Supabase auth state changes...");
+    window.supabaseAuth.onAuthStateChange((authState) => {
+        console.log("UI received auth state change:", authState.isAuthenticated);
+        
+        if (authState.isAuthenticated && authState.session) {
+            console.log("Auth state is authenticated, saving session...");
+            securelySaveSession(authState.session);
+            updateAuthUI(true, authState.user);
+        } else if (!authState.isAuthenticated) {
+            console.log("Auth state is unauthenticated...");
+            // Only clear the secure session if we've finished our initial check
+            // This prevents the initial "no session" state from wiping our saved session
+            if (initialAuthCheckComplete) {
+                console.log("Clearing secure session (user explicitly logged out or session expired)");
+                securelyClearSession();
+            } else {
+                console.log("Skipping secure session clear (initial check pending)");
+            }
+            updateAuthUI(false);
+        }
+    });
+}
 
 // Also check periodically in case the message was missed (disabled due to localStorage issues)
 // setInterval(checkForAuthCallback, 2000);
@@ -706,8 +766,6 @@ window.addEventListener('message', async (event) => {
     }
 });
 
-<<<<<<< Updated upstream
-=======
 // Add a simple "Check Authentication" button for after OAuth
 function addAuthCheckButton() {
     // Check if button already exists
@@ -864,7 +922,6 @@ addAuthCheckButton();
 // Try multiple times to ensure the button gets added
 setTimeout(addAuthCheckButton, 2000);
 setTimeout(addAuthCheckButton, 3000);
->>>>>>> Stashed changes
 
 // Handle successful authentication
 function handleAuthSuccess(authData) {
@@ -1443,6 +1500,14 @@ function showLoginForm() {
       } else if (user) {
         isAuthenticated = true;
         currentUser = user;
+        
+        // Save session immediately
+        window.supabaseAuth.getSession().then(session => {
+            if (session) {
+                securelySaveSession(session);
+            }
+        });
+
         updateAuthUI(true, user);
         append(`\n🔓 Signed in as ${user.email}\n`);
       }

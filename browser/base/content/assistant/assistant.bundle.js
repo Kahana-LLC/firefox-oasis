@@ -54271,7 +54271,11 @@ var SupabaseAuth = class _SupabaseAuth {
         device_info: deviceInfo
       }).select().single();
       if (error) {
-        console.error("Error creating session:", error.message);
+        if (error.message.includes("row-level security policy")) {
+          console.warn("Session tracking skipped due to RLS policy (non-critical):", error.message);
+        } else {
+          console.error("Error creating session:", error.message);
+        }
       } else if (data) {
         this.currentSession = data;
         console.log("Session created:", data.session_id);
