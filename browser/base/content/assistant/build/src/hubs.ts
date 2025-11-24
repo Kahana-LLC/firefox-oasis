@@ -10,7 +10,8 @@ function getChrome() {
   const gBrowser = topWin?.gBrowser;
   const PlacesUtils = topWin?.PlacesUtils;
   const PlacesTransactions = topWin?.PlacesTransactions;
-  return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
+  const browser = topWin?.browser;
+  return { topWin, gBrowser, PlacesUtils, PlacesTransactions, browser };
 }
 
 type HubItem = { url: string; title?: string; host: string; id: string };
@@ -317,24 +318,62 @@ class HubManager {
       name = (name || "").trim();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils, topWin } = getChrome();
+      const { PlacesUtils, topWin, gBrowser, browser } = getChrome();
       const folder = children.find((c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
       
       if (!folder) return { ok: false };
 
       const bookmarks = await getBookmarkChildren(folder.guid);
       const items = bookmarks.filter((b: any) => b.uri);
+      const urls = items.map((it: any) => it.uri);
 
-      if (!topWin?.openTrustedLinkIn) return { ok: false };
+      if (urls.length === 0) return { ok: true };
 
+      let targetBrowser = gBrowser;
       if (where === "window") {
         const w = topWin.OpenBrowserWindow();
-        setTimeout(() => {
-          for (const it of items) (w as any).openTrustedLinkIn(it.uri, "tab");
-        }, 250);
-      } else {
-        for (const it of items) topWin.openTrustedLinkIn(it.uri, "tab");
+        // A bit of a wait for the new window to be ready
+        await new Promise(resolve => setTimeout(resolve, 250));
+        targetBrowser = w.gBrowser;
       }
+
+      if (!targetBrowser) return { ok: false };
+      
+      const openedTabs: FxTab[] = [];
+      for (const url of urls) {
+        const tab = await targetBrowser.addTab(url, { triggerPrimaryAction: false });
+        openedTabs.push(tab);
+      }
+      
+      // Focus the first tab of the new group
+      if (openedTabs.length > 0) {
+        targetBrowser.selectedTab = openedTabs[0];
+      }
+
+      // We need tab IDs for the grouping API, but gBrowser tabs are not WebExtension tabs.
+      // So we'll find the corresponding WebExtension tabs by URL. This is hacky.
+      // A better implementation would be to have this logic in a background script.
+      if (browser?.tabs && openedTabs.length > 0) {
+        setTimeout(async () => {
+          try {
+            const allTabs = await browser.tabs.query({});
+            const tabIdsToGroup = [];
+            for (const openedTab of openedTabs) {
+              const url = openedTab.linkedBrowser.currentURI.spec;
+              const foundTab = allTabs.find((t: any) => t.url === url && !t.discarded);
+              if (foundTab) tabIdsToGroup.push(foundTab.id);
+            }
+
+            if (tabIdsToGroup.length > 0) {
+              const groupId = await browser.tabs.group({ tabIds: tabIdsToGroup });
+              await browser.tabGroups.update(groupId, { title: name });
+            }
+          } catch (e) {
+            console.error("Failed to group tabs", e);
+          }
+        }, 500); // Wait a bit for tabs to be registered in the WebExtension API
+      }
+
       return { ok: true };
     } catch (e) {
       console.error("Failed to open hub:", e);

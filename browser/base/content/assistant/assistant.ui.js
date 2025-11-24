@@ -1,4 +1,6 @@
 import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
+// Try to get Services from global scope or import it
+const Services = window.Services || ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
 // Import voice input service - it will be bundled
 let voiceInputService = null;
@@ -15,12 +17,26 @@ console.log('SupabaseAuth available:', !!window.supabaseAuth);
 
 // Check current authentication status on page load
 async function checkCurrentAuthStatus() {
+    // First try to load from secure storage
+    const restored = await securelyLoadSession();
+    if (restored) {
+        console.log('Session restored from secure storage');
+        // If we restored a session, we might want to verify it's still valid
+        // but for now we assume it is or that Supabase will handle the refresh
+    }
+
     if (window.supabaseAuth && window.supabaseAuth.supabase) {
         try {
             const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
             if (user && !error) {
                 console.log('User is already authenticated:', user.email);
                 updateAuthUI(true, user);
+                
+                // Ensure session is saved (in case it wasn't or was updated)
+                const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
+                if (session) {
+                    securelySaveSession(session);
+                }
             } else {
                 console.log('User is not authenticated');
                 updateAuthUI(false);
@@ -34,6 +50,96 @@ async function checkCurrentAuthStatus() {
 
 // Check auth status after a short delay to ensure everything is loaded
 setTimeout(checkCurrentAuthStatus, 1000);
+
+// --- Secure Session Storage (Services.logins) ---
+
+const LOGIN_HOSTNAME = "https://kahana.co"; // Use the service domain
+const LOGIN_REALM = "Oasis Assistant";
+const LOGIN_USERNAME = "oasis_assistant_session"; // Fixed username for the session token
+
+function securelySaveSession(session) {
+    if (!session || !session.access_token) return;
+
+    try {
+        const loginInfo = new Components.Constructor(
+            "@mozilla.org/login-manager/loginInfo;1",
+            Ci.nsILoginInfo,
+            "init"
+        )(
+            LOGIN_HOSTNAME,
+            null, // formSubmitURL
+            LOGIN_REALM,
+            LOGIN_USERNAME,
+            JSON.stringify({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                expires_at: session.expires_at,
+                user: session.user
+            }), // password (store full session as JSON)
+            "", // usernameField
+            ""  // passwordField
+        );
+
+        // Remove existing login if any
+        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+        for (const login of logins) {
+            if (login.username === LOGIN_USERNAME) {
+                Services.logins.removeLogin(login);
+            }
+        }
+
+        // Add new login
+        Services.logins.addLogin(loginInfo);
+        console.log("Session securely saved to Password Manager");
+    } catch (e) {
+        console.error("Failed to save session securely:", e);
+    }
+}
+
+async function securelyLoadSession() {
+    try {
+        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+        const login = logins.find(l => l.username === LOGIN_USERNAME);
+
+        if (login) {
+            const sessionData = JSON.parse(login.password);
+            console.log("Found secure session data");
+
+            if (window.supabaseAuth && window.supabaseAuth.supabase) {
+                const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
+                    access_token: sessionData.access_token,
+                    refresh_token: sessionData.refresh_token
+                });
+
+                if (!error && data.session) {
+                    console.log("Supabase session restored successfully");
+                    return true;
+                } else {
+                    console.warn("Failed to restore Supabase session:", error);
+                    // If restore fails (e.g. expired), clear it
+                    securelyClearSession();
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load secure session:", e);
+    }
+    return false;
+}
+
+function securelyClearSession() {
+    try {
+        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+        for (const login of logins) {
+            if (login.username === LOGIN_USERNAME) {
+                Services.logins.removeLogin(login);
+            }
+        }
+        console.log("Secure session cleared");
+    } catch (e) {
+        console.error("Failed to clear secure session:", e);
+    }
+}
 
 const log = document.getElementById("log");
 const q   = document.getElementById("q");
@@ -600,6 +706,165 @@ window.addEventListener('message', async (event) => {
     }
 });
 
+<<<<<<< Updated upstream
+=======
+// Add a simple "Check Authentication" button for after OAuth
+function addAuthCheckButton() {
+    // Check if button already exists
+    if (document.getElementById('checkAuthBtn')) {
+        return;
+    }
+    
+    // Try to find the auth header, if not found, add it to the log area
+    let authHeader = document.getElementById('authHeader');
+    if (!authHeader) {
+        // Create auth header in the log area
+        const log = document.getElementById('log');
+        if (log) {
+            authHeader = document.createElement('div');
+            authHeader.id = 'authHeader';
+            authHeader.style.cssText = `
+                background: #f3f4f6;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                padding: 12px;
+                margin: 8px 0;
+                text-align: center;
+            `;
+            log.appendChild(authHeader);
+        } else {
+            return;
+        }
+    }
+    
+    const checkAuthBtn = document.createElement('button');
+    checkAuthBtn.id = 'checkAuthBtn';
+    checkAuthBtn.textContent = 'Check Authentication';
+    checkAuthBtn.style.cssText = `
+        background: #10b981;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        margin-left: 10px;
+        font-weight: 500;
+    `;
+    
+    checkAuthBtn.addEventListener('click', async () => {
+        // Create a more detailed input dialog for the full OAuth data
+        const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
+        
+The URL should look like:
+https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
+
+Or just paste the access_token part if you prefer:`;
+        
+        const input = prompt(instructions);
+        if (input && input.trim()) {
+            try {
+                console.log('Processing OAuth data manually...');
+                
+                let authData = {};
+                
+                // Check if it's a full URL or just a token
+                if (input.includes('#')) {
+                    // It's a full URL, parse it
+                    const url = new URL(input);
+                    const hashParams = new URLSearchParams(url.hash.substring(1));
+                    
+                    authData = {
+                        access_token: hashParams.get('access_token'),
+                        refresh_token: hashParams.get('refresh_token'),
+                        expires_at: hashParams.get('expires_at'),
+                        expires_in: hashParams.get('expires_in'),
+                        token_type: hashParams.get('token_type'),
+                        timestamp: Date.now(),
+                        source: 'manual_url'
+                    };
+                } else {
+                    // It's just a token, create minimal auth data
+                    authData = {
+                        access_token: input.trim(),
+                        refresh_token: '', // We'll need to handle this differently
+                        timestamp: Date.now(),
+                        source: 'manual_token'
+                    };
+                }
+                
+                console.log('Auth data:', authData);
+                
+                // Try to set the session with the auth data
+                if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
+                    console.log('Setting session with auth data...');
+                    const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
+                        access_token: authData.access_token,
+                        refresh_token: authData.refresh_token || ''
+                    });
+                    
+                    if (error) {
+                        console.error('Failed to set session:', error.message);
+                        showAuthError(`Authentication failed: ${error.message}`);
+                    } else {
+                        console.log('Session set successfully for user:', data.user?.id);
+                        showAuthSuccess('Authentication successful! You are now signed in.');
+                        
+                        // Save session securely
+                        if (data.session) {
+                            securelySaveSession(data.session);
+                        }
+
+                        // Update the UI immediately
+                        updateAuthUI(true, data.user);
+                        
+                        // Also reload after a delay to ensure everything is synced
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }
+                    return;
+                }
+                
+                // Fallback: Use the OAuth callback handler
+                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+                    const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
+                    if (result.success) {
+                        showAuthSuccess('Authentication successful! You are now signed in.');
+                        
+                        // Update the UI immediately
+                        updateAuthUI(true, data.user);
+                        
+                        // Also reload after a delay to ensure everything is synced
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        showAuthError(`Authentication failed: ${result.error}`);
+                    }
+                } else {
+                    showAuthError('Authentication service not available.');
+                }
+            } catch (error) {
+                console.error('Error processing OAuth data:', error);
+                showAuthError('Error processing OAuth data. Please try again.');
+            }
+        }
+    });
+    
+    authHeader.appendChild(checkAuthBtn);
+}
+
+// Add the check authentication button
+setTimeout(addAuthCheckButton, 1000);
+
+// Also try to add it immediately
+addAuthCheckButton();
+
+// Try multiple times to ensure the button gets added
+setTimeout(addAuthCheckButton, 2000);
+setTimeout(addAuthCheckButton, 3000);
+>>>>>>> Stashed changes
 
 // Handle successful authentication
 function handleAuthSuccess(authData) {
@@ -617,6 +882,13 @@ function handleAuthSuccess(authData) {
                 console.log('User authenticated:', user.email);
                 // Update the UI to show authenticated state
                 updateAuthUI(true, user);
+                
+                // Save session if available
+                window.supabaseAuth.supabase.auth.getSession().then(({ data }) => {
+                    if (data.session) {
+                        securelySaveSession(data.session);
+                    }
+                });
             }
         }).catch(error => {
             console.error('Error getting current user:', error);
@@ -811,7 +1083,11 @@ const dropdownItems = [
     { label: "Account", action: () => alert("Account clicked") },
     { label: "Subscription", action: () => alert("Subscription clicked") },
     { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Logout", action: () => logout() }
+    { label: "Settings", action: () => alert("Settings clicked") },
+    { label: "Logout", action: () => {
+        logout();
+        securelyClearSession();
+    }}
 ];
 
 dropdownItems.forEach(item => {

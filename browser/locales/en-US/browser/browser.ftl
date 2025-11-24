@@ -1479,3 +1479,8 @@ trustpanel-cryptominer-not-blocking-tab-header = { $count ->
   *[other] { -brand-product-name } allowed { $count } cryptominers
 }
 trustpanel-cryptominer-tab-list-header = These sites are trying to cryptomine:
+
+oasis-assistant =
+    .label = Oasis Assistant
+    .tooltiptext = Oasis Assistant
+

@@ -35,6 +35,76 @@ export class ListTabsCommand implements Command {
   }
 }
 
+export class NewWindowCommand implements Command {
+  commandName = "new_window";
+  description = "Open a new browser window.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    topWin.OpenBrowserWindow();
+    return { message: "Opened a new window." };
+  }
+}
+
+export class OrganizeWindowsCommand implements Command {
+  commandName = "organize_windows";
+  description = "Arrange two or more windows side-by-side.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    // Access Services.jsm via ChromeUtils
+    const { ChromeUtils } = topWin;
+    if (!ChromeUtils) return { message: "ChromeUtils not available." };
+    const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+
+    const windowManager = Services.wm;
+    const windows = windowManager.getEnumerator("navigator:browser");
+    const browserWindows = [];
+
+    while (windows.hasMoreElements()) {
+      browserWindows.push(windows.getNext());
+    }
+
+    if (browserWindows.length < 2) {
+      return { message: "You need at least two windows to organize." };
+    }
+
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numWindows = browserWindows.length;
+    const windowWidth = Math.floor(availWidth / numWindows);
+
+    for (let i = 0; i < numWindows; i++) {
+      const win = browserWindows[i];
+      const xPos = availLeft + (windowWidth * i);
+      win.resizeTo(windowWidth, availHeight);
+      win.moveTo(xPos, availTop);
+    }
+
+    return { message: `Organized ${numWindows} windows.` };
+  }
+}
+
+export class ShowURLCommand implements Command {
+  commandName = "show_url";
+  description = "Open a URL in a new tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
+
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened ${url}` };
+  }
+}
+
 export class OpenTabCommand implements Command {
   commandName = "open_tab";
   description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
