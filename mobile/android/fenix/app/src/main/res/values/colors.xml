@@ -249,8 +249,6 @@
     <color name="fx_mobile_private_on_tertiary_fixed_variant">@color/photonDarkGrey90</color>
 
     <!-- Layers -->
-    <!-- Default Screen background, Frontlayer background, App Bar Top, App Bar Bottom, Frontlayer header -->
-    <color name="fx_mobile_private_layer_color_1">@color/photonViolet90</color>
     <!-- Card background, Menu background, Dialog, Banner -->
     <color name="fx_mobile_private_layer_color_2">@color/photonViolet90</color>
     <!-- Search -->

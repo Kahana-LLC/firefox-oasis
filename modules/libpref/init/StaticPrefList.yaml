@@ -3697,6 +3697,13 @@
   value: false
   mirror: always
 
+# For non-Navigation API navigations, create an internal method tracker
+# so that it's possible to await navigations being committed.
+- name: dom.navigation.api.internal_method_tracker
+  type: bool
+  value: false
+  mirror: always
+
 # Network Information API
 # This feature is not available on Firefox desktop. It exposes too much
 # user information. Let's be consistent and disable it on Android.
@@ -9849,6 +9856,16 @@
   mirror: always
   rust: true
 
+# Whether to enable generalized CSS Attr Support. If this pref is set to false
+# we treat attr as a regular function with support only for the `content` css
+# property. If it is set to true, attr is parsed as a subtitution function.
+# https://drafts.csswg.org/css-values-5/#attr-notation
+- name: layout.css.attr.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+  rust: true
+
 # Whether to enable CSS @custom-media
 # https://drafts.csswg.org/mediaqueries-5/
 # TODO(emilio): Needs more tests before enabling.
@@ -11076,6 +11093,18 @@
 #else
   value: false
 #endif
+  mirror: always
+
+# Enable the support to position absoluetly positioned frames properly across
+# fragmentainers (Bug 1994316).
+#
+# Note: Layout code should use
+# nsPresContext::FragmentainerAwarePositioningEnabled() rather than checking
+# this pref directly. This ensures a given frame tree handles abspos
+# fragmentation consistently even if the actual pref value changes.
+- name: layout.abspos.fragmentainer-aware-positioning.enabled
+  type: bool
+  value: false
   mirror: always
 
 #---------------------------------------------------------------------------
@@ -16204,6 +16233,14 @@
   value: 2
   mirror: always
 
+#ifdef MOZ_ENABLE_SKIA_PDF
+# Whether we should try to use skpdf for pdf output.
+- name: print.experimental.skpdf
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+#endif
+
 #---------------------------------------------------------------------------
 # Prefs starting with "privacy."
 #---------------------------------------------------------------------------
@@ -19643,13 +19680,13 @@
   mirror: always
 #endif
 
+#ifdef ANDROID
 # Whether to render in to a child SurfaceControl rather than directly into the SurfaceView
 - name: widget.android.use-surfacecontrol
   type: bool
   value: false
   mirror: once
 
-#ifdef ANDROID
 # A threshold value for double click by mouse.
 - name: widget.double-click.threshold
   type: RelaxedAtomicInt32

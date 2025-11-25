@@ -8318,7 +8318,8 @@ void CodeGenerator::emitWasmAnyrefResultChecks(LInstruction* lir,
 
   Label ok;
   masm.branchWasmRefIsSubtype(output, wasm::MaybeRefType(), destType.value(),
-                              &ok, true, temp1, temp2, temp3);
+                              &ok, /*onSuccess=*/true,
+                              /*signalNullChecks=*/false, temp1, temp2, temp3);
   masm.breakpoint();
   masm.bind(&ok);
 
@@ -10457,7 +10458,8 @@ void CodeGenerator::visitWasmStackSwitchToSuspendable(
   const Register ScratchReg1 = ScratchReg;
 #  elif defined(JS_CODEGEN_ARM)
   const Register ScratchReg1 = ABINonArgReturnVolatileReg;
-#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64)
+#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
+      defined(JS_CODEGEN_MIPS64)
   UseScratchRegisterScope temps(masm);
   const Register ScratchReg1 = temps.Acquire();
 #  else
@@ -10540,7 +10542,8 @@ void CodeGenerator::visitWasmStackSwitchToSuspendable(
 
   // Call wasm function fast.
 #  ifdef JS_USE_LINK_REGISTER
-#    if defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64)
+#    if defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
+        defined(JS_CODEGEN_MIPS64)
   masm.mov(ReturnAddressReg, ra);
 #    else
   masm.mov(ReturnAddressReg, lr);
@@ -10606,7 +10609,8 @@ void CodeGenerator::visitWasmStackSwitchToMain(LWasmStackSwitchToMain* lir) {
   const Register ScratchReg1 = ScratchReg;
 #  elif defined(JS_CODEGEN_ARM)
   const Register ScratchReg1 = ABINonArgReturnVolatileReg;
-#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64)
+#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
+      defined(JS_CODEGEN_MIPS64)
   UseScratchRegisterScope temps(masm);
   const Register ScratchReg1 = temps.Acquire();
 #  else
@@ -10726,7 +10730,8 @@ void CodeGenerator::visitWasmStackSwitchToMain(LWasmStackSwitchToMain* lir) {
 
   // Call wasm function fast.
 #  ifdef JS_USE_LINK_REGISTER
-#    if defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64)
+#    if defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
+        defined(JS_CODEGEN_MIPS64)
   masm.mov(ReturnAddressReg, ra);
 #    else
   masm.mov(ReturnAddressReg, lr);
@@ -10802,7 +10807,8 @@ void CodeGenerator::visitWasmStackContinueOnSuspendable(
   const Register ScratchReg1 = ScratchReg;
 #  elif defined(JS_CODEGEN_ARM)
   const Register ScratchReg1 = ABINonArgReturnVolatileReg;
-#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64)
+#  elif defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
+      defined(JS_CODEGEN_MIPS64)
   UseScratchRegisterScope temps(masm);
   const Register ScratchReg1 = temps.Acquire();
 #  else
@@ -20939,8 +20945,9 @@ void CodeGenerator::visitWasmRefTestAbstract(LWasmRefTestAbstract* ins) {
   Label onFail;
   Label join;
   masm.branchWasmRefIsSubtype(ref, mir->ref()->wasmRefType(), mir->destType(),
-                              &onSuccess, /*onSuccess=*/true, superSTV,
-                              scratch1, scratch2);
+                              &onSuccess,
+                              /*onSuccess=*/true, /*signalNullChecks=*/false,
+                              superSTV, scratch1, scratch2);
   masm.bind(&onFail);
   masm.xor32(result, result);
   masm.jump(&join);
@@ -20963,8 +20970,9 @@ void CodeGenerator::visitWasmRefTestConcrete(LWasmRefTestConcrete* ins) {
   Label onSuccess;
   Label join;
   masm.branchWasmRefIsSubtype(ref, mir->ref()->wasmRefType(), mir->destType(),
-                              &onSuccess, /*onSuccess=*/true, superSTV,
-                              scratch1, scratch2);
+                              &onSuccess,
+                              /*onSuccess=*/true, /*signalNullChecks=*/false,
+                              superSTV, scratch1, scratch2);
   masm.move32(Imm32(0), result);
   masm.jump(&join);
   masm.bind(&onSuccess);
@@ -20979,9 +20987,10 @@ void CodeGenerator::visitWasmRefTestAbstractAndBranch(
   Register scratch1 = ToTempRegisterOrInvalid(ins->temp0());
   Label* onSuccess = getJumpLabelForBranch(ins->ifTrue());
   Label* onFail = getJumpLabelForBranch(ins->ifFalse());
-  masm.branchWasmRefIsSubtype(
-      ref, ins->sourceType(), ins->destType(), onSuccess, /*onSuccess=*/true,
-      Register::Invalid(), scratch1, Register::Invalid());
+  masm.branchWasmRefIsSubtype(ref, ins->sourceType(), ins->destType(),
+                              onSuccess, /*onSuccess=*/true,
+                              /*signalNullChecks=*/false, Register::Invalid(),
+                              scratch1, Register::Invalid());
   masm.jump(onFail);
 }
 
@@ -20994,9 +21003,9 @@ void CodeGenerator::visitWasmRefTestConcreteAndBranch(
   Register scratch2 = ToTempRegisterOrInvalid(ins->temp1());
   Label* onSuccess = getJumpLabelForBranch(ins->ifTrue());
   Label* onFail = getJumpLabelForBranch(ins->ifFalse());
-  masm.branchWasmRefIsSubtype(ref, ins->sourceType(), ins->destType(),
-                              onSuccess, /*onSuccess=*/true, superSTV, scratch1,
-                              scratch2);
+  masm.branchWasmRefIsSubtype(
+      ref, ins->sourceType(), ins->destType(), onSuccess, /*onSuccess=*/true,
+      /*signalNullChecks=*/false, superSTV, scratch1, scratch2);
   masm.jump(onFail);
 }
 
@@ -21015,9 +21024,14 @@ void CodeGenerator::visitWasmRefCastAbstract(LWasmRefCastAbstract* ins) {
     masm.wasmTrap(wasm::Trap::BadCast, mir->trapSiteDesc());
   });
   addOutOfLineCode(ool, ins->mir());
-  masm.branchWasmRefIsSubtype(ref, mir->ref()->wasmRefType(), mir->destType(),
-                              ool->entry(), /*onSuccess=*/false, superSTV,
-                              scratch1, scratch2);
+  FaultingCodeOffset fco = masm.branchWasmRefIsSubtype(
+      ref, mir->ref()->wasmRefType(), mir->destType(), ool->entry(),
+      /*onSuccess=*/false, /*signalNullChecks=*/true, superSTV, scratch1,
+      scratch2);
+  if (fco.isValid()) {
+    masm.append(wasm::Trap::BadCast, wasm::TrapMachineInsnForLoadWord(),
+                fco.get(), mir->trapSiteDesc());
+  }
 }
 
 void CodeGenerator::visitWasmRefCastConcrete(LWasmRefCastConcrete* ins) {
@@ -21035,9 +21049,14 @@ void CodeGenerator::visitWasmRefCastConcrete(LWasmRefCastConcrete* ins) {
     masm.wasmTrap(wasm::Trap::BadCast, mir->trapSiteDesc());
   });
   addOutOfLineCode(ool, ins->mir());
-  masm.branchWasmRefIsSubtype(ref, mir->ref()->wasmRefType(), mir->destType(),
-                              ool->entry(), /*onSuccess=*/false, superSTV,
-                              scratch1, scratch2);
+  FaultingCodeOffset fco = masm.branchWasmRefIsSubtype(
+      ref, mir->ref()->wasmRefType(), mir->destType(), ool->entry(),
+      /*onSuccess=*/false, /*signalNullChecks=*/true, superSTV, scratch1,
+      scratch2);
+  if (fco.isValid()) {
+    masm.append(wasm::Trap::BadCast, wasm::TrapMachineInsnForLoadWord(),
+                fco.get(), mir->trapSiteDesc());
+  }
 }
 
 void CodeGenerator::callWasmStructAllocFun(

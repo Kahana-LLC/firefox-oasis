@@ -112,7 +112,6 @@
           "moz-src:///browser/components/newtab/SponsorProtection.sys.mjs",
         TabMetrics:
           "moz-src:///browser/components/tabbrowser/TabMetrics.sys.mjs",
-        TabNotes: "moz-src:///browser/components/tabbrowser/TabNotes.sys.mjs",
         TabStateFlusher:
           "resource:///modules/sessionstore/TabStateFlusher.sys.mjs",
         TaskbarTabsUtils:
@@ -3176,10 +3175,10 @@
       if (elementIndex < 0) {
         return -1;
       }
-      if (elementIndex >= this.tabContainer.ariaFocusableItems.length) {
+      if (elementIndex >= this.tabContainer.dragAndDropElements.length) {
         return this.tabs.length;
       }
-      let element = this.tabContainer.ariaFocusableItems[elementIndex];
+      let element = this.tabContainer.dragAndDropElements[elementIndex];
       if (this.isTabGroupLabel(element)) {
         element = element.group.tabs[0];
       }
@@ -3235,6 +3234,11 @@
         return null;
       }
 
+      this.dispatchEvent(
+        new CustomEvent("SplitViewCreated", {
+          bubbles: true,
+        })
+      );
       return splitview;
     }
 
@@ -4338,6 +4342,11 @@
             previousTab.pinned
           ) {
             elementIndex = Infinity;
+          } else if (previousTab.visible && previousTab.splitview) {
+            elementIndex =
+              this.tabContainer.dragAndDropElements.indexOf(
+                previousTab.splitview
+              ) + 1;
           } else if (previousTab.visible) {
             elementIndex = previousTab.elementIndex + 1;
           } else if (previousTab == FirefoxViewHandler.tab) {
@@ -4359,7 +4368,7 @@
       let allItems;
       let index;
       if (typeof elementIndex == "number") {
-        allItems = this.tabContainer.ariaFocusableItems;
+        allItems = this.tabContainer.dragAndDropElements;
         index = elementIndex;
       } else {
         allItems = this.tabs;
@@ -4378,6 +4387,8 @@
 
       if (pinned && !itemAfter?.pinned) {
         itemAfter = null;
+      } else if (itemAfter?.splitview) {
+        itemAfter = itemAfter.splitview?.nextElementSibling || null;
       }
       // Prevent a flash of unstyled content by setting up the tab content
       // and inherited attributes before appending it (see Bug 1592054):
@@ -4386,7 +4397,10 @@
       this.tabContainer._invalidateCachedTabs();
 
       if (tabGroup) {
-        if (this.isTab(itemAfter) && itemAfter.group == tabGroup) {
+        if (
+          (this.isTab(itemAfter) && itemAfter.group == tabGroup) ||
+          this.isSplitViewWrapper(itemAfter)
+        ) {
           // Place at the front of, or between tabs in, the same tab group
           this.tabContainer.insertBefore(tab, itemAfter);
         } else {
@@ -6432,7 +6446,7 @@
      *   The desired position, expressed as the index within the `tabs` array.
      * @param {number} [options.elementIndex]
      *   The desired position, expressed as the index within the
-     *   `MozTabbrowserTabs::ariaFocusableItems` array.
+     *   `MozTabbrowserTabs::dragAndDropElements` array.
      * @param {boolean} [options.forceUngrouped=false]
      *   Force `element` to move into position as a standalone tab, overriding
      *   any possibility of entering a tab group. For example, setting `true`
@@ -6870,7 +6884,7 @@
       let nextElement;
       if (typeof elementIndex == "number") {
         index = elementIndex;
-        nextElement = this.tabContainer.ariaFocusableItems.at(elementIndex);
+        nextElement = this.tabContainer.dragAndDropElements.at(elementIndex);
       } else {
         index = tabIndex;
         nextElement = this.tabs.at(tabIndex);
@@ -9707,8 +9721,9 @@ var TabContextMenu = {
     let contextAddNote = document.getElementById("context_addNote");
     let contextEditNote = document.getElementById("context_editNote");
     if (gBrowser._tabNotesEnabled) {
-      let noteURL = this.contextTab.linkedBrowser.currentURI.spec;
-      let hasNote = gBrowser.TabNotes.has(noteURL);
+      let noteURL = this.contextTab.canonicalUrl;
+      let hasNote = this.TabNotes.has(noteURL);
+      contextAddNote.disabled = !noteURL;
       contextAddNote.hidden = hasNote;
       contextEditNote.hidden = !hasNote;
     } else {
@@ -10266,4 +10281,5 @@ var TabContextMenu = {
 
 ChromeUtils.defineESModuleGetters(TabContextMenu, {
   GenAI: "resource:///modules/GenAI.sys.mjs",
+  TabNotes: "moz-src:///browser/components/tabnotes/TabNotes.sys.mjs",
 });
