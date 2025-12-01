@@ -630,6 +630,18 @@ Preferences.addSetting({
 Preferences.addSetting({ id: "containersPlaceholder" });
 
 Preferences.addSetting({
+  id: "data-migration",
+  visible: () =>
+    !Services.policies || Services.policies.isAllowed("profileImport"),
+  onUserClick() {
+    const browserWindow = window.browsingContext.topChromeWindow;
+    MigrationUtils.showMigrationWizard(browserWindow, {
+      entrypoint: MigrationUtils.MIGRATION_ENTRYPOINTS.PREFERENCES,
+    });
+  },
+});
+
+Preferences.addSetting({
   id: "connectionSettings",
   onUserClick: () => gMainPane.showConnections(),
 });
@@ -1305,6 +1317,13 @@ Preferences.addSetting(
   class extends Preferences.AsyncSetting {
     static id = "payments-list";
 
+    /** @type {Promise<any[]>} */
+    paymentMethods;
+
+    beforeRefresh() {
+      this.paymentMethods = this.getPaymentMethods();
+    }
+
     async getPaymentMethods() {
       await FormAutofillPreferences.prototype.initializePaymentsStorage();
       return FormAutofillPreferences.prototype.makePaymentsListItems();
@@ -1312,8 +1331,12 @@ Preferences.addSetting(
 
     async getControlConfig() {
       return {
-        items: await this.getPaymentMethods(),
+        items: await this.paymentMethods,
       };
+    }
+
+    async visible() {
+      return Boolean((await this.paymentMethods).length);
     }
 
     setup() {
@@ -1701,9 +1724,7 @@ SettingGroupManager.registerGroups({
           {
             control: "span",
             l10nId: "windows-launch-on-login-disabled",
-            controlAttrs: {
-              slot: "message",
-            },
+            slot: "message",
             options: [
               {
                 control: "a",
@@ -1740,12 +1761,23 @@ SettingGroupManager.registerGroups({
             control: "moz-button",
             l10nId: "set-as-my-default-browser",
             id: "setDefaultButton",
+            slot: "actions",
             controlAttrs: {
-              slot: "actions",
               type: "primary",
             },
           },
         ],
+      },
+    ],
+  },
+  importBrowserData: {
+    l10nId: "preferences-data-migration-group",
+    headingLevel: 2,
+    items: [
+      {
+        id: "data-migration",
+        l10nId: "preferences-data-migration-button",
+        control: "moz-box-button",
       },
     ],
   },
@@ -1774,12 +1806,10 @@ SettingGroupManager.registerGroups({
           {
             id: "lists",
             l10nId: "home-prefs-lists-header",
-            control: "moz-checkbox",
           },
           {
             id: "timer",
             l10nId: "home-prefs-timer-header",
-            control: "moz-checkbox",
           },
         ],
       },
@@ -1842,9 +1872,9 @@ SettingGroupManager.registerGroups({
               {
                 control: "a",
                 l10nId: "home-prefs-mission-message-learn-more-link",
+                slot: "support-link",
                 controlAttrs: {
                   is: "moz-support-link",
-                  slot: "support-link",
                   "support-page": "sponsor-privacy",
                   "utm-content": "inproduct",
                 },
@@ -1890,17 +1920,14 @@ SettingGroupManager.registerGroups({
           {
             id: "recentActivityVisited",
             l10nId: "home-prefs-highlights-option-visited-pages",
-            control: "moz-checkbox",
           },
           {
             id: "recentActivityBookmarks",
             l10nId: "home-prefs-highlights-options-bookmarks",
-            control: "moz-checkbox",
           },
           {
             id: "recentActivityDownloads",
             l10nId: "home-prefs-highlights-option-most-recent-download",
-            control: "moz-checkbox",
           },
         ],
       },
@@ -2479,9 +2506,7 @@ SettingGroupManager.registerGroups({
                     id: "turnOffPrimaryPassword",
                     l10nId: "forms-primary-pw-turn-off",
                     control: "moz-button",
-                    controlAttrs: {
-                      slot: "actions",
-                    },
+                    slot: "actions",
                   },
                 ],
               },
@@ -2516,8 +2541,8 @@ SettingGroupManager.registerGroups({
         ],
         controlAttrs: {
           "search-l10n-ids": `
-            history-remember-description2,
-            history-dontremember-description2,
+            history-remember-description3,
+            history-dontremember-description3,
             history-private-browsing-permanent.label,
             history-remember-browser-option.label,
             history-remember-search-option.label,
@@ -3024,6 +3049,7 @@ var gMainPane = {
     initSettingGroup("zoom");
     initSettingGroup("performance");
     initSettingGroup("startup");
+    initSettingGroup("importBrowserData");
     initSettingGroup("networkProxy");
     initSettingGroup("tabs");
     initSettingGroup("profiles");
@@ -3072,11 +3098,6 @@ var gMainPane = {
       gMainPane.updateColorsButton.bind(gMainPane)
     );
     gMainPane.updateColorsButton();
-    setEventListener(
-      "data-migration",
-      "command",
-      gMainPane.onMigrationButtonCommand
-    );
 
     document
       .getElementById("browserLayoutShowSidebar")
@@ -3091,10 +3112,6 @@ var gMainPane = {
       .addEventListener("MigrationWizard:Close", function (e) {
         e.currentTarget.close();
       });
-
-    if (Services.policies && !Services.policies.isAllowed("profileImport")) {
-      document.getElementById("dataMigrationGroup").remove();
-    }
 
     // Initializes the fonts dropdowns displayed in this pane.
     this._rebuildFonts();
@@ -4421,18 +4438,6 @@ var gMainPane = {
         }
       }
     })().catch(console.error);
-  },
-
-  onMigrationButtonCommand() {
-    // Even though we're going to be showing the migration wizard here in
-    // about:preferences, we'll delegate the call to
-    // `MigrationUtils.showMigrationWizard`, as this will allow us to
-    // properly measure entering the dialog from the PREFERENCES entrypoint.
-    const browserWindow = window.browsingContext.topChromeWindow;
-
-    MigrationUtils.showMigrationWizard(browserWindow, {
-      entrypoint: MigrationUtils.MIGRATION_ENTRYPOINTS.PREFERENCES,
-    });
   },
 
   /**

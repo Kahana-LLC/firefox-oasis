@@ -171,10 +171,11 @@ windows-launch-on-login-disabled = This preference has been disabled in Windows.
 disable-extension =
     .label = Disable Extension
 
-preferences-data-migration-header = Import Browser Data
-preferences-data-migration-description = Import bookmarks, passwords, history, and autofill data into { -brand-short-name }.
+preferences-data-migration-group =
+    .label = Import browser data
+    .description = Bring your bookmarks, passwords, history, extensions, and autofill data from another browser.
 preferences-data-migration-button =
-    .label = Import Data
+    .label = Import data
     .accesskey = m
 
 preferences-profiles-group-header =
@@ -1301,8 +1302,7 @@ history-header = History
 #   - Simply as "Firefox", moving the verb into each option.
 #     This will result in "Firefox" + "Will remember history", etc.
 #   - As a stand-alone message, for example "Firefox history settings:".
-history-remember-label = { -brand-short-name } will
-    .accesskey = w
+history-remember-label2 = { -brand-short-name } will
 
 history-remember-option-all =
     .label = Remember history
@@ -1311,13 +1311,16 @@ history-remember-option-never =
 history-remember-option-custom =
     .label = Use custom settings for history
 
-history-remember-description2 =
-    .description ={ -brand-short-name } will remember your browsing, download, form, and search history.
+history-remember-description3 =
+    .aria-label = { history-remember-label2 }
+    .description = { -brand-short-name } will remember your browsing, download, form, and search history.
 
-history-dontremember-description2 =
+history-dontremember-description3 =
+    .aria-label = { history-remember-label2 }
     .description = { -brand-short-name } will use the same settings as private browsing, and will not remember any history as you browse the Web.
 
-history-custom-description =
+history-custom-description3 =
+    .aria-label = { history-remember-label2 }
     .description = { -brand-short-name } will use custom settings for your browsing, download, form and search history.
 
 history-private-browsing-permanent =

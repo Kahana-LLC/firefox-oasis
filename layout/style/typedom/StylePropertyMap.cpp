@@ -35,6 +35,8 @@ JSObject* StylePropertyMap::WrapObject(JSContext* aCx,
 
 // start of StylePropertyMap Web IDL implementation
 
+// https://drafts.css-houdini.org/css-typed-om/#dom-stylepropertymap-set
+//
 // XXX This is not yet fully implemented and optimized!
 void StylePropertyMap::Set(
     const nsACString& aProperty,
@@ -73,18 +75,32 @@ void StylePropertyMap::Set(
     return;
   }
 
-  nsAutoCString value;
+  nsAutoCString cssText;
 
-  if (styleValue.IsCSSUnsupportedValue()) {
-    CSSUnsupportedValue& unsupportedValue =
-        styleValue.GetAsCSSUnsupportedValue();
+  switch (styleValue.GetValueType()) {
+    case CSSStyleValue::ValueType::UnitValue:
+      break;
 
-    unsupportedValue.GetValue(value);
-  } else if (styleValue.IsCSSKeywordValue()) {
-    CSSKeywordValue& keywordValue = styleValue.GetAsCSSKeywordValue();
+    case CSSStyleValue::ValueType::KeywordValue: {
+      CSSKeywordValue& keywordValue = styleValue.GetAsCSSKeywordValue();
 
-    keywordValue.GetValue(value);
-  } else {
+      keywordValue.ToCssTextWithProperty(propertyId, cssText);
+      break;
+    }
+
+    case CSSStyleValue::ValueType::UnsupportedValue: {
+      CSSUnsupportedValue& unsupportedValue =
+          styleValue.GetAsCSSUnsupportedValue();
+
+      unsupportedValue.ToCssTextWithProperty(propertyId, cssText);
+      break;
+    }
+
+    case CSSStyleValue::ValueType::Uninitialized:
+      break;
+  }
+
+  if (cssText.IsEmpty()) {
     aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
     return;
   }
@@ -99,7 +115,7 @@ void StylePropertyMap::Set(
 
   nsCOMPtr<nsDOMCSSDeclaration> declaration = styledElement->Style();
 
-  declaration->SetProperty(aProperty, value, ""_ns, aRv);
+  declaration->SetProperty(aProperty, cssText, ""_ns, aRv);
 }
 
 void StylePropertyMap::Append(

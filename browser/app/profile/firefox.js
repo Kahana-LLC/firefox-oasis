@@ -2207,6 +2207,7 @@ pref("browser.ml.chat.provider", "");
 pref("browser.ml.chat.shortcuts", true);
 pref("browser.ml.chat.shortcuts.custom", true);
 pref("browser.ml.chat.shortcuts.longPress", 60000);
+pref("browser.ml.chat.shortcut.onboardingMouseoverCount", 0);
 pref("browser.ml.chat.sidebar", true);
 
 pref("browser.ml.linkPreview.allowedLanguages", "en");
@@ -3442,8 +3443,8 @@ pref("browser.backup.scheduled.enabled", false);
 
 // Prefs to control visibility and usability of the create backup and restore from backup features.
 #ifdef XP_WIN
-  pref("browser.backup.archive.enabled", false);
-  pref("browser.backup.restore.enabled", false);
+  pref("browser.backup.archive.enabled", true);
+  pref("browser.backup.restore.enabled", true);
 #else
   pref("browser.backup.archive.enabled", false);
   pref("browser.backup.restore.enabled", false);

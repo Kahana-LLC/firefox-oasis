@@ -94,7 +94,6 @@
 #include "nsPresContext.h"
 #include "nsTextFrame.h"
 #include "nsTransitionManager.h"
-#include "nsViewManager.h"
 
 #if defined(MOZ_WIDGET_ANDROID)
 #  include "VRManagerChild.h"
@@ -2628,10 +2627,11 @@ bool nsRefreshDriver::PaintIfNeeded() {
     }
     mCompositionPayloads.Clear();
   }
-  RefPtr<nsViewManager> vm = mPresContext->PresShell()->GetViewManager();
+  RefPtr<PresShell> ps = mPresContext->PresShell();
   {
     PaintTelemetry::AutoRecordPaint record;
-    vm->ProcessPendingUpdates();
+    ps->SyncWindowPropertiesIfNeeded();
+    ps->PaintSynchronously();
     // Paint our popups.
     if (nsXULPopupManager* pm = nsXULPopupManager::GetInstance()) {
       pm->PaintPopups(this);

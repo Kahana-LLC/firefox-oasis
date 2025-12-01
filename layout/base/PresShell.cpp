@@ -17,6 +17,7 @@
 #include "OverflowChangedTracker.h"
 #include "PLDHashTable.h"
 #include "PositionedEventTargeting.h"
+#include "PresShellWidgetListener.h"
 #include "ScrollSnap.h"
 #include "StickyScrollContainer.h"
 #include "Units.h"
@@ -69,6 +70,7 @@
 #include "mozilla/ServoBindings.h"
 #include "mozilla/ServoStyleSet.h"
 #include "mozilla/Sprintf.h"
+#include "mozilla/StartupTimeline.h"
 #include "mozilla/StaticAnalysisFunctions.h"
 #include "mozilla/StaticPrefs_apz.h"
 #include "mozilla/StaticPrefs_dom.h"
@@ -196,8 +198,6 @@
 #include "nsTransitionManager.h"
 #include "nsTreeBodyFrame.h"
 #include "nsTreeColumns.h"
-#include "nsView.h"
-#include "nsViewManager.h"
 #include "nsViewportInfo.h"
 #include "nsWindowSizes.h"
 #include "nsXPCOM.h"
@@ -669,7 +669,6 @@ bool PresShell::AccessibleCaretEnabled(nsIDocShell* aDocShell) {
 
 PresShell::PresShell(Document* aDocument)
     : mDocument(aDocument),
-      mViewManager(nullptr),
       mLastSelectionForToString(nullptr),
 #ifdef ACCESSIBILITY
       mDocAccessible(nullptr),
@@ -785,18 +784,16 @@ PresShell::~PresShell() {
 }
 
 /**
- * Initialize the presentation shell. Create view manager and style
- * manager.
+ * Initialize the presentation shell.
  * Note this can't be merged into our constructor because caret initialization
  * calls AddRef() on us.
  */
-void PresShell::Init(nsPresContext* aPresContext, nsViewManager* aViewManager) {
+void PresShell::Init(nsPresContext* aPresContext) {
   MOZ_ASSERT(mDocument);
   MOZ_ASSERT(aPresContext);
-  MOZ_ASSERT(aViewManager);
-  MOZ_ASSERT(!mViewManager, "already initialized");
+  MOZ_ASSERT(!mWidgetListener, "Already initialized");
 
-  mViewManager = aViewManager;
+  mWidgetListener = MakeUnique<PresShellWidgetListener>(this);
 
   // mDocument is now set.  It might have a display document whose "need layout/
   // style" flush flags are not set, but ours will be set.  To keep these
@@ -807,9 +804,6 @@ void PresShell::Init(nsPresContext* aPresContext, nsViewManager* aViewManager) {
 
   // Create our frame constructor.
   mFrameConstructor = MakeUnique<nsCSSFrameConstructor>(mDocument, this);
-
-  // The document viewer owns both view manager and pres shell.
-  mViewManager->SetPresShell(this);
 
   // Bind the context to the presentation shell.
   // FYI: We cannot initialize mPresContext in the constructor because we
@@ -1259,12 +1253,7 @@ void PresShell::Destroy() {
     mAccessibleCaretEventHub = nullptr;
   }
 
-  if (mViewManager) {
-    // Clear the view manager's weak pointer back to |this| in case it
-    // was leaked.
-    mViewManager->SetPresShell(nullptr);
-    mViewManager = nullptr;
-  }
+  mWidgetListener = nullptr;
 
   if (mPresContext) {
     // We hold a reference to the pres context, and it holds a weak link back
@@ -1798,8 +1787,44 @@ void PresShell::RefreshZoomConstraintsForScreenSizeChange() {
   }
 }
 
+nsSize PresShell::MaybePendingLayoutViewportSize() const {
+  if (mPendingLayoutViewportSize) {
+    return *mPendingLayoutViewportSize;
+  }
+  return mPresContext ? mPresContext->GetVisibleArea().Size() : nsSize();
+}
+
+bool PresShell::ShouldDelayResize() const {
+  if (!IsVisible()) {
+    return true;
+  }
+  nsRefreshDriver* rd = GetRefreshDriver();
+  return rd && rd->IsResizeSuppressed();
+}
+
+void PresShell::FlushDelayedResize() {
+  if (!mPendingLayoutViewportSize) {
+    return;
+  }
+  auto size = mPendingLayoutViewportSize.extract();
+  if (!mPresContext || size == mPresContext->GetVisibleArea().Size()) {
+    return;
+  }
+  ResizeReflow(size);
+}
+
+void PresShell::SetLayoutViewportSize(const nsSize& aSize, bool aDelay) {
+  mPendingLayoutViewportSize = Some(aSize);
+  if (aDelay || ShouldDelayResize()) {
+    SetNeedStyleFlush();
+    SetNeedLayoutFlush();
+    return;
+  }
+  FlushDelayedResize();
+}
+
 void PresShell::ForceResizeReflowWithCurrentDimensions() {
-  ResizeReflow(mViewManager->GetWindowDimensions());
+  ResizeReflow(MaybePendingLayoutViewportSize());
 }
 
 void PresShell::ResizeReflow(const nsSize& aSize,
@@ -3776,7 +3801,7 @@ void PresShell::ScrollFrameIntoVisualViewport(Maybe<nsPoint>& aDestination,
     // Offset the position:fixed element position by the layout scroll
     // position because the position:fixed origin (0, 0) is the layout scroll
     // position. Otherwise if we've already scrolled, this scrollIntoView
-    // operaiton will jump back to near (0, 0) position.
+    // operation will jump back to near (0, 0) position.
     // Bug 1947470: We need to calculate the destination with `WhereToScroll`
     // options.
     const nsPoint layoutOffset = rootScrollContainer->GetScrollPosition();
@@ -4255,17 +4280,9 @@ bool PresShell::IsSafeToFlush() const {
   if (mIsReflowing || mChangeNestCount || mIsDestroying) {
     return false;
   }
-
-  // Not safe if we are painting
-  if (nsViewManager* viewManager = GetViewManager()) {
-    bool isPainting = false;
-    viewManager->IsPainting(isPainting);
-    if (isPainting) {
-      return false;
-    }
-  }
-
-  return true;
+  // Not safe either if we're painting.
+  // TODO(emilio): What could call us while painting now?
+  return !mIsPainting;
 }
 
 void PresShell::NotifyFontFaceSetOnRefresh() {
@@ -4374,15 +4391,13 @@ void PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush) {
   }
 
   MOZ_DIAGNOSTIC_ASSERT(!mIsDestroying || !isSafeToFlush);
-  MOZ_DIAGNOSTIC_ASSERT(mIsDestroying || mViewManager);
+  MOZ_DIAGNOSTIC_ASSERT(mIsDestroying || mWidgetListener);
   MOZ_DIAGNOSTIC_ASSERT(mIsDestroying || mDocument->HasShellOrBFCacheEntry());
 
   if (!isSafeToFlush) {
     return;
   }
 
-  // Make sure the view manager stays alive.
-  RefPtr<nsViewManager> viewManager = mViewManager;
   // We need to make sure external resource documents are flushed too (for
   // example, svg filters that reference a filter in an external document
   // need the frames in the external document to be constructed for the
@@ -4402,7 +4417,7 @@ void PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush) {
   // Process pending restyles, since any flush of the presshell wants
   // up-to-date style data.
   if (MOZ_LIKELY(!mIsDestroying)) {
-    viewManager->FlushDelayedResize();
+    FlushDelayedResize();
     mPresContext->FlushPendingMediaFeatureValuesChanged();
   }
 
@@ -4481,12 +4496,6 @@ void PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush) {
     // scroll-timeline is active), and this depends on the readiness of the
     // scrollable frame and the primary frame of the scroll container.
     TriggerPendingScrollTimelineAnimations(mDocument);
-  }
-
-  if (flushType >= FlushType::Layout) {
-    if (!mIsDestroying) {
-      viewManager->UpdateWidgetGeometry();
-    }
   }
 }
 
@@ -5608,7 +5617,6 @@ struct PaintParams {
 };
 
 WindowRenderer* PresShell::GetWindowRenderer() {
-  NS_ASSERTION(mViewManager, "Should have view manager");
   if (nsIWidget* widget = GetOwnWidget()) {
     return widget->GetWindowRenderer();
   }
@@ -5626,13 +5634,7 @@ nsIWidget* PresShell::GetNearestWidget() const {
 }
 
 nsIWidget* PresShell::GetOwnWidget() const {
-  if (!mViewManager) {
-    return nullptr;
-  }
-  if (auto* root = mViewManager->GetRootView()) {
-    return root->GetWidget();
-  }
-  return nullptr;
+  return mWidgetListener ? mWidgetListener->GetWidget() : nullptr;
 }
 
 bool PresShell::AsyncPanZoomEnabled() {
@@ -8619,7 +8621,7 @@ nsIFrame* PresShell::EventHandler::ComputeRootFrameToHandleEventWithPopup(
   nsPresContext* rootPresContext = framePresContext->GetRootPresContext();
   NS_ASSERTION(rootPresContext == GetPresContext()->GetRootPresContext(),
                "How did we end up outside the connected "
-               "prescontext/viewmanager hierarchy?");
+               "prescontext hierarchy?");
   nsIFrame* popupFrame = nsLayoutUtils::GetPopupFrameForEventCoordinates(
       rootPresContext, aGUIEvent);
   if (!popupFrame) {
@@ -10109,8 +10111,8 @@ void PresShell::WillPaint() {
   // check mIsActive before making any of the more expensive calls such
   // as GetRootPresContext, for the case of a browser with a large
   // number of tabs.
-  // Don't bother doing anything if some viewmanager in our tree is painting
-  // while we still have painting suppressed or we are not active.
+  // Don't bother doing anything if we still have painting suppressed or we are
+  // not active.
   if (!mIsActive || mPaintingSuppressed || !IsVisible()) {
     return;
   }
@@ -10150,23 +10152,16 @@ void PresShell::WillPaint() {
 }
 
 void PresShell::DidPaintWindow() {
-  nsRootPresContext* rootPresContext = mPresContext->GetRootPresContext();
-  if (rootPresContext != mPresContext) {
-    // This could be a popup's presshell. No point in notifying XPConnect
-    // about compositing of popups.
+  if (mHasReceivedPaintMessage) {
     return;
   }
-
-  if (!mHasReceivedPaintMessage) {
-    mHasReceivedPaintMessage = true;
-
-    nsCOMPtr<nsIObserverService> obsvc = services::GetObserverService();
-    if (obsvc && mDocument) {
-      nsPIDOMWindowOuter* window = mDocument->GetWindow();
-      if (window && nsGlobalWindowOuter::Cast(window)->IsChromeWindow()) {
-        obsvc->NotifyObservers(window, "widget-first-paint", nullptr);
-      }
-    }
+  mHasReceivedPaintMessage = true;
+  nsPIDOMWindowOuter* win = mDocument->GetWindow();
+  if (!win || !nsGlobalWindowOuter::Cast(win)->IsChromeWindow()) {
+    return;
+  }
+  if (nsCOMPtr<nsIObserverService> obsvc = services::GetObserverService()) {
+    obsvc->NotifyObservers(win, "widget-first-paint", nullptr);
   }
 }
 
@@ -11621,15 +11616,30 @@ static nsTArray<AffectedAnchorGroup> FindAnchorsAffectedByScroll(
 static Maybe<const AffectedAnchor&> FindScrollCompensatedAnchor(
     const PresShell* aPresShell,
     const nsTArray<AffectedAnchorGroup>& aAffectedAnchors,
-    const nsIFrame* aPositioned, const AnchorPosReferenceData& aReferenceData) {
+    const nsIFrame* aPositioned, const AnchorPosReferenceData& aReferenceData,
+    const nsIFrame** aResolvedDefaultAnchor) {
   MOZ_ASSERT(aPositioned->IsAbsolutelyPositioned(),
              "Anchor positioned frame is not absolutely positioned?");
+  if (aResolvedDefaultAnchor) {
+    *aResolvedDefaultAnchor = nullptr;
+  }
+
   if (aReferenceData.IsEmpty()) {
     return Nothing{};
   }
 
-  if (!aReferenceData.mDefaultAnchorName) {
+  const auto* defaultAnchorName = aReferenceData.mDefaultAnchorName.get();
+  if (!defaultAnchorName) {
     return Nothing{};
+  }
+
+  const auto* defaultAnchor =
+      aPresShell->GetAnchorPosAnchor(defaultAnchorName, aPositioned);
+  if (!defaultAnchor) {
+    return Nothing{};
+  }
+  if (aResolvedDefaultAnchor) {
+    *aResolvedDefaultAnchor = defaultAnchor;
   }
 
   const auto compensatingForScroll = aReferenceData.CompensatingForScrollAxes();
@@ -11644,24 +11654,11 @@ static Maybe<const AffectedAnchor&> FindScrollCompensatedAnchor(
   };
 
   // Find the relevant default anchor.
-  const auto* defaultAnchorName =
-      AnchorPositioningUtils::GetUsedAnchorName(aPositioned, nullptr);
-  nsIFrame const* defaultAnchor = nullptr;
   for (const auto& group : aAffectedAnchors) {
-    if (defaultAnchorName &&
-        !group.mAnchorName->Equals(defaultAnchorName->GetUTF16String(),
-                                   defaultAnchorName->GetLength())) {
+    if (group.mAnchorName != defaultAnchorName) {
       // Default anchor has a name, and it's different from this affected
       // anchor group.
       continue;
-    }
-    if (!defaultAnchor) {
-      defaultAnchor =
-          aPresShell->GetAnchorPosAnchor(defaultAnchorName, aPositioned);
-      if (!defaultAnchor) {
-        // Default anchor not valid for this positioned frame.
-        return Nothing{};
-      }
     }
     const auto& anchors = group.mFrames;
     // Find the affected anchor that not only matches in name, but in actual
@@ -11695,6 +11692,41 @@ static bool CheckOverflow(nsIFrame* aPositioned,
   return hasFallbacks && overflows;
 }
 
+// HACK(dshin, Bug 1999954): This is a workaround. While we try to lay out
+// against the scroll-ignored position of an anchor, sticky and chain anchor
+// positioned frames actually end up containing scroll offset in their position.
+// Additionally, scroll offset collection does not do any special handling for
+// such frames (Which is impossible unless we can cleanly separate the
+// scroll-ignored position).
+// For now, we detect such frames and just trigger a reflow.
+// Bug 2002789 tracks the proper fix.
+static bool AnchorIsStickyOrChainedToScrollCompensatedAnchor(
+    const nsIFrame* aAnchor) {
+  if (!aAnchor) {
+    return false;
+  }
+
+  if (aAnchor->IsStickyPositioned()) {
+    return true;
+  }
+
+  if (aAnchor->StylePosition()->mPositionAnchor.IsNone()) {
+    // Not anchored, or anchored but not scroll compensated.
+    return false;
+  }
+
+  const auto* referenceData =
+      aAnchor->GetProperty(nsIFrame::AnchorPosReferences());
+  if (!referenceData) {
+    return false;
+  }
+
+  // Theoretically, we should look at the entire anchor chain to see if this
+  // anchor will be affected by scroll compensation. However, that does not seem
+  // worth it - A long anchor chain seems like an edge case anyway.
+  return !referenceData->CompensatingForScrollAxes().isEmpty();
+}
+
 // https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
 void PresShell::UpdateAnchorPosForScroll(
     const ScrollContainerFrame* aScrollContainer) {
@@ -11721,8 +11753,9 @@ void PresShell::UpdateAnchorPosForScroll(
     if (!referenceData) {
       continue;
     }
+    const nsIFrame* defaultAnchor = nullptr;
     const auto scrollDependency = FindScrollCompensatedAnchor(
-        this, affectedAnchors, positioned, *referenceData);
+        this, affectedAnchors, positioned, *referenceData, &defaultAnchor);
     const bool offsetChanged = [&]() {
       if (!scrollDependency) {
         return false;
@@ -11738,13 +11771,30 @@ void PresShell::UpdateAnchorPosForScroll(
       // block's.
       positioned->UpdateOverflow();
       positioned->GetParent()->UpdateOverflow();
+      // APZ-handled scrolling may skip scheduling of paint for the relevant
+      // scroll container - We need to ensure that we schedule a paint for this
+      // positioned frame. Could theoretically do this when deciding to skip
+      // painting in `ScrollContainerFrame::ScrollToImpl`, that'd be conditional
+      // on finding a dependent anchor anyway, we should be as specific as
+      // possible as to what gets scheduled to paint.
+      positioned->SchedulePaint();
       referenceData->mDefaultScrollShift = offset;
       return true;
     }();
     const bool cbScrolls =
         positioned->GetParent() == aScrollContainer->GetScrolledFrame();
-    if (offsetChanged || cbScrolls) {
-      if (CheckOverflow(positioned, *referenceData)) {
+    // HACK(dshin): Check if this positioned frame is anchoring to a sticky or
+    // another anchor positioned frame, even if we may not be scroll
+    // compensating against it. Such frames, even when in the same scroll
+    // container, as the positioned element, don't (always) scroll with the
+    // scroll container. Also see comment for
+    // `AnchorIsStickyOrChainedToScrollCompensatedAnchor`.
+    const bool anchorIsStickyOrScrollCompensatedAnchor =
+        defaultAnchor &&
+        AnchorIsStickyOrChainedToScrollCompensatedAnchor(defaultAnchor);
+    if (offsetChanged || cbScrolls || anchorIsStickyOrScrollCompensatedAnchor) {
+      if (CheckOverflow(positioned, *referenceData) ||
+          anchorIsStickyOrScrollCompensatedAnchor) {
 #ifdef ACCESSIBILITY
         if (nsAccessibilityService* accService = GetAccService()) {
           accService->NotifyAnchorPositionedScrollUpdate(this, positioned);
@@ -11985,7 +12035,7 @@ void PresShell::MaybeRecreateMobileViewportManager(bool aAfterInitialization) {
     if (mMobileViewportManager) {
       mMobileViewportManager->SetInitialViewport();
     } else {
-      // Force a reflow to our correct view manager size.
+      // Force a reflow to our correct layout viewport size.
       ForceResizeReflowWithCurrentDimensions();
     }
     // After we clear out the MVM and the MVMContext, also reset the
@@ -12197,10 +12247,13 @@ void PresShell::ResetVisualViewportSize() {
 }
 
 void PresShell::SetNeedsWindowPropertiesSync() {
-  mNeedsWindowPropertiesSync = true;
-  if (mViewManager) {
-    mViewManager->PostPendingUpdate();
+  if (XRE_IsContentProcess() || !IsRoot()) {
+    // Window properties are only relevant to top level widgets in the parent
+    // process
+    return;
   }
+  mNeedsWindowPropertiesSync = true;
+  SchedulePaint();
 }
 
 bool PresShell::SetVisualViewportOffset(const nsPoint& aScrollOffset,
@@ -12478,8 +12531,42 @@ PresShell::WindowSizeConstraints PresShell::GetWindowSizeConstraints() {
   return {minSize, maxSize};
 }
 
-void PresShell::SyncWindowProperties() {
-  if (!mNeedsWindowPropertiesSync || XRE_IsContentProcess()) {
+void PresShell::PaintSynchronously() {
+  MOZ_ASSERT(!mIsPainting, "re-entrant paint?");
+  if (IsNeverPainting() || IsPaintingSuppressed() || !IsVisible() ||
+      MOZ_UNLIKELY(NS_WARN_IF(mIsPainting))) {
+    return;
+  }
+  RefPtr widget = GetOwnWidget();
+  if (NS_WARN_IF(!widget)) {
+    // We were asked to paint a non-root pres shell, or an already-detached
+    // shell.
+    return;
+  }
+  MOZ_ASSERT(widget->IsTopLevelWidget());
+  if (!widget->NeedsPaint()) {
+    return;
+  }
+
+  // FIXME: This might not be needed now except for widget paints
+  // (WillPaintWindow) and maybe FlushWillPaintObservers.
+  WillPaint();
+
+  if (MOZ_UNLIKELY(mIsDestroying)) {
+    return;
+  }
+
+  FlushDelayedResize();
+
+  mIsPainting = true;
+  auto cleanUpPaintingBit = MakeScopeExit([&] { mIsPainting = false; });
+  nsAutoScriptBlocker blocker;
+  RefPtr<WindowRenderer> renderer = widget->GetWindowRenderer();
+  PaintAndRequestComposite(GetRootFrame(), renderer, PaintFlags::None);
+}
+
+void PresShell::SyncWindowPropertiesIfNeeded() {
+  if (!mNeedsWindowPropertiesSync) {
     return;
   }
 

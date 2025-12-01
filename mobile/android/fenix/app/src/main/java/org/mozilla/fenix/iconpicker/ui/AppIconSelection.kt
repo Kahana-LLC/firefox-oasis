@@ -86,21 +86,31 @@ private val GroupSpacerHeight = 8.dp
  * A composable that displays a list of app icon options.
  *
  * @param store A store for managing the app icon selection screen state.
+ * @param shortcutRemovalWarning Whether the user should be shown a warning that their Home screen
+ * shortcuts will be removed when changing the app icon.
  */
 @Composable
 fun AppIconSelection(
     store: AppIconStore,
+    shortcutRemovalWarning: () -> Boolean,
 ) {
     val state by store.observeAsState(store.state) { it }
     val selectedIcon = state.userSelectedAppIcon ?: state.currentAppIcon
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val snackbarState = state.snackbarState
     val errorSnackbarMessage = stringResource(R.string.shortcuts_update_error)
-    LaunchedEffect(state.snackbarState) {
-        when (state.snackbarState) {
+    LaunchedEffect(snackbarState) {
+        when (snackbarState) {
             AppIconSnackbarState.None -> return@LaunchedEffect
-            AppIconSnackbarState.ApplyingNewIconError -> scope.launch {
+            is AppIconSnackbarState.ApplyingNewIconError -> scope.launch {
+                store.dispatch(
+                    SystemAction.SnackbarShown(
+                        oldIcon = snackbarState.oldIcon,
+                        newIcon = snackbarState.newIcon,
+                    ),
+                )
                 snackbarHostState.displaySnackbar(
                     message = errorSnackbarMessage,
                     onDismissPerformed = {
@@ -133,6 +143,7 @@ fun AppIconSelection(
 
     when (val warning = state.warningDialogState) {
         is AppIconWarningDialog.Presenting -> RestartWarningDialog(
+            shortcutRemovalWarning = shortcutRemovalWarning,
             onConfirmClicked = {
                 store.dispatch(
                     UserAction.Confirmed(
@@ -315,6 +326,7 @@ fun AppIcon(
 
 @Composable
 private fun RestartWarningDialog(
+    shortcutRemovalWarning: () -> Boolean,
     onConfirmClicked: () -> Unit,
     onDismissClicked: () -> Unit,
     onDismissed: () -> Unit,
@@ -329,7 +341,11 @@ private fun RestartWarningDialog(
         text = {
             Text(
                 text = stringResource(
-                    id = R.string.restart_warning_dialog_body_2,
+                    id = if (shortcutRemovalWarning()) {
+                        R.string.restart_and_shortcuts_removal_warning_dialog_body
+                    } else {
+                        R.string.restart_warning_dialog_body_2
+                    },
                     stringResource(R.string.app_name),
                 ),
                 style = FirefoxTheme.typography.body2,
@@ -366,6 +382,7 @@ private fun AppIconSelectionPreview() {
                     ).groupedAppIcons,
                 ),
             ),
+            shortcutRemovalWarning = { false },
         )
     }
 }
@@ -407,6 +424,7 @@ private fun AppIconOptionWithSubtitlePrivatePreview() {
 private fun RestartWarningDialogPreview() {
     FirefoxTheme {
         RestartWarningDialog(
+            shortcutRemovalWarning = { false },
             onConfirmClicked = {},
             onDismissClicked = {},
             onDismissed = {},
@@ -419,6 +437,33 @@ private fun RestartWarningDialogPreview() {
 private fun RestartWarningDialogPrivatePreview() {
     FirefoxTheme(theme = Theme.Private) {
         RestartWarningDialog(
+            shortcutRemovalWarning = { false },
+            onConfirmClicked = {},
+            onDismissClicked = {},
+            onDismissed = {},
+        )
+    }
+}
+
+@FlexibleWindowLightDarkPreview
+@Composable
+private fun ShortcutRemovalWarningDialogPreview() {
+    FirefoxTheme {
+        RestartWarningDialog(
+            shortcutRemovalWarning = { true },
+            onConfirmClicked = {},
+            onDismissClicked = {},
+            onDismissed = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ShortcutRemovalWarningDialogPrivatePreview() {
+    FirefoxTheme(theme = Theme.Private) {
+        RestartWarningDialog(
+            shortcutRemovalWarning = { true },
             onConfirmClicked = {},
             onDismissClicked = {},
             onDismissed = {},

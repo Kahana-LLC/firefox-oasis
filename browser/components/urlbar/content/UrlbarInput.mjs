@@ -420,13 +420,16 @@ export class UrlbarInput extends HTMLElement {
       // On startup, this will be called again by browser-init.js
       // once gBrowser has been initialized.
       this.addGBrowserListeners();
+    }
 
-      // If gBrowser or the search service is not initialized yet,
-      // the placeholder and icon will be updated in delayedStartupInit.
-      if (Services.search.isInitialized) {
-        this.searchModeSwitcher.updateSearchIcon();
-        this._updatePlaceholderFromDefaultEngine();
-      }
+    // If the search service is not initialized yet, the placeholder
+    // and icon will be updated in delayedStartupInit.
+    if (
+      Cu.isESModuleLoaded("resource://gre/modules/SearchService.sys.mjs") &&
+      Services.search.isInitialized
+    ) {
+      this.searchModeSwitcher.updateSearchIcon();
+      this._updatePlaceholderFromDefaultEngine();
     }
 
     // Expanding requires a parent toolbar, and us not being read-only.
@@ -2498,6 +2501,10 @@ export class UrlbarInput extends HTMLElement {
   }
 
   get searchMode() {
+    if (!this.window.gBrowser) {
+      // This only happens before DOMContentLoaded.
+      return null;
+    }
     return this.getSearchMode(this.window.gBrowser.selectedBrowser);
   }
 
@@ -4566,7 +4573,7 @@ export class UrlbarInput extends HTMLElement {
    * Determines if we should select all the text in the Urlbar based on the
    *  Urlbar state, and whether the selection is empty.
    */
-  _maybeSelectAll() {
+  #maybeSelectAll() {
     if (
       !this._preventClickSelectsAll &&
       this.#compositionState != lazy.UrlbarUtils.COMPOSITION.COMPOSING &&
@@ -4671,7 +4678,7 @@ export class UrlbarInput extends HTMLElement {
     switch (event.target) {
       case this.inputField:
       case this._inputContainer:
-        this._maybeSelectAll();
+        this.#maybeSelectAll();
         this.#maybeUntrimUrl();
         break;
 
@@ -4708,7 +4715,7 @@ export class UrlbarInput extends HTMLElement {
       return;
     }
 
-    this._maybeSelectAll();
+    this.#maybeSelectAll();
   }
 
   _on_focus(event) {
@@ -4757,7 +4764,7 @@ export class UrlbarInput extends HTMLElement {
       }
 
       if (this.inputField.hasAttribute("refocused-by-panel")) {
-        this._maybeSelectAll();
+        this.#maybeSelectAll();
       }
     }
 

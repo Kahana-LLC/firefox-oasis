@@ -368,9 +368,21 @@ export class UrlbarProviderQuickSuggest extends UrlbarProvider {
     result.payload.isSponsored = feature
       ? feature.isSuggestionSponsored(suggestion)
       : !!suggestion.is_sponsored;
-    if (suggestion.source == "rust") {
-      // `suggestionObject` is passed back into the Rust component on dismissal.
-      result.payload.suggestionObject = suggestion;
+
+    switch (suggestion.source) {
+      case "merino":
+        // Set `dismissalKey` unless the feature already did it.
+        if (
+          suggestion.dismissal_key &&
+          !result.payload.hasOwnProperty("dismissalKey")
+        ) {
+          result.payload.dismissalKey = suggestion.dismissal_key;
+        }
+        break;
+      case "rust":
+        // `suggestionObject` is passed back to the Rust component on dismissal.
+        result.payload.suggestionObject = suggestion;
+        break;
     }
 
     // Handle icons here so each feature doesn't have to do it, but use `||=` to
@@ -422,11 +434,9 @@ export class UrlbarProviderQuickSuggest extends UrlbarProvider {
    * Returns a new result for an unmanaged suggestion. An "unmanaged" suggestion
    * is a suggestion without a feature.
    *
-   * Merino is the only backend allowed to serve unmanaged suggestions, for a
-   * couple of reasons: (1) Some suggestion types aren't that complicated and
-   * can be handled in a default manner, for example "top_picks". (2) It allows
-   * us to experiment with new suggestion types without requiring any changes to
-   * Firefox.
+   * Merino is the only backend allowed to serve unmanaged suggestions, and its
+   * "top_picks" provider is the only Merino provider recognized by this method.
+   * For everything else, the method returns null.
    *
    * @param {UrlbarQueryContext} queryContext
    *   The query context.
@@ -434,10 +444,10 @@ export class UrlbarProviderQuickSuggest extends UrlbarProvider {
    *   The suggestion.
    * @returns {UrlbarResult|null}
    *   A new result for the suggestion or null if the suggestion is not from
-   *   Merino.
+   *   the Merino "top_picks" provider.
    */
   #makeUnmanagedResult(queryContext, suggestion) {
-    if (suggestion.source != "merino") {
+    if (suggestion.source != "merino" || suggestion.provider != "top_picks") {
       return null;
     }
 
@@ -445,7 +455,6 @@ export class UrlbarProviderQuickSuggest extends UrlbarProvider {
     let payload = {
       url: suggestion.url,
       originalUrl: suggestion.original_url,
-      dismissalKey: suggestion.dismissal_key,
       isBlockable: true,
       isManageable: true,
     };

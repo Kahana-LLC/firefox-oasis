@@ -14,16 +14,27 @@ namespace mozilla::dom {
 CSSUnsupportedValue::CSSUnsupportedValue(nsCOMPtr<nsISupports> aParent,
                                          const CSSPropertyId& aPropertyId,
                                          RefPtr<DeclarationBlock> aDeclarations)
-    : CSSStyleValue(std::move(aParent), ValueType::Unsupported),
+    : CSSStyleValue(std::move(aParent), ValueType::UnsupportedValue),
       mPropertyId(aPropertyId),
       mDeclarations(std::move(aDeclarations)) {}
 
-void CSSUnsupportedValue::GetValue(nsACString& aRetVal) const {
-  mDeclarations->GetPropertyValueById(mPropertyId, aRetVal);
+void CSSUnsupportedValue::ToCssTextWithProperty(
+    const CSSPropertyId& aPropertyId, nsACString& aDest) const {
+  MOZ_ASSERT(aPropertyId == mPropertyId);
+
+  if (aDest.IsEmpty()) {
+    mDeclarations->GetPropertyValueById(mPropertyId, aDest);
+    return;
+  }
+
+  nsAutoCString value;
+  mDeclarations->GetPropertyValueById(mPropertyId, value);
+
+  aDest.Append(value);
 }
 
 CSSUnsupportedValue& CSSStyleValue::GetAsCSSUnsupportedValue() {
-  MOZ_DIAGNOSTIC_ASSERT(mValueType == ValueType::Unsupported);
+  MOZ_DIAGNOSTIC_ASSERT(mValueType == ValueType::UnsupportedValue);
 
   return *static_cast<CSSUnsupportedValue*>(this);
 }

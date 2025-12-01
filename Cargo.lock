@@ -763,7 +763,6 @@ dependencies = [
  "clubcard-crlite",
  "crossbeam-utils",
  "cstr",
- "firefox-on-glean",
  "log",
  "moz_task",
  "nserror",
@@ -2716,9 +2715,9 @@ dependencies = [
 
 [[package]]
 name = "glean"
-version = "66.1.1"
+version = "66.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bcd0114d7e54775fc6e27f5668ecd4e348cd705cee2fe4853173ea7122d43a2"
+checksum = "16967309c8c9320aa752fbb700db55b543983845ad5309cb981c0df9650a530f"
 dependencies = [
  "crossbeam-channel",
  "glean-core",
@@ -2731,9 +2730,9 @@ dependencies = [
 
 [[package]]
 name = "glean-core"
-version = "66.1.1"
+version = "66.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4be45adb18821dc6f6dfe02c52e9e161e3e4b2e8bcc6e826402b3c984b0e275f"
+checksum = "b8d8cb0e35e0bc8472cf75cd3ca4d448f208003ea49a524deb623bdfd7c6c882"
 dependencies = [
  "android_logger",
  "bincode",
@@ -4765,7 +4764,7 @@ dependencies = [
 [[package]]
 name = "mtu"
 version = "0.2.9"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "bindgen 0.72.0",
  "cfg_aliases",
@@ -4809,13 +4808,14 @@ dependencies = [
 
 [[package]]
 name = "neqo-bin"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
  "futures",
  "hex",
+ "libc",
  "log",
  "neqo-common",
  "neqo-crypto",
@@ -4833,8 +4833,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-common"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "enum-map",
  "env_logger",
@@ -4847,8 +4847,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-crypto"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "bindgen 0.72.0",
  "enum-map",
@@ -4866,8 +4866,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-http3"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "enumset",
  "log",
@@ -4885,8 +4885,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-qpack"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "log",
  "neqo-common",
@@ -4899,8 +4899,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-transport"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "enum-map",
  "enumset",
@@ -4919,8 +4919,8 @@ dependencies = [
 
 [[package]]
 name = "neqo-udp"
-version = "0.19.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.19.0#3dbba8ffc2b3c78713161d1925b2858bd2098548"
+version = "0.20.0"
+source = "git+https://github.com/mozilla/neqo?tag=v0.20.0#126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
 dependencies = [
  "cfg_aliases",
  "libc",

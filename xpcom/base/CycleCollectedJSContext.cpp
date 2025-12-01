@@ -1016,10 +1016,17 @@ static void MOZ_CAN_RUN_SCRIPT RunMicroTask(
   if (!callbackGlobal) {
     return;
   }
-  JS::RootedField<JSObject*, 1> hostDefinedData(
-      roots, aMicroTask.get().MaybeGetHostDefinedDataFromJSMicroTask());
-  JS::RootedField<JSObject*, 2> allocStack(
-      roots, aMicroTask.get().MaybeGetAllocationSiteFromJSMicroTask());
+  JS::RootedField<JSObject*, 1> hostDefinedData(roots);
+  JS::RootedField<JSObject*, 2> allocStack(roots);
+
+  // Don't run if we fail to unwrap the host defined data.
+  if (!aMicroTask.get().MaybeGetHostDefinedDataFromJSMicroTask(
+          &hostDefinedData)) {
+    return;
+  }
+
+  // We do however still need to run if we can't unwrap the stack
+  (void)aMicroTask.get().MaybeGetAllocationSiteFromJSMicroTask(&allocStack);
 
   nsIGlobalObject* incumbentGlobal = nullptr;
 
@@ -1188,7 +1195,7 @@ bool CycleCollectedJSContext::PerformMicroTaskCheckPoint(bool aForce) {
     while (JS::HasAnyMicroTasks(cx)) {
       MOZ_ASSERT(mDebuggerMicroTaskQueue.empty());
       MOZ_ASSERT(mPendingMicroTaskRunnables.empty());
-      job = DequeueNextMicroTask(cx);
+      job.set(DequeueNextMicroTask(cx));
 
       // To avoid us accidentally re-enqueing a SuppressionMicroTaskList in
       // itself, we determine here if the job is actually the suppression task
@@ -1318,11 +1325,11 @@ void CycleCollectedJSContext::PerformDebuggerMicroTaskCheckpoint() {
 
   JSContext* cx = Context();
   if (StaticPrefs::javascript_options_use_js_microtask_queue()) {
+    JS::Rooted<MustConsumeMicroTask> job(cx);
     while (JS::HasDebuggerMicroTasks(cx)) {
       MOZ_ASSERT(mDebuggerMicroTaskQueue.empty());
       MOZ_ASSERT(mPendingMicroTaskRunnables.empty());
 
-      JS::Rooted<MustConsumeMicroTask> job(cx);
       job.set(DequeueNextDebuggerMicroTask(cx));
 
       RunMicroTask(cx, &job);
