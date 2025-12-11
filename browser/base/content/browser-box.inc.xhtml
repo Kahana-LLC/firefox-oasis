@@ -33,4 +33,17 @@
     <stack class="ai-window-browser-stack" flex="1">
     </stack>
   </vbox>
+  <!-- Oasis Assistant overlay container: covers entire browser window when active -->
+  <html:div id="oasis-assistant-overlay" hidden="true">
+    <html:div id="oasis-assistant-shell" style="position:fixed; left:24px; top:96px; width:min(95vw, 900px); height:min(85vh, 680px); z-index:2147483646; pointer-events:auto; box-shadow:0 20px 40px rgba(0,0,0,0.25); border-radius:14px; background:white;">
+      <html:div id="oasis-assistant-chrome-header" style="position:absolute; left:8px; top:8px; height:32px; display:flex; align-items:center; gap:8px; padding:4px 8px; background:#F0F6F1; border:1px solid #E5E7EB; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.20); cursor:grab; z-index:2147483647; pointer-events:auto;">
+        <html:span style="font-weight:600; color:#111827;">Oasis Assistant</html:span>
+        <html:button id="oasis-assistant-expand" style="border:0; background:#F0F6F1; cursor:pointer; pointer-events:auto; z-index:2147483648; border-radius:4px; padding:2px 4px;">⛶</html:button>
+        <html:button id="oasis-assistant-minimize" style="border:0; background:#F0F6F1; cursor:pointer; pointer-events:auto; z-index:2147483648; border-radius:4px; padding:2px 4px;">▁</html:button>
+        <html:button id="oasis-assistant-close" style="border:0; background:#F0F6F1; cursor:pointer; pointer-events:auto; z-index:2147483648; border-radius:4px; padding:2px 4px;">✕</html:button>
+      </html:div>
+      <browser id="oasis-assistant-overlay-browser" autoscroll="false" disablehistory="true" tooltip="aHTMLTooltip" style="width:100%; height:100%; border:none; background:white; position:relative; z-index:1;"/>
+      <html:div id="oasis-assistant-resizer" style="position:absolute; width:18px; height:18px; right:8px; bottom:8px; border-right:2px solid #E5E7EB; border-bottom:2px solid #E5E7EB; background:white; cursor:nwse-resize; z-index:2147483647; pointer-events:auto;"></html:div>
+    </html:div>
+  </html:div>
 </hbox>
