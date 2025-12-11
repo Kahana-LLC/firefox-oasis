@@ -3,6 +3,8 @@
 // - We badge open tabs whose host matches any bookmark in a hub.
 // - Assistant commands call into this manager.
 
+import { localMemory } from "./services/localMemory";
+
 type FxTab = any;
 
 function getChrome() {
@@ -274,11 +276,16 @@ class HubManager {
 
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const folder = children.find((c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
+      // Case-insensitive match for hub folder
+      const folder = children.find((c: any) => 
+        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
+        (c.title || "").toLowerCase() === name.toLowerCase()
+      );
       
       if (!folder) return { ok: false, msg: "Hub not found" };
 
-      await this.addTabToFolder(folder.guid, gBrowser.selectedTab);
+      // Pass the actual folder title (correct case) as the hub name
+      await this.addTabToFolder(folder.guid, gBrowser.selectedTab, folder.title);
       this.updateAllTabMarkers();
       return { ok: true };
     } catch (e) {
@@ -390,7 +397,7 @@ class HubManager {
     } catch {}
   }
 
-  private async addTabToFolder(folderGuid: string, tab: FxTab) {
+  private async addTabToFolder(folderGuid: string, tab: FxTab, hubName?: string) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
     if (!url) return;
     
@@ -407,6 +414,27 @@ class HubManager {
       title,
       url,
     });
+
+    // Index in local memory
+    try {
+      // Best-effort content extraction
+      let content = "";
+      try {
+        // Note: This only works if the tab is in the same process or via CPOW (not recommended but might work for now)
+        // For full Fission support, we'd need a JSWindowActor.
+        const doc = tab.linkedBrowser?.contentDocument;
+        if (doc && doc.body) {
+          content = doc.body.innerText.substring(0, 5000); // Limit to 5k chars
+        }
+      } catch (e) {
+        console.warn("Failed to extract tab content:", e);
+      }
+
+      const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;
+      await localMemory.addDocument(text, { title, type: "hub_item", hub: folderGuid, hubName, description: content.substring(0, 200) }, url);
+    } catch (e) {
+      console.error("Failed to index hub item:", e);
+    }
   }
 
   private suggestName(): string {
