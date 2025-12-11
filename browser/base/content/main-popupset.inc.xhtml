@@ -99,7 +99,7 @@
           data-l10n-args='{"tabCount": 1}'>
       <menupopup id="context_sendTabToDevicePopupMenu" class="sync-ui-item"/>
     </menu>
-    <menuseparator id="context_sendTabToDeviceSeparator"/>
+    <menuseparator id="context_sendTabToDeviceSeparator" class="sync-ui-item"/>
     <menuitem id="context_closeTab"
               data-lazy-l10n-id="tab-context-close-n-tabs"
               data-l10n-args='{"tabCount": 1}'/>
@@ -414,6 +414,16 @@
               id="sidebar-synced-tabs-context-bookmark-tab"/>
     <menuitem data-l10n-id="sidebar-context-menu-copy-link"
               id="sidebar-synced-tabs-context-copy-link"/>
+  </menupopup>
+
+  <menupopup id="split-view-menu">
+    <menuitem command="splitViewCmd_separateTabs"
+              data-l10n-id="split-view-menuitem-separate-tabs"/>
+    <menuitem command="splitViewCmd_reverseTabs"
+              data-l10n-id="split-view-menuitem-reverse-tabs"/>
+    <menuseparator/>
+    <menuitem command="splitViewCmd_closeTabs"
+              data-l10n-id="split-view-menuitem-close-both-tabs"/>
   </menupopup>
 
   <menupopup id="toolbar-context-menu">

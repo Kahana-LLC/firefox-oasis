@@ -429,6 +429,7 @@ export const FormAutofillHeuristics = {
     // during the update.
     const fields = [];
     const fieldIndicies = [];
+
     for (let idx = scanner.parsingIndex; !scanner.parsingFinished; idx++) {
       const detail = scanner.getFieldDetailByIndex(idx);
 
@@ -450,6 +451,7 @@ export const FormAutofillHeuristics = {
 
       if (detail?.isLookup) {
         lookupFieldsCount++;
+
         continue; // Skip address lookup fields
       }
 
@@ -497,7 +499,15 @@ export const FormAutofillHeuristics = {
             }
           }
 
-          if (canUpdate) {
+          // If the address-line1 field was not found, we promote `address-line2`
+          // to `address-line1`. If the address-line1 field is a lookup field, we don't
+          // want to promote another field since it does exist but is not fillable.
+          if (
+            canUpdate &&
+            !scanner.getFieldsMatching(
+              field => field.fieldName == "address-line1" && field.isLookup
+            ).length
+          ) {
             scanner.updateFieldName(fieldIndicies[0], "address-line1");
           }
         }
@@ -1268,6 +1278,12 @@ export const FormAutofillHeuristics = {
         const labels = lazy.LabelUtils.findLabelElements(element);
         for (let label of labels) {
           yield* lazy.LabelUtils.extractLabelStrings(label);
+        }
+
+        // If no labels were found, look for nearby text that could
+        // be used as a label.
+        if (!labels.length) {
+          yield lazy.LabelUtils.findNearbyText(element);
         }
 
         const ariaLabels = element.getAttribute("aria-label");

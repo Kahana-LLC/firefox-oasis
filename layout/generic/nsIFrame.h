@@ -423,10 +423,8 @@ struct IntrinsicSize {
     }
   }
 
-  bool operator==(const IntrinsicSize& rhs) const {
-    return width == rhs.width && height == rhs.height;
-  }
-  bool operator!=(const IntrinsicSize& rhs) const { return !(*this == rhs); }
+  bool operator==(const IntrinsicSize&) const = default;
+  bool operator!=(const IntrinsicSize&) const = default;
 };
 
 // Pseudo bidi embedding level indicating nonexistence.
@@ -705,6 +703,7 @@ class nsIFrame : public nsQueryFrame {
   using Nothing = mozilla::Nothing;
   using OnNonvisible = mozilla::OnNonvisible;
   using ReflowInput = mozilla::ReflowInput;
+  using SizeComputationInput = mozilla::SizeComputationInput;
   using ReflowOutput = mozilla::ReflowOutput;
   using Visibility = mozilla::Visibility;
   using ContentRelevancy = mozilla::ContentRelevancy;
@@ -2978,7 +2977,7 @@ class nsIFrame : public nsQueryFrame {
     AspectRatioUsage mAspectRatioUsage = AspectRatioUsage::None;
   };
   virtual SizeComputationResult ComputeSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -3012,7 +3011,7 @@ class nsIFrame : public nsQueryFrame {
    * optimize and return garbage inline-size.
    */
   virtual mozilla::LogicalSize ComputeAutoSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -3028,7 +3027,7 @@ class nsIFrame : public nsQueryFrame {
    * [1]: https://drafts.csswg.org/css-position-3/#abspos-auto-size
    */
   mozilla::LogicalSize ComputeAbsolutePosAutoSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -3225,8 +3224,12 @@ class nsIFrame : public nsQueryFrame {
       const mozilla::PhysicalAxes aClipAxes, nsRect& aOutRect,
       nsRectCornerRadii& aOutRadii) const;
 
-  // Returns the applicable overflow-clip-margin values.
-  nsSize OverflowClipMargin(mozilla::PhysicalAxes aClipAxes) const;
+  // Returns the applicable overflow-clip-margin values relative to our
+  // border-box. If aAllowNegative is false, prevents us from returning margins
+  // that are less than zero. This is useful for overflow computation (where you
+  // don't want the box to shrink).
+  nsMargin OverflowClipMargin(mozilla::PhysicalAxes aClipAxes,
+                              bool aAllowNegative = true) const;
 
   // Returns the axes on which this frame should apply overflow clipping.
   mozilla::PhysicalAxes ShouldApplyOverflowClipping(
@@ -4047,6 +4050,16 @@ class nsIFrame : public nsQueryFrame {
       mozilla::StyleUserSelect* aSelectStyle = nullptr) const;
 
   /**
+   * Return true if the frame should paint normal selection.  This may return
+   * true even if IsSelectable() in some cases.  E.g., when the normal selection
+   * is the result of "Find in Page".
+   * NOTE: This returns true even if the display selection is OFF since it
+   * should've already been checked before this is called and this should be
+   * cheaper as far as possible because of a part of painting.
+   */
+  [[nodiscard]] bool ShouldPaintNormalSelection() const;
+
+  /**
    * Returns whether this frame should have the content-block-size of a line,
    * even if empty.
    */
@@ -4054,12 +4067,14 @@ class nsIFrame : public nsQueryFrame {
 
   /**
    * Called to retrieve the SelectionController associated with the frame.
-   *
-   * @param aSelCon will contain the selection controller associated with
-   * the frame.
    */
-  nsresult GetSelectionController(nsPresContext* aPresContext,
-                                  nsISelectionController** aSelCon);
+  nsISelectionController* GetSelectionController() const;
+
+  /**
+   * Return the display value of selections which is default to SELECTION_OFF if
+   * there is no selection controller.
+   */
+  int16_t GetDisplaySelection() const;
 
   /**
    * Call to get nsFrameSelection for this frame.
@@ -5240,13 +5255,8 @@ class nsIFrame : public nsQueryFrame {
     uint8_t mTop;
     uint8_t mRight;
     uint8_t mBottom;
-    bool operator==(const InkOverflowDeltas& aOther) const {
-      return mLeft == aOther.mLeft && mTop == aOther.mTop &&
-             mRight == aOther.mRight && mBottom == aOther.mBottom;
-    }
-    bool operator!=(const InkOverflowDeltas& aOther) const {
-      return !(*this == aOther);
-    }
+    bool operator==(const InkOverflowDeltas& aOther) const = default;
+    bool operator!=(const InkOverflowDeltas& aOther) const = default;
   };
   enum class OverflowStorageType : uint32_t {
     // No overflow area; code relies on this being an all-zero value.
@@ -5901,8 +5911,17 @@ inline nsIFrame* nsFrameList::BackwardFrameTraversal::Prev(nsIFrame* aFrame) {
 inline AnchorPosResolutionParams AnchorPosResolutionParams::From(
     const nsIFrame* aFrame,
     mozilla::AnchorPosResolutionCache* aAnchorPosResolutionCache) {
-  return {aFrame, aFrame->StyleDisplay()->mPosition,
-          aFrame->StylePosition()->mPositionArea, aAnchorPosResolutionCache};
+  bool inlineUsesAnchorCenter = false;
+  bool blockUsesAnchorCenter = false;
+  ComputeAnchorCenterUsage(aFrame, aAnchorPosResolutionCache,
+                           inlineUsesAnchorCenter, blockUsesAnchorCenter);
+
+  return {aFrame,
+          aFrame->StyleDisplay()->mPosition,
+          aFrame->StylePosition()->mPositionArea,
+          aAnchorPosResolutionCache,
+          inlineUsesAnchorCenter,
+          blockUsesAnchorCenter};
 }
 
 #endif /* nsIFrame_h___ */

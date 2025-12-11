@@ -18,7 +18,10 @@ use crate::applicable_declarations::ApplicableDeclarationBlock;
 use crate::bloom::each_relevant_element_hash;
 use crate::context::{QuirksMode, SharedStyleContext, UpdateAnimationsTasks};
 use crate::data::ElementData;
-use crate::dom::{LayoutIterator, NodeInfo, OpaqueNode, TDocument, TElement, TNode, TShadowRoot};
+use crate::dom::{
+    AttributeProvider, LayoutIterator, NodeInfo, OpaqueNode, TDocument, TElement, TNode,
+    TShadowRoot,
+};
 use crate::gecko::selector_parser::{NonTSPseudoClass, PseudoElement, SelectorImpl};
 use crate::gecko::snapshot_helpers;
 use crate::gecko_bindings::bindings;
@@ -71,6 +74,7 @@ use app_units::Au;
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use dom::{DocumentState, ElementState};
 use euclid::default::Size2D;
+use nsstring::nsString;
 use rustc_hash::FxHashMap;
 use selectors::attr::{AttrSelectorOperation, CaseSensitivity, NamespaceConstraint};
 use selectors::bloom::{BloomFilter, BLOOM_HASH_MASK};
@@ -656,12 +660,22 @@ impl<'le> GeckoElement<'le> {
         self.may_have_animations() && unsafe { Gecko_ElementHasAnimations(self.0) }
     }
 
+    /// Check if mImpl contains a real pointer (not a bloom filter).
+    #[inline(always)]
+    fn has_attr_impl(&self) -> bool {
+        let ptr = self.0.mAttrs.mImpl.mPtr as usize;
+        ptr != 0 && (ptr & 1) == 0
+    }
+
     #[inline(always)]
     fn attrs(&self) -> &[structs::AttrArray_InternalAttr] {
         unsafe {
+            if !self.has_attr_impl() {
+                return &[];
+            }
             match self.0.mAttrs.mImpl.mPtr.as_ref() {
                 Some(attrs) => attrs.mBuffer.as_slice(attrs.mAttrCount as usize),
-                None => return &[],
+                None => &[],
             }
         }
     }
@@ -1086,6 +1100,11 @@ impl<'le> TElement for GeckoElement<'le> {
     #[inline]
     fn is_xul_element(&self) -> bool {
         self.namespace_id() == structs::root::kNameSpaceID_XUL as i32
+    }
+
+    #[inline]
+    fn subtree_bloom_filter(&self) -> u64 {
+        unsafe { bindings::Gecko_Element_GetSubtreeBloomFilter(self.0) }
     }
 
     #[inline]
@@ -1814,6 +1833,19 @@ impl<'le> TElement for GeckoElement<'le> {
             ElementSelectorFlags::RELATIVE_SELECTOR_SEARCH_DIRECTION_SIBLING
         } else {
             ElementSelectorFlags::empty()
+        }
+    }
+}
+
+impl<'le> AttributeProvider for GeckoElement<'le> {
+    fn get_attr(&self, attr: &LocalName) -> Option<String> {
+        //TODO(bug 2003334): Avoid unnecessary string copies/conversions here.
+        let mut result = nsString::new();
+
+        if unsafe { bindings::Gecko_LookupAttrValue(self.0, attr.0.as_ptr(), &mut *result) } {
+            Some(result.to_string())
+        } else {
+            None
         }
     }
 }

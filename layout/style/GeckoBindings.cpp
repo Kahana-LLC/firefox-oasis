@@ -869,6 +869,11 @@ bool Gecko_IsSelectListBox(const Element* aElement) {
   return select && !select->IsCombobox();
 }
 
+bool Gecko_LookupAttrValue(const Element* aElement, const nsAtom& aName,
+                           nsAString& aResult) {
+  return aElement->GetAttr(&aName, aResult);
+}
+
 template <typename Implementor>
 static nsAtom* LangValue(Implementor* aElement) {
   // TODO(emilio): Deduplicate a bit with nsIContent::GetLang().
@@ -1780,6 +1785,10 @@ nsAtom** Gecko_Element_ExportedParts(const nsAttrValue* aValue,
   static_assert(sizeof(RefPtr<nsAtom>) == sizeof(nsAtom*));
   static_assert(alignof(RefPtr<nsAtom>) == alignof(nsAtom*));
   return reinterpret_cast<nsAtom**>(parts->Elements());
+}
+
+uint64_t Gecko_Element_GetSubtreeBloomFilter(const Element* aElement) {
+  return aElement->GetSubtreeBloomFilter();
 }
 
 bool StyleSingleFontFamily::IsNamedFamily(const nsAString& aFamilyName) const {

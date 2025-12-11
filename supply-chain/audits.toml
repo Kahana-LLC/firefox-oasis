@@ -4371,12 +4371,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.naga]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.net2]]
@@ -4622,6 +4622,11 @@ Small crate, reviewed by bendk.  There is a decent amount of unsafe code, but it
 The git branch is my fork of the official code that removes the `loom` target to avoid pulling in that crate and its dependencies into moz-central.
 This doesn't change any of the functionality -- the `loom` target is only used for testing.
 """
+
+[[audits.oneshot]]
+who = "Bastian Gruber <foreach@me.com>"
+criteria = "safe-to-deploy"
+version = "0.1.11"
 
 [[audits.oneshot-uniffi]]
 who = "Ben Dean-Kawamura <bdk@mozilla.com>"
@@ -6938,12 +6943,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.wgpu-core]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.wgpu-core-deps-apple]]
@@ -6969,12 +6974,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.wgpu-core-deps-apple]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.wgpu-core-deps-windows-linux-android]]
@@ -7000,12 +7005,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.wgpu-core-deps-windows-linux-android]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.wgpu-hal]]
@@ -7109,12 +7114,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.wgpu-hal]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.wgpu-types]]
@@ -7213,12 +7218,12 @@ delta = "26.0.0 -> 27.0.0"
 [[audits.wgpu-types]]
 who = [
     "Andy Leiserson <aleiserson@mozilla.com>",
-    "Jim Blandy <jimb@red-bean.com>",
     "Teodor Tanasoaia <ttanasoaia@mozilla.com>",
     "Erich Gubler <erichdongubler@gmail.com>",
+    "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:d65295a3ce2bb11a36c2c2454ef400652fc1c4a4"
+delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
 importable = false
 
 [[audits.whatsys]]

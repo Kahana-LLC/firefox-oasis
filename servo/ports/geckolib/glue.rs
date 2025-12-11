@@ -106,7 +106,7 @@ use style::invalidation::element::relative_selector::{
 };
 use style::invalidation::element::restyle_hints::RestyleHint;
 use style::invalidation::stylesheets::RuleChangeKind;
-use style::logical_geometry::{PhysicalAxis, PhysicalSide, WritingMode};
+use style::logical_geometry::{LogicalAxis, PhysicalAxis, PhysicalSide, WritingMode};
 use style::media_queries::MediaList;
 use style::parser::{Parse, ParserContext};
 use style::properties::declaration_block::PropertyTypedValue;
@@ -164,9 +164,7 @@ use style::values::computed::length_percentage::{
     AllowAnchorPosResolutionInCalcPercentage, Unpacked,
 };
 use style::values::computed::position::{AnchorFunction, PositionArea};
-use style::values::computed::{
-    self, ContentVisibility, Context, PositionAreaKeyword, ToComputedValue,
-};
+use style::values::computed::{self, ContentVisibility, Context, ToComputedValue};
 use style::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use style::values::generics::color::ColorMixFlags;
 use style::values::generics::easing::BeforeFlag;
@@ -174,7 +172,7 @@ use style::values::generics::length::GenericAnchorSizeFunction;
 use style::values::resolved;
 use style::values::specified::align::AlignFlags;
 use style::values::specified::intersection_observer::IntersectionObserverMargin;
-use style::values::specified::position::DashedIdentAndOrTryTactic;
+use style::values::specified::position::PositionTryFallbacksItem;
 use style::values::specified::source_size_list::SourceSizeList;
 use style::values::specified::svg_path::PathCommand;
 use style::values::specified::{AbsoluteLength, NoCalcLength};
@@ -2052,6 +2050,12 @@ pub extern "C" fn Servo_StyleSet_SetAuthorStyleDisabled(
 pub extern "C" fn Servo_StyleSet_UsesFontMetrics(raw_data: &PerDocumentStyleData) -> bool {
     let doc_data = raw_data;
     doc_data.borrow().stylist.device().used_font_metrics()
+}
+
+#[no_mangle]
+pub extern "C" fn Servo_StyleSet_UsesRootFontMetrics(raw_data: &PerDocumentStyleData) -> bool {
+    let doc_data = raw_data;
+    doc_data.borrow().stylist.device().used_root_font_metrics()
 }
 
 #[no_mangle]
@@ -4446,7 +4450,7 @@ pub unsafe extern "C" fn Servo_ComputedValues_GetForPositionTry(
     raw_data: &PerDocumentStyleData,
     style: &ComputedValues,
     element: &RawGeckoElement,
-    name_and_try_tactic: &DashedIdentAndOrTryTactic,
+    fallback_item: &PositionTryFallbacksItem,
 ) -> Strong<ComputedValues> {
     let global_style_data = &*GLOBAL_STYLE_DATA;
     let guard = global_style_data.shared_lock.read();
@@ -4454,7 +4458,7 @@ pub unsafe extern "C" fn Servo_ComputedValues_GetForPositionTry(
     let element = GeckoElement(element);
     let data = raw_data.borrow();
     data.stylist
-        .resolve_position_try(style, &guards, element, name_and_try_tactic)
+        .resolve_position_try(style, &guards, element, fallback_item)
         .into()
 }
 
@@ -6940,7 +6944,7 @@ fn create_context_for_animation<'a>(
     container_size_query: ContainerSizeQuery<'a>,
 ) -> Context<'a> {
     Context::new_for_animation(
-        StyleBuilder::for_animation(
+        StyleBuilder::for_derived_style(
             per_doc_data.stylist.device(),
             Some(&per_doc_data.stylist),
             style,
@@ -7080,12 +7084,12 @@ pub extern "C" fn Servo_GetComputedKeyframeValues(
                 let guard = declarations.read_with(&guard);
                 for decl in guard.normal_declaration_iter() {
                     if let PropertyDeclaration::Custom(ref declaration) = *decl {
-                        builder.cascade(declaration, priority);
+                        builder.cascade(declaration, priority, &element);
                     }
                 }
             }
             iter.reset();
-            let _deferred = builder.build(DeferFontRelativeCustomPropertyResolution::No);
+            let _deferred = builder.build(DeferFontRelativeCustomPropertyResolution::No, &element);
             debug_assert!(
                 _deferred.is_none(),
                 "Custom property processing deferred despite specifying otherwise?"
@@ -7234,8 +7238,13 @@ pub extern "C" fn Servo_AnimationValue_Compute(
         .next()
     {
         Some((decl, imp)) if imp == Importance::Normal => {
-            let animation =
-                AnimationValue::from_declaration(decl, &mut context, style, default_values);
+            let animation = AnimationValue::from_declaration(
+                decl,
+                &mut context,
+                style,
+                default_values,
+                &element,
+            );
             animation.map_or(Strong::null(), |value| Arc::new(value).into())
         },
         _ => Strong::null(),
@@ -10774,6 +10783,8 @@ fn offset_params_from_base_params(
             mPosition: params.mPosition,
             mPositionArea: params.mPositionArea,
             mCache: params.mCache,
+            mIAnchorCenter: params.mIAnchorCenter,
+            mBAnchorCenter: params.mBAnchorCenter,
         },
     }
 }
@@ -10829,12 +10840,25 @@ pub extern "C" fn Servo_PhysicalizePositionArea(
     *area = area.to_physical(*cb_wm, *self_wm);
 }
 
+/// https://drafts.csswg.org/css-anchor-position-1/#position-area-alignment
 #[no_mangle]
 pub extern "C" fn Servo_ResolvePositionAreaSelfAlignment(
-    area: &PositionAreaKeyword,
+    area: &PositionArea,
+    axis: LogicalAxis,
+    cb_wm: &WritingMode,
+    self_wm: &WritingMode,
     out: &mut AlignFlags,
 ) {
-    let Some(align) = area.to_self_alignment() else {
+    // As well as converting `area` and `axis` to the same form for comparison
+    // this also makes sure `area`'s second keyword is explicit (not none).
+    let physical_area = area.to_physical(*cb_wm, *self_wm);
+    let physical_axis = axis.to_physical(*cb_wm);
+    let area_keyword = match physical_axis {
+        PhysicalAxis::Horizontal => physical_area.first,
+        PhysicalAxis::Vertical => physical_area.second,
+    };
+    // Note that area_keyword is a physical value (left/right/top/bottom).
+    let Some(align) = area_keyword.to_self_alignment(axis, cb_wm) else {
         debug_assert!(
             false,
             "ResolvePositionAreaSelfAlignment called on {:?}",

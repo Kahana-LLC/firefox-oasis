@@ -74,6 +74,15 @@ class WaylandSurface final {
   // Set WaylandSurface target size (viewport & ELG surface if it's present).
   void SetSize(DesktopIntSize aSize);
 
+  // Apply changes to EGLWindow size set by SetSize().
+  // ApplyEGLWindowSize() is called from compostor thread
+  // right before GL rendering to set EGLWindow size / viewport size
+  // for actual back buffer.
+  //
+  // aEGLWindowSize is scaled backbuffer size and it's used similary
+  // as WaylandBuffer size at Attach().
+  void ApplyEGLWindowSize(LayoutDeviceIntSize aEGLWindowSize);
+
   // Mapped means we have all internals created.
   bool IsMapped() const { return mIsMapped; }
 
@@ -197,7 +206,7 @@ class WaylandSurface final {
   // Returns scale as float point number. If WaylandSurface is not mapped,
   // return fractional scale of parent surface or monitor.
   static constexpr const double sNoScale = -1;
-  double GetScale();
+  double GetScale() const;
 
   // Called when screen ceiled scale changed or set initial scale before we map
   // and paint the surface.
@@ -279,9 +288,6 @@ class WaylandSurface final {
                  WaylandSurfaceLock* aParentWaylandSurfaceLock,
                  DesktopIntPoint aSubsurfacePosition, bool aSubsurfaceDesync);
 
-  void SetRenderingSizeLocked(const WaylandSurfaceLock& aProofOfLock,
-                              DesktopIntSize aSize);
-
   wl_surface* Lock(WaylandSurfaceLock* aWaylandSurfaceLock);
   void Unlock(struct wl_surface** aSurface,
               WaylandSurfaceLock* aWaylandSurfaceLock);
@@ -300,6 +306,10 @@ class WaylandSurface final {
       const WaylandSurfaceLock& aProofOfLock) const;
 
   void ClearScaleLocked(const WaylandSurfaceLock& aProofOfLock);
+
+  // Calculate 'stable' rounded size for subsurface based
+  // on its size and position.
+  LayoutDeviceIntSize GetScaledSize(const DesktopIntSize& aSize) const;
 
   // Weak ref to owning widget (nsWindow or NativeLayerWayland),
   // used for diagnostics/logging only.
@@ -347,7 +357,7 @@ class WaylandSurface final {
   bool mSubsurfaceDesync = true;
 
   wl_subsurface* mSubsurface = nullptr;
-  DesktopIntPoint mSubsurfacePosition{-1, -1};
+  DesktopIntPoint mSubsurfacePosition;
 
   // Wayland buffers recently attached to this surface or held by
   // Wayland compositor.

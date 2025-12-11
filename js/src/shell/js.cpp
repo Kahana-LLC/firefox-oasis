@@ -1704,8 +1704,8 @@ class MOZ_RAII AutoLockTelemetry : public LockGuard<Mutex> {
 };
 
 using TelemetrySamples = mozilla::Vector<uint32_t, 0, js::SystemAllocPolicy>;
-MOZ_CONSTINIT static mozilla::Array<UniquePtr<TelemetrySamples>,
-                                    size_t(JSMetric::Count)>
+constinit static mozilla::Array<UniquePtr<TelemetrySamples>,
+                                size_t(JSMetric::Count)>
     recordedTelemetrySamples;
 
 static void AccumulateTelemetryDataCallback(JSMetric id, uint32_t sample) {
@@ -8085,6 +8085,14 @@ static bool DisableGeckoProfiling(JSContext* cx, unsigned argc, Value* vp) {
   return true;
 }
 
+static bool GetGeckoProfilingScriptSourcesCount(JSContext* cx, unsigned argc,
+                                                Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+  size_t count = cx->runtime()->geckoProfiler().scriptSourcesCount();
+  args.rval().setNumber(static_cast<double>(count));
+  return true;
+}
+
 // Global mailbox that is used to communicate a shareable object value from one
 // worker to another.
 //
@@ -10575,6 +10583,10 @@ JS_FN_HELP("createUserArrayBuffer", CreateUserArrayBuffer, 1, 0,
 "disableGeckoProfiling()",
 "  Disables Gecko Profiler instrumentation"),
 
+    JS_FN_HELP("getGeckoProfilingScriptSourcesCount", GetGeckoProfilingScriptSourcesCount, 0, 0,
+"getGeckoProfilingScriptSourcesCount()",
+"  Returns the number of script sources registered with the Gecko Profiler"),
+
     JS_FN_HELP("isLatin1", IsLatin1, 1, 0,
 "isLatin1(s)",
 "  Return true iff the string's characters are stored as Latin1."),
@@ -11035,15 +11047,10 @@ static bool MatchPattern(JSContext* cx, JS::Handle<RegExpObject*> regex,
 }
 
 static bool PrintEnumeratedHelp(JSContext* cx, HandleObject obj,
-                                HandleObject pattern, bool brief) {
+                                Handle<RegExpObject*> pattern, bool brief) {
   RootedIdVector idv(cx);
   if (!GetPropertyKeys(cx, obj, JSITER_OWNONLY | JSITER_HIDDEN, &idv)) {
     return false;
-  }
-
-  Rooted<RegExpObject*> regex(cx);
-  if (pattern) {
-    regex = &UncheckedUnwrap(pattern)->as<RegExpObject>();
   }
 
   for (size_t i = 0; i < idv.length(); i++) {
@@ -11057,7 +11064,7 @@ static bool PrintEnumeratedHelp(JSContext* cx, HandleObject obj,
     }
 
     RootedObject funcObj(cx, &v.toObject());
-    if (regex) {
+    if (pattern) {
       // Only pay attention to objects with a 'help' property, which will
       // either be documented functions or interface objects.
       if (!JS_GetProperty(cx, funcObj, "help", &v)) {
@@ -11083,7 +11090,7 @@ static bool PrintEnumeratedHelp(JSContext* cx, HandleObject obj,
 
       Rooted<JSString*> inputStr(cx, v.toString());
       bool result = false;
-      if (!MatchPattern(cx, regex, inputStr, &result)) {
+      if (!MatchPattern(cx, pattern, inputStr, &result)) {
         return false;
       }
       if (!result) {
@@ -11099,22 +11106,18 @@ static bool PrintEnumeratedHelp(JSContext* cx, HandleObject obj,
   return true;
 }
 
-static bool PrintExtraGlobalEnumeratedHelp(JSContext* cx, HandleObject pattern,
+static bool PrintExtraGlobalEnumeratedHelp(JSContext* cx,
+                                           Handle<RegExpObject*> pattern,
                                            bool brief) {
-  Rooted<RegExpObject*> regex(cx);
-  if (pattern) {
-    regex = &UncheckedUnwrap(pattern)->as<RegExpObject>();
-  }
-
   for (const auto& item : extraGlobalBindingsWithHelp) {
-    if (regex) {
+    if (pattern) {
       JS::Rooted<JSString*> name(cx, JS_NewStringCopyZ(cx, item.name));
       if (!name) {
         return false;
       }
 
       bool result = false;
-      if (!MatchPattern(cx, regex, name, &result)) {
+      if (!MatchPattern(cx, pattern, name, &result)) {
         return false;
       }
       if (!result) {
@@ -11171,10 +11174,12 @@ static bool Help(JSContext* cx, unsigned argc, Value* vp) {
 
   if (isRegexp) {
     // help(/pattern/)
-    if (!PrintEnumeratedHelp(cx, global, obj, false)) {
+    Rooted<RegExpObject*> pattern(cx,
+                                  &UncheckedUnwrap(obj)->as<RegExpObject>());
+    if (!PrintEnumeratedHelp(cx, global, pattern, false)) {
       return false;
     }
-    if (!PrintExtraGlobalEnumeratedHelp(cx, obj, false)) {
+    if (!PrintExtraGlobalEnumeratedHelp(cx, pattern, false)) {
       return false;
     }
     return true;
@@ -13314,10 +13319,13 @@ bool InitOptionParser(OptionParser& op) {
       !op.addBoolOption('\0', "enable-temporal", "Enable Temporal") ||
       !op.addBoolOption('\0', "enable-upsert", "Enable Upsert proposal") ||
       !op.addBoolOption('\0', "enable-import-bytes", "Enable import bytes") ||
+      !op.addBoolOption('\0', "enable-promise-allkeyed",
+                        "Enable Promise.allKeyed") ||
       !op.addBoolOption('\0', "enable-arraybuffer-immutable",
                         "Enable immutable ArrayBuffers") ||
       !op.addBoolOption('\0', "enable-iterator-chunking",
-                        "Enable Iterator Chunking")) {
+                        "Enable Iterator Chunking") ||
+      !op.addBoolOption('\0', "enable-iterator-join", "Enable Iterator.join")) {
     return false;
   }
 
@@ -13396,8 +13404,14 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
   if (op.getBoolOption("enable-import-bytes")) {
     JS::Prefs::setAtStartup_experimental_import_bytes(true);
   }
+  if (op.getBoolOption("enable-promise-allkeyed")) {
+    JS::Prefs::setAtStartup_experimental_promise_allkeyed(true);
+  }
   if (op.getBoolOption("enable-iterator-chunking")) {
     JS::Prefs::setAtStartup_experimental_iterator_chunking(true);
+  }
+  if (op.getBoolOption("enable-iterator-join")) {
+    JS::Prefs::setAtStartup_experimental_iterator_join(true);
   }
 #endif
 #ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
@@ -13887,6 +13901,16 @@ bool SetContextJITOptions(JSContext* cx, const OptionParser& op) {
       jit::JitOptions.disableLicm = true;
     } else {
       return OptionFailure("ion-licm", str);
+    }
+  }
+
+  if (const char* str = op.getStringOption("ion-edgecase-analysis")) {
+    if (strcmp(str, "on") == 0) {
+      jit::JitOptions.disableEdgeCaseAnalysis = false;
+    } else if (strcmp(str, "off") == 0) {
+      jit::JitOptions.disableEdgeCaseAnalysis = true;
+    } else {
+      return OptionFailure("ion-edgecase-analysis", str);
     }
   }
 

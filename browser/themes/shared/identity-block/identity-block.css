@@ -32,12 +32,8 @@
 
 /* stylelint-disable-next-line media-query-no-invalid */
 @media -moz-pref("browser.urlbar.searchModeSwitcher.featureGate") or -moz-pref("browser.urlbar.scotchBonnet.enableOverride") {
-  #identity-box {
-    margin-inline-end: 0;
-
-    &[pageproxystate="invalid"] {
-      display: none;
-    }
+  #identity-box[pageproxystate="invalid"] {
+    display: none;
   }
 }
 
@@ -82,6 +78,10 @@
   /* stylelint-disable-next-line media-query-no-invalid */
   @media -moz-pref("browser.urlbar.searchModeSwitcher.featureGate") or -moz-pref("browser.urlbar.scotchBonnet.enableOverride") {
     margin-inline-end: var(--urlbar-searchmodeswitcher-margin-inline-end);
+  }
+  /* stylelint-disable-next-line media-query-no-invalid */
+  @media -moz-pref("browser.urlbar.trustPanel.featureGate") {
+    margin-inline-end: 0;
   }
 }
 
@@ -303,11 +303,23 @@
     display: none;
   }
 
+  .searchmode-switcher,
+  #identity-box {
+    margin-inline-end: 0;
+  }
+
+  #urlbar-label-box,
+  .urlbar-input-box {
+    margin-inline-start: var(--identity-box-margin-inline);
+  }
+
   #trust-icon-container {
     padding-inline: var(--urlbar-icon-padding);
     border-radius: var(--urlbar-inner-border-radius);
-    margin-inline-end: var(--identity-box-margin-inline);
     -moz-context-properties: fill, fill-opacity;
+    /* Height shouldn't need defined here but is failing wpt tests without.
+       Investigating in https://bugzilla.mozilla.org/show_bug.cgi?id=2004907 */
+    height: calc(16px + (2 * var(--urlbar-icon-padding)));
 
     /* The urlbar will show insecure or secure icon by default depending
        on the state of the connection, the further clauses may override that. */
@@ -334,7 +346,7 @@
     }
 
     .urlbar-input-container[pageproxystate="valid"] > &:not(.chickletShown) {
-      display: flex;
+      display: inline-flex;
     }
   }
 

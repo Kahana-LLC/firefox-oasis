@@ -46,7 +46,6 @@
     <ID>UndocumentedPublicClass:FenixProductDetector.kt$FenixProductDetector</ID>
     <ID>UndocumentedPublicClass:FenixProductDetector.kt$FenixProductDetector$FenixVersion</ID>
     <ID>UndocumentedPublicClass:FindInPageIntegration.kt$FindInPageIntegration : LifecycleAwareFeatureUserInteractionHandler</ID>
-    <ID>UndocumentedPublicClass:FocusApplication.kt$FocusApplication : LocaleAwareApplicationProviderCoroutineScope</ID>
     <ID>UndocumentedPublicClass:FocusSnackbar.kt$FocusSnackbar : BaseTransientBottomBar</ID>
     <ID>UndocumentedPublicClass:FocusSnackbarDelegate.kt$FocusSnackbarDelegate : SnackbarDelegate</ID>
     <ID>UndocumentedPublicClass:FullScreenIntegration.kt$FullScreenIntegration : LifecycleAwareFeatureUserInteractionHandler</ID>
@@ -63,6 +62,7 @@
     <ID>UndocumentedPublicClass:IntentProcessor.kt$IntentProcessor.Result$None : Result</ID>
     <ID>UndocumentedPublicClass:IntentProcessor.kt$IntentProcessor.Result$Tab : Result</ID>
     <ID>UndocumentedPublicClass:LocaleDescriptor.kt$LocaleDescriptor : Comparable</ID>
+    <ID>UndocumentedPublicClass:MainActivity.kt$MainActivity : EdgeToEdgeActivity</ID>
     <ID>UndocumentedPublicClass:ManualAddSearchEnginePreference.kt$ManualAddSearchEnginePreference : Preference</ID>
     <ID>UndocumentedPublicClass:ManualAddSearchEngineSettingsFragment.kt$ManualAddSearchEngineSettingsFragment : BaseSettingsFragment</ID>
     <ID>UndocumentedPublicClass:MozillaPreference.kt$MozillaPreference : Preference</ID>
@@ -154,7 +154,6 @@
     <ID>UndocumentedPublicFunction:FenixProductDetector.kt$FenixProductDetector$fun isFenixDefaultBrowser(defaultBrowser: ActivityInfo?): Boolean</ID>
     <ID>UndocumentedPublicFunction:FindInPageIntegration.kt$FindInPageIntegration$fun hide()</ID>
     <ID>UndocumentedPublicFunction:FindInPageIntegration.kt$FindInPageIntegration$fun show(sessionState: SessionState)</ID>
-    <ID>UndocumentedPublicFunction:FocusApplication.kt$FocusApplication$open fun updateLeakCanaryState(isEnabled: Boolean)</ID>
     <ID>UndocumentedPublicFunction:FocusSnackbar.kt$FocusSnackbar$fun setText(text: String)</ID>
     <ID>UndocumentedPublicFunction:FocusTheme.kt$fun phoneDimensions()</ID>
     <ID>UndocumentedPublicFunction:FocusTheme.kt$fun tabletDimensions()</ID>
@@ -181,7 +180,6 @@
     <ID>UndocumentedPublicFunction:RadioButtonPreference.kt$GroupableRadioButton$fun updateRadioValue(isChecked: Boolean)</ID>
     <ID>UndocumentedPublicFunction:RadioButtonPreference.kt$RadioButtonPreference$fun onClickListener(listener: (() -&gt; Unit))</ID>
     <ID>UndocumentedPublicFunction:RadioButtonPreference.kt$fun Iterable&lt;GroupableRadioButton&gt;.uncheckAll()</ID>
-    <ID>UndocumentedPublicFunction:SearchEngineListPreference.kt$SearchEngineListPreference$fun refetchSearchEngines()</ID>
     <ID>UndocumentedPublicFunction:SearchSuggestionsPreferences.kt$SearchSuggestionsPreferences$fun disableSearchSuggestions()</ID>
     <ID>UndocumentedPublicFunction:SearchSuggestionsPreferences.kt$SearchSuggestionsPreferences$fun dismissNoSuggestionsMessage()</ID>
     <ID>UndocumentedPublicFunction:SearchSuggestionsPreferences.kt$SearchSuggestionsPreferences$fun enableSearchSuggestions()</ID>

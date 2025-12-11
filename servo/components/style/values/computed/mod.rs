@@ -55,7 +55,7 @@ pub use self::border::{
 pub use self::box_::{
     Appearance, BaselineSource, BreakBetween, BreakWithin, Clear, Contain, ContainIntrinsicSize,
     ContainerName, ContainerType, ContentVisibility, Display, Float, LineClamp, Overflow,
-    OverflowAnchor, OverflowClipBox, OverscrollBehavior, Perspective, PositionProperty, Resize,
+    OverflowAnchor, OverflowClipMargin, OverscrollBehavior, Perspective, PositionProperty, Resize,
     ScrollSnapAlign, ScrollSnapAxis, ScrollSnapStop, ScrollSnapStrictness, ScrollSnapType,
     ScrollbarGutter, TouchAction, VerticalAlign, WillChange, WritingModeProperty, Zoom,
 };
@@ -399,7 +399,7 @@ impl<'a> Context<'a> {
             flags |= QueryFontMetricsFlags::USE_USER_FONT_SET
         }
         self.device()
-            .query_font_metrics(vertical, font, size, flags)
+            .query_font_metrics(vertical, font, size, flags, /* track_changes = */ true)
     }
 
     /// The current viewport size, used to resolve viewport units.

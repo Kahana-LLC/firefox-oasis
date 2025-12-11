@@ -3565,6 +3565,7 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
   } else if (NS_ERROR_PHISHING_URI == aError ||
              NS_ERROR_MALWARE_URI == aError ||
              NS_ERROR_UNWANTED_URI == aError ||
+             NS_ERROR_HARMFULADDON_URI == aError ||
              NS_ERROR_HARMFUL_URI == aError) {
     nsAutoCString host;
     aURI->GetHost(host);
@@ -3587,6 +3588,8 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
       error = "unwantedBlocked";
     } else if (NS_ERROR_HARMFUL_URI == aError) {
       error = "harmfulBlocked";
+    } else if (NS_ERROR_HARMFULADDON_URI == aError) {
+      error = "addonBlocked";
     }
 
     cssClass.AssignLiteral("blacklist");
@@ -3926,6 +3929,18 @@ nsresult nsDocShell::LoadErrorPage(nsIURI* aURI, const char16_t* aURL,
 
   errorPageUrl.AppendLiteral("&d=");
   errorPageUrl.AppendASCII(escapedDescription.get());
+
+  nsCOMPtr<nsIWritablePropertyBag2> props(do_QueryInterface(aFailedChannel));
+  if (props) {
+    nsAutoCString addonName;
+    props->GetPropertyAsACString(u"blockedExtension"_ns, addonName);
+
+    nsCString escapedAddonName;
+    SAFE_ESCAPE(escapedAddonName, addonName, url_Path);
+
+    errorPageUrl.AppendLiteral("&a=");
+    errorPageUrl.AppendASCII(escapedAddonName.get());
+  }
 
   nsCOMPtr<nsIURI> errorPageURI;
   nsresult rv = NS_NewURI(getter_AddRefs(errorPageURI), errorPageUrl);
@@ -5037,8 +5052,7 @@ nsresult nsDocShell::SetCurScrollPosEx(int32_t aCurHorizontalPos,
   ScrollContainerFrame* sf = GetRootScrollContainerFrame();
   NS_ENSURE_TRUE(sf, NS_ERROR_FAILURE);
 
-  ScrollMode scrollMode =
-      sf->IsSmoothScroll() ? ScrollMode::SmoothMsd : ScrollMode::Instant;
+  ScrollMode scrollMode = sf->ScrollModeForScrollBehavior();
 
   nsPoint targetPos(aCurHorizontalPos, aCurVerticalPos);
   sf->ScrollTo(targetPos, scrollMode);
@@ -6344,6 +6358,7 @@ nsresult nsDocShell::FilterStatusForErrorPage(
        aStatus == NS_ERROR_PROXY_AUTHENTICATION_FAILED ||
        aStatus == NS_ERROR_PROXY_TOO_MANY_REQUESTS ||
        aStatus == NS_ERROR_MALFORMED_URI ||
+       aStatus == NS_ERROR_HARMFULADDON_URI ||
        aStatus == NS_ERROR_BLOCKED_BY_POLICY ||
        aStatus == NS_ERROR_DOM_COOP_FAILED ||
        aStatus == NS_ERROR_DOM_COEP_FAILED ||
@@ -10831,6 +10846,18 @@ nsresult nsDocShell::DoURILoad(nsDocShellLoadState* aLoadState,
     inheritPrincipal = inheritAttrs && !uri->SchemeIs("data");
   }
 
+  // If a page opens about:blank, it will have a content principal.
+  // If it is then restored after a restart, we might not have initialized
+  // UsesOAC for it. If this is the case, do a normal load (bug 2004647).
+  // XXX bug 2005205 tracks removing this workaround.
+  const auto shouldSkipSyncLoadForSHRestore = [&] {
+    return aLoadState->LoadIsFromSessionHistory() &&
+           aLoadState->PrincipalToInherit() &&
+           !mBrowsingContext->Group()
+                ->UsesOriginAgentCluster(aLoadState->PrincipalToInherit())
+                .isSome();
+  };
+
   MOZ_ASSERT_IF(NS_IsAboutBlankAllowQueryAndFragment(uri) &&
                     aLoadState->PrincipalToInherit(),
                 inheritPrincipal);
@@ -10838,7 +10865,8 @@ nsresult nsDocShell::DoURILoad(nsDocShellLoadState* aLoadState,
   const bool isAboutBlankLoadOntoInitialAboutBlank =
       !aLoadState->IsInitialAboutBlankHandlingProhibited() &&
       IsAboutBlankLoadOntoInitialAboutBlank(uri,
-                                            aLoadState->PrincipalToInherit());
+                                            aLoadState->PrincipalToInherit()) &&
+      !shouldSkipSyncLoadForSHRestore();
 
   // FIXME We still have a ton of codepaths that don't pass through
   //       DocumentLoadListener, so probably need to create session history info

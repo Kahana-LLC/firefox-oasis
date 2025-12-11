@@ -424,7 +424,11 @@ pref("browser.urlbar.deduplication.thresholdDays", 0);
 
 pref("browser.urlbar.scotchBonnet.enableOverride", true);
 
+#ifdef NIGHTLY_BUILD
+pref("browser.urlbar.trustPanel.featureGate", true);
+#else
 pref("browser.urlbar.trustPanel.featureGate", false);
+#endif
 
 // Once Perplexity has entered search mode at least once,
 // we no longer show the Perplexity onboarding callout.
@@ -676,6 +680,12 @@ pref("browser.urlbar.merino.ohttpConfigURL", "");
 // OHTTP relay URL for Merino requests
 pref("browser.urlbar.merino.ohttpRelayURL", "");
 
+// OHTTP hpke for DAP
+pref("dap.ohttp.hpke", "https://dap-09-3.api.divviup.org/ohttp-configs");
+
+// OHTTP relay URL for DAP
+pref("dap.ohttp.relayURL", "https://mozilla-ohttp-dap.mozilla.fastly-edge.com/");
+
 // Enable site specific search result.
 pref("browser.urlbar.contextualSearch.enabled", true);
 
@@ -688,6 +698,7 @@ pref("places.semanticHistory.featureGate", true);
 #else
 pref("places.semanticHistory.featureGate", false);
 #endif
+pref("places.semanticHistory.supportedRegions", "[[\"AU\",[\"en-*\"]],[\"CA\",[\"en-*\"]],[\"GB\",[\"en-*\"]],[\"IE\",[\"en-*\"]],[\"NZ\",[\"en-*\"]],[\"PH\",[\"en-*\"]],[\"US\",[\"en-*\"]]]");
 
 // Minimum length threshold for semantic history search
 pref("browser.urlbar.suggest.semanticHistory.minLength", 5);
@@ -1068,11 +1079,7 @@ pref("browser.tabs.dragDrop.expandGroup.delayMS", 350);
 pref("browser.tabs.dragDrop.selectTab.delayMS", 350);
 pref("browser.tabs.dragDrop.pinInteractionCue.delayMS", 500);
 pref("browser.tabs.dragDrop.moveOverThresholdPercent", 80);
-#ifdef NIGHTLY_BUILD
 pref("browser.tabs.dragDrop.multiselectStacking", true);
-#else
-pref("browser.tabs.dragDrop.multiselectStacking", false);
-#endif
 
 pref("browser.tabs.firefox-view.logLevel", "Warn");
 
@@ -1754,6 +1761,7 @@ pref("services.sync.prefs.sync.privacy.donottrackheader.enabled", true);
 pref("services.sync.prefs.sync.privacy.globalprivacycontrol.enabled", true);
 pref("services.sync.prefs.sync.privacy.sanitize.sanitizeOnShutdown", true);
 pref("services.sync.prefs.sync.privacy.trackingprotection.enabled", true);
+pref("services.sync.prefs.sync.privacy.trackingprotection.harmfuladdon.enabled", true);
 pref("services.sync.prefs.sync.privacy.trackingprotection.cryptomining.enabled", true);
 pref("services.sync.prefs.sync.privacy.trackingprotection.fingerprinting.enabled", true);
 pref("services.sync.prefs.sync.privacy.trackingprotection.pbmode.enabled", true);
@@ -2018,6 +2026,7 @@ pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.endpoin
 pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.ohttp.enabled", false);
 pref("browser.newtabpage.activity-stream.discoverystream.ohttp.relayURL", "https://mozilla-ohttp.fastly-edge.com/");
 pref("browser.newtabpage.activity-stream.discoverystream.ohttp.configURL", "https://prod.ohttp-gateway.prod.webservices.mozgcp.net/ohttp-configs");
+pref("browser.newtabpage.activity-stream.discoverystream.imageProxy.enabled", false);
 
 // List of regions that get spocs by default.
 pref("browser.newtabpage.activity-stream.discoverystream.region-spocs-config", "US,CA,DE,GB,FR,IT,ES");
@@ -2028,22 +2037,22 @@ pref("browser.newtabpage.activity-stream.discoverystream.region-basic-config", "
 pref("browser.newtabpage.activity-stream.discoverystream.pocket-feed-parameters", "");
 pref("browser.newtabpage.activity-stream.discoverystream.merino-feed-experiment", false);
 
-pref("browser.newtabpage.activity-stream.discoverystream.personalization.enabled", true);
+pref("browser.newtabpage.activity-stream.discoverystream.personalization.enabled", false);
 pref("browser.newtabpage.activity-stream.discoverystream.personalization.override", false);
 // Configurable keys used by personalization.
 pref("browser.newtabpage.activity-stream.discoverystream.personalization.modelKeys", "nb_model_arts_and_entertainment, nb_model_autos_and_vehicles, nb_model_beauty_and_fitness, nb_model_blogging_resources_and_services, nb_model_books_and_literature, nb_model_business_and_industrial, nb_model_computers_and_electronics, nb_model_finance, nb_model_food_and_drink, nb_model_games, nb_model_health, nb_model_hobbies_and_leisure, nb_model_home_and_garden, nb_model_internet_and_telecom, nb_model_jobs_and_education, nb_model_law_and_government, nb_model_online_communities, nb_model_people_and_society, nb_model_pets_and_animals, nb_model_real_estate, nb_model_reference, nb_model_science, nb_model_shopping, nb_model_sports, nb_model_travel");
 // System pref to allow Pocket stories personalization to be turned on/off.
 pref("browser.newtabpage.activity-stream.discoverystream.recs.personalized", false);
 // System pref to allow Pocket sponsored content personalization to be turned on/off.
-pref("browser.newtabpage.activity-stream.discoverystream.spocs.personalized", true);
+pref("browser.newtabpage.activity-stream.discoverystream.spocs.personalized", false);
 
 // List of locales that get thumbs up/down on recommended stories by default.
 pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.locale-thumbs-config", "en-US, en-GB, en-CA");
 
-pref("browser.newtabpage.activity-stream.telemetry.privatePing.enabled", false);
+pref("browser.newtabpage.activity-stream.telemetry.privatePing.enabled", true);
 
 // Redacts content interaction ids from original New Tab ping once data processing migrated to the Newtab_content private ping
-pref("browser.newtabpage.activity-stream.telemetry.privatePing.redactNewtabPing.enabled", false);
+pref("browser.newtabpage.activity-stream.telemetry.privatePing.redactNewtabPing.enabled", true);
 pref("browser.newtabpage.activity-stream.telemetry.privatePing.maxSubmissionDelayMs", 5000);
 
   // Include differentialy private inferred New Tab interests with New Tab content Ping. Only used when user has enabled personalization.
@@ -2291,14 +2300,6 @@ pref("identity.sendtabpromo.url", "https://support.mozilla.org/1/firefox/%VERSIO
 pref("identity.mobilepromo.android", "https://www.mozilla.org/firefox/android/?utm_source=firefox-browser&utm_medium=firefox-browser&utm_campaign=");
 pref("identity.mobilepromo.ios", "https://www.mozilla.org/firefox/ios/?utm_source=firefox-browser&utm_medium=firefox-browser&utm_campaign=");
 
-// Migrate any existing Firefox Account data from the default profile to the
-// Developer Edition profile.
-#ifdef MOZ_DEV_EDITION
-  pref("identity.fxaccounts.migrateToDevEdition", true);
-#else
-  pref("identity.fxaccounts.migrateToDevEdition", false);
-#endif
-
 // How often should we try to fetch missed FxA commands on sync (in seconds).
 // Default is 24 hours.
 pref("identity.fxaccounts.commands.missed.fetch_interval", 86400);
@@ -2401,6 +2402,9 @@ pref("network.cookie.cookieBehavior", 5 /* BEHAVIOR_REJECT_TRACKER_AND_PARTITION
 
 // Enable Dynamic First-Party Isolation in the private browsing mode.
 pref("network.cookie.cookieBehavior.pbmode", 5 /* BEHAVIOR_REJECT_TRACKER_AND_PARTITION_FOREIGN */);
+
+// Enable harmful addon URL blocking by default for all channels, only on desktop.
+pref("privacy.trackingprotection.harmfuladdon.enabled", true);
 
 // Enable fingerprinting blocking by default for all channels, only on desktop.
 pref("privacy.trackingprotection.fingerprinting.enabled", true);

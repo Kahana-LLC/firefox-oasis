@@ -23,6 +23,7 @@
 #include "mozilla/ipc/IPCStreamUtils.h"
 #include "mozilla/net/NeckoChild.h"
 #include "mozilla/net/HttpChannelChild.h"
+#include "mozilla/net/CacheEntryWriteHandleChild.h"
 #include "mozilla/net/PBackgroundDataBridge.h"
 #include "mozilla/net/UrlClassifierCommon.h"
 #include "mozilla/net/UrlClassifierFeatureFactory.h"
@@ -444,26 +445,14 @@ void HttpChannelChild::OnStartRequest(
 
   ResourceTimingStructArgsToTimingsStruct(aArgs.timing(), mTransactionTimings);
 
-  nsAutoCString cosString;
-  ClassOfService::ToString(mClassOfService, cosString);
   if (!mAsyncOpenTime.IsNull() &&
       !aArgs.timing().transactionPending().IsNull()) {
-    glean::network::async_open_child_to_transaction_pending_exp.Get(cosString)
-        .AccumulateRawDuration(aArgs.timing().transactionPending() -
-                               mAsyncOpenTime);
     PerfStats::RecordMeasurement(
         PerfStats::Metric::HttpChannelAsyncOpenToTransactionPending,
         aArgs.timing().transactionPending() - mAsyncOpenTime);
   }
 
   const TimeStamp now = TimeStamp::Now();
-  if (!aArgs.timing().responseStart().IsNull()) {
-    glean::network::response_start_parent_to_content_exp.Get(cosString)
-        .AccumulateRawDuration(now - aArgs.timing().responseStart());
-    PerfStats::RecordMeasurement(
-        PerfStats::Metric::HttpChannelResponseStartParentToContent,
-        now - aArgs.timing().responseStart());
-  }
   if (!mOnStartRequestStartTime.IsNull()) {
     PerfStats::RecordMeasurement(PerfStats::Metric::OnStartRequestToContent,
                                  now - mOnStartRequestStartTime);
@@ -892,6 +881,7 @@ void HttpChannelChild::ProcessOnStopRequest(
     MutexAutoLock lock(mOnDataFinishedMutex);
     mTransferSize = aTiming.transferSize();
     mEncodedBodySize = aTiming.encodedBodySize();
+    mDecodedBodySize = aTiming.decodedBodySize();
   }
 
   if (StaticPrefs::network_send_OnDataFinished()) {
@@ -1023,16 +1013,6 @@ void HttpChannelChild::OnStopRequest(
   }
   PerfStats::RecordMeasurement(PerfStats::Metric::HttpChannelCompletion,
                                channelCompletionDuration);
-
-  if (!aTiming.responseEnd().IsNull()) {
-    nsAutoCString cosString;
-    ClassOfService::ToString(mClassOfService, cosString);
-    glean::network::response_end_parent_to_content.Get(cosString)
-        .AccumulateRawDuration(now - aTiming.responseEnd());
-    PerfStats::RecordMeasurement(
-        PerfStats::Metric::HttpChannelResponseEndParentToContent,
-        now - aTiming.responseEnd());
-  }
 
   if (!mOnStopRequestStartTime.IsNull()) {
     PerfStats::RecordMeasurement(PerfStats::Metric::OnStopRequestToContent,
@@ -1198,6 +1178,7 @@ void HttpChannelChild::DoOnStopRequest(nsIRequest* aRequest,
         aChannelStatus == NS_ERROR_UNWANTED_URI ||
         aChannelStatus == NS_ERROR_BLOCKED_URI ||
         aChannelStatus == NS_ERROR_HARMFUL_URI ||
+        aChannelStatus == NS_ERROR_HARMFULADDON_URI ||
         aChannelStatus == NS_ERROR_PHISHING_URI) {
       nsCString list, provider, fullhash;
 
@@ -2888,6 +2869,69 @@ HttpChannelChild::GetAlternativeDataType(nsACString& aType) {
   return NS_OK;
 }
 
+NS_IMPL_ADDREF(CacheEntryWriteHandleChild)
+NS_IMPL_RELEASE(CacheEntryWriteHandleChild)
+NS_INTERFACE_MAP_BEGIN(CacheEntryWriteHandleChild)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
+  NS_INTERFACE_MAP_ENTRY(nsICacheEntryWriteHandle)
+NS_INTERFACE_MAP_END
+
+void CacheEntryWriteHandleChild::AddIPDLReference() { AddRef(); }
+
+void CacheEntryWriteHandleChild::ReleaseIPDLReference() { Release(); }
+
+NS_IMETHODIMP
+CacheEntryWriteHandleChild::OpenAlternativeOutputStream(
+    const nsACString& aType, int64_t aPredictedSize,
+    nsIAsyncOutputStream** _retval) {
+  MOZ_ASSERT(NS_IsMainThread(), "Main thread only");
+
+  if (!CanSend()) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+  if (static_cast<ContentChild*>(gNeckoChild->Manager())->IsShuttingDown()) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  RefPtr<AltDataOutputStreamChild> stream = new AltDataOutputStreamChild();
+
+  if (!gNeckoChild->SendPAltDataOutputStreamConstructor(
+          stream, nsCString(aType), aPredictedSize, Nothing(),
+          Some(WrapNotNull(this)))) {
+    return NS_ERROR_FAILURE;
+  }
+
+  stream->AddIPDLReference();
+  stream.forget(_retval);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+HttpChannelChild::GetCacheEntryWriteHandle(nsICacheEntryWriteHandle** _retval) {
+  MOZ_ASSERT(NS_IsMainThread(), "Main thread only");
+
+  if (!CanSend()) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+  if (static_cast<ContentChild*>(gNeckoChild->Manager())->IsShuttingDown()) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  nsCOMPtr<nsISerialEventTarget> neckoTarget = GetNeckoTarget();
+  MOZ_ASSERT(neckoTarget);
+
+  RefPtr<CacheEntryWriteHandleChild> handle = new CacheEntryWriteHandleChild();
+
+  if (!gNeckoChild->SendPCacheEntryWriteHandleConstructor(handle,
+                                                          WrapNotNull(this))) {
+    return NS_ERROR_FAILURE;
+  }
+
+  handle->AddIPDLReference();
+  handle.forget(_retval);
+  return NS_OK;
+}
+
 NS_IMETHODIMP
 HttpChannelChild::OpenAlternativeOutputStream(const nsACString& aType,
                                               int64_t aPredictedSize,
@@ -2908,7 +2952,8 @@ HttpChannelChild::OpenAlternativeOutputStream(const nsACString& aType,
   stream->AddIPDLReference();
 
   if (!gNeckoChild->SendPAltDataOutputStreamConstructor(
-          stream, nsCString(aType), aPredictedSize, WrapNotNull(this))) {
+          stream, nsCString(aType), aPredictedSize, Some(WrapNotNull(this)),
+          Nothing())) {
     return NS_ERROR_FAILURE;
   }
 

@@ -181,6 +181,10 @@ urlbar-star-edit-bookmark =
 urlbar-star-add-bookmark =
     .tooltiptext = Bookmark this page ({ $shortcut })
 
+urlbar-split-view-button =
+    .tooltiptext = Split view
+    .aria-label = Split view
+
 ## Page Action Context Menu
 
 page-action-manage-extension2 =
@@ -698,6 +702,10 @@ urlbar-result-menu-dont-show-market =
 
 # A message that replaces a result when the user dismisses Market suggestions.
 urlbar-result-dismissal-acknowledgment-market = Thanks for your feedback. You won’t see market suggestions anymore.
+
+# This a11y label is read by screen readers when an item in the row is selected.
+urlbar-result-aria-group-market =
+  .aria-label = Stock market suggestions
 
 # A message that replaces a result when the user dismisses all suggestions of a
 # particular type.
@@ -1410,9 +1418,9 @@ trustpanel-blocker-header =
 ## Variables
 ##  $count (String): the number of trackers blocked.
 
-trustpanel-blocker-section-header = { $count ->
-  [one] <span>{ $count }</span> Tracker blocked on this site
-  *[other] <span>{ $count }</span> Trackers blocked on this site
+trustpanel-blocker-section-header2 = { $count ->
+  [one] <span data-l10n-name="count">{ $count }</span> Tracker blocked on this site
+  *[other] <span data-l10n-name="count">{ $count }</span> Trackers blocked on this site
 }
 trustpanel-blocker-description = { -brand-product-name } thinks companies should follow you less. So we block as many as we can.
 trustpanel-blocked-header = { -brand-product-name } blocked these things for you:

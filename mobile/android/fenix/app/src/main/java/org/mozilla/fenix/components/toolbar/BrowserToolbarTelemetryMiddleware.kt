@@ -23,6 +23,7 @@ import org.mozilla.fenix.components.toolbar.DisplayActions.RefreshClicked
 import org.mozilla.fenix.components.toolbar.DisplayActions.ShareClicked
 import org.mozilla.fenix.components.toolbar.DisplayActions.StopRefreshClicked
 import org.mozilla.fenix.components.toolbar.PageEndActionsInteractions.ReaderModeClicked
+import org.mozilla.fenix.components.toolbar.StartPageActions.SiteInfoClicked
 import org.mozilla.fenix.components.toolbar.TabCounterInteractions.AddNewPrivateTab
 import org.mozilla.fenix.components.toolbar.TabCounterInteractions.AddNewTab
 import org.mozilla.fenix.components.toolbar.TabCounterInteractions.TabCounterClicked
@@ -39,12 +40,17 @@ import org.mozilla.fenix.telemetry.ACTION_NAVIGATE_FORWARD_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_NAVIGATE_FORWARD_LONG_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_READER_MODE_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_REFRESH_CLICKED
+import org.mozilla.fenix.telemetry.ACTION_SECURITY_INDICATOR_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_SHARE_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_STOP_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_TAB_COUNTER_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_TAB_COUNTER_LONG_CLICKED
 import org.mozilla.fenix.telemetry.SOURCE_ADDRESS_BAR
+import org.mozilla.fenix.telemetry.SOURCE_BROWSER_END
+import org.mozilla.fenix.telemetry.SOURCE_BROWSER_START
 import org.mozilla.fenix.telemetry.SOURCE_NAVIGATION_BAR
+import org.mozilla.fenix.telemetry.SOURCE_PAGE_END
+import org.mozilla.fenix.telemetry.SOURCE_PAGE_START
 
 /**
  * [Middleware] responsible for recording telemetry of actions triggered by compose toolbars.
@@ -105,6 +111,9 @@ class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, Browse
             is HomepageClicked -> {
                 trackToolbarEvent(ToolbarActionRecord.HomepageClicked, action.source)
             }
+            is SiteInfoClicked -> {
+                trackToolbarEvent(ToolbarActionRecord.SecurityIndicatorClicked, action.source)
+            }
             else -> {}
         }
 
@@ -129,18 +138,20 @@ class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, Browse
         data object ShareClicked : ToolbarActionRecord(ACTION_SHARE_CLICKED)
         data object ReaderModeClicked : ToolbarActionRecord(ACTION_READER_MODE_CLICKED)
         data object HomepageClicked : ToolbarActionRecord(ACTION_HOME_CLICKED)
+        data object SecurityIndicatorClicked : ToolbarActionRecord(ACTION_SECURITY_INDICATOR_CLICKED)
     }
 
     private fun trackToolbarEvent(
         toolbarActionRecord: ToolbarActionRecord,
-        source: Source = Source.AddressBar,
+        source: Source = Source.Unknown,
     ) {
         when (source) {
-            Source.AddressBar ->
+            is Source.AddressBar ->
                 Toolbar.buttonTapped.record(
                     Toolbar.ButtonTappedExtra(
                         source = SOURCE_ADDRESS_BAR,
                         item = toolbarActionRecord.action,
+                        extra = source.telemetryName(),
                     ),
                 )
 
@@ -151,6 +162,16 @@ class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, Browse
                         item = toolbarActionRecord.action,
                     ),
                 )
+
+            Source.Unknown -> return
         }
     }
 }
+
+internal fun Source.AddressBar.telemetryName(): String =
+    when (this) {
+        Source.AddressBar.BrowserStart -> SOURCE_BROWSER_START
+        Source.AddressBar.PageStart -> SOURCE_PAGE_START
+        Source.AddressBar.PageEnd -> SOURCE_PAGE_END
+        Source.AddressBar.BrowserEnd -> SOURCE_BROWSER_END
+    }

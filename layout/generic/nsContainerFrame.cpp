@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "AnchorPositioningUtils.h"
+#include "CSSAlignUtils.h"
 #include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/ComputedStyle.h"
@@ -496,8 +497,9 @@ void nsContainerFrame::DisplaySelectionOverlay(nsDisplayListBuilder* aBuilder,
   // look up to see what selection(s) are on this frame
   UniquePtr<SelectionDetails> details = frameSelection->LookUpSelection(
       newContent, offset, 1,
-      IsSelectable() ? nsFrameSelection::IgnoreNormalSelection::No
-                     : nsFrameSelection::IgnoreNormalSelection::Yes);
+      ShouldPaintNormalSelection()
+          ? nsFrameSelection::IgnoreNormalSelection::No
+          : nsFrameSelection::IgnoreNormalSelection::Yes);
   if (!details) {
     return;
   }
@@ -637,14 +639,14 @@ void nsContainerFrame::DoInlinePrefISize(const IntrinsicSizeInput& aInput,
 
 /* virtual */
 LogicalSize nsContainerFrame::ComputeAutoSize(
-    gfxContext* aRenderingContext, WritingMode aWM, const LogicalSize& aCBSize,
-    nscoord aAvailableISize, const LogicalSize& aMargin,
-    const mozilla::LogicalSize& aBorderPadding,
+    const SizeComputationInput& aSizingInput, WritingMode aWM,
+    const LogicalSize& aCBSize, nscoord aAvailableISize,
+    const LogicalSize& aMargin, const mozilla::LogicalSize& aBorderPadding,
     const StyleSizeOverrides& aSizeOverrides, ComputeSizeFlags aFlags) {
   const bool isTableCaption = IsTableCaption();
   // Skip table caption, which requires special sizing - see bug 1109571.
   if (IsAbsolutelyPositionedWithDefiniteContainingBlock() && !isTableCaption) {
-    return ComputeAbsolutePosAutoSize(aRenderingContext, aWM, aCBSize,
+    return ComputeAbsolutePosAutoSize(aSizingInput, aWM, aCBSize,
                                       aAvailableISize, aMargin, aBorderPadding,
                                       aSizeOverrides, aFlags);
   }
@@ -652,7 +654,7 @@ LogicalSize nsContainerFrame::ComputeAutoSize(
   if (aFlags.contains(ComputeSizeFlag::ShrinkWrap)) {
     // Delegate to nsIFrame::ComputeAutoSize() for computing the shrink-wrapping
     // size.
-    result = nsIFrame::ComputeAutoSize(aRenderingContext, aWM, aCBSize,
+    result = nsIFrame::ComputeAutoSize(aSizingInput, aWM, aCBSize,
                                        aAvailableISize, aMargin, aBorderPadding,
                                        aSizeOverrides, aFlags);
   } else {
@@ -667,8 +669,8 @@ LogicalSize nsContainerFrame::ComputeAutoSize(
 
     WritingMode tableWM = GetParent()->GetWritingMode();
     const IntrinsicSizeInput input(
-        aRenderingContext, Some(aCBSize.ConvertTo(GetWritingMode(), aWM)),
-        Nothing());
+        aSizingInput.mRenderingContext,
+        Some(aCBSize.ConvertTo(GetWritingMode(), aWM)), Nothing());
     if (aWM.IsOrthogonalTo(tableWM)) {
       // For an orthogonal caption on a block-dir side of the table, shrink-wrap
       // to min-isize.
@@ -2456,45 +2458,6 @@ void nsContainerFrame::ConsiderChildOverflow(OverflowAreas& aOverflowAreas,
   }
 }
 
-// Map a raw StyleAlignFlags value to the used one.
-static StyleAlignFlags MapCSSAlignment(StyleAlignFlags aFlags,
-                                       const ReflowInput& aChildRI,
-                                       LogicalAxis aLogicalAxis,
-                                       WritingMode aWM) {
-  // Extract and strip the flag bits
-  StyleAlignFlags alignmentFlags = aFlags & StyleAlignFlags::FLAG_BITS;
-  aFlags &= ~StyleAlignFlags::FLAG_BITS;
-
-  if (aFlags == StyleAlignFlags::NORMAL) {
-    // "the 'normal' keyword behaves as 'start' on replaced
-    // absolutely-positioned boxes, and behaves as 'stretch' on all other
-    // absolutely-positioned boxes."
-    // https://drafts.csswg.org/css-align/#align-abspos
-    // https://drafts.csswg.org/css-align/#justify-abspos
-    aFlags = aChildRI.mFrame->IsReplaced() ? StyleAlignFlags::START
-                                           : StyleAlignFlags::STRETCH;
-  } else if (aFlags == StyleAlignFlags::FLEX_START) {
-    aFlags = StyleAlignFlags::START;
-  } else if (aFlags == StyleAlignFlags::FLEX_END) {
-    aFlags = StyleAlignFlags::END;
-  } else if (aFlags == StyleAlignFlags::LEFT ||
-             aFlags == StyleAlignFlags::RIGHT) {
-    if (aLogicalAxis == LogicalAxis::Inline) {
-      const bool isLeft = (aFlags == StyleAlignFlags::LEFT);
-      aFlags = (isLeft == aWM.IsBidiLTR()) ? StyleAlignFlags::START
-                                           : StyleAlignFlags::END;
-    } else {
-      aFlags = StyleAlignFlags::START;
-    }
-  } else if (aFlags == StyleAlignFlags::BASELINE) {
-    aFlags = StyleAlignFlags::START;
-  } else if (aFlags == StyleAlignFlags::LAST_BASELINE) {
-    aFlags = StyleAlignFlags::END;
-  }
-
-  return (aFlags | alignmentFlags);
-}
-
 StyleAlignFlags nsContainerFrame::CSSAlignmentForAbsPosChild(
     const ReflowInput& aChildRI, LogicalAxis aLogicalAxis) const {
   MOZ_ASSERT(aChildRI.mFrame->IsAbsolutelyPositioned(),
@@ -2503,7 +2466,8 @@ StyleAlignFlags nsContainerFrame::CSSAlignmentForAbsPosChild(
   // `auto` takes from parent's `align-items`.
   StyleAlignFlags alignment =
       aChildRI.mStylePosition->UsedSelfAlignment(aLogicalAxis, Style());
-  return MapCSSAlignment(alignment, aChildRI, aLogicalAxis, GetWritingMode());
+  return CSSAlignUtils::UsedAlignmentForAbsPos(aChildRI.mFrame, alignment,
+                                               aLogicalAxis, GetWritingMode());
 }
 
 StyleAlignFlags
@@ -2549,15 +2513,19 @@ nsContainerFrame::CSSAlignmentForAbsPosChildWithinContainingBlock(
                                                   : StyleAlignFlags::START;
       alignment |= StyleAlignFlags::UNSAFE;
     } else {
-      auto keyword = aLogicalAxis == LogicalAxis::Inline
-                         ? aResolvedPositionArea.first
-                         : aResolvedPositionArea.second;
-      // Use normal position-area alignment
-      Servo_ResolvePositionAreaSelfAlignment(&keyword, &alignment);
+      // Use default position-area self-alignment:
+      // https://drafts.csswg.org/css-anchor-position-1/#position-area-alignment
+      const auto axis = ToStyleLogicalAxis(aLogicalAxis);
+      const auto cbSWM = cbWM.ToStyleWritingMode();
+      const auto selfWM =
+          aChildRI.mFrame->GetWritingMode().ToStyleWritingMode();
+      Servo_ResolvePositionAreaSelfAlignment(&aResolvedPositionArea, axis,
+                                             &cbSWM, &selfWM, &alignment);
     }
   }
 
-  return MapCSSAlignment(alignment, aChildRI, aLogicalAxis, GetWritingMode());
+  return CSSAlignUtils::UsedAlignmentForAbsPos(aChildRI.mFrame, alignment,
+                                               aLogicalAxis, GetWritingMode());
 }
 
 nsOverflowContinuationTracker::nsOverflowContinuationTracker(

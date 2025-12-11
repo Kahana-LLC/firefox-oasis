@@ -7,12 +7,40 @@
 // This is loaded into chrome windows with the subscript loader. Wrap in
 // a block to prevent accidentally leaking globals onto `window`.
 {
+  ChromeUtils.defineESModuleGetters(this, {
+    DeferredTask: "resource://gre/modules/DeferredTask.sys.mjs",
+  });
+
+  /**
+   * A shared task which updates the urlbar indicator whenever:
+   * - A split view is activated or deactivated.
+   * - The active tab of a split view changes.
+   * - The order of tabs in a split view changes.
+   *
+   * @type {DeferredTask}
+   */
+  const updateUrlbarButton = new DeferredTask(() => {
+    const { activeSplitView, selectedTab } = gBrowser;
+    const button = document.getElementById("split-view-button");
+    if (activeSplitView) {
+      const activeIndex = activeSplitView.tabs.indexOf(selectedTab);
+      button.hidden = false;
+      button.setAttribute("data-active-index", activeIndex);
+    } else {
+      button.hidden = true;
+      button.removeAttribute("data-active-index");
+    }
+  }, 0);
+
   class MozTabSplitViewWrapper extends MozXULElement {
     /** @type {MutationObserver} */
     #tabChangeObserver;
 
     /** @type {MozTabbrowserTab[]} */
     #tabs = [];
+
+    /** @type {boolean} */
+    #activated = false;
 
     /**
      * @returns {boolean}
@@ -48,6 +76,10 @@
 
       this.#observeTabChanges();
 
+      if (this.hasActiveTab) {
+        this.#activate();
+      }
+
       if (this._initialized) {
         return;
       }
@@ -64,9 +96,10 @@
       this.#tabChangeObserver?.disconnect();
       this.ownerGlobal.removeEventListener("TabSelect", this);
       this.#deactivate();
-      this.dispatchEvent(
+      this.container.dispatchEvent(
         new CustomEvent("SplitViewRemoved", {
           bubbles: true,
+          composed: true,
         })
       );
     }
@@ -115,13 +148,18 @@
      * Show all Split View tabs in the content area.
      */
     #activate() {
+      updateUrlbarButton.arm();
+      if (this.#activated) {
+        return;
+      }
       gBrowser.showSplitViewPanels(this.#tabs);
-      this.dispatchEvent(
+      this.container.dispatchEvent(
         new CustomEvent("TabSplitViewActivate", {
-          detail: { tabs: this.#tabs },
+          detail: { tabs: this.#tabs, splitview: this },
           bubbles: true,
         })
       );
+      this.#activated = true;
     }
 
     /**
@@ -129,12 +167,14 @@
      */
     #deactivate() {
       gBrowser.hideSplitViewPanels(this.#tabs);
-      this.dispatchEvent(
+      updateUrlbarButton.arm();
+      this.container.dispatchEvent(
         new CustomEvent("TabSplitViewDeactivate", {
-          detail: { tabs: this.#tabs },
+          detail: { tabs: this.#tabs, splitview: this },
           bubbles: true,
         })
       );
+      this.#activated = false;
     }
 
     /**
@@ -173,6 +213,15 @@
     }
 
     /**
+     * Replace a tab in the split view with another tab
+     */
+    replaceTab(tabToReplace, newTab) {
+      this.#tabs = this.#tabs.filter(tab => tab != tabToReplace);
+      this.addTabs([newTab]);
+      gBrowser.removeTab(tabToReplace);
+    }
+
+    /**
      * Reverse order of the tabs in the split view wrapper.
      */
     reverseTabs() {
@@ -180,6 +229,7 @@
       gBrowser.moveTabBefore(secondTab, firstTab);
       this.#tabs = [secondTab, firstTab];
       gBrowser.showSplitViewPanels(this.#tabs);
+      updateUrlbarButton.arm();
     }
 
     /**

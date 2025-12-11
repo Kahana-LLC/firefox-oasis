@@ -1476,15 +1476,6 @@
   mirror: always
   rust: true
 
-# 0 = always native
-# 1 = never native
-# other = default
-- name: browser.display.windows.non_native_menus
-  type: RelaxedAtomicUint32
-  value: 2
-  mirror: always
-  rust: true
-
 # This pref dictates whether or not backplates and background images
 # are to be drawn, when in high-contrast mode:
 #   false: do not draw backplates or render background images
@@ -2913,6 +2904,12 @@
   value: true
   mirror: always
 
+# Whether pointerrawupdate's movementX and movementY are set to non-zero values.
+- name: dom.event.pointer.rawupdate.movement.enabled
+  type: bool
+  value: true
+  mirror: always
+
 # Whether wheel event target's should be grouped. When enabled, all wheel
 # events that occur in a given wheel transaction have the same event target.
 - name: dom.event.wheel-event-groups.enabled
@@ -4032,7 +4029,8 @@
 # based on the LRU policy. When disabled, the access time is stored only once
 # when the corresponding origin directory is created for the first time.
 #
-# This setting is currently intended for manual testing purposes only.
+# This pref must remain set to true in production, setting it to false is
+# intended for testing only.
 - name: dom.quotaManager.temporaryStorage.updateOriginAccessTime
   type: RelaxedAtomicBool
   value: true
@@ -4508,7 +4506,7 @@
 # (https://w3c.github.io/trusted-types/dist/spec/) is enabled.
 - name: dom.security.trusted_types.enabled
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 # If true, all content requests will get upgraded to HTTPS://
@@ -4646,7 +4644,7 @@
 # https://wicg.github.io/sanitizer-api/
 - name: dom.security.sanitizer.enabled
   type: bool
-  value: @IS_NIGHTLY_BUILD@
+  value: @IS_EARLY_BETA_OR_EARLIER@
   mirror: always
 
 # Logs elements and attributes removed by the Sanitizer API to the console.
@@ -4873,7 +4871,7 @@
 # Enable Storage-Access-Headers
 - name: dom.storage_access.headers.enabled
   type: bool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 # Forward-Declared Storage-access API.
@@ -5060,11 +5058,6 @@
   value: true
   mirror: always
   rust: true
-
-- name: dom.text_fragments.create_text_fragment.enabled
-  type: bool
-  value: true
-  mirror: always
 
 - name: dom.text_fragments.create_text_fragment.timeout_seconds
   type: uint32_t
@@ -6150,22 +6143,19 @@
 # whether fission is enabled by default.
 - name: fission.autostart
   type: bool
-#if defined(MOZ_WIDGET_ANDROID) && !defined(EARLY_BETA_OR_EARLIER)
-  value: false
-#else
   value: true
-#endif
   mirror: never
 
 # Disable storing the session history in the parent process, and accessing it
 # over IPC from the child processes.
+# WARNING: Until the test harness can understand ship-pref default values, this pref’s
+# default must be synchronized with the values set in testing/mochitest/runtests.py and in
+# testing/web-platform/tests/tools/wptrunner/wptrunner/browsers/firefox_android.py.
+# Changing the default here without updating the test harnesses will cause mismatches
+# in automation.
 - name: fission.disableSessionHistoryInParent
   type: bool
-#if defined(MOZ_WIDGET_ANDROID) && !defined(EARLY_BETA_OR_EARLIER)
-  value: true
-#else
   value: false
-#endif
   mirror: once
   do_not_use_directly: true
 
@@ -6205,6 +6195,9 @@
 # The strategy used to control how sites are isolated into separate processes
 # when Fisison is enabled. This pref has no effect if Fission is disabled.
 # See the `WebContentIsolationStrategy` enum in `ProcessIsolation.cpp`.
+# On Android, this is currently overridden: for Fenix - via nimbus.fml.yml,
+# and for other Andoid Components consumers value 2 is hardcoded
+# in the default settings in mozilla.components.concept.engine.Settings
 - name: fission.webContentIsolationStrategy
   type: uint32_t
   value: 1
@@ -7757,7 +7750,7 @@
 - name: gfx.webrender.layer-compositor
   type: bool
 #if defined(XP_WIN)
-  value: true
+  value: @IS_NIGHTLY_BUILD@
 #else
   value: false
 #endif
@@ -8499,16 +8492,6 @@
   value: true
   mirror: always
 
-# Whether we attempt to decode AVIF images or not.
-- name: image.avif.enabled
-  type: RelaxedAtomicBool
-#if defined(MOZ_AV1)
-  value: true
-#else
-  value: false
-#endif
-  mirror: always
-
 # How strict we are in accepting/rejecting AVIF inputs according to whether they
 # conform to the specification
 # 0 = Permissive: accept whatever we can simply, unambiguously interpret
@@ -9076,8 +9059,22 @@
   mirror: always
   set_spidermonkey_pref: startup
 
+  # Experimental support for Promise.allKeyed in JavaScript.
+- name: javascript.options.experimental.promise_allkeyed
+  type: bool
+  value: false
+  mirror: always
+  set_spidermonkey_pref: startup
+
  # Experimental support for Iterator Chunking in JavaScript.
 - name: javascript.options.experimental.iterator_chunking
+  type: bool
+  value: false
+  mirror: always
+  set_spidermonkey_pref: startup
+
+ # Experimental support for Iterator.join in JavaScript.
+- name: javascript.options.experimental.iterator_join
   type: bool
   value: false
   mirror: always
@@ -9262,6 +9259,12 @@
 #endif
     mirror: always
     set_spidermonkey_pref: always
+
+-   name: javascript.options.wasm_custom_page_sizes
+    type: bool
+    value: false
+    mirror: always
+    set_spidermonkey_pref: startup
 
 #if defined(ENABLE_WASM_SIMD)
 #if defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86)
@@ -9455,11 +9458,9 @@
   do_not_use_directly: true
 
 # Use the JS microtask queue for Promise jobs and other microtasks.
-# DO NOT TURN THIS ON BY DEFAULT WITHOUT THE BUGS BLOCKING
-# BUG 1990841 being fixed (especially Bug 1990842).
 - name: javascript.options.use_js_microtask_queue
   type: RelaxedAtomicBool
-  value: false
+  value: true
   # Changing this mid process will break invariants and crash, however
   # making this mirror: once, and set_spidermonkey_pref: startup is
   # broken: See Bug 1989094
@@ -9906,7 +9907,7 @@
 # https://drafts.csswg.org/css-anchor-position-1/
 - name: layout.css.anchor-positioning.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
   rust: true
 
@@ -10419,7 +10420,7 @@
 #endif
   mirror: always
 
-- name: layout.css.scroll-behavior.damping-ratio
+- name: layout.css.scroll-snap.damping-ratio
   type: AtomicFloat
   value: 1.0f
   mirror: always
@@ -10427,9 +10428,17 @@
 # Tuning of the smooth scroll motion used by CSSOM-View scroll-behavior.
 # Spring-constant controls the strength of the simulated MSD
 # (Mass-Spring-Damper).
-- name: layout.css.scroll-behavior.spring-constant
+- name: layout.css.scroll-snap.spring-constant
   type: AtomicFloat
   value: 250.0f
+  mirror: always
+
+# If enabled, CSSOM-View scroll-behavior uses the same physics as
+# scroll animations for user input (mousewheel or keyboard), rather
+# than the snappier-feeling scroll snap physics.
+- name: layout.css.scroll-behavior.same-physics-as-user-input
+  type: bool
+  value: false
   mirror: always
 
 # Whether the scroll-driven animations generated by CSS is enabled. This
@@ -15928,7 +15937,7 @@
 # Enable HTTP Compression Dictionary support
 - name: network.http.dictionaries.enable
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 #---------------------------------------------------------------------------
@@ -16376,6 +16385,12 @@
 - name: privacy.trackingprotection.annotate_channels
   type: bool
   value: true
+  mirror: always
+
+# Block harmful addon URLs.
+- name: privacy.trackingprotection.harmfuladdon.enabled
+  type: bool
+  value: false
   mirror: always
 
 # Block 3rd party fingerprinting resources.
@@ -17159,11 +17174,7 @@
 - name: security.sandbox.gpu.level
   type: int32_t
 #if defined(XP_WIN)
-#if defined(EARLY_BETA_OR_EARLIER)
   value: 2
-#else
-  value: 1
-#endif
 #elif defined(XP_MACOSX)
   value: 1
 #else
@@ -17374,6 +17385,12 @@
 # Show the Windows Passkey settings link in about:preferences. This is
 # set to true if we find that webauthn.dll is sufficiently recent.
 - name: security.webauthn.show_ms_settings_link
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# Allow WebAuthn when a certificate override is in place
+- name: security.webauthn.allow_with_certificate_override
   type: RelaxedAtomicBool
   value: false
   mirror: always

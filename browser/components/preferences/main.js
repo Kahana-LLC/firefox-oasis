@@ -191,6 +191,10 @@ Preferences.addAll([
     id: "media.videocontrols.picture-in-picture.video-toggle.enabled",
     type: "bool",
   },
+  {
+    id: "media.videocontrols.picture-in-picture.enable-when-switching-tabs.enabled",
+    type: "bool",
+  },
 
   // Media
   { id: "media.hardwaremediakeys.enabled", type: "bool" },
@@ -524,6 +528,16 @@ Preferences.addSetting({
   onUserChange(checked) {
     if (!checked) {
       Glean.pictureinpictureSettings.disableSettings.record();
+    }
+  },
+});
+Preferences.addSetting({
+  id: "pictureInPictureEnableWhenSwitchingTabs",
+  pref: "media.videocontrols.picture-in-picture.enable-when-switching-tabs.enabled",
+  deps: ["pictureInPictureToggleEnabled"],
+  onUserChange(checked) {
+    if (checked) {
+      Glean.pictureinpictureSettings.enableAutotriggerSettings.record();
     }
   },
 });
@@ -1239,6 +1253,17 @@ Preferences.addSetting({
       setDefaultButton.disabled = false;
     });
   },
+});
+
+// Firefox support settings
+Preferences.addSetting({
+  id: "supportLinksGroup",
+});
+Preferences.addSetting({
+  id: "supportGetHelp",
+});
+Preferences.addSetting({
+  id: "supportShareIdeas",
 });
 
 // Performance settings
@@ -2078,6 +2103,12 @@ SettingGroupManager.registerGroups({
         id: "pictureInPictureToggleEnabled",
         l10nId: "browsing-picture-in-picture-toggle-enabled",
         supportPage: "picture-in-picture",
+        items: [
+          {
+            id: "pictureInPictureEnableWhenSwitchingTabs",
+            l10nId: "browsing-picture-in-picture-enable-when-switching-tabs",
+          },
+        ],
       },
       {
         id: "mediaControlToggleEnabled",
@@ -2238,6 +2269,33 @@ SettingGroupManager.registerGroups({
         controlAttrs: {
           type: "list",
         },
+      },
+    ],
+  },
+  support: {
+    inProgress: true,
+    l10nId: "support-application-heading",
+    headingLevel: 2,
+    items: [
+      {
+        id: "supportLinksGroup",
+        control: "moz-box-group",
+        items: [
+          {
+            id: "supportGetHelp",
+            l10nId: "support-get-help",
+            control: "moz-box-link",
+            supportPage: "preferences",
+          },
+          {
+            id: "supportShareIdeas",
+            l10nId: "support-share-ideas",
+            control: "moz-box-link",
+            controlAttrs: {
+              href: "https://connect.mozilla.org/",
+            },
+          },
+        ],
       },
     ],
   },
@@ -2463,7 +2521,7 @@ SettingGroupManager.registerGroups({
       {
         id: "manageSavedPasswords",
         l10nId: "forms-saved-passwords-2",
-        control: "moz-box-button",
+        control: "moz-box-link",
       },
       {
         id: "additionalProtectionsGroup",
@@ -2759,6 +2817,32 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  defaultEngine: {
+    l10nId: "search-engine-group",
+    headingLevel: 2,
+    items: [
+      {
+        id: "defaultEngineNormal",
+        l10nId: "search-default-engine",
+        control: "moz-select",
+      },
+      {
+        id: "searchShowSearchTermCheckbox",
+        l10nId: "search-show-search-term-option-2",
+      },
+      {
+        id: "browserSeparateDefaultEngine",
+        l10nId: "search-separate-default-engine-2",
+        items: [
+          {
+            id: "defaultPrivateEngine",
+            l10nId: "search-separate-default-engine-dropdown",
+            control: "moz-select",
+          },
+        ],
+      },
+    ],
+  },
   dnsOverHttpsAdvanced: {
     inProgress: true,
     l10nId: "preferences-doh-advanced-section",
@@ -2927,6 +3011,120 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  etpStatus: {
+    inProgress: true,
+    headingLevel: 2,
+    l10nId: "preferences-etp-status-header",
+    supportPage: "enhanced-tracking-protection",
+    iconSrc: "chrome://browser/skin/controlcenter/tracking-protection.svg",
+    items: [
+      {
+        id: "etpStatusBoxGroup",
+        control: "moz-box-group",
+        items: [
+          {
+            id: "etpStatusItem",
+            l10nId: "preferences-etp-level-standard",
+            control: "moz-box-item",
+          },
+          {
+            id: "etpStatusAdvancedButton",
+            l10nId: "preferences-etp-status-advanced-button",
+            control: "moz-box-button",
+          },
+        ],
+      },
+      {
+        id: "protectionsDashboardLink",
+        l10nId: "preferences-etp-status-protections-dashboard-link",
+        control: "moz-box-link",
+        controlAttrs: {
+          href: "about:protections",
+        },
+      },
+    ],
+  },
+  etpBanner: {
+    inProgress: true,
+    items: [
+      {
+        id: "etpBannerEl",
+        control: "moz-card",
+      },
+    ],
+  },
+  etpAdvanced: {
+    inProgress: true,
+    headingLevel: 2,
+    l10nId: "preferences-etp-advanced-settings-group",
+    supportPage: "enhanced-tracking-protection",
+    items: [
+      {
+        id: "contentBlockingCategory",
+        control: "moz-radio-group",
+        options: [
+          {
+            id: "etpLevelStandard",
+            value: "standard",
+            l10nId: "preferences-etp-level-standard",
+          },
+          {
+            id: "etpLevelStrict",
+            value: "strict",
+            l10nId: "preferences-etp-level-strict",
+            items: [
+              {
+                id: "etpAllowListBaselineEnabled",
+                l10nId: "content-blocking-baseline-exceptions-3",
+                supportPage: "manage-enhanced-tracking-protection-exceptions",
+                control: "moz-checkbox",
+                items: [
+                  {
+                    id: "etpAllowListConvenienceEnabled",
+                    l10nId: "content-blocking-convenience-exceptions-3",
+                    control: "moz-checkbox",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: "etpLevelCustom",
+            value: "custom",
+            l10nId: "preferences-etp-level-custom",
+            items: [
+              {
+                id: "etpCustomizeButton",
+                l10nId: "preferences-etp-customize-button",
+                control: "moz-box-button",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "rfpWarning",
+        control: "moz-message-bar",
+        l10nId: "preferences-etp-rfp-warning-message",
+        supportPage: "resist-fingerprinting",
+      },
+      {
+        id: "etpLevelWarning",
+        control: "moz-promo",
+        l10nId: "preferences-etp-level-warning-message",
+        controlAttrs: {
+          ".imageAlignment": "end",
+          ".imageSrc":
+            "chrome://browser/content/preferences/etp-toggle-promo.svg",
+        },
+      },
+      {
+        id: "etpManageExceptionsButton",
+        l10nId: "preferences-etp-manage-exceptions-button",
+        control: "moz-box-button",
+      },
+    ],
+  },
 });
 
 /**
@@ -3047,6 +3245,7 @@ var gMainPane = {
     initSettingGroup("drm");
     initSettingGroup("browsing");
     initSettingGroup("zoom");
+    initSettingGroup("support");
     initSettingGroup("performance");
     initSettingGroup("startup");
     initSettingGroup("importBrowserData");

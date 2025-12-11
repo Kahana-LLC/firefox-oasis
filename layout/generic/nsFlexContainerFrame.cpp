@@ -1735,8 +1735,8 @@ void nsFlexContainerFrame::ResolveAutoFlexBasisAndMinSize(
           sizeOverrides.mStyleBSize.emplace(aFlexItem.StyleCrossSize());
         }
         const auto sizeInItemWM = aFlexItem.Frame()->ComputeSize(
-            aItemReflowInput.mRenderingContext, itemWM,
-            aItemReflowInput.mContainingBlockSize, availISize,
+            aItemReflowInput, itemWM, aItemReflowInput.mContainingBlockSize,
+            availISize,
             aItemReflowInput.ComputedLogicalMargin(itemWM).Size(itemWM),
             aItemReflowInput.ComputedLogicalBorderPadding(itemWM).Size(itemWM),
             sizeOverrides, {ComputeSizeFlag::ShrinkWrap});
@@ -1870,12 +1870,7 @@ class nsFlexContainerFrame::CachedBAxisMeasurement {
           mComputedMaxBSize(aRI.ComputedMaxBSize()),
           mAvailableBSize(aRI.AvailableBSize()) {}
 
-    bool operator==(const Key& aOther) const {
-      return mComputedSize == aOther.mComputedSize &&
-             mComputedMinBSize == aOther.mComputedMinBSize &&
-             mComputedMaxBSize == aOther.mComputedMaxBSize &&
-             mAvailableBSize == aOther.mAvailableBSize;
-    }
+    bool operator==(const Key& aOther) const = default;
   };
 
   const Key mKey;

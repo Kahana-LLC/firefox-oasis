@@ -20,35 +20,37 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentDataType
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDataType
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import mozilla.components.compose.base.Dropdown
 import mozilla.components.compose.base.annotation.FlexibleWindowLightDarkPreview
 import mozilla.components.compose.base.button.DestructiveButton
 import mozilla.components.compose.base.button.FilledButton
+import mozilla.components.compose.base.button.IconButton
 import mozilla.components.compose.base.button.OutlinedButton
 import mozilla.components.compose.base.menu.MenuItem
 import mozilla.components.compose.base.text.Text
@@ -98,7 +100,6 @@ fun CreditCardEditorScreen(store: CreditCardEditorStore) {
                 },
             )
         },
-        containerColor = FirefoxTheme.colors.layer1,
     ) {
         if (state.showDeleteDialog) {
             DeleteCreditCardDialog(
@@ -156,11 +157,6 @@ private fun EditorTopBar(
 ) {
     TopAppBar(
         modifier = modifier,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = FirefoxTheme.colors.layer1,
-            titleContentColor = FirefoxTheme.colors.textPrimary,
-            actionIconContentColor = FirefoxTheme.colors.iconPrimary,
-        ),
         title = {
             Text(
                 text = if (inEditMode) {
@@ -168,36 +164,42 @@ private fun EditorTopBar(
                 } else {
                     stringResource(R.string.credit_cards_add_card)
                 },
-                style = FirefoxTheme.typography.headline6,
+                style = FirefoxTheme.typography.headline5,
             )
         },
         navigationIcon = {
-            IconButton(onClick = onBackClicked) {
+            IconButton(
+                onClick = onBackClicked,
+                contentDescription = stringResource(R.string.credit_cards_navigate_back_button_content_description),
+            ) {
                 Icon(
                     painter = painterResource(iconsR.drawable.mozac_ic_back_24),
-                    contentDescription = stringResource(R.string.credit_cards_navigate_back_button_content_description),
+                    contentDescription = null,
                 )
             }
         },
         actions = {
             if (inEditMode) {
                 IconButton(
-                    modifier = Modifier.testTag(CreditCardEditorTestTags.TOPBAR_DELETE_BUTTON),
                     onClick = onDeleteActionClicked,
+                    contentDescription = stringResource(R.string.credit_cards_menu_delete_card),
+                    modifier = Modifier.testTag(CreditCardEditorTestTags.TOPBAR_DELETE_BUTTON),
                 ) {
                     Icon(
                         painter = painterResource(iconsR.drawable.mozac_ic_delete_24),
-                        contentDescription = stringResource(R.string.credit_cards_menu_delete_card),
+                        contentDescription = null,
                     )
                 }
             }
+
             IconButton(
-                modifier = Modifier.testTag(CreditCardEditorTestTags.TOPBAR_SAVE_BUTTON),
                 onClick = onSaveActionClicked,
+                contentDescription = stringResource(R.string.credit_cards_menu_save),
+                modifier = Modifier.testTag(CreditCardEditorTestTags.TOPBAR_SAVE_BUTTON),
             ) {
                 Icon(
                     painter = painterResource(iconsR.drawable.mozac_ic_checkmark_24),
-                    contentDescription = stringResource(R.string.credit_cards_menu_save),
+                    contentDescription = null,
                 )
             }
         },
@@ -237,7 +239,7 @@ private fun EditorContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(CreditCardEditorTestTags.CARD_NUMBER_FIELD)
-                .semantics { contentType = ContentType.CreditCardNumber }
+                .semantics { contentDataType = ContentDataType.None }
                 .focusRequester(focusRequester),
             errorText = stringResource(R.string.credit_cards_number_validation_error_message_2),
             label = stringResource(R.string.credit_cards_card_number),
@@ -254,7 +256,7 @@ private fun EditorContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(CreditCardEditorTestTags.NAME_ON_CARD_FIELD)
-                .semantics { contentType = ContentType.PersonFullName },
+                .semantics { contentDataType = ContentDataType.None },
             errorText = stringResource(R.string.credit_cards_name_on_card_validation_error_message_2),
             label = stringResource(R.string.credit_cards_name_on_card),
             isError = state.showNameOnCardError,
@@ -397,72 +399,65 @@ private fun TextInput(
     )
 }
 
-@FlexibleWindowLightDarkPreview
-@Composable
-@Preview
-private fun CreditCardEditorScreenPreview() = FirefoxTheme {
-    val state by remember {
-        mutableStateOf(
-            CreditCardEditorState(
-                guid = "1234",
-                cardNumber = "5555444433331111",
-                nameOnCard = "Jane Doe",
-                expiryMonths = listOf("January (01)", "February (02)"),
-                selectedExpiryMonthIndex = 1,
-                expiryYears = listOf("2025", "2026", "2027"),
-                selectedExpiryYearIndex = 2,
-                inEditMode = false,
-                showDeleteDialog = false,
-            ),
-        )
-    }
-    CreditCardEditorScreen(
-        store = CreditCardEditorStore(initialState = state),
-    )
-}
+private data class CreditCardEditorPreviewState(
+    val guid: String = "1234",
+    val cardNumber: String = "5555444433331111",
+    val nameOnCard: String = "Jane Doe",
+    val expiryMonths: List<String> = listOf("January (01)", "February (02)"),
+    val selectedExpiryMonthIndex: Int = 1,
+    val expiryYears: List<String> = listOf("2025", "2026", "2027"),
+    val selectedExpiryYearIndex: Int = 2,
+    val inEditMode: Boolean = false,
+    val showDeleteDialog: Boolean = false,
+)
 
-@Composable
-@Preview
-private fun CreditCardEditorScreenPrivateThemePreview() = FirefoxTheme(theme = Theme.Private) {
-    val state by remember {
-        mutableStateOf(
-            CreditCardEditorState(
-                guid = "1234",
-                cardNumber = "5555444433331111",
-                nameOnCard = "Jane Doe",
-                expiryMonths = listOf("January (01)", "February (02)"),
-                selectedExpiryMonthIndex = 1,
-                expiryYears = listOf("2025", "2026", "2027"),
-                selectedExpiryYearIndex = 2,
-                inEditMode = false,
-                showDeleteDialog = false,
-            ),
-        )
-    }
-    CreditCardEditorScreen(
-        store = CreditCardEditorStore(initialState = state),
+private class CreditCardEditorPreviewProvider : PreviewParameterProvider<CreditCardEditorPreviewState> {
+    override val values = sequenceOf(
+        CreditCardEditorPreviewState(),
+        CreditCardEditorPreviewState(inEditMode = true),
+        CreditCardEditorPreviewState(inEditMode = true, showDeleteDialog = true),
     )
 }
 
 @FlexibleWindowLightDarkPreview
 @Composable
-@Preview
-private fun CreditCardEditorScreenDeleteDialogPreview() = FirefoxTheme {
-    val state by remember {
-        mutableStateOf(
-            CreditCardEditorState(
-                guid = "1234",
-                cardNumber = "5555444433331111",
-                nameOnCard = "Jane Doe",
-                expiryMonths = listOf("January (01)", "February (02)"),
-                selectedExpiryMonthIndex = 1,
-                expiryYears = listOf("2025", "2026", "2027"),
-                selectedExpiryYearIndex = 2,
-                inEditMode = false,
-                showDeleteDialog = true,
-            ),
+private fun CreditCardEditorScreenPreview(
+    @PreviewParameter(CreditCardEditorPreviewProvider::class) param: CreditCardEditorPreviewState,
+) {
+    val state = CreditCardEditorState(
+        guid = param.guid,
+        cardNumber = param.cardNumber,
+        nameOnCard = param.nameOnCard,
+        expiryMonths = param.expiryMonths,
+        selectedExpiryMonthIndex = param.selectedExpiryMonthIndex,
+        expiryYears = param.expiryYears,
+        selectedExpiryYearIndex = param.selectedExpiryYearIndex,
+        inEditMode = param.inEditMode,
+        showDeleteDialog = param.showDeleteDialog,
+    )
+    FirefoxTheme {
+        CreditCardEditorScreen(
+            store = CreditCardEditorStore(initialState = state),
         )
     }
+}
+
+@Composable
+@Preview
+private fun CreditCardEditorScreenPrivatePreview(
+    @PreviewParameter(CreditCardEditorPreviewProvider::class) param: CreditCardEditorPreviewState,
+) = FirefoxTheme(theme = Theme.Private) {
+    val state = CreditCardEditorState(
+        guid = param.guid,
+        cardNumber = param.cardNumber,
+        nameOnCard = param.nameOnCard,
+        expiryMonths = param.expiryMonths,
+        selectedExpiryMonthIndex = param.selectedExpiryMonthIndex,
+        expiryYears = param.expiryYears,
+        selectedExpiryYearIndex = param.selectedExpiryYearIndex,
+        inEditMode = param.inEditMode,
+        showDeleteDialog = param.showDeleteDialog,
+    )
     CreditCardEditorScreen(
         store = CreditCardEditorStore(initialState = state),
     )

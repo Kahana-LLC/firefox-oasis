@@ -2532,10 +2532,11 @@ nsresult ScriptLoader::ProcessRequest(ScriptLoadRequest* aRequest) {
     aRequest->GetScriptLoadContext()->MaybeCancelOffThreadScript();
   }
 
-  // Free any source data, but keep the serialized Stencil as we might have to
-  // save it later.
-  aRequest->ClearScriptSource();
-  if (aRequest->IsSerializedStencil()) {
+  if (aRequest->IsTextSource()) {
+    // Free text source, but keep the serialized Stencil as we might have to
+    // save it later.
+    aRequest->ClearScriptText();
+  } else if (aRequest->IsSerializedStencil()) {
     // We received serialized Stencil as input, thus we were decoding, and we
     // will not be encoding it once more. We can safely clear the content of
     // this buffer.
@@ -2780,7 +2781,7 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
          aRequest));
     aRequest->MarkNotCacheable();
     MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
-    MOZ_ASSERT_IF(aRequest->IsSource(),
+    MOZ_ASSERT_IF(aRequest->IsTextSource(),
                   aRequest->HasNoSRIOrSRIAndSerializedStencil());
     return;
   }
@@ -2826,7 +2827,7 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
          "!LoadedScript::HasDiskCacheReference",
          aRequest));
     aRequest->MarkSkippedDiskCaching();
-    MOZ_ASSERT_IF(aRequest->IsSource(),
+    MOZ_ASSERT_IF(aRequest->IsTextSource(),
                   aRequest->HasNoSRIOrSRIAndSerializedStencil());
     return;
   }
@@ -2871,27 +2872,7 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
   // disk cache optimization, such that we do not waste time on entry which
   // are going to be dropped soon.
   if (strategy.mHasFetchCountMin) {
-    uint32_t fetchCount = 0;
-    if (aRequest->IsCachedStencil()) {
-      fetchCount = aRequest->mLoadedScript->mFetchCount;
-    } else {
-      if (NS_FAILED(
-              aRequest->getLoadedScript()->mCacheInfo->GetCacheTokenFetchCount(
-                  &fetchCount))) {
-        LOG(
-            ("ScriptLoadRequest (%p): Bytecode-cache: Skip disk: Cannot get "
-             "fetchCount.",
-             aRequest));
-        aRequest->MarkSkippedDiskCaching();
-        aRequest->getLoadedScript()->DropDiskCacheReferenceAndSRI();
-        return;
-      }
-      if (fetchCount < UINT8_MAX) {
-        aRequest->mLoadedScript->mFetchCount = fetchCount;
-      } else {
-        aRequest->mLoadedScript->mFetchCount = UINT8_MAX;
-      }
-    }
+    uint8_t fetchCount = aRequest->mLoadedScript->mFetchCount;
     LOG(("ScriptLoadRequest (%p): Bytecode-cache: fetchCount = %d.", aRequest,
          fetchCount));
     if (fetchCount < strategy.mFetchCountMin) {
@@ -3172,7 +3153,7 @@ void ScriptLoader::InstantiateClassicScriptFromMaybeEncodedSource(
     return;
   }
 
-  MOZ_ASSERT(aRequest->IsSource());
+  MOZ_ASSERT(aRequest->IsTextSource());
   CollectDelazifications collectDelazifications =
       aRequest->PassedConditionForEitherCache() ? CollectDelazifications::Yes
                                                 : CollectDelazifications::No;
@@ -3343,12 +3324,12 @@ void ScriptLoader::TryCacheRequest(ScriptLoadRequest* aRequest) {
     cacheBehavior = CacheBehavior::Evict;
   }
 
+  LoadedScript* loadedScript = aRequest->getLoadedScript();
   if (cacheBehavior == CacheBehavior::Insert) {
-    auto loadData =
-        MakeRefPtr<ScriptLoadData>(this, aRequest, aRequest->getLoadedScript());
-    aRequest->ConvertToCachedStencil();
-    if (aRequest->getLoadedScript()->mFetchCount == 0) {
-      aRequest->getLoadedScript()->mFetchCount = 1;
+    auto loadData = MakeRefPtr<ScriptLoadData>(this, aRequest, loadedScript);
+    loadedScript->ConvertToCachedStencil();
+    if (loadedScript->mFetchCount == 0) {
+      loadedScript->mFetchCount = 1;
     }
     mCache->Insert(*loadData);
     LOG(("ScriptLoader (%p): Inserting in-memory cache for %s.", this,
@@ -3356,7 +3337,7 @@ void ScriptLoader::TryCacheRequest(ScriptLoadRequest* aRequest) {
     TRACE_FOR_TEST(aRequest, "memorycache:saved");
   } else {
     MOZ_ASSERT(cacheBehavior == CacheBehavior::Evict);
-    ScriptHashKey key(this, aRequest, aRequest->getLoadedScript());
+    ScriptHashKey key(this, aRequest, loadedScript);
     mCache->Evict(key);
     LOG(("ScriptLoader (%p): Evicting in-memory cache for %s.", this,
          aRequest->URI()->GetSpecOrDefault().get()));
@@ -3733,7 +3714,7 @@ bool ScriptLoader::SaveToDiskCache(
   // might fail if the stream is already open by another request, in which
   // case, we just ignore the current one.
   nsCOMPtr<nsIAsyncOutputStream> output;
-  nsresult rv = aLoadedScript->mCacheInfo->OpenAlternativeOutputStream(
+  nsresult rv = aLoadedScript->mCacheEntry->OpenAlternativeOutputStream(
       BytecodeMimeTypeFor(aLoadedScript),
       static_cast<int64_t>(aCompressed.length()), getter_AddRefs(output));
   if (NS_FAILED(rv)) {
@@ -4090,8 +4071,9 @@ nsresult ScriptLoader::OnStreamComplete(
     aLoader->GetRequest(getter_AddRefs(channelRequest));
 
     nsCOMPtr<nsICacheInfoChannel> cacheInfo = do_QueryInterface(channelRequest);
-
-    if (cacheInfo) {
+    nsCOMPtr<nsICacheEntryWriteHandle> cacheEntry;
+    if (cacheInfo && NS_SUCCEEDED(cacheInfo->GetCacheEntryWriteHandle(
+                         getter_AddRefs(cacheEntry)))) {
       uint64_t id;
       nsresult rv = cacheInfo->GetCacheEntryId(&id);
       if (NS_SUCCEEDED(rv)) {
@@ -4128,19 +4110,25 @@ nsresult ScriptLoader::OnStreamComplete(
 
         aRequest->getLoadedScript()->SetCacheEntryId(id);
       }
-    }
 
-    // If we are loading from source, store the cache info channel and
-    // save the computed SRI hash or a dummy SRI hash in case we are going to
-    // save the this script in the disk cache.
-    if (aRequest->IsSource() &&
-        StaticPrefs::dom_script_loader_bytecode_cache_enabled()) {
-      aRequest->getLoadedScript()->mCacheInfo = cacheInfo;
-      LOG(("ScriptLoadRequest (%p): nsICacheInfoChannel = %p", aRequest,
-           aRequest->getLoadedScript()->mCacheInfo.get()));
+      // If we are loading from source, store the cache info channel and
+      // save the computed SRI hash or a dummy SRI hash in case we are going to
+      // save the this script in the disk cache.
+      if (aRequest->IsTextSource() &&
+          StaticPrefs::dom_script_loader_bytecode_cache_enabled()) {
+        uint32_t fetchCount;
+        if (NS_SUCCEEDED(cacheInfo->GetCacheTokenFetchCount(&fetchCount))) {
+          if (fetchCount < UINT8_MAX) {
+            aRequest->getLoadedScript()->mFetchCount = fetchCount;
+          } else {
+            aRequest->getLoadedScript()->mFetchCount = UINT8_MAX;
+          }
+        }
 
-      // We need the SRI hash only when the channel has cache info.
-      if (aRequest->getLoadedScript()->mCacheInfo) {
+        aRequest->getLoadedScript()->mCacheEntry = cacheEntry;
+        LOG(("ScriptLoadRequest (%p): nsICacheEntryWriteHandle = %p", aRequest,
+             (void*)cacheEntry));
+
         rv = SaveSRIHash(aRequest, aSRIDataVerifier);
       }
     }
@@ -4202,7 +4190,7 @@ nsresult ScriptLoader::VerifySRI(ScriptLoadRequest* aRequest,
 
 nsresult ScriptLoader::SaveSRIHash(
     ScriptLoadRequest* aRequest, SRICheckDataVerifier* aSRIDataVerifier) const {
-  MOZ_ASSERT(aRequest->IsSource());
+  MOZ_ASSERT(aRequest->IsTextSource());
   JS::TranscodeBuffer& sri = aRequest->SRI();
   MOZ_ASSERT(sri.empty());
 

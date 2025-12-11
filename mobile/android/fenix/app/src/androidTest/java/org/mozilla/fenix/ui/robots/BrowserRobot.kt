@@ -202,6 +202,12 @@ class BrowserRobot {
         }
     }
 
+    fun verifyCrossOriginStorageLearnMoreURL() {
+        Log.i(TAG, "verifyCrossOriginStorageLearnMoreURL: Trying to verify cross origin storage URL")
+        verifyUrl("docs/Web/API/Storage_Access_API")
+        Log.i(TAG, "verifyCrossOriginStorageLearnMoreURL: Verified cross origin storage URL")
+    }
+
     fun verifySponsoredShortcutsLearnMoreURL() {
         try {
             verifyUrl("support.mozilla.org/en-US/kb/sponsor-privacy")
@@ -1232,7 +1238,8 @@ class BrowserRobot {
         Log.i(TAG, "verifyWebCompatReporterViewItems: Verified that the \"Describe the problem (optional)\" field is displayed")
         if (appContext.components.core.engine.version.releaseChannel !== EngineReleaseChannel.RELEASE) {
             Log.i(
-                TAG, "Release channel is ${appContext.components.core.engine.version.releaseChannel}",
+                TAG,
+                "Release channel is ${appContext.components.core.engine.version.releaseChannel}",
             )
             Log.i(
                 TAG,

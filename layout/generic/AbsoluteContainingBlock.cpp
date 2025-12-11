@@ -17,12 +17,11 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ReflowInput.h"
+#include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/ViewportFrame.h"
 #include "mozilla/dom/ViewTransition.h"
-#include "nsAtomicContainerFrame.h"
 #include "nsCSSFrameConstructor.h"
 #include "nsContainerFrame.h"
-#include "nsGkAtoms.h"
 #include "nsGridContainerFrame.h"
 #include "nsIFrameInlines.h"
 #include "nsPlaceholderFrame.h"
@@ -261,6 +260,24 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     aOverflowAreas = nullptr;
   }
 
+  const auto scrollableContainingBlock = [&]() -> nsRect {
+    switch (aDelegatingFrame->Style()->GetPseudoType()) {
+      case PseudoStyleType::scrolledContent:
+      case PseudoStyleType::scrolledCanvas: {
+        // FIXME(bug 2004432): This is close enough to what we want. In practice
+        // we don't want to account for relative positioning and so on, but this
+        // seems good enough for now.
+        ScrollContainerFrame* sf = do_QueryFrame(aDelegatingFrame->GetParent());
+        // Clamp to the scrollable range.
+        return sf->GetUnsnappedScrolledRectInternal(
+            aOverflowAreas->ScrollableOverflow(), aContainingBlock.Size());
+      }
+      default:
+        break;
+    }
+    return aContainingBlock;
+  }();
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
@@ -321,8 +338,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       // Reflow the frame
       nsReflowStatus kidStatus;
       ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
-                          aContainingBlock, aFlags, kidFrame, kidStatus,
-                          aOverflowAreas,
+                          aContainingBlock, scrollableContainingBlock, aFlags,
+                          kidFrame, kidStatus, aOverflowAreas,
                           anchorPosResolutionCache.ptrOr(nullptr));
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
@@ -762,9 +779,65 @@ static nscoord OffsetToAlignedStaticPos(
   LogicalSize kidSizeInOwnWM =
       aKidSizeInAbsPosCBWM.ConvertTo(kidWM, aAbsPosCBWM);
   const LogicalAxis kidAxis = aAbsPosCBWM.ConvertAxisTo(aAbsPosCBAxis, kidWM);
+
+  // Build an Inset Modified anchor info from the anchor which can be used to
+  // align to the anchor-center, if AlignJustifySelf is AnchorCenter.
+  Maybe<CSSAlignUtils::AnchorAlignInfo> anchorAlignInfo;
+  if (alignConst == StyleAlignFlags::ANCHOR_CENTER &&
+      aKidReflowInput.mAnchorPosResolutionCache) {
+    const auto* referenceData =
+        aKidReflowInput.mAnchorPosResolutionCache->mReferenceData;
+    if (referenceData) {
+      const auto* cachedData =
+          referenceData->Lookup(referenceData->mDefaultAnchorName);
+      if (cachedData && *cachedData) {
+        const auto& data = cachedData->ref();
+        if (data.mOffsetData) {
+          const nsSize containerSize =
+              aAbsPosCBSize.GetPhysicalSize(aAbsPosCBWM);
+          const nsRect anchorRect(data.mOffsetData->mOrigin, data.mSize);
+          const LogicalRect logicalAnchorRect{aAbsPosCBWM, anchorRect,
+                                              containerSize};
+          const auto axisInAbsPosCBWM =
+              kidWM.ConvertAxisTo(kidAxis, aAbsPosCBWM);
+          const auto anchorStart =
+              logicalAnchorRect.Start(axisInAbsPosCBWM, aAbsPosCBWM);
+          const auto anchorSize =
+              logicalAnchorRect.Size(axisInAbsPosCBWM, aAbsPosCBWM);
+          anchorAlignInfo =
+              Some(CSSAlignUtils::AnchorAlignInfo{anchorStart, anchorSize});
+          if (aNonAutoAlignParams) {
+            anchorAlignInfo->mAnchorStart -=
+                aNonAutoAlignParams->mCurrentStartInset;
+          }
+        }
+      }
+    }
+  }
+
   nscoord offset = CSSAlignUtils::AlignJustifySelf(
       alignConst, kidAxis, flags, baselineAdjust, alignAreaSizeInAxis,
-      aKidReflowInput, kidSizeInOwnWM);
+      aKidReflowInput, kidSizeInOwnWM, anchorAlignInfo);
+
+  // Safe alignment clamping for anchor-center.
+  // When using anchor-center with the safe keyword, or when both insets are
+  // auto (which defaults to safe behavior), clamp the element to stay within
+  // the containing block.
+  if ((!aNonAutoAlignParams || (safetyBits & StyleAlignFlags::SAFE)) &&
+      alignConst == StyleAlignFlags::ANCHOR_CENTER) {
+    const auto cbSize = aAbsPosCBSize.Size(aAbsPosCBAxis, aAbsPosCBWM);
+    const auto kidSize = aKidSizeInAbsPosCBWM.Size(aAbsPosCBAxis, aAbsPosCBWM);
+
+    if (aNonAutoAlignParams) {
+      const nscoord currentStartInset = aNonAutoAlignParams->mCurrentStartInset;
+      const nscoord finalStart = currentStartInset + offset;
+      const nscoord clampedStart =
+          CSSMinMax(finalStart, nscoord(0), cbSize - kidSize);
+      offset = clampedStart - currentStartInset;
+    } else {
+      offset = CSSMinMax(offset, nscoord(0), cbSize - kidSize);
+    }
+  }
 
   const auto rawAlignConst =
       (pcAxis == LogicalAxis::Inline)
@@ -794,17 +867,19 @@ static nscoord OffsetToAlignedStaticPos(
       // 1. We fit inside the IMCB, no action needed.
     } else if (kidSize <= overflowLimitRectEnd - overflowLimitRectStart) {
       // 2. We overflowed IMCB, try to cover IMCB completely, if it's not.
-      if (kidEnd < imcbEnd) {
-        offset += imcbEnd - kidEnd;
-      } else if (kidStart > imcbStart) {
-        offset -= kidStart - imcbStart;
-      } else {
+      if (kidStart <= imcbStart && kidEnd >= imcbEnd) {
         // IMCB already covered, ensure that we aren't escaping the limit rect.
         if (kidStart < overflowLimitRectStart) {
           offset += overflowLimitRectStart - kidStart;
         } else if (kidEnd > overflowLimitRectEnd) {
           offset -= kidEnd - overflowLimitRectEnd;
         }
+      } else if (kidEnd < imcbEnd && kidStart < imcbStart) {
+        // Space to end, overflowing on start - nudge to end.
+        offset += std::min(imcbStart - kidStart, imcbEnd - kidEnd);
+      } else if (kidStart > imcbStart && kidEnd > imcbEnd) {
+        // Space to start, overflowing on end - nudge to start.
+        offset -= std::min(kidEnd - imcbEnd, kidStart - imcbStart);
       }
     } else {
       // 3. We'll overflow the limit rect. Start align the subject int overflow
@@ -897,53 +972,53 @@ void AbsoluteContainingBlock::ResolveAutoMarginsAfterLayout(
     ReflowInput& aKidReflowInput, const LogicalSize& aCBSize,
     const LogicalSize& aKidSize, LogicalMargin& aMargin,
     const LogicalMargin& aOffsets) {
-  MOZ_ASSERT(aKidReflowInput.mFlags.mDeferAutoMarginComputation);
-
-  WritingMode wm = aKidReflowInput.GetWritingMode();
   WritingMode outerWM = aKidReflowInput.mParentReflowInput->GetWritingMode();
-
-  const LogicalSize cbSizeInWM = aCBSize.ConvertTo(wm, outerWM);
-  const LogicalSize kidSizeInWM = aKidSize.ConvertTo(wm, outerWM);
-  LogicalMargin marginInWM = aMargin.ConvertTo(wm, outerWM);
-  LogicalMargin offsetsInWM = aOffsets.ConvertTo(wm, outerWM);
-
-  // No need to substract border sizes because aKidSize has it included
-  // already. Also, if any offset is auto, the auto margin resolves to zero.
-  // https://drafts.csswg.org/css-position-3/#abspos-margins
-  const bool autoOffset = offsetsInWM.BEnd(wm) == NS_AUTOOFFSET ||
-                          offsetsInWM.BStart(wm) == NS_AUTOOFFSET;
-  nscoord availMarginSpace =
-      autoOffset ? 0
-                 : cbSizeInWM.BSize(wm) - kidSizeInWM.BSize(wm) -
-                       offsetsInWM.BStartEnd(wm) - marginInWM.BStartEnd(wm);
-
   const auto& styleMargin = aKidReflowInput.mStyleMargin;
   const auto anchorResolutionParams =
       AnchorPosResolutionParams::From(&aKidReflowInput);
-  if (wm.IsOrthogonalTo(outerWM)) {
-    ReflowInput::ComputeAbsPosInlineAutoMargin(
-        availMarginSpace, outerWM,
-        styleMargin
-            ->GetMargin(LogicalSide::IStart, outerWM, anchorResolutionParams)
-            ->IsAuto(),
-        styleMargin
-            ->GetMargin(LogicalSide::IEnd, outerWM, anchorResolutionParams)
-            ->IsAuto(),
-        aMargin);
-  } else {
-    ReflowInput::ComputeAbsPosBlockAutoMargin(
-        availMarginSpace, outerWM,
-        styleMargin
-            ->GetMargin(LogicalSide::BStart, outerWM, anchorResolutionParams)
-            ->IsAuto(),
-        styleMargin
-            ->GetMargin(LogicalSide::BEnd, outerWM, anchorResolutionParams)
-            ->IsAuto(),
-        aMargin);
-  }
 
+  auto ResolveMarginsInAxis = [&](LogicalAxis aAxis) {
+    const auto startSide = MakeLogicalSide(aAxis, LogicalEdge::Start);
+    const auto endSide = MakeLogicalSide(aAxis, LogicalEdge::End);
+
+    // No need to substract border sizes because aKidSize has it included
+    // already. Also, if any offset is auto, the auto margin resolves to zero.
+    // https://drafts.csswg.org/css-position-3/#abspos-margins
+    const bool autoOffset =
+        aOffsets.Side(startSide, outerWM) == NS_AUTOOFFSET ||
+        aOffsets.Side(endSide, outerWM) == NS_AUTOOFFSET;
+
+    nscoord availMarginSpace;
+    if (autoOffset) {
+      availMarginSpace = 0;
+    } else {
+      const nscoord stretchFitSize = std::max(
+          0, aCBSize.Size(aAxis, outerWM) - aOffsets.StartEnd(aAxis, outerWM) -
+                 aMargin.StartEnd(aAxis, outerWM));
+      availMarginSpace = stretchFitSize - aKidSize.Size(aAxis, outerWM);
+    }
+
+    const bool startSideMarginIsAuto =
+        styleMargin->GetMargin(startSide, outerWM, anchorResolutionParams)
+            ->IsAuto();
+    const bool endSideMarginIsAuto =
+        styleMargin->GetMargin(endSide, outerWM, anchorResolutionParams)
+            ->IsAuto();
+
+    if (aAxis == LogicalAxis::Inline) {
+      ReflowInput::ComputeAbsPosInlineAutoMargin(availMarginSpace, outerWM,
+                                                 startSideMarginIsAuto,
+                                                 endSideMarginIsAuto, aMargin);
+    } else {
+      ReflowInput::ComputeAbsPosBlockAutoMargin(availMarginSpace, outerWM,
+                                                startSideMarginIsAuto,
+                                                endSideMarginIsAuto, aMargin);
+    }
+  };
+
+  ResolveMarginsInAxis(LogicalAxis::Inline);
+  ResolveMarginsInAxis(LogicalAxis::Block);
   aKidReflowInput.SetComputedLogicalMargin(outerWM, aMargin);
-  aKidReflowInput.SetComputedLogicalOffsets(outerWM, aOffsets);
 
   nsMargin* propValue =
       aKidReflowInput.mFrame->GetProperty(nsIFrame::UsedMarginProperty());
@@ -1032,15 +1107,19 @@ struct AnchorShiftInfo {
 };
 
 struct ContainingBlockRect {
-  Maybe<AnchorShiftInfo> mAnchorShiftInfo = Nothing{};
-  nsRect mRect;
+  Maybe<AnchorShiftInfo> mAnchorShiftInfo;
+  nsRect mMaybeScrollableRect;
+  nsRect mFinalRect;
 
-  explicit ContainingBlockRect(const nsRect& aRect) : mRect{aRect} {}
+  explicit ContainingBlockRect(const nsRect& aRect)
+      : mMaybeScrollableRect{aRect}, mFinalRect{aRect} {}
   ContainingBlockRect(const nsPoint& aOffset,
                       const StylePositionArea& aResolvedArea,
-                      const nsRect& aRect)
+                      const nsRect& aMaybeScrollableRect,
+                      const nsRect& aFinalRect)
       : mAnchorShiftInfo{Some(AnchorShiftInfo{aOffset, aResolvedArea})},
-        mRect{aRect} {}
+        mMaybeScrollableRect{aMaybeScrollableRect},
+        mFinalRect{aFinalRect} {}
 
   StylePositionArea ResolvedPositionArea() const {
     return mAnchorShiftInfo
@@ -1049,72 +1128,13 @@ struct ContainingBlockRect {
   }
 };
 
-static nsRect GrowOverflowCheckRect(const nsRect& aOverflowCheckRect,
-                                    const nsRect& aKidRect,
-                                    const StylePositionArea& aPosArea) {
-  // The overflow check rect may end up being smaller than the positioned rect -
-  // imagine an absolute containing block & a scroller of the same size, and an
-  // anchor inside it. If position-area: bottom, and the anchor positioned such
-  // that the anchor is touching the lower edge of the containing block & the
-  // scroller, the grid height is 0, which the positioned frame will always
-  // overflow - until the scrollbar moves. To account for this, we will let this
-  // containing block grow in directions that aren't constrained by the anchor.
-  auto result = aOverflowCheckRect;
-  if (aPosArea.first == StylePositionAreaKeyword::Left ||
-      aPosArea.first == StylePositionAreaKeyword::SpanLeft) {
-    // Allowed to grow left
-    if (aKidRect.x < result.x) {
-      result.SetLeftEdge(aKidRect.x);
-    }
-  } else if (aPosArea.first == StylePositionAreaKeyword::Center) {
-    // Not allowed to grow in this axis
-  } else if (aPosArea.first == StylePositionAreaKeyword::Right ||
-             aPosArea.first == StylePositionAreaKeyword::SpanRight) {
-    // Allowed to grow right
-    if (aKidRect.XMost() > aOverflowCheckRect.XMost()) {
-      result.SetRightEdge(aKidRect.XMost());
-    }
-  } else if (aPosArea.first == StylePositionAreaKeyword::SpanAll) {
-    // Allowed to grow in both directions
-    if (aKidRect.x < aOverflowCheckRect.x) {
-      result.SetLeftEdge(aKidRect.x);
-    }
-    if (aKidRect.XMost() > aOverflowCheckRect.XMost()) {
-      result.SetRightEdge(aKidRect.XMost());
-    }
-  }
-  if (aPosArea.first == StylePositionAreaKeyword::Top ||
-      aPosArea.first == StylePositionAreaKeyword::SpanTop) {
-    // Allowed to grow up
-    if (aKidRect.y < aOverflowCheckRect.y) {
-      result.SetTopEdge(aKidRect.y);
-    }
-  } else if (aPosArea.first == StylePositionAreaKeyword::Center) {
-    // Not allowed to grow in this axis
-  } else if (aPosArea.first == StylePositionAreaKeyword::Bottom ||
-             aPosArea.first == StylePositionAreaKeyword::SpanBottom) {
-    // Allowed to grow down
-    if (aKidRect.YMost() > aOverflowCheckRect.YMost()) {
-      result.SetBottomEdge(aKidRect.YMost());
-    }
-  } else if (aPosArea.first == StylePositionAreaKeyword::SpanAll) {
-    // Allowed to grow in both directions
-    if (aKidRect.y < aOverflowCheckRect.y) {
-      result.SetTopEdge(aKidRect.y);
-    }
-    if (aKidRect.YMost() > aOverflowCheckRect.YMost()) {
-      result.SetBottomEdge(aKidRect.YMost());
-    }
-  }
-  return result;
-}
-
 // XXX Optimize the case where it's a resize reflow and the absolutely
 // positioned child has the exact same size and position and skip the
 // reflow...
 void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     nsContainerFrame* aDelegatingFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, const nsRect& aOriginalContainingBlockRect,
+    const nsRect& aOriginalScrollableContainingBlockRect,
     AbsPosReflowFlags aFlags, nsIFrame* aKidFrame, nsReflowStatus& aStatus,
     OverflowAreas* aOverflowAreas,
     AnchorPosResolutionCache* aAnchorPosResolutionCache) {
@@ -1147,17 +1167,15 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     RefPtr<ComputedStyle> nextFallbackStyle;
     while (true) {
       nextFallback = &fallbacks[aIndex];
-      if (nextFallback->IsIdentAndOrTactic()) {
-        nextFallbackStyle = aPresContext->StyleSet()->ResolvePositionTry(
-            *aKidFrame->GetContent()->AsElement(), *aKidFrame->Style(),
-            nextFallback->AsIdentAndOrTactic());
-        if (!nextFallbackStyle) {
-          // No @position-try rule for this name was found, per spec we should
-          // skip it.
-          aIndex++;
-          if (aIndex >= fallbacks.Length()) {
-            return false;
-          }
+      nextFallbackStyle = aPresContext->StyleSet()->ResolvePositionTry(
+          *aKidFrame->GetContent()->AsElement(), *aKidFrame->Style(),
+          *nextFallback);
+      if (!nextFallbackStyle) {
+        // No @position-try rule for this name was found, per spec we should
+        // skip it.
+        aIndex++;
+        if (aIndex >= fallbacks.Length()) {
+          return false;
         }
       }
       break;
@@ -1202,50 +1220,51 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
                                      aAnchorPosResolutionCache,
                                      firstTryIndex == currentFallbackIndex);
     auto cb = [&]() {
-      if (isGrid) {
-        // TODO(emilio): how does position-area interact with grid?
-        const auto border = aDelegatingFrame->GetUsedBorder();
-        const nsPoint borderShift{border.left, border.top};
-        // Shift in by border of the overall grid container.
-        return ContainingBlockRect{nsGridContainerFrame::GridItemCB(aKidFrame) +
-                                   borderShift};
-      }
-
-      auto positionArea = aKidFrame->StylePosition()->mPositionArea;
-      if (currentFallback && currentFallback->IsPositionArea()) {
-        MOZ_ASSERT(currentFallback->IsPositionArea());
-        positionArea = currentFallback->AsPositionArea();
-      }
-
-      if (!positionArea.IsNone() && aAnchorPosResolutionCache) {
+      if (aAnchorPosResolutionCache) {
         const auto defaultAnchorInfo =
             AnchorPositioningUtils::ResolveAnchorPosRect(
                 aKidFrame, aDelegatingFrame, nullptr, false,
                 aAnchorPosResolutionCache);
         if (defaultAnchorInfo) {
-          // Offset should be up to, but not including the containing block's
-          // scroll offset.
-          const auto offset = AnchorPositioningUtils::GetScrollOffsetFor(
-              aAnchorPosResolutionCache->mReferenceData
-                  ->CompensatingForScrollAxes(),
-              aKidFrame, aAnchorPosResolutionCache->mDefaultAnchorCache);
-          // Imagine an abspos container with a scroller in it, and then an
-          // anchor in it, where the anchor is visually in the middle of the
-          // scrollport. Then, when the scroller moves such that the anchor's
-          // left edge is on that of the scrollports, w.r.t. containing block,
-          // the anchor is zero left offset horizontally. The position-area grid
-          // needs to account for this.
-          const auto scrolledAnchorRect = defaultAnchorInfo->mRect - offset;
-          StylePositionArea resolvedPositionArea{};
-          const auto scrolledAnchorCb = AnchorPositioningUtils::
-              AdjustAbsoluteContainingBlockRectForPositionArea(
-                  scrolledAnchorRect + aOriginalContainingBlockRect.TopLeft(),
-                  aOriginalContainingBlockRect, aKidFrame->GetWritingMode(),
-                  aDelegatingFrame->GetWritingMode(), positionArea,
-                  &resolvedPositionArea);
-          return ContainingBlockRect{offset, resolvedPositionArea,
-                                     scrolledAnchorCb};
+          auto positionArea = aKidFrame->StylePosition()->mPositionArea;
+          if (!positionArea.IsNone()) {
+            // Offset should be up to, but not including the containing block's
+            // scroll offset.
+            const auto offset = AnchorPositioningUtils::GetScrollOffsetFor(
+                aAnchorPosResolutionCache->mReferenceData
+                    ->CompensatingForScrollAxes(),
+                aKidFrame, aAnchorPosResolutionCache->mDefaultAnchorCache);
+            // Imagine an abspos container with a scroller in it, and then an
+            // anchor in it, where the anchor is visually in the middle of the
+            // scrollport. Then, when the scroller moves such that the anchor's
+            // left edge is on that of the scrollports, w.r.t. containing block,
+            // the anchor is zero left offset horizontally. The position-area
+            // grid needs to account for this.
+            const auto scrolledAnchorRect = defaultAnchorInfo->mRect - offset;
+            StylePositionArea resolvedPositionArea{};
+            const auto scrolledAnchorCb = AnchorPositioningUtils::
+                AdjustAbsoluteContainingBlockRectForPositionArea(
+                    scrolledAnchorRect + aOriginalContainingBlockRect.TopLeft(),
+                    aOriginalScrollableContainingBlockRect,
+                    aKidFrame->GetWritingMode(),
+                    aDelegatingFrame->GetWritingMode(), positionArea,
+                    &resolvedPositionArea);
+            return ContainingBlockRect{offset, resolvedPositionArea,
+                                       aOriginalScrollableContainingBlockRect,
+                                       scrolledAnchorCb};
+          }
+          return ContainingBlockRect{aOriginalScrollableContainingBlockRect};
         }
+      }
+
+      if (isGrid) {
+        // TODO(emilio, bug 2004596): This adjustment is supposed to also
+        // restrict the position-area rect above...
+        const auto border = aDelegatingFrame->GetUsedBorder();
+        const nsPoint borderShift{border.left, border.top};
+        // Shift in by border of the overall grid container.
+        return ContainingBlockRect{nsGridContainerFrame::GridItemCB(aKidFrame) +
+                                   borderShift};
       }
 
       if (ViewportFrame* viewport = do_QueryFrame(aDelegatingFrame)) {
@@ -1261,11 +1280,11 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     }();
     if (aAnchorPosResolutionCache) {
       aAnchorPosResolutionCache->mReferenceData->mContainingBlockRect =
-          cb.mRect;
+          cb.mMaybeScrollableRect;
     }
     const WritingMode outerWM = aReflowInput.GetWritingMode();
     const WritingMode wm = aKidFrame->GetWritingMode();
-    const LogicalSize cbSize(outerWM, cb.mRect.Size());
+    const LogicalSize cbSize(outerWM, cb.mFinalRect.Size());
 
     ReflowInput::InitFlags initFlags;
     const bool staticPosIsCBOrigin = [&] {
@@ -1313,7 +1332,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // Don't split things below the fold. (Ideally we shouldn't *have*
         // anything totally below the fold, but we can't position frames
         // across next-in-flow breaks yet. (Bug 1994346)
-        (aKidFrame->GetLogicalRect(cb.mRect.Size()).BStart(wm) <=
+        (aKidFrame->GetLogicalRect(cb.mFinalRect.Size()).BStart(wm) <=
          aReflowInput.AvailableBSize());
 
     // Get the border values
@@ -1389,10 +1408,12 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       // margin for us in that axis (since the thing that's aligned is the
       // margin box).  So, we clear out the margin here to avoid applying it
       // twice.
-      if (kidReflowInput.mFlags.mIOffsetsNeedCSSAlign) {
+      if (kidReflowInput.mFlags.mIOffsetsNeedCSSAlign ||
+          kidReflowInput.mFlags.mIAnchorCenter) {
         margin.IStart(outerWM) = margin.IEnd(outerWM) = 0;
       }
-      if (kidReflowInput.mFlags.mBOffsetsNeedCSSAlign) {
+      if (kidReflowInput.mFlags.mBOffsetsNeedCSSAlign ||
+          kidReflowInput.mFlags.mBAnchorCenter) {
         margin.BStart(outerWM) = margin.BEnd(outerWM) = 0;
       }
 
@@ -1401,10 +1422,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       ResolveSizeDependentOffsets(kidReflowInput, cbSize, kidSize, margin,
                                   cb.ResolvedPositionArea(), offsets);
 
-      if (kidReflowInput.mFlags.mDeferAutoMarginComputation) {
-        ResolveAutoMarginsAfterLayout(kidReflowInput, cbSize, kidSize, margin,
-                                      offsets);
-      }
+      ResolveAutoMarginsAfterLayout(kidReflowInput, cbSize, kidSize, margin,
+                                    offsets);
 
       // If the inset is constrained as non-auto, we may have a child that does
       // not fill out the inset-reduced containing block. In this case, we need
@@ -1445,9 +1464,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       const auto* placeholderContainer =
           GetPlaceholderContainer(kidReflowInput.mFrame);
 
-      if (!iInsetAuto) {
+      if (!iInsetAuto || kidReflowInput.mFlags.mIAnchorCenter) {
         MOZ_ASSERT(
-            !kidReflowInput.mFlags.mIOffsetsNeedCSSAlign,
+            !kidReflowInput.mFlags.mIOffsetsNeedCSSAlign ||
+                kidReflowInput.mFlags.mIAnchorCenter,
             "Non-auto inline inset but requires CSS alignment for static "
             "position?");
         auto alignOffset = OffsetToAlignedStaticPos(
@@ -1464,8 +1484,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             cbSize.ISize(outerWM) -
             (offsets.IStart(outerWM) + kidMarginBox.ISize(outerWM));
       }
-      if (!bInsetAuto) {
-        MOZ_ASSERT(!kidReflowInput.mFlags.mBOffsetsNeedCSSAlign,
+      if (!bInsetAuto || kidReflowInput.mFlags.mBAnchorCenter) {
+        MOZ_ASSERT(!kidReflowInput.mFlags.mBOffsetsNeedCSSAlign ||
+                       kidReflowInput.mFlags.mBAnchorCenter,
                    "Non-auto block inset but requires CSS alignment for static "
                    "position?");
         auto alignOffset = OffsetToAlignedStaticPos(
@@ -1490,23 +1511,13 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       // So far, we've positioned against the padding edge of the containing
       // block, which is necessary for inset computation. However, the position
       // of a frame originates against the border box.
-      r += cb.mRect.TopLeft();
+      r += cb.mFinalRect.TopLeft();
       if (cb.mAnchorShiftInfo) {
         // Push the frame out to where the anchor is.
         r += cb.mAnchorShiftInfo->mOffset;
       }
 
       aKidFrame->SetRect(r);
-
-      // For the purpose of computing the inset-modified containing block,
-      // `auto` is considered the same as 0.
-      // https://drafts.csswg.org/css-position-3/#resolving-insets
-      LogicalMargin insetModification{
-          outerWM, bStartInsetAuto ? 0 : offsets.BStart(outerWM),
-          iEndInsetAuto ? 0 : offsets.IEnd(outerWM),
-          bEndInsetAuto ? 0 : offsets.BEnd(outerWM),
-          iStartInsetAuto ? 0 : offsets.IStart(outerWM)};
-      cb.mRect.Deflate(insetModification.GetPhysicalMargin(outerWM));
     }
 
     aKidFrame->DidReflow(aPresContext, &kidReflowInput);
@@ -1547,22 +1558,11 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift = offset;
     }();
 
-    const auto fits = aStatus.IsComplete() && [&]() {
-      const auto overflowCheckRect = cb.mRect;
-      if (aAnchorPosResolutionCache) {
-        if (cb.mAnchorShiftInfo) {
-          aAnchorPosResolutionCache->mReferenceData->mContainingBlockRect =
-              GrowOverflowCheckRect(overflowCheckRect,
-                                    aKidFrame->GetNormalRect(),
-                                    cb.mAnchorShiftInfo->mResolvedArea);
-        }
-        return AnchorPositioningUtils::FitsInContainingBlock(
-            AnchorPositioningUtils::ContainingBlockInfo::ExplicitCBFrameSize(
-                aOriginalContainingBlockRect),
-            aKidFrame, aAnchorPosResolutionCache->mReferenceData);
-      }
-      return overflowCheckRect.Contains(aKidFrame->GetRect());
-    }();
+    // FIXME(bug 2004495): Per spec this should be the inset-modified
+    // containing-block, see:
+    // https://drafts.csswg.org/css-anchor-position-1/#fallback-apply
+    const auto fits = aStatus.IsComplete() && cb.mMaybeScrollableRect.Contains(
+                                                  aKidFrame->GetMarginRect());
     if (fallbacks.IsEmpty() || fits) {
       // We completed the reflow - Either we had a fallback that fit, or we
       // didn't have any to try in the first place.
@@ -1605,13 +1605,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     aKidFrame->UpdateOverflow();
   }();
 
-  // If author asked for `position-visibility: no-overflow` and we overflow
-  // `usedCB`, treat as "strongly hidden".
-  aKidFrame->AddOrRemoveStateBits(
-      NS_FRAME_POSITION_VISIBILITY_HIDDEN,
-      isOverflowingCB && aKidFrame->StylePosition()->mPositionVisibility ==
-                             StylePositionVisibility::NO_OVERFLOW);
-
   if (currentFallbackIndex) {
     aKidFrame->SetOrUpdateDeletableProperty(
         nsIFrame::LastSuccessfulPositionFallback(), *currentFallbackIndex,
@@ -1625,6 +1618,16 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
                  ToString(aKidFrame->GetRect()));
   }
 #endif
+  // If author asked for `position-visibility: no-overflow` and we overflow
+  // `usedCB`, treat as "strongly hidden". Note that for anchored frames this
+  // happens in ComputePositionVisibility. But no-overflow also applies to
+  // non-anchored frames.
+  if (!aAnchorPosResolutionCache) {
+    aKidFrame->AddOrRemoveStateBits(
+        NS_FRAME_POSITION_VISIBILITY_HIDDEN,
+        isOverflowingCB && aKidFrame->StylePosition()->mPositionVisibility &
+                               StylePositionVisibility::NO_OVERFLOW);
+  }
 
   if (aOverflowAreas) {
     aOverflowAreas->UnionWith(aKidFrame->GetOverflowAreasRelativeToParent());

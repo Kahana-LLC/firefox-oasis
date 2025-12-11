@@ -477,6 +477,7 @@ mozilla::LazyLogModule gPageCacheLog("PageCache");
 mozilla::LazyLogModule gSHIPBFCacheLog("SHIPBFCache");
 mozilla::LazyLogModule gTimeoutDeferralLog("TimeoutDefer");
 mozilla::LazyLogModule gUseCountersLog("UseCounters");
+static mozilla::LazyLogModule gFingerprinterDetection("FingerprinterDetection");
 
 namespace mozilla {
 
@@ -2301,19 +2302,6 @@ void Document::RecordPageLoadEventTelemetry() {
 }
 
 #ifndef ANDROID
-static void AccumulateHttp3FcpGleanPref(const nsCString& http3Key,
-                                        const TimeDuration& duration) {
-  if (http3Key == "http3"_ns) {
-    glean::performance_pageload::http3_fcp_http3.AccumulateRawDuration(
-        duration);
-  } else if (http3Key == "supports_http3"_ns) {
-    glean::performance_pageload::http3_fcp_supports_http3.AccumulateRawDuration(
-        duration);
-  } else {
-    MOZ_ASSERT_UNREACHABLE("Unknown value for http3Key");
-  }
-}
-
 static void AccumulatePriorityFcpGleanPref(
     const nsCString& http3WithPriorityKey, const TimeDuration& duration) {
   if (http3WithPriorityKey == "with_priority"_ns) {
@@ -2466,15 +2454,6 @@ void Document::AccumulatePageLoadTelemetry() {
     glean::performance_pageload::fcp.AccumulateRawDuration(
         firstContentfulComposite - navigationStart);
 
-    if (!http3Key.IsEmpty()) {
-      glean::perf::http3_first_contentful_paint.Get(http3Key)
-          .AccumulateRawDuration(firstContentfulComposite - navigationStart);
-#ifndef ANDROID
-      AccumulateHttp3FcpGleanPref(http3Key,
-                                  firstContentfulComposite - navigationStart);
-#endif
-    }
-
     if (!http3WithPriorityKey.IsEmpty()) {
       glean::perf::h3p_first_contentful_paint.Get(http3WithPriorityKey)
           .AccumulateRawDuration(firstContentfulComposite - navigationStart);
@@ -2483,9 +2462,6 @@ void Document::AccumulatePageLoadTelemetry() {
           http3WithPriorityKey, firstContentfulComposite - navigationStart);
 #endif
     }
-
-    glean::perf::dns_first_contentful_paint.Get(dnsKey).AccumulateRawDuration(
-        firstContentfulComposite - navigationStart);
 
     glean::performance_pageload::fcp_responsestart.AccumulateRawDuration(
         firstContentfulComposite - responseStart);
@@ -2510,10 +2486,6 @@ void Document::AccumulatePageLoadTelemetry() {
           GetNavigationTiming()->GetLoadEventStartTimeStamp()) {
     glean::performance_pageload::load_time.AccumulateRawDuration(
         loadEventStart - navigationStart);
-    if (!http3Key.IsEmpty()) {
-      glean::perf::http3_page_load_time.Get(http3Key).AccumulateRawDuration(
-          loadEventStart - navigationStart);
-    }
 
     if (!http3WithPriorityKey.IsEmpty()) {
       glean::perf::h3p_page_load_time.Get(http3WithPriorityKey)
@@ -4318,6 +4290,11 @@ void Document::EnsureNotEnteringAndExitFullscreen() {
   }
 }
 
+// https://html.spec.whatwg.org/#document-state-request-referrer-policy
+ReferrerPolicy Document::ReferrerPolicyUsedToFetchThisDocument() const {
+  return mRequestReferrerPolicy;
+}
+
 void Document::SetReferrerInfo(nsIReferrerInfo* aReferrerInfo) {
   mReferrerInfo = aReferrerInfo;
   mCachedReferrerInfoForInternalCSSAndSVGResources = nullptr;
@@ -4362,6 +4339,7 @@ nsresult Document::InitReferrerInfo(nsIChannel* aChannel) {
 
   if (nsCOMPtr<nsIReferrerInfo> referrerInfo = httpChannel->GetReferrerInfo()) {
     SetReferrerInfo(referrerInfo);
+    mRequestReferrerPolicy = referrerInfo->ReferrerPolicy();
   }
 
   // Override policy if we get one from Referrerr-Policy header
@@ -13726,7 +13704,8 @@ void Document::FlushAutoFocusCandidates() {
 
   nsTObserverArray<nsWeakPtr>::ForwardIterator iter(mAutoFocusCandidates);
   while (iter.HasMore()) {
-    nsCOMPtr<Element> autoFocusElement = do_QueryReferent(iter.GetNext());
+    nsWeakPtr weakElement = iter.GetNext();
+    nsCOMPtr<Element> autoFocusElement = do_QueryReferent(weakElement);
     if (!autoFocusElement) {
       continue;
     }
@@ -13735,8 +13714,9 @@ void Document::FlushAutoFocusCandidates() {
     // to run which might affect the focusability of this element.
     autoFocusElementDoc->FlushPendingNotifications(FlushType::Frames);
 
-    // Above layout flush may cause the PresShell to disappear.
-    if (!mPresShell) {
+    // Above layout flush may cause the PresShell to disappear or autofocus to
+    // complete. The iterator position might have changed.
+    if (!mPresShell || mAutoFocusFired) {
       return;
     }
 
@@ -13750,7 +13730,7 @@ void Document::FlushAutoFocusCandidates() {
     // If doc is not fully active, then remove element from candidates, and
     // continue.
     if (!autoFocusElementDoc->IsCurrentActiveDocument()) {
-      iter.Remove();
+      mAutoFocusCandidates.RemoveElement(weakElement);
       continue;
     }
 
@@ -13780,7 +13760,7 @@ void Document::FlushAutoFocusCandidates() {
       continue;
     }
 
-    iter.Remove();
+    mAutoFocusCandidates.RemoveElement(weakElement);
 
     // Let inclusiveAncestorDocuments be a list consisting of doc, plus the
     // active documents of each of doc's browsing context's ancestor browsing
@@ -17583,35 +17563,134 @@ bool Document::ShouldResistFingerprinting(RFPTarget aTarget) const {
 
 void Document::RecordCanvasUsage(CanvasUsage& aUsage) {
   // Limit the number of recent canvas extraction uses that are tracked.
-  const size_t kTrackedCanvasLimit = 8;
+  // Because we are now covering more canvas extraction sources, we need to
+  // increase this a bit
+  const size_t kTrackedCanvasLimit = 15;
   // Timeout between different canvas extractions.
   const uint64_t kTimeoutUsec = 3000 * 1000;
 
   uint64_t now = PR_Now();
-  if ((mCanvasUsage.Length() > kTrackedCanvasLimit) ||
-      ((now - mLastCanvasUsage) > kTimeoutUsec)) {
-    mCanvasUsage.ClearAndRetainStorage();
-  }
-
-  mCanvasUsage.AppendElement(aUsage);
-  mLastCanvasUsage = now;
 
   nsCString originNoSuffix;
+  nsCString uri;
   if (NS_FAILED(NodePrincipal()->GetOriginNoSuffix(originNoSuffix))) {
+    MOZ_LOG(gFingerprinterDetection, LogLevel::Error,
+            ("Document:: %p Could not get originsuffix", this));
     return;
   }
+  if (NS_FAILED(NodePrincipal()->GetSpec(uri))) {
+    MOZ_LOG(gFingerprinterDetection, LogLevel::Error,
+            ("Document:: %p Could not get uri", this));
+    return;
+  }
+  if (MOZ_LOG_TEST(gFingerprinterDetection, LogLevel::Debug)) {
+    nsAutoCString filename;
+    uint32_t lineNum = 0;
+    filename.AssignLiteral("<unknown>");
+    JSContext* cx = nsContentUtils::GetCurrentJSContext();
+    if (cx) {
+      JS::AutoFilename scriptFilename;
+      JS::ColumnNumberOneOrigin colOneOrigin;
+      if (JS::DescribeScriptedCaller(&scriptFilename, cx, &lineNum,
+                                     &colOneOrigin)) {
+        if (const char* file = scriptFilename.get()) {
+          filename = nsDependentCString(file);
+        }
+      }
+    }
 
-  nsRFPService::MaybeReportCanvasFingerprinter(mCanvasUsage, GetChannel(),
+    MOZ_LOG(gFingerprinterDetection, LogLevel::Debug,
+            ("Document:: %p %s recording canvas usage of type %s on %s in %s",
+             this, originNoSuffix.get(),
+             CanvasUsageSourceToString(aUsage.mUsageSource).get(), uri.get(),
+             filename.get()));
+  }
+
+  // Check if we need to clear the usage data for this source.
+  if (mCanvasUsageLastTimestamp != 0 &&
+      (now - mCanvasUsageLastTimestamp) > kTimeoutUsec) {
+    MOZ_LOG(
+        gFingerprinterDetection, LogLevel::Verbose,
+        ("Document:: %p %s clearing canvas array", this, originNoSuffix.get()));
+    mCanvasUsageData.Clear();
+  } else if (mCanvasUsageData.Length() > kTrackedCanvasLimit) {
+    MOZ_LOG(gFingerprinterDetection, LogLevel::Verbose,
+            ("Document:: %p %s removing oldest canvas "
+             "usage in array",
+             this, originNoSuffix.get()));
+    mCanvasUsageData.RemoveElementAt(0);
+  } else {
+    MOZ_LOG(gFingerprinterDetection, LogLevel::Verbose,
+            ("Document:: %p %s recorded canvas "
+             "usage of type %s in array, records: %zu",
+             this, originNoSuffix.get(),
+             CanvasUsageSourceToString(aUsage.mUsageSource).get(),
+             static_cast<size_t>(mCanvasUsageData.Length() + 1)));
+  }
+
+  // Update the timestamp and append the new usage.
+  mCanvasUsageLastTimestamp = now;
+  mCanvasUsageData.AppendElement(aUsage);
+
+  nsIChannel* channel = GetChannel();
+  if (!channel) {
+    MOZ_LOG(
+        gFingerprinterDetection, LogLevel::Warning,
+        ("Document:: %p %s no channel available", this, originNoSuffix.get()));
+
+    // Borrowed from ReComputeResistFingerprinting
+    // which tells me this is probably a common problem...
+    auto shouldInheritFrom = [this](Document* aDoc) {
+      return aDoc && this->NodePrincipal() &&
+             (this->NodePrincipal()->Equals(aDoc->NodePrincipal()) ||
+              this->NodePrincipal()->GetIsNullPrincipal());
+    };
+
+    // Climb parent documents until we find a channel.
+    Document* docToCheck = this;
+    while (docToCheck && !channel) {
+      if (docToCheck->mParentDocument &&
+          shouldInheritFrom(docToCheck->mParentDocument)) {
+        channel = docToCheck->mParentDocument->GetChannel();
+      }
+      docToCheck = docToCheck->mParentDocument;
+    }
+
+    docToCheck = this;
+    while (docToCheck && !channel) {
+      RefPtr<BrowsingContext> opener =
+          docToCheck->GetBrowsingContext()
+              ? docToCheck->GetBrowsingContext()->GetOpener()
+              : nullptr;
+      docToCheck = opener ? opener->GetDocument() : nullptr;
+
+      if (docToCheck && shouldInheritFrom(docToCheck)) {
+        channel = docToCheck->GetChannel();
+      }
+    }
+
+    if (!channel) {
+      MOZ_LOG(gFingerprinterDetection, LogLevel::Warning,
+              ("Document:: %p %s still could not find a channel", this,
+               originNoSuffix.get()));
+    }
+  }
+
+  nsRFPService::MaybeReportCanvasFingerprinter(mCanvasUsageData, channel, uri,
                                                originNoSuffix);
 }
 
 void Document::RecordFontFingerprinting() {
+  nsCString uri;
   nsCString originNoSuffix;
   if (NS_FAILED(NodePrincipal()->GetOriginNoSuffix(originNoSuffix))) {
     return;
   }
+  if (NS_FAILED(NodePrincipal()->GetSpec(uri))) {
+    return;
+  }
 
-  nsRFPService::MaybeReportFontFingerprinter(GetChannel(), originNoSuffix);
+  nsRFPService::MaybeReportFontFingerprinter(GetChannel(), uri, originNoSuffix);
 }
 
 bool Document::IsInPrivateBrowsing() const { return mIsInPrivateBrowsing; }

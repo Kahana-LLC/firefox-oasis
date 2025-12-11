@@ -1371,6 +1371,10 @@ function getSmallIncrementKey() {
  * @param {object[]} expectedElements
  * @param {string} expectedElements[].selector - The expected selector of the rule. Wrap
  *        unmatched selector with `~~` characters (e.g. "div, ~~unmatched~~")
+ * @param {boolean} expectedElements[].selectorEditable - Whether or not the selector can
+ *        be edited. Defaults to true.
+ * @param {boolean} expectedElements[].hasSelectorHighlighterButton - Whether or not a
+ *        selector highlighter button is visible. Defaults to true.
  * @param {string[]|null} expectedElements[].ancestorRulesData - An array of the parent
  *        selectors of the rule, with their indentations and the opening brace.
  *        e.g. for the following rule `html { body { span {} } }`, for the `span` rule,
@@ -1428,8 +1432,12 @@ function checkRuleViewContent(view, expectedElements) {
 
     const selector = [
       ...elementInView.querySelectorAll(
-        // Get the selector parts (.ruleview-selector), as well as the `element` "fake" selector
-        ".ruleview-selectors-container .ruleview-selector, .ruleview-selectors-container.alternative-selector"
+        // Get the selector parts (.ruleview-selector)
+        ".ruleview-selectors-container .ruleview-selector," +
+          // as well as the `element` "fake" selector
+          ".ruleview-selectors-container.alternative-selector," +
+          // and read-only selectors
+          `.ruleview-selectors-container.uneditable-selector`
       ),
     ]
       .map(selectorEl => {
@@ -1444,6 +1452,18 @@ function checkRuleViewContent(view, expectedElements) {
       selector,
       expectedElement.selector,
       `Expected selector for element #${i}`
+    );
+    is(
+      elementInView.querySelector(
+        `.ruleview-selectors-container:not(.uneditable-selector)`
+      ) !== null,
+      expectedElement.selectorEditable ?? true,
+      `Selector for element #${i} (${selector}) ${(expectedElement.selectorEditable ?? true) ? "is" : "isn't"} editable`
+    );
+    is(
+      elementInView.querySelector(`.ruleview-selectorhighlighter`) !== null,
+      expectedElement.hasSelectorHighlighterButton ?? true,
+      `Element #${i} (${selector}) ${(expectedElement.hasSelectorHighlighterButton ?? true) ? "has" : "does not have"} a selector highlighter button`
     );
 
     const ancestorData = elementInView.querySelector(
@@ -1511,12 +1531,14 @@ function checkRuleViewContent(view, expectedElements) {
         !!expectedDeclaration?.inactiveCSS,
         `Element #${i} ("${selector}") declaration #${j} ("${propName.innerText}: ${propValue.innerText}") is ${expectedDeclaration?.inactiveCSS ? "inactive" : "not inactive"} `
       );
+      const isWarningIconDisplayed = !!ruleViewPropertyElement.querySelector(
+        ".ruleview-warning:not([hidden])"
+      );
+      const expectedValid = expectedDeclaration?.valid ?? true;
       is(
-        !!ruleViewPropertyElement.querySelector(
-          ".ruleview-warning:not([hidden])"
-        ),
-        !!expectedDeclaration?.valid,
-        `Element #${i} ("${selector}") declaration #${j} ("${propName.innerText}: ${propValue.innerText}") is ${expectedDeclaration?.valid === false ? "not valid" : "valid"}`
+        !isWarningIconDisplayed,
+        expectedValid,
+        `Element #${i} ("${selector}") declaration #${j} ("${propName.innerText}: ${propValue.innerText}") is ${expectedValid ? "valid" : "invalid"}`
       );
       is(
         !!ruleViewPropertyElement.hasAttribute("dirty"),

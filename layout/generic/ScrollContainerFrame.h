@@ -853,13 +853,22 @@ class ScrollContainerFrame : public nsContainerFrame,
 
   bool SmoothScrollVisual(
       const nsPoint& aVisualViewportOffset,
-      layers::FrameMetrics::ScrollOffsetUpdateType aUpdateType);
+      layers::FrameMetrics::ScrollOffsetUpdateType aUpdateType,
+      ScrollMode aMode);
 
   /**
    * Returns true if this scroll frame should perform smooth scroll with the
    * given |aBehavior|.
    */
   bool IsSmoothScroll(
+      dom::ScrollBehavior aBehavior = dom::ScrollBehavior::Auto) const;
+
+  /**
+   * Returns the ScrollMode that this scroll frame should use for a
+   * programmatic scroll governed by CSSOM-View `scroll-behavior`.
+   * This includes most programmatic scrolls but not scroll snapping.
+   */
+  ScrollMode ScrollModeForScrollBehavior(
       dom::ScrollBehavior aBehavior = dom::ScrollBehavior::Auto) const;
 
   static nscoord GetNonOverlayScrollbarSize(const nsPresContext*,
@@ -1286,8 +1295,7 @@ class ScrollContainerFrame : public nsContainerFrame,
   // We need this if a scrollbar frame is recreated.
   void ReloadChildFrames();
 
-  // NOTE: Use GetScrollStylesFromFrame() if you want to know `overflow`
-  // and `overflow-behavior` properties.
+  // NOTE: Use GetScrollStyles() if you want `overflow` property info.
   nsIFrame* GetFrameForStyle() const;
 
   // Compute all scroll snap related information and store eash snap target

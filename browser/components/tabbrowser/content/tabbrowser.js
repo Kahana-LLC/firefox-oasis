@@ -388,6 +388,10 @@
     /** @type {MozTabSplitViewWrapper} */
     #activeSplitView = null;
 
+    get activeSplitView() {
+      return this.#activeSplitView;
+    }
+
     /**
      * List of browsers which are currently in an active Split View.
      *
@@ -3234,7 +3238,7 @@
         return null;
       }
 
-      this.dispatchEvent(
+      this.tabContainer.dispatchEvent(
         new CustomEvent("SplitViewCreated", {
           bubbles: true,
         })
@@ -3243,7 +3247,7 @@
     }
 
     /**
-     * Removes a tab from a split view wrapper. This also removes the split view wrapper component
+     * Removes all tabs from a split view wrapper. This also removes the split view wrapper component
      *
      * @param {MozTabSplitViewWrapper} [splitView]
      *   The split view to remove.
@@ -3261,6 +3265,7 @@
           )
         );
       }
+
       splitview.remove();
     }
 
@@ -3298,12 +3303,19 @@
      */
     #insertSplitViewFooter(tab) {
       const panelEl = document.getElementById(tab.linkedPanel);
-      if (panelEl.querySelector("split-view-footer")) {
+      if (panelEl?.querySelector("split-view-footer")) {
         return;
       }
-      const footer = document.createXULElement("split-view-footer");
-      footer.setTab(tab);
-      panelEl.appendChild(footer);
+      if (panelEl) {
+        const footer = document.createXULElement("split-view-footer");
+        footer.setTab(tab);
+        panelEl.appendChild(footer);
+      }
+    }
+
+    openSplitViewMenu(anchorElement) {
+      const menu = document.getElementById("split-view-menu");
+      menu.openPopup(anchorElement, "after_start");
     }
 
     /**
@@ -4428,6 +4440,13 @@
           ? this.tabContainer.pinnedTabsContainer
           : this.tabContainer;
         tabContainer.insertBefore(tab, itemAfter);
+      }
+
+      if (tab.group?.collapsed) {
+        // Bug 1997096: automatically expand the group if we are adding a new
+        // tab to a collapsed group, and that tab does not have automatic focus
+        // (i.e. if the user right clicks and clicks "Open in New Tab")
+        tab.group.collapsed = false;
       }
 
       this._updateTabsAfterInsert();
@@ -7786,10 +7805,10 @@
           break;
         }
         case "TabSplitViewActivate":
-          this.#activeSplitView = aEvent.originalTarget;
+          this.#activeSplitView = aEvent.detail.splitview;
           break;
         case "TabSplitViewDeactivate":
-          if (this.#activeSplitView === aEvent.originalTarget) {
+          if (this.#activeSplitView === aEvent.detail.splitview) {
             this.#activeSplitView = null;
           }
           break;
@@ -9722,10 +9741,12 @@ var TabContextMenu = {
     let contextEditNote = document.getElementById("context_editNote");
     if (gBrowser._tabNotesEnabled) {
       let noteURL = this.contextTab.canonicalUrl;
-      let hasNote = this.TabNotes.has(noteURL);
       contextAddNote.disabled = !noteURL;
-      contextAddNote.hidden = hasNote;
-      contextEditNote.hidden = !hasNote;
+
+      this.TabNotes.has(noteURL).then(hasNote => {
+        contextAddNote.hidden = hasNote;
+        contextEditNote.hidden = !hasNote;
+      });
     } else {
       contextAddNote.hidden = true;
       contextEditNote.hidden = true;
@@ -10245,7 +10266,7 @@ var TabContextMenu = {
     let newTab = null;
     if (this.contextTabs.length < 2) {
       // Open new tab to split with context tab
-      newTab = gBrowser.addTrustedTab(BROWSER_NEW_TAB_URL);
+      newTab = gBrowser.addTrustedTab("about:opentabs");
       tabsToAdd = [this.contextTabs[0], newTab];
     }
 

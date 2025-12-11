@@ -31,7 +31,10 @@ add_setup(async function () {
   // when in the signed-out state, we need to set the state _before_ opening
   // the FxA menu (since the panel cannot be opened) in the signed out state.
   await SpecialPowers.pushPrefEnv({
-    set: [["identity.fxaccounts.toolbar.accessed", true]],
+    set: [
+      ["browser.urlbar.trustPanel.featureGate", false],
+      ["identity.fxaccounts.toolbar.accessed", true],
+    ],
   });
 });
 
@@ -790,6 +793,7 @@ add_task(async function test_new_sync_setup_ui() {
   let state = {
     status: UIState.STATUS_SIGNED_IN,
     syncEnabled: false,
+    hasSyncKeys: true,
     email: "foo@bar.com",
     displayName: "Foo Bar",
     avatarURL: "https://foo.bar",
@@ -839,6 +843,7 @@ add_task(async function test_ui_my_services_signedin() {
   let state = {
     status: UIState.STATUS_SIGNED_IN,
     syncEnabled: true,
+    hasSyncKeys: true,
     email: "foo@bar.com",
     displayName: "Foo Bar",
     avatarURL: "https://foo.bar",

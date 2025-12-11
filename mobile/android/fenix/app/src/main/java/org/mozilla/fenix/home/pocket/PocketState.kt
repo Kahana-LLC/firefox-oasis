@@ -5,13 +5,13 @@
 package org.mozilla.fenix.home.pocket
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SelectableChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import mozilla.components.compose.base.SelectableChipColors
 import mozilla.components.service.pocket.PocketStory
 import org.mozilla.fenix.components.appstate.AppState
-import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.utils.Settings
 
 /**
@@ -48,7 +48,7 @@ data class PocketState(
          */
         @Composable
         internal fun build(appState: AppState, settings: Settings) = with(appState) {
-            var textColor = FirefoxTheme.colors.textPrimary
+            var textColor = MaterialTheme.colorScheme.onSurface
             var linkTextColor = MaterialTheme.colorScheme.tertiary
 
             wallpaperState.currentWallpaper.let { currentWallpaper ->
@@ -74,12 +74,14 @@ data class PocketState(
 
 @Composable
 private fun AppState.getSelectableChipColors(): SelectableChipColors {
-    var (selectedContainerColor, containerColor, selectedLabelColor, labelColor, borderColor) =
-        SelectableChipColors.buildColors()
+    var selectedLabelColor = Color.Unspecified
+    var labelColor = Color.Unspecified
+    var selectedContainerColor = Color.Unspecified
+    var containerColor = Color.Unspecified
 
     wallpaperState.ComposeRunIfWallpaperCardColorsAreAvailable { cardColorLight, cardColorDark ->
-        selectedLabelColor = FirefoxTheme.colors.textPrimary
-        labelColor = FirefoxTheme.colors.textInverted
+        selectedLabelColor = MaterialTheme.colorScheme.onSurface
+        labelColor = MaterialTheme.colorScheme.inverseOnSurface
 
         if (isSystemInDarkTheme()) {
             selectedContainerColor = cardColorDark
@@ -90,11 +92,10 @@ private fun AppState.getSelectableChipColors(): SelectableChipColors {
         }
     }
 
-    return SelectableChipColors(
+    return FilterChipDefaults.filterChipColors(
         selectedLabelColor = selectedLabelColor,
         labelColor = labelColor,
         selectedContainerColor = selectedContainerColor,
         containerColor = containerColor,
-        borderColor = borderColor,
     )
 }

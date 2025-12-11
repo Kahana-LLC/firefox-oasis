@@ -123,7 +123,7 @@ typedef mozilla::layers::BufferRecycleBin BufferRecycleBin;
 namespace mozilla {
 
 #if defined(MOZ_USE_HWDECODE) && defined(MOZ_WIDGET_GTK)
-MOZ_CONSTINIT nsTArray<AVCodecID>
+constinit nsTArray<AVCodecID>
     FFmpegVideoDecoder<LIBAV_VER>::mAcceleratedFormats;
 #endif
 
@@ -1926,6 +1926,37 @@ FFmpegVideoDecoder<LIBAV_VER>::ProcessFlush() {
   mPerformanceRecorder.Record(std::numeric_limits<int64_t>::max());
   return FFmpegDataDecoder::ProcessFlush();
 }
+
+#ifdef MOZ_WIDGET_ANDROID
+Maybe<MediaDataDecoder::PropertyValue> FFmpegVideoDecoder<
+    LIBAV_VER>::GetDecodeProperty(MediaDataDecoder::PropertyName aName) const {
+  // If we are using a software decoder, then we aren't subject to platform
+  // limits. If we don't have mCodecContext, assume worst case.
+  if (mCodecContext) {
+    if (const auto* codec = mCodecContext->codec) {
+      if (!(codec->capabilities & AV_CODEC_CAP_HARDWARE)) {
+        return MediaDataDecoder::GetDecodeProperty(aName);
+      }
+    }
+  }
+
+  // Android has limited amount of output buffers. See Bug 794747.
+  static constexpr uint32_t kNumOutputBuffers = 3;
+  // SurfaceTexture can have only one current/renderable image at a time.
+  // See Bug 1299068
+  static constexpr uint32_t kNumCurrentImages = 1;
+  switch (aName) {
+    case PropertyName::MaxNumVideoBuffers:
+      [[fallthrough]];
+    case PropertyName::MinNumVideoBuffers:
+      return Some(PropertyValue(kNumOutputBuffers));
+    case PropertyName::MaxNumCurrentImages:
+      return Some(PropertyValue(kNumCurrentImages));
+    default:
+      return MediaDataDecoder::GetDecodeProperty(aName);
+  }
+}
+#endif
 
 AVCodecID FFmpegVideoDecoder<LIBAV_VER>::GetCodecId(
     const nsACString& aMimeType) {

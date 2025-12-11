@@ -6,8 +6,8 @@ use api::{BorderRadius, ColorF, ExternalImageId, ImageBufferKind, ImageKey, Imag
 use api::units::*;
 use api::ColorDepth;
 use crate::image_source::resolve_image;
+use crate::renderer::GpuBufferBuilderF;
 use euclid::Box2D;
-use crate::gpu_cache::GpuCache;
 use crate::gpu_types::{ZBufferId, ZBufferIdGenerator};
 use crate::internal_types::{FrameAllocator, FrameMemory, FrameVec, TextureSource};
 use crate::picture::{ImageDependency, ResolvedSurfaceTexture, TileCacheInstance, TileId, TileSurface};
@@ -102,7 +102,6 @@ pub enum CompositeTileSurface {
     Color {
         color: ColorF,
     },
-    Clear,
     ExternalSurface {
         external_surface_index: ResolvedExternalSurfaceIndex,
     },
@@ -136,7 +135,6 @@ bitflags! {
 pub enum TileKind {
     Opaque,
     Alpha,
-    Clear,
 }
 
 // Index in to the compositor transforms stored in `CompositeState`
@@ -177,8 +175,6 @@ pub fn tile_kind(surface: &CompositeTileSurface, is_opaque: bool) -> TileKind {
         // Color tiles are, by definition, opaque. We might support non-opaque color
         // tiles if we ever find pages that have a lot of these.
         CompositeTileSurface::Color { .. } => TileKind::Opaque,
-        // Clear tiles have a special bucket
-        CompositeTileSurface::Clear => TileKind::Clear,
         CompositeTileSurface::Texture { .. }
         | CompositeTileSurface::ExternalSurface { .. } => {
             // Texture surfaces get bucketed by opaque/alpha, for z-rejection
@@ -458,7 +454,6 @@ pub enum TileSurfaceKind {
     Color {
         color: ColorF,
     },
-    Clear,
 }
 
 impl From<&TileSurface> for TileSurfaceKind {
@@ -466,7 +461,6 @@ impl From<&TileSurface> for TileSurfaceKind {
         match surface {
             TileSurface::Texture { .. } => TileSurfaceKind::Texture,
             TileSurface::Color { color } => TileSurfaceKind::Color { color: *color },
-            TileSurface::Clear => TileSurfaceKind::Clear,
         }
     }
 }
@@ -854,7 +848,7 @@ impl CompositeState {
         is_opaque: bool,
         device_clip_rect: DeviceRect,
         resource_cache: &ResourceCache,
-        gpu_cache: &mut GpuCache,
+        gpu_buffer: &mut GpuBufferBuilderF,
         deferred_resolves: &mut FrameVec<DeferredResolve>,
         clip_index: Option<CompositorClipIndex>,
     ) {
@@ -905,7 +899,7 @@ impl CompositeState {
                 &image_dependencies,
                 required_plane_count,
                 resource_cache,
-                gpu_cache,
+                gpu_buffer,
                 deferred_resolves,
             );
             if external_surface_index == ResolvedExternalSurfaceIndex::INVALID {
@@ -967,7 +961,7 @@ impl CompositeState {
         tile_cache: &TileCacheInstance,
         device_clip_rect: DeviceRect,
         resource_cache: &ResourceCache,
-        gpu_cache: &mut GpuCache,
+        gpu_buffer: &mut GpuBufferBuilderF,
         deferred_resolves: &mut FrameVec<DeferredResolve>,
     ) {
         let slice_transform = self.get_compositor_transform(tile_cache.transform_index);
@@ -983,7 +977,7 @@ impl CompositeState {
                 tile_cache.compositor_clip,
                 backdrop_surface.device_rect,
             );
-    
+
             // Use the backdrop native surface we created and add that to the composite state.
             self.descriptor.surfaces.push(
                 CompositeSurfaceDescriptor {
@@ -1006,7 +1000,7 @@ impl CompositeState {
                 true,
                 device_clip_rect,
                 resource_cache,
-                gpu_cache,
+                gpu_buffer,
                 deferred_resolves,
                 tile_cache.compositor_clip,
             );
@@ -1092,7 +1086,7 @@ impl CompositeState {
                     compositor_surface.is_opaque,
                     device_clip_rect,
                     resource_cache,
-                    gpu_cache,
+                    gpu_buffer,
                     deferred_resolves,
                     tile_cache.compositor_clip,
                 );
@@ -1136,7 +1130,7 @@ impl CompositeState {
         image_dependencies: &[ImageDependency; 3],
         required_plane_count: usize,
         resource_cache: &ResourceCache,
-        gpu_cache: &mut GpuCache,
+        gpu_buffer: &mut GpuBufferBuilderF,
         deferred_resolves: &mut FrameVec<DeferredResolve>,
     ) -> ResolvedExternalSurfaceIndex {
         let mut planes = [
@@ -1156,7 +1150,7 @@ impl CompositeState {
             let cache_item = resolve_image(
                 request,
                 resource_cache,
-                gpu_cache,
+                gpu_buffer,
                 deferred_resolves,
                 true,
             );
@@ -1801,7 +1795,7 @@ impl Occluders {
             occluders: memory.new_vec(),
             scratch: OccludersScratchBuffers {
                 events: memory.new_vec(),
-                active: memory.new_vec(),    
+                active: memory.new_vec(),
             }
         }
     }

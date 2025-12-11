@@ -34,6 +34,7 @@
 #include "nsCOMPtr.h"
 #include "nsCRTGlue.h"
 #include "nsCSSProps.h"
+#include "nsContainerFrame.h"
 #include "nsDeviceContext.h"
 #include "nsIURI.h"
 #include "nsIURIMutator.h"
@@ -323,7 +324,8 @@ nsStyleMargin::nsStyleMargin()
     : mMargin(StyleRectWithAllSides(
           StyleMargin::LengthPercentage(LengthPercentage::Zero()))),
       mScrollMargin(StyleRectWithAllSides(StyleLength{0.})),
-      mOverflowClipMargin(StyleLength::Zero()) {
+      mOverflowClipMargin(
+          {StyleLength::Zero(), StyleOverflowClipMarginBox::PaddingBox}) {
   MOZ_COUNT_CTOR(nsStyleMargin);
 }
 
@@ -1014,7 +1016,7 @@ nsStylePosition::nsStylePosition()
       mMinHeight(StyleSize::Auto()),
       mMaxHeight(StyleMaxSize::None()),
       mPositionAnchor(StylePositionAnchor::None()),
-      mPositionVisibility(StylePositionVisibility::ALWAYS),
+      mPositionVisibility(StylePositionVisibility::ANCHORS_VISIBLE),
       mPositionTryFallbacks(StylePositionTryFallbacks()),
       mPositionTryOrder(StylePositionTryOrder::Normal),
       mFlexBasis(StyleFlexBasis::Size(StyleSize::Auto())),
@@ -1257,7 +1259,7 @@ nsChangeHint nsStylePosition::CalcDifference(
       mPositionArea != aNewData.mPositionArea) {
     // We need to reflow in order to update the `AnchorPosReferences`
     // property at minimum.
-    hint |= nsChangeHint_NeedReflow;
+    hint |= nsChangeHint_NeedReflow | nsChangeHint_ReflowChangesSizeOrPosition;
   }
 
   if (mAspectRatio != aNewData.mAspectRatio) {
@@ -1324,6 +1326,25 @@ StyleSelfAlignment nsStylePosition::UsedJustifySelf(
     return {inheritedJustifyItems._0 & ~StyleAlignFlags::LEGACY};
   }
   return {StyleAlignFlags::NORMAL};
+}
+
+bool AnchorResolvedInsetHelper::SideUsesAnchorCenter(
+    mozilla::Side aSide, const AnchorPosOffsetResolutionParams& aParams) {
+  const nsIFrame* frame = aParams.mBaseParams.mFrame;
+  if (!frame) {
+    return false;
+  }
+  const nsIFrame* parent = frame->GetParent();
+  if (!parent) {
+    return false;
+  }
+
+  WritingMode wm = parent->GetWritingMode();
+  LogicalSide logicalSide = wm.LogicalSideForPhysicalSide(aSide);
+  LogicalAxis axis = GetAxis(logicalSide);
+
+  return axis == LogicalAxis::Inline ? aParams.mBaseParams.mIAnchorCenter
+                                     : aParams.mBaseParams.mBAnchorCenter;
 }
 
 AnchorResolvedInset AnchorResolvedInsetHelper::ResolveAnchor(

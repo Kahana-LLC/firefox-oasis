@@ -826,7 +826,7 @@ nsresult HTMLInputElement::InitColorPicker() {
   rv = colorPicker->Open(callback);
   if (NS_SUCCEEDED(rv)) {
     mPickerRunning = true;
-    SetStates(ElementState::OPEN, true);
+    SetOpenState(true);
   }
 
   return rv;
@@ -943,7 +943,7 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
     rv = filePicker->Open(callback);
     if (NS_SUCCEEDED(rv)) {
       mPickerRunning = true;
-      SetStates(ElementState::OPEN, true);
+      SetOpenState(true);
     }
 
     return rv;
@@ -952,7 +952,7 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
   HTMLInputElement::gUploadLastDir->FetchDirectoryAndDisplayPicker(
       doc, filePicker, callback);
   mPickerRunning = true;
-  SetStates(ElementState::OPEN, true);
+  SetOpenState(true);
   return NS_OK;
 }
 
@@ -2334,7 +2334,7 @@ void HTMLInputElement::CloseDateTimePicker() {
                                       CanBubble::eYes, Cancelable::eYes);
 }
 
-void HTMLInputElement::SetDateTimePickerState(bool aIsOpen) {
+void HTMLInputElement::SetOpenState(bool aIsOpen) {
   SetStates(ElementState::OPEN, aIsOpen);
 }
 
@@ -4162,13 +4162,14 @@ void EndSubmitClick(EventChainPostVisitor& aVisitor) {
 void HTMLInputElement::ActivationBehavior(EventChainPostVisitor& aVisitor) {
   auto oldType = FormControlType(NS_CONTROL_TYPE(aVisitor.mItemFlags));
 
+  auto endSubmit = MakeScopeExit([&] { EndSubmitClick(aVisitor); });
+
   if (IsDisabled() && oldType != FormControlType::InputCheckbox &&
       oldType != FormControlType::InputRadio) {
     // Behave as if defaultPrevented when the element becomes disabled by event
     // listeners. Checkboxes and radio buttons should still process clicks for
     // web compat. See:
     // https://html.spec.whatwg.org/multipage/input.html#the-input-element:activation-behaviour
-    EndSubmitClick(aVisitor);
     return;
   }
 
@@ -4216,6 +4217,7 @@ void HTMLInputElement::ActivationBehavior(EventChainPostVisitor& aVisitor) {
           form->MaybeSubmit(this);
         }
         aVisitor.mEventStatus = nsEventStatus_eConsumeNoDefault;
+        return;
       }
       break;
 
@@ -4227,8 +4229,6 @@ void HTMLInputElement::ActivationBehavior(EventChainPostVisitor& aVisitor) {
         do_QueryInterface(aVisitor.mEvent->mOriginalTarget);
     HandlePopoverTargetAction(eventTarget);
   }
-
-  EndSubmitClick(aVisitor);
 }
 
 void HTMLInputElement::LegacyCanceledActivationBehavior(
@@ -7439,7 +7439,7 @@ void HTMLInputElement::UpdateHasRange(bool aNotify) {
 
 void HTMLInputElement::PickerClosed() {
   mPickerRunning = false;
-  SetStates(ElementState::OPEN, false);
+  SetOpenState(false);
 }
 
 JSObject* HTMLInputElement::WrapNode(JSContext* aCx,

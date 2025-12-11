@@ -52,9 +52,7 @@ struct OverflowAreas {
            ScrollableOverflow().IsEqualEdges(aOther.ScrollableOverflow());
   }
 
-  bool operator!=(const OverflowAreas& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator!=(const OverflowAreas&) const = default;
 
   OverflowAreas operator+(const nsPoint& aPoint) const {
     OverflowAreas result(*this);
@@ -82,7 +80,7 @@ struct OverflowAreas {
   // Applies overflow clipping (for e.g. overflow: clip) as needed to both our
   // overflow rects.
   void ApplyClipping(const nsRect& aBounds, PhysicalAxes aClipAxes,
-                     const nsSize& aOverflowMargin) {
+                     const nsMargin& aOverflowMargin) {
     ApplyOverflowClippingOnRect(InkOverflow(), aBounds, aClipAxes,
                                 aOverflowMargin);
     ApplyOverflowClippingOnRect(ScrollableOverflow(), aBounds, aClipAxes,
@@ -94,14 +92,14 @@ struct OverflowAreas {
   static nsRect GetOverflowClipRect(const nsRect& aRectToClip,
                                     const nsRect& aBounds,
                                     PhysicalAxes aClipAxes,
-                                    const nsSize& aOverflowMargin);
+                                    const nsMargin& aOverflowMargin);
 
   // Applies the overflow clipping to a given overflow rect, given the frame
   // bounds, and the physical axes on which to apply the overflow clip.
   static void ApplyOverflowClippingOnRect(nsRect& aOverflowRect,
                                           const nsRect& aBounds,
                                           PhysicalAxes aClipAxes,
-                                          const nsSize& aOverflowMargin);
+                                          const nsMargin& aOverflowMargin);
 
  private:
   nsRect mInk;
@@ -119,13 +117,8 @@ struct OverflowAreas {
  */
 class CollapsingMargin final {
  public:
-  bool operator==(const CollapsingMargin& aOther) const {
-    return mMostPos == aOther.mMostPos && mMostNeg == aOther.mMostNeg;
-  }
-
-  bool operator!=(const CollapsingMargin& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator==(const CollapsingMargin&) const = default;
+  bool operator!=(const CollapsingMargin&) const = default;
 
   void Include(nscoord aCoord) {
     if (aCoord > mMostPos) {

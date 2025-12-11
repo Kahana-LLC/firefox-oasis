@@ -12,5 +12,20 @@ interface CanonicalURLIdentifiedEvent {
   target: MozBrowser;
   detail: {
     canonicalUrl: string;
+    canonicalUrlSources: CanonicalURLSource[];
   };
 }
+
+interface TabNoteRecord {
+  id: number;
+  canonicalUrl: string;
+  created: Temporal.Instant;
+  text: string;
+}
+
+type TabbrowserWebProgressListener<
+  ListenerName extends keyof nsIWebProgressListener,
+  F = nsIWebProgressListener[ListenerName],
+> = F extends (...args: any) => any
+  ? (aBrowser: MozBrowser, ...rest: Parameters<F>) => ReturnType<F>
+  : never;

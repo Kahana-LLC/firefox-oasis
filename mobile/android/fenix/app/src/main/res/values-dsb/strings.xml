@@ -61,6 +61,8 @@
   <string name="tab_manager_empty_synced_tabs_page_description">Pśizjawśo se, aby synchronizěrowane rejtariki ze wšych wašych rědow zastojał.</string>
   <!-- The action text displayed on the synced tabs page when the user is not logged into an account, prompting the user to sign into their account. When clicked, it takes the user to the account sign-in flow. -->
   <string name="tab_manager_empty_synced_tabs_page_sign_in_cta">Pśizjawiś</string>
+  <!-- Text for the button used to show all stories -->
+  <string name="homepage_all_stories">Wšykne tšojeńka</string>
   <!--
     Home - Bookmarks
 
@@ -1481,6 +1483,14 @@
   <string name="tab_tray_menu_tab_settings">Nastajenja rejtarikow</string>
   <!-- Text shown in the menu for closing all tabs -->
   <string name="tab_tray_menu_item_close">Wšykne rejtariki zacyniś</string>
+  <!-- Text shown as the title of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_title">Wšykne rejtariki zacyniś?</string>
+  <!-- Text shown in the body of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_body">To wšykne wócynjone rejtariki zacynijo.</string>
+  <!-- Text shown on the confirm button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_confirm">Rejtariki zacyniś</string>
+  <!-- Text shown on the cancel button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_cancel">Pśetergnuś</string>
   <!-- Text shown in the multiselect menu for bookmarking selected tabs. -->
   <string name="tab_tray_multiselect_menu_item_bookmark">Cytańske znamje</string>
   <!-- Content description (not visible, for screen readers etc.): Bookmarks selected tabs. -->
@@ -1527,6 +1537,8 @@
   <string name="delete_from_history">Z historije lašowaś</string>
   <!-- Postfix for private WebApp titles. %1$s is the name of the app (for example "Firefox"). -->
   <string name="pwa_site_controls_title_private">%1$s (priwatny modus)</string>
+  <!-- Content description (not visible, for screen readers etc.) for the button to open the Tab Search feature to search through tabs. -->
+  <string name="tab_manager_open_tab_search">Pytanje rejtarikow wócyniś</string>
   <!--
     History
 
@@ -3893,7 +3905,7 @@
   <!-- Message displayed when the search field in the Settings Search screen is empty -->
   <string name="settings_search_empty_query_placeholder">Žedne nejnowše pytanja</string>
   <!-- Message when error happens with Settings Search -->
-  <string name="settings_search_error_message">Zmólka jo nastała</string>
+  <string name="settings_search_error_message" tools:ignore="UnusedResources" moz:removedIn="147">Zmólka jo nastała</string>
   <!-- Text of button allowing to clear history of recent searches done in the settings screen. -->
   <string name="settings_search_clear_recent_searches_message">Wšykne wulašowaś</string>
   <!-- Section header for recent search results -->
@@ -3930,4 +3942,16 @@
   <string name="terms_of_use_prompt_accept">Akceptěrowaś</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Pózdźej dopomnjeś</string>
+  <!--
+    Privacy notice homepage banner
+
+    A message we show the user on the homepage when there is a new version of the privacy notice. 'Firefox' is intentionally hardcoded.
+    %1$s is replaced by an active link using privacy_notice_updated_homepage_message_privacy_notice as text (Privacy Notice)
+    %2$s is replaced by an active link using privacy_notice_updated_homepage_message_learn_more as text (Learn more)
+  -->
+  <string name="privacy_notice_updated_homepage_message" tools:ignore="BrandUsage,UnusedResources">Smy to zaktualizěrowali: naša %1$s, aby my nejnowše funkcije w Firefox wótbłyšćowali. %2$s</string>
+  <!-- The first active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_privacy_notice" tools:ignore="UnusedResources">powěźeńku priwatnosći</string>
+  <!-- The second active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_learn_more" tools:ignore="UnusedResources">Dalšne informacije</string>
 </resources>

@@ -929,7 +929,12 @@ void AsyncPanZoomController::Destroy() {
     MonitorAutoLock lock(mRefPtrMonitor);
     mGeckoContentController = nullptr;
     if (mGestureEventListener) {
-      mGestureEventListener->Destroy();
+      APZThreadUtils::RunOnControllerThread(NS_NewRunnableFunction(
+          "AsyncPanZoomController: destroying mGestureEventListener",
+          [listener = std::move(mGestureEventListener)]() {
+            listener->Destroy();
+          }));
+
       mGestureEventListener = nullptr;
     }
   }
@@ -5806,6 +5811,9 @@ void AsyncPanZoomController::NotifyLayersUpdated(
     Metrics().SetHasNonZeroDisplayPortMargins(
         aLayerMetrics.HasNonZeroDisplayPortMargins());
     Metrics().SetMinimalDisplayPort(aLayerMetrics.IsMinimalDisplayPort());
+    Metrics().SetInteractiveWidget(aLayerMetrics.GetInteractiveWidget());
+    Metrics().SetIsSoftwareKeyboardVisible(
+        aLayerMetrics.IsSoftwareKeyboardVisible());
     mScrollMetadata.SetForceDisableApz(aScrollMetadata.IsApzForceDisabled());
     mScrollMetadata.SetIsRDMTouchSimulationActive(
         aScrollMetadata.GetIsRDMTouchSimulationActive());
@@ -6110,7 +6118,20 @@ void AsyncPanZoomController::NotifyLayersUpdated(
     // The rest of this branch largely follows the code in the
     // |if (scrollOffsetUpdated)| branch above. Eventually it should get
     // merged into that branch.
-    Metrics().RecalculateLayoutViewportOffset();
+    //
+    // RecalculateLayoutViewportOffset tries to adjust the layout scroll offset
+    // if the updated visual scroll offset overflows the visual viewport from
+    // the layout viewport. Unfortunately the visual viewport calculated in APZ
+    // is basically including the dynamic toolbar area (because position:fixed
+    // (or sticky) elements are directly composited on the compositor in
+    // response to the dynamic toolbar movement), thus with the slightly larger
+    // visual viewport RecalculateLayoutViewportOffset unintentionally moves the
+    // layout scroll offset even if the dynamic toolbar is not collapsed at all.
+    // So we pass the compositor fixed layers margins which is representing the
+    // dynamic toolbar state to RecalculateLayoutViewportOffset to avoid such
+    // unintentional layout offset changes.
+    Metrics().RecalculateLayoutViewportOffset(
+        GetFixedLayerMargins(lock).bottom);
     mExpectedGeckoMetrics.UpdateFrom(aLayerMetrics);
     if (ShouldCancelAnimationForScrollUpdate(Nothing())) {
       CancelAnimation();
@@ -7120,6 +7141,16 @@ CSSPoint AsyncPanZoomController::MaybeFillOutOverscrollGutter(
   SetVisualScrollOffset(origin + delta);
   Metrics().RecalculateLayoutViewportOffset();
   return Metrics().GetVisualScrollOffset() - origin;
+}
+
+ScreenMargin AsyncPanZoomController::GetFixedLayerMargins(
+    const RecursiveMutexAutoLock& aProofOfLock) const {
+  return mCompositorFixedLayerMargins;
+}
+
+void AsyncPanZoomController::SetFixedLayerMargins(const ScreenMargin& aMargin) {
+  RecursiveMutexAutoLock lock(mRecursiveMutex);
+  mCompositorFixedLayerMargins = aMargin;
 }
 
 std::ostream& operator<<(std::ostream& aOut,

@@ -113,6 +113,8 @@ using namespace mozilla::dom;
 using namespace mozilla::gfx;
 using namespace mozilla::layers;
 
+static LazyLogModule gFingerprinterDetection("FingerprinterDetection");
+
 /**
  * Layer UserData for ContainerLayers that want to be notified
  * of local invalidations of them and their descendant layers.
@@ -2149,8 +2151,10 @@ void nsPresContext::UserFontSetUpdated(gfxUserFontEntry* aUpdatedFont) {
   // TODO(emilio): We could be more granular if we knew which families have
   // potentially changed.
   if (!aUpdatedFont) {
-    auto hint = StyleSet()->UsesFontMetrics() ? RestyleHint::RecascadeSubtree()
-                                              : RestyleHint{0};
+    auto hint =
+        (StyleSet()->UsesFontMetrics() || StyleSet()->UsesRootFontMetrics())
+            ? RestyleHint::RecascadeSubtree()
+            : RestyleHint{0};
     PostRebuildAllStyleDataEvent(NS_STYLE_HINT_REFLOW, hint);
     return;
   }
@@ -2948,7 +2952,7 @@ void nsPresContext::UpdateDynamicToolbarOffset(ScreenIntCoord aOffset) {
   // position:fixed or position:sticky element is painted at the correct
   // position on the main-thread.
   if (mDynamicToolbarHeight == 0 || aOffset == -mDynamicToolbarMaxHeight) {
-    mPresShell->MarkFixedFramesForReflow(IntrinsicDirty::None);
+    mPresShell->MarkFixedFramesForReflow();
     mPresShell->MarkStickyFramesForReflow();
     mPresShell->ScheduleResizeEventIfNeeded(
         PresShell::ResizeEventKind::Regular);
@@ -3079,6 +3083,7 @@ bool nsPresContext::ShouldResistFingerprinting(RFPTarget aTarget) const {
 }
 
 void nsPresContext::ReportBlockedFontFamily(const nsCString& aMsg) const {
+  MOZ_LOG(gFingerprinterDetection, LogLevel::Info, ("%s", aMsg.get()));
   nsContentUtils::ReportToConsoleNonLocalized(NS_ConvertUTF8toUTF16(aMsg),
                                               nsIScriptError::warningFlag,
                                               "Security"_ns, Document());

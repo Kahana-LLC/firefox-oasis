@@ -251,6 +251,36 @@ export const NimbusTestUtils = {
     },
 
     /**
+     * Assert that the only active enrollments have the expected slugs.
+     *
+     * @param {string} expectedSlugs The slugs of the enrollments that we expect to be active.
+     */
+    async activeEnrollments(expectedSlugs) {
+      await NimbusTestUtils.flushStore();
+
+      const conn = await lazy.ProfilesDatastoreService.getConnection();
+      const slugs = await conn
+        .execute(
+          `
+            SELECT
+              slug
+            FROM NimbusEnrollments
+            WHERE
+              active = true AND
+              profileId = :profileId;
+          `,
+          { profileId: ExperimentAPI.profileId }
+        )
+        .then(rows => rows.map(row => row.getResultByName("slug")));
+
+      NimbusTestUtils.Assert.deepEqual(
+        slugs.sort(),
+        expectedSlugs.sort(),
+        "Should only see expected active enrollments"
+      );
+    },
+
+    /**
      * Assert that an enrollment exists in the NimbusEnrollments table.
      *
      * @param {string} slug The slug to check for.
@@ -268,6 +298,8 @@ export const NimbusTestUtils = {
       slug,
       { active: expectedActive, profileId = ExperimentAPI.profileId } = {}
     ) {
+      await NimbusTestUtils.flushStore();
+
       const conn = await lazy.ProfilesDatastoreService.getConnection();
 
       const result = await conn.execute(
@@ -521,13 +553,23 @@ export const NimbusTestUtils = {
       });
     },
 
+    get GRADUATED_FIREFOX_LABS_AUTO_PIP() {
+      const { Phase } = lazy.NimbusMigrations;
+
+      return NimbusTestUtils.makeMigrationState({
+        [Phase.INIT_STARTED]: "multi-phase-migrations",
+        [Phase.AFTER_STORE_INITIALIZED]: "graduate-firefox-labs-auto-pip",
+        [Phase.AFTER_REMOTE_SETTINGS_UPDATE]: "firefox-labs-enrollments",
+      });
+    },
+
     /**
      * A migration state that represents all migrations applied.
      *
      * @type {Record<Phase, number>}
      */
     get LATEST() {
-      return NimbusTestUtils.migrationState.IMPORTED_ENROLLMENTS_TO_SQL;
+      return NimbusTestUtils.migrationState.GRADUATED_FIREFOX_LABS_AUTO_PIP;
     },
   },
 
@@ -1353,13 +1395,6 @@ export const NimbusTestUtils = {
     );
   },
 
-  /**
-   * Wait for the given slugs to be the only active enrollments in the
-   * NimbusEnrollments table.
-   *
-   * @param {string[]} expectedSlugs The slugs of the only active enrollments we
-   * expect.
-   */
   async waitForActiveEnrollments(expectedSlugs) {
     const profileId = ExperimentAPI.profileId;
 
@@ -1382,52 +1417,6 @@ export const NimbusTestUtils = {
 
       return lazy.ObjectUtils.deepEqual(slugs.sort(), expectedSlugs.sort());
     }, `Waiting for enrollments of ${expectedSlugs} to sync to database`);
-  },
-
-  async waitForInactiveEnrollment(slug) {
-    const profileId = ExperimentAPI.profileId;
-
-    await this.flushStore();
-    await lazy.TestUtils.waitForCondition(async () => {
-      const conn = await lazy.ProfilesDatastoreService.getConnection();
-      const result = await conn.execute(
-        `
-            SELECT
-              active
-            FROM NimbusEnrollments
-            WHERE
-              slug = :slug AND
-              profileId = :profileId;
-          `,
-        { profileId, slug }
-      );
-
-      return result.length === 1 && !result[0].getResultByName("active");
-    }, `Waiting for ${slug} enrollment to exist and be inactive`);
-  },
-
-  async waitForAllUnenrollments() {
-    const profileId = ExperimentAPI.profileId;
-
-    await this.flushStore();
-    await lazy.TestUtils.waitForCondition(async () => {
-      const conn = await lazy.ProfilesDatastoreService.getConnection();
-      const slugs = await conn
-        .execute(
-          `
-            SELECT
-              slug
-            FROM NimbusEnrollments
-            WHERE
-              active = true AND
-              profileId = :profileId;
-          `,
-          { profileId }
-        )
-        .then(rows => rows.map(row => row.getResultByName("slug")));
-
-      return slugs.length === 0;
-    }, "Waiting for unenrollments to sync to database");
   },
 
   async flushStore(store = null) {

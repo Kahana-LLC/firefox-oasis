@@ -8,13 +8,12 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -23,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,19 +35,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
+import mozilla.components.browser.state.state.createTab
 import mozilla.components.compose.base.button.ExtendedFloatingActionButton
 import mozilla.components.compose.base.button.FloatingActionButtonDefaults
 import mozilla.components.compose.base.menu.DropdownMenu
 import mozilla.components.compose.base.menu.MenuItem
 import mozilla.components.compose.base.modifier.animateRotation
 import mozilla.components.compose.base.text.Text
+import mozilla.components.compose.base.theme.surfaceDimVariant
 import mozilla.components.lib.state.ext.observeAsState
 import org.mozilla.fenix.R
+import org.mozilla.fenix.tabstray.DefaultTabManagementFeatureHelper
 import org.mozilla.fenix.tabstray.Page
+import org.mozilla.fenix.tabstray.TabManagementFeatureHelper
 import org.mozilla.fenix.tabstray.TabsTrayAction
 import org.mozilla.fenix.tabstray.TabsTrayState
 import org.mozilla.fenix.tabstray.TabsTrayState.Mode
@@ -66,6 +70,7 @@ import mozilla.components.ui.icons.R as iconsR
  * @param expanded Controls the expansion state of this FAB. In an expanded state, the FAB will
  * show both the icon and text. In a collapsed state, the FAB will show only the icon.
  * @param pbmLocked Whether the private browsing mode is currently locked.
+ * @param featureHelper The feature flag helper for the Tab Manager feature.
  * @param onOpenNewNormalTabClicked Invoked when the fab is clicked in [Page.NormalTabs].
  * @param onOpenNewPrivateTabClicked Invoked when the fab is clicked in [Page.PrivateTabs].
  * @param onSyncedTabsFabClicked Invoked when the fab is clicked in [Page.SyncedTabs].
@@ -82,6 +87,7 @@ internal fun TabManagerFloatingToolbar(
     modifier: Modifier = Modifier,
     expanded: Boolean = true,
     pbmLocked: Boolean = false,
+    featureHelper: TabManagementFeatureHelper = DefaultTabManagementFeatureHelper,
     onOpenNewNormalTabClicked: () -> Unit,
     onOpenNewPrivateTabClicked: () -> Unit,
     onSyncedTabsFabClicked: () -> Unit,
@@ -108,6 +114,7 @@ internal fun TabManagerFloatingToolbar(
             ) {
                 FloatingToolbarActions(
                     state = state,
+                    featureHelper = featureHelper,
                     onMenuShown = {
                         tabsTrayStore.dispatch(TabsTrayAction.ThreeDotMenuShown)
                     },
@@ -118,6 +125,9 @@ internal fun TabManagerFloatingToolbar(
                     onRecentlyClosedClick = onRecentlyClosedClick,
                     onAccountSettingsClick = onAccountSettingsClick,
                     onDeleteAllTabsClick = onDeleteAllTabsClick,
+                    onSearchClicked = {
+                        tabsTrayStore.dispatch(TabsTrayAction.TabSearchClicked)
+                    },
                 )
             }
 
@@ -140,15 +150,18 @@ internal fun TabManagerFloatingToolbar(
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun FloatingToolbarActions(
     state: TabsTrayState,
+    featureHelper: TabManagementFeatureHelper,
     onMenuShown: () -> Unit,
     onEnterMultiselectModeClick: () -> Unit,
     onTabSettingsClick: () -> Unit,
     onRecentlyClosedClick: () -> Unit,
     onAccountSettingsClick: () -> Unit,
     onDeleteAllTabsClick: () -> Unit,
+    onSearchClicked: () -> Unit,
 ) {
     var showBottomAppBarMenu by remember { mutableStateOf(false) }
     var showCloseAllTabsDialog by remember { mutableStateOf(false) }
@@ -165,10 +178,10 @@ private fun FloatingToolbarActions(
     )
 
     Card(
-        modifier = Modifier.size(56.dp),
+        modifier = Modifier.height(56.dp),
         shape = CircleShape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceDimVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
@@ -177,6 +190,19 @@ private fun FloatingToolbarActions(
             modifier = Modifier.padding(all = FirefoxTheme.layout.space.static100),
             horizontalArrangement = Arrangement.spacedBy(FirefoxTheme.layout.space.static50),
         ) {
+            if (featureHelper.tabSearchEnabled && state.searchIconVisible) {
+                IconButton(
+                    onClick = onSearchClicked,
+                    modifier = Modifier.testTag(TabsTrayTestTag.TAB_SEARCH_ICON),
+                    enabled = state.searchIconEnabled,
+                ) {
+                    Icon(
+                        painter = painterResource(iconsR.drawable.mozac_ic_search_24),
+                        contentDescription = stringResource(id = R.string.tab_manager_open_tab_search),
+                    )
+                }
+            }
+
             IconButton(
                 onClick = {
                     onMenuShown()
@@ -299,7 +325,7 @@ private fun CloseAllTabsConfirmationDialog(
         title = {
             Text(
                 text = stringResource(R.string.tab_manager_close_all_tabs_dialog_title),
-                style = FirefoxTheme.typography.headline6,
+                style = FirefoxTheme.typography.headline5,
             )
         },
         text = {
@@ -359,6 +385,7 @@ private fun generateMenuItems(
         drawableRes = iconsR.drawable.mozac_ic_delete_24,
         testTag = TabsTrayTestTag.CLOSE_ALL_TABS,
         onClick = onDeleteAllTabsClick,
+        level = MenuItem.FixedItem.Level.Critical,
     )
     val accountSettingsItem = MenuItem.IconItem(
         text = Text.Resource(R.string.tab_tray_menu_account_settings),
@@ -367,8 +394,8 @@ private fun generateMenuItems(
         onClick = onAccountSettingsClick,
     )
     return when {
-        selectedPage == Page.NormalTabs && normalTabCount == 0 ||
-                selectedPage == Page.PrivateTabs && privateTabCount == 0 -> listOf(
+        (selectedPage == Page.NormalTabs && normalTabCount == 0) ||
+            (selectedPage == Page.PrivateTabs && privateTabCount == 0) -> listOf(
             recentlyClosedTabsItem,
             tabSettingsItem,
         )
@@ -405,35 +432,75 @@ private class TabManagerFloatingToolbarParameterProvider :
     PreviewParameterProvider<TabManagerFloatingToolbarPreviewModel> {
     override val values: Sequence<TabManagerFloatingToolbarPreviewModel>
         get() = sequenceOf(
+            // Normal tab page, disabled search icon, collapsed fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.NormalTabs),
                 expanded = false,
             ),
+            // Normal tab page, disabled search icon, expanded fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.NormalTabs),
                 expanded = true,
             ),
+            // Normal tab page, enabled search icon, collapsed fab
+            TabManagerFloatingToolbarPreviewModel(
+                state = TabsTrayState(
+                    selectedPage = Page.NormalTabs,
+                    normalTabs = listOf(createTab(url = "url")),
+                ),
+                expanded = false,
+            ),
+            // Normal tab page, enabled search icon, expanded fab
+            TabManagerFloatingToolbarPreviewModel(
+                state = TabsTrayState(
+                    selectedPage = Page.NormalTabs,
+                    normalTabs = listOf(createTab(url = "url")),
+                ),
+                expanded = true,
+            ),
+            // Private tab page, disabled search icon, collapsed fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.PrivateTabs),
                 expanded = false,
             ),
+            // Private tab page, disabled search icon, expanded fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.PrivateTabs),
                 expanded = true,
             ),
+            // Private tab page, enabled search icon, collapsed fab
+            TabManagerFloatingToolbarPreviewModel(
+                state = TabsTrayState(
+                    selectedPage = Page.PrivateTabs,
+                    privateTabs = listOf(createTab(url = "url")),
+                ),
+                expanded = false,
+            ),
+            // Private tab page, enabled search icon, expanded fab
+            TabManagerFloatingToolbarPreviewModel(
+                state = TabsTrayState(
+                    selectedPage = Page.PrivateTabs,
+                    privateTabs = listOf(createTab(url = "url")),
+                ),
+                expanded = true,
+            ),
+            // Synced tab page, signed-in, collapsed fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.SyncedTabs),
                 expanded = false,
             ),
+            // Synced tab page, signed-in, expanded fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.SyncedTabs),
                 expanded = true,
             ),
+            // Synced tab page, signed-out, collapsed fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.SyncedTabs),
                 expanded = false,
                 isSignedIn = false,
             ),
+            // Synced tab page, signed-out, expanded fab
             TabManagerFloatingToolbarPreviewModel(
                 state = TabsTrayState(selectedPage = Page.SyncedTabs),
                 expanded = true,
@@ -442,28 +509,28 @@ private class TabManagerFloatingToolbarParameterProvider :
         )
 }
 
-@Preview
+@PreviewLightDark
 @Composable
 private fun TabManagerFloatingToolbarPreview(
     @PreviewParameter(TabManagerFloatingToolbarParameterProvider::class)
     previewDataModel: TabManagerFloatingToolbarPreviewModel,
 ) {
     FirefoxTheme {
-        TabManagerFloatingToolbar(
-            tabsTrayStore = remember { TabsTrayStore(initialState = previewDataModel.state) },
-            expanded = previewDataModel.expanded,
-            isSignedIn = previewDataModel.isSignedIn,
-            pbmLocked = false,
-            modifier = Modifier
-                .background(color = MaterialTheme.colorScheme.surface)
-                .padding(all = 16.dp),
-            onOpenNewNormalTabClicked = {},
-            onOpenNewPrivateTabClicked = {},
-            onSyncedTabsFabClicked = {},
-            onTabSettingsClick = {},
-            onAccountSettingsClick = {},
-            onDeleteAllTabsClick = {},
-            onRecentlyClosedClick = {},
-        )
+        Surface {
+            TabManagerFloatingToolbar(
+                tabsTrayStore = remember { TabsTrayStore(initialState = previewDataModel.state) },
+                expanded = previewDataModel.expanded,
+                isSignedIn = previewDataModel.isSignedIn,
+                pbmLocked = false,
+                modifier = Modifier.padding(all = 16.dp),
+                onOpenNewNormalTabClicked = {},
+                onOpenNewPrivateTabClicked = {},
+                onSyncedTabsFabClicked = {},
+                onTabSettingsClick = {},
+                onAccountSettingsClick = {},
+                onDeleteAllTabsClick = {},
+                onRecentlyClosedClick = {},
+            )
+        }
     }
 }

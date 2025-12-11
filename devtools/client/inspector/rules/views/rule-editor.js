@@ -144,7 +144,15 @@ RuleEditor.prototype = {
     return (
       this.isEditable &&
       this.rule.domRule.type !== ELEMENT_STYLE &&
-      this.rule.domRule.type !== CSSRule.KEYFRAME_RULE
+      this.rule.domRule.type !== CSSRule.KEYFRAME_RULE &&
+      this.rule.domRule.className !== "CSSPositionTryRule"
+    );
+  },
+
+  get showSelectorHighlighterButton() {
+    return (
+      this.rule.domRule.type !== CSSRule.KEYFRAME_RULE &&
+      this.rule.domRule.className !== "CSSPositionTryRule"
     );
   },
 
@@ -381,6 +389,8 @@ RuleEditor.prototype = {
         // devtools.inspector.rule-view.focusNextOnEnter set to true
         stopOnReturn: this.ruleView.inplaceEditorFocusNextOnEnter !== true,
       });
+    } else {
+      this.selectorText.classList.add("uneditable-selector");
     }
 
     if (this.rule.domRule.type !== CSSRule.KEYFRAME_RULE) {
@@ -392,18 +402,20 @@ RuleEditor.prototype = {
         // be computed on demand when the highlighter is requested.
       }
 
-      const isHighlighted =
-        this.ruleView.isSelectorHighlighted(computedSelector);
-      // Handling of click events is delegated to CssRuleView.handleEvent()
-      createChild(header, "button", {
-        class:
-          "ruleview-selectorhighlighter js-toggle-selector-highlighter" +
-          (isHighlighted ? " highlighted" : ""),
-        "aria-pressed": isHighlighted,
-        // This is used in rules.js for the selector highlighter
-        "data-computed-selector": computedSelector,
-        title: l10n("rule.selectorHighlighter.tooltip"),
-      });
+      if (this.showSelectorHighlighterButton) {
+        const isHighlighted =
+          this.ruleView.isSelectorHighlighted(computedSelector);
+        // Handling of click events is delegated to CssRuleView.handleEvent()
+        createChild(header, "button", {
+          class:
+            "ruleview-selectorhighlighter js-toggle-selector-highlighter" +
+            (isHighlighted ? " highlighted" : ""),
+          "aria-pressed": isHighlighted,
+          // This is used in rules.js for the selector highlighter
+          "data-computed-selector": computedSelector,
+          title: l10n("rule.selectorHighlighter.tooltip"),
+        });
+      }
     }
 
     this.openBrace = createChild(header, "span", {
@@ -660,6 +672,8 @@ RuleEditor.prototype = {
       this.selectorText.textContent = this.rule.selectorText;
     } else if (this.rule.domRule.type === CSSRule.KEYFRAME_RULE) {
       this.selectorText.textContent = this.rule.domRule.keyText;
+    } else if (this.rule.domRule.className === "CSSPositionTryRule") {
+      this.selectorText.textContent = this.rule.domRule.name;
     } else {
       this.rule.domRule.selectors.forEach((selector, i) => {
         this._populateSelector(selector, i);
@@ -1230,6 +1244,11 @@ RuleEditor.prototype = {
     try {
       const response = await this.rule.domRule.modifySelector(element, value);
 
+      // Modifying the selector might have removed the element (e.g. for pseudo element)
+      if (!element.actorID) {
+        return;
+      }
+
       // We recompute the list of applied styles, because editing a
       // selector might cause this rule's position to change.
       const applied = await elementStyle.pageStyle.getApplied(element, {
@@ -1237,6 +1256,11 @@ RuleEditor.prototype = {
         matchedSelectors: true,
         filter: elementStyle.showUserAgentStyles ? "ua" : undefined,
       });
+
+      // The element might have been removed while we were trying to get the applied declarations
+      if (!element.actorID) {
+        return;
+      }
 
       this.isEditing = false;
 

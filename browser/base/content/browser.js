@@ -13,6 +13,8 @@ var { AppConstants } = ChromeUtils.importESModule(
 // lazy module getters
 
 ChromeUtils.defineESModuleGetters(this, {
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   AMTelemetry: "resource://gre/modules/AddonManager.sys.mjs",
   AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
   AboutReaderParent: "resource:///actors/AboutReaderParent.sys.mjs",
@@ -623,9 +625,9 @@ customElements.setElementCreationCallback("screenshots-buttons", () => {
   );
 });
 
-customElements.setElementCreationCallback("fxa-menu-message", () => {
+customElements.setElementCreationCallback("menu-message", () => {
   ChromeUtils.importESModule(
-    "chrome://browser/content/asrouter/components/fxa-menu-message.mjs",
+    "chrome://browser/content/asrouter/components/menu-message.mjs",
     { global: "current" }
   );
 });
@@ -713,6 +715,7 @@ async function gLazyFindCommand(cmd, ...args) {
 var gPageIcons = {
   "about:home": "chrome://branding/content/icon32.png",
   "about:newtab": "chrome://branding/content/icon32.png",
+  "about:opentabs": "chrome://branding/content/icon32.png",
   "about:welcome": "chrome://branding/content/icon32.png",
   "about:privatebrowsing": "chrome://browser/skin/privatebrowsing/favicon.svg",
 };
@@ -722,6 +725,7 @@ var gInitialPages = [
   "about:home",
   "about:firefoxview",
   "about:newtab",
+  "about:opentabs",
   "about:privatebrowsing",
   "about:sessionrestore",
   "about:welcome",
@@ -1703,20 +1707,20 @@ function toOpenWindowByType(inType, uri, features) {
     );
   }
 }
-
 /**
  * Open a new browser window. See `BrowserWindowTracker.openWindow` for
  * options.
  *
  * @return a reference to the new window.
  */
-function OpenBrowserWindow(options = {}) {
+function OpenBrowserWindow(options) {
   let timerId = Glean.browserTimings.newWindow.start();
+  options ??= {};
+  options.openerWindow ??= window;
 
-  let win = BrowserWindowTracker.openWindow({
-    openerWindow: window,
-    ...options,
-  });
+  AIWindow.handleAIWindowOptions(window, options);
+
+  let win = BrowserWindowTracker.openWindow(options);
 
   win.addEventListener(
     "MozAfterPaint",
@@ -1885,6 +1889,16 @@ let gFileMenu = {
       );
     }
     PrintUtils.updatePrintSetupMenuHiddenState();
+
+    const aiWindowMenu = event.target.querySelector("#menu_newAIWindow");
+    const classicWindowMenu = event.target.querySelector(
+      "#menu_newClassicWindow"
+    );
+
+    aiWindowMenu.hidden =
+      !AIWindow.isAIWindowEnabled() || AIWindow.isAIWindowActive(window);
+    classicWindowMenu.hidden =
+      !AIWindow.isAIWindowEnabled() || !AIWindow.isAIWindowActive(window);
   },
 };
 

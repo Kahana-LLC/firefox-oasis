@@ -13,7 +13,8 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   BrowserTestUtils: "resource://testing-common/BrowserTestUtils.sys.mjs",
   BrowserUIUtils: "resource:///modules/BrowserUIUtils.sys.mjs",
-  BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  DEFAULT_FORM_HISTORY_PARAM:
+    "moz-src:///toolkit/components/search/SearchSuggestionController.sys.mjs",
   ExperimentAPI: "resource://nimbus/ExperimentAPI.sys.mjs",
   FormHistoryTestUtils:
     "resource://testing-common/FormHistoryTestUtils.sys.mjs",
@@ -29,7 +30,19 @@ ChromeUtils.defineESModuleGetters(lazy, {
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
 });
 
-export var UrlbarTestUtils = {
+/**
+ * Utility class for testing <html:moz-urlbar> elements.
+ */
+class UrlbarInputTestUtils {
+  /**
+   * @param {(window: ChromeWindow) => UrlbarInput} getUrlbarInputForWindow
+   */
+  constructor(getUrlbarInputForWindow) {
+    this.#urlbar = getUrlbarInputForWindow;
+  }
+
+  #urlbar;
+
   /**
    * This maps the categories used by the FX_SEARCHBAR_SELECTED_RESULT_METHOD
    * histogram to its indexes in the `labels` array. This only needs to be
@@ -37,17 +50,17 @@ export var UrlbarTestUtils = {
    * snapshots. Actual app code can use these category names directly when
    * they add to a histogram.
    */
-  SELECTED_RESULT_METHODS: {
+  SELECTED_RESULT_METHODS = {
     enter: 0,
     enterSelection: 1,
     click: 2,
     arrowEnterSelection: 3,
     tabEnterSelection: 4,
     rightClickEnter: 5,
-  },
+  };
 
   // Fallback to the console.
-  info: console.log,
+  info = console.log;
 
   /**
    * Running this init allows helpers to access test scope helpers, like Assert
@@ -58,7 +71,7 @@ export var UrlbarTestUtils = {
    */
   init(scope) {
     if (!scope) {
-      throw new Error("Must initialize UrlbarTestUtils with a test scope");
+      throw new Error("Must initialize UrlbarInputTestUtils with a test scope");
     }
     // If you add other properties to `this`, null them in uninit().
     this.Assert = scope.Assert;
@@ -80,7 +93,7 @@ export var UrlbarTestUtils = {
       this.EventUtils = null;
       this.SimpleTest = null;
     });
-  },
+  }
 
   /**
    * Waits to a search to be complete.
@@ -90,18 +103,18 @@ export var UrlbarTestUtils = {
   async promiseSearchComplete(win) {
     let waitForQuery = () => {
       return this.promisePopupOpen(win, () => {}).then(
-        () => win.gURLBar.lastQueryContextPromise
+        () => this.#urlbar(win).lastQueryContextPromise
       );
     };
     /** @type {UrlbarQueryContext} */
     let context = await waitForQuery();
-    if (win.gURLBar.searchMode) {
+    if (this.#urlbar(win).searchMode) {
       // Search mode may start a second query.
       context = await waitForQuery();
     }
-    if (win.gURLBar.view.oneOffSearchButtons._rebuilding) {
+    if (this.#urlbar(win).view.oneOffSearchButtons?._rebuilding) {
       await new Promise(resolve =>
-        win.gURLBar.view.oneOffSearchButtons.addEventListener(
+        this.#urlbar(win).view.oneOffSearchButtons.addEventListener(
           "rebuild",
           resolve,
           {
@@ -111,7 +124,7 @@ export var UrlbarTestUtils = {
       );
     }
     return context;
-  },
+  }
 
   /**
    * Starts a search for a given string and waits for the search to be complete.
@@ -151,21 +164,21 @@ export var UrlbarTestUtils = {
     }
 
     const setup = () => {
-      window.gURLBar.focus();
+      this.#urlbar(window).focus();
       // Using the value setter in some cases may trim and fetch unexpected
       // results, then pick an alternate path.
       if (
         lazy.UrlbarPrefs.get("trimURLs") &&
         value != lazy.BrowserUIUtils.trimURL(value)
       ) {
-        window.gURLBar._setValue(value);
+        this.#urlbar(window)._setValue(value);
         fireInputEvent = true;
       } else {
-        window.gURLBar.value = value;
+        this.#urlbar(window).value = value;
       }
       if (selectionStart >= 0 && selectionEnd >= 0) {
-        window.gURLBar.selectionEnd = selectionEnd;
-        window.gURLBar.selectionStart = selectionStart;
+        this.#urlbar(window).selectionEnd = selectionEnd;
+        this.#urlbar(window).selectionStart = selectionStart;
       }
 
       // An input event will start a new search, so be careful not to start a
@@ -174,8 +187,8 @@ export var UrlbarTestUtils = {
         // This is necessary to get the urlbar to set gBrowser.userTypedValue.
         this.fireInputEvent(window);
       } else {
-        window.gURLBar.setPageProxyState("invalid");
-        window.gURLBar.startQuery();
+        this.#urlbar(window).setPageProxyState("invalid");
+        this.#urlbar(window).startQuery();
       }
     };
     setup();
@@ -185,14 +198,16 @@ export var UrlbarTestUtils = {
     // never be shown. To avoid this, if losing the focus, retry setup to open
     // popup.
     if (reopenOnBlur) {
-      window.gURLBar.inputField.addEventListener("blur", setup, { once: true });
+      this.#urlbar(window).inputField.addEventListener("blur", setup, {
+        once: true,
+      });
     }
     const result = await this.promiseSearchComplete(window);
     if (reopenOnBlur) {
-      window.gURLBar.inputField.removeEventListener("blur", setup);
+      this.#urlbar(window).inputField.removeEventListener("blur", setup);
     }
     return result;
-  },
+  }
 
   /**
    * Waits for a result to be added at a certain index. Since we implement lazy
@@ -211,7 +226,7 @@ export var UrlbarTestUtils = {
       throw new Error("Not enough results");
     }
     return container.children[index];
-  },
+  }
 
   /**
    * Returns the oneOffSearchButtons object for the urlbar.
@@ -220,8 +235,8 @@ export var UrlbarTestUtils = {
    * @returns {object} The oneOffSearchButtons
    */
   getOneOffSearchButtons(win) {
-    return win.gURLBar.view.oneOffSearchButtons;
-  },
+    return this.#urlbar(win).view.oneOffSearchButtons;
+  }
 
   /**
    * Returns a specific button of a result.
@@ -235,7 +250,7 @@ export var UrlbarTestUtils = {
     return this.getRowAt(win, resultIndex).querySelector(
       `.urlbarView-button-${buttonName}`
     );
-  },
+  }
 
   /**
    * Show the result menu button regardless of the result being hovered or
@@ -250,7 +265,7 @@ export var UrlbarTestUtils = {
     this.registerCleanupFunction?.(() => {
       container.toggleAttribute(attr, false);
     });
-  },
+  }
 
   /**
    * Opens the result menu of a specific result.
@@ -267,12 +282,12 @@ export var UrlbarTestUtils = {
   async openResultMenu(
     win,
     {
-      resultIndex = win.gURLBar.view.selectedRowIndex,
+      resultIndex = this.#urlbar(win).view.selectedRowIndex,
       byMouse = false,
       activationKey = "KEY_Enter",
     } = {}
   ) {
-    this.Assert?.ok(win.gURLBar.view.isOpen, "view should be open");
+    this.Assert?.ok(this.#urlbar(win).view.isOpen, "view should be open");
     let menuButton = this.getButtonForResultIndex(
       win,
       "result-menu",
@@ -283,7 +298,7 @@ export var UrlbarTestUtils = {
       `found the menu button at result index ${resultIndex}`
     );
     let promiseMenuOpen = lazy.BrowserTestUtils.waitForEvent(
-      win.gURLBar.view.resultMenu,
+      this.#urlbar(win).view.resultMenu,
       "popupshown"
     );
     if (byMouse) {
@@ -300,7 +315,7 @@ export var UrlbarTestUtils = {
       this.info(`waiting for the menu popup to open via mouse`);
     } else {
       this.info(`selecting the result at index ${resultIndex}`);
-      while (win.gURLBar.view.selectedRowIndex != resultIndex) {
+      while (this.#urlbar(win).view.selectedRowIndex != resultIndex) {
         this.EventUtils.synthesizeKey("KEY_ArrowDown", {}, win);
       }
       if (this.getSelectedElement(win) != menuButton) {
@@ -316,11 +331,11 @@ export var UrlbarTestUtils = {
     }
     await promiseMenuOpen;
     this.Assert?.equal(
-      win.gURLBar.view.resultMenu.state,
+      this.#urlbar(win).view.resultMenu.state,
       "open",
       "Checking popup state"
     );
-  },
+  }
 
   /**
    * Opens the result menu of a specific result and gets a menu item by either
@@ -350,7 +365,7 @@ export var UrlbarTestUtils = {
     window,
     accesskey,
     command,
-    resultIndex = window.gURLBar.view.selectedRowIndex,
+    resultIndex = this.#urlbar(window).view.selectedRowIndex,
     openByMouse = false,
     submenuSelectors = [],
   }) {
@@ -358,13 +373,14 @@ export var UrlbarTestUtils = {
 
     // Open the sequence of submenus that contains the item.
     for (let selector of submenuSelectors) {
-      let menuitem = window.gURLBar.view.resultMenu.querySelector(selector);
+      let menuitem =
+        this.#urlbar(window).view.resultMenu.querySelector(selector);
       if (!menuitem) {
         throw new Error("Submenu item not found for selector: " + selector);
       }
 
       let promisePopup = lazy.BrowserTestUtils.waitForEvent(
-        window.gURLBar.view.resultMenu,
+        this.#urlbar(window).view.resultMenu,
         "popupshown"
       );
 
@@ -388,13 +404,13 @@ export var UrlbarTestUtils = {
     let menuitem;
     if (accesskey) {
       await lazy.BrowserTestUtils.waitForCondition(() => {
-        menuitem = window.gURLBar.view.resultMenu.querySelector(
+        menuitem = this.#urlbar(window).view.resultMenu.querySelector(
           `menuitem[accesskey=${accesskey}]`
         );
         return menuitem;
       }, "Waiting for strings to load");
     } else if (command) {
-      menuitem = window.gURLBar.view.resultMenu.querySelector(
+      menuitem = this.#urlbar(window).view.resultMenu.querySelector(
         `menuitem[data-command=${command}]`
       );
     } else {
@@ -402,7 +418,7 @@ export var UrlbarTestUtils = {
     }
 
     return menuitem;
-  },
+  }
 
   /**
    * Opens the result menu of a specific result and presses an access key to
@@ -420,7 +436,7 @@ export var UrlbarTestUtils = {
     win,
     accesskey,
     {
-      resultIndex = win.gURLBar.view.selectedRowIndex,
+      resultIndex = this.#urlbar(win).view.selectedRowIndex,
       openByMouse = false,
     } = {}
   ) {
@@ -435,7 +451,7 @@ export var UrlbarTestUtils = {
     }
 
     let promiseCommand = lazy.BrowserTestUtils.waitForEvent(
-      win.gURLBar.view.resultMenu,
+      this.#urlbar(win).view.resultMenu,
       "command"
     );
 
@@ -443,7 +459,7 @@ export var UrlbarTestUtils = {
       // The native Mac menu doesn't support access keys.
       this.info("calling doCommand() to activate menu item");
       menuitem.doCommand();
-      win.gURLBar.view.resultMenu.hidePopup(true);
+      this.#urlbar(win).view.resultMenu.hidePopup(true);
     } else {
       this.info(`pressing access key (${accesskey}) to activate menu item`);
       this.EventUtils.synthesizeKey(accesskey, {}, win);
@@ -452,7 +468,7 @@ export var UrlbarTestUtils = {
     this.info("waiting for command event");
     await promiseCommand;
     this.info("got the command event");
-  },
+  }
 
   /**
    * Opens the result menu of a specific result and clicks a menu item with a
@@ -476,7 +492,7 @@ export var UrlbarTestUtils = {
     win,
     commandOrArray,
     {
-      resultIndex = win.gURLBar.view.selectedRowIndex,
+      resultIndex = this.#urlbar(win).view.selectedRowIndex,
       openByMouse = false,
     } = {}
   ) {
@@ -497,7 +513,7 @@ export var UrlbarTestUtils = {
     }
 
     let promiseCommand = lazy.BrowserTestUtils.waitForEvent(
-      win.gURLBar.view.resultMenu,
+      this.#urlbar(win).view.resultMenu,
       "command"
     );
 
@@ -505,7 +521,7 @@ export var UrlbarTestUtils = {
       // Synthesized clicks don't work in the native Mac menu.
       this.info("calling doCommand() to activate menu item");
       menuitem.doCommand();
-      win.gURLBar.view.resultMenu.hidePopup(true);
+      this.#urlbar(win).view.resultMenu.hidePopup(true);
     } else {
       this.info("Clicking menu item with command: " + command);
       this.EventUtils.synthesizeMouseAtCenter(menuitem, {}, win);
@@ -514,7 +530,7 @@ export var UrlbarTestUtils = {
     this.info("Waiting for command event");
     await promiseCommand;
     this.info("Got the command event");
-  },
+  }
 
   /**
    * Returns true if the oneOffSearchButtons are visible.
@@ -525,7 +541,7 @@ export var UrlbarTestUtils = {
   getOneOffSearchButtonsVisible(win) {
     let buttons = this.getOneOffSearchButtons(win);
     return buttons.style.display != "none" && !buttons.container.hidden;
-  },
+  }
 
   /**
    * Gets an abstracted representation of the result at an index.
@@ -588,7 +604,7 @@ export var UrlbarTestUtils = {
       details.dynamicType = result.payload.dynamicType;
     }
     return details;
-  },
+  }
 
   /**
    * Gets the currently selected element.
@@ -597,8 +613,8 @@ export var UrlbarTestUtils = {
    * @returns {HtmlElement|XulElement} The selected element.
    */
   getSelectedElement(win) {
-    return win.gURLBar.view.selectedElement || null;
-  },
+    return this.#urlbar(win).view.selectedElement || null;
+  }
 
   /**
    * Gets the index of the currently selected element.
@@ -607,8 +623,8 @@ export var UrlbarTestUtils = {
    * @returns {number} The selected index.
    */
   getSelectedElementIndex(win) {
-    return win.gURLBar.view.selectedElementIndex;
-  },
+    return this.#urlbar(win).view.selectedElementIndex;
+  }
 
   /**
    * Gets the row at a specific index.
@@ -619,7 +635,7 @@ export var UrlbarTestUtils = {
    */
   getRowAt(win, index) {
     return this.getResultsContainer(win).children.item(index);
-  },
+  }
 
   /**
    * Gets the currently selected row. If the selected element is a descendant of
@@ -630,7 +646,7 @@ export var UrlbarTestUtils = {
    */
   getSelectedRow(win) {
     return this.getRowAt(win, this.getSelectedRowIndex(win));
-  },
+  }
 
   /**
    * Gets the index of the currently selected element.
@@ -639,8 +655,8 @@ export var UrlbarTestUtils = {
    * @returns {number} The selected row index.
    */
   getSelectedRowIndex(win) {
-    return win.gURLBar.view.selectedRowIndex;
-  },
+    return this.#urlbar(win).view.selectedRowIndex;
+  }
 
   /**
    * Selects the element at the index specified.
@@ -649,8 +665,8 @@ export var UrlbarTestUtils = {
    * @param {number} index The index to select.
    */
   setSelectedRowIndex(win, index) {
-    win.gURLBar.view.selectedRowIndex = index;
-  },
+    this.#urlbar(win).view.selectedRowIndex = index;
+  }
 
   /**
    * Gets the results container div for the address bar.
@@ -659,8 +675,8 @@ export var UrlbarTestUtils = {
    * @returns {HTMLDivElement}
    */
   getResultsContainer(win) {
-    return win.gURLBar.view.panel.querySelector(".urlbarView-results");
-  },
+    return this.#urlbar(win).view.panel.querySelector(".urlbarView-results");
+  }
 
   /**
    * Gets the number of results.
@@ -671,7 +687,7 @@ export var UrlbarTestUtils = {
    */
   getResultCount(win) {
     return this.getResultsContainer(win).children.length;
-  },
+  }
 
   /**
    * Ensures at least one search suggestion is present.
@@ -696,7 +712,7 @@ export var UrlbarTestUtils = {
       }
       return firstSearchSuggestionIndex;
     });
-  },
+  }
 
   /**
    * Waits for the given number of connections to an http server.
@@ -713,7 +729,7 @@ export var UrlbarTestUtils = {
       () => httpserver.connectionNumber == count,
       "Waiting for speculative connection setup"
     );
-  },
+  }
 
   /**
    * Waits for the popup to be shown.
@@ -727,20 +743,21 @@ export var UrlbarTestUtils = {
       throw new Error("openFn should be supplied to promisePopupOpen");
     }
     await openFn();
-    if (win.gURLBar.view.isOpen) {
+    let urlbar = this.#urlbar(win);
+    if (urlbar.view.isOpen) {
       return;
     }
     this.info("Waiting for the urlbar view to open");
     await new Promise(resolve => {
-      win.gURLBar.controller.addListener({
+      urlbar.controller.addListener({
         onViewOpen() {
-          win.gURLBar.controller.removeListener(this);
+          urlbar.controller.removeListener(this);
           resolve();
         },
       });
     });
     this.info("Urlbar view opened");
-  },
+  }
 
   /**
    * Waits for the popup to be hidden.
@@ -751,14 +768,15 @@ export var UrlbarTestUtils = {
    * @returns {Promise} resolved once the popup is closed
    */
   async promisePopupClose(win, closeFn = null) {
+    let urlbar = this.#urlbar(win);
     let closePromise = new Promise(resolve => {
-      if (!win.gURLBar.view.isOpen) {
+      if (!urlbar.view.isOpen) {
         resolve();
         return;
       }
-      win.gURLBar.controller.addListener({
+      urlbar.controller.addListener({
         onViewClose() {
-          win.gURLBar.controller.removeListener(this);
+          urlbar.controller.removeListener(this);
           resolve();
         },
       });
@@ -769,12 +787,12 @@ export var UrlbarTestUtils = {
       this.info("Done awaiting custom close function");
     } else {
       this.info("Closing the view directly");
-      win.gURLBar.view.close();
+      urlbar.view.close();
     }
     this.info("Waiting for the view to close");
     await closePromise;
     this.info("Urlbar view closed");
-  },
+  }
 
   /**
    * Open the input field context menu and run a task on it.
@@ -784,11 +802,11 @@ export var UrlbarTestUtils = {
    *        as argument.
    */
   async withContextMenu(win, task) {
-    let textBox = win.gURLBar.querySelector("moz-input-box");
+    let textBox = this.#urlbar(win).querySelector("moz-input-box");
     let cxmenu = textBox.menupopup;
     let openPromise = lazy.BrowserTestUtils.waitForEvent(cxmenu, "popupshown");
     this.EventUtils.synthesizeMouseAtCenter(
-      win.gURLBar.inputField,
+      this.#urlbar(win).inputField,
       {
         type: "contextmenu",
         button: 2,
@@ -811,15 +829,15 @@ export var UrlbarTestUtils = {
         await closePromise;
       }
     }
-  },
+  }
 
   /**
    * @param {object} win The browser window
    * @returns {boolean} Whether the popup is open
    */
   isPopupOpen(win) {
-    return win.gURLBar.view.isOpen;
-  },
+    return this.#urlbar(win).view.isOpen;
+  }
 
   /**
    * Asserts that the input is in a given search mode, or no search mode. Can
@@ -832,22 +850,23 @@ export var UrlbarTestUtils = {
    */
   async assertSearchMode(window, expectedSearchMode) {
     this.Assert.equal(
-      !!window.gURLBar.searchMode,
-      window.gURLBar.hasAttribute("searchmode"),
+      !!this.#urlbar(window).searchMode,
+      this.#urlbar(window).hasAttribute("searchmode"),
       "Urlbar should never be in search mode without the corresponding attribute."
     );
 
     this.Assert.equal(
-      !!window.gURLBar.searchMode,
+      !!this.#urlbar(window).searchMode,
       !!expectedSearchMode,
-      "gURLBar.searchMode should exist as expected"
+      "searchMode should exist on moz-urlbar"
     );
 
-    let results = window.gURLBar.querySelector(".urlbarView-results");
+    let results = this.#urlbar(window).querySelector(".urlbarView-results");
     await lazy.BrowserTestUtils.waitForCondition(
       () =>
         results.hasAttribute("actionmode") ==
-        (window.gURLBar.searchMode?.source == UrlbarUtils.RESULT_SOURCE.ACTIONS)
+        (this.#urlbar(window).searchMode?.source ==
+          UrlbarUtils.RESULT_SOURCE.ACTIONS)
     );
     this.Assert.ok(true, "Urlbar results have proper actionmode attribute");
 
@@ -873,7 +892,7 @@ export var UrlbarTestUtils = {
 
       await lazy.BrowserTestUtils.waitForCondition(() => {
         let l10nAttributes = window.document.l10n.getAttributes(
-          window.gURLBar.inputField
+          this.#urlbar(window).inputField
         );
         return (
           l10nAttributes.id == expectedPlaceholder.id &&
@@ -915,7 +934,10 @@ export var UrlbarTestUtils = {
       "uiLabel",
     ];
     for (let prop of ignoreProperties) {
-      if (prop in expectedSearchMode && !(prop in window.gURLBar.searchMode)) {
+      if (
+        prop in expectedSearchMode &&
+        !(prop in this.#urlbar(window).searchMode)
+      ) {
         this.info(
           `Ignoring unimportant property '${prop}' in expected search mode`
         );
@@ -924,7 +946,7 @@ export var UrlbarTestUtils = {
     }
 
     this.Assert.deepEqual(
-      window.gURLBar.searchMode,
+      this.#urlbar(window).searchMode,
       expectedSearchMode,
       "Expected searchMode"
     );
@@ -944,14 +966,14 @@ export var UrlbarTestUtils = {
 
     if (expectedTextContent) {
       this.Assert.equal(
-        window.gURLBar._searchModeIndicatorTitle.textContent,
+        this.#urlbar(window)._searchModeIndicatorTitle.textContent,
         expectedTextContent,
         "Expected textContent"
       );
     }
     this.Assert.deepEqual(
       window.document.l10n.getAttributes(
-        window.gURLBar._searchModeIndicatorTitle
+        this.#urlbar(window)._searchModeIndicatorTitle
       ),
       expectedL10n,
       "Expected l10n"
@@ -974,7 +996,7 @@ export var UrlbarTestUtils = {
       };
     }
     this.Assert.deepEqual(
-      window.document.l10n.getAttributes(window.gURLBar.inputField),
+      window.document.l10n.getAttributes(this.#urlbar(window).inputField),
       expectedPlaceholderL10n,
       "Expected placeholder l10n when search mode is active"
     );
@@ -1011,7 +1033,7 @@ export var UrlbarTestUtils = {
         }
       }
     }
-  },
+  }
 
   /**
    * Enters search mode by clicking a one-off.  The view must already be open
@@ -1066,7 +1088,7 @@ export var UrlbarTestUtils = {
     await this.promiseSearchComplete(window);
     this.Assert.ok(this.isPopupOpen(window), "Urlbar view is still open.");
     await this.assertSearchMode(window, searchMode);
-  },
+  }
 
   /**
    * Removes the scheme from an url according to user prefs.
@@ -1099,7 +1121,7 @@ export var UrlbarTestUtils = {
     }
 
     return sanitizedURL;
-  },
+  }
 
   /**
    * Returns the trimmed protocol with slashes.
@@ -1114,7 +1136,7 @@ export var UrlbarTestUtils = {
         : "http://"; // eslint-disable-this-line @microsoft/sdl/no-insecure-url
     }
     return "";
-  },
+  }
 
   /**
    * Exits search mode. If neither `backspace` nor `clickClose` is given, we'll
@@ -1138,7 +1160,7 @@ export var UrlbarTestUtils = {
     window,
     { backspace, clickClose, waitForSearch = true } = {}
   ) {
-    let urlbar = window.gURLBar;
+    let urlbar = this.#urlbar(window);
     // If the Urlbar is not extended, ignore the clickClose parameter. The close
     // button is not clickable in this state. This state might be encountered on
     // Linux, where prefers-reduced-motion is enabled in automation.
@@ -1194,7 +1216,7 @@ export var UrlbarTestUtils = {
       }
       await this.assertSearchMode(window, null);
     }
-  },
+  }
 
   /**
    * Returns the userContextId (container id) for the last search.
@@ -1205,9 +1227,9 @@ export var UrlbarTestUtils = {
    */
   async promiseUserContextId(win) {
     const defaultId = Ci.nsIScriptSecurityManager.DEFAULT_USER_CONTEXT_ID;
-    let context = await win.gURLBar.lastQueryContextPromise;
+    let context = await this.#urlbar(win).lastQueryContextPromise;
     return context.userContextId || defaultId;
-  },
+  }
 
   /**
    * Dispatches an input event to the input field.
@@ -1218,10 +1240,10 @@ export var UrlbarTestUtils = {
     // Set event.data to the last character in the input, for a couple of
     // reasons: It simulates the user typing, and it's necessary for autofill.
     let event = new InputEvent("input", {
-      data: win.gURLBar.value[win.gURLBar.value.length - 1] || null,
+      data: this.#urlbar(win).value[this.#urlbar(win).value.length - 1] || null,
     });
-    win.gURLBar.inputField.dispatchEvent(event);
-  },
+    this.#urlbar(win).inputField.dispatchEvent(event);
+  }
 
   /**
    * Returns a new mock controller.  This is useful for xpcshell tests.
@@ -1252,7 +1274,7 @@ export var UrlbarTestUtils = {
         options
       )
     );
-  },
+  }
 
   /**
    * Initializes some external components used by the urlbar.  This is necessary
@@ -1264,7 +1286,7 @@ export var UrlbarTestUtils = {
     Cc["@mozilla.org/satchel/form-history-startup;1"]
       .getService(Ci.nsIObserver)
       .observe(null, "profile-after-change", null);
-  },
+  }
 
   /**
    * Enrolls in a mock Nimbus feature.
@@ -1323,31 +1345,35 @@ export var UrlbarTestUtils = {
     });
 
     return cleanup;
-  },
+  }
 
   /**
-   * Simulate that user clicks URLBar and inputs text into it.
+   * Simulate that user clicks moz-urlbar and inputs text into it.
    *
    * @param {object} win
-   *   The browser window containing target gURLBar.
+   *   The browser window containing target moz-urlbar.
    * @param {string} text
    *   The text to be input.
    */
   async inputIntoURLBar(win, text) {
-    if (win.gURLBar.focused) {
-      win.gURLBar.select();
+    if (this.#urlbar(win).focused) {
+      this.#urlbar(win).select();
     } else {
-      this.EventUtils.synthesizeMouseAtCenter(win.gURLBar.inputField, {}, win);
-      await lazy.TestUtils.waitForCondition(() => win.gURLBar.focused);
+      this.EventUtils.synthesizeMouseAtCenter(
+        this.#urlbar(win).inputField,
+        {},
+        win
+      );
+      await lazy.TestUtils.waitForCondition(() => this.#urlbar(win).focused);
     }
     if (text.length > 1) {
       // Set most of the string directly instead of going through sendString,
       // so that we don't make life unnecessarily hard for consumers by
       // possibly starting multiple searches.
-      win.gURLBar._setValue(text.substr(0, text.length - 1));
+      this.#urlbar(win)._setValue(text.substr(0, text.length - 1));
     }
     this.EventUtils.sendString(text.substr(-1, 1), win);
-  },
+  }
 
   /**
    * Checks the urlbar value fomatting for a given URL.
@@ -1381,9 +1407,9 @@ export var UrlbarTestUtils = {
     } = {}
   ) {
     await new Promise(resolve => win.requestAnimationFrame(resolve));
-    let selectionController = win.gURLBar.editor.selectionController;
+    let selectionController = this.#urlbar(win).editor.selectionController;
     let selection = selectionController.getSelection(selectionType);
-    let value = win.gURLBar.editor.rootElement.textContent;
+    let value = this.#urlbar(win).editor.rootElement.textContent;
     let result = "";
     for (let i = 0; i < selection.rangeCount; i++) {
       let range = selection.getRangeAt(i).toString();
@@ -1398,15 +1424,15 @@ export var UrlbarTestUtils = {
       "Correct part of the URL is de-emphasized" +
         (additionalMsg ? ` (${additionalMsg})` : "")
     );
-  },
+  }
 
   searchModeSwitcherPopup(win) {
-    return win.gURLBar.querySelector(".searchmode-switcher-popup");
-  },
+    return this.#urlbar(win).querySelector(".searchmode-switcher-popup");
+  }
 
   async openSearchModeSwitcher(win) {
     let popup = this.searchModeSwitcherPopup(win);
-    let button = win.gURLBar.querySelector(".searchmode-switcher");
+    let button = this.#urlbar(win).querySelector(".searchmode-switcher");
     this.Assert.ok(lazy.BrowserTestUtils.isVisible(button));
     await this.EventUtils.promiseElementReadyForUserInput(button, win);
 
@@ -1419,14 +1445,14 @@ export var UrlbarTestUtils = {
     await Promise.all([promiseMenuOpen, rebuildPromise]);
 
     return popup;
-  },
+  }
 
   searchModeSwitcherPopupClosed(win) {
     return lazy.BrowserTestUtils.waitForPopupEvent(
       this.searchModeSwitcherPopup(win),
       "hidden"
     );
-  },
+  }
 
   async openTrustPanel(win) {
     let btn = win.document.getElementById("trust-icon");
@@ -1436,7 +1462,7 @@ export var UrlbarTestUtils = {
     );
     this.EventUtils.synthesizeMouseAtCenter(btn, {}, win);
     await popupShown;
-  },
+  }
 
   async openTrustPanelSubview(win, viewId) {
     let view = win.document.getElementById(viewId);
@@ -1447,7 +1473,7 @@ export var UrlbarTestUtils = {
       win
     );
     await shown;
-  },
+  }
 
   async closeTrustPanel(win) {
     let popupHidden = lazy.BrowserTestUtils.waitForEvent(
@@ -1456,7 +1482,7 @@ export var UrlbarTestUtils = {
     );
     this.EventUtils.synthesizeKey("VK_ESCAPE", {}, win);
     await popupHidden;
-  },
+  }
 
   async selectMenuItem(menupopup, targetSelector) {
     let target = menupopup.querySelector(targetSelector);
@@ -1475,22 +1501,22 @@ export var UrlbarTestUtils = {
         break;
       }
     }
-  },
-};
+  }
+}
 
-UrlbarTestUtils.formHistory = {
+UrlbarInputTestUtils.prototype.formHistory = {
   /**
    * Adds values to the urlbar's form history.
    *
    * @param {Array} values
    *   The form history entries to remove.
-   * @param {object} window
-   *   The window containing the urlbar.
    * @returns {Promise} resolved once the operation is complete.
    */
-  add(values = [], window = lazy.BrowserWindowTracker.getTopWindow()) {
-    let fieldname = this.getFormHistoryName(window);
-    return lazy.FormHistoryTestUtils.add(fieldname, values);
+  add(values = []) {
+    return lazy.FormHistoryTestUtils.add(
+      lazy.DEFAULT_FORM_HISTORY_PARAM,
+      values
+    );
   },
 
   /**
@@ -1499,26 +1525,23 @@ UrlbarTestUtils.formHistory = {
    *
    * @param {Array} values
    *   The form history entries to remove.
-   * @param {object} window
-   *   The window containing the urlbar.
    * @returns {Promise} resolved once the operation is complete.
    */
-  remove(values = [], window = lazy.BrowserWindowTracker.getTopWindow()) {
-    let fieldname = this.getFormHistoryName(window);
-    return lazy.FormHistoryTestUtils.remove(fieldname, values);
+  remove(values = []) {
+    return lazy.FormHistoryTestUtils.remove(
+      lazy.DEFAULT_FORM_HISTORY_PARAM,
+      values
+    );
   },
 
   /**
    * Removes all values from the urlbar's form history.  If you want to remove
    * individual values, use removeFormHistory.
    *
-   * @param {object} window
-   *   The window containing the urlbar.
    * @returns {Promise} resolved once the operation is complete.
    */
-  clear(window = lazy.BrowserWindowTracker.getTopWindow()) {
-    let fieldname = this.getFormHistoryName(window);
-    return lazy.FormHistoryTestUtils.clear(fieldname);
+  clear() {
+    return lazy.FormHistoryTestUtils.clear(lazy.DEFAULT_FORM_HISTORY_PARAM);
   },
 
   /**
@@ -1526,14 +1549,14 @@ UrlbarTestUtils.formHistory = {
    *
    * @param {object} criteria
    *   Criteria to narrow the search.  See FormHistory.search.
-   * @param {object} window
-   *   The window containing the urlbar.
    * @returns {Promise}
    *   A promise resolved with an array of found form history entries.
    */
-  search(criteria = {}, window = lazy.BrowserWindowTracker.getTopWindow()) {
-    let fieldname = this.getFormHistoryName(window);
-    return lazy.FormHistoryTestUtils.search(fieldname, criteria);
+  search(criteria = {}) {
+    return lazy.FormHistoryTestUtils.search(
+      lazy.DEFAULT_FORM_HISTORY_PARAM,
+      criteria
+    );
   },
 
   /**
@@ -1549,18 +1572,6 @@ UrlbarTestUtils.formHistory = {
       "satchel-storage-changed",
       (subject, data) => !change || data == "formhistory-" + change
     );
-  },
-
-  /**
-   * Returns the form history name for the urlbar in a window.
-   *
-   * @param {object} window
-   *   The window.
-   * @returns {string}
-   *   The form history name of the urlbar in the window.
-   */
-  getFormHistoryName(window = lazy.BrowserWindowTracker.getTopWindow()) {
-    return window ? window.gURLBar.formHistoryName : "searchbar-history";
   },
 };
 
@@ -1719,4 +1730,9 @@ class TestProvider extends UrlbarProvider {
   }
 }
 
-UrlbarTestUtils.TestProvider = TestProvider;
+UrlbarInputTestUtils.prototype.TestProvider = TestProvider;
+
+export var UrlbarTestUtils = new UrlbarInputTestUtils(window => window.gURLBar);
+export var SearchbarTestUtils = new UrlbarInputTestUtils(window =>
+  window.document.getElementById("searchbar-new")
+);

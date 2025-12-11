@@ -20,8 +20,6 @@ const lazy = XPCOMUtils.declareLazy({
     "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs",
   BrowserUIUtils: "resource:///modules/BrowserUIUtils.sys.mjs",
   BrowserUtils: "resource://gre/modules/BrowserUtils.sys.mjs",
-  CustomizableUI:
-    "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   ExtensionSearchHandler:
     "resource://gre/modules/ExtensionSearchHandler.sys.mjs",
   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
@@ -70,8 +68,6 @@ const lazy = XPCOMUtils.declareLazy({
   logger: () => lazy.UrlbarUtils.getLogger({ prefix: "Input" }),
 });
 
-const DEFAULT_FORM_HISTORY_NAME = "searchbar-history";
-
 const UNLIMITED_MAX_RESULTS = 99;
 
 let getBoundsWithoutFlushing = element =>
@@ -89,7 +85,6 @@ export class UrlbarInput extends HTMLElement {
             flex="1"
             pageproxystate="invalid">
         <moz-urlbar-slot name="remote-control-box"> </moz-urlbar-slot>
-        <toolbartabstop />
         <toolbarbutton id="urlbar-searchmode-switcher"
                        class="searchmode-switcher chromeclass-toolbar-additional"
                        align="center"
@@ -218,7 +213,6 @@ export class UrlbarInput extends HTMLElement {
   #compositionClosedPopup = false;
 
   valueIsTyped = false;
-  formHistoryName = DEFAULT_FORM_HISTORY_NAME;
 
   // Properties accessed in tests.
   lastQueryContextPromise = Promise.resolve();
@@ -356,7 +350,7 @@ export class UrlbarInput extends HTMLElement {
 
   connectedCallback() {
     if (
-      this.sapName == "searchbar" &&
+      this.getAttribute("sap-name") == "searchbar" &&
       !lazy.UrlbarPrefs.get("browser.search.widget.new")
     ) {
       return;
@@ -404,9 +398,6 @@ export class UrlbarInput extends HTMLElement {
     // recording abandonment events when the command causes a blur event.
     this.view.panel.addEventListener("command", this, true);
 
-    lazy.CustomizableUI.addListener(this);
-
-    this.window.addEventListener("unload", this);
     this.window.addEventListener("customizationstarting", this);
     this.window.addEventListener("aftercustomization", this);
     this.window.addEventListener("toolbarvisibilitychange", this);
@@ -453,7 +444,7 @@ export class UrlbarInput extends HTMLElement {
 
   disconnectedCallback() {
     if (
-      this.sapName == "searchbar" &&
+      this.getAttribute("sap-name") == "searchbar" &&
       !lazy.UrlbarPrefs.get("browser.search.widget.new")
     ) {
       return;
@@ -489,10 +480,6 @@ export class UrlbarInput extends HTMLElement {
     // This is used to detect commands launched from the panel, to avoid
     // recording abandonment events when the command causes a blur event.
     this.view.panel.removeEventListener("command", this, true);
-
-    lazy.CustomizableUI.removeListener(this);
-
-    this.window.removeEventListener("unload", this);
 
     this.window.removeEventListener("customizationstarting", this);
     this.window.removeEventListener("aftercustomization", this);
@@ -594,7 +581,7 @@ export class UrlbarInput extends HTMLElement {
         );
         break;
       case "browser.search.widget.new": {
-        if (this.sapName == "searchbar" && this.isConnected) {
+        if (this.getAttribute("sap-name") == "searchbar" && this.isConnected) {
           if (lazy.UrlbarPrefs.get("browser.search.widget.new")) {
             // The connectedCallback was skipped. Init now.
             this.#init();
@@ -5182,7 +5169,6 @@ export class UrlbarInput extends HTMLElement {
       ),
       tabGroup: this.window.gBrowser.selectedTab.group?.id ?? null,
       currentPage: this.window.gBrowser.currentURI.spec,
-      formHistoryName: this.formHistoryName,
       prohibitRemoteResults:
         event &&
         lazy.UrlbarUtils.isPasteEvent(event) &&
@@ -5483,8 +5469,6 @@ export class UrlbarInput extends HTMLElement {
     this.blur();
   }
 
-  // TODO(emilio, bug 1927942): Consider removing this listener and using
-  // onCustomizeEnd.
   _on_aftercustomization() {
     this.decrementBreakoutBlockerCount();
     this.#updateLayoutBreakout();
@@ -5495,24 +5479,6 @@ export class UrlbarInput extends HTMLElement {
       return;
     }
     this.#updateLayoutBreakout();
-  }
-
-  // CustomizableUI might unbind and bind us again, which makes us lose the
-  // popover state, which this fixes up. This can easily happen outside of
-  // customize mode with a call to CustomizableUI.reset().
-  // TODO(emilio): Do we need some of the on-aftercustomization fixups here?
-  onWidgetAfterDOMChange(aNode) {
-    if (aNode != this.parentNode || !this.hasAttribute("breakout")) {
-      return;
-    }
-    if (!this.matches(":popover-open")) {
-      this.showPopover();
-    }
-    this.#updateTextboxPositionNextFrame();
-  }
-
-  _on_unload() {
-    lazy.CustomizableUI.removeListener(this);
   }
 
   _on_toolbarvisibilitychange() {

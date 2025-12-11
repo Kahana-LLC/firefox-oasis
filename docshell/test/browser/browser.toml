@@ -274,6 +274,11 @@ skip-if = [
 
 ["browser_bug1798780.js"]
 
+["browser_bug2004165.js"]
+skip-if = [
+  "debug", # bug 2005202
+]
+
 ["browser_click_link_within_view_source.js"]
 
 ["browser_closewatcher_integration.js"]
@@ -315,6 +320,8 @@ skip-if = [
 
 ["browser_history_triggeringprincipal_viewsource.js"]
 https_first_disabled = true
+
+["browser_initialDocument_noLoadBlocking.js"]
 
 ["browser_initial_entry_without_interaction.js"]
 

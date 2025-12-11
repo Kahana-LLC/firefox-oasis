@@ -598,6 +598,19 @@ urlbar:
       description: >-
         semantic similarity distance threshold (0.0 - 1.0)
         defaulted at 0.6.
+    semanticHistorySupportedRegions:
+      type: string
+      setPref:
+        branch: user
+        pref: places.semanticHistory.supportedRegions
+      description: >-
+        map-like JSON of regions and locales for which the feature is supported.
+        When `semanticHistoryEnable` is false, this list is ignored and the
+        feature is disabled everywhere. When true, the feature is enabled only
+        in the regions/locales listed here.
+        The format is like: '[["AU",["en-*"]],["CA",["en-*"]], …]' where `-*`
+        can be used as a wildcard to match any locale that starts with the given
+        prefix.
     showDebuggingIcons:
       type: boolean
       setPref:
@@ -2725,6 +2738,38 @@ gleanInternalSdk:
         branch: user
         pref: telemetry.glean.internal.maxPingsPerMinute
 
+legacyTelemetry:
+  description: "Controls for the Legacy Telemetry data collection system"
+  owner: chutten@mozilla.com
+  applications:
+    - firefox-desktop
+  hasExposure: false
+  variables:
+    disabledPings:
+      type: json
+      description: |
+        A list of Legacy Telemetry pings to disable.
+        Pings on this list will not be archived or uploaded.
+        On submit their payloads will be dropped.
+        Code that collects to and submits the ping will still operate as normal.
+        Cannot be used to disable the "main", "first-shutdown", "new-profile",
+        or "deletion-request" pings.
+    disableMainPingScalars:
+      type: boolean
+      description: |
+        If true, scalars will not be included in "main" pings.
+        Exceptions are made for two important engagement measures:
+        `browser.engagement.total_uri_count_normal_and_private_mode` and
+        `browser.engagement.active_ticks`.
+        These scalars will continue to be reported as normal, even if all
+        others are disabled by this variable.
+    disableMainPingHgrams:
+      type: boolean
+      description: |
+        If true, histograms will not be included in "main" pings.
+        Data will still be recorded locally,
+        it will merely not be included in "main" pings when they are submitted.
+
 browserLowMemoryPrefs:
   description: Prefs which control the browser's behaviour under low memory.
   owner: haftandilian@mozilla.com
@@ -3445,7 +3490,19 @@ networkingDenyIpAddrAny:
       type: boolean
       setPref:
         branch: default
-        pref: "network.socket.ip_addr_any.disabled"
+        pref: network.socket.ip_addr_any.disabled
+
+compressionDictionaries:
+  description: HTTP Compression Dictionaries
+  owner: rjesup@mozilla.com
+  hasExposure: false
+  variables:
+    enableDictionaries:
+      description: Enables/disables HTTP Compression Dictionaries
+      type: boolean
+      setPref:
+       branch: default
+       pref: network.http.dictionaries.enable
 
 cookieStore:
   description: Enablement of cookieStore API

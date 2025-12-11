@@ -47,7 +47,7 @@
         <item name="mozacSelectAddressHeaderTextStyle" tools:ignore="UnusedResources">@style/SelectPromptHeaderTextStyle</item>
 
         <!-- Material3 -->
-        <item name="colorPrimary">@color/fx_mobile_primary</item>
+        <item name="colorPrimarySurface">@color/fx_mobile_primary</item>
         <item name="colorOnPrimary">@color/fx_mobile_on_primary</item>
         <item name="colorPrimaryContainer">@color/fx_mobile_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/fx_mobile_on_primary_container</item>
@@ -101,9 +101,6 @@
         <item name="layer2">@color/fx_mobile_layer_color_2</item>
         <!-- Search -->
         <item name="layer3">@color/fx_mobile_layer_color_3</item>
-        <item name="layerSearch">@color/fx_mobile_layer_color_search</item>
-        <!-- Selected tab -->
-        <item name="layerNonOpaque">@color/fx_mobile_layer_color_accent_nonopaque</item>
         <item name="scrim">@color/fx_mobile_layer_color_scrim</item>
 
         <!-- Action -->
@@ -111,8 +108,6 @@
         <item name="actionPrimary">@color/fx_mobile_action_color_primary</item>
         <!-- Primary button in a disabled state -->
         <item name="actionPrimaryDisabled">@color/fx_mobile_action_color_primary_disabled</item>
-        <!-- Selected chip -->
-        <item name="actionChipSelected">@color/fx_mobile_action_color_chip_selected</item>
 
         <!-- Text -->
         <!-- Primary text -->
@@ -133,19 +128,13 @@
         <item name="textActionPrimaryDisabled">@color/fx_mobile_text_color_action_primary_disabled</item>
 
         <!-- Icon -->
-        <!-- Secondary icon -->
-        <item name="iconSecondary">@color/fx_mobile_icon_color_secondary</item>
-        <!-- Active tab -->
-        <item name="iconActive">@color/fx_mobile_icon_color_active</item>
         <!-- Icon inverted (on color) -->
         <item name="iconOnColor">@color/fx_mobile_icon_color_oncolor</item>
 
         <!-- Border -->
         <!-- Default, Divider, Dotted -->
         <item name="borderPrimary">@color/fx_mobile_border_color_primary</item>
-        <item name="borderSecondary">@color/fx_mobile_border_color_secondary</item>
-        <!-- Toolbar divider -->
-        <item name="borderToolbarDivider">@color/fx_mobile_border_color_toolbar_divider</item>
+
         <!-- Active thumb color & Active track color (30% transparency) -->
         <item name="colorControlActivated">@color/accent_high_contrast_normal_theme</item>
         <!-- Inactive thumb color -->
@@ -344,7 +333,7 @@
         <item name="mozacSelectAddressHeaderTextStyle" tools:ignore="UnusedResources">@style/SelectPromptHeaderTextStyle</item>
 
         <!-- Material3 -->
-        <item name="colorPrimary">@color/fx_mobile_private_primary</item>
+        <item name="colorPrimarySurface">@color/fx_mobile_private_primary</item>
         <item name="colorOnPrimary">@color/fx_mobile_private_on_primary</item>
         <item name="colorPrimaryContainer">@color/fx_mobile_private_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/fx_mobile_private_on_primary_container</item>
@@ -398,9 +387,6 @@
         <item name="layer2">@color/fx_mobile_private_layer_color_2</item>
         <!-- Search -->
         <item name="layer3">@color/fx_mobile_private_layer_color_3</item>
-        <item name="layerSearch">@color/fx_mobile_private_layer_color_search</item>
-        <!-- Selected tab -->
-        <item name="layerNonOpaque">@color/fx_mobile_private_layer_color_accent_nonopaque</item>
         <item name="scrim">@color/fx_mobile_private_layer_color_scrim</item>
 
         <!-- Action -->
@@ -408,8 +394,7 @@
         <item name="actionPrimary">@color/fx_mobile_private_action_color_primary</item>
         <!-- Primary button in a disabled state -->
         <item name="actionPrimaryDisabled">@color/fx_mobile_private_action_color_primary_disabled</item>
-        <!-- Selected chip -->
-        <item name="actionChipSelected">@color/fx_mobile_private_action_color_chip_selected</item>
+
         <!-- Text -->
         <!-- Primary text -->
         <item name="textPrimary">@color/fx_mobile_private_text_color_primary</item>
@@ -429,19 +414,12 @@
         <item name="textActionPrimaryDisabled">@color/fx_mobile_private_text_color_action_primary_disabled</item>
 
         <!-- Icon -->
-        <!-- Secondary icon -->
-        <item name="iconSecondary">@color/fx_mobile_private_icon_color_secondary</item>
-        <!-- Active tab -->
-        <item name="iconActive">@color/fx_mobile_private_icon_color_active</item>
         <!-- Icon inverted (on color) -->
         <item name="iconOnColor">@color/fx_mobile_private_icon_color_oncolor</item>
 
         <!-- Border -->
         <!-- Default, Divider, Dotted -->
         <item name="borderPrimary">@color/fx_mobile_private_border_color_primary</item>
-        <item name="borderSecondary">@color/fx_mobile_private_border_color_secondary</item>
-        <!-- Toolbar divider -->
-        <item name="borderToolbarDivider">@color/fx_mobile_private_border_color_toolbar_divider</item>
 
         <!-- Inactive thumb color -->
         <item name="colorSwitchThumbNormal">@color/toggle_off_knob_dark_theme</item>
@@ -635,10 +613,8 @@
         <item name="android:fontWeight">@integer/font_weight_medium</item>
     </style>
 
-    <style name="ToolbarTitleTextStyle" parent="HeaderTextStyle">
-        <item name="android:textSize">20sp</item>
-        <item name="android:textFontWeight" tools:ignore="NewApi">@integer/font_weight_medium</item>
-        <item name="android:fontWeight">@integer/font_weight_medium</item>
+    <style name="AppBarTitleTextStyle" parent="AcornHeadline5">
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <style name="ListItemTextStyle" parent="TextAppearance.MaterialComponents.Subtitle1">
@@ -647,6 +623,12 @@
 
     <style name="progressBarStyleHorizontal" parent="@style/Widget.AppCompat.ProgressBar.Horizontal">
         <item name="android:progressDrawable">@drawable/progress_gradient</item>
+    </style>
+
+    <style name="AcornHeadline5">
+        <item name="android:textSize">24sp</item>
+        <item name="android:letterSpacing">0.0075</item> <!-- 0.18sp / 24sp -->
+        <item name="android:lineHeight" tools:targetApi="28">32sp</item>
     </style>
 
     <style name="AcornHeadline8">
