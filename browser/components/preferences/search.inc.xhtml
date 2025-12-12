@@ -95,20 +95,7 @@
                   preference="browser.urlbar.suggest.quicksuggest.all"
         />
         <description class="indent tip-caption"
-                      data-l10n-id="addressbar-locbar-suggest-nonsponsored-desc"
-        />
-        <checkbox id="firefoxSuggestSponsored"
-                  data-l10n-id="addressbar-locbar-suggest-sponsored-option"
-                  preference="browser.urlbar.suggest.quicksuggest.sponsored"
-        />
-        <description class="indent tip-caption"
-                      data-l10n-id="addressbar-locbar-suggest-sponsored-desc"
-        />
-        <html:moz-toggle id="firefoxSuggestDataCollectionSearchToggle"
-                         preference="browser.urlbar.quicksuggest.dataCollection.enabled"
-                         data-l10n-id="addressbar-firefox-suggest-data-collection"
-                         data-l10n-attrs="label, description"
-                         support-page="kahana-improve-oasis-suggest"
+                      data-l10n-id="addressbar-locbar-suggest-all-option-desc"
         />
         <vbox class="indent">
           <checkbox id="firefoxSuggestSponsored"
@@ -130,6 +117,12 @@
             />
           </hbox>
         </vbox>
+        <html:moz-toggle id="firefoxSuggestDataCollectionSearchToggle"
+                         preference="browser.urlbar.quicksuggest.dataCollection.enabled"
+                         data-l10n-id="addressbar-firefox-suggest-data-collection"
+                         data-l10n-attrs="label, description"
+                         support-page="kahana-improve-oasis-suggest"
+        />
         <hbox id="dismissedSuggestions" align="center">
           <vbox flex="1">
             <label data-l10n-id="addressbar-dismissed-suggestions-label"/>
