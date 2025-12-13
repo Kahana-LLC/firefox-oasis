@@ -38,5 +38,8 @@
     "prepare": "ts-patch install -s"
   },
   "notes(private)": "We don't want to publish to npm, so this is marked as private",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "minisearch": "^7.2.0"
+  }
 }
