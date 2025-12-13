@@ -1532,7 +1532,7 @@ pref("toolkit.datacollection.infoURL",
      "https://www.mozilla.org/legal/privacy/firefox.html");
 
 // base URL for web-based support pages
-pref("app.support.baseURL", "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/");
+pref("app.support.baseURL", "https://kahana.co/docs");
 
 // base url for web-based feedback pages
 pref("app.feedback.baseURL", "https://kahana.co/oasis-feedback-survey");

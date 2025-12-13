@@ -2333,3 +2333,28 @@ radiogroup:focus-visible > .subviewradio[focused="true"] {
 #ipprotection-header-button {
   list-style-image: url(chrome://global/skin/icons/help.svg);
 }
+/* Hide FxA signed-in label and "Sync and save data" CTA in app menu
+#appMenu-fxa-text,
+#appMenu-header-description,
+#appMenu-fxa-status2[fxastatus] > #appMenu-fxa-label2 > vbox > #appMenu-header-description,
+#appMenu-fxa-status2[fxastatus] > #appMenu-fxa-label2 > vbox {
+  display: none !important;
+}
+/* Hide FxA app-menu label/button and separator in PanelUI and app menu */
+/* #appMenu-fxa-label2,
+#appMenu-fxa-separator,
+#appMenu-fxa-text,
+#appMenu-header-description {
+  display: none !important;
+} */ 
+
+/* Remove FxA app-menu control and separator in the app menu to avoid empty gap */
+#appMenu-popup #appMenu-fxa-status2,
+#appMenu-popup #appMenu-fxa-separator {
+  display: none !important;
+}
+/* Remove FxA control and separator everywhere PanelUI is used */
+#appMenu-fxa-status2,
+#appMenu-fxa-separator {
+  display: none !important;
+}

@@ -560,9 +560,9 @@ function makeURLAbsolute(aBase, aUrl) {
 
 function getHelpLinkURL(aHelpTopic) {
   var url = Services.urlFormatter.formatURLPref("app.support.baseURL");
-  return url + aHelpTopic;
+  return url;
 }
-
+//  + aHelpTopic
 function openHelpLink(aHelpTopic) {
   openTrustedLinkIn(getHelpLinkURL(aHelpTopic), "tab");
 }
