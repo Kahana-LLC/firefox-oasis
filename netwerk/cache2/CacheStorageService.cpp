@@ -2458,4 +2458,36 @@ CacheStorageService::Flush(nsIObserver* aObserver) {
   return thread->Dispatch(r, CacheIOThread::WRITE);
 }
 
+NS_IMETHODIMP
+CacheStorageService::ClearDictionaryCacheMemory() {
+  LOG(("CacheStorageService::ClearDictionaryCacheMemory"));
+  RefPtr<DictionaryCache> cache = DictionaryCache::GetInstance();
+  if (cache) {
+    cache->Clear();
+  }
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+CacheStorageService::CorruptDictionaryHash(const nsACString& aURI) {
+  LOG(("CacheStorageService::CorruptDictionaryHash [uri=%s]",
+       PromiseFlatCString(aURI).get()));
+  RefPtr<DictionaryCache> cache = DictionaryCache::GetInstance();
+  if (cache) {
+    cache->CorruptHashForTesting(aURI);
+  }
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+CacheStorageService::ClearDictionaryDataForTesting(const nsACString& aURI) {
+  LOG(("CacheStorageService::ClearDictionaryDataForTesting [uri=%s]",
+       PromiseFlatCString(aURI).get()));
+  RefPtr<DictionaryCache> cache = DictionaryCache::GetInstance();
+  if (cache) {
+    cache->ClearDictionaryDataForTesting(aURI);
+  }
+  return NS_OK;
+}
+
 }  // namespace mozilla::net

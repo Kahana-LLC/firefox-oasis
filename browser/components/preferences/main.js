@@ -142,6 +142,9 @@ Preferences.addAll([
   { id: "accessibility.typeaheadfind", type: "bool" },
   { id: "accessibility.blockautorefresh", type: "bool" },
 
+  /* Zoom */
+  { id: "browser.zoom.full", type: "bool" },
+
   /* Browsing
    * general.autoScroll
      - when set to true, clicking the scroll wheel on the mouse activates a
@@ -633,7 +636,6 @@ Preferences.addSetting({
   },
 });
 
-Preferences.addSetting({ id: "zoomPlaceholder" });
 Preferences.addSetting({
   id: "containersPane",
   onUserClick(e) {
@@ -1308,9 +1310,9 @@ Preferences.addSetting({
     const guid = e.target.getAttribute("guid");
     if (action === "remove") {
       let [title, confirm, cancel] = await document.l10n.formatValues([
-        { id: "payments-remove-payment-prompt-title" },
-        { id: "payments-remove-payment-prompt-confirm-button" },
-        { id: "payments-remove-payment-prompt-cancel-button" },
+        { id: "payments-delete-payment-prompt-title" },
+        { id: "payments-delete-payment-prompt-confirm-button" },
+        { id: "payments-delete-payment-prompt-cancel-button" },
       ]);
       FormAutofillPreferences.prototype.openRemovePaymentDialog(
         guid,
@@ -1662,6 +1664,127 @@ Preferences.addSetting({
   },
 });
 
+/**
+ * Helper object for managing the various zoom related settings.
+ */
+const ZoomHelpers = {
+  win: window.browsingContext.topChromeWindow,
+  get FullZoom() {
+    return this.win.FullZoom;
+  },
+  get ZoomManager() {
+    return this.win.ZoomManager;
+  },
+
+  /**
+   * Set the global default zoom value.
+   *
+   * @param {number} newZoom - The new zoom
+   * @returns {Promise<void>}
+   */
+  async setDefaultZoom(newZoom) {
+    let cps2 = Cc["@mozilla.org/content-pref/service;1"].getService(
+      Ci.nsIContentPrefService2
+    );
+    let nonPrivateLoadContext = Cu.createLoadContext();
+    let resolvers = Promise.withResolvers();
+    /* Because our setGlobal function takes in a browsing context, and
+     * because we want to keep this property consistent across both private
+     * and non-private contexts, we create a non-private context and use that
+     * to set the property, regardless of our actual context.
+     */
+    cps2.setGlobal(this.FullZoom.name, newZoom, nonPrivateLoadContext, {
+      handleCompletion: resolvers.resolve,
+      handleError: resolvers.reject,
+    });
+    return resolvers.promise;
+  },
+
+  async getDefaultZoom() {
+    /** @import { ZoomUI as GlobalZoomUI } from "resource:///modules/ZoomUI.sys.mjs" */
+    /** @type {GlobalZoomUI} */
+    let ZoomUI = this.win.ZoomUI;
+    return await ZoomUI.getGlobalValue();
+  },
+
+  /**
+   * The possible zoom values.
+   *
+   * @returns {number[]}
+   */
+  get zoomValues() {
+    return this.ZoomManager.zoomValues;
+  },
+
+  toggleFullZoom() {
+    this.ZoomManager.toggleZoom();
+  },
+};
+Preferences.addSetting(
+  class extends Preferences.AsyncSetting {
+    static id = "defaultZoom";
+    /** @type {Record<"options", object[]>} */
+    optionsConfig;
+
+    /**
+     * @param {string} val - zoom value as a string
+     */
+    async set(val) {
+      ZoomHelpers.setDefaultZoom(
+        parseFloat((parseInt(val, 10) / 100).toFixed(2))
+      );
+    }
+    async get() {
+      return Math.round((await ZoomHelpers.getDefaultZoom()) * 100);
+    }
+    async getControlConfig() {
+      if (!this.optionsConfig) {
+        this.optionsConfig = {
+          options: ZoomHelpers.zoomValues.map(a => {
+            let value = Math.round(a * 100);
+            return {
+              value,
+              l10nId: "preferences-default-zoom-value",
+              l10nArgs: { percentage: value },
+            };
+          }),
+        };
+      }
+      return this.optionsConfig;
+    }
+  }
+);
+Preferences.addSetting({
+  id: "zoomTextPref",
+  pref: "browser.zoom.full",
+});
+Preferences.addSetting({
+  id: "zoomText",
+  deps: ["zoomTextPref"],
+  // Use the Setting since the ZoomManager getter may not have updated yet.
+  get: (_, { zoomTextPref }) => !zoomTextPref.value,
+  set: () => ZoomHelpers.toggleFullZoom(),
+  disabled: ({ zoomTextPref }) => zoomTextPref.locked,
+});
+Preferences.addSetting({
+  id: "zoomWarning",
+  deps: ["zoomText"],
+  visible: ({ zoomText }) => Boolean(zoomText.value),
+});
+Preferences.addSetting({
+  id: "contrastControlSettings",
+  pref: "browser.display.document_color_use",
+});
+Preferences.addSetting({
+  id: "colors",
+  onUserClick() {
+    gSubDialog.open(
+      "chrome://browser/content/preferences/dialogs/colors.xhtml",
+      { features: "resizable=no" }
+    );
+  },
+});
+
 SettingGroupManager.registerGroups({
   containers: {
     // This section is marked as in progress for testing purposes
@@ -1875,6 +1998,16 @@ SettingGroupManager.registerGroups({
         id: "stories",
         l10nId: "home-prefs-stories-header2",
         control: "moz-toggle",
+        items: [
+          {
+            id: "manageTopics",
+            l10nId: "home-prefs-manage-topics-link2",
+            control: "moz-box-link",
+            controlAttrs: {
+              href: "about:newtab#customize-topics",
+            },
+          },
+        ],
       },
       {
         id: "supportFirefox",
@@ -1956,24 +2089,36 @@ SettingGroupManager.registerGroups({
           },
         ],
       },
+      {
+        id: "chooseWallpaper",
+        l10nId: "home-prefs-choose-wallpaper-link2",
+        control: "moz-box-link",
+        controlAttrs: {
+          href: "about:newtab#customize",
+        },
+        iconSrc: "chrome://browser/skin/customize.svg",
+      },
     ],
   },
   zoom: {
-    // This section is marked as in progress for testing purposes
-    inProgress: true,
+    l10nId: "preferences-zoom-header2",
+    headingLevel: 2,
     items: [
       {
-        id: "zoomPlaceholder",
-        control: "moz-message-bar",
-        controlAttrs: {
-          message: "Placeholder for updated zoom controls",
-        },
+        id: "defaultZoom",
+        l10nId: "preferences-default-zoom-label",
+        control: "moz-select",
       },
       {
-        id: "containersPane",
-        control: "moz-button",
+        id: "zoomText",
+        l10nId: "preferences-zoom-text-only",
+      },
+      {
+        id: "zoomWarning",
+        l10nId: "preferences-text-zoom-override-warning",
+        control: "moz-message-bar",
         controlAttrs: {
-          label: "Manage container settings",
+          type: "warning",
         },
       },
     ],
@@ -2061,6 +2206,45 @@ SettingGroupManager.registerGroups({
         id: "playDRMContent",
         l10nId: "play-drm-content",
         supportPage: "drm-content",
+      },
+    ],
+  },
+  contrast: {
+    l10nId: "preferences-contrast-control-group",
+    headingLevel: 2,
+    items: [
+      {
+        id: "contrastControlSettings",
+        control: "moz-radio-group",
+        l10nId: "preferences-contrast-control-radio-group",
+        options: [
+          {
+            id: "contrastSettingsAuto",
+            value: 0,
+            l10nId: "preferences-contrast-control-use-platform-settings",
+          },
+          {
+            id: "contrastSettingsOff",
+            value: 1,
+            l10nId: "preferences-contrast-control-off",
+          },
+          {
+            id: "contrastSettingsOn",
+            value: 2,
+            l10nId: "preferences-contrast-control-custom",
+            items: [
+              {
+                id: "colors",
+                l10nId: "preferences-colors-manage-button",
+                control: "moz-box-button",
+                controlAttrs: {
+                  "search-l10n-ids":
+                    "colors-text-and-background, colors-text.label, colors-text-background.label, colors-links-header, colors-links-unvisited.label, colors-links-visited.label",
+                },
+              },
+            ],
+          },
+        ],
       },
     ],
   },
@@ -2319,36 +2503,17 @@ SettingGroupManager.registerGroups({
     supportPage: "ip-protection",
     items: [
       {
-        id: "ipProtectionExceptionsMode",
+        id: "ipProtectionExceptions",
         l10nId: "ip-protection-site-exceptions",
-        control: "moz-radio-group",
+        control: "moz-fieldset",
         controlAttrs: {
           ".headingLevel": 3,
         },
-        options: [
+        items: [
           {
-            id: "ipProtectionExceptionRadioAll",
-            value: "all",
-            l10nId: "ip-protection-site-exceptions-all-sites-radio",
-            items: [
-              {
-                id: "ipProtectionExceptionAllListButton",
-                l10nId: "ip-protection-site-exceptions-all-sites-button",
-                control: "moz-box-button",
-              },
-            ],
-          },
-          {
-            id: "ipProtectionExceptionRadioSelect",
-            value: "select",
-            l10nId: "ip-protection-site-exceptions-select-sites-radio",
-            items: [
-              {
-                id: "ipProtectionExceptionSelectListButton",
-                l10nId: "ip-protection-site-exceptions-select-sites-button",
-                control: "moz-box-button",
-              },
-            ],
+            id: "ipProtectionExceptionAllListButton",
+            l10nId: "ip-protection-site-exceptions-all-sites-button",
+            control: "moz-box-button",
           },
         ],
       },
@@ -2843,6 +3008,40 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  searchSuggestions: {
+    l10nId: "search-suggestions-header-2",
+    headingLevel: 2,
+    items: [
+      {
+        id: "suggestionsInSearchFieldsCheckbox",
+        l10nId: "search-show-suggestions-option",
+        items: [
+          {
+            id: "urlBarSuggestionCheckbox",
+            l10nId: "search-show-suggestions-url-bar-option",
+          },
+          {
+            id: "showSearchSuggestionsFirstCheckbox",
+            l10nId: "search-show-suggestions-above-history-option-2",
+          },
+          {
+            id: "showSearchSuggestionsPrivateWindowsCheckbox",
+            l10nId: "search-show-suggestions-private-windows-2",
+          },
+          {
+            id: "showTrendingSuggestionsCheckbox",
+            l10nId: "addressbar-locbar-showtrendingsuggestions-option-2",
+            supportPage: "use-google-trending-search-firefox-address-bar",
+          },
+          {
+            id: "urlBarSuggestionPermanentPBMessage",
+            l10nId: "search-suggestions-cant-show-2",
+            control: "moz-message-bar",
+          },
+        ],
+      },
+    ],
+  },
   dnsOverHttpsAdvanced: {
     inProgress: true,
     l10nId: "preferences-doh-advanced-section",
@@ -3125,6 +3324,101 @@ SettingGroupManager.registerGroups({
       },
     ],
   },
+  sync: {
+    inProgress: true,
+    l10nId: "sync-group-label",
+    headingLevel: 2,
+    items: [
+      {
+        id: "syncNoFxaSignIn",
+        l10nId: "sync-signedout-account-signin-4",
+        control: "moz-box-link",
+        iconSrc: "chrome://global/skin/icons/warning.svg",
+        controlAttrs: {
+          id: "noFxaSignIn",
+        },
+      },
+      {
+        id: "syncConfigured",
+        control: "moz-box-group",
+        items: [
+          {
+            id: "syncStatus",
+            l10nId: "prefs-syncing-on-2",
+            control: "moz-box-item",
+            iconSrc: "chrome://global/skin/icons/check-filled.svg",
+            items: [
+              {
+                id: "syncNow",
+                control: "moz-button",
+                l10nId: "prefs-sync-now-button-2",
+                slot: "actions",
+              },
+              {
+                id: "syncing",
+                control: "moz-button",
+                l10nId: "prefs-syncing-button-2",
+                slot: "actions",
+              },
+            ],
+          },
+          {
+            id: "syncEnginesList",
+            control: "sync-engines-list",
+          },
+          {
+            id: "syncChangeOptions",
+            control: "moz-box-button",
+            l10nId: "sync-manage-options-2",
+          },
+        ],
+      },
+      {
+        id: "syncNotConfigured",
+        l10nId: "prefs-syncing-off-2",
+        control: "moz-box-item",
+        iconSrc: "chrome://global/skin/icons/warning.svg",
+        items: [
+          {
+            id: "syncSetup",
+            control: "moz-button",
+            l10nId: "prefs-sync-turn-on-syncing-2",
+            slot: "actions",
+          },
+        ],
+      },
+      {
+        id: "fxaDeviceNameSection",
+        l10nId: "sync-device-name-header-2",
+        control: "moz-fieldset",
+        controlAttrs: {
+          ".headingLevel": 3,
+        },
+        items: [
+          {
+            id: "fxaDeviceNameGroup",
+            control: "moz-box-group",
+            items: [
+              {
+                id: "fxaDeviceName",
+                control: "sync-device-name",
+              },
+              {
+                id: "fxaConnectAnotherDevice",
+                l10nId: "sync-connect-another-device-2",
+                control: "moz-box-link",
+                iconSrc: "chrome://browser/skin/device-phone.svg",
+                controlAttrs: {
+                  id: "connect-another-device",
+                  href: "https://accounts.firefox.com/pair",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 });
 
 /**
@@ -3232,17 +3526,13 @@ var gMainPane = {
       gMainPane.initPrimaryBrowserLanguageUI();
     }
 
-    // We call `initDefaultZoomValues` to set and unhide the
-    // default zoom preferences menu, and to establish a
-    // listener for future menu changes.
-    gMainPane.initDefaultZoomValues();
-
     gMainPane.initTranslations();
 
     // Initialize settings groups from the config object.
     initSettingGroup("appearance");
     initSettingGroup("downloads");
     initSettingGroup("drm");
+    initSettingGroup("contrast");
     initSettingGroup("browsing");
     initSettingGroup("zoom");
     initSettingGroup("support");
@@ -3291,12 +3581,6 @@ var gMainPane = {
       gMainPane._rebuildFonts.bind(gMainPane)
     );
     setEventListener("advancedFonts", "command", gMainPane.configureFonts);
-    setEventListener("colors", "command", gMainPane.configureColors);
-    Preferences.get("browser.display.document_color_use").on(
-      "change",
-      gMainPane.updateColorsButton.bind(gMainPane)
-    );
-    gMainPane.updateColorsButton();
 
     document
       .getElementById("browserLayoutShowSidebar")
@@ -3605,58 +3889,6 @@ var gMainPane = {
     var preference = Preferences.get(aPreferenceID);
     button.disabled = !preference.value;
     return undefined;
-  },
-
-  /**
-   * Fetch the existing default zoom value, initialise and unhide
-   * the preferences menu. This method also establishes a listener
-   * to ensure handleDefaultZoomChange is called on future menu
-   * changes.
-   */
-  async initDefaultZoomValues() {
-    let win = window.browsingContext.topChromeWindow;
-    let selected = await win.ZoomUI.getGlobalValue();
-    let menulist = document.getElementById("defaultZoom");
-
-    new SelectionChangedMenulist(menulist, event => {
-      let parsedZoom = parseFloat((event.target.value / 100).toFixed(2));
-      gMainPane.handleDefaultZoomChange(parsedZoom);
-    });
-
-    setEventListener("zoomText", "command", function () {
-      win.ZoomManager.toggleZoom();
-      document.getElementById("text-zoom-override-warning").hidden =
-        !document.getElementById("zoomText").checked;
-    });
-
-    let zoomValues = win.ZoomManager.zoomValues.map(a => {
-      return Math.round(a * 100);
-    });
-
-    let fragment = document.createDocumentFragment();
-    for (let zoomLevel of zoomValues) {
-      let menuitem = document.createXULElement("menuitem");
-      document.l10n.setAttributes(menuitem, "preferences-default-zoom-value", {
-        percentage: zoomLevel,
-      });
-      menuitem.setAttribute("value", zoomLevel);
-      fragment.appendChild(menuitem);
-    }
-
-    let menupopup = menulist.querySelector("menupopup");
-    menupopup.appendChild(fragment);
-    menulist.value = Math.round(selected * 100);
-
-    let checkbox = document.getElementById("zoomText");
-    checkbox.checked = !win.ZoomManager.useFullZoom;
-    document.getElementById("text-zoom-override-warning").hidden =
-      !checkbox.checked;
-    document.getElementById("zoomBox").hidden = false;
-  },
-
-  updateColorsButton() {
-    document.getElementById("colors").disabled =
-      Preferences.get("browser.display.document_color_use").value != 2;
   },
 
   /**
@@ -4275,27 +4507,6 @@ var gMainPane = {
   },
 
   /**
-   * Takes as newZoom a floating point value representing the
-   * new default zoom. This value should not be a string, and
-   * should not carry a percentage sign/other localisation
-   * characteristics.
-   */
-  handleDefaultZoomChange(newZoom) {
-    let cps2 = Cc["@mozilla.org/content-pref/service;1"].getService(
-      Ci.nsIContentPrefService2
-    );
-    let nonPrivateLoadContext = Cu.createLoadContext();
-    /* Because our setGlobal function takes in a browsing context, and
-     * because we want to keep this property consistent across both private
-     * and non-private contexts, we crate a non-private context and use that
-     * to set the property, regardless of our actual context.
-     */
-
-    let win = window.browsingContext.topChromeWindow;
-    cps2.setGlobal(win.FullZoom.name, newZoom, nonPrivateLoadContext);
-  },
-
-  /**
    *  Shows a subdialog containing the profile selector page.
    */
   manageProfiles() {
@@ -4490,17 +4701,6 @@ var gMainPane = {
   configureFonts() {
     gSubDialog.open(
       "chrome://browser/content/preferences/dialogs/fonts.xhtml",
-      { features: "resizable=no" }
-    );
-  },
-
-  /**
-   * Displays the colors dialog, where default web page/link/etc. colors can be
-   * configured.
-   */
-  configureColors() {
-    gSubDialog.open(
-      "chrome://browser/content/preferences/dialogs/colors.xhtml",
       { features: "resizable=no" }
     );
   },

@@ -2775,15 +2775,33 @@ void ScriptLoader::CalculateCacheFlag(ScriptLoadRequest* aRequest) {
     return;
   }
 
-  if (aRequest->IsModuleRequest() &&
-      aRequest->AsModuleRequest()->mModuleType != JS::ModuleType::JavaScript) {
-    LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: JSON module",
-         aRequest));
-    aRequest->MarkNotCacheable();
-    MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
-    MOZ_ASSERT_IF(aRequest->IsTextSource(),
-                  aRequest->HasNoSRIOrSRIAndSerializedStencil());
-    return;
+  if (aRequest->IsModuleRequest()) {
+    ModuleLoadRequest* moduleLoadRequest = aRequest->AsModuleRequest();
+    if (moduleLoadRequest->mModuleType == JS::ModuleType::JavaScriptOrWasm) {
+#ifdef NIGHTLY_BUILD
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=1998240
+      // For now, we don't support caching wasm modules.
+      if (moduleLoadRequest->HasWasmMimeTypeEssence()) {
+        LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: wasm module",
+             aRequest));
+        aRequest->MarkNotCacheable();
+        // The disk reference is cleared when we do the mime essense check
+        // in PrepareLoadedRequest.
+        MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
+        MOZ_ASSERT_IF(aRequest->IsTextSource(),
+                      aRequest->HasNoSRIOrSRIAndSerializedStencil());
+        return;
+      }
+#endif
+    } else {
+      LOG(("ScriptLoadRequest (%p): Bytecode-cache: Skip all: synthetic module",
+           aRequest));
+      aRequest->MarkNotCacheable();
+      MOZ_ASSERT(!aRequest->getLoadedScript()->HasDiskCacheReference());
+      MOZ_ASSERT_IF(aRequest->IsTextSource(),
+                    aRequest->HasNoSRIOrSRIAndSerializedStencil());
+      return;
+    }
   }
 
   if (!aRequest->IsCachedStencil() && aRequest->ExpirationTime().IsExpired()) {
@@ -4560,7 +4578,13 @@ static bool MimeTypeMatchesExpectedModuleType(
   NS_ConvertUTF8toUTF16 typeString(mimeType);
 
   switch (expectedModuleType) {
-    case JS::ModuleType::JavaScript:
+    case JS::ModuleType::JavaScriptOrWasm:
+#ifdef NIGHTLY_BUILD
+      if (StaticPrefs::javascript_options_experimental_wasm_esm_integration()) {
+        return nsContentUtils::IsJavascriptMIMEType(typeString) ||
+               nsContentUtils::HasWasmMimeTypeEssence(typeString);
+      }
+#endif
       return nsContentUtils::IsJavascriptMIMEType(typeString);
     case JS::ModuleType::JSON:
       return nsContentUtils::IsJsonMimeType(typeString);
@@ -4613,6 +4637,26 @@ nsresult ScriptLoader::PrepareLoadedRequest(ScriptLoadRequest* aRequest,
       if (policy != ReferrerPolicy::_empty) {
         aRequest->AsModuleRequest()->UpdateReferrerPolicy(policy);
       }
+
+#ifdef NIGHTLY_BUILD
+      if (StaticPrefs::javascript_options_experimental_wasm_esm_integration()) {
+        // https://html.spec.whatwg.org/multipage/webappapis.html#fetch-a-single-module-script
+        // Extract the content-type. If its essence is wasm, we'll attempt to
+        // compile this module as a wasm module. (Steps 13.2, 13.6)
+        nsAutoCString mimeType;
+        if (NS_SUCCEEDED(httpChannel->GetContentType(mimeType))) {
+          if (nsContentUtils::HasWasmMimeTypeEssence(
+                  NS_ConvertUTF8toUTF16(mimeType))) {
+            aRequest->AsModuleRequest()->SetHasWasmMimeTypeEssence();
+            // See https://bugzilla.mozilla.org/show_bug.cgi?id=1998240
+            // For now, we don't support caching wasm modules. We enable
+            // caching in ScriptLoader::OnStreamComplete for
+            // text streams prior to reaching the mime type check.
+            aRequest->getLoadedScript()->DropDiskCacheReferenceAndSRI();
+          }
+        }
+      }
+#endif
     }
 
     nsAutoCString sourceMapURL;

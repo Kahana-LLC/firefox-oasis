@@ -57,10 +57,10 @@ use crate::capture::{CaptureConfig, ExternalCaptureImage, PlainExternalImage};
 use crate::composite::{CompositeState, CompositeTileSurface, CompositorInputLayer, CompositorSurfaceTransform, ResolvedExternalSurface};
 use crate::composite::{CompositorKind, Compositor, NativeTileId, CompositeFeatures, CompositeSurfaceFormat, ResolvedExternalSurfaceColorData};
 use crate::composite::{CompositorConfig, NativeSurfaceOperationDetails, NativeSurfaceId, NativeSurfaceOperation, ClipRadius};
-use crate::composite::TileKind;
+use crate::composite::{CompositeRoundedCorner, TileKind};
 #[cfg(feature = "debugger")]
 use api::debugger::{CompositorDebugInfo, DebuggerTextureContent};
-use crate::segment::SegmentBuilder;
+use crate::segment::{EdgeAaSegmentMask, SegmentBuilder};
 use crate::{debug_colors, CompositorInputConfig, CompositorSurfaceUsage};
 use crate::device::{DepthFunction, Device, DrawTarget, ExternalTexture, GpuFrameId, UploadPBOPool};
 use crate::device::{ReadTarget, ShaderError, Texture, TextureFilter, TextureFlags, TextureSlot, Texel};
@@ -78,7 +78,8 @@ use crate::internal_types::DebugOutput;
 use crate::internal_types::{CacheTextureId, FastHashMap, FastHashSet, RenderedDocument, ResultMsg};
 use crate::internal_types::{TextureCacheAllocInfo, TextureCacheAllocationKind, TextureUpdateList};
 use crate::internal_types::{RenderTargetInfo, Swizzle, DeferredResolveIndex};
-use crate::picture::{ResolvedSurfaceTexture, TileId};
+use crate::picture::ResolvedSurfaceTexture;
+use crate::tile_cache::TileId;
 use crate::prim_store::DeferredResolve;
 use crate::profiler::{self, RenderCommandLog, GpuProfileTag, TransactionProfile};
 use crate::profiler::{Profiler, add_event_marker, add_text_marker, thread_is_being_profiled};
@@ -107,6 +108,7 @@ use std::sync::Arc;
 
 use std::{
     cell::RefCell,
+    collections::HashSet,
     collections::VecDeque,
     f32,
     ffi::c_void,
@@ -3661,6 +3663,8 @@ impl Renderer {
                 is_opaque: false,
                 offset: DeviceIntPoint::zero(),
                 clip_rect: device_size.into(),
+                rounded_clip_rect: device_size.into(),
+                rounded_clip_radii: ClipRadius::EMPTY,                
             });
 
             swapchain_layers.push(SwapChainLayer {
@@ -3798,12 +3802,14 @@ impl Renderer {
             };
 
             if let Some(new_layer_kind) = new_layer_kind {
-                let (offset, clip_rect, is_opaque) = match usage {
+                let (offset, clip_rect, is_opaque, rounded_clip_rect, rounded_clip_radii) = match usage {
                     CompositorSurfaceUsage::Content => {
                         (
                             DeviceIntPoint::zero(),
                             device_size.into(),
                             false,      // Assume not opaque, we'll calculate this later
+                            device_size.into(),
+                            ClipRadius::EMPTY,
                         )
                     }
                     CompositorSurfaceUsage::External { .. } => {
@@ -3824,7 +3830,29 @@ impl Renderer {
                             });
                         }
 
-                        (rect.min.to_i32(), clip_rect, is_opaque)
+                        let (rounded_clip_rect, rounded_clip_radii) = match tile.clip_index {
+                            Some(clip_index) => {
+                                let clip = composite_state.get_compositor_clip(clip_index);
+                                let radius = ClipRadius {
+                                    top_left: clip.radius.top_left.width.round() as i32,
+                                    top_right: clip.radius.top_right.width.round() as i32,
+                                    bottom_left: clip.radius.bottom_left.width.round() as i32,
+                                    bottom_right: clip.radius.bottom_right.width.round() as i32,
+                                };
+                                (clip.rect.to_i32(), radius)
+                            }
+                            None => {
+                                (clip_rect, ClipRadius::EMPTY)
+                            }
+                        };
+
+                        (
+                            rect.min.to_i32(),
+                            clip_rect,
+                            is_opaque,
+                            rounded_clip_rect,
+                            rounded_clip_radii,
+                        )
                     }
                     CompositorSurfaceUsage::DebugOverlay => unreachable!(),
                 };
@@ -3834,6 +3862,8 @@ impl Renderer {
                     is_opaque,
                     offset,
                     clip_rect,
+                    rounded_clip_rect,
+                    rounded_clip_radii,
                 });
 
                 swapchain_layers.push(SwapChainLayer {
@@ -3901,6 +3931,8 @@ impl Renderer {
                         is_opaque: true,
                         offset: DeviceIntPoint::zero(),
                         clip_rect: device_size.into(),
+                        rounded_clip_rect: device_size.into(),
+                        rounded_clip_radii: ClipRadius::EMPTY,
                     });
 
                     swapchain_layers.push(SwapChainLayer {
@@ -4051,6 +4083,8 @@ impl Renderer {
 
         // Check tiles handling with partial_present_mode
 
+        let mut opaque_rounded_corners: HashSet<CompositeRoundedCorner> = HashSet::new();
+
         // NOTE: Tiles here are being iterated in front-to-back order by
         //       z-id, due to the sort in composite_state.end_frame()
         for (idx, tile) in composite_state.tiles.iter().enumerate() {
@@ -4110,6 +4144,43 @@ impl Renderer {
                     );
                     segment_builder.build(|segment| {
                         let key = OcclusionItemKey { tile_index: idx, needs_mask: segment.has_mask };
+
+                        let radius = if segment.edge_flags ==
+                            EdgeAaSegmentMask::TOP | EdgeAaSegmentMask::LEFT &&
+                            !clip.radius.top_left.is_empty() {
+                            Some(clip.radius.top_left)
+                        } else if segment.edge_flags ==
+                            EdgeAaSegmentMask::TOP | EdgeAaSegmentMask::RIGHT &&
+                            !clip.radius.top_right.is_empty() {
+                            Some(clip.radius.top_right)
+                        } else if segment.edge_flags ==
+                            EdgeAaSegmentMask::BOTTOM | EdgeAaSegmentMask::LEFT &&
+                            !clip.radius.bottom_left.is_empty() {
+                            Some(clip.radius.bottom_left)
+                        } else if segment.edge_flags ==
+                            EdgeAaSegmentMask::BOTTOM | EdgeAaSegmentMask::RIGHT &&
+                            !clip.radius.bottom_right.is_empty() {
+                            Some(clip.radius.bottom_right)
+                        } else {
+                            None
+                        };
+
+                        if let Some(radius) = radius {
+                            let rounded_corner = CompositeRoundedCorner {
+                                    rect: segment.rect.cast_unit(),
+                                    radius: radius,
+                                    edge_flags: segment.edge_flags,
+                            };
+
+                            // Drop overdraw rounded rect
+                            if opaque_rounded_corners.contains(&rounded_corner) {
+                                return;
+                            }
+                            
+                            if is_opaque {
+                                opaque_rounded_corners.insert(rounded_corner);
+                            }
+                        }
 
                         layer.occlusion.add(
                             &segment.rect.cast_unit(),
@@ -4216,6 +4287,8 @@ impl Renderer {
                     transform,
                     layer.clip_rect,
                     ImageRendering::Auto,
+                    layer.rounded_clip_rect,
+                    layer.rounded_clip_radii,
                 );
             }
         }

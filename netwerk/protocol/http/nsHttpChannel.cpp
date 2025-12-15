@@ -155,6 +155,9 @@
 #  include "mozilla/StaticPrefs_fuzzing.h"
 #endif
 
+#include "mozilla/dom/ReportDeliver.h"
+#include "mozilla/dom/ReportingHeader.h"
+
 namespace mozilla {
 
 using namespace dom;
@@ -671,9 +674,29 @@ nsresult nsHttpChannel::PrepareToConnect() {
           // weird cases like no storage service.
           return NS_SUCCEEDED(self->mDictDecompress->Prefetch(
               GetLoadContextInfo(self), self->mShouldSuspendForDictionary,
-              [self]() {
+              [self](nsresult aResult) {
                 // this is called when the prefetch is complete to
                 // un-Suspend the channel
+                PROFILER_MARKER("Dictionary Prefetch", NETWORK,
+                                MarkerTiming::IntervalEnd(), FlowMarker,
+                                Flow::FromPointer(self));
+                if (NS_FAILED(aResult)) {
+                  LOG(
+                      ("nsHttpChannel::SetupChannelForTransaction [this=%p] "
+                       "Dictionary prefetch failed: 0x%08" PRIx32,
+                       self.get(), static_cast<uint32_t>(aResult)));
+                  if (self->mUsingDictionary) {
+                    self->mDictDecompress->UseCompleted();
+                    self->mUsingDictionary = false;
+                  }
+                  self->mDictDecompress = nullptr;
+                  if (self->mSuspendedForDictionary) {
+                    self->mSuspendedForDictionary = false;
+                    self->Cancel(aResult);
+                    self->Resume();
+                  }
+                  return;
+                }
                 MOZ_ASSERT(self->mDictDecompress->DictionaryReady());
                 if (self->mSuspendedForDictionary) {
                   LOG(
@@ -684,9 +707,6 @@ nsresult nsHttpChannel::PrepareToConnect() {
                   self->mSuspendedForDictionary = false;
                   self->Resume();
                 }
-                PROFILER_MARKER("Dictionary Prefetch", NETWORK,
-                                MarkerTiming::IntervalEnd(), FlowMarker,
-                                Flow::FromPointer(self));
               }));
         }
         return true;
@@ -4546,6 +4566,76 @@ bool nsHttpChannel::ShouldBypassProcessNotModified() {
   return false;
 }
 
+void nsHttpChannel::MaybeGenerateNELReport() {
+  if (!StaticPrefs::network_http_network_error_logging_enabled()) {
+    return;
+  }
+
+  nsCOMPtr<nsINetworkErrorReport> report;
+  if (nsCOMPtr<nsINetworkErrorLogging> nel =
+          components::NetworkErrorLogging::Service()) {
+    nel->GenerateNELReport(this, getter_AddRefs(report));
+  }
+
+  mReportedNEL = true;
+
+  // https://www.w3.org/TR/2023/WD-network-error-logging-20231005/#deliver-a-network-report
+  // 4. Generate a network report given these parameters:
+  // type: network-error
+  // url
+  // user_agent
+  // body
+
+  if (!report) {
+    return;
+  }
+
+  nsCOMPtr<nsIScriptSecurityManager> ssm = nsContentUtils::GetSecurityManager();
+  if (!ssm) {
+    return;
+  }
+
+  nsCOMPtr<nsIPrincipal> channelPrincipal;
+  ssm->GetChannelResultPrincipal(this, getter_AddRefs(channelPrincipal));
+  if (!channelPrincipal) {
+    return;
+  }
+
+  nsAutoCString body;
+  nsAutoString group;
+  nsAutoString url;
+
+  report->GetBody(body);
+  report->GetGroup(group);
+  report->GetUrl(url);
+
+  nsAutoCString endpointURL;
+  ReportingHeader::GetEndpointForReportIncludeSubdomains(
+      group, channelPrincipal, /* includeSubdomains */ true, endpointURL);
+  if (endpointURL.IsEmpty()) {
+    return;
+  }
+
+  ReportDeliver::ReportData data;
+  data.mType = u"network-error"_ns;
+  data.mGroupName = group;
+  data.mURL = url;
+  data.mFailures = 0;
+  data.mCreationTime = TimeStamp::Now();
+
+  data.mPrincipal = channelPrincipal;
+  data.mEndpointURL = endpointURL;
+  data.mReportBodyJSON = body;
+  nsAutoCString userAgent;
+  // XXX(valentin): Should this be the potentially user set value of the header
+  // or the current value of user_agent from http handler?
+  (void)mRequestHead.GetHeader(nsHttp::User_Agent, userAgent);
+  data.mUserAgent = NS_ConvertUTF8toUTF16(userAgent);
+
+  // Enqueue the report to be delivered by the reporting API
+  ReportDeliver::Fetch(data);
+}
+
 nsresult nsHttpChannel::ProcessNotModified(
     const std::function<nsresult(nsHttpChannel*, nsresult)>&
         aContinueProcessResponseFunc) {
@@ -4598,13 +4688,8 @@ nsresult nsHttpChannel::ProcessNotModified(
   rv = mCacheEntry->SetMetaDataElement("response-head", head.get());
   if (NS_FAILED(rv)) return rv;
 
-  if (StaticPrefs::network_http_network_error_logging_enabled() &&
-      LoadUsedNetwork() && !mReportedNEL) {
-    if (nsCOMPtr<nsINetworkErrorLogging> nel =
-            components::NetworkErrorLogging::Service()) {
-      nel->GenerateNELReport(this);
-    }
-    mReportedNEL = true;
+  if (LoadUsedNetwork() && !mReportedNEL) {
+    MaybeGenerateNELReport();
   }
 
   // make the cached response be the current response
@@ -6230,7 +6315,7 @@ bool nsHttpChannel::ParseDictionary(nsICacheEntry* aEntry,
       if (mDictSaving->ShouldSuspendUntilCacheRead()) {
         LOG_DICTIONARIES(("Suspending %p to wait for cache read", this));
         mTransactionPump->Suspend();
-        mDictSaving->CallbackOnCacheRead([self = RefPtr(this)]() {
+        mDictSaving->CallbackOnCacheRead([self = RefPtr(this)](nsresult) {
           LOG_DICTIONARIES(("Resuming %p after cache read", self.get()));
           self->Resume();
         });
@@ -6980,6 +7065,9 @@ nsHttpChannel::Cancel(nsresult status) {
 
   LOG(("nsHttpChannel::Cancel [this=%p status=%" PRIx32 ", reason=%s]\n", this,
        static_cast<uint32_t>(status), mCanceledReason.get()));
+  PROFILER_MARKER("nsHttpChannel::Cancel", NETWORK, {}, FlowMarker,
+                  Flow::FromPointer(this));
+
   MOZ_ASSERT_IF(!(mConnectionInfo && mConnectionInfo->UsingConnect()) &&
                     NS_SUCCEEDED(mStatus),
                 !AllowedErrorForTransactionRetry(status));
@@ -7110,13 +7198,8 @@ nsresult nsHttpChannel::CancelInternal(nsresult status) {
     return NS_OK;
   }
 
-  if (StaticPrefs::network_http_network_error_logging_enabled() &&
-      LoadUsedNetwork() && !mReportedNEL) {
-    if (nsCOMPtr<nsINetworkErrorLogging> nel =
-            components::NetworkErrorLogging::Service()) {
-      nel->GenerateNELReport(this);
-    }
-    mReportedNEL = true;
+  if (LoadUsedNetwork() && !mReportedNEL) {
+    MaybeGenerateNELReport();
   }
 
   // We don't want the content process to see any header values
@@ -10307,13 +10390,8 @@ nsresult nsHttpChannel::ContinueOnStopRequest(nsresult aStatus, bool aIsFromNet,
     mAuthRetryPending = false;
   }
 
-  if (StaticPrefs::network_http_network_error_logging_enabled() &&
-      LoadUsedNetwork() && !mReportedNEL) {
-    if (nsCOMPtr<nsINetworkErrorLogging> nel =
-            components::NetworkErrorLogging::Service()) {
-      nel->GenerateNELReport(this);
-    }
-    mReportedNEL = true;
+  if (LoadUsedNetwork() && !mReportedNEL) {
+    MaybeGenerateNELReport();
   }
 
   // notify "http-on-before-stop-request" observers

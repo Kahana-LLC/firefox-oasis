@@ -357,6 +357,7 @@ static nsWindow* gFocusWindow = nullptr;
 static bool gBlockActivateEvent = false;
 static bool gGlobalsInitialized = false;
 static bool gUseAspectRatio = true;
+bool gUseStableRounding = true;
 static uint32_t gLastTouchID = 0;
 // See Bug 1777269 for details. We don't know if the suspected leave notify
 // event is a correct one when we get it.
@@ -592,7 +593,10 @@ void nsWindow::DispatchResized() {
     return;
   }
 
-  auto clientSize = GetClientSize();
+  auto clientSize = gUseStableRounding
+                        ? GetClientSize()
+                        : LayoutDeviceIntSize::Round(mClientArea.Size() *
+                                                     GetDesktopToDeviceScale());
 
   LOG("nsWindow::DispatchResized() client scaled size [%d, %d]",
       (int)clientSize.width, (int)clientSize.height);
@@ -3376,6 +3380,8 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
     gdk_window_get_frame_extents(aWin, &b);
     if (gtk_check_version(3, 24, 35) &&
         gdk_window_get_window_type(aWin) == GDK_WINDOW_TEMP) {
+      LOGVERBOSE(
+          "  GetFrameTitlebarBounds gtk 3.24.35 & GDK_WINDOW_TEMP workaround");
       // Workaround for https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/4820
       // Bug 1775017 Gtk < 3.24.35 returns scaled values for
       // override redirected window on X11.
@@ -3387,6 +3393,7 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
     auto result = DesktopIntRect(b.x, b.y, b.width, b.height);
     if (gtk_check_version(3, 24, 50)) {
       if (auto border = GetXWindowBorder(aWin)) {
+        LOGVERBOSE("  GetFrameTitlebarBounds gtk 3.24.50 workaround");
         // Workaround for
         // https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/8423
         // Bug 1958174 Gtk doesn't account for window border sizes on X11.
@@ -3406,16 +3413,20 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
       // event size, to avoid spurious resizes on e.g. sizemode changes.
       gdk_window_get_geometry(aWin, nullptr, nullptr, &b.width, &b.height);
       gdk_window_get_origin(aWin, &b.x, &b.y);
-      return DesktopIntRect(b.x, b.y, b.width, b.height);
+    } else {
+      gdk_window_get_position(aWin, &b.x, &b.y);
+      b.width = gdk_window_get_width(aWin);
+      b.height = gdk_window_get_height(aWin);
     }
-    gdk_window_get_position(aWin, &b.x, &b.y);
-    b.width = gdk_window_get_width(aWin);
-    b.height = gdk_window_get_height(aWin);
     return DesktopIntRect(b.x, b.y, b.width, b.height);
   };
 
   const auto toplevelBoundsWithTitlebar = GetFrameTitlebarBounds(toplevel);
   const auto toplevelBounds = GetBounds(toplevel);
+
+  LOGVERBOSE("  toplevelBoundsWithTitlebar %s",
+             ToString(toplevelBoundsWithTitlebar).c_str());
+  LOGVERBOSE("  toplevelBounds %s", ToString(toplevelBounds).c_str());
 
   // Unscaled bounds include decorations and titlebar (X11)
   DesktopIntRect finalBounds = [&] {
@@ -3428,9 +3439,10 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
     bounds.height = std::max(bounds.height, toplevelBounds.height);
     return bounds;
   }();
-
+  LOGVERBOSE("  finalBounds %s", ToString(finalBounds).c_str());
   const bool decorated =
       IsTopLevelWidget() && mSizeMode != nsSizeMode_Fullscreen && !mUndecorated;
+  LOGVERBOSE("  decorated %d", decorated);
   if (!decorated) {
     mClientMargin = {};
   } else if (aMayChangeCsdMargin) {
@@ -3438,6 +3450,9 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
     const DesktopIntRect clientRectRelativeToFrame = [&] {
       auto topLevelBoundsRelativeToFrame = toplevelBounds;
       topLevelBoundsRelativeToFrame -= toplevelBoundsWithTitlebar.TopLeft();
+
+      LOGVERBOSE("  topLevelBoundsRelativeToFrame %s",
+                 ToString(topLevelBoundsRelativeToFrame).c_str());
       if (!mGdkWindow) {
         return topLevelBoundsRelativeToFrame;
       }
@@ -3447,12 +3462,16 @@ void nsWindow::RecomputeBoundsX11(bool aMayChangeCsdMargin) {
         // If we don't have gdkwindow bounds, assume we take the whole toplevel.
         return topLevelBoundsRelativeToFrame;
       }
+      LOGVERBOSE("  gdkWindowBounds %s", ToString(gdkWindowBounds).c_str());
       // gdkWindowBounds is relative to topLevelBounds already.
       return gdkWindowBounds + topLevelBoundsRelativeToFrame.TopLeft();
     }();
 
+    auto relative = clientRectRelativeToFrame;
+    LOGVERBOSE("  clientRectRelativeToFrame %s", ToString(relative).c_str());
     mClientMargin = DesktopIntRect(DesktopIntPoint(), finalBounds.Size()) -
                     clientRectRelativeToFrame;
+    LOGVERBOSE("  mClientMargin %s", ToString(mClientMargin).c_str());
     mClientMargin.EnsureAtLeast(DesktopIntMargin());
   } else {
     // Assume the client margin remains the same.
@@ -8789,6 +8808,9 @@ static nsresult initialize_prefs(void) {
   } else {
     gUseAspectRatio = IsGnomeDesktopEnvironment() || IsKdeDesktopEnvironment();
   }
+  // 'Stable' Wayland subsurface rounding algorithm is used by all compositors
+  // except KDE.
+  gUseStableRounding = !IsKdeDesktopEnvironment() || GdkIsX11Display();
   return NS_OK;
 }
 

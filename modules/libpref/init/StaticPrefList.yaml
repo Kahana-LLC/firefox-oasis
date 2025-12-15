@@ -1425,7 +1425,7 @@
 # Control whether we enable the feature of crash pull at all
 - name: browser.crashReports.crashPull
   type: bool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 # Should we prompt the user to send targeted crash report requested by devs?
@@ -3017,6 +3017,12 @@
 # Expose Window.TextEvent and make the builtin editors dispatch `textInput`
 # event as a default action of `beforeinput`.
 - name: dom.events.textevent.enabled
+  type: bool
+  value: true
+  mirror: always
+
+# Whether to expose execCommand("paste") to web content.
+- name: dom.execCommand.paste.enabled
   type: bool
   value: true
   mirror: always
@@ -8880,7 +8886,7 @@
 # NOTE: These must match JitOptions defaults.
 - name: javascript.options.inlining_bytecode_max_length
   type: uint32_t
-  value: 130
+  value: 140
   mirror: always
   do_not_use_directly: true
 
@@ -9080,6 +9086,12 @@
   mirror: always
   set_spidermonkey_pref: startup
 
+  # Experimental support for WASM/EcmaScript module integration in JavaScript.
+- name: javascript.options.experimental.wasm_esm_integration
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+  set_spidermonkey_pref: startup
 #endif  // NIGHTLY_BUILD
 
 # Whether to Baseline-compile self-hosted functions the first time they are
@@ -10105,7 +10117,7 @@
 # Is support for shape() enabled?
 - name: layout.css.basic-shape-shape.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
   rust: true
 
@@ -15229,13 +15241,6 @@
 # are disabled, and extensible prioritization scheme is in use.
 # defaults to false as some servers panic when they see this (bug 1928600)
 - name: network.http.http2.send_NO_RFC7540_PRI
-  type: RelaxedAtomicBool
-  value: false
-  mirror: always
-
-# This pref controls whether to send PRIORITY_UPDATE
-# frames for pushed streams.
-- name: network.http.http2.push_priority_update
   type: RelaxedAtomicBool
   value: false
   mirror: always

@@ -1067,7 +1067,7 @@ pref("browser.tabs.notes.enabled", false);
 #endif
 
 // KMEANS_WITH_ANCHOR or NEAREST_NEIGHBOR or LOGISTIC_REGRESSION
-pref("browser.tabs.groups.smart.suggestOtherTabsMethod", "NEAREST_NEIGHBOR");
+pref("browser.tabs.groups.smart.suggestOtherTabsMethod", "LOGISTIC_REGRESSION");
 pref("browser.tabs.groups.smart.topicModelRevision", "latest");
 pref("browser.tabs.groups.smart.embeddingModelRevision", "latest");
 // value should be <= 1000 to be correctly converted (275 -> 0.275)
@@ -1336,6 +1336,9 @@ pref("network.captive-portal-service.enabled", true);
 
 // If true, network link events will change the value of navigator.onLine
 pref("network.manage-offline-status", true);
+
+// timeout for local network access prompts
+pref("network.lna.prompt.timeout", 300000); // 5 minutes
 
 // We want to make sure mail URLs are handled externally...
 pref("network.protocol-handler.external.mailto", true); // for mail
@@ -1861,7 +1864,11 @@ pref("browser.newtabpage.activity-stream.unifiedAds.tiles.enabled", true);
 pref("browser.newtabpage.activity-stream.unifiedAds.spocs.enabled", true);
 pref("browser.newtabpage.activity-stream.unifiedAds.endpoint", "https://ads.mozilla.org/");
 pref("browser.newtabpage.activity-stream.unifiedAds.adsFeed.enabled", false);
+#ifdef NIGHTLY_BUILD
+pref("browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled", true);
+#else
 pref("browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled", false);
+#endif
 
 // Weather widget for newtab
 pref("browser.newtabpage.activity-stream.showWeather", true);
@@ -2243,6 +2250,7 @@ pref("browser.ml.smartAssist.overrideNewTab", false);
 
 // AI Window Feature
 pref("browser.aiwindow.enabled", false);
+pref("browser.aiwindow.chatStore.loglevel", "Error");
 
 // Block insecure active content on https pages
 pref("security.mixed_content.block_active_content", true);
@@ -2662,6 +2670,9 @@ pref("browser.tabs.fadeOutUnloadedTabs", false);
 
 // Whether tabs can be "split" or displayed side by side at once.
 pref("browser.tabs.splitView.enabled", false);
+
+// Whether SVG favicons should be safely re-encoded using the moz-remote-image:// protocol.
+pref("browser.tabs.remoteSVGIconDecoding", false);
 
 // If true, unprivileged extensions may use experimental APIs on
 // nightly and developer edition.

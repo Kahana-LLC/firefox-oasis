@@ -6,18 +6,22 @@ use api::{BorderRadius, ColorF, ExternalImageId, ImageBufferKind, ImageKey, Imag
 use api::units::*;
 use api::ColorDepth;
 use crate::image_source::resolve_image;
+use crate::picture::ResolvedSurfaceTexture;
 use crate::renderer::GpuBufferBuilderF;
 use euclid::Box2D;
 use crate::gpu_types::{ZBufferId, ZBufferIdGenerator};
 use crate::internal_types::{FrameAllocator, FrameMemory, FrameVec, TextureSource};
-use crate::picture::{ImageDependency, ResolvedSurfaceTexture, TileCacheInstance, TileId, TileSurface};
+use crate::invalidation::compare::ImageDependency;
+use crate::tile_cache::{TileCacheInstance, TileSurface};
+use crate::tile_cache::TileId;
 use crate::prim_store::DeferredResolve;
 use crate::resource_cache::{ImageRequest, ResourceCache};
+use crate::segment::EdgeAaSegmentMask;
 use crate::util::{extract_inner_rect_safe, Preallocator, ScaleOffset};
 use crate::tile_cache::PictureCacheDebugInfo;
 use crate::device::Device;
 use crate::space::SpaceMapper;
-use std::{ops, u64, os::raw::c_void};
+use std::{ops, u64, os::raw::c_void, hash};
 use std::num::NonZeroUsize;
 
 /*
@@ -211,6 +215,7 @@ pub struct ExternalSurfaceDescriptor {
     pub local_clip_rect: PictureRect,
     pub clip_rect: DeviceRect,
     pub transform_index: CompositorTransformIndex,
+    pub compositor_clip_index: Option<CompositorClipIndex>,
     pub image_rendering: ImageRendering,
     pub z_id: ZBufferId,
     pub dependency: ExternalSurfaceDependency,
@@ -613,9 +618,31 @@ pub struct CompositorTransform {
 
 #[cfg_attr(feature = "capture", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[derive(Debug)]
 pub struct CompositorClip {
     pub rect: DeviceRect,
     pub radius: BorderRadius,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct CompositeRoundedCorner {
+    pub rect: LayoutRect,
+    pub radius: LayoutSize,
+    pub edge_flags: EdgeAaSegmentMask,
+}
+
+impl Eq for CompositeRoundedCorner {}
+
+impl hash::Hash for CompositeRoundedCorner {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.rect.min.x.to_bits().hash(state);
+        self.rect.min.y.to_bits().hash(state);
+        self.rect.max.x.to_bits().hash(state);
+        self.rect.max.y.to_bits().hash(state);
+        self.radius.width.to_bits().hash(state);
+        self.radius.height.to_bits().hash(state);
+        self.edge_flags.bits().hash(state);
+    }
 }
 
 /// The list of tiles to be drawn this frame
@@ -1081,6 +1108,13 @@ impl CompositeState {
             // For each compositor surface that was promoted, build the
             // information required for the compositor to draw it
             for compositor_surface in &sub_slice.compositor_surfaces {
+                let compositor_clip_index = if compositor_surface.descriptor.compositor_clip_index.is_some() {
+                    assert!(tile_cache.compositor_clip.is_none());
+                    compositor_surface.descriptor.compositor_clip_index
+                } else {
+                    tile_cache.compositor_clip
+                };
+
                 self.push_compositor_surface(
                     &compositor_surface.descriptor,
                     compositor_surface.is_opaque,
@@ -1088,7 +1122,7 @@ impl CompositeState {
                     resource_cache,
                     gpu_buffer,
                     deferred_resolves,
-                    tile_cache.compositor_clip,
+                    compositor_clip_index,
                 );
             }
         }
@@ -1609,6 +1643,8 @@ pub struct CompositorInputLayer {
     pub usage: CompositorSurfaceUsage,
     // If true, layer is opaque, blend can be disabled
     pub is_opaque: bool,
+    pub rounded_clip_rect: DeviceIntRect,
+    pub rounded_clip_radii: ClipRadius,
 }
 
 // Provides the parameters about the frame to the compositor implementation.
@@ -1650,6 +1686,8 @@ pub trait LayerCompositor {
         transform: CompositorSurfaceTransform,
         clip_rect: DeviceIntRect,
         image_rendering: ImageRendering,
+        rounded_clip_rect: DeviceIntRect,
+        rounded_clip_radii: ClipRadius,
     );
 
     // Finish compositing this frame - commit the visual tree to the OS

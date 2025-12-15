@@ -450,7 +450,6 @@ export class nsContextMenu {
   initTextFragmentItems() {
     const shouldShow =
       lazy.TEXT_FRAGMENTS_ENABLED &&
-      lazy.STRIP_ON_SHARE_ENABLED &&
       !(
         this.inPDFViewer ||
         this.inFrame ||
@@ -459,7 +458,10 @@ export class nsContextMenu {
       ) &&
       (this.hasTextFragments || this.isContentSelected);
     this.showItem("context-copy-link-to-highlight", shouldShow);
-    this.showItem("context-copy-clean-link-to-highlight", shouldShow);
+    this.showItem(
+      "context-copy-clean-link-to-highlight",
+      shouldShow && lazy.STRIP_ON_SHARE_ENABLED
+    );
 
     // disables both options by default, while API tries to build a text fragment
     this.setItemAttr("context-copy-link-to-highlight", "disabled", true);
@@ -1248,19 +1250,7 @@ export class nsContextMenu {
       }
 
       // Update sub-menu items.
-      let fragment = lazy.LoginManagerContextMenu.addLoginsToMenu(
-        this.targetIdentifier,
-        this.browser,
-        formOrigin
-      );
-
-      if (!fragment) {
-        return;
-      }
-
-      showUseSavedLogin = true;
-      let popup = document.getElementById("fill-login-popup");
-      popup.appendChild(fragment);
+      this.updatePasswordManagerSubMenuItems(document, formOrigin);
     } finally {
       const documentURI = this.contentData?.documentURIObject;
       const showRelay =
@@ -1284,6 +1274,25 @@ export class nsContextMenu {
           : true
       );
     }
+  }
+
+  async updatePasswordManagerSubMenuItems(document, formOrigin) {
+    const fragment = await lazy.LoginManagerContextMenu.addLoginsToMenu(
+      this.targetIdentifier,
+      this.browser,
+      formOrigin
+    );
+
+    if (!fragment) {
+      return;
+    }
+
+    let popup = document.getElementById("fill-login-popup");
+    popup.appendChild(fragment);
+
+    this.showItem("fill-login", true);
+
+    this.setItemAttr("passwordmgr-items-separator", "ensureHidden", null);
   }
 
   initSyncItems() {
@@ -2931,7 +2940,7 @@ export class nsContextMenu {
       engine,
       policyContainer,
       searchUrlType,
-      usePrivate,
+      usePrivateWindow: usePrivate,
       window: this.window,
       searchText: searchTerms,
       triggeringPrincipal: principal,

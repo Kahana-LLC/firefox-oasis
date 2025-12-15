@@ -108,7 +108,9 @@ mod internal_types;
 mod lru_cache;
 mod pattern;
 mod picture;
+mod picture_composite_mode;
 mod picture_graph;
+mod invalidation;
 mod prepare;
 mod prim_store;
 mod print_tree;
@@ -139,6 +141,7 @@ mod rectangle_occlusion;
 mod picture_textures;
 mod frame_allocator;
 mod bump_allocator;
+mod svg_filter;
 
 ///
 pub mod intern;
@@ -191,9 +194,7 @@ pub use crate::screen_capture::{AsyncScreenshotHandle, RecordedFrameHandle};
 pub use crate::texture_cache::TextureCacheConfig;
 pub use api as webrender_api;
 pub use webrender_build::shader::{ProgramSourceDigest, ShaderKind};
-pub use crate::picture::{TileDescriptor, TileId, InvalidationReason};
-pub use crate::picture::{PrimitiveCompareResult, CompareHelperResult};
-pub use crate::picture::{TileNode, TileNodeKind, TileOffset};
+pub use crate::tile_cache::TileOffset;
 pub use crate::intern::ItemUid;
 pub use crate::render_api::*;
 pub use crate::tile_cache::{PictureCacheDebugInfo, DirtyTileDebugInfo, TileDebugInfo, SliceDebugInfo};

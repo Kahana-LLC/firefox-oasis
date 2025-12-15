@@ -135,6 +135,7 @@ export const OriginType = {
 };
 
 const TIMEOUT_SET_HISTORY_INDEX = 1000;
+const TIMEOUT_WAIT_FOR_VISIBILITY = 250;
 
 /**
  * Enum of user prompt types supported by the browsingContext.handleUserPrompt
@@ -330,7 +331,7 @@ class BrowsingContextModule extends RootBiDiModule {
       // Bug 1884142: It's not supported on Android for the TestRunner package.
       const selectedBrowser = lazy.TabManager.getBrowserForTab(selectedTab);
       activated.push(
-        this.#waitForVisibilityChange(selectedBrowser.browsingContext)
+        this.#waitForVisibilityState(selectedBrowser.browsingContext, "hidden")
       );
     }
 
@@ -698,7 +699,7 @@ class BrowsingContextModule extends RootBiDiModule {
       );
     }
 
-    let waitForVisibilityChangePromise;
+    let waitForVisibilityStatePromise;
     switch (type) {
       case "window": {
         const newWindow = await lazy.windowManager.openBrowserWindow({
@@ -729,8 +730,9 @@ class BrowsingContextModule extends RootBiDiModule {
 
           // Create the promise immediately, but await it later in parallel with
           // waitForInitialNavigationCompleted.
-          waitForVisibilityChangePromise = this.#waitForVisibilityChange(
-            lazy.TabManager.getBrowserForTab(selectedTab).browsingContext
+          waitForVisibilityStatePromise = this.#waitForVisibilityState(
+            lazy.TabManager.getBrowserForTab(selectedTab).browsingContext,
+            "hidden"
           );
         }
 
@@ -762,7 +764,7 @@ class BrowsingContextModule extends RootBiDiModule {
           unloadTimeout: 5000,
         }
       ),
-      waitForVisibilityChangePromise,
+      waitForVisibilityStatePromise,
       blocker.promise,
     ]);
 
@@ -780,6 +782,19 @@ class BrowsingContextModule extends RootBiDiModule {
 
     // Force a reflow by accessing `clientHeight` (see Bug 1847044).
     browser.parentElement.clientHeight;
+
+    if (!background && !lazy.AppInfo.isAndroid) {
+      // See Bug 2002097, on slow platforms, the newly created tab might not be
+      // visible immediately.
+      await this.#waitForVisibilityState(
+        browser.browsingContext,
+        "visible",
+        // Waiting for visibility can potentially be racy. If several contexts
+        // are created in parallel, we might not be able to catch the document
+        // in the expected state.
+        { timeout: TIMEOUT_WAIT_FOR_VISIBILITY * lazy.getTimeoutMultiplier() }
+      );
+    }
 
     return {
       context: lazy.NavigableManager.getIdForBrowser(browser),
@@ -2419,11 +2434,12 @@ class BrowsingContextModule extends RootBiDiModule {
     }
   }
 
-  #waitForVisibilityChange(browsingContext) {
+  #waitForVisibilityState(browsingContext, expectedState, options = {}) {
+    const { timeout } = options;
     return this._forwardToWindowGlobal(
       "_awaitVisibilityState",
       browsingContext.id,
-      { value: "hidden" },
+      { value: expectedState, timeout },
       { retryOnAbort: true }
     );
   }

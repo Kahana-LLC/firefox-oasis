@@ -5211,7 +5211,7 @@ void CodeGenerator::visitGuardStringToDouble(LGuardStringToDouble* lir) {
 }
 
 void CodeGenerator::visitGuardNoDenseElements(LGuardNoDenseElements* guard) {
-  Register obj = ToRegister(guard->input());
+  Register obj = ToRegister(guard->object());
   Register temp = ToRegister(guard->temp0());
 
   // Load obj->elements.
@@ -5488,7 +5488,7 @@ void CodeGenerator::visitGuardValue(LGuardValue* lir) {
 }
 
 void CodeGenerator::visitGuardNullOrUndefined(LGuardNullOrUndefined* lir) {
-  ValueOperand input = ToValue(lir->input());
+  ValueOperand input = ToValue(lir->value());
 
   ScratchTagScope tag(masm, input);
   masm.splitTagForTest(input, tag);
@@ -5504,7 +5504,7 @@ void CodeGenerator::visitGuardNullOrUndefined(LGuardNullOrUndefined* lir) {
 }
 
 void CodeGenerator::visitGuardIsNotObject(LGuardIsNotObject* lir) {
-  ValueOperand input = ToValue(lir->input());
+  ValueOperand input = ToValue(lir->value());
 
   Label bail;
   masm.branchTestObject(Assembler::Equal, input, &bail);
@@ -11502,8 +11502,8 @@ void CodeGenerator::visitResizableTypedArrayLength(
   Register out = ToRegister(lir->output());
   Register temp = ToRegister(lir->temp0());
 
-  masm.loadResizableTypedArrayLengthIntPtr(lir->synchronization(), obj, out,
-                                           temp);
+  auto sync = SynchronizeLoad(lir->mir()->requiresMemoryBarrier());
+  masm.loadResizableTypedArrayLengthIntPtr(sync, obj, out, temp);
 }
 
 void CodeGenerator::visitResizableDataViewByteLength(
@@ -11512,8 +11512,8 @@ void CodeGenerator::visitResizableDataViewByteLength(
   Register out = ToRegister(lir->output());
   Register temp = ToRegister(lir->temp0());
 
-  masm.loadResizableDataViewByteLengthIntPtr(lir->synchronization(), obj, out,
-                                             temp);
+  auto sync = SynchronizeLoad(lir->mir()->requiresMemoryBarrier());
+  masm.loadResizableDataViewByteLengthIntPtr(sync, obj, out, temp);
 }
 
 void CodeGenerator::visitGrowableSharedArrayBufferByteLength(
@@ -18464,7 +18464,7 @@ void CodeGenerator::visitNewPrivateName(LNewPrivateName* ins) {
   callVM<Fn, NewPrivateName>(ins);
 }
 
-void CodeGenerator::visitCallDeleteProperty(LCallDeleteProperty* lir) {
+void CodeGenerator::visitDeleteProperty(LDeleteProperty* lir) {
   pushArg(ImmGCPtr(lir->mir()->name()));
   pushArg(ToValue(lir->value()));
 
@@ -18476,7 +18476,7 @@ void CodeGenerator::visitCallDeleteProperty(LCallDeleteProperty* lir) {
   }
 }
 
-void CodeGenerator::visitCallDeleteElement(LCallDeleteElement* lir) {
+void CodeGenerator::visitDeleteElement(LDeleteElement* lir) {
   pushArg(ToValue(lir->index()));
   pushArg(ToValue(lir->value()));
 
@@ -20359,7 +20359,7 @@ void CodeGenerator::visitLoadDOMExpandoValueIgnoreGeneration(
 void CodeGenerator::visitGuardDOMExpandoMissingOrGuardShape(
     LGuardDOMExpandoMissingOrGuardShape* ins) {
   Register temp = ToRegister(ins->temp0());
-  ValueOperand input = ToValue(ins->input());
+  ValueOperand input = ToValue(ins->expando());
 
   Label done;
   masm.branchTestUndefined(Assembler::Equal, input, &done);
@@ -21627,7 +21627,7 @@ void CodeGenerator::visitCheckIsObj(LCheckIsObj* ins) {
 }
 
 void CodeGenerator::visitCheckObjCoercible(LCheckObjCoercible* ins) {
-  ValueOperand checkValue = ToValue(ins->value());
+  ValueOperand checkValue = ToValue(ins->checkValue());
 
   using Fn = bool (*)(JSContext*, HandleValue);
   OutOfLineCode* ool = oolCallVM<Fn, ThrowObjectCoercible>(
@@ -21656,7 +21656,7 @@ void CodeGenerator::visitCheckClassHeritage(LCheckClassHeritage* ins) {
 }
 
 void CodeGenerator::visitCheckThis(LCheckThis* ins) {
-  ValueOperand thisValue = ToValue(ins->value());
+  ValueOperand thisValue = ToValue(ins->thisValue());
 
   using Fn = bool (*)(JSContext*);
   OutOfLineCode* ool =
@@ -21759,7 +21759,7 @@ void CodeGenerator::visitMaybeExtractAwaitValue(LMaybeExtractAwaitValue* lir) {
 }
 
 void CodeGenerator::visitDebugCheckSelfHosted(LDebugCheckSelfHosted* ins) {
-  ValueOperand checkValue = ToValue(ins->value());
+  ValueOperand checkValue = ToValue(ins->checkValue());
   pushArg(checkValue);
   using Fn = bool (*)(JSContext*, HandleValue);
   callVM<Fn, js::Debug_CheckSelfHosted>(ins);
@@ -23126,7 +23126,7 @@ void CodeGenerator::visitAddDisposableResource(LAddDisposableResource* lir) {
   ValueOperand resource = ToValue(lir->resource());
   ValueOperand method = ToValue(lir->method());
   Register needsClosure = ToRegister(lir->needsClosure());
-  uint8_t hint = lir->hint();
+  uint8_t hint = lir->mir()->hint();
 
   pushArg(Imm32(hint));
   pushArg(needsClosure);
