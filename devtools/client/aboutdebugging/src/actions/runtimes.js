@@ -71,9 +71,12 @@ async function getRuntimeIcon(runtime, channel) {
     }
   }
 
+  // return channel === "release" || channel === "beta" || channel === "aurora"
+  //   ? `chrome://devtools/skin/images/aboutdebugging-firefox-${channel}.svg`
+  //   : "chrome://devtools/skin/images/aboutdebugging-firefox-nightly.svg";
   return channel === "release" || channel === "beta" || channel === "aurora"
-    ? `chrome://devtools/skin/images/aboutdebugging-firefox-${channel}.svg`
-    : "chrome://devtools/skin/images/aboutdebugging-firefox-nightly.svg";
+    ? "chrome://devtools/skin/images/kahana_logo.svg"
+    : "chrome://devtools/skin/images/kahana_logo.svg";;
 }
 
 function onRemoteDevToolsClientClosed() {

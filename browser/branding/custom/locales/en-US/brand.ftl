@@ -22,6 +22,6 @@
 -brand-full-name = Oasis
 # This brand name can be used in messages where the product name needs to
 # remain unchanged across different versions (Nightly, Beta, etc.).
--brand-product-name = Firefox
+-brand-product-name = Oasis
 -vendor-short-name = Mozilla
 trademarkInfo = { " " }

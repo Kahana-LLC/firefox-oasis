@@ -800,6 +800,11 @@ section:not(:empty) ~ #empty-addons-message {
   display: none;
 }
 
+/* Hide the default "Get extensions" empty-list message when present. */
+#empty-addons-message {
+  display: none !important;
+}
+
 @media (max-width: 830px) {
   .category[badge-count]::after {
     content: "";
