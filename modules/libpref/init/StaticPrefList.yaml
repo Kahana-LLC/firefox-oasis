@@ -2645,18 +2645,6 @@
   value: true
   mirror: always
 
-# Enable cookie-store manager API
-- name: dom.cookieStore.manager.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-
-# Enable extra cookie-store properties
-- name: dom.cookieStore.extra.enabled
-  type: RelaxedAtomicBool
-  value: false
-  mirror: always
-
 # Is support for CSSPseudoElement enabled?
 - name: dom.css_pseudo_element.enabled
   type: bool
@@ -4650,7 +4638,7 @@
 # https://wicg.github.io/sanitizer-api/
 - name: dom.security.sanitizer.enabled
   type: bool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 # Logs elements and attributes removed by the Sanitizer API to the console.
@@ -10015,13 +10003,6 @@
   value: false
   mirror: always
 
-# This pref controls whether the `prefers-color-scheme` value of iframes images
-# reacts to the embedder `color-scheme` in content.
-- name: layout.css.iframe-embedder-prefers-color-scheme.content.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-
 # Controls the transparency of the initial about:blank document. Generally you
 # don't ever want a white flash in dark mode, but due to backwards compat we
 # have some extra control over this, for now at least.
@@ -14976,7 +14957,7 @@
 # Use GET (rather than POST)
 - name: network.trr.useGET
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 # Allow RFC1918 address in responses?

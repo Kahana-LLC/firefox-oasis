@@ -1533,3 +1533,8 @@ setting-group[groupid="home"] {
 #category-sync,#fxaNoLoginStatus{
   display: none !important;
 }
+
+#addresses-list-header,
+#payments-list-header {
+  --box-label-font-weight: var(--heading-font-weight);
+}
