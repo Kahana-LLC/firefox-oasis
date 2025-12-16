@@ -1,4 +1,5 @@
 import { hubs, CreateHubOpts, DeleteHubOpts } from "./hubs";
+import { localMemory } from "./services/localMemory";
 
 export type CmdResult = { message: string };
 
@@ -328,5 +329,31 @@ export class SplitTabsCommand implements Command {
 
     const tabTitles = windows.map(w => w.title).join(", ");
     return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
+  }
+}
+
+export class SearchMemoryCommand implements Command {
+  commandName = "search_memory";
+  description = "Search stored memory (bookmarks/hubs) for a query. Arguments: { query: string, hub?: string }.";
+  async execute(args: any): Promise<CmdResult> {
+    const query = args?.query;
+    const hub = args?.hub;
+    if (!query) return { message: "Missing 'query' argument." };
+    
+    const results = await localMemory.search(query, 5, hub ? { hub } : undefined);
+    
+    if (results.length === 0) {
+      return { message: `No matches found for "${query}"${hub ? ` in hub "${hub}"` : ""}.` };
+    }
+    
+    const out = results.map((r, i) => {
+      const title = r.metadata?.title || "(no title)";
+      const url = r.metadata?.url || "";
+      // Show a snippet of the text
+      const snippet = r.text.length > 100 ? r.text.substring(0, 100) + "..." : r.text;
+      return `${i + 1}. ${title} (${url})\n   "${snippet}"`;
+    }).join("\n\n");
+    
+    return { message: `Found ${results.length} matches:\n${out}` };
   }
 }
