@@ -68,11 +68,57 @@
       flex:1; 
       padding:16px; 
       overflow:auto; 
-      white-space:pre-wrap; 
       background: transparent;
       color: var(--text-body);
       border-radius: var(--border-radius-lg);
       line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    /* Chat message bubbles */
+    .message-bubble {
+      display: flex;
+      flex-direction: column;
+      max-width: 100%;
+      animation: fadeIn 0.2s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message-user {
+      align-items: flex-end;
+    }
+    
+    .message-ai {
+      align-items: flex-start;
+    }
+    
+    .message-content {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 20px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    
+    .message-user .message-content {
+      background: #f2f4e5;
+      color: #4d4d4d;
+      max-width: 325px;
+      text-align: left;
+    }
+    
+    .message-ai .message-content {
+      background: white;
+      color: #666;
+      max-width: 100%;
+      padding: 10px 0;
     }
     #bar { 
       display:flex; 

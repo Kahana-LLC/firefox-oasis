@@ -516,6 +516,31 @@ function updateAuthUI(authenticated, user = null) {
         updateDropdownMenu();
     }
     
+    // Update authentication banner (wrapped in try-catch for Firefox chrome context)
+    try {
+        const authBanner = document.getElementById('authBanner');
+        const bannerUserEmail = document.getElementById('bannerUserEmail');
+        const hideBanner = sessionStorage.getItem("hideBanner");
+        
+        if (authBanner && bannerUserEmail) {
+            if (authenticated && user?.email && !hideBanner) {
+                authBanner.style.display = "flex";
+                bannerUserEmail.textContent = user.email;
+                console.log('Auth banner shown for:', user.email);
+            } else {
+                authBanner.style.display = "none";
+            }
+        }
+    } catch (error) {
+        // Banner elements not yet in DOM, will be updated on next call
+        console.log('Auth banner not yet available:', error.name);
+    }
+    
+    // Clear banner preference when logging out
+    if (!authenticated) {
+        sessionStorage.removeItem("hideBanner");
+    }
+    
     console.log('Auth UI updated:', { authenticated, user: user?.email });
     
     // Notify iframe of authentication state change (if we're the parent window)
@@ -885,6 +910,81 @@ rightSection.appendChild(sidebarButton);
 
 authHeader.appendChild(rightSection);
 
+// Create authentication banner (shown when authenticated)
+const authBanner = document.createElement("div");
+authBanner.id = "authBanner";
+authBanner.style.cssText = `
+  display: none;
+  background-color: #f2f4e5;
+  padding: 8px 16px;
+  border-radius: 8px;
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+`;
+
+const bannerText = document.createElement("p");
+bannerText.style.cssText = `
+  margin: 0;
+  font-size: 12px;
+  color: #808080;
+  line-height: 20px;
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+`;
+
+const signedInLabel = document.createElement("span");
+signedInLabel.textContent = "Signed in as";
+bannerText.appendChild(signedInLabel);
+
+const userEmail = document.createElement("span");
+userEmail.id = "bannerUserEmail";
+userEmail.style.cssText = `
+  text-decoration: underline;
+  color: #808080;
+`;
+bannerText.appendChild(userEmail);
+
+authBanner.appendChild(bannerText);
+
+// Close button for banner
+const bannerCloseBtn = document.createElement("button");
+bannerCloseBtn.innerHTML = `
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 4L4 12M4 4L12 12" stroke="#7A9200" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+`;
+bannerCloseBtn.style.cssText = `
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 64px;
+  transition: background-color 0.2s ease;
+`;
+bannerCloseBtn.addEventListener("mouseenter", () => {
+  bannerCloseBtn.style.backgroundColor = "rgba(122, 146, 0, 0.1)";
+});
+bannerCloseBtn.addEventListener("mouseleave", () => {
+  bannerCloseBtn.style.backgroundColor = "transparent";
+});
+bannerCloseBtn.addEventListener("click", () => {
+  authBanner.style.display = "none";
+  // Store preference to not show banner again in this session
+  sessionStorage.setItem("hideBanner", "true");
+});
+authBanner.appendChild(bannerCloseBtn);
+
+// Insert banner after header
+log.parentElement.insertBefore(authBanner, log);
+
 // Hidden auth buttons for login/signup (will be shown in dropdown)
 const authButtons = document.createElement("div");
 authButtons.id = "authButtons";
@@ -1031,9 +1131,59 @@ document.addEventListener("click", (event) => {
 });
 
 
+// Legacy append function for backward compatibility
 function append(text) {
-  log.textContent += text;
+  // For system messages, create a simple text node
+  if (text.includes('🔓') || text.includes('Session') || text.includes('📚')) {
+    const systemMsg = document.createElement("div");
+    systemMsg.style.cssText = `
+      color: #999;
+      font-size: 12px;
+      text-align: center;
+      margin: 8px 0;
+    `;
+    systemMsg.textContent = text.trim();
+    log.appendChild(systemMsg);
+  }
   log.scrollTop = log.scrollHeight;
+}
+
+// Add user message bubble
+function addUserMessage(text) {
+  const messageContainer = document.createElement("div");
+  messageContainer.className = "message-bubble message-user";
+  
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  messageContent.textContent = text;
+  
+  messageContainer.appendChild(messageContent);
+  log.appendChild(messageContainer);
+  log.scrollTop = log.scrollHeight;
+}
+
+// Add AI response bubble
+function addAIMessage(text) {
+  const messageContainer = document.createElement("div");
+  messageContainer.className = "message-bubble message-ai";
+  
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  messageContent.textContent = text;
+  
+  messageContainer.appendChild(messageContent);
+  log.appendChild(messageContainer);
+  log.scrollTop = log.scrollHeight;
+  
+  return messageContent; // Return reference for streaming updates
+}
+
+// Update existing AI message (for streaming)
+function updateAIMessage(element, text) {
+  if (element && element.classList.contains('message-content')) {
+    element.textContent = text;
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
 
@@ -1594,6 +1744,8 @@ async function logout() {
   }
 }
 
+let currentAIMessageElement = null;
+
 async function send() {
   if (busy) return;
   
@@ -1607,9 +1759,16 @@ async function send() {
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
-  append(`\n> ${prompt}\n`);
+  
+  // Add user message bubble
+  addUserMessage(prompt);
+  
   stopped = false;
   setBusy(true);
+
+  // Create AI response bubble
+  currentAIMessageElement = addAIMessage("");
+  let fullResponse = "";
 
   try {
     // Double-check authentication before making the API call
@@ -1620,15 +1779,17 @@ async function send() {
     // Session context is automatically managed
     await runAssistantStream(prompt, (chunk) => {
       if (!stopped) {
-        append(chunk);
+        fullResponse += chunk;
+        updateAIMessage(currentAIMessageElement, fullResponse);
+        
         // Forward the chunk to iframe if it exists
         if (typeof window.notifyIframeCommandResult === 'function') {
           window.notifyIframeCommandResult(chunk);
         }
       }
     });
+    
     if (!stopped) {
-      append("\n");
       // Forward completion to iframe
       if (typeof window.notifyIframeCommandResult === 'function') {
         window.notifyIframeCommandResult("\n");
@@ -1639,7 +1800,7 @@ async function send() {
       ? `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`
       : `Error: ${e?.message || e}`;
     
-    append(`\n${errorMessage}\n`);
+    updateAIMessage(currentAIMessageElement, errorMessage);
     
     // Forward error to iframe if we're in main window
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
@@ -1647,6 +1808,7 @@ async function send() {
     }
   } finally {
     setBusy(false);
+    currentAIMessageElement = null;
   }
 }
 
@@ -1665,8 +1827,8 @@ q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
 loginButton.addEventListener("click", showLoginForm);
 signupButton.addEventListener("click", showSignupForm);
 
-// Initialize UI
-updateAuthUI();
+// Initialize UI - start with unauthenticated state
+updateAuthUI(false, null);
 
 // Check for existing authentication on load
 async function checkExistingAuth() {
