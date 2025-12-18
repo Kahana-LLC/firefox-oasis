@@ -174,168 +174,92 @@ const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
 
-// Modernize the Send button
+// Replace send button with SVG icon button
+go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="36" height="36" rx="18" fill="#7A9200"/>
+  <path d="M18 26V10M18 10L24 16M18 10L12 16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
 go.style.cssText = `
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
   border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
+  background: transparent;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 go.addEventListener("mouseenter", () => {
   go.style.transform = "translateY(-1px)";
-  go.style.boxShadow = "0 4px 8px rgba(102, 126, 234, 0.3)";
+  go.style.opacity = "0.9";
 });
 go.addEventListener("mouseleave", () => {
   go.style.transform = "translateY(0)";
-  go.style.boxShadow = "0 2px 4px rgba(102, 126, 234, 0.2)";
+  go.style.opacity = "1";
 });
 
-// Stop button
+// Voice button with microphone icon
 const bar = document.getElementById("bar") || q.parentElement;
-const stop = document.createElement("button");
-stop.textContent = "Stop";
-stop.disabled = true;
-stop.style.cssText = `
-  padding: 10px 20px;
-  border-radius: 12px;
+const voiceBtn = document.createElement("button");
+voiceBtn.id = "voice-btn";
+voiceBtn.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
+</svg>`;
+voiceBtn.style.cssText = `
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
   border: none;
-  background: #ef4444;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: not-allowed;
+  background: transparent;
+  cursor: pointer;
   transition: all 0.2s ease;
-  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
 `;
-bar.appendChild(stop);
+voiceBtn.addEventListener("mouseenter", () => {
+  voiceBtn.style.transform = "translateY(-1px)";
+  voiceBtn.style.opacity = "0.9";
+});
+voiceBtn.addEventListener("mouseleave", () => {
+  voiceBtn.style.transform = "translateY(0)";
+  voiceBtn.style.opacity = "1";
+});
+bar.insertBefore(voiceBtn, go);
 
-// Define setBusy function with modern styling for stop button
+// Define setBusy function with send button toggle to pause
 let busy = false;
 let stopped = false;
 
 function setBusy(v) {
   busy = v;
   q.disabled = v;
-  go.disabled = v;
-  stop.disabled = !v;
-  go.textContent = v ? "…" : "Send";
   
-  // Update stop button styling based on state
+  // Toggle send button to pause icon when busy
   if (v) {
-    stop.style.cssText = `
-      padding: 10px 20px;
-      border-radius: 12px;
-      border: none;
-      background: #ef4444;
-      color: white;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      opacity: 1;
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
-    `;
-    // Add hover effects when enabled
-    const stopHoverEnter = () => {
-      stop.style.transform = "translateY(-1px)";
-      stop.style.boxShadow = "0 4px 8px rgba(239, 68, 68, 0.3)";
-    };
-    const stopHoverLeave = () => {
-      stop.style.transform = "translateY(0)";
-      stop.style.boxShadow = "0 2px 4px rgba(239, 68, 68, 0.2)";
-    };
-    stop.addEventListener("mouseenter", stopHoverEnter);
-    stop.addEventListener("mouseleave", stopHoverLeave);
+    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+    </svg>`;
+    go.title = "Click to stop";
   } else {
-    stop.style.cssText = `
-      padding: 10px 20px;
-      border-radius: 12px;
-      border: none;
-      background: #ef4444;
-      color: white;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: not-allowed;
-      transition: all 0.2s ease;
-      opacity: 0.5;
-    `;
+    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#7A9200"/>
+      <path d="M18 26V10M18 10L24 16M18 10L12 16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    go.title = "Send message";
   }
 }
 
-// Clear context button
-const clearContext = document.createElement("button");
-clearContext.textContent = "Clear Context";
-clearContext.style.cssText = `
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  color: #374151;
-  font-weight: 500;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-`;
-clearContext.title = "Clear conversation history (start fresh)";
-clearContext.addEventListener("mouseenter", () => {
-  clearContext.style.background = "#f9fafb";
-  clearContext.style.borderColor = "#d1d5db";
-  clearContext.style.transform = "translateY(-1px)";
-  clearContext.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
-clearContext.addEventListener("mouseleave", () => {
-  clearContext.style.background = "white";
-  clearContext.style.borderColor = "#e5e7eb";
-  clearContext.style.transform = "translateY(0)";
-  clearContext.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
-});
-bar.appendChild(clearContext);
-clearContext.addEventListener("click", () => {
-  resetAssistantSession();
-  append("\n🔄 Conversation context cleared. Starting fresh!\n");
-});
-
-// Microphone button
-const micButton = document.createElement("button");
-micButton.innerHTML = "🎤";
-micButton.style.cssText = `
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
+// Use the voiceBtn as micButton for compatibility with existing code
+const micButton = voiceBtn;
 micButton.title = "Click to start voice input";
-micButton.addEventListener("mouseenter", () => {
-  if (!isRecording) {
-    micButton.style.background = "#f9fafb";
-    micButton.style.borderColor = "#d1d5db";
-    micButton.style.transform = "translateY(-1px)";
-    micButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-  }
-});
-micButton.addEventListener("mouseleave", () => {
-  if (!isRecording) {
-    micButton.style.background = "white";
-    micButton.style.borderColor = "#e5e7eb";
-    micButton.style.transform = "translateY(0)";
-    micButton.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
-  }
-});
-bar.appendChild(micButton);
 
 let isRecording = false;
 
@@ -351,22 +275,25 @@ micButton.addEventListener("click", async () => {
   }
 
   if (isRecording) {
-    // Stop recording
-    micButton.innerHTML = "⏹️";
+    // Stop recording - show stop icon while processing
+    micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+    </svg>`;
     micButton.disabled = true;
     micButton.style.cssText = `
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: 1px solid #ef4444;
-      background: #fee2e2;
+      padding: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
+      border: none;
+      background: transparent;
       cursor: not-allowed;
-      font-size: 18px;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.8;
+      opacity: 0.6;
     `;
     
     try {
@@ -383,44 +310,66 @@ micButton.addEventListener("click", async () => {
       append(`\n❌ Transcription failed: ${error.message}\n`);
     } finally {
       isRecording = false;
-      micButton.innerHTML = "🎤";
+      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
+      </svg>`;
       micButton.disabled = false;
       micButton.style.cssText = `
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid #e5e7eb;
-        background: white;
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        border: none;
+        background: transparent;
         cursor: pointer;
-        font-size: 18px;
         transition: all 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-right: 8px;
       `;
       micButton.title = "Click to start voice input";
     }
   } else {
-    // Start recording
+    // Start recording - change to stop icon from Figma design
     try {
       await voiceInputService.startRecording();
       isRecording = true;
-      micButton.innerHTML = "⏹️";
+      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+        <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+      </svg>`;
       micButton.style.cssText = `
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid #ef4444;
-        background: #fee2e2;
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        border: none;
+        background: transparent;
         cursor: pointer;
-        font-size: 18px;
         transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-right: 8px;
+        animation: pulse 1.5s ease-in-out infinite;
       `;
       micButton.title = "Click to stop recording";
       append("\n🎤 Recording... Click again to stop.\n");
+      
+      // Add pulse animation for recording state
+      if (!document.getElementById('recording-pulse-style')) {
+        const style = document.createElement('style');
+        style.id = 'recording-pulse-style';
+        style.textContent = `
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
     } catch (error) {
       console.error("Recording error:", error);
       append(`\n❌ Failed to start recording: ${error.message}\n`);
@@ -562,41 +511,10 @@ function updateAuthUI(authenticated, user = null) {
         sendButton.disabled = !authenticated;
     }
     
-    // Update auth status display - wait for element to exist
-    waitForElement('#authStatus').then(authStatus => {
-        console.log('Auth status element found:', authStatus);
-        const statusSpan = authStatus.querySelector('span:last-child');
-        if (statusSpan) {
-            if (authenticated) {
-                statusSpan.textContent = `Signed in as ${user?.email || 'User'}`;
-                statusSpan.style.color = '#51cf66';
-                console.log('Updated auth status to authenticated');
-            } else {
-                statusSpan.textContent = 'Not Authenticated';
-                statusSpan.style.color = '#ff6b6b';
-                console.log('Updated auth status to not authenticated');
-            }
-        } else {
-            console.warn('Status span not found within authStatus');
-        }
-    }).catch(error => {
-        console.warn('Auth status element not found:', error.message);
-    });
-    
-    // Show/hide auth buttons - wait for element to exist
-    waitForElement('#authButtons').then(authButtons => {
-        console.log('Auth buttons container found:', authButtons);
-        const loginButton = authButtons.querySelector('.login-btn');
-        const signupButton = authButtons.querySelector('.signup-btn');
-        const menuButton = authButtons.querySelector('.menu-btn');
-
-        if (loginButton) loginButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (signupButton) signupButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (menuButton) menuButton.style.display = authenticated ? 'inline-block' : 'none';
-        
-    }).catch(error => {
-        console.warn('Auth buttons container not found:', error.message);
-    });
+    // Update dropdown menu if it exists
+    if (typeof updateDropdownMenu === 'function') {
+        updateDropdownMenu();
+    }
     
     console.log('Auth UI updated:', { authenticated, user: user?.email });
     
@@ -847,120 +765,145 @@ function showAuthError(message) {
     }, 5000);
 }
 
-// Create a clean authentication header
+// Create clean header matching Figma design
 const authHeader = document.createElement("div");
 authHeader.style.cssText = `
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 0;
+  margin-bottom: 16px;
+  height: 31px;
 `;
-bar.parentElement.insertBefore(authHeader, bar);
+log.parentElement.insertBefore(authHeader, log);
 
-// Auth status display
-const authStatus = document.createElement("div");
-authStatus.id = "authStatus";
-authStatus.style.cssText = "display: flex; align-items: center; gap: 8px;";
-authStatus.innerHTML = `
-  <span style="font-size: 16px;">🔒</span>
-  <span>Not Authenticated</span>
+// Left side: Logo + Title
+const leftSection = document.createElement("div");
+leftSection.style.cssText = `
+  display: flex;
+  align-items: center;
+  gap: 8px;
 `;
-authHeader.appendChild(authStatus);
 
-// Auth buttons container
+// Sloth logo
+const logoContainer = document.createElement("div");
+logoContainer.style.cssText = `
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+logoContainer.innerHTML = `
+  <svg width="26" height="21" viewBox="0 0 26 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="13" cy="10.5" rx="12" ry="10.5" fill="#8B7355"/>
+    <circle cx="8" cy="8" r="2" fill="#333"/>
+    <circle cx="18" cy="8" r="2" fill="#333"/>
+  </svg>
+`;
+leftSection.appendChild(logoContainer);
+
+// Title
+const titleText = document.createElement("p");
+titleText.textContent = "Oasis AI";
+titleText.style.cssText = `
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-headings, #333);
+  line-height: 24px;
+`;
+leftSection.appendChild(titleText);
+
+authHeader.appendChild(leftSection);
+
+// Right side: Menu buttons
+const rightSection = document.createElement("div");
+rightSection.style.cssText = `
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`;
+
+// Three-dot menu button
+const menuButton = document.createElement("button");
+menuButton.className = "menu-btn";
+menuButton.innerHTML = `
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="6" r="1.5" fill="#333"/>
+    <circle cx="12" cy="12" r="1.5" fill="#333"/>
+    <circle cx="12" cy="18" r="1.5" fill="#333"/>
+  </svg>
+`;
+menuButton.style.cssText = `
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
+`;
+menuButton.addEventListener("mouseenter", () => {
+  menuButton.style.opacity = "0.7";
+});
+menuButton.addEventListener("mouseleave", () => {
+  menuButton.style.opacity = "1";
+});
+rightSection.appendChild(menuButton);
+
+// Sidebar toggle button (for future use)
+const sidebarButton = document.createElement("button");
+sidebarButton.innerHTML = `
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="18" height="18" rx="2" fill="#333"/>
+    <rect x="13" y="3" width="8" height="18" fill="#f8faf2"/>
+  </svg>
+`;
+sidebarButton.style.cssText = `
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
+`;
+sidebarButton.addEventListener("mouseenter", () => {
+  sidebarButton.style.opacity = "0.7";
+});
+sidebarButton.addEventListener("mouseleave", () => {
+  sidebarButton.style.opacity = "1";
+});
+rightSection.appendChild(sidebarButton);
+
+authHeader.appendChild(rightSection);
+
+// Hidden auth buttons for login/signup (will be shown in dropdown)
 const authButtons = document.createElement("div");
 authButtons.id = "authButtons";
-authButtons.style.cssText = "display: flex; gap: 8px;";
-authHeader.appendChild(authButtons);
+authButtons.style.display = "none";
 
 const loginButton = document.createElement("button");
 loginButton.textContent = "Sign In";
 loginButton.className = "login-btn";
-loginButton.style.cssText = `
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-loginButton.addEventListener("mouseenter", () => {
-  loginButton.style.background = "rgba(255,255,255,0.3)";
-  loginButton.style.transform = "translateY(-1px)";
-  loginButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-loginButton.addEventListener("mouseleave", () => {
-  loginButton.style.background = "rgba(255,255,255,0.2)";
-  loginButton.style.transform = "translateY(0)";
-  loginButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
 authButtons.appendChild(loginButton);
 
 const signupButton = document.createElement("button");
 signupButton.textContent = "Sign Up";
 signupButton.className = "signup-btn";
-signupButton.style.cssText = `
-  background: white;
-  color: #667eea;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-signupButton.addEventListener("mouseenter", () => {
-  signupButton.style.background = "#f9fafb";
-  signupButton.style.transform = "translateY(-1px)";
-  signupButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-signupButton.addEventListener("mouseleave", () => {
-  signupButton.style.background = "white";
-  signupButton.style.transform = "translateY(0)";
-  signupButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
 authButtons.appendChild(signupButton);
 
-// Create three-dot menu button
-const menuButton = document.createElement("button");
-menuButton.className = "menu-btn";
-menuButton.innerHTML = "&#8942;"; // Vertical ellipsis
-menuButton.style.cssText = `
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 12px;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 8px 12px;
-  display: none;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-menuButton.addEventListener("mouseenter", () => {
-  menuButton.style.background = "rgba(255,255,255,0.3)";
-  menuButton.style.transform = "translateY(-1px)";
-  menuButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-menuButton.addEventListener("mouseleave", () => {
-  menuButton.style.background = "rgba(255,255,255,0.2)";
-  menuButton.style.transform = "translateY(0)";
-  menuButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
-authButtons.appendChild(menuButton);
+// Hidden auth status (for backwards compatibility)
+const authStatus = document.createElement("div");
+authStatus.id = "authStatus";
+authStatus.style.display = "none";
 
 // Create dropdown menu
 const dropdownMenu = document.createElement("div");
@@ -978,51 +921,106 @@ dropdownMenu.style.cssText = `
   overflow: hidden;
   min-width: 160px;
 `;
-authHeader.appendChild(dropdownMenu);
+document.body.appendChild(dropdownMenu);
 
-// Dropdown items
-const dropdownItems = [
-    { label: "Account", action: () => alert("Account clicked") },
-    { label: "Subscription", action: () => alert("Subscription clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Logout", action: () => {
-        logout();
-        securelyClearSession();
-    }}
-];
-
-dropdownItems.forEach(item => {
-    const menuItem = document.createElement("a");
-    menuItem.textContent = item.label;
-    menuItem.style.cssText = `
-        display: block;
-        padding: 10px 16px;
-        color: #374151;
-        text-decoration: none;
-        cursor: pointer;
-        font-size: 14px;
-        transition: all 0.15s ease;
-        border-bottom: 1px solid #f3f4f6;
-    `;
-    if (item.label === "Logout") {
-        menuItem.style.color = "#ef4444";
-        menuItem.style.borderBottom = "none";
+// Function to update dropdown menu based on auth state
+function updateDropdownMenu() {
+    dropdownMenu.innerHTML = "";
+    
+    if (isAuthenticated && currentUser) {
+        // Show user info
+        const userInfo = document.createElement("div");
+        userInfo.style.cssText = `
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        `;
+        userInfo.innerHTML = `
+            <div style="font-size: 13px; color: #6b7280;">Signed in as</div>
+            <div style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">${currentUser.email}</div>
+        `;
+        dropdownMenu.appendChild(userInfo);
+        
+        // Authenticated menu items
+        const authenticatedItems = [
+            { label: "Account", action: () => { alert("Account settings coming soon"); dropdownMenu.style.display = "none"; }},
+            { label: "Settings", action: () => { alert("Settings coming soon"); dropdownMenu.style.display = "none"; }},
+            { label: "Sign Out", action: () => {
+                logout();
+                securelyClearSession();
+                dropdownMenu.style.display = "none";
+            }}
+        ];
+        
+        authenticatedItems.forEach((item, index) => {
+            const menuItem = document.createElement("a");
+            menuItem.textContent = item.label;
+            menuItem.style.cssText = `
+                display: block;
+                padding: 10px 16px;
+                color: ${item.label === "Sign Out" ? "#ef4444" : "#374151"};
+                text-decoration: none;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.15s ease;
+                ${index < authenticatedItems.length - 1 ? "border-bottom: 1px solid #f3f4f6;" : ""}
+            `;
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = item.label === "Sign Out" ? "#fee2e2" : "#f9fafb";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+            menuItem.addEventListener("click", item.action);
+            dropdownMenu.appendChild(menuItem);
+        });
+    } else {
+        // Not authenticated menu items
+        const unauthenticatedItems = [
+            { label: "Sign In", action: () => {
+                showLoginForm();
+                dropdownMenu.style.display = "none";
+            }},
+            { label: "Sign Up", action: () => {
+                showSignupForm();
+                dropdownMenu.style.display = "none";
+            }}
+        ];
+        
+        unauthenticatedItems.forEach((item, index) => {
+            const menuItem = document.createElement("a");
+            menuItem.textContent = item.label;
+            menuItem.style.cssText = `
+                display: block;
+                padding: 12px 16px;
+                color: #374151;
+                text-decoration: none;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.15s ease;
+                ${index === 0 ? "border-bottom: 1px solid #e5e7eb;" : ""}
+            `;
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = "#f9fafb";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+            menuItem.addEventListener("click", item.action);
+            dropdownMenu.appendChild(menuItem);
+        });
     }
-    menuItem.addEventListener("mouseenter", () => {
-        menuItem.style.backgroundColor = item.label === "Logout" ? "#fee2e2" : "#f9fafb";
-    });
-    menuItem.addEventListener("mouseleave", () => {
-        menuItem.style.backgroundColor = "transparent";
-    });
-    menuItem.addEventListener("click", item.action);
-    dropdownMenu.appendChild(menuItem);
-});
+}
 
 // Toggle dropdown menu
-menuButton.addEventListener("click", () => {
+menuButton.addEventListener("click", (e) => {
+    e.stopPropagation();
     const isDisplayed = dropdownMenu.style.display === "block";
     dropdownMenu.style.display = isDisplayed ? "none" : "block";
+    if (!isDisplayed) {
+        updateDropdownMenu();
+    }
 });
 
 // Hide dropdown if clicked outside
@@ -1652,9 +1650,18 @@ async function send() {
   }
 }
 
-go.addEventListener("click", send);
+go.addEventListener("click", () => {
+  if (busy) {
+    // Stop the current operation
+    stopped = true;
+    setBusy(false);
+    append("\n(stopped)\n");
+  } else {
+    // Send message
+    send();
+  }
+});
 q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
-stop.addEventListener("click", () => { stopped = true; setBusy(false); append("\n(stopped)\n"); });
 loginButton.addEventListener("click", showLoginForm);
 signupButton.addEventListener("click", showSignupForm);
 
