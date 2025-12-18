@@ -366,6 +366,7 @@ browser/components/storybook/node_modules/
 browser/components/storybook/storybook-static/
 browser/components/storybook/.storybook/chrome-map.js
 browser/components/storybook/custom-elements.json
+browser/components/storybook/component-status/components.json
 
 # Ignore design-system node_modules
 toolkit/themes/shared/design-system/node_modules/
@@ -399,3 +400,7 @@ Oasis-Browser-*.zip
 
 # Ignore personal preferences files
 CLAUDE.local.md
+
+# Ignore .json.gz (typically profiles) in the root directory
+# lint-ignore-next-line: git-only
+/*.json.gz

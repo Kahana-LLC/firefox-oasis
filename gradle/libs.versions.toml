@@ -52,7 +52,7 @@ work = "2.11.0"
 accompanist = "0.37.3"
 firebase-messaging = "25.0.1"
 installreferrer = "2.2"
-ksp = "2.3.3"
+ksp = "2.3.4"
 material = "1.13.0"
 osslicenses-plugin = "0.10.10"
 play-review = "2.0.2"
@@ -63,8 +63,8 @@ protobuf = "4.33.0" # Keep Protobuf in sync with the version used by AppServices
 
 # Gradle plugins
 jacoco = "0.8.14"
-kotlin-dsl = "5.2.0"
-protobuf-plugin = "0.9.5"
+kotlin-dsl = "6.4.1"
+protobuf-plugin = "0.9.6"
 python-envs-plugin = "0.0.31"
 semanticdb-javac = "0.11.1"
 semanticdb-kotlinc = "0.7.0"
@@ -101,7 +101,7 @@ disklrucache = "2.0.2"
 jna = "5.18.1"
 okhttp = "4.12.0"
 okio = "3.15.0"
-sentry = "8.28.0"
+sentry = "8.29.0"
 zxing = "3.5.4"
 
 [libraries]
@@ -119,6 +119,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # AndroidX
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity" }
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 androidx-annotation-experimental = { group = "androidx.annotation", name = "annotation-experimental", version.ref = "annotation-experimental" }

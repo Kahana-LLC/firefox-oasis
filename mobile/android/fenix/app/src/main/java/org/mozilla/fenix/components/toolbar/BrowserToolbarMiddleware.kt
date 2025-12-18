@@ -429,7 +429,7 @@ class BrowserToolbarMiddleware(
                         searchTermOrURL = it,
                         newTab = false,
                         searchEngine = searchEngine,
-                        private = browsingModeManager?.mode == Private,
+                        private = browsingModeManager.mode == Private,
                     )
                 } ?: run {
                     Logger("BrowserOriginContextMenu").error("Clipboard contains URL but unable to read text")
@@ -587,9 +587,9 @@ class BrowserToolbarMiddleware(
                     useCases.fenixBrowserUseCases.navigateToHomepage()
                 } else {
                     val directions = BrowserFragmentDirections.actionGlobalHome()
-                    browserAnimator?.captureEngineViewAndDrawStatically {
+                    browserAnimator.captureEngineViewAndDrawStatically {
                         navController.navigate(directions)
-                    } ?: navController.navigate(directions)
+                    }
                 }
                 next(action)
             }
@@ -1104,12 +1104,12 @@ class BrowserToolbarMiddleware(
     ): Action = when (toolbarAction) {
         ToolbarAction.NewTab -> ActionButtonRes(
             drawableResId = iconsR.drawable.mozac_ic_plus_24,
-            contentDescription = if (browsingModeManager?.mode == Private) {
+            contentDescription = if (browsingModeManager.mode == Private) {
                 R.string.home_screen_shortcut_open_new_private_tab_2
             } else {
                 R.string.home_screen_shortcut_open_new_tab_2
             },
-            onClick = if (browsingModeManager?.mode == Private) {
+            onClick = if (browsingModeManager.mode == Private) {
                 AddNewPrivateTab(source)
             } else {
                 AddNewTab(source)
@@ -1165,7 +1165,11 @@ class BrowserToolbarMiddleware(
         )
 
         ToolbarAction.ReaderMode -> ActionButtonRes(
-            drawableResId = R.drawable.ic_readermode,
+            drawableResId = if (browserScreenStore.state.readerModeStatus.isActive) {
+                iconsR.drawable.mozac_ic_reader_view_fill_24
+            } else {
+                iconsR.drawable.mozac_ic_reader_view_24
+            },
             contentDescription = if (browserScreenStore.state.readerModeStatus.isActive) {
                 R.string.browser_menu_read_close
             } else {

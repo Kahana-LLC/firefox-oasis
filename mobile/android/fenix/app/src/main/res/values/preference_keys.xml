@@ -96,6 +96,7 @@
     <string name="pref_key_crash_pull_never_show_again" translatable="false">pref_key_crash_pull_never_show_again</string>
     <string name="pref_key_crash_pull_dont_show_before" translatable="false">pref_key_crash_pull_dont_show_before</string>
     <string name="pref_key_enable_relay_email_masks" translatable="false">pref_key_enable_relay_email_masks</string>
+    <string name="pref_key_privacy_notice_banner_last_displayed_time" translatable="false">pref_key_privacy_notice_banner_last_displayed_time</string>
 
     <!-- Data Choices -->
     <string name="pref_key_telemetry" translatable="false">pref_key_telemetry</string>
@@ -206,8 +207,7 @@
     <string name="pref_key_customization_category_toolbar" translatable="false">pref_key_customization_category_toolbar</string>
     <string name="pref_key_customization_category_toolbar_layout" translatable="false">pref_key_customization_category_toolbar_layout</string>
     <string name="pref_key_customization_category_app_icon" translatable="false">pref_key_customization_category_app_icon</string>
-    <string name="pref_key_customization_category_toolbar_simple_shortcut" translatable="false">pref_key_customization_category_toolbar_simple_shortcut</string>
-    <string name="pref_key_customization_category_toolbar_expanded_shortcut" translatable="false">pref_key_customization_category_toolbar_expanded_shortcut</string>
+    <string name="pref_key_customization_category_toolbar_shortcut" translatable="false">pref_key_customization_category_toolbar_shortcut</string>
     <string name="pref_key_toolbar_simple_shortcut" translatable="false">pref_key_toolbar_simple_shortcut</string>
     <string name="pref_key_toolbar_expanded_shortcut" translatable="false">pref_key_toolbar_expanded_shortcut</string>
 
@@ -445,6 +445,7 @@
     <string name="pref_key_enable_firefox_labs" translatable="false">pref_key_enable_firefox_labs</string>
     <string name="pref_key_enable_unified_trust_panel" translatable="false">pref_key_enable_unified_trust_panel</string>
     <string name="pref_key_enable_composable_toolbar" translatable="false">pref_key_enable_composable_toolbar</string>"
+    <string name="pref_key_use_minimal_bottom_toolbar_while_entering_text" translatable="false">pref_key_use_minimal_bottom_toolbar_while_entering_text</string>"
     <string name="pref_key_enable_toolbar_redesign" translatable="false">pref_key_enable_toolbar_redesign</string>"
     <string name="pref_key_enable_address_sync" translatable="false">pref_key_enable_address_sync</string>"
     <string name="pref_key_enable_toolbar_customization">pref_key_enable_toolbar_customization</string>
@@ -519,4 +520,7 @@
     <!-- Tab Manager-->
     <string name="pref_key_tab_manager_enhancements" translatable="false">pref_key_tab_manager_enhancements</string>
     <string name="pref_key_tab_manager_opening_animation" translatable="false">pref_key_tab_manager_opening_animation</string>
+
+    <!-- Tab Search -->
+    <string name="pref_key_tab_search" translatable="false">pref_key_tab_search_feature</string>
 </resources>

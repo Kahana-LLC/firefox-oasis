@@ -3050,6 +3050,21 @@
   value: true
   mirror: always
 
+# Whether the Document PictureInPicture API is enabled
+# https://wicg.github.io/document-picture-in-picture/#api
+- name: dom.documentpip.enabled
+  type: RelaxedAtomicBool
+#ifdef ANDROID
+# Always disable on android (unsupported) so that webpages aren't
+# confused by the webidl bindings being exposed
+  value: false
+#else
+# Probably only enable by default after bug 543435
+  value: @IS_NIGHTLY_BUILD@
+#endif
+  mirror: always
+  rust: true
+
 # Allow the content process to create a File from a path. This is allowed just
 # on parent process, on 'file' Content process, or for testing.
 - name: dom.file.createInChild
@@ -3453,7 +3468,7 @@
 # This being true is necessary to type check messages.
 - name: dom.jsipc.send_typed
   type: bool
-  value: false
+  value: true
   mirror: always
 
 # Support for input type=month, type=week. By default, disabled.
@@ -3547,6 +3562,14 @@
 # If this is true, "keypress" event's keyCode value and charCode value always
 # become same if the event is not created/initialized by JS.
 - name: dom.keyboardevent.keypress.set_keycode_and_charcode_to_same_value
+  type: bool
+  value: true
+  mirror: always
+
+# If this is set to true, location.ancestorOrigins feature defined
+# by the spec https://html.spec.whatwg.org/#concept-location-ancestor-origins-list
+# is enabled
+- name: dom.location.ancestorOrigins.enabled
   type: bool
   value: true
   mirror: always
@@ -8142,7 +8165,7 @@
 - name: gfx.webrender.precise-linear-gradients-swgl
   type: bool
   rust: true
-  value: false
+  value: true
   mirror: once
 
 # Use a more precise method for sampling gradients when *not* using SWGL .
@@ -9005,11 +9028,18 @@
   set_spidermonkey_pref: startup
 
   # Experimental support for Iterator Sequencing in JavaScript.
--   name: javascript.options.experimental.iterator_sequencing
-    type: bool
-    value: true
-    mirror: always
-    set_spidermonkey_pref: startup
+- name: javascript.options.experimental.iterator_sequencing
+  type: bool
+  value: true
+  mirror: always
+  set_spidermonkey_pref: startup
+
+  # Experimental support for Joint Iteration in JavaScript.
+- name: javascript.options.experimental.joint_iteration
+  type: bool
+  value: true
+  mirror: always
+  set_spidermonkey_pref: startup
 
 #ifdef NIGHTLY_BUILD
   # Experimental support for Async Iterator Helpers in JavaScript.
@@ -9021,13 +9051,6 @@
 
   # Experimental support for Iterator.range in JavaScript.
 -   name: javascript.options.experimental.iterator_range
-    type: bool
-    value: false
-    mirror: always
-    set_spidermonkey_pref: startup
-
-  # Experimental support for Joint Iteration in JavaScript.
--   name: javascript.options.experimental.joint_iteration
     type: bool
     value: false
     mirror: always
@@ -9247,7 +9270,7 @@
 -   name: javascript.options.wasm_branch_hinting
     type: bool
 #if defined(ENABLE_WASM_BRANCH_HINTING)
-    value: @IS_NIGHTLY_BUILD@
+    value: true
 #else
     value: false
 #endif
@@ -17476,6 +17499,16 @@
   type: RelaxedAtomicBool
   value: true
   mirror: always
+
+#if defined(NIGHTLY_BUILD) && !defined(MOZ_NO_SMART_CARDS)
+# If true, load PKCS#11 third-party modules in a dedicated utility process
+# rather than the main process. (Well, that's the long-term goal for the code
+# paths behind this pref, but right now this is still work in progress!)
+- name: security.utility_pkcs11_module_process.enabled
+  type: bool
+  value: false
+  mirror: once
+#endif  // NIGHTLY_BUILD && !MOZ_NO_SMART_CARDS
 
 - name: security.pki.cert_short_lifetime_in_days
   type: RelaxedAtomicUint32

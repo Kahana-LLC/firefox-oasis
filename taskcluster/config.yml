@@ -295,6 +295,7 @@ treeherder:
         'samples-crash': 'samples-crash'
         'samples-dataprotect': 'samples-dataprotect'
         'samples-firefox-accounts': 'samples-firefox-accounts'
+        'samples-firefox-relay': 'samples-firefox-relay'
         'samples-glean-library': 'samples-glean-library'
         'samples-glean': 'samples-glean'
         'samples-sync-logins': 'samples-sync-logins'
@@ -874,6 +875,15 @@ mac-signing:
                   globs:
                       - "/Contents/MacOS/media-plugin-helper.app"
 
+                # Only built in Nightly builds for now. For other builds, the
+                # globs will match nothing, and so nothing will happen.
+                - deep: false
+                  runtime: true
+                  force: true
+                  entitlements: public/build/security/security-module-helper.xml
+                  globs:
+                      - "/Contents/MacOS/security-module-helper.app"
+
                 - deep: false
                   runtime: true
                   force: true
@@ -922,6 +932,15 @@ mac-signing:
                   entitlements: public/build/security/media-plugin-helper.xml
                   globs:
                       - "/Contents/MacOS/media-plugin-helper.app"
+
+                # Only built in Nightly builds for now. For other builds, the
+                # globs will match nothing, and so nothing will happen.
+                - deep: false
+                  runtime: true
+                  force: true
+                  entitlements: public/build/security/security-module-helper.xml
+                  globs:
+                      - "/Contents/MacOS/security-module-helper.app"
 
                 - deep: false
                   runtime: true

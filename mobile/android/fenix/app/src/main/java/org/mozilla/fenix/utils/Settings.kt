@@ -600,6 +600,11 @@ class Settings(
         },
     )
 
+    var privacyNoticeBannerLastDisplayedTimeInMillis by longPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_privacy_notice_banner_last_displayed_time),
+        default = 0,
+    )
+
     /**
      * The version of the Terms of Use that the user has accepted.
      */
@@ -2189,6 +2194,11 @@ class Settings(
         default = { FxNimbus.features.composableToolbar.value().enabled },
     )
 
+    var shouldUseMinimalBottomToolbarWhenEnteringText by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_use_minimal_bottom_toolbar_while_entering_text),
+        default = { FxNimbus.features.minimalAddressbar.value().atBottomWhileEnteringText },
+    )
+
     /**
      * Indicates if the user has access to the toolbar redesign option in settings.
      */
@@ -2815,6 +2825,14 @@ class Settings(
     var tabManagerOpeningAnimationEnabled by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_tab_manager_opening_animation),
         default = { DefaultTabManagementFeatureHelper.openingAnimationEnabled },
+    )
+
+    /**
+     * Whether the Tab Search feature is enabled.
+     */
+    var tabSearchEnabled by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_tab_search),
+        default = { DefaultTabManagementFeatureHelper.tabSearchEnabled },
     )
 
     /**

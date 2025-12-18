@@ -887,7 +887,11 @@ pref("browser.search.serpMetricsRecordedCounter", 0);
 // days
 pref("browser.search.widget.removeAfterDaysUnused", 120);
 
+#ifdef NIGHTLY_BUILD
+pref("browser.search.widget.new", true);
+#else
 pref("browser.search.widget.new", false);
+#endif
 
 // The number of times the search function in the URL bar has been used,
 // capped at 100.
@@ -3319,6 +3323,7 @@ pref("devtools.popup.disable_autohide", false);
 
 // FirstStartup service time-out in ms
 pref("first-startup.timeout", 30000);
+pref("first-startup.category-tasks-enabled", true);
 
 // Enable the default browser agent.
 // The agent still runs as scheduled if this pref is disabled,
@@ -3483,7 +3488,7 @@ pref("browser.backup.template.fallback-download.aurora", "https://www.firefox.co
 pref("browser.backup.template.fallback-download.nightly", "https://www.firefox.com/channel/desktop/?utm_medium=firefox-desktop&utm_source=html-backup");
 pref("browser.backup.template.fallback-download.esr", " https://www.firefox.com/download/all/desktop-esr/?utm_medium=firefox-desktop&utm_source=html-backup");
 pref("browser.backup.errorCode", 0);
-pref("browser.backup.backup-retry-limit", 100);
+pref("browser.backup.backup-retry-limit", 10);
 pref("browser.backup.disabled-on-idle-backup-retry", false);
 // Limit of number of unremovable staging directories and archives that are
 // permitted before backup will stop making additional backups.  Unremovable
@@ -3543,9 +3548,6 @@ pref("browser.ipProtection.variant", "");
 pref("browser.ipProtection.panelOpenCount", 0);
 // Pref to enable support for site exceptions
 pref("browser.ipProtection.features.siteExceptions", false);
-pref("browser.ipProtection.exceptionsMode", "all");
-pref("browser.ipProtection.domainExclusions", "");
-pref("browser.ipProtection.domainInclusions", "");
 pref("browser.ipProtection.log", false);
 pref("browser.ipProtection.guardian.endpoint", "https://vpn.mozilla.org/");
 pref("browser.ipProtection.added", false);

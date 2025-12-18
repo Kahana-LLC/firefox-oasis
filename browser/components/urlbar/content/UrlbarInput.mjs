@@ -339,13 +339,6 @@ export class UrlbarInput extends HTMLElement {
     // The engine name is not known yet, but update placeholder anyway to
     // reflect value of keyword.enabled or set the searchbar placeholder.
     this._setPlaceholder(null);
-
-    if (this.#isAddressbar) {
-      let searchContainersPref = lazy.UrlbarPrefs.get(
-        "switchTabs.searchAllContainers"
-      );
-      Glean.urlbar.prefSwitchTabsSearchAllContainers.set(searchContainersPref);
-    }
   }
 
   connectedCallback() {
@@ -460,6 +453,11 @@ export class UrlbarInput extends HTMLElement {
   #uninit() {
     if (this.sapName == "searchbar") {
       this.parentNode.removeAttribute("overflows");
+
+      // Exit search mode to make sure it doesn't become stale while the
+      // searchbar is invisible. Otherwise, the engine might get deleted
+      // but we don't notice because the search service observer is inactive.
+      this.searchMode = null;
     }
 
     if (this._copyCutController) {
@@ -716,6 +714,14 @@ export class UrlbarInput extends HTMLElement {
       throw new Error(
         "Cannot set URI for UrlbarInput that is not an address bar"
       );
+    }
+    if (
+      this.window.browsingContext.isDocumentPiP &&
+      uri.spec.startsWith("about:blank")
+    ) {
+      // If this is a Document PiP, its url will be about:blank while
+      // the opener will be a secure context, i.e. no about:blank
+      throw new Error("Document PiP should show its opener URL");
     }
     // We only need to update the searchModeUI on tab switch conditionally
     // as we only persist searchMode with ScotchBonnet enabled.
