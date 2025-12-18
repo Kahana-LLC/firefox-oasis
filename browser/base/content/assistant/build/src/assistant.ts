@@ -202,6 +202,12 @@ The available workers are: {options}`.trim();
 2. If asked general questions: Answer helpfully based on what you know
 3. You can see everything that happened in this conversation - use that context!
 
+**Response Format:**
+- Respond in plain text or markdown only
+- DO NOT use XML tags like <function_calls>, <invoke>, or <parameter>
+- DO NOT include tool calling syntax in your response
+- Just provide a natural, conversational response to the user
+
 **Example:**
 If the history shows:
   - User: "list tabs"

@@ -859,6 +859,7 @@ authHeader.style.cssText = `
   align-items: center;
   font-size: 14px;
   font-weight: 500;
+  position: relative;
 `;
 bar.parentElement.insertBefore(authHeader, bar);
 
@@ -985,7 +986,7 @@ const dropdownItems = [
     { label: "Account", action: () => alert("Account clicked") },
     { label: "Subscription", action: () => alert("Subscription clicked") },
     { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
+    { label: "LLM Config", action: () => showLLMConfigDialog() },
     { label: "Logout", action: () => {
         logout();
         securelyClearSession();
@@ -1015,14 +1016,19 @@ dropdownItems.forEach(item => {
     menuItem.addEventListener("mouseleave", () => {
         menuItem.style.backgroundColor = "transparent";
     });
-    menuItem.addEventListener("click", item.action);
+    menuItem.addEventListener("click", (e) => {
+        dropdownMenu.style.display = "none";
+        item.action();
+    });
     dropdownMenu.appendChild(menuItem);
 });
 
 // Toggle dropdown menu
-menuButton.addEventListener("click", () => {
+menuButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     const isDisplayed = dropdownMenu.style.display === "block";
     dropdownMenu.style.display = isDisplayed ? "none" : "block";
+    console.log("Menu button clicked, display:", dropdownMenu.style.display);
 });
 
 // Hide dropdown if clicked outside
@@ -1580,6 +1586,436 @@ function showSignupForm() {
   
   // Focus first input
   setTimeout(() => nameInput.focus(), 100);
+}
+
+// --- LLM Config Storage ---
+const LLM_CONFIG_HOSTNAME = "https://kahana.co";
+const LLM_CONFIG_REALM = "Oasis LLM Config";
+const LLM_CONFIG_USERNAME = "oasis_llm_config";
+
+async function saveLLMConfig(config) {
+    try {
+        const logins = Services.logins.findLogins(LLM_CONFIG_HOSTNAME, null, LLM_CONFIG_REALM);
+        for (const login of logins) {
+            if (login.username === LLM_CONFIG_USERNAME) {
+                Services.logins.removeLogin(login);
+            }
+        }
+
+        const loginInfo = new Components.Constructor(
+            "@mozilla.org/login-manager/loginInfo;1",
+            Ci.nsILoginInfo,
+            "init"
+        )(
+            LLM_CONFIG_HOSTNAME,
+            null,
+            LLM_CONFIG_REALM,
+            LLM_CONFIG_USERNAME,
+            JSON.stringify(config),
+            "",
+            ""
+        );
+
+        await Services.logins.addLoginAsync(loginInfo);
+        console.log("LLM config saved securely");
+        return true;
+    } catch (e) {
+        console.error("Failed to save LLM config:", e);
+        return false;
+    }
+}
+
+async function loadLLMConfig() {
+    try {
+        const logins = Services.logins.findLogins(LLM_CONFIG_HOSTNAME, null, LLM_CONFIG_REALM);
+        const login = logins.find(l => l.username === LLM_CONFIG_USERNAME);
+        if (login) {
+            return JSON.parse(login.password);
+        }
+    } catch (e) {
+        console.error("Failed to load LLM config:", e);
+    }
+    return null;
+}
+
+async function clearLLMConfig() {
+    try {
+        const logins = Services.logins.findLogins(LLM_CONFIG_HOSTNAME, null, LLM_CONFIG_REALM);
+        for (const login of logins) {
+            if (login.username === LLM_CONFIG_USERNAME) {
+                Services.logins.removeLogin(login);
+            }
+        }
+        console.log("LLM config cleared");
+    } catch (e) {
+        console.error("Failed to clear LLM config:", e);
+    }
+}
+
+// Expose LLM config functions globally for proxyClient to use
+window.loadLLMConfig = loadLLMConfig;
+
+function showLLMConfigDialog() {
+    const form = document.createElement("div");
+    form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+
+    const description = document.createElement("p");
+    description.textContent = "Configure your own LLM API key to use instead of the default service.";
+    description.style.cssText = "margin: 0; color: #4b5563; font-size: 14px; line-height: 1.5;";
+
+    const enableByokContainer = document.createElement("div");
+    enableByokContainer.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+
+    const toggleContainer = document.createElement("div");
+    toggleContainer.style.cssText = "display: inline-flex; border-radius: 8px; overflow: hidden; border: 2px solid #e5e7eb; align-self: flex-start;";
+
+    const serverButton = document.createElement("button");
+    serverButton.type = "button";
+    serverButton.textContent = "Server";
+    serverButton.style.cssText = `
+        padding: 10px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    `;
+
+    const byokButton = document.createElement("button");
+    byokButton.type = "button";
+    byokButton.textContent = "BYOK";
+    byokButton.style.cssText = `
+        padding: 10px 24px;
+        background: white;
+        color: #6b7280;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    `;
+
+    let isByokMode = false;
+
+    function updateToggleButtons() {
+        if (isByokMode) {
+            byokButton.style.cssText = `
+                padding: 10px 24px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+            serverButton.style.cssText = `
+                padding: 10px 24px;
+                background: white;
+                color: #6b7280;
+                border: none;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+        } else {
+            serverButton.style.cssText = `
+                padding: 10px 24px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+            byokButton.style.cssText = `
+                padding: 10px 24px;
+                background: white;
+                color: #6b7280;
+                border: none;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+        }
+    }
+
+    toggleContainer.appendChild(serverButton);
+    toggleContainer.appendChild(byokButton);
+    enableByokContainer.appendChild(toggleContainer);
+
+    const providerLabel = document.createElement("label");
+    providerLabel.textContent = "Vendor:";
+    providerLabel.style.cssText = "font-size: 13px; font-weight: 600; color: #1f2937; margin-top: 8px;";
+
+    const providerSelect = document.createElement("select");
+    providerSelect.style.cssText = `
+        padding: 10px 12px;
+        border: 2px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        cursor: pointer;
+        background: white;
+        color: #1f2937;
+    `;
+    
+    const openaiOption = document.createElement("option");
+    openaiOption.value = "openai";
+    openaiOption.textContent = "OpenAI";
+    providerSelect.appendChild(openaiOption);
+    
+    const anthropicOption = document.createElement("option");
+    anthropicOption.value = "anthropic";
+    anthropicOption.textContent = "Anthropic";
+    providerSelect.appendChild(anthropicOption);
+    
+    providerSelect.addEventListener("focus", () => {
+        providerSelect.style.borderColor = "#667eea";
+    });
+    providerSelect.addEventListener("blur", () => {
+        providerSelect.style.borderColor = "#d1d5db";
+    });
+
+    const modelLabel = document.createElement("label");
+    modelLabel.textContent = "Model:";
+    modelLabel.style.cssText = "font-size: 13px; font-weight: 600; color: #1f2937;";
+
+    const modelSelect = document.createElement("select");
+    modelSelect.style.cssText = `
+        padding: 10px 12px;
+        border: 2px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        cursor: pointer;
+        background: white;
+        color: #1f2937;
+    `;
+    
+    const openaiModels = [
+        { value: "gpt-4o", label: "gpt-4o" },
+        { value: "gpt-4o-mini", label: "gpt-4o-mini" },
+        { value: "gpt-4-turbo", label: "gpt-4-turbo" },
+        { value: "gpt-4", label: "gpt-4" },
+        { value: "gpt-3.5-turbo", label: "gpt-3.5-turbo" }
+    ];
+    
+    const anthropicModels = [
+        { value: "claude-sonnet-4-5", label: "claude-sonnet-4-5" },
+        { value: "claude-haiku-4-5", label: "claude-haiku-4-5" },
+        { value: "claude-opus-4-5", label: "claude-opus-4-5" }
+    ];
+
+    function updateModelOptions() {
+        const isOpenAI = providerSelect.value === "openai";
+        const models = isOpenAI ? openaiModels : anthropicModels;
+        
+        modelSelect.innerHTML = "";
+        
+        models.forEach(m => {
+            const option = document.createElement("option");
+            option.value = m.value;
+            option.textContent = m.label;
+            modelSelect.appendChild(option);
+        });
+    }
+
+    updateModelOptions();
+    
+    providerSelect.addEventListener("change", updateModelOptions);
+    
+    modelSelect.addEventListener("focus", () => {
+        modelSelect.style.borderColor = "#667eea";
+    });
+    modelSelect.addEventListener("blur", () => {
+        modelSelect.style.borderColor = "#d1d5db";
+    });
+
+    const apiKeyLabel = document.createElement("label");
+    apiKeyLabel.textContent = "API Key:";
+    apiKeyLabel.style.cssText = "font-size: 13px; font-weight: 600; color: #1f2937;";
+
+    const apiKeyInput = document.createElement("input");
+    apiKeyInput.type = "password";
+    apiKeyInput.placeholder = "Enter your API key";
+    apiKeyInput.style.cssText = `
+        padding: 10px 12px;
+        border: 2px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        font-family: monospace;
+        background: white;
+        color: #1f2937;
+    `;
+    apiKeyInput.addEventListener("focus", () => {
+        apiKeyInput.style.borderColor = "#667eea";
+    });
+    apiKeyInput.addEventListener("blur", () => {
+        apiKeyInput.style.borderColor = "#d1d5db";
+    });
+
+    const showKeyCheckbox = document.createElement("input");
+    showKeyCheckbox.type = "checkbox";
+    showKeyCheckbox.id = "showKey";
+    showKeyCheckbox.style.cssText = "width: 16px; height: 16px; cursor: pointer;";
+
+    const showKeyLabel = document.createElement("label");
+    showKeyLabel.htmlFor = "showKey";
+    showKeyLabel.textContent = "Show API key";
+    showKeyLabel.style.cssText = "font-size: 12px; color: #4b5563; cursor: pointer;";
+
+    const showKeyContainer = document.createElement("div");
+    showKeyContainer.style.cssText = "display: flex; align-items: center; gap: 6px;";
+    showKeyContainer.appendChild(showKeyCheckbox);
+    showKeyContainer.appendChild(showKeyLabel);
+
+    showKeyCheckbox.addEventListener("change", () => {
+        apiKeyInput.type = showKeyCheckbox.checked ? "text" : "password";
+    });
+
+    const configContainer = document.createElement("div");
+    configContainer.style.cssText = "display: none; flex-direction: column; gap: 12px;";
+    configContainer.appendChild(providerLabel);
+    configContainer.appendChild(providerSelect);
+    configContainer.appendChild(modelLabel);
+    configContainer.appendChild(modelSelect);
+    configContainer.appendChild(apiKeyLabel);
+    configContainer.appendChild(apiKeyInput);
+    configContainer.appendChild(showKeyContainer);
+
+    function updateConfigVisibility() {
+        if (isByokMode) {
+            configContainer.style.display = "flex";
+        } else {
+            configContainer.style.display = "none";
+        }
+    }
+
+    serverButton.addEventListener("click", () => {
+        isByokMode = false;
+        updateToggleButtons();
+        updateConfigVisibility();
+    });
+
+    byokButton.addEventListener("click", () => {
+        isByokMode = true;
+        updateToggleButtons();
+        updateConfigVisibility();
+    });
+
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 16px;";
+
+    const saveButton = document.createElement("button");
+    saveButton.textContent = "Save";
+    saveButton.style.cssText = `
+        flex: 1;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    `;
+    saveButton.addEventListener("mouseenter", () => {
+        saveButton.style.transform = "translateY(-1px)";
+        saveButton.style.boxShadow = "0 4px 8px rgba(102, 126, 234, 0.4)";
+    });
+    saveButton.addEventListener("mouseleave", () => {
+        saveButton.style.transform = "translateY(0)";
+        saveButton.style.boxShadow = "0 2px 4px rgba(102, 126, 234, 0.3)";
+    });
+
+    const cancelButton = document.createElement("button");
+    cancelButton.textContent = "Cancel";
+    cancelButton.style.cssText = `
+        flex: 1;
+        background: #e5e7eb;
+        color: #1f2937;
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    `;
+    cancelButton.addEventListener("mouseenter", () => {
+        cancelButton.style.background = "#d1d5db";
+    });
+    cancelButton.addEventListener("mouseleave", () => {
+        cancelButton.style.background = "#e5e7eb";
+    });
+
+    buttonContainer.appendChild(saveButton);
+    buttonContainer.appendChild(cancelButton);
+
+    form.appendChild(description);
+    form.appendChild(enableByokContainer);
+    form.appendChild(configContainer);
+    form.appendChild(buttonContainer);
+
+    const { modal } = createModal("LLM Configuration", form);
+
+    loadLLMConfig().then(config => {
+        if (config && config.enabled) {
+            isByokMode = true;
+            updateToggleButtons();
+            updateConfigVisibility();
+            providerSelect.value = config.provider || "openai";
+            updateModelOptions();
+            if (config.model) {
+                modelSelect.value = config.model;
+            }
+            apiKeyInput.value = config.apiKey || "";
+        }
+    });
+
+    cancelButton.addEventListener("click", () => {
+        document.body.removeChild(modal);
+    });
+
+    saveButton.addEventListener("click", async () => {
+        if (isByokMode) {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert("Please enter an API key");
+                return;
+            }
+
+            const config = {
+                enabled: true,
+                provider: providerSelect.value,
+                model: modelSelect.value,
+                apiKey: apiKey
+            };
+
+            const saved = await saveLLMConfig(config);
+            if (saved) {
+                document.body.removeChild(modal);
+                showAuthSuccess("LLM configuration saved successfully!");
+                append("\n✅ BYOK enabled. Your API key will be used for LLM requests.\n");
+            } else {
+                alert("Failed to save configuration");
+            }
+        } else {
+            await clearLLMConfig();
+            document.body.removeChild(modal);
+            showAuthSuccess("Using default LLM service");
+            append("\n✅ Using default LLM service.\n");
+        }
+    });
 }
 
 async function logout() {
