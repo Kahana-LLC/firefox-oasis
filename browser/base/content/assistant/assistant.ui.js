@@ -233,6 +233,55 @@ voiceBtn.addEventListener("mouseleave", () => {
 });
 bar.insertBefore(voiceBtn, go);
 
+// Feedback button with speech bubble icon
+const feedbackBtn = document.createElement("button");
+feedbackBtn.id = "feedback-btn";
+feedbackBtn.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+  <path d="M18 10C14.134 10 11 12.686 11 16C11 17.567 11.666 19.007 12.781 20.094C12.781 20.094 12 22.5 12 23C12 23.5 12.5 24 13 24C13.5 24 15.906 23.219 15.906 23.219C16.553 23.447 17.261 23.562 18 23.562C21.866 23.562 25 20.876 25 17.562C25 14.248 21.866 10 18 10Z" fill="#94A833"/>
+  <circle cx="15" cy="16.5" r="1" fill="#F8FAF2"/>
+  <circle cx="18" cy="16.5" r="1" fill="#F8FAF2"/>
+  <circle cx="21" cy="16.5" r="1" fill="#F8FAF2"/>
+</svg>`;
+feedbackBtn.style.cssText = `
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+`;
+feedbackBtn.title = "Submit feedback";
+feedbackBtn.addEventListener("mouseenter", () => {
+  feedbackBtn.style.transform = "translateY(-1px)";
+  feedbackBtn.style.opacity = "0.9";
+});
+feedbackBtn.addEventListener("mouseleave", () => {
+  feedbackBtn.style.transform = "translateY(0)";
+  feedbackBtn.style.opacity = "1";
+});
+feedbackBtn.addEventListener("click", () => {
+  try {
+    const feedbackUrl = "https://tally.so/r/3jkNN6";
+    if (typeof openWebLinkIn === 'function') {
+      openWebLinkIn(feedbackUrl, "tab", {});
+    } else if (window.top && window.top.openWebLinkIn) {
+      window.top.openWebLinkIn(feedbackUrl, "tab", {});
+    } else {
+      window.open(feedbackUrl, "_blank");
+    }
+  } catch (error) {
+    console.log("Could not open feedback URL:", error);
+  }
+});
+bar.appendChild(feedbackBtn);
+
 // Define setBusy function with send button toggle to pause
 let busy = false;
 let stopped = false;
