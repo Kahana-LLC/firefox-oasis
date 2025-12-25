@@ -203,6 +203,22 @@ go.addEventListener("mouseleave", () => {
 
 // Voice button with microphone icon
 const bar = document.getElementById("bar") || q.parentElement;
+
+// Create input row wrapper
+const inputRow = document.createElement("div");
+inputRow.id = "input-row";
+
+// Add just the input field to input row
+if (q.parentElement === bar) {
+  inputRow.appendChild(q);
+}
+bar.appendChild(inputRow);
+
+// Create buttons row for feedback, voice, and send
+const buttonsRow = document.createElement("div");
+buttonsRow.id = "buttons-row";
+bar.appendChild(buttonsRow);
+
 const voiceBtn = document.createElement("button");
 voiceBtn.id = "voice-btn";
 voiceBtn.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -221,7 +237,6 @@ voiceBtn.style.cssText = `
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 8px;
 `;
 voiceBtn.addEventListener("mouseenter", () => {
   voiceBtn.style.transform = "translateY(-1px)";
@@ -231,40 +246,29 @@ voiceBtn.addEventListener("mouseleave", () => {
   voiceBtn.style.transform = "translateY(0)";
   voiceBtn.style.opacity = "1";
 });
-bar.insertBefore(voiceBtn, go);
 
-// Feedback button with speech bubble icon
+// Feedback button with text - positioned below input
 const feedbackBtn = document.createElement("button");
 feedbackBtn.id = "feedback-btn";
-feedbackBtn.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
-  <path d="M18 10C14.134 10 11 12.686 11 16C11 17.567 11.666 19.007 12.781 20.094C12.781 20.094 12 22.5 12 23C12 23.5 12.5 24 13 24C13.5 24 15.906 23.219 15.906 23.219C16.553 23.447 17.261 23.562 18 23.562C21.866 23.562 25 20.876 25 17.562C25 14.248 21.866 10 18 10Z" fill="#94A833"/>
-  <circle cx="15" cy="16.5" r="1" fill="#F8FAF2"/>
-  <circle cx="18" cy="16.5" r="1" fill="#F8FAF2"/>
-  <circle cx="21" cy="16.5" r="1" fill="#F8FAF2"/>
-</svg>`;
+feedbackBtn.textContent = "Feedback?";
 feedbackBtn.style.cssText = `
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
+  padding: 4px 8px;
   border: none;
   background: transparent;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 8px;
+  font-size: 14px;
+  color: var(--primary-green, #7A9200);
+  font-weight: 500;
+  border-radius: 8px;
+  white-space: nowrap;
 `;
 feedbackBtn.title = "Submit feedback";
 feedbackBtn.addEventListener("mouseenter", () => {
-  feedbackBtn.style.transform = "translateY(-1px)";
-  feedbackBtn.style.opacity = "0.9";
+  feedbackBtn.style.background = "var(--primary-50, #F2F4E5)";
 });
 feedbackBtn.addEventListener("mouseleave", () => {
-  feedbackBtn.style.transform = "translateY(0)";
-  feedbackBtn.style.opacity = "1";
+  feedbackBtn.style.background = "transparent";
 });
 feedbackBtn.addEventListener("click", () => {
   try {
@@ -280,7 +284,13 @@ feedbackBtn.addEventListener("click", () => {
     console.log("Could not open feedback URL:", error);
   }
 });
-bar.appendChild(feedbackBtn);
+
+// Add all buttons to buttons row: feedback, voice, send
+buttonsRow.appendChild(feedbackBtn);
+buttonsRow.appendChild(voiceBtn);
+if (go.parentElement === bar) {
+  buttonsRow.appendChild(go);
+}
 
 // Define setBusy function with send button toggle to pause
 let busy = false;
@@ -839,17 +849,34 @@ function showAuthError(message) {
     }, 5000);
 }
 
-// Create clean header matching Figma design
+// Create draggable top bar with window controls
 const authHeader = document.createElement("div");
 authHeader.style.cssText = `
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 35px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0;
-  margin-bottom: 16px;
-  height: 31px;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #F0F6F1;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.20);
+  cursor: grab;
+  z-index: 2147483647;
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin: 16px;
 `;
-log.parentElement.insertBefore(authHeader, log);
+document.body.appendChild(authHeader);
+
+// Add padding to main content to account for fixed header
+const mainElement = log.parentElement;
+mainElement.style.paddingTop = "64px";
 
 // Left side: Logo + Title
 const leftSection = document.createElement("div");
@@ -869,10 +896,13 @@ logoContainer.style.cssText = `
   justify-content: center;
 `;
 logoContainer.innerHTML = `
-  <svg width="26" height="21" viewBox="0 0 26 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="13" cy="10.5" rx="12" ry="10.5" fill="#8B7355"/>
-    <circle cx="8" cy="8" r="2" fill="#333"/>
-    <circle cx="18" cy="8" r="2" fill="#333"/>
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="16.5" cy="16.5" rx="12.5" ry="10.5" fill="#978455"/>
+    <ellipse cx="16.5" cy="18.5" rx="10.5" ry="8.5" fill="#F8FAF2"/>
+    <ellipse cx="10.3268" cy="19.2453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 19.2453)" fill="#978455"/>
+    <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 12 18)" fill="#F8FAF2"/>
+    <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7334 14)" fill="#978455"/>
+    <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 18)" fill="#F8FAF2"/>
   </svg>
 `;
 leftSection.appendChild(logoContainer);
@@ -891,13 +921,203 @@ leftSection.appendChild(titleText);
 
 authHeader.appendChild(leftSection);
 
-// Right side: Menu buttons
+// Right side: Window controls + Menu buttons
 const rightSection = document.createElement("div");
 rightSection.style.cssText = `
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
 `;
+
+// Minimize button
+const minimizeBtn = document.createElement("button");
+minimizeBtn.innerHTML = `−`;
+minimizeBtn.title = "Minimize";
+minimizeBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+`;
+minimizeBtn.addEventListener("mouseenter", () => {
+  minimizeBtn.style.backgroundColor = "#E5E7EB";
+});
+minimizeBtn.addEventListener("mouseleave", () => {
+  minimizeBtn.style.backgroundColor = "#F0F6F1";
+});
+
+let minimizeClickTimeout = null;
+minimizeBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (minimizeClickTimeout) {
+    console.log("Minimize click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Minimize button clicked, parent:", window.parent !== window);
+  try {
+    window.parent.postMessage({ type: "oasisOverlayMinimize" }, "*");
+    console.log("Minimize message sent successfully");
+    
+    // Set debounce timeout
+    minimizeClickTimeout = setTimeout(() => {
+      minimizeClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending minimize message:", err);
+  }
+}, true);
+rightSection.appendChild(minimizeBtn);
+
+// Maximize/Expand button with toggle
+let isMaximized = false;
+const expandBtn = document.createElement("button");
+expandBtn.innerHTML = `⛶`;
+expandBtn.title = "Maximize";
+expandBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+`;
+expandBtn.addEventListener("mouseenter", () => {
+  expandBtn.style.backgroundColor = "#E5E7EB";
+});
+expandBtn.addEventListener("mouseleave", () => {
+  expandBtn.style.backgroundColor = "#F0F6F1";
+});
+
+let expandClickTimeout = null;
+expandBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (expandClickTimeout) {
+    console.log("Expand click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Expand button clicked, isMaximized:", isMaximized, "parent:", window.parent !== window);
+  try {
+    if (isMaximized) {
+      // Restore to normal size
+      window.parent.postMessage({ type: "oasisOverlayExitFullscreen" }, "*");
+      expandBtn.title = "Maximize";
+      isMaximized = false;
+      console.log("Restore message sent successfully");
+    } else {
+      // Maximize
+      window.parent.postMessage({ type: "oasisOverlayExpand" }, "*");
+      expandBtn.title = "Restore";
+      isMaximized = true;
+      console.log("Maximize message sent successfully");
+    }
+    
+    // Set debounce timeout
+    expandClickTimeout = setTimeout(() => {
+      expandClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending expand message:", err);
+  }
+}, true);
+rightSection.appendChild(expandBtn);
+
+// Close button
+const closeBtn = document.createElement("button");
+closeBtn.innerHTML = `✕`;
+closeBtn.title = "Close";
+closeBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+`;
+closeBtn.addEventListener("mouseenter", () => {
+  closeBtn.style.backgroundColor = "#E5E7EB";
+});
+closeBtn.addEventListener("mouseleave", () => {
+  closeBtn.style.backgroundColor = "#F0F6F1";
+});
+
+let closeClickTimeout = null;
+closeBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (closeClickTimeout) {
+    console.log("Close click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Close button clicked, parent:", window.parent !== window);
+  try {
+    window.parent.postMessage({ type: "oasisOverlayClose" }, "*");
+    console.log("Close message sent successfully");
+    
+    // Set debounce timeout
+    closeClickTimeout = setTimeout(() => {
+      closeClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending close message:", err);
+  }
+}, true);
+rightSection.appendChild(closeBtn);
+
+// Separator
+const separator = document.createElement("div");
+separator.style.cssText = `
+  width: 1px;
+  height: 20px;
+  background: #E5E7EB;
+  margin: 0 4px;
+`;
+rightSection.appendChild(separator);
 
 // Three-dot menu button
 const menuButton = document.createElement("button");
@@ -929,35 +1149,83 @@ menuButton.addEventListener("mouseleave", () => {
 });
 rightSection.appendChild(menuButton);
 
-// Sidebar toggle button (for future use)
-const sidebarButton = document.createElement("button");
-sidebarButton.innerHTML = `
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="3" y="3" width="18" height="18" rx="2" fill="#333"/>
-    <rect x="13" y="3" width="8" height="18" fill="#f8faf2"/>
-  </svg>
-`;
-sidebarButton.style.cssText = `
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.2s ease;
-`;
-sidebarButton.addEventListener("mouseenter", () => {
-  sidebarButton.style.opacity = "0.7";
-});
-sidebarButton.addEventListener("mouseleave", () => {
-  sidebarButton.style.opacity = "1";
-});
-rightSection.appendChild(sidebarButton);
-
 authHeader.appendChild(rightSection);
+
+// Make header draggable - RAF smoothing with light damping
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let accumulatedDeltaX = 0;
+let accumulatedDeltaY = 0;
+let rafId = null;
+
+const DRAG_DAMPING = 0.88; // Light damping for smooth, responsive feel
+
+function sendDragUpdate() {
+  if (!isDragging) {
+    rafId = null;
+    return;
+  }
+  
+  if (Math.abs(accumulatedDeltaX) > 0.1 || Math.abs(accumulatedDeltaY) > 0.1) {
+    window.parent.postMessage({
+      type: "oasisOverlayMoveRelative",
+      deltaX: accumulatedDeltaX,
+      deltaY: accumulatedDeltaY
+    }, "*");
+    
+    accumulatedDeltaX = 0;
+    accumulatedDeltaY = 0;
+  }
+  
+  rafId = requestAnimationFrame(sendDragUpdate);
+}
+
+authHeader.addEventListener("mousedown", (e) => {
+  // Don't start drag when clicking buttons or menu
+  if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
+    console.log("Skipping drag - clicked on button/menu");
+    return;
+  }
+  console.log("Starting drag");
+  isDragging = true;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+  accumulatedDeltaX = 0;
+  accumulatedDeltaY = 0;
+  authHeader.style.cursor = "grabbing";
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (!rafId) {
+    rafId = requestAnimationFrame(sendDragUpdate);
+  }
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+  
+  const deltaX = (e.clientX - lastMouseX) * DRAG_DAMPING;
+  const deltaY = (e.clientY - lastMouseY) * DRAG_DAMPING;
+  
+  accumulatedDeltaX += deltaX;
+  accumulatedDeltaY += deltaY;
+  
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
+document.addEventListener("mouseup", () => {
+  if (isDragging) {
+    console.log("Ending drag");
+    isDragging = false;
+    authHeader.style.cursor = "grab";
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+});
 
 // Create authentication banner (shown when authenticated)
 const authBanner = document.createElement("div");
