@@ -75,6 +75,10 @@
       line-height: 1.6;
       display: flex;
       flex-direction: column;
+    }
+    
+    /* When log has messages, add gap between them */
+    #log:has(.message-bubble) {
       gap: 24px;
     }
     
@@ -181,11 +185,68 @@
       cursor: not-allowed;
       opacity: 0.6;
     }
+    
+    /* Empty state styling */
+    #empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex: 1;
+      padding: 0 69px;
+      margin: auto 0;
+    }
+    
+    #empty-state.hidden {
+      display: none;
+    }
+    
+    #empty-state-image {
+      width: 199px;
+      height: 136px;
+      position: relative;
+      margin-bottom: 10px;
+    }
+    
+    #empty-state-image img {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    
+    #empty-state-text {
+      font-family: 'Geist', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--neutral-500);
+      text-align: center;
+      max-width: 366px;
+      white-space: pre-wrap;
+    }
+    
+    #empty-state-text p {
+      margin: 0;
+    }
+    
+    #empty-state-text p:first-child {
+      margin-bottom: 0;
+    }
   </style>
 </head>
 <body>
   <main>
-    <div id="log"></div>
+    <div id="log">
+      <div id="empty-state">
+        <div id="empty-state-image">
+          <img src="chrome://browser/content/assistant/images/empty-state-bg.png" alt="Oasis AI"/>
+        </div>
+        <div id="empty-state-text">
+          <p>Welcome to Oasis AI</p>
+          <p>Browse, summarize, or manage your browsing tabs here.</p>
+        </div>
+      </div>
+    </div>
     <div id="bar">
       <input id="q" placeholder="Ask me anything…"/>
       <button id="go">Send</button>
