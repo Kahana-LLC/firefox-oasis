@@ -1159,8 +1159,6 @@ let accumulatedDeltaX = 0;
 let accumulatedDeltaY = 0;
 let rafId = null;
 
-const DRAG_DAMPING = 0.88; // Light damping for smooth, responsive feel
-
 function sendDragUpdate() {
   if (!isDragging) {
     rafId = null;
@@ -1184,13 +1182,11 @@ function sendDragUpdate() {
 authHeader.addEventListener("mousedown", (e) => {
   // Don't start drag when clicking buttons or menu
   if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
-    console.log("Skipping drag - clicked on button/menu");
     return;
   }
-  console.log("Starting drag");
   isDragging = true;
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
+  lastMouseX = e.screenX;
+  lastMouseY = e.screenY;
   accumulatedDeltaX = 0;
   accumulatedDeltaY = 0;
   authHeader.style.cursor = "grabbing";
@@ -1205,19 +1201,18 @@ authHeader.addEventListener("mousedown", (e) => {
 document.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   
-  const deltaX = (e.clientX - lastMouseX) * DRAG_DAMPING;
-  const deltaY = (e.clientY - lastMouseY) * DRAG_DAMPING;
+  const deltaX = e.screenX - lastMouseX;
+  const deltaY = e.screenY - lastMouseY;
   
   accumulatedDeltaX += deltaX;
   accumulatedDeltaY += deltaY;
   
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
+  lastMouseX = e.screenX;
+  lastMouseY = e.screenY;
 });
 
 document.addEventListener("mouseup", () => {
   if (isDragging) {
-    console.log("Ending drag");
     isDragging = false;
     authHeader.style.cursor = "grab";
     if (rafId) {
