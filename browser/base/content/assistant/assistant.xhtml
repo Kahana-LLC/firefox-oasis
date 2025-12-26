@@ -5,28 +5,179 @@
   <meta charset="utf-8"/>
   <title>Assistant</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { margin:0; font: 13px system-ui, sans-serif; background: Canvas; color: CanvasText; }
-    main { height: 100vh; display:flex; flex-direction:column; }
-    #log { flex:1; padding:12px; overflow:auto; white-space:pre-wrap; }
-    #bar { display:flex; gap:8px; padding:12px; border-top: 1px solid rgba(128,128,128,.2); background: Canvas; }
+    :root { 
+      color-scheme: light dark;
+      --surface-default: #f8faf2;
+      --surface-page: white;
+      --primary-green: #7A9200;
+      --primary-light: #F8FAF2;
+      --primary-50: #F2F4E5;
+      --text-body: #666;
+      --text-headings: #333;
+      --text-secondary: #5b6b4b;
+      --neutral-500: #999;
+      --border-radius-xlg: 20px;
+      --border-radius-lg: 12px;
+    }
+    body { 
+      margin:0; 
+      font: 14px 'Geist', system-ui, -apple-system, sans-serif; 
+      background: var(--surface-default); 
+      color: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+    }
+    main { 
+      height: 100vh; 
+      display:flex; 
+      flex-direction:column; 
+      background: var(--surface-default);
+      padding: 16px;
+      gap: 16px;
+      resize: none;
+    }
+    
+    /* Hide all resize handles and grippers */
+    main::after,
+    main::before {
+      display: none !important;
+      visibility: hidden !important;
+    }
+    
+    /* Make any resize bars transparent */
+    splitter,
+    resizer,
+    grippy,
+    .resizer,
+    [class*="resize"],
+    [class*="gripper"],
+    [class*="splitter"] {
+      background: transparent !important;
+      border: none !important;
+      opacity: 0 !important;
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+    
+    /* Ensure body doesn't show resize cursor */
+    body,
+    main {
+      cursor: default !important;
+    }
+    #log { 
+      flex:1; 
+      padding:16px; 
+      padding-bottom: 120px; /* Space for fixed input bar */
+      overflow:auto; 
+      background: transparent;
+      color: var(--text-body);
+      border-radius: var(--border-radius-lg);
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    /* Chat message bubbles */
+    .message-bubble {
+      display: flex;
+      flex-direction: column;
+      max-width: 100%;
+      animation: fadeIn 0.2s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message-user {
+      align-items: flex-end;
+    }
+    
+    .message-ai {
+      align-items: flex-start;
+    }
+    
+    .message-content {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 20px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    
+    .message-user .message-content {
+      background: #f2f4e5;
+      color: #4d4d4d;
+      max-width: 325px;
+      text-align: left;
+    }
+    
+    .message-ai .message-content {
+      background: white;
+      color: #666;
+      max-width: 100%;
+      padding: 10px 0;
+    }
+    #bar { 
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      display:flex; 
+      flex-direction: column;
+      gap:8px; 
+      padding:16px; 
+      padding-right: 24px;
+      border: 1px solid white;
+      background: var(--surface-page);
+      border-radius: var(--border-radius-xlg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      z-index: 100;
+    }
+    
+    #input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+    
+    #buttons-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+    
+    #buttons-row #feedback-btn {
+      margin-right: auto;
+    }
     #q { 
       flex:1; 
-      padding:10px 16px; 
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
+      min-width: 400px;
+      height: 50px;
+      padding:12px 16px; 
+      border: none;
+      border-radius: var(--border-radius-lg);
       font-size: 14px;
       transition: all 0.2s ease;
-      background: Canvas;
-      color: CanvasText;
+      background: transparent;
+      color: var(--text-body);
+      font-family: inherit;
+    }
+    #q::placeholder {
+      color: var(--neutral-500);
+      font-size: 14px;
     }
     #q:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      background: transparent;
     }
     #q:disabled {
-      background: #f3f4f6;
+      background: var(--primary-50);
       cursor: not-allowed;
       opacity: 0.6;
     }
