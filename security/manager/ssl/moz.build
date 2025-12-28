@@ -49,6 +49,7 @@ XPCOM_MANIFESTS += [
 EXTRA_JS_MODULES.psm += [
     "ClientAuthDialogService.sys.mjs",
     "DER.sys.mjs",
+    "QWACs.sys.mjs",
     "RemoteSecuritySettings.sys.mjs",
     "X509.sys.mjs",
 ]
@@ -211,21 +212,6 @@ if CONFIG["OS_ARCH"] == "WINNT":
 
     UNIFIED_SOURCES += [
         "CredentialManagerSecret.cpp",
-    ]
-
-if not CONFIG["MOZ_NO_SMART_CARDS"]:
-    EXPORTS.mozilla.psm += [
-        "PKCS11ModuleChild.h",
-        "PKCS11ModuleParent.h",
-    ]
-
-    UNIFIED_SOURCES += [
-        "PKCS11ModuleChild.cpp",
-        "PKCS11ModuleParent.cpp",
-    ]
-
-    IPDL_SOURCES += [
-        "PPKCS11Module.ipdl",
     ]
 
 FINAL_LIBRARY = "xul"

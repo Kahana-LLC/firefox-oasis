@@ -2088,9 +2088,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enable
 // User pref to show stories on newtab (feeds.system.topstories has to be set to true as well)
 pref("browser.newtabpage.activity-stream.feeds.section.topstories", true);
 
-// The pref controls if search hand-off is enabled for Activity Stream.
-pref("browser.newtabpage.activity-stream.improvesearch.handoffToAwesomebar", true);
-
 pref("browser.newtabpage.activity-stream.logowordmark.alwaysVisible", true);
 
 // URLs from the user's history that contain this search param will be hidden
@@ -2253,10 +2250,14 @@ pref("browser.ml.smartAssist.model", "");
 pref("browser.ml.smartAssist.overrideNewTab", false);
 
 // AI Window Feature
-pref("browser.aiwindow.enabled", false);
+pref("browser.aiwindow.apiKey", '');
 pref("browser.aiwindow.chatStore.loglevel", "Error");
+pref("browser.aiwindow.enabled", false);
+pref("browser.aiwindow.endpoint", "https://mlpa-prod-prod-mozilla.global.ssl.fastly.net/v1");
 pref("browser.aiwindow.insights", false);
 pref("browser.aiwindow.insightsLogLevel", "Warn");
+pref("browser.aiwindow.firstrun.modelChoice", "");
+pref("browser.aiwindow.model", "");
 
 // Block insecure active content on https pages
 pref("security.mixed_content.block_active_content", true);
@@ -2375,9 +2376,6 @@ pref("browser.translation.neverForLanguages", "");
 // Enable Firefox translations powered by the Bergamot translations
 // engine https://browser.mt/.
 pref("browser.translations.enable", true);
-
-// Enable the new Firefox Translations Settings UI Design
-pref("browser.translations.newSettingsUI.enable", false);
 
 // Enable Firefox Select translations powered by Bergamot translations
 // engine https://browser.mt/.

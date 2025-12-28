@@ -791,7 +791,7 @@ export class UrlbarInput extends HTMLElement {
       // identity yet. See Bug 1746383.
       valid =
         !dueToSessionRestore &&
-        (!this.window.isBlankPageURL(uri.spec) ||
+        (!this.#canHandleAsBlankPage(uri.spec) ||
           lazy.ExtensionUtils.isExtensionUrl(uri) ||
           isInitialPageControlledByWebContent);
     } else if (
@@ -938,7 +938,7 @@ export class UrlbarInput extends HTMLElement {
 
     if (
       browser != this.window.gBrowser.selectedBrowser &&
-      !this.window.isBlankPageURL(locationURI.spec)
+      !this.#canHandleAsBlankPage(locationURI.spec)
     ) {
       // If the page is loaded on background tab, make Unified Search Button
       // unavailable when back to the tab.
@@ -3910,7 +3910,11 @@ export class UrlbarInput extends HTMLElement {
     } else {
       where = lazy.BrowserUtils.whereToOpenLink(event, false, false);
     }
-    if (lazy.UrlbarPrefs.get("openintab")) {
+    let openInTabPref =
+      this.#sapName == "searchbar"
+        ? lazy.UrlbarPrefs.get("browser.search.openintab")
+        : lazy.UrlbarPrefs.get("openintab");
+    if (openInTabPref) {
       if (where == "current") {
         where = "tab";
       } else if (where == "tab") {
@@ -4231,7 +4235,11 @@ export class UrlbarInput extends HTMLElement {
    */
   _searchModeForResult(result, entry = null) {
     // Search mode is determined by the result's keyword or engine.
-    if (!result.payload.keyword && !result.payload.engine) {
+    if (
+      !result.payload.keyword &&
+      !result.payload.engine &&
+      !this.view.selectedElement.dataset?.engine
+    ) {
       return null;
     }
 
@@ -4245,6 +4253,8 @@ export class UrlbarInput extends HTMLElement {
         result.payload.engine == result.payload.originalEngine)
     ) {
       searchMode = { engineName: result.payload.engine };
+    } else if (this.view.selectedElement?.dataset.engine) {
+      searchMode = { engineName: this.view.selectedElement.dataset.engine };
     }
 
     if (searchMode) {
@@ -5640,6 +5650,10 @@ export class UrlbarInput extends HTMLElement {
         event.keyCode == KeyEvent.DOM_VK_META &&
         this._isKeyDownWithMetaAndLeft)
     );
+  }
+
+  #canHandleAsBlankPage(spec) {
+    return this.window.isBlankPageURL(spec) || spec == "about:privatebrowsing";
   }
 }
 

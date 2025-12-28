@@ -3976,6 +3976,11 @@ who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.31.0 -> 0.32.0"
 
+[[audits.metal]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "0.32.0 -> 0.33.0"
+
 [[audits.midir]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -4263,11 +4268,10 @@ criteria = "safe-to-deploy"
 delta = "0.2.6 -> 0.2.9"
 
 [[audits.mtu]]
-who = "Oskar Mansfeld <git@omansfeld.net>"
+who = "Max Leonard Inden <mail@max-inden.de>"
 criteria = "safe-to-deploy"
-delta = "0.2.9 -> 0.2.9@git:126b1df97c7f88e4b66ef16dbfe4708dc6f104d9"
+delta = "0.2.9 -> 0.2.9@git:b3338f904e2b9cdd59fbb2ade6b36d1a2ced4eba"
 importable = false
-notes = "mtu crate is now part of neqo and maintained by Mozilla employees"
 
 [[audits.naga]]
 who = "Dzmitry Malyshau <kvark@fastmail.com>"
@@ -4374,7 +4378,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.naga]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.net2]]
@@ -5315,6 +5324,11 @@ delta = "0.9.0 -> 0.10.1"
 who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.10.1 -> 0.11.0"
+
+[[audits.ron]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.0 -> 0.12.0"
 
 [[audits.rure]]
 who = "Nika Layzell <nika@thelayzells.com>"
@@ -6771,6 +6785,11 @@ who = "Ryan Hunt <rhunt@eqrion.net>"
 criteria = "safe-to-run"
 delta = "0.11.7 -> 0.11.8"
 
+[[audits.wasm-smith]]
+who = "Yury Delendik <ydelendik@mozilla.com>"
+criteria = "safe-to-run"
+delta = "0.227.1 -> 0.243.0"
+
 [[audits.wasmparser]]
 who = "Ryan Hunt <rhunt@eqrion.net>"
 criteria = "safe-to-deploy"
@@ -6956,7 +6975,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.wgpu-core]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.wgpu-core-deps-apple]]
@@ -6987,7 +7011,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.wgpu-core-deps-apple]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.wgpu-core-deps-windows-linux-android]]
@@ -7018,7 +7047,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.wgpu-core-deps-windows-linux-android]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.wgpu-hal]]
@@ -7127,7 +7161,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.wgpu-hal]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.wgpu-types]]
@@ -7231,7 +7270,12 @@ who = [
     "Jim Blandy <jimb@red-bean.com>",
 ]
 criteria = "safe-to-deploy"
-delta = "27.0.0 -> 27.0.0@git:9a975b24deb379b31a8a7cb999d2da5f3227a91a"
+delta = "27.0.0 -> 28.0.0"
+
+[[audits.wgpu-types]]
+who = "Jim Blandy <jimb@red-bean.com>"
+criteria = "safe-to-deploy"
+delta = "28.0.0 -> 28.0.0@git:3f02781bb5a0a1fe1922ea36c9bdacf9792abcbc"
 importable = false
 
 [[audits.whatsys]]
@@ -8018,6 +8062,12 @@ criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2025-07-08"
 end = "2026-11-12"
+
+[[trusted.typeid]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2024-05-13"
+end = "2026-12-11"
 
 [[trusted.unicode-ident]]
 criteria = "safe-to-deploy"

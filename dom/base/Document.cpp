@@ -574,7 +574,7 @@ void IdentifierMapEntry::Traverse(
 }
 
 bool IdentifierMapEntry::IsEmpty() {
-  return mIdContentList->IsEmpty() && !mNameContentList &&
+  return mIdContentList.IsEmpty() && !mNameContentList &&
          !mDocumentNameContentList && !mChangeCallbacks && !mImageElement;
 }
 
@@ -623,11 +623,11 @@ void IdentifierMapEntry::FireChangeCallbacks(Element* aOldElement,
 
 void IdentifierMapEntry::AddIdElement(Element* aElement) {
   MOZ_ASSERT(aElement, "Must have element");
-  MOZ_ASSERT(!mIdContentList->Contains(nullptr), "Why is null in our list?");
+  MOZ_ASSERT(!mIdContentList.Contains(nullptr), "Why is null in our list?");
 
   size_t index = mIdContentList.Insert(*aElement);
   if (index == 0) {
-    Element* oldElement = mIdContentList->SafeElementAt(1);
+    Element* oldElement = mIdContentList.SafeElementAt(1, nullptr);
     FireChangeCallbacks(oldElement, aElement);
   }
 }
@@ -642,15 +642,16 @@ void IdentifierMapEntry::RemoveIdElement(Element* aElement) {
   // Only assert this in HTML documents for now as XUL does all sorts of weird
   // crap.
   NS_ASSERTION(!aElement->OwnerDoc()->IsHTMLDocument() ||
-                   mIdContentList->Contains(aElement),
+                   mIdContentList.Contains(aElement),
                "Removing id entry that doesn't exist");
 
   // XXXbz should this ever Compact() I guess when all the content is gone
   // we'll just get cleaned up in the natural order of things...
-  Element* currentElement = mIdContentList->SafeElementAt(0);
+  Element* currentElement = mIdContentList.SafeElementAt(0, nullptr);
   mIdContentList.RemoveElement(*aElement);
   if (currentElement == aElement) {
-    FireChangeCallbacks(currentElement, mIdContentList->SafeElementAt(0));
+    FireChangeCallbacks(currentElement,
+                        mIdContentList.SafeElementAt(0, nullptr));
   }
 }
 
@@ -664,7 +665,7 @@ void IdentifierMapEntry::SetImageElement(Element* aElement) {
 }
 
 void IdentifierMapEntry::ClearAndNotify() {
-  Element* currentElement = mIdContentList->SafeElementAt(0);
+  Element* currentElement = mIdContentList.SafeElementAt(0, nullptr);
   mIdContentList.Clear();
   if (currentElement) {
     FireChangeCallbacks(currentElement, nullptr);
@@ -2058,91 +2059,6 @@ void Document::LoadEventFired() {
   }
 }
 
-static void RecordExecutionTimeForAsmJS(Document* aDoc) {
-  if (aDoc->GetScopeObject()) {
-    AutoJSAPI jsapi;
-    if (!jsapi.Init(aDoc->GetScopeObject())) {
-      return;
-    }
-
-    if (JSContext* cx = jsapi.cx()) {
-      // Disable the execution timer.
-      JS::SetMeasuringExecutionTimeEnabled(cx, false);
-
-      // Get the execution time and accumulate it.
-      JS::JSTimers timers = JS::GetJSTimers(cx);
-      mozilla::glean::perf::js_exec_asm_js.AccumulateRawDuration(
-          timers.executionTime);
-    }
-  }
-}
-
-class ASMJSExecutionTimeRecorder final : public nsITimerCallback,
-                                         public nsINamed {
- public:
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSITIMERCALLBACK
-  NS_DECL_NSINAMED
-
-  explicit ASMJSExecutionTimeRecorder(Document* aDocument)
-      : mDocument(aDocument) {}
-
- private:
-  ~ASMJSExecutionTimeRecorder() = default;
-  WeakPtr<Document> mDocument;
-};
-
-NS_IMPL_ISUPPORTS(ASMJSExecutionTimeRecorder, nsITimerCallback, nsINamed)
-
-NS_IMETHODIMP
-ASMJSExecutionTimeRecorder::Notify(nsITimer* aTimer) {
-  RefPtr<Document> doc(mDocument);
-  if (!doc) {
-    return NS_OK;
-  }
-
-  // Record the JS execution time to Glean.
-  RecordExecutionTimeForAsmJS(doc);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ASMJSExecutionTimeRecorder::GetName(nsACString& aName) {
-  aName.AssignLiteral("ASMJSExecutionTimeRecorder");
-  return NS_OK;
-}
-
-// If an asm.js use counter is set, then enable the JS execution
-// timer and record it after 5 minutes of activity.
-void Document::RecordASMJSExecutionTime() {
-  // Skip if the document is being destroyed.
-  if (mIsGoingAway) {
-    return;
-  }
-
-  // If the timer has already fired, or the use counter is already set,
-  // then nothing more needs to be done.
-  if (mASMJSExecutionTimer || HasUseCounter(eUseCounter_custom_JS_use_asm)) {
-    return;
-  }
-
-  AutoJSContext cx;
-  if (static_cast<JSContext*>(cx)) {
-    JS::SetMeasuringExecutionTimeEnabled(cx, true);
-  }
-
-  RefPtr<ASMJSExecutionTimeRecorder> callback =
-      new ASMJSExecutionTimeRecorder(this);
-  nsresult rv =
-      NS_NewTimerWithCallback(getter_AddRefs(mASMJSExecutionTimer), callback,
-                              5 * 60 * 1000,  // 5min delay
-                              nsITimer::TYPE_ONE_SHOT);
-
-  if (NS_FAILED(rv)) {
-    mASMJSExecutionTimer = nullptr;
-  }
-}
-
 void Document::RecordPageLoadEventTelemetry() {
   // If the page load time is empty, then the content wasn't something we want
   // to report (i.e. not a top level document).
@@ -2854,14 +2770,15 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(Document)
 
   nsINode::Unlink(tmp);
 
-  while (tmp->HasChildren()) {
+  BatchRemovalState state{};
+  while (nsCOMPtr<nsIContent> child = tmp->GetLastChild()) {
     // Hold a strong ref to the node when we remove it, because we may be
     // the last reference to it.
     // If this code changes, change the corresponding code in Document's
     // unlink impl and ContentUnbinder::UnbindSubtree.
-    nsCOMPtr<nsIContent> child = tmp->GetLastChild();
     tmp->DisconnectChild(child);
-    child->UnbindFromTree();
+    child->UnbindFromTree(/* aNewParent=*/nullptr, &state);
+    state.mIsFirst = false;
   }
 
   tmp->UnlinkOriginalDocumentIfStatic();
@@ -3757,12 +3674,6 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
   // If this is an error page, don't inherit sandbox flags
   nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
-
-  if (!IsTopLevelContentDocument()) {
-    SetAncestorOriginsList(
-        ProduceAncestorOriginsList(loadInfo->AncestorPrincipals()));
-  }
-
   if (docShell && !loadInfo->GetLoadErrorPage()) {
     mSandboxFlags = loadInfo->GetSandboxFlags();
     WarnIfSandboxIneffective(docShell, mSandboxFlags, GetChannel());
@@ -3831,6 +3742,9 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
   // Initialize FeaturePolicy
   rv = InitFeaturePolicy(aChannel);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = InitTLSCertificateBinding(aChannel);
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = loadInfo->GetCookieJarSettings(getter_AddRefs(mCookieJarSettings));
@@ -4169,6 +4083,46 @@ nsresult Document::InitIntegrityPolicy(nsIChannel* aChannel) {
   NS_ENSURE_SUCCESS(rv, rv);
 
   mPolicyContainer->SetIntegrityPolicy(integrityPolicy);
+  return NS_OK;
+}
+
+nsresult Document::InitTLSCertificateBinding(nsIChannel* aChannel) {
+  mTLSCertificateBindingURI = nullptr;
+  nsCOMPtr<nsIHttpChannel> httpChannel;
+  nsresult rv = GetHttpChannelHelper(aChannel, getter_AddRefs(httpChannel));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+
+  if (!httpChannel) {
+    return NS_OK;
+  }
+
+  nsAutoCString linkHeader;
+  rv = httpChannel->GetResponseHeader("link"_ns, linkHeader);
+  if (NS_FAILED(rv) || linkHeader.IsEmpty()) {
+    return NS_OK;
+  }
+  nsTArray<LinkHeader> linkHeaders(
+      ParseLinkHeader(NS_ConvertUTF8toUTF16(linkHeader)));
+  for (const auto& linkHeader : linkHeaders) {
+    // According to ETSI TS 119 411-5 V2.1.1 Section 5.2, "When using a 2-QWAC,
+    // website operators shall... Configure their website to serve... an HTTP
+    // 'Link' response header (as defined in IETF RFC 8288 [6]) with a relative
+    // reference to the TLS Certificate Binding, and a rel value of
+    // tls-certificate-binding".
+    if (linkHeader.mRel.EqualsIgnoreCase("tls-certificate-binding") &&
+        !net_IsAbsoluteURL(NS_ConvertUTF16toUTF8(linkHeader.mHref)) &&
+        !net_IsAbsoluteURL(NS_ConvertUTF16toUTF8(linkHeader.mAnchor))) {
+      if (NS_SUCCEEDED(linkHeader.NewResolveHref(
+              getter_AddRefs(mTLSCertificateBindingURI), mDocumentURI))) {
+        break;
+      } else {
+        mTLSCertificateBindingURI = nullptr;
+      }
+    }
+  }
+
   return NS_OK;
 }
 
@@ -11755,8 +11709,7 @@ void Document::RemoveColorSchemeMeta(HTMLMetaElement& aMeta) {
 void Document::RecomputeColorScheme() {
   auto oldColorScheme = mColorSchemeBits;
   mColorSchemeBits = 0;
-  const nsTArray<HTMLMetaElement*>& elements = mColorSchemeMetaTags;
-  for (const HTMLMetaElement* el : elements) {
+  for (const HTMLMetaElement* el : mColorSchemeMetaTags.AsSpan()) {
     nsAutoString content;
     if (!el->GetAttr(nsGkAtoms::content, content)) {
       continue;
@@ -12325,11 +12278,6 @@ void Document::Destroy() {
 
   mIsGoingAway = true;
 
-  if (mASMJSExecutionTimer) {
-    mASMJSExecutionTimer->Cancel();
-    mASMJSExecutionTimer = nullptr;
-    RecordExecutionTimeForAsmJS(this);
-  }
   if (mScriptLoader) {
     mScriptLoader->Destroy();
   }
@@ -18114,23 +18062,6 @@ void Document::UpdateLastRememberedSizes() {
   }
 }
 
-void Document::SetAncestorOriginsList(
-    nsTArray<nsString>&& aAncestorOriginsList) {
-  mAncestorOriginsList = std::move(aAncestorOriginsList);
-}
-
-Span<const nsString> Document::GetAncestorOriginsList() const {
-  return mAncestorOriginsList;
-}
-
-already_AddRefed<DOMStringList> Document::AncestorOrigins() const {
-  RefPtr<DOMStringList> list = new DOMStringList();
-  for (const auto& origin : mAncestorOriginsList) {
-    list->Add(origin);
-  }
-  return list.forget();
-}
-
 void Document::NotifyLayerManagerRecreated() {
   NotifyActivityChanged();
   EnumerateSubDocuments([](Document& aSubDoc) {
@@ -20821,9 +20752,7 @@ void Document::RemoveToplevelLoadingDocument(Document* aDoc) {
   }
 
   // Stop the JS execution timer once the page is loaded.
-  // If the asm.js counter is active, then continue the timer
-  // for telemetry purposes.
-  if (!aDoc->HasUseCounter(eUseCounter_custom_JS_use_asm)) {
+  {
     AutoJSContext cx;
     if (static_cast<JSContext*>(cx)) {
       JS::SetMeasuringExecutionTimeEnabled(cx, false);

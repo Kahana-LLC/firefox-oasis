@@ -180,6 +180,8 @@ task_description_schema = Schema(
         Optional("run-on-projects"): optionally_keyed_by("build-platform", [str]),
         # Like `run_on_projects`, `run-on-hg-branches` defaults to "all".
         Optional("run-on-hg-branches"): optionally_keyed_by("project", [str]),
+        # Specifies git branches for which this task should run.
+        Optional("run-on-git-branches"): [str],
         # The `shipping_phase` attribute, defaulting to None. This specifies the
         # release promotion phase that this task belongs to.
         Required("shipping-phase"): Any(
@@ -292,6 +294,12 @@ def get_branch_repo(config):
             config.graph_config["project-repo-param-prefix"],
         )
     ]
+
+
+def get_project_alias(config):
+    if config.params["tasks_for"].startswith("github-pull-request"):
+        return f"{config.params['project']}-pr"
+    return config.params["project"]
 
 
 @memoize
@@ -1139,7 +1147,7 @@ def build_balrog_payload(config, task, task_def):
                     task["description"],
                     **{
                         "release-type": config.params["release_type"],
-                        "release-level": release_level(config.params["project"]),
+                        "release-level": release_level(config.params),
                         "beta-number": beta_number,
                     },
                 )
@@ -1883,6 +1891,8 @@ def add_generic_index_routes(config, task):
     except KeyError:
         pass
 
+    subs["project"] = get_project_alias(config)
+
     project = config.params.get("project")
 
     for tpl in V2_ROUTE_TEMPLATES:
@@ -1923,6 +1933,7 @@ def add_shippable_index_routes(config, task):
         subs["branch_git_rev"] = get_branch_git_rev(config)
     except KeyError:
         pass
+    subs["project"] = get_project_alias(config)
 
     for tpl in V2_SHIPPABLE_TEMPLATES:
         try:
@@ -2001,6 +2012,7 @@ def add_shippable_l10n_index_routes(config, task, force_locale=None):
     subs["product"] = index["product"]
     subs["trust-domain"] = config.graph_config["trust-domain"]
     subs["branch_rev"] = get_branch_rev(config)
+    subs["project"] = get_project_alias(config)
 
     locales = task["attributes"].get(
         "chunk_locales", task["attributes"].get("all_locales")
@@ -2277,11 +2289,7 @@ def build_task(config, tasks):
             branch_rev = get_branch_rev(config)
 
             routes.append(
-                "{}.v2.{}.{}".format(
-                    TREEHERDER_ROUTE_ROOT,
-                    config.params["project"],
-                    branch_rev,
-                )
+                f"{TREEHERDER_ROUTE_ROOT}.v2.{get_project_alias(config)}.{branch_rev}"
             )
 
         if "deadline-after" not in task:
@@ -2357,6 +2365,12 @@ def build_task(config, tasks):
         )
         attributes["run_on_repo_type"] = task.get("run-on-repo-type", ["git", "hg"])
         attributes["run_on_projects"] = task.get("run-on-projects", ["all"])
+
+        # We don't want to pollute non git repos with this attribute. Moreover, target_tasks
+        # already assumes the default value is ['all']
+        if task.get("run-on-git-branches"):
+            attributes["run_on_git_branches"] = task["run-on-git-branches"]
+
         attributes["always_target"] = task["always-target"]
         # This logic is here since downstream tasks don't always match their
         # upstream dependency's shipping_phase.

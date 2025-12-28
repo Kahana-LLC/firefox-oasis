@@ -223,8 +223,7 @@ struct LoadInfoArgs
   InterceptionInfoArg?        interceptionInfo;
   bool                        isNewWindowTarget;
   UserNavigationInvolvement   userNavigationInvolvement;
-  // https://html.spec.whatwg.org/#dom-location-ancestororigins
-  PrincipalInfo?[]             ancestorOrigins;
+  FeaturePolicyInfo?          containerFeaturePolicyInfo;
 };
 
 /**
@@ -650,7 +649,6 @@ struct TransactionObserverResult
 struct SpeculativeConnectionOverriderArgs {
   uint32_t parallelSpeculativeConnectLimit;
   bool ignoreIdle;
-  bool isFromPredictor;
   bool allow1918;
 };
 

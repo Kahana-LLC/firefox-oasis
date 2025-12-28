@@ -57,6 +57,8 @@
   <string name="tab_manager_empty_synced_tabs_page_header">Захоплівайце карткі з любой прылады</string>
   <!-- The action text displayed on the synced tabs page when the user is not logged into an account, prompting the user to sign into their account. When clicked, it takes the user to the account sign-in flow. -->
   <string name="tab_manager_empty_synced_tabs_page_sign_in_cta">Увайсці</string>
+  <!-- Text for the button used to show all stories -->
+  <string name="homepage_all_stories">Усе гісторыі</string>
   <!--
     Home - Bookmarks
 
@@ -346,6 +348,14 @@
     %2$s is the name of the language which the page was translated to. (For example: French)
   -->
   <string name="browser_toolbar_translated_successfully">Старонка перакладзена з %1$s на %2$s.</string>
+  <!--
+    Translation Toolbar
+
+    Translation toolbar label that is displayed when the current page has been translated by the translation feature.
+    %1$s is the name of the language that is displayed in the original page. (For example: English)
+    %2$s is the name of the language which the page was translated to. (For example: French)
+  -->
+  <string name="translation_toolbar_translated_from_and_to" tools:ignore="UnusedResources">Перакладзена з %1$s на %2$s</string>
   <!-- Content description for the translate toolbar action that opens the translations dialog. -->
   <string name="translation_toolbar_expand_action">Адкрыць аркуш перакладаў</string>
   <!-- Content description for the translate toolbar action that closes the translations toolbar. -->
@@ -494,6 +504,8 @@
   <string name="onboarding_term_of_service_line_one_2">Працягваючы, вы згаджаецеся з %1$s.</string>
   <!-- Used as text for the link in onboarding_term_of_service_line_one_2. -->
   <string name="onboarding_term_of_service_line_one_link_text_2" tools:ignore="BrandUsage">Умовы выкарыстання Firefox</string>
+  <!-- Line two of the terms of service onboarding page. 'Firefox' is intentionally hardcoded. %1$s is replaced by an active link, using onboarding_term_of_service_line_two_link_text as text (“Privacy Notice”). -->
+  <string name="onboarding_term_of_service_line_two_2" tools:ignore="BrandUsage">Firefox клапоціцца аб вашай прыватнасці. Даведайцеся больш у нашых %1$s.</string>
   <!-- Used as text for the link in onboarding_term_of_service_line_two. -->
   <string name="onboarding_term_of_service_line_two_link_text">Паведамленнем аб прыватнасці</string>
   <!-- Used as text for the link in onboarding_term_of_service_line_three. -->
@@ -535,6 +547,35 @@
   <string name="onboarding_marketing_learn_more" tools:ignore="UnusedResources">Як мы выкарыстоўваем дадзеныя</string>
   <!-- Marketing onboarding page title variant. “One last thing” refers to the final step or action in the onboarding process that we’re asking users to take before they can start using the browser. -->
   <string name="onboarding_marketing_title_1" tools:ignore="UnusedResources">Яшчэ адна рэч</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- "Continue" onboarding button. -->
+  <string name="nova_onboarding_continue_button" tools:ignore="UnusedResources">Працягнуць</string>
+  <!-- "Not now" onboarding button. -->
+  <string name="nova_onboarding_negative_button" tools:ignore="UnusedResources">Не зараз</string>
+  <!-- Terms of use (ToU) onboarding body line one link text for nova_onboarding_tou_body_line_1. 'Firefox' is intentionally hardcoded. -->
+  <string name="nova_onboarding_tou_body_line_1_link_text" tools:ignore="BrandUsage,UnusedResources">Умовы выкарыстання Firefox</string>
+  <!--
+    Terms of use (ToU) onboarding body line two. 'Firefox' is intentionally hardcoded.
+    %1$s is replaced by an active link, using nova_onboarding_tou_body_line_2_link_text as text (“Privacy Notice”).
+  -->
+  <string name="nova_onboarding_tou_body_line_2" tools:ignore="BrandUsage,UnusedResources">Firefox клапоціцца аб вашай прыватнасці. Даведайцеся больш у нашых %1$s.</string>
+  <!-- Terms of use (ToU) onboarding body line two link text for nova_onboarding_tou_body_line_2. -->
+  <string name="nova_onboarding_tou_body_line_2_link_text" tools:ignore="UnusedResources">Паведамленне аб прыватнасці</string>
+  <!-- "Set to default" onboarding button. -->
+  <string name="nova_onboarding_set_to_default_button" tools:ignore="UnusedResources">Зрабіць прадвызначаным браўзерам</string>
+  <!-- Toolbar selection onboarding "top" option label. -->
+  <string name="nova_onboarding_toolbar_selection_top_label" tools:ignore="UnusedResources">Уверсе</string>
+  <!-- Toolbar selection onboarding "bottom" option label. -->
+  <string name="nova_onboarding_toolbar_selection_bottom_label" tools:ignore="UnusedResources">Унізе</string>
+  <!-- Theme selection onboarding "automatic" option label. -->
+  <string name="nova_onboarding_theme_selection_automatic_label" tools:ignore="UnusedResources">Аўтаматычна</string>
+  <!-- Theme selection onboarding "dark" option label. -->
+  <string name="nova_onboarding_theme_selection_dark_label" tools:ignore="UnusedResources">Цёмная</string>
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
+  <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
+  <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Выберыце размяшчэнне панэлі інструментаў</string>
   <!-- Onboarding label for 'Save and continue' button, used by Nimbus experiments. -->
   <string name="onboarding_save_and_continue_button">Захаваць і працягваць</string>
   <!-- Onboarding toolbar selection card label for 'top' option, used by Nimbus experiments. -->
@@ -1273,6 +1314,10 @@
   <string name="tab_tray_menu_tab_settings">Налады картак</string>
   <!-- Text shown in the menu for closing all tabs -->
   <string name="tab_tray_menu_item_close">Закрыць усе карткі</string>
+  <!-- Text shown on the confirm button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_confirm">Закрыць карткі</string>
+  <!-- Text shown on the cancel button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_cancel">Скасаваць</string>
   <!-- Text shown in the multiselect menu for bookmarking selected tabs. -->
   <string name="tab_tray_multiselect_menu_item_bookmark">Закладка</string>
   <!-- Text shown in the multiselect menu for closing selected tabs. -->
@@ -3028,6 +3073,8 @@
   <string name="private_tab_cfr_negative">Не, дзякуй</string>
   <!-- Label for a button opening a feedback forum -->
   <string name="review_prompt_feedback_button">Пакінуць водгук</string>
+  <!-- ==== Terms of use pop up prompt ==== -->
+
   <!-- Terms of use link in the pop up prompt message that links to the terms of use -->
   <string name="terms_of_use_prompt_link_terms_of_use">Умовы выкарыстання</string>
   <!-- Privacy notice link in the pop up prompt message that links to the privacy notice -->
@@ -3038,4 +3085,7 @@
   <string name="terms_of_use_prompt_accept">Прыняць</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Нагадаць пазней</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

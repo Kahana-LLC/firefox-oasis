@@ -3105,7 +3105,7 @@
           // If we were called by frontend and don't have openWindowInfo,
           // but we were opened from another browser, set the cross group
           // opener ID:
-          if (openerBrowser && !openWindowInfo) {
+          if (openerBrowser?.browsingContext && !openWindowInfo) {
             b.browsingContext.crossGroupOpener = openerBrowser.browsingContext;
           }
         }
@@ -6025,6 +6025,10 @@
         });
         aOtherTab.dispatchEvent(event);
       }
+
+      // Copy tab note-related properties of the tab.
+      aOurTab.hasTabNote = aOtherTab.hasTabNote;
+      aOurTab.canonicalUrl = aOtherTab.canonicalUrl;
 
       if (otherBrowser.isDistinctProductPageVisit) {
         ourBrowser.isDistinctProductPageVisit = true;
@@ -9827,17 +9831,19 @@ var TabContextMenu = {
     }
 
     let contextAddNote = document.getElementById("context_addNote");
-    let contextEditNote = document.getElementById("context_editNote");
+    let contextUpdateNote = document.getElementById("context_updateNote");
     if (gBrowser._tabNotesEnabled) {
-      contextAddNote.disabled = !this.TabNotes.isEligible(this.contextTab);
+      contextAddNote.disabled =
+        this.multiselected || !this.TabNotes.isEligible(this.contextTab);
+      contextUpdateNote.disabled = this.multiselected;
 
       this.TabNotes.has(this.contextTab).then(hasNote => {
         contextAddNote.hidden = hasNote;
-        contextEditNote.hidden = !hasNote;
+        contextUpdateNote.hidden = !hasNote;
       });
     } else {
       contextAddNote.hidden = true;
-      contextEditNote.hidden = true;
+      contextUpdateNote.hidden = true;
     }
 
     // Split View
@@ -10385,6 +10391,12 @@ var TabContextMenu = {
         gBrowser.tabLocalization.formatValueSync("tab-context-badge-new")
       );
     });
+  },
+
+  deleteTabNotes() {
+    for (let tab of this.contextTabs) {
+      this.TabNotes.delete(tab);
+    }
   },
 };
 

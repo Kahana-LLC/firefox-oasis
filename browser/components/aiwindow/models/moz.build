@@ -9,9 +9,14 @@ DIRS += [
     "prompts",
 ]
 
+BROWSER_CHROME_MANIFESTS += [
+    "tests/browser/browser.toml",
+]
+
 MOZ_SRC_FILES += [
     "Chat.sys.mjs",
     "ChatUtils.sys.mjs",
+    "ConversationSuggestions.sys.mjs",
     "Insights.sys.mjs",
     "InsightsChatSource.sys.mjs",
     "InsightsConstants.sys.mjs",

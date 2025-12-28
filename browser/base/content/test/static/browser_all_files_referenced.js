@@ -339,26 +339,13 @@ var allowlist = [
   {
     file: "moz-src:///browser/components/aiwindow/ui/modules/ChatStore.sys.mjs",
   },
-  //  Bug 2003598 - Add Chat service with fetch with history  (backed out due to unused file)
-  {
-    file: "moz-src:///browser/components/aiwindow/models/Chat.sys.mjs",
-  },
   // Bug 2002840 - add function to return real time info injection message & tests (backed out due to unused file)
   {
     file: "moz-src:///browser/components/aiwindow/models/ChatUtils.sys.mjs",
   },
-  // Bug 2003328 - Implement createOpenAIEngine and prompt rendering (backed out due to unused file)
-  // Bug 2003832 - Change .mjs files to .sys.mjs (backed out due to unused file)
-  {
-    file: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
-  },
   // Bug 2003623 - Add assistant system prompt
   {
     file: "moz-src:///browser/components/aiwindow/models/prompts/AssistantPrompts.sys.mjs",
-  },
-  // Bug 2002638 - Move search browsing history to AI-window r?mardak (backed out due to unused file)
-  {
-    file: "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs",
   },
   // Bug 2004888 - [FirstRun] Create Firstrun.html opening firstrun welcome screen
   {
@@ -379,6 +366,10 @@ var allowlist = [
   // Bug 2006090 - Insight updation - Day 0 and incremental updates from Chat history
   {
     file: "moz-src:///browser/components/aiwindow/models/InsightsConversationScheduler.sys.mjs",
+  },
+  // Bug 2006433 - Implement conversation starter/followup inference
+  {
+    file: "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs",
   },
 ];
 

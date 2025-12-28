@@ -119,7 +119,7 @@ android {
 	// If building locally, just use debug signing. In official automation builds, the
 	// files are signed using a separate service and not within gradle.
         if (!gradle.mozconfig.substs.MOZ_AUTOMATION) {
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
 
         if (gradle.hasProperty("localProperties.debuggable") ||
@@ -832,6 +832,32 @@ tasks.register('printVariants') {
         ])
         println 'variants: ' + JsonOutput.toJson(variants.get())
     }
+}
+
+// Work around generated SafeArgs code hitting USELESS_CAST warnings with Kotlin 2.3+
+// https://issuetracker.google.com/issues/458082829
+def safeArgsSrc = fileTree(layout.buildDirectory.dir("generated/source/navigation-args")) {
+    include "**/*.kt"
+}
+
+tasks.register("suppressUselessCastInSafeArgs") {
+    inputs.files(safeArgsSrc)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        safeArgsSrc.each { File f ->
+            if (!f.text.contains('@file:Suppress("USELESS_CAST")')) {
+                f.text =
+"""@file:Suppress("USELESS_CAST")
+
+${f.text}"""
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("generateSafeArgs") }.configureEach {
+    finalizedBy tasks.named("suppressUselessCastInSafeArgs")
 }
 
 afterEvaluate {

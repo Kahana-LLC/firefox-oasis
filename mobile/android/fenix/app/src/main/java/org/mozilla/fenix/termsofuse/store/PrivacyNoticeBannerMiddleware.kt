@@ -5,7 +5,7 @@
 package org.mozilla.fenix.termsofuse.store
 
 import mozilla.components.lib.state.Middleware
-import mozilla.components.lib.state.MiddlewareContext
+import mozilla.components.lib.state.Store
 
 /**
  * [Middleware] that reacts to various [PrivacyNoticeBannerAction]s
@@ -17,7 +17,7 @@ class PrivacyNoticeBannerMiddleware(
 ) : Middleware<PrivacyNoticeBannerState, PrivacyNoticeBannerAction> {
 
     override fun invoke(
-        context: MiddlewareContext<PrivacyNoticeBannerState, PrivacyNoticeBannerAction>,
+        store: Store<PrivacyNoticeBannerState, PrivacyNoticeBannerAction>,
         next: (PrivacyNoticeBannerAction) -> Unit,
         action: PrivacyNoticeBannerAction,
     ) {
@@ -29,7 +29,7 @@ class PrivacyNoticeBannerMiddleware(
             is PrivacyNoticeBannerAction.OnPrivacyNoticeClicked,
             is PrivacyNoticeBannerAction.OnLearnMoreClicked,
             is PrivacyNoticeBannerAction.OnCloseClicked,
-            is PrivacyNoticeBannerAction.OnFragmentStopped,
+            is PrivacyNoticeBannerAction.OnNavigatedAwayFromHome,
                 -> {
             }
         }

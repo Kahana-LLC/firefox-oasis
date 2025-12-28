@@ -2502,10 +2502,6 @@ class FunctionCompiler {
   [[nodiscard]]
   bool collectBuiltinCallResult(MIRType type, MDefinition** result,
                                 CallCompileState* callState) {
-    // This function is for collecting results of builtin calls. Use
-    // collectWasmCallResults for wasm calls.
-    MOZ_ASSERT(callState->abiKind == ABIKind::System);
-
     MInstruction* def;
     switch (type) {
       case MIRType::Int32:
@@ -2514,14 +2510,26 @@ class FunctionCompiler {
       case MIRType::Int64:
         def = MWasmRegister64Result::New(alloc(), ReturnReg64);
         break;
-      case MIRType::Float32:
-        def = MWasmBuiltinFloatRegisterResult::New(
-            alloc(), type, ReturnFloat32Reg, callState->hardFP);
+      case MIRType::Float32: {
+        if (callState->abiKind == ABIKind::System) {
+          def = MWasmSystemFloatRegisterResult::New(
+              alloc(), type, ReturnFloat32Reg, callState->hardFP);
+        } else {
+          def = MWasmFloatRegisterResult::New(alloc(), MIRType::Float32,
+                                              ReturnFloat32Reg);
+        }
         break;
-      case MIRType::Double:
-        def = MWasmBuiltinFloatRegisterResult::New(
-            alloc(), type, ReturnDoubleReg, callState->hardFP);
+      }
+      case MIRType::Double: {
+        if (callState->abiKind == ABIKind::System) {
+          def = MWasmSystemFloatRegisterResult::New(
+              alloc(), type, ReturnDoubleReg, callState->hardFP);
+        } else {
+          def = MWasmFloatRegisterResult::New(alloc(), MIRType::Double,
+                                              ReturnDoubleReg);
+        }
         break;
+      }
 #ifdef ENABLE_WASM_SIMD
       case MIRType::Simd128:
         MOZ_CRASH("SIMD128 not supported in builtin ABI");
@@ -2549,7 +2557,7 @@ class FunctionCompiler {
   [[nodiscard]]
   bool collectWasmCallResults(const ResultType& type,
                               CallCompileState* callState, DefVector* results) {
-    // This function uses wasm::ABIResultIter which does not handle the builtin
+    // This function uses wasm::ABIResultIter which does not handle the system
     // ABI. Use collectBuiltinCallResult instead for builtin calls.
     MOZ_ASSERT(callState->abiKind == ABIKind::Wasm);
     MOZ_ASSERT(callState->hardFP);
@@ -3064,7 +3072,7 @@ class FunctionCompiler {
   bool builtinCall1(const SymbolicAddressSignature& builtin,
                     uint32_t lineOrBytecode, MDefinition* arg,
                     MDefinition** result) {
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(builtin.identity));
     return passCallArg(arg, builtin.argTypes[0], &callState) &&
            finishCallArgs(&callState) &&
            builtinCall(&callState, builtin, lineOrBytecode, result);
@@ -3074,7 +3082,7 @@ class FunctionCompiler {
   bool builtinCall2(const SymbolicAddressSignature& builtin,
                     uint32_t lineOrBytecode, MDefinition* arg1,
                     MDefinition* arg2, MDefinition** result) {
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(builtin.identity));
     return passCallArg(arg1, builtin.argTypes[0], &callState) &&
            passCallArg(arg2, builtin.argTypes[1], &callState) &&
            finishCallArgs(&callState) &&
@@ -3086,7 +3094,7 @@ class FunctionCompiler {
                     uint32_t lineOrBytecode, MDefinition* arg1,
                     MDefinition* arg2, MDefinition* arg3, MDefinition* arg4,
                     MDefinition* arg5, MDefinition** result) {
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(builtin.identity));
     return passCallArg(arg1, builtin.argTypes[0], &callState) &&
            passCallArg(arg2, builtin.argTypes[1], &callState) &&
            passCallArg(arg3, builtin.argTypes[2], &callState) &&
@@ -3102,7 +3110,7 @@ class FunctionCompiler {
                     MDefinition* arg2, MDefinition* arg3, MDefinition* arg4,
                     MDefinition* arg5, MDefinition* arg6,
                     MDefinition** result) {
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(builtin.identity));
     return passCallArg(arg1, builtin.argTypes[0], &callState) &&
            passCallArg(arg2, builtin.argTypes[1], &callState) &&
            passCallArg(arg3, builtin.argTypes[2], &callState) &&
@@ -3209,7 +3217,7 @@ class FunctionCompiler {
     }
 
     // Finally, construct the call.
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(callee.identity));
     if (!passInstanceCallArg(callee.argTypes[0], &callState)) {
       return false;
     }
@@ -3291,13 +3299,16 @@ class FunctionCompiler {
     MInstruction* ins;
     switch (kind) {
       case StackSwitchKind::SwitchToMain:
-        ins = MWasmStackSwitchToMain::New(alloc(), suspender, fn, data);
+        ins = MWasmStackSwitchToMain::New(alloc(), instancePointer_, suspender,
+                                          fn, data);
         break;
       case StackSwitchKind::SwitchToSuspendable:
-        ins = MWasmStackSwitchToSuspendable::New(alloc(), suspender, fn, data);
+        ins = MWasmStackSwitchToSuspendable::New(alloc(), instancePointer_,
+                                                 suspender, fn, data);
         break;
       case StackSwitchKind::ContinueOnSuspendable:
-        ins = MWasmStackContinueOnSuspendable::New(alloc(), suspender, data);
+        ins = MWasmStackContinueOnSuspendable::New(alloc(), instancePointer_,
+                                                   suspender, data);
         break;
     }
     if (!ins) {
@@ -3443,7 +3454,7 @@ class FunctionCompiler {
     // `memoryBase`, and make the call.
     const SymbolicAddressSignature& callee = *builtinModuleFunc.sig();
 
-    CallCompileState callState(ABIKind::System);
+    CallCompileState callState(ABIForBuiltin(callee.identity));
     if (!passInstanceCallArg(callee.argTypes[0], &callState) ||
         !passCallArgs(params, builtinModuleFunc.funcType()->args(),
                       &callState)) {
@@ -5122,22 +5133,18 @@ class FunctionCompiler {
       uint32_t fieldIndex, MDefinition* structObject, MDefinition* value,
       WasmPreBarrierKind preBarrierKind) {
     StorageType fieldType = structType.fields_[fieldIndex].type;
-    uint32_t fieldOffset = structType.fieldOffset(fieldIndex);
-
-    bool areaIsOutline;
-    uint32_t areaOffset;
-    WasmStructObject::fieldOffsetToAreaAndOffset(fieldType, fieldOffset,
-                                                 &areaIsOutline, &areaOffset);
+    FieldAccessPath path = structType.fieldAccessPaths_[fieldIndex];
+    uint32_t areaOffset = path.hasOOL() ? path.oolOffset() : path.ilOffset();
 
     // Make `base` point at the first byte of either the struct object as a
-    // whole or of the out-of-line data area.  And adjust `areaOffset`
-    // accordingly.
+    // whole or of the out-of-line data area.
     MDefinition* base;
     bool needsTrapInfo;
-    if (areaIsOutline) {
+    if (path.hasOOL()) {
+      // The path has two components, of which the first (the IL component) is
+      // the offset where the OOL pointer is stored.  Hence `path.ilOffset()`.
       auto* loadDataPointer = MWasmLoadField::New(
-          alloc(), structObject, nullptr,
-          WasmStructObject::offsetOfOutlineData(), mozilla::Nothing(),
+          alloc(), structObject, nullptr, path.ilOffset(), mozilla::Nothing(),
           MIRType::WasmStructData, MWideningOp::None,
           AliasSet::Load(AliasSet::WasmStructOutlineDataPointer),
           mozilla::Some(trapSiteDesc()));
@@ -5150,14 +5157,12 @@ class FunctionCompiler {
     } else {
       base = structObject;
       needsTrapInfo = true;
-      areaOffset += WasmStructObject::offsetOfInlineData();
     }
     // The transaction is to happen at `base + areaOffset`, so to speak.
-    // After this point we must ignore `fieldOffset`.
 
     // The alias set denoting the field's location, although lacking a
     // Load-vs-Store indication at this point.
-    AliasSet::Flag fieldAliasSet = areaIsOutline
+    AliasSet::Flag fieldAliasSet = path.hasOOL()
                                        ? AliasSet::WasmStructOutlineDataArea
                                        : AliasSet::WasmStructInlineDataArea;
 
@@ -5174,22 +5179,18 @@ class FunctionCompiler {
       const StructType& structType, uint32_t fieldIndex,
       FieldWideningOp wideningOp, MDefinition* structObject) {
     StorageType fieldType = structType.fields_[fieldIndex].type;
-    uint32_t fieldOffset = structType.fieldOffset(fieldIndex);
-
-    bool areaIsOutline;
-    uint32_t areaOffset;
-    WasmStructObject::fieldOffsetToAreaAndOffset(fieldType, fieldOffset,
-                                                 &areaIsOutline, &areaOffset);
+    FieldAccessPath path = structType.fieldAccessPaths_[fieldIndex];
+    uint32_t areaOffset = path.hasOOL() ? path.oolOffset() : path.ilOffset();
 
     // Make `base` point at the first byte of either the struct object as a
-    // whole or of the out-of-line data area.  And adjust `areaOffset`
-    // accordingly.
+    // whole or of the out-of-line data area.
     MDefinition* base;
     bool needsTrapInfo;
-    if (areaIsOutline) {
+    if (path.hasOOL()) {
+      // The path has two components, of which the first (the IL component) is
+      // the offset where the OOL pointer is stored.  Hence `path.ilOffset()`.
       auto* loadDataPointer = MWasmLoadField::New(
-          alloc(), structObject, nullptr,
-          WasmStructObject::offsetOfOutlineData(), mozilla::Nothing(),
+          alloc(), structObject, nullptr, path.ilOffset(), mozilla::Nothing(),
           MIRType::WasmStructData, MWideningOp::None,
           AliasSet::Load(AliasSet::WasmStructOutlineDataPointer),
           mozilla::Some(trapSiteDesc()));
@@ -5202,14 +5203,12 @@ class FunctionCompiler {
     } else {
       base = structObject;
       needsTrapInfo = true;
-      areaOffset += WasmStructObject::offsetOfInlineData();
     }
     // The transaction is to happen at `base + areaOffset`, so to speak.
-    // After this point we must ignore `fieldOffset`.
 
     // The alias set denoting the field's location, although lacking a
     // Load-vs-Store indication at this point.
-    AliasSet::Flag fieldAliasSet = areaIsOutline
+    AliasSet::Flag fieldAliasSet = path.hasOOL()
                                        ? AliasSet::WasmStructOutlineDataArea
                                        : AliasSet::WasmStructInlineDataArea;
 

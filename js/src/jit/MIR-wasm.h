@@ -1730,14 +1730,14 @@ class MWasmFloatRegisterResult : public MWasmResultBase<FloatRegister> {
   AliasSet getAliasSet() const override { return AliasSet::None(); }
 };
 
-class MWasmBuiltinFloatRegisterResult : public MWasmResultBase<FloatRegister> {
-  MWasmBuiltinFloatRegisterResult(MIRType type, FloatRegister reg, bool hardFP)
+class MWasmSystemFloatRegisterResult : public MWasmResultBase<FloatRegister> {
+  MWasmSystemFloatRegisterResult(MIRType type, FloatRegister reg, bool hardFP)
       : MWasmResultBase(classOpcode, type, reg), hardFP_(hardFP) {}
 
   bool hardFP_;
 
  public:
-  INSTRUCTION_HEADER(WasmBuiltinFloatRegisterResult)
+  INSTRUCTION_HEADER(WasmSystemFloatRegisterResult)
   TRIVIAL_NEW_WRAPPERS
   AliasSet getAliasSet() const override { return AliasSet::None(); }
 
@@ -3232,14 +3232,10 @@ class MWasmNewStructObject : public MBinaryInstruction,
   }
   const wasm::TypeDef& typeDef() { return *typeDef_; }
   const wasm::StructType& structType() const { return typeDef_->structType(); }
-  bool isOutline() const {
-    return WasmStructObject::requiresOutlineBytes(typeDef_->structType().size_);
-  }
+  bool isOutline() const { return typeDef_->structType().hasOOL(); }
   bool zeroFields() const { return zeroFields_; }
   const wasm::TrapSiteDesc& trapSiteDesc() const { return trapSiteDesc_; }
-  gc::AllocKind allocKind() const {
-    return WasmStructObject::allocKindForTypeDef(typeDef_);
-  }
+  gc::AllocKind allocKind() const { return typeDef_->structType().allocKind_; }
 };
 
 class MWasmNewArrayObject : public MTernaryInstruction,
