@@ -2011,7 +2011,9 @@ var SidebarController = {
             lastButtonAction = { type: data.type, time: now };
           }
           
-          console.log("[Sidebar] Received message:", data.type);
+          if (data.type !== "oasisOverlayMoveRelative") {
+            console.log("[Sidebar] Received message:", data.type);
+          }
           if (data.type === "oasisOverlayMove") {
             if (Number.isFinite(data.left)) overlayShell.style.left = `${data.left}px`;
             if (Number.isFinite(data.top)) overlayShell.style.top = `${data.top}px`;
