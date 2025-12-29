@@ -74,7 +74,6 @@
 #include "nsQueryObject.h"
 #include "nsRefreshDriver.h"
 #include "nsStyleUtil.h"
-#include "nsViewManager.h"
 
 #if defined(MOZ_WIDGET_GTK)
 #  include <gdk/gdk.h>
@@ -423,15 +422,12 @@ nsDOMWindowUtils::GetDocumentMetadata(const nsAString& aName,
 NS_IMETHODIMP
 nsDOMWindowUtils::UpdateLayerTree() {
   FlushLayoutWithoutThrottledAnimations();
-  if (RefPtr<PresShell> presShell = GetPresShell()) {
-    RefPtr<nsViewManager> vm = presShell->GetViewManager();
-    if (nsView* view = vm->GetRootView()) {
-      nsAutoScriptBlocker scriptBlocker;
-      presShell->PaintAndRequestComposite(
-          presShell->GetRootFrame(), view->GetWidget()->GetWindowRenderer(),
-          PaintFlags::PaintSyncDecodeImages);
-      presShell->GetWindowRenderer()->WaitOnTransactionProcessed();
-    }
+  if (RefPtr<PresShell> ps = GetPresShell()) {
+    nsAutoScriptBlocker scriptBlocker;
+    RefPtr renderer = ps->GetWindowRenderer();
+    ps->PaintAndRequestComposite(ps->GetRootFrame(), renderer,
+                                 PaintFlags::PaintSyncDecodeImages);
+    renderer->WaitOnTransactionProcessed();
   }
   return NS_OK;
 }
@@ -1587,9 +1583,11 @@ static already_AddRefed<DataSourceSurface> CanvasToDataSourceSurface(
     HTMLCanvasElement* aCanvas) {
   MOZ_ASSERT(aCanvas);
   SurfaceFromElementResult result = nsLayoutUtils::SurfaceFromElement(aCanvas);
-
-  MOZ_ASSERT(result.GetSourceSurface());
-  return result.GetSourceSurface()->GetDataSurface();
+  const RefPtr<SourceSurface> surf = result.GetSourceSurface();
+  if (!surf) {
+    return nullptr;
+  }
+  return surf->GetDataSurface();
 }
 
 NS_IMETHODIMP
@@ -1789,6 +1787,10 @@ nsDOMWindowUtils::ScrollToVisual(float aOffsetX, float aOffsetY,
   NS_ENSURE_TRUE(presContext->IsRootContentDocumentCrossProcess(),
                  NS_ERROR_INVALID_ARG);
 
+  ScrollContainerFrame* sf =
+      presContext->PresShell()->GetRootScrollContainerFrame();
+  NS_ENSURE_TRUE(sf, NS_ERROR_NOT_AVAILABLE);
+
   FrameMetrics::ScrollOffsetUpdateType updateType;
   switch (aUpdateType) {
     case UPDATE_TYPE_RESTORE:
@@ -1801,13 +1803,13 @@ nsDOMWindowUtils::ScrollToVisual(float aOffsetX, float aOffsetY,
       return NS_ERROR_INVALID_ARG;
   }
 
-  ScrollMode scrollMode;
+  ScrollBehavior scrollBehavior;
   switch (aScrollMode) {
     case SCROLL_MODE_INSTANT:
-      scrollMode = ScrollMode::Instant;
+      scrollBehavior = ScrollBehavior::Instant;
       break;
     case SCROLL_MODE_SMOOTH:
-      scrollMode = ScrollMode::SmoothMsd;
+      scrollBehavior = ScrollBehavior::Smooth;
       break;
     default:
       return NS_ERROR_INVALID_ARG;
@@ -1815,7 +1817,7 @@ nsDOMWindowUtils::ScrollToVisual(float aOffsetX, float aOffsetY,
 
   presContext->PresShell()->ScrollToVisual(
       CSSPoint::ToAppUnits(CSSPoint(aOffsetX, aOffsetY)), updateType,
-      scrollMode);
+      sf->ScrollModeForScrollBehavior(scrollBehavior));
 
   return NS_OK;
 }
@@ -3169,7 +3171,7 @@ nsDOMWindowUtils::ZoomToFocusedInput() {
         caretInfo.frame, caretInfo.caretRectRelativeToTextFrame,
         ScrollAxis(WhereToScroll::Center, WhenToScroll::IfNotVisible),
         ScrollAxis(WhereToScroll::Center, WhenToScroll::IfNotVisible),
-        ScrollFlags::ScrollOverflowHidden);
+        ScrollFlags::ForZoomToFocusedInput);
   }
 
   RefPtr<Document> document = presShell->GetDocument();

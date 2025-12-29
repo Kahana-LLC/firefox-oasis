@@ -117,11 +117,6 @@ interface FeatureSettingsHelper {
     var isTermsOfServiceAccepted: Boolean
 
     /**
-     * Enable or disable the composable logins.
-     */
-    var isComposeLoginsEnabled: Boolean
-
-    /**
      * The Open links in External apps settings, between the following options:
      * - Ask before opening
      * - Never
@@ -133,6 +128,11 @@ interface FeatureSettingsHelper {
      * Enable or disable the Tab Manager's opening animation.
      */
     var tabManagerOpeningAnimationEnabled: Boolean
+
+    /**
+     * Indicates if the toolbar CFR was displayed to the user.
+     */
+    var hasSeenBrowserToolbarCFR: Boolean
 
     /**
      * Enable or disable the translations prompt after a page that can be translated is loaded.

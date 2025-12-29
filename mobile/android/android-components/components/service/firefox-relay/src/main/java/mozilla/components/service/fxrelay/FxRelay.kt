@@ -6,27 +6,31 @@ package mozilla.components.service.fxrelay
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mozilla.appservices.relay.RelayAddress
 import mozilla.appservices.relay.RelayApiException
 import mozilla.appservices.relay.RelayClient
+import mozilla.appservices.relay.RelayProfile
+import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.support.base.log.logger.Logger
+
+const val RELAY_SCOPE_URL = "https://identity.mozilla.com/apps/relay"
+const val RELAY_BASE_URL = "https://relay.firefox.com"
 
 /**
  * Service wrapper for Firefox Relay APIs.
  *
- * @param serverUrl The base URL of the Firefox Relay service (for example,
- *                  `https://relay.firefox.com`). This defines the endpoint
- *                  that the [RelayClient] will connect to.
- * @param authToken An optional authentication token used to authorize API
- *                  requests. If `null` or invalid, calls that require
- *                  authentication will fail gracefully via [handleRelayExceptions].
+ * @param account An [OAuthAccount] used to obtain and manage FxA access tokens scoped for Firefox Relay.
  */
 class FxRelay(
-    serverUrl: String,
-    authToken: String? = null,
+    private val account: OAuthAccount,
 ) {
     private val logger = Logger("FxRelay")
-    private val client: RelayClient = RelayClient(serverUrl, authToken)
+
+    /**
+     * Cache for RelayClient so we don't recreate the Rust client on every call.
+     * We tie it to the access token it was built with.
+     */
+    private var cachedClient: RelayClient? = null
+    private var cachedToken: String? = null
 
     /**
      * Defines supported Relay operations for logging and error handling.
@@ -35,6 +39,24 @@ class FxRelay(
         CREATE_ADDRESS,
         ACCEPT_TERMS,
         FETCH_ALL_ADDRESSES,
+        FETCH_PROFILE,
+    }
+
+    /**
+     * Build or reuse a [RelayClient] with a fresh token.
+     * If no token is available, fail fast with an error.
+     *
+     * @throws RelayApiException.Other if no FxA access token is available.
+     */
+    private suspend fun getOrCreateClient(): RelayClient {
+        val token = account.getAccessToken(RELAY_SCOPE_URL)?.token
+            ?: throw RelayApiException.Other("No FxA access token available for Relay")
+
+        return cachedClient.takeIf { cachedToken == token }
+            ?: RelayClient(RELAY_BASE_URL, token).also {
+                cachedClient = it
+                cachedToken = token
+            }
     }
 
     /**
@@ -59,8 +81,7 @@ class FxRelay(
             when (e) {
                 is RelayApiException.Api -> {
                     logger.error(
-                        "Relay API error during $operation " +
-                                "(status=${e.status}, code=${e.code}): ${e.detail}",
+                        "Relay API error during $operation: (status=${e.status}, code=${e.code}): ${e.detail}",
                         e,
                     )
                 }
@@ -82,36 +103,39 @@ class FxRelay(
      */
     suspend fun acceptTerms() = withContext(Dispatchers.IO) {
         handleRelayExceptions(RelayOperation.ACCEPT_TERMS, { false }) {
+            val client = getOrCreateClient()
             client.acceptTerms()
             true
         }
     }
 
     /**
-     * Create a new Relay address.
+     * Fetch all Relay addresses.
      *
-     * @param description description for the address
-     * @param generatedFor where this alias is generated for
-     * @param usedOn where this alias will be used
+     * This returns `null` when the operation failed with a known Relay API error.
      */
-    suspend fun createAddress(
-        description: String,
-        generatedFor: String,
-        usedOn: String,
-    ): RelayAddress? = withContext(Dispatchers.IO) {
-        handleRelayExceptions(RelayOperation.CREATE_ADDRESS, { null }) {
-            client.createAddress(description, generatedFor, usedOn)
+    suspend fun fetchAllAddresses(): List<RelayAddress> = withContext(Dispatchers.IO) {
+        handleRelayExceptions(
+            RelayOperation.FETCH_ALL_ADDRESSES,
+            { emptyList() },
+        ) {
+            val client = getOrCreateClient()
+            client.fetchAddresses().map { it.into() }
         }
     }
 
     /**
-     * Fetch all Relay addresses.
+     * Retrieves the [RelayProfile] for the authenticated user.
+     *
+     * @return The user's [RelayProfile] or `null` if the operation failed.
      */
-    suspend fun fetchAllAddresses(): List<RelayAddress> = withContext(Dispatchers.IO) {
+    suspend fun fetchProfile(): RelayProfile? = withContext(Dispatchers.IO) {
         handleRelayExceptions(
-            RelayOperation.FETCH_ALL_ADDRESSES, { emptyList() },
+            RelayOperation.FETCH_PROFILE,
+            { null },
         ) {
-            client.fetchAddresses()
+            val client = getOrCreateClient()
+            client.fetchProfile()
         }
     }
 }

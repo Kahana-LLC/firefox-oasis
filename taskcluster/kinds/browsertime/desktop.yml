@@ -498,12 +498,6 @@ browsertime-benchmark:
                             macosx1500.*shippable.*: [trunk]
                             .*nightlyasrelease.*: [autoland, mozilla-central]
                             default: []
-                    custom-car:
-                        by-test-platform:
-                            # NOTE: this includes windows -hw-ref machines
-                            linux.*shippable.*: [mozilla-central]
-                            windows.*shippable.*: [mozilla-central]
-                            default: []
                     safari-tp:
                         by-test-platform:
                             macosx1400.*: [mozilla-central]
@@ -524,11 +518,6 @@ browsertime-benchmark:
                         by-test-platform:
                             .*64.*shippable.*/.*: [trunk]
                             .*nightlyasrelease.*: [autoland]
-                            default: []
-                    custom-car:
-                        by-test-platform:
-                            linux.*shippable.*: [mozilla-central]
-                            windows.*-64.*shippable.*: [mozilla-central]
                             default: []
                     default: []
             default:

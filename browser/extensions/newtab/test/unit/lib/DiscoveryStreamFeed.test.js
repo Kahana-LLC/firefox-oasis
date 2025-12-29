@@ -300,6 +300,60 @@ describe("DiscoveryStreamFeed", () => {
         DUMMY_ENDPOINT
       );
     });
+
+    it("should cast headers from a Headers object to JS object when using OHTTP", async () => {
+      sandbox
+        .stub(global.Services.prefs, "getStringPref")
+        .withArgs(
+          "browser.newtabpage.activity-stream.discoverystream.ohttp.relayURL"
+        )
+        .returns("https://relay.url")
+        .withArgs(
+          "browser.newtabpage.activity-stream.discoverystream.ohttp.configURL"
+        )
+        .returns("https://config.url");
+
+      const fakeOhttpConfig = { config: "config" };
+      sandbox
+        .stub(global.ObliviousHTTP, "getOHTTPConfig")
+        .resolves(fakeOhttpConfig);
+
+      const ohttpResponse = {
+        json: () => Promise.resolve("ohttp response"),
+        ok: true,
+      };
+      const ohttpRequestStub = sandbox
+        .stub(global.ObliviousHTTP, "ohttpRequest")
+        .resolves(ohttpResponse);
+
+      // Allow the endpoint
+      feed.store.getState = () => ({
+        Prefs: {
+          values: {
+            [ENDPOINTS_PREF_NAME]: DUMMY_ENDPOINT,
+          },
+        },
+      });
+
+      const headers = new Headers();
+      headers.set("headername", "headervalue");
+
+      const result = await feed.fetchFromEndpoint(
+        DUMMY_ENDPOINT,
+        { headers },
+        true
+      );
+
+      assert.equal(result, "ohttp response");
+      assert.calledOnce(ohttpRequestStub);
+      assert.calledWithMatch(
+        ohttpRequestStub,
+        "https://relay.url",
+        fakeOhttpConfig,
+        DUMMY_ENDPOINT,
+        { headers: Object.fromEntries(headers), credentials: "omit" }
+      );
+    });
   });
 
   describe("#getOrCreateImpressionId", () => {
@@ -968,10 +1022,11 @@ describe("DiscoveryStreamFeed", () => {
     it("should fetch MARS pre flight info", async () => {
       sandbox
         .stub(feed, "fetchFromEndpoint")
-        .withArgs("unifiedAdEndpoint/v1/o", { method: "GET" })
+        .withArgs("unifiedAdEndpoint/v1/ads-preflight", { method: "GET" })
         .resolves({
           normalized_ua: "normalized_ua",
           geoname_id: "geoname_id",
+          geo_location: "geo_location",
         });
 
       feed.store = createStore(combineReducers(reducers), {
@@ -982,9 +1037,7 @@ describe("DiscoveryStreamFeed", () => {
             "unifiedAds.spocs.enabled": true,
             "discoverystream.placements.spocs": "newtab_stories_1",
             "discoverystream.placements.spocs.counts": "1",
-            trainhopConfig: {
-              marsPreFlight: { enabled: true },
-            },
+            "unifiedAds.ohttp.enabled": true,
           },
         },
       });
@@ -993,7 +1046,7 @@ describe("DiscoveryStreamFeed", () => {
 
       assert.equal(
         feed.fetchFromEndpoint.firstCall.args[0],
-        "unifiedAdEndpoint/v1/o"
+        "unifiedAdEndpoint/v1/ads-preflight"
       );
       assert.equal(feed.fetchFromEndpoint.firstCall.args[1].method, "GET");
       assert.equal(
@@ -1007,6 +1060,10 @@ describe("DiscoveryStreamFeed", () => {
       assert.equal(
         feed.fetchFromEndpoint.secondCall.args[1].headers.get("X-Geoname-ID"),
         "geoname_id"
+      );
+      assert.equal(
+        feed.fetchFromEndpoint.secondCall.args[1].headers.get("X-Geo-Location"),
+        "geo_location"
       );
     });
   });

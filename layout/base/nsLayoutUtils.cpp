@@ -10,6 +10,7 @@
 #include <limits>
 
 #include "ActiveLayerTracker.h"
+#include "AnchorPositioningUtils.h"
 #include "DisplayItemClip.h"
 #include "ImageContainer.h"
 #include "ImageOps.h"
@@ -841,7 +842,8 @@ FrameChildListID nsLayoutUtils::GetChildListNameFor(nsIFrame* aChildFrame) {
 static Element* GetPseudo(const nsIContent* aContent, nsAtom* aPseudoProperty) {
   MOZ_ASSERT(aPseudoProperty == nsGkAtoms::beforePseudoProperty ||
              aPseudoProperty == nsGkAtoms::afterPseudoProperty ||
-             aPseudoProperty == nsGkAtoms::markerPseudoProperty);
+             aPseudoProperty == nsGkAtoms::markerPseudoProperty ||
+             aPseudoProperty == nsGkAtoms::backdropPseudoProperty);
   if (!aContent->MayHaveAnonymousChildren()) {
     return nullptr;
   }
@@ -878,6 +880,15 @@ Element* nsLayoutUtils::GetMarkerPseudo(const nsIContent* aContent) {
 /*static*/
 nsIFrame* nsLayoutUtils::GetMarkerFrame(const nsIContent* aContent) {
   Element* pseudo = GetMarkerPseudo(aContent);
+  return pseudo ? pseudo->GetPrimaryFrame() : nullptr;
+}
+
+Element* nsLayoutUtils::GetBackdropPseudo(const nsIContent* aContent) {
+  return GetPseudo(aContent, nsGkAtoms::backdropPseudoProperty);
+}
+
+nsIFrame* nsLayoutUtils::GetBackdropFrame(const nsIContent* aContent) {
+  Element* pseudo = GetBackdropPseudo(aContent);
   return pseudo ? pseudo->GetPrimaryFrame() : nullptr;
 }
 
@@ -1324,6 +1335,10 @@ static nsIFrame* GetNearestScrollableOrOverflowClipFrame(
                : nsLayoutUtils::GetCrossDocParentFrameInProcess(aFrame);
   };
 
+  // This should be kept in sync with
+  // DisplayPortUtils::OneStepInAsyncScrollableAncestorChain,
+  // DisplayPortUtils::OneStepInASRChain, DisplayPortUtils::GetASRAncestorFrame,
+  // and ShouldAsyncScrollWithAnchorNotCached.
   for (nsIFrame* f = aFrame; f; f = GetNextFrame(f)) {
     if (aClipFrameCheck && aClipFrameCheck(f)) {
       return f;
@@ -1362,6 +1377,29 @@ static nsIFrame* GetNearestScrollableOrOverflowClipFrame(
         }
       }
     }
+
+    nsIFrame* anchor = nullptr;
+    // If the current frame also happens to be fixed then we want to check if it
+    // scrolls with its anchor before the special fixed behaviour below because
+    // scrolling with its anchor overrides that behaviour and is higher
+    // priority.
+
+    // This needs to be a while loop because anchors can chain, and we don't
+    // want to consider each frame in this loop separately (as a potential
+    // scrollable ancestor) because they are all equivalent in the scrollable
+    // ancestor chain: they all scroll together. We are not walking up the async
+    // scrollable ancestor chain, but rather we are moving sideways. And when
+    // we exit this loop we want to move up one because we haven't yet ascended
+    // (because of that same reason), and that moving up one will happen either
+    // via the special fixed pos behaviour below or the next iteration of the
+    // outer for loop.
+    if (aFlags & nsLayoutUtils::SCROLLABLE_ONLY_ASYNC_SCROLLABLE) {
+      while ((anchor = AnchorPositioningUtils::GetAnchorThatFrameScrollsWith(
+                  f, /* aBuilder */ nullptr))) {
+        f = anchor;
+      }
+    }
+
     if ((aFlags & nsLayoutUtils::SCROLLABLE_FIXEDPOS_FINDS_ROOT) &&
         f->StyleDisplay()->mPosition == StylePositionProperty::Fixed &&
         nsLayoutUtils::IsReallyFixedPos(f)) {
@@ -1868,6 +1906,11 @@ void nsLayoutUtils::PostTranslate(Matrix4x4& aTransform, const nsPoint& aOrigin,
 }
 
 bool nsLayoutUtils::ShouldSnapToGrid(const nsIFrame* aFrame) {
+  // TODO: Remove this function when this pref is being removed.
+  if (StaticPrefs::layout_disable_pixel_alignment()) {
+    return aFrame && aFrame->IsSVGOuterSVGAnonChildFrame();
+  }
+
   return !aFrame || !aFrame->HasAnyStateBits(NS_FRAME_SVG_LAYOUT) ||
          aFrame->IsSVGOuterSVGAnonChildFrame();
 }
@@ -2596,6 +2639,8 @@ FrameMetrics nsLayoutUtils::CalculateBasicFrameMetrics(
 
 ScrollContainerFrame* nsLayoutUtils::GetAsyncScrollableAncestorFrame(
     nsIFrame* aTarget) {
+  // This should be kept in sync with
+  // DisplayPortUtils::OneStepInAsyncScrollableAncestorChain.
   uint32_t flags = nsLayoutUtils::SCROLLABLE_ALWAYS_MATCH_ROOT |
                    nsLayoutUtils::SCROLLABLE_ONLY_ASYNC_SCROLLABLE |
                    nsLayoutUtils::SCROLLABLE_FIXEDPOS_FINDS_ROOT;
@@ -3889,7 +3934,7 @@ nsIFrame* nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(
 }
 
 nsIFrame* nsLayoutUtils::GetDisplayListParent(nsIFrame* aFrame) {
-  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_FLOAT)) {
+  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW)) {
     return aFrame->GetParent();
   }
   return nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(aFrame);
@@ -5759,7 +5804,8 @@ nscoord nsLayoutUtils::CalculateContentBEnd(WritingMode aWM, nsIFrame* aFrame) {
   // calculation is intended to affect layout.
   LogicalSize overflowSize(aWM, aFrame->ScrollableOverflowRect().Size());
   if (overflowSize.BSize(aWM) > contentBEnd) {
-    FrameChildListIDs skip = {FrameChildListID::Overflow,
+    FrameChildListIDs skip = {FrameChildListID::PushedAbsolute,
+                              FrameChildListID::Overflow,
                               FrameChildListID::ExcessOverflowContainers,
                               FrameChildListID::OverflowOutOfFlow};
     nsBlockFrame* blockFrame = do_QueryFrame(aFrame);
@@ -8680,9 +8726,9 @@ ScrollMetadata nsLayoutUtils::ComputeScrollMetadata(
         }
       }
 
-      metadata.SetIsSoftwareKeyboardVisible(presContext->GetKeyboardHeight() >
-                                            0);
-      metadata.SetInteractiveWidget(
+      metrics.SetIsSoftwareKeyboardVisible(presContext->GetKeyboardHeight() >
+                                           0);
+      metrics.SetInteractiveWidget(
           presContext->Document()->InteractiveWidget());
     }
 
@@ -9269,7 +9315,7 @@ static bool LineHasNonEmptyContent(nsLineBox* aLine) {
 }
 
 /* static */
-bool nsLayoutUtils::IsInvisibleBreak(nsINode* aNode,
+bool nsLayoutUtils::IsInvisibleBreak(const nsINode* aNode,
                                      nsIFrame** aNextLineFrame) {
   if (aNextLineFrame) {
     *aNextLineFrame = nullptr;

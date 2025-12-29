@@ -264,7 +264,7 @@ void Cc["@mozilla.org/widget/transferable;1"].createInstance();
  * This behaviour would cause random failures and slowdown tests execution,
  * for example by running database vacuum or cleanups for each test.
  *
- * @note Idle service is overridden by default.  If a test requires it, it will
+ * Note: Idle service is overridden by default.  If a test requires it, it will
  *       have to call do_get_idle() function at least once before use.
  */
 var _fakeIdleService = {
@@ -627,7 +627,9 @@ function _execute_test() {
 
   let timer;
   if (
-    Services.profiler.IsActive() &&
+    // Services.profiler is missing on some tier3 platforms where
+    // MOZ_GECKO_PROFILER is not set.
+    Services.profiler?.IsActive() &&
     !Services.env.exists("MOZ_PROFILER_SHUTDOWN") &&
     Services.env.exists("MOZ_UPLOAD_DIR") &&
     Services.env.exists("MOZ_TEST_TIMEOUT_INTERVAL")

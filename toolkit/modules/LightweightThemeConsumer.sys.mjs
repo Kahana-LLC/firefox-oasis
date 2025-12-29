@@ -12,6 +12,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ThemeContentPropertyList: "resource:///modules/ThemeVariableMap.sys.mjs",
   ThemeVariableMap: "resource:///modules/ThemeVariableMap.sys.mjs",
   BuiltInThemeConfig: "resource:///modules/BuiltInThemeConfig.sys.mjs",
+  LightweightThemeManager:
+    "resource://gre/modules/LightweightThemeManager.sys.mjs",
 });
 
 // Whether the content and chrome areas should always use the same color
@@ -221,6 +223,7 @@ export function LightweightThemeConsumer(aDocument) {
   this._doc = aDocument;
   this._win = aDocument.defaultView;
   this._winId = this._win.docShell.outerWindowID;
+  this._isAIWindow = this._doc.documentElement.hasAttribute("ai-window");
 
   XPCOMUtils.defineLazyPreferenceGetter(
     this,
@@ -238,10 +241,19 @@ export function LightweightThemeConsumer(aDocument) {
   this.forcedColorsMediaQuery = this._win.matchMedia("(forced-colors)");
   this.forcedColorsMediaQuery.addListener(this);
 
-  const { LightweightThemeManager } = ChromeUtils.importESModule(
-    "resource://gre/modules/LightweightThemeManager.sys.mjs"
-  );
-  this._update(LightweightThemeManager.themeData);
+  const manager = lazy.LightweightThemeManager;
+  const theme =
+    this._isAIWindow && manager.aiThemeData
+      ? manager.aiThemeData
+      : manager.themeData;
+
+  this._update(theme);
+
+  if (this._isAIWindow && !manager.aiThemeData) {
+    manager.promiseAIThemeData().then(() => {
+      this._update(manager.aiThemeData);
+    });
+  }
 
   this._win.addEventListener("unload", this, { once: true });
 }
@@ -259,7 +271,9 @@ LightweightThemeConsumer.prototype = {
       return;
     }
 
-    this._update(data);
+    if (!this._isAIWindow) {
+      this._update(data);
+    }
   },
 
   handleEvent(aEvent) {
@@ -472,13 +486,11 @@ LightweightThemeConsumer.prototype = {
     this._lastExperimentData.usedVariables = usedVariables;
 
     if (experiment.stylesheet) {
-      /* Stylesheet URLs are validated using WebExtension schemas */
-      let stylesheetAttr = `href="${experiment.stylesheet}" type="text/css"`;
-      let stylesheet = this._doc.createProcessingInstruction(
-        "xml-stylesheet",
-        stylesheetAttr
-      );
-      this._doc.insertBefore(stylesheet, root);
+      let stylesheet = this._doc.createElement("link");
+      stylesheet.rel = "stylesheet";
+      // Stylesheet URLs are validated using WebExtension schemas
+      stylesheet.href = experiment.stylesheet;
+      this._doc.head.appendChild(stylesheet);
       this._lastExperimentData.stylesheet = stylesheet;
     }
   },

@@ -74,6 +74,9 @@ class ConnectionEntry : public SupportsWeakPtr {
   void RemoveExtendedCONNECTConns(HttpConnectionBase* conn);
 
   HttpConnectionBase* GetH2orH3ActiveConn();
+  // Find an H2 tunnel connection (nsHttpConnection with UsingSpdy()) in active
+  // connections. This is used for WebSocket/WebTransport through H3 proxy.
+  already_AddRefed<nsHttpConnection> GetH2TunnelActiveConn();
   // Make an active spdy connection DontReuse.
   // TODO: this is a helper function and should nbe improved.
   bool MakeFirstActiveSpdyConnDontReuse();
@@ -115,8 +118,8 @@ class ConnectionEntry : public SupportsWeakPtr {
                                   bool aIsHttp3 = false);
 
   nsresult CreateDnsAndConnectSocket(nsAHttpTransaction* trans, uint32_t caps,
-                                     bool speculative, bool isFromPredictor,
-                                     bool urgentStart, bool allow1918,
+                                     bool speculative, bool urgentStart,
+                                     bool allow1918,
                                      PendingTransactionInfo* pendingTransInfo);
 
   // Spdy sometimes resolves the address in the socket manager in order

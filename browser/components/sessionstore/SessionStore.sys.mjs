@@ -173,6 +173,8 @@ XPCOMUtils.defineLazyServiceGetters(lazy, {
 });
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   DevToolsShim: "chrome://devtools-startup/content/DevToolsShim.sys.mjs",
@@ -2044,6 +2046,10 @@ var SessionStoreInternal = {
       this._windows[aWindow.__SSi].isTaskbarTab = true;
     }
 
+    if (lazy.AIWindow.isAIWindowActiveAndEnabled(aWindow)) {
+      this._windows[aWindow.__SSi].isAIWindow = true;
+    }
+
     let tabbrowser = aWindow.gBrowser;
 
     // add tab change listeners to all already existing tabs
@@ -2142,16 +2148,21 @@ var SessionStoreInternal = {
       // after starting up with a single private or web app window.
       // Let's restore the session we actually wanted to restore at startup.
     } else if (this._deferredInitialState && isRegularWindow) {
-      // global data must be restored before restoreWindow is called so that
-      // it happens before observers are notified
-      this._globalState.setFromState(this._deferredInitialState);
-
-      this._restoreCount = this._deferredInitialState.windows
-        ? this._deferredInitialState.windows.length
-        : 0;
-      this.restoreWindows(aWindow, this._deferredInitialState, {
-        firstWindow: true,
-      });
+      // Only restore the deferred session if SessionStartup indicates we should
+      // restore (e.g., crash recovery or user preference to restore sessions).
+      // This prevents incorrect session restoration when a private window was
+      // opened first followed by a normal window. See Bug 1938752.
+      if (lazy.SessionStartup.willRestore()) {
+        // global data must be restored before restoreWindow is called so that
+        // it happens before observers are notified
+        this._globalState.setFromState(this._deferredInitialState);
+        this._restoreCount = this._deferredInitialState.windows
+          ? this._deferredInitialState.windows.length
+          : 0;
+        this.restoreWindows(aWindow, this._deferredInitialState, {
+          firstWindow: true,
+        });
+      }
       this._deferredInitialState = null;
     } else if (
       this._restoreLastWindow &&
@@ -2255,6 +2266,12 @@ var SessionStoreInternal = {
    *        Window reference
    */
   onBeforeBrowserWindowShown(aWindow) {
+    // Do not track Document Picture-in-Picture windows since these are
+    // ephemeral and tied to a specific tab's browser document.
+    if (aWindow.browsingContext.isDocumentPiP) {
+      return;
+    }
+
     // Register the window.
     this.onLoad(aWindow);
 
@@ -6966,11 +6983,8 @@ var SessionStoreInternal = {
    *        Object containing session data
    */
   _openWindowWithState: function ssi_openWindowWithState(aState) {
-    var argString = Cc["@mozilla.org/supports-string;1"].createInstance(
-      Ci.nsISupportsString
-    );
-    argString.data = "";
-
+    // Build arguments string
+    let argString;
     // Build feature string
     let features;
     let winState = aState.windows[0];
@@ -7013,8 +7027,23 @@ var SessionStoreInternal = {
       }
     });
 
+    // A window CANNOT be both a Private Window and an AI Window
     if (winState.isPrivate) {
       features.push("private");
+    } else if (winState.isAIWindow) {
+      argString = lazy.AIWindow.handleAIWindowOptions({
+        openerWindow: null,
+        args: argString,
+        aiWindow: winState.isAIWindow,
+        restoreSession: true,
+      });
+    }
+
+    if (!argString) {
+      argString = Cc["@mozilla.org/supports-string;1"].createInstance(
+        Ci.nsISupportsString
+      );
+      argString.data = "";
     }
 
     this._log.debug(

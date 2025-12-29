@@ -216,10 +216,8 @@ annotations-default-pdf-handler-headline = Sign on the dotted line — or anywhe
 annotations-default-pdf-handler-body = Draw, type, or upload your signature, then place it exactly where you want. Save your go-to signatures for next time.
 annotations-make-default-pdf-handler-title = Make { -brand-short-name } your default PDF editor?
 annotations-make-default-pdf-handler-subtitle = You’ll have access to our tools every time you open a PDF.
-annotations-make-default-pdf-primary-cta =
-  .label = Set as default
-annotations-make-default-pdf-next =
-  .label = Next
+annotations-make-default-pdf-primary-cta-label = Set as default
+annotations-make-default-pdf-next-label = Next
 
 ## FxA sync CFR
 
@@ -409,3 +407,20 @@ etp-strict-exceptions-infobar-button = Apply fixes
   .accesskey = A
 etp-strict-exceptions-infobar-not-now = Not now
   .accesskey = N
+
+## 'Set to default' messaging displayed within the App menu
+
+set-default-menu-message-simple-layout-title = { -brand-short-name } is not your default browser
+set-default-menu-message-simple-layout-title-variant = { -brand-short-name } is not your primary browser
+
+set-default-menu-message-row-layout-title = Make { -brand-short-name } your primary browser
+set-default-menu-message-row-layout-title-variant = Make { -brand-short-name } your default browser
+
+set-default-menu-message-row-layout-subtitle = Get speed, safety and privacy every time you browse.
+set-default-menu-message-row-layout-subtitle-variant = { PLATFORM() ->
+    [macos] Keep { -brand-short-name } at your fingertips — make it your default and keep it in your Dock.
+   *[other] Keep { -brand-short-name } at your fingertips — make it your default and keep it in your taskbar.
+}
+
+set-default-menu-message-primary-button = Set as default
+set-default-menu-message-primary-button-variant = Set as primary browser

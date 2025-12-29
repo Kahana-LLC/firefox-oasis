@@ -200,9 +200,8 @@ Preferences.addAll([
   { id: "privacy.globalprivacycontrol.enabled", type: "bool" },
 
   // Firefox VPN
-  { id: "browser.ipProtection.variant", type: "string" },
+  { id: "browser.ipProtection.enabled", type: "bool" },
   { id: "browser.ipProtection.features.siteExceptions", type: "bool" },
-  { id: "browser.ipProtection.exceptionsMode", type: "string" },
   { id: "browser.ipProtection.features.autoStart", type: "bool" },
   { id: "browser.ipProtection.autoStartEnabled", type: "bool" },
   { id: "browser.ipProtection.autoStartPrivateEnabled", type: "bool" },
@@ -268,10 +267,6 @@ Preferences.addAll([
 
   // Windows SSO
   { id: "network.http.windows-sso.enabled", type: "bool" },
-
-  // Quick Actions
-  { id: "browser.urlbar.quickactions.showPrefs", type: "bool" },
-  { id: "browser.urlbar.suggest.quickactions", type: "bool" },
 
   // Cookie Banner Handling
   { id: "cookiebanners.ui.desktop.enabled", type: "bool" },
@@ -684,6 +679,12 @@ Preferences.addSetting({
     return () =>
       Services.obs.removeObserver(emitChange, "PasswordsOSAuthEnabledChange");
   },
+});
+
+Preferences.addSetting({
+  id: "allowWindowSSO",
+  pref: "network.http.windows-sso.enabled",
+  visible: () => AppConstants.platform === "win",
 });
 
 Preferences.addSetting({
@@ -1412,17 +1413,14 @@ Preferences.addSetting({
 
 Preferences.addSetting({
   id: "ipProtectionVisible",
-  pref: "browser.ipProtection.variant",
-  get: prefVal => prefVal == "beta",
+  pref: "browser.ipProtection.enabled",
 });
 Preferences.addSetting({
   id: "ipProtectionSiteExceptionsFeatureEnabled",
   pref: "browser.ipProtection.features.siteExceptions",
 });
-// This setting also affects the radio group for site exceptions
 Preferences.addSetting({
-  id: "ipProtectionExceptionsMode",
-  pref: "browser.ipProtection.exceptionsMode",
+  id: "ipProtectionExceptions",
   deps: ["ipProtectionVisible", "ipProtectionSiteExceptionsFeatureEnabled"],
   visible: ({
     ipProtectionVisible,
@@ -1430,39 +1428,22 @@ Preferences.addSetting({
   }) =>
     ipProtectionVisible.value && ipProtectionSiteExceptionsFeatureEnabled.value,
 });
+
 Preferences.addSetting({
   id: "ipProtectionExceptionAllListButton",
-  deps: ["ipProtectionVisible", "ipProtectionExceptionsMode"],
-  visible: ({ ipProtectionVisible, ipProtectionExceptionsMode }) =>
-    ipProtectionVisible.value && ipProtectionExceptionsMode.value == "all",
+  deps: ["ipProtectionVisible", "ipProtectionSiteExceptionsFeatureEnabled"],
+  visible: ({
+    ipProtectionVisible,
+    ipProtectionSiteExceptionsFeatureEnabled,
+  }) =>
+    ipProtectionVisible.value && ipProtectionSiteExceptionsFeatureEnabled.value,
   onUserClick() {
     let params = {
-      blockVisible: true,
+      addVisible: true,
       hideStatusColumn: true,
       prefilledHost: "",
       permissionType: "ipp-vpn",
       capabilityFilter: Ci.nsIPermissionManager.DENY_ACTION,
-    };
-
-    gSubDialog.open(
-      "chrome://browser/content/preferences/dialogs/permissions.xhtml",
-      { features: "resizable=yes" },
-      params
-    );
-  },
-});
-Preferences.addSetting({
-  id: "ipProtectionExceptionSelectListButton",
-  deps: ["ipProtectionVisible", "ipProtectionExceptionsMode"],
-  visible: ({ ipProtectionVisible, ipProtectionExceptionsMode }) =>
-    ipProtectionVisible.value && ipProtectionExceptionsMode.value == "select",
-  onUserClick() {
-    let params = {
-      allowVisible: true,
-      hideStatusColumn: true,
-      prefilledHost: "",
-      permissionType: "ipp-vpn",
-      capabilityFilter: Ci.nsIPermissionManager.ALLOW_ACTION,
     };
 
     gSubDialog.open(
@@ -2145,11 +2126,11 @@ Preferences.addSetting({
   getControlConfig(config, { privateBrowsingAutoStart }, setting) {
     let l10nId = null;
     if (setting.value == "remember") {
-      l10nId = "history-remember-description2";
+      l10nId = "history-remember-description3";
     } else if (setting.value == "dontremember") {
-      l10nId = "history-dontremember-description2";
+      l10nId = "history-dontremember-description3";
     } else if (setting.value == "custom") {
-      l10nId = "history-custom-description";
+      l10nId = "history-custom-description3";
     }
 
     let dontRememberOption = config.options.find(
@@ -2801,6 +2782,400 @@ Preferences.addSetting({
   },
 });
 
+function shouldDisableETPCategoryControls() {
+  let policy = Services.policies.getActivePolicies();
+  return policy?.EnableTrackingProtection?.Locked || policy?.Cookies?.Locked;
+}
+
+Preferences.addSetting({
+  id: "contentBlockingCategory",
+  pref: "browser.contentblocking.category",
+});
+
+// We need a separate setting for the radio group for custom disable behavior.
+// Setter and getter simply write to the pref.
+Preferences.addSetting({
+  id: "contentBlockingCategoryRadioGroup",
+  deps: ["contentBlockingCategory"],
+  get(_, { contentBlockingCategory }) {
+    return contentBlockingCategory.value;
+  },
+  set(value, { contentBlockingCategory }) {
+    contentBlockingCategory.value = value;
+  },
+  getControlConfig(config, _, setting) {
+    if (!shouldDisableETPCategoryControls()) {
+      return config;
+    }
+
+    let { options } = config;
+
+    // If ETP level is set to custom keep the radio button enabled so the "customize" button works even when the category selection itself is locked.
+    for (let option of options) {
+      option.disabled =
+        option.id != "etpLevelCustom" || setting.value != "custom";
+    }
+
+    return config;
+  },
+});
+
+Preferences.addSetting({
+  id: "etpStatusBoxGroup",
+});
+
+Preferences.addSetting({
+  id: "etpStatusItem",
+  deps: ["contentBlockingCategory"],
+  getControlConfig(config, { contentBlockingCategory }) {
+    // Display a different description and label depending on the content blocking category (= ETP level).
+    let categoryToL10nId = {
+      standard: "preferences-etp-level-standard",
+      strict: "preferences-etp-level-strict",
+      custom: "preferences-etp-level-custom",
+    };
+
+    return {
+      ...config,
+      l10nId:
+        categoryToL10nId[contentBlockingCategory.value] ??
+        "preferences-etp-level-standard",
+    };
+  },
+});
+
+Preferences.addSetting({
+  id: "etpStatusAdvancedButton",
+  onUserClick(e) {
+    e.preventDefault();
+    gotoPref("etp");
+  },
+});
+
+Preferences.addSetting({
+  id: "protectionsDashboardLink",
+});
+
+Preferences.addSetting({
+  id: "etpBannerEl",
+});
+
+Preferences.addSetting({
+  id: "etpAllowListBaselineEnabled",
+  pref: "privacy.trackingprotection.allow_list.baseline.enabled",
+  deps: ["contentBlockingCategory"],
+  visible({ contentBlockingCategory }) {
+    return contentBlockingCategory.value == "strict";
+  },
+  onUserChange(value, _deps, setting) {
+    gPrivacyPane.onBaselineAllowListSettingChange(value, setting);
+  },
+});
+
+Preferences.addSetting({
+  id: "etpAllowListConvenienceEnabled",
+  pref: "privacy.trackingprotection.allow_list.convenience.enabled",
+  onUserChange() {
+    gPrivacyPane.maybeNotifyUserToReload();
+  },
+});
+
+Preferences.addSetting({
+  id: "etpCustomizeButton",
+  onUserClick(e) {
+    e.preventDefault();
+    gotoPref("etpCustomize");
+  },
+});
+
+Preferences.addSetting({
+  id: "reloadTabsHint",
+  _showHint: false,
+  set(value, _, setting) {
+    this._showHint = value;
+    setting.emit("change");
+  },
+  get() {
+    return this._showHint;
+  },
+  visible(_, setting) {
+    return setting.value;
+  },
+  onUserClick() {
+    gPrivacyPane.reloadAllOtherTabs();
+  },
+});
+
+Preferences.addSetting({
+  id: "resistFingerprinting",
+  pref: "privacy.resistFingerprinting",
+});
+
+Preferences.addSetting({
+  id: "resistFingerprintingPBM",
+  pref: "privacy.resistFingerprinting.pbmode",
+});
+
+Preferences.addSetting({
+  id: "rfpWarning",
+  deps: ["resistFingerprinting", "resistFingerprintingPBM"],
+  visible({ resistFingerprinting, resistFingerprintingPBM }) {
+    return resistFingerprinting.value || resistFingerprintingPBM.value;
+  },
+});
+
+Preferences.addSetting({
+  id: "etpLevelWarning",
+  deps: ["contentBlockingCategory"],
+  visible({ contentBlockingCategory }) {
+    return contentBlockingCategory.value != "standard";
+  },
+});
+
+Preferences.addSetting({
+  id: "etpManageExceptionsButton",
+  onUserClick() {
+    let params = {
+      permissionType: "trackingprotection",
+      disableETPVisible: true,
+      prefilledHost: "",
+      hideStatusColumn: true,
+    };
+    gSubDialog.open(
+      "chrome://browser/content/preferences/dialogs/permissions.xhtml",
+      undefined,
+      params
+    );
+  },
+});
+
+Preferences.addSetting({
+  id: "etpResetButtonGroup",
+});
+
+Preferences.addSetting({
+  id: "etpResetStandardButton",
+  deps: ["contentBlockingCategory"],
+  onUserClick(_, { contentBlockingCategory }) {
+    contentBlockingCategory.value = "standard";
+  },
+  disabled({ contentBlockingCategory }) {
+    return (
+      contentBlockingCategory.value == "standard" ||
+      shouldDisableETPCategoryControls()
+    );
+  },
+});
+
+Preferences.addSetting({
+  id: "etpResetStrictButton",
+  deps: ["contentBlockingCategory"],
+  onUserClick(_, { contentBlockingCategory }) {
+    contentBlockingCategory.value = "strict";
+  },
+  disabled({ contentBlockingCategory }) {
+    return (
+      contentBlockingCategory.value == "strict" ||
+      shouldDisableETPCategoryControls()
+    );
+  },
+});
+
+Preferences.addSetting({
+  id: "etpAllowListBaselineEnabledCustom",
+  pref: "privacy.trackingprotection.allow_list.baseline.enabled",
+  onUserChange(value, _deps, setting) {
+    gPrivacyPane.onBaselineAllowListSettingChange(value, setting);
+  },
+});
+
+Preferences.addSetting({
+  id: "etpAllowListConvenienceEnabledCustom",
+  pref: "privacy.trackingprotection.allow_list.convenience.enabled",
+  onUserChange() {
+    gPrivacyPane.maybeNotifyUserToReload();
+  },
+});
+
+Preferences.addSetting({
+  id: "etpCustomCookiesEnabled",
+  deps: ["cookieBehavior"],
+  disabled: ({ cookieBehavior }) => {
+    return cookieBehavior.locked;
+  },
+  get(_, { cookieBehavior }) {
+    return cookieBehavior.value != Ci.nsICookieService.BEHAVIOR_ACCEPT;
+  },
+  set(value, { cookieBehavior }) {
+    if (!value) {
+      cookieBehavior.value = Ci.nsICookieService.BEHAVIOR_ACCEPT;
+    } else {
+      // When the user enabled cookie blocking, set the cookie behavior to the default.
+      cookieBehavior.value = cookieBehavior.pref.defaultValue;
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "trackingProtectionEnabled",
+  pref: "privacy.trackingprotection.enabled",
+});
+
+Preferences.addSetting({
+  id: "trackingProtectionEnabledPBM",
+  pref: "privacy.trackingprotection.pbmode.enabled",
+});
+
+Preferences.addSetting({
+  id: "etpCustomTrackingProtectionEnabledContext",
+  deps: ["trackingProtectionEnabled", "trackingProtectionEnabledPBM"],
+  get(_, { trackingProtectionEnabled, trackingProtectionEnabledPBM }) {
+    if (trackingProtectionEnabled.value && trackingProtectionEnabledPBM.value) {
+      return "all";
+    } else if (trackingProtectionEnabledPBM) {
+      return "pbmOnly";
+    }
+    return null;
+  },
+  set(value, { trackingProtectionEnabled, trackingProtectionEnabledPBM }) {
+    if (value == "all") {
+      trackingProtectionEnabled.value = true;
+      trackingProtectionEnabledPBM.value = true;
+    } else if (value == "pbmOnly") {
+      trackingProtectionEnabled.value = false;
+      trackingProtectionEnabledPBM.value = true;
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "etpCustomTrackingProtectionEnabled",
+  deps: ["trackingProtectionEnabled", "trackingProtectionEnabledPBM"],
+  disabled: ({ trackingProtectionEnabled, trackingProtectionEnabledPBM }) => {
+    return (
+      trackingProtectionEnabled.locked || trackingProtectionEnabledPBM.locked
+    );
+  },
+  get(_, { trackingProtectionEnabled, trackingProtectionEnabledPBM }) {
+    return (
+      trackingProtectionEnabled.value || trackingProtectionEnabledPBM.value
+    );
+  },
+  set(value, { trackingProtectionEnabled, trackingProtectionEnabledPBM }) {
+    if (value) {
+      trackingProtectionEnabled.value = false;
+      trackingProtectionEnabledPBM.value = true;
+    } else {
+      trackingProtectionEnabled.value = false;
+      trackingProtectionEnabledPBM.value = false;
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "etpCustomCryptominingProtectionEnabled",
+  pref: "privacy.trackingprotection.cryptomining.enabled",
+});
+
+Preferences.addSetting({
+  id: "etpCustomKnownFingerprintingProtectionEnabled",
+  pref: "privacy.trackingprotection.fingerprinting.enabled",
+});
+
+Preferences.addSetting({
+  id: "etpCustomFingerprintingProtectionEnabled",
+  pref: "privacy.fingerprintingProtection",
+});
+
+Preferences.addSetting({
+  id: "etpCustomFingerprintingProtectionEnabledPBM",
+  pref: "privacy.fingerprintingProtection.pbmode",
+});
+
+Preferences.addSetting({
+  id: "etpCustomSuspectFingerprintingProtectionEnabled",
+  deps: [
+    "etpCustomFingerprintingProtectionEnabled",
+    "etpCustomFingerprintingProtectionEnabledPBM",
+  ],
+  disabled({
+    etpCustomFingerprintingProtectionEnabled,
+    etpCustomFingerprintingProtectionEnabledPBM,
+  }) {
+    return (
+      etpCustomFingerprintingProtectionEnabled.locked ||
+      etpCustomFingerprintingProtectionEnabledPBM.locked
+    );
+  },
+  get(
+    _,
+    {
+      etpCustomFingerprintingProtectionEnabled,
+      etpCustomFingerprintingProtectionEnabledPBM,
+    }
+  ) {
+    return (
+      etpCustomFingerprintingProtectionEnabled.value ||
+      etpCustomFingerprintingProtectionEnabledPBM.value
+    );
+  },
+  set(
+    value,
+    {
+      etpCustomFingerprintingProtectionEnabled,
+      etpCustomFingerprintingProtectionEnabledPBM,
+    }
+  ) {
+    if (value) {
+      etpCustomFingerprintingProtectionEnabled.value = false;
+      etpCustomFingerprintingProtectionEnabledPBM.value = true;
+    } else {
+      etpCustomFingerprintingProtectionEnabled.value = false;
+      etpCustomFingerprintingProtectionEnabledPBM.value = false;
+    }
+  },
+});
+
+Preferences.addSetting({
+  id: "etpCustomSuspectFingerprintingProtectionEnabledContext",
+  deps: [
+    "etpCustomFingerprintingProtectionEnabled",
+    "etpCustomFingerprintingProtectionEnabledPBM",
+  ],
+  get(
+    _,
+    {
+      etpCustomFingerprintingProtectionEnabled,
+      etpCustomFingerprintingProtectionEnabledPBM,
+    }
+  ) {
+    if (
+      etpCustomFingerprintingProtectionEnabled.value &&
+      etpCustomFingerprintingProtectionEnabledPBM.value
+    ) {
+      return "all";
+    } else if (etpCustomFingerprintingProtectionEnabledPBM) {
+      return "pbmOnly";
+    }
+    return null;
+  },
+  set(
+    value,
+    {
+      etpCustomFingerprintingProtectionEnabled,
+      etpCustomFingerprintingProtectionEnabledPBM,
+    }
+  ) {
+    if (value == "all") {
+      etpCustomFingerprintingProtectionEnabled.value = true;
+      etpCustomFingerprintingProtectionEnabledPBM.value = true;
+    } else if (value == "pbmOnly") {
+      etpCustomFingerprintingProtectionEnabled.value = false;
+      etpCustomFingerprintingProtectionEnabledPBM.value = true;
+    }
+  },
+});
+
 function setEventListener(aId, aEventType, aCallback) {
   document
     .getElementById(aId)
@@ -2919,13 +3294,7 @@ var gPrivacyPane = {
       Services.obs.notifyObservers(window, "privacy-pane-tp-ui-updated");
     }
 
-    let policy = Services.policies.getActivePolicies();
-    if (
-      policy &&
-      ((policy.EnableTrackingProtection &&
-        policy.EnableTrackingProtection.Locked) ||
-        (policy.Cookies && policy.Cookies.Locked))
-    ) {
+    if (shouldDisableETPCategoryControls()) {
       setInputsDisabledState(true);
     }
     if (tPPrefisLocked) {
@@ -3362,6 +3731,11 @@ var gPrivacyPane = {
     initSettingGroup("permissions");
     initSettingGroup("dnsOverHttps");
     initSettingGroup("dnsOverHttpsAdvanced");
+    initSettingGroup("etpStatus");
+    initSettingGroup("etpBanner");
+    initSettingGroup("etpAdvanced");
+    initSettingGroup("etpReset");
+    initSettingGroup("etpCustomize");
 
     /* Initialize Content Blocking */
     this.initContentBlocking();
@@ -4353,6 +4727,8 @@ var gPrivacyPane = {
     for (let notification of document.querySelectorAll(".reload-tabs")) {
       notification.hidden = true;
     }
+
+    Preferences.getSetting("reloadTabsHint").value = false;
   },
 
   /**
@@ -4374,6 +4750,8 @@ var gPrivacyPane = {
         notification.hidden = false;
       }
     }
+
+    Preferences.getSetting("reloadTabsHint").value = true;
   },
 
   /**
@@ -5204,6 +5582,38 @@ var gPrivacyPane = {
       return;
     }
 
+    const confirmed = await this._confirmBaselineAllowListDisable();
+
+    if (confirmed) {
+      // User confirmed, set the checkbox to false.
+      event.target.checked = false;
+      this.maybeNotifyUserToReload();
+    } else {
+      // User cancelled, set the checkbox and the baseline pref to true.
+      event.target.checked = true;
+      Services.prefs.setBoolPref(
+        "privacy.trackingprotection.allow_list.baseline.enabled",
+        true
+      );
+    }
+  },
+
+  async onBaselineAllowListSettingChange(value, setting) {
+    if (value) {
+      this.maybeNotifyUserToReload();
+      return;
+    }
+
+    const confirmed = await this._confirmBaselineAllowListDisable();
+    if (confirmed) {
+      this.maybeNotifyUserToReload();
+      return;
+    }
+
+    setting.value = true;
+  },
+
+  async _confirmBaselineAllowListDisable() {
     let [title, body, okButtonText, cancelButtonText] =
       await document.l10n.formatValues([
         { id: "content-blocking-baseline-uncheck-warning-dialog-title" },
@@ -5236,18 +5646,6 @@ var gPrivacyPane = {
     );
 
     const propertyBag = result.QueryInterface(Ci.nsIPropertyBag2);
-
-    if (propertyBag.get("buttonNumClicked") == 1) {
-      // User confirmed, set the checkbox to false.
-      event.target.checked = false;
-      this.maybeNotifyUserToReload();
-    } else {
-      // User cancelled, set the checkbox and the baseline pref to true.
-      event.target.checked = true;
-      Services.prefs.setBoolPref(
-        "privacy.trackingprotection.allow_list.baseline.enabled",
-        true
-      );
-    }
+    return propertyBag.get("buttonNumClicked") == 1;
   },
 };

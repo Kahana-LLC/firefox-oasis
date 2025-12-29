@@ -14,6 +14,8 @@ use super::{
 };
 use crate::context::QuirksMode;
 use crate::custom_properties;
+use crate::derives::*;
+use crate::dom::DummyAttributeProvider;
 use crate::error_reporting::{ContextualParseError, ParseErrorReporter};
 use crate::parser::ParserContext;
 use crate::properties::{
@@ -360,6 +362,8 @@ impl<'a, 'cx, 'cx_a: 'cx> Iterator for AnimationValueIterator<'a, 'cx, 'cx_a> {
                 &mut self.context,
                 self.style,
                 self.default_values,
+                // TODO (descalante): should be able to get an attr from an animated element
+                &DummyAttributeProvider {},
             );
 
             if let Some(anim) = animation {
@@ -1011,6 +1015,7 @@ impl PropertyDeclarationBlock {
                     stylist,
                     &context,
                     &mut Default::default(),
+                    &DummyAttributeProvider {},
                 )
                 .to_css(dest),
             (ref d, _) => d.to_css(dest),

@@ -35,6 +35,7 @@ import androidx.core.text.HtmlCompat
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
@@ -106,11 +107,10 @@ import mozilla.components.feature.prompts.identitycredential.DialogColors
 import mozilla.components.feature.prompts.identitycredential.DialogColorsProvider
 import mozilla.components.feature.prompts.login.LoginDelegate
 import mozilla.components.feature.prompts.login.LoginSelectBar
-import mozilla.components.feature.prompts.login.PasswordGeneratorDialogColors
-import mozilla.components.feature.prompts.login.PasswordGeneratorDialogColorsProvider
 import mozilla.components.feature.prompts.login.SuggestStrongPasswordBar
 import mozilla.components.feature.prompts.login.SuggestStrongPasswordDelegate
 import mozilla.components.feature.prompts.share.ShareDelegate
+import mozilla.components.feature.pwa.feature.WebAppHideToolbarFeature
 import mozilla.components.feature.readerview.ReaderViewFeature
 import mozilla.components.feature.search.SearchFeature
 import mozilla.components.feature.session.FullScreenFeature
@@ -190,6 +190,7 @@ import org.mozilla.fenix.components.toolbar.FenixBrowserToolbarView
 import org.mozilla.fenix.components.toolbar.ToolbarContainerView
 import org.mozilla.fenix.components.toolbar.ToolbarIntegration
 import org.mozilla.fenix.components.toolbar.ToolbarPosition
+import org.mozilla.fenix.components.toolbar.ToolbarsIntegration
 import org.mozilla.fenix.components.toolbar.interactor.BrowserToolbarInteractor
 import org.mozilla.fenix.components.toolbar.interactor.DefaultBrowserToolbarInteractor
 import org.mozilla.fenix.compose.core.Action
@@ -232,7 +233,7 @@ import org.mozilla.fenix.perf.MarkersFragmentLifecycleCallbacks
 import org.mozilla.fenix.search.awesomebar.AwesomeBarComposable
 import org.mozilla.fenix.settings.SupportUtils
 import org.mozilla.fenix.settings.biometric.BiometricPromptFeature
-import org.mozilla.fenix.settings.deletebrowsingdata.deleteAndQuit
+import org.mozilla.fenix.settings.deletebrowsingdata.DefaultDeleteBrowsingDataController
 import org.mozilla.fenix.snackbar.FenixSnackbarDelegate
 import org.mozilla.fenix.snackbar.SnackbarBinding
 import org.mozilla.fenix.tabstray.Page
@@ -327,9 +328,12 @@ abstract class BaseBrowserFragment :
     @VisibleForTesting
     internal val findInPageIntegration = ViewBoundFeatureWrapper<FindInPageIntegration>()
     private val toolbarIntegration = ViewBoundFeatureWrapper<ToolbarIntegration>()
+    private val toolbarsIntegration = ViewBoundFeatureWrapper<ToolbarsIntegration>()
     private val bottomToolbarContainerIntegration = ViewBoundFeatureWrapper<BottomToolbarContainerIntegration>()
     private val sitePermissionsFeature = ViewBoundFeatureWrapper<SitePermissionsFeature>()
     private val fullScreenFeature = ViewBoundFeatureWrapper<FullScreenFeature>()
+    protected val hideToolbarFeature = ViewBoundFeatureWrapper<WebAppHideToolbarFeature>()
+
     private val swipeRefreshFeature = ViewBoundFeatureWrapper<SwipeRefreshFeature>()
     private val webchannelIntegration = ViewBoundFeatureWrapper<FxaWebChannelIntegration>()
     private val sitePermissionWifiIntegration =
@@ -579,6 +583,25 @@ abstract class BaseBrowserFragment :
         _findInPageLauncher = {
             launchFindInPageFeature(view, store)
         }
+
+        val deleteBrowsingDataController = DefaultDeleteBrowsingDataController(
+            deleteDataUseCases = DefaultDeleteBrowsingDataController.DeleteDataUseCases(
+                removeAllTabs = activity.components.useCases.tabsUseCases.removeAllTabs,
+                removeAllDownloads = activity.components.useCases.downloadUseCases.removeAllDownloads,
+            ),
+            dataStorage = DefaultDeleteBrowsingDataController.DataStorage(
+                history = activity.components.core.historyStorage,
+                permissions = activity.components.core.permissionStorage,
+            ),
+            stores = DefaultDeleteBrowsingDataController.Stores(
+                appStore = activity.components.appStore,
+                browserStore = activity.components.core.store,
+            ),
+            engine = activity.components.core.engine,
+            settings = activity.components.settings,
+            coroutineContext = activity.lifecycleScope.coroutineContext,
+        )
+
         _browserToolbarMenuController = DefaultBrowserToolbarMenuController(
             fragment = this,
             store = store,
@@ -601,8 +624,12 @@ abstract class BaseBrowserFragment :
             tabCollectionStorage = requireComponents.core.tabCollectionStorage,
             topSitesStorage = requireComponents.core.topSitesStorage,
             pinnedSiteStorage = requireComponents.core.pinnedSiteStorage,
-            deleteAndQuit = { activity: HomeActivity ->
-                deleteAndQuit(activity, activity.lifecycleScope)
+            deleteAndQuit = { activity: FragmentActivity ->
+                lifecycleScope.launch {
+                    deleteBrowsingDataController.clearBrowsingDataOnQuit {
+                        activity.finishAndRemoveTask()
+                    }
+                }
             },
         )
 
@@ -620,6 +647,28 @@ abstract class BaseBrowserFragment :
         (browserToolbarView as? BrowserToolbarView)?.toolbarIntegration?.let {
             toolbarIntegration.set(
                 feature = it,
+                owner = this,
+                view = view,
+            )
+        }
+
+        if (context.settings().shouldUseComposableToolbar) {
+            toolbarsIntegration.set(
+                feature = ToolbarsIntegration(
+                    fullScreenFeature = { fullScreenFeature.get() },
+                    webAppHideToolbarFeature = { hideToolbarFeature.get() },
+                    settings = context.settings(),
+                    browserLayout = getSwipeRefreshLayout(),
+                    engineView = getEngineView(),
+                    toolbar = browserToolbarView,
+                    navbar = browserNavigationBar,
+                    topToolbarHeight = {
+                        getTopToolbarHeight(
+                            includeTabStripIfAvailable = customTabSessionId == null,
+                        )
+                    },
+                    onToolbarsReset = ::collapseBrowserView,
+                ),
                 owner = this,
                 view = view,
             )
@@ -656,6 +705,7 @@ abstract class BaseBrowserFragment :
             view = view,
         )
 
+        // Site info telemetry for legacy toolbar
         (browserToolbarView as? BrowserToolbarView)?.toolbar?.display?.setOnSiteInfoClickedListener {
             showQuickSettingsDialog()
             Toolbar.buttonTapped.record(
@@ -930,18 +980,6 @@ abstract class BaseBrowserFragment :
             },
         )
 
-        val passwordGeneratorColorsProvider = PasswordGeneratorDialogColorsProvider {
-            PasswordGeneratorDialogColors(
-                title = ThemeManager.resolveAttributeColor(attribute = R.attr.textPrimary),
-                description = ThemeManager.resolveAttributeColor(attribute = R.attr.textSecondary),
-                background = ThemeManager.resolveAttributeColor(attribute = materialR.attr.colorSurface),
-                cancelText = ThemeManager.resolveAttributeColor(attribute = R.attr.textAccent),
-                confirmButton = ThemeManager.resolveAttributeColor(attribute = R.attr.actionPrimary),
-                passwordBox = ThemeManager.resolveAttributeColor(attribute = R.attr.layer2),
-                boxBorder = ThemeManager.resolveAttributeColor(attribute = R.attr.textDisabled),
-            )
-        }
-
         val bottomToolbarHeight = getBottomToolbarHeight(
             includeNavBarIfEnabled = customTabSessionId == null,
         )
@@ -1124,7 +1162,6 @@ abstract class BaseBrowserFragment :
                         password = password,
                     )
                 },
-                passwordGeneratorColorsProvider = passwordGeneratorColorsProvider,
                 hideUpdateFragmentAfterSavingGeneratedPassword = { username, password ->
                     hideUpdateFragmentAfterSavingGeneratedPassword(
                         username,
@@ -1257,6 +1294,7 @@ abstract class BaseBrowserFragment :
                         it,
                     )
                 },
+                shouldShowDoNotAskAgainCheckBox = context.components.appStore.state.mode != BrowsingMode.Private,
                 store = store,
             ),
             owner = this,
@@ -1335,8 +1373,10 @@ abstract class BaseBrowserFragment :
         binding.swipeRefresh.isEnabled = shouldPullToRefreshBeEnabled(false)
 
         if (binding.swipeRefresh.isEnabled) {
-            val primaryTextColor = ThemeManager.resolveAttribute(R.attr.textPrimary, context)
-            val primaryBackgroundColor = ThemeManager.resolveAttribute(R.attr.layer2, context)
+            val primaryTextColor =
+                ThemeManager.resolveAttribute(materialR.attr.colorOnSurface, context)
+            val primaryBackgroundColor =
+                ThemeManager.resolveAttribute(materialR.attr.colorSurfaceContainerLowest, context)
             binding.swipeRefresh.apply {
                 setColorSchemeResources(primaryTextColor)
                 setProgressBackgroundColorSchemeResource(primaryBackgroundColor)
@@ -1625,7 +1665,8 @@ abstract class BaseBrowserFragment :
                 state.findCustomTabOrSelectedTab(customTabSessionId)
             }
                 .ifAnyChanged { tab ->
-                    arrayOf(tab.content.url, tab.content.loadRequest)
+                    val urlWithoutFragment = tab.content.url.substringBefore("#")
+                    arrayOf(urlWithoutFragment, tab.content.loadRequest)
                 }
                 .collect {
                     findInPageIntegration.onBackPressed()
@@ -2483,7 +2524,7 @@ abstract class BaseBrowserFragment :
         private const val LAST_SAVED_GENERATED_PASSWORD = "last_saved_generated_password"
 
         val onboardingLinksList: List<String> = listOf(
-            SupportUtils.getMozillaPageUrl(SupportUtils.MozillaPage.PRIVATE_NOTICE),
+            SupportUtils.getMozillaPageUrl(SupportUtils.MozillaPage.PRIVACY_NOTICE),
             SupportUtils.FXACCOUNT_SUMO_URL,
         )
     }

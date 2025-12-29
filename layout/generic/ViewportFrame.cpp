@@ -24,8 +24,6 @@
 #include "nsLayoutUtils.h"
 #include "nsPlaceholderFrame.h"
 #include "nsSubDocumentFrame.h"
-#include "nsView.h"
-#include "nsViewManager.h"
 
 using namespace mozilla;
 
@@ -261,15 +259,8 @@ nsDisplayWrapList* ViewportFrame::BuildDisplayListForContentTopLayer(
                  "layer");
       continue;
     }
-    if (nsIFrame* backdropPh =
-            frame->GetChildList(FrameChildListID::Backdrop).FirstChild()) {
-      MOZ_ASSERT(!backdropPh->GetNextSibling(), "more than one ::backdrop?");
-      MOZ_ASSERT(backdropPh->HasAnyStateBits(NS_FRAME_FIRST_REFLOW),
-                 "did you intend to reflow ::backdrop placeholders?");
-      nsIFrame* backdropFrame =
-          nsPlaceholderFrame::GetRealFrameForPlaceholder(backdropPh);
+    if (auto* backdropFrame = nsLayoutUtils::GetBackdropFrame(elem)) {
       BuildDisplayListForTopLayerFrame(aBuilder, backdropFrame, &topLayerList);
-
       if (aIsOpaque) {
         *aIsOpaque = BackdropListIsOpaque(this, aBuilder, &topLayerList);
       }
@@ -338,11 +329,6 @@ void ViewportFrame::RemoveFrame(DestroyContext& aContext, ChildListID aListID,
   nsContainerFrame::RemoveFrame(aContext, aListID, aOldFrame);
 }
 #endif
-
-void ViewportFrame::SetView(nsView* aView) {
-  MOZ_ASSERT(!mView, "Should not swap views");
-  mView = aView;
-}
 
 void ViewportFrame::Destroy(DestroyContext& aContext) {
   if (PresShell()->IsDestroying()) {
@@ -501,10 +487,6 @@ void ViewportFrame::Reflow(nsPresContext* aPresContext,
   // Clipping is handled by the document container (e.g., nsSubDocumentFrame),
   // so we don't need to change our overflow areas.
   FinishAndStoreOverflow(&aDesiredSize);
-
-  if (mView) {
-    mView->GetViewManager()->ResizeView(mView, aDesiredSize.PhysicalSize());
-  }
 
   NS_FRAME_TRACE_REFLOW_OUT("ViewportFrame::Reflow", aStatus);
 }

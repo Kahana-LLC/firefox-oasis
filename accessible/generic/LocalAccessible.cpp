@@ -59,7 +59,6 @@
 #include "nsPresContext.h"
 #include "nsIFrame.h"
 #include "nsTextFrame.h"
-#include "nsView.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsStyleStructInlines.h"
 #include "nsFocusManager.h"
@@ -1122,7 +1121,7 @@ already_AddRefed<AccAttributes> LocalAccessible::Attributes() {
     attribIter.ExposeAttr(attributes);
   }
 
-  if (nsAccUtils::HasARIAAttr(Elm(), nsGkAtoms::aria_actions)) {
+  if (HasCustomActions()) {
     attributes->SetAttribute(nsGkAtoms::hasActions, true);
   }
 
@@ -2153,15 +2152,11 @@ Relation LocalAccessible::RelationByType(RelationType aType) const {
       // ROLE_WINDOW accessible which will prevent us from going up further
       // (because it is system generated and has no idea about the hierarchy
       // above it).
-      nsIFrame* frame = GetFrame();
-      if (frame) {
-        nsView* view = frame->GetView();
-        if (view) {
-          ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(frame);
-          if (scrollContainerFrame || view->GetWidget() ||
-              !frame->GetParent()) {
-            rel.AppendTarget(LocalParent());
-          }
+      if (nsIFrame* frame = GetFrame()) {
+        ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(frame);
+        if (scrollContainerFrame || frame->GetOwnWidget() ||
+            !frame->GetParent()) {
+          rel.AppendTarget(LocalParent());
         }
       }
 
@@ -3683,15 +3678,8 @@ already_AddRefed<AccAttributes> LocalAccessible::BundleFieldsForCache(
     if (boundsChanged) {
       mBounds = Some(newBoundsRect);
 
-      nsTArray<int32_t> boundsArray(4);
-
-      boundsArray.AppendElement(newBoundsRect.x);
-      boundsArray.AppendElement(newBoundsRect.y);
-      boundsArray.AppendElement(newBoundsRect.width);
-      boundsArray.AppendElement(newBoundsRect.height);
-
-      fields->SetAttribute(CacheKey::ParentRelativeBounds,
-                           std::move(boundsArray));
+      UniquePtr<nsRect> ptr = MakeUnique<nsRect>(newBoundsRect);
+      fields->SetAttribute(CacheKey::ParentRelativeBounds, std::move(ptr));
     }
 
     if (frame && frame->ScrollableOverflowRect().IsEmpty()) {
@@ -3712,12 +3700,29 @@ already_AddRefed<AccAttributes> LocalAccessible::BundleFieldsForCache(
         TextLeafPoint point(this, 0);
         RefPtr<AccAttributes> attrs = point.GetTextAttributesLocalAcc(
             /* aIncludeDefaults */ false);
-        fields->SetAttribute(CacheKey::TextAttributes, std::move(attrs));
+        if (attrs->Count()) {
+          fields->SetAttribute(CacheKey::TextAttributes, std::move(attrs));
+        } else if (IsUpdatePush(CacheDomain::Text)) {
+          fields->SetAttribute(CacheKey::TextAttributes, DeleteEntry());
+        }
       }
     }
     if (HyperTextAccessible* ht = AsHyperText()) {
       RefPtr<AccAttributes> attrs = ht->DefaultTextAttributes();
-      fields->SetAttribute(CacheKey::TextAttributes, std::move(attrs));
+      LocalAccessible* parent = LocalParent();
+      if (HyperTextAccessible* htParent =
+              parent ? parent->AsHyperText() : nullptr) {
+        if (RefPtr<AccAttributes> parentAttrs =
+                htParent->DefaultTextAttributes()) {
+          // Discard any entries that our parent already has.
+          attrs->RemoveIdentical(parentAttrs);
+        }
+      }
+      if (attrs->Count()) {
+        fields->SetAttribute(CacheKey::TextAttributes, std::move(attrs));
+      } else if (IsUpdatePush(CacheDomain::Text)) {
+        fields->SetAttribute(CacheKey::TextAttributes, DeleteEntry());
+      }
     } else if (!IsText()) {
       // Language is normally cached in text attributes, but Accessibles that
       // aren't HyperText or Text (e.g. <img>, <input type="radio">) don't have
@@ -3910,12 +3915,19 @@ already_AddRefed<AccAttributes> LocalAccessible::BundleFieldsForCache(
     } else if (IsUpdatePush(CacheDomain::DOMNodeIDAndClass)) {
       fields->SetAttribute(CacheKey::DOMNodeID, DeleteEntry());
     }
-    nsString className;
-    DOMNodeClass(className);
-    if (!className.IsEmpty()) {
-      fields->SetAttribute(CacheKey::DOMNodeClass, std::move(className));
-    } else if (IsUpdatePush(CacheDomain::DOMNodeIDAndClass)) {
-      fields->SetAttribute(CacheKey::DOMNodeClass, DeleteEntry());
+
+    if (dom::Element* el = Elm()) {
+      nsTArray<RefPtr<nsAtom>> classes;
+      if (const nsAttrValue* attr = el->GetClasses()) {
+        for (uint32_t i = 0; i < attr->GetAtomCount(); i++) {
+          classes.AppendElement(attr->AtomAt(i));
+        }
+      }
+      if (!classes.IsEmpty()) {
+        fields->SetAttribute(CacheKey::DOMNodeClass, std::move(classes));
+      } else if (IsUpdatePush(CacheDomain::DOMNodeIDAndClass)) {
+        fields->SetAttribute(CacheKey::DOMNodeClass, DeleteEntry());
+      }
     }
   }
 
@@ -4079,7 +4091,7 @@ already_AddRefed<AccAttributes> LocalAccessible::BundleFieldsForCache(
       fields->SetAttribute(CacheKey::ARIAAttributes, DeleteEntry());
     }
 
-    if (nsAccUtils::HasARIAAttr(Elm(), nsGkAtoms::aria_actions)) {
+    if (HasCustomActions()) {
       fields->SetAttribute(CacheKey::HasActions, true);
     } else if (IsUpdatePush(CacheDomain::ARIA)) {
       fields->SetAttribute(CacheKey::HasActions, DeleteEntry());
@@ -4553,4 +4565,9 @@ bool LocalAccessible::ARIAAttrValueIs(nsAtom* aAttrName,
 bool LocalAccessible::HasARIAAttr(nsAtom* aAttrName) const {
   return mContent ? nsAccUtils::HasDefinedARIAToken(mContent, aAttrName)
                   : false;
+}
+
+bool LocalAccessible::HasCustomActions() const {
+  dom::Element* el = Elm();
+  return el && nsAccUtils::HasARIAAttr(el, nsGkAtoms::aria_actions);
 }

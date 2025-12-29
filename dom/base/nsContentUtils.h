@@ -549,8 +549,8 @@ class nsContentUtils {
    * Returns the common flattened tree ancestor from the point of view of
    * the selection system, if any, for two given content nodes.
    */
-  static nsIContent* GetCommonFlattenedTreeAncestorForSelection(
-      nsIContent* aContent1, nsIContent* aContent2);
+  static nsINode* GetCommonFlattenedTreeAncestorForSelection(nsINode* aNode1,
+                                                             nsINode* aNode2);
 
   /**
    * Returns the common flattened tree ancestor from the point of view of the
@@ -2746,6 +2746,12 @@ class nsContentUtils {
    * otherwise false.
    */
   static bool HasCssMimeTypeEssence(const nsAString& aMimeType);
+
+  /**
+   * Returns true if the given MIME type string has a wasm MIME type essence,
+   * otherwise false.
+   */
+  static bool HasWasmMimeTypeEssence(const nsAString& aMimeType);
 
   static void SplitMimeType(const nsAString& aValue, nsString& aType,
                             nsString& aParams);

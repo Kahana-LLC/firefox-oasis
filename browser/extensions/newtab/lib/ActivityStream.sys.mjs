@@ -13,9 +13,15 @@ const { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
 );
 
+// eslint-disable-next-line mozilla/use-static-import
+const { XPCOMUtils } = ChromeUtils.importESModule(
+  "resource://gre/modules/XPCOMUtils.sys.mjs"
+);
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  AboutNewTabParent: "resource:///actors/AboutNewTabParent.sys.mjs",
   AboutPreferences: "resource://newtab/lib/AboutPreferences.sys.mjs",
   AdsFeed: "resource://newtab/lib/AdsFeed.sys.mjs",
   InferredPersonalizationFeed:
@@ -49,6 +55,13 @@ ChromeUtils.defineESModuleGetters(lazy, {
   WeatherFeed: "resource://newtab/lib/WeatherFeed.sys.mjs",
 });
 
+XPCOMUtils.defineLazyServiceGetter(
+  lazy,
+  "ProxyService",
+  "@mozilla.org/network/protocol-proxy-service;1",
+  Ci.nsIProtocolProxyService
+);
+
 // NB: Eagerly load modules that will be loaded/constructed/initialized in the
 // common case to avoid the overhead of wrapping and detecting lazy loading.
 import {
@@ -60,6 +73,10 @@ const REGION_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.region-config";
 const LOCALE_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config";
+const REGION_SOV_CONFIG =
+  "browser.newtabpage.activity-stream.sov.region-config";
+const LOCALE_SOV_CONFIG =
+  "browser.newtabpage.activity-stream.sov.locale-config";
 
 const REGION_WEATHER_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.region-weather-config";
@@ -78,11 +95,6 @@ const LOCALE_TOPIC_LABEL_CONFIG =
 const REGION_BASIC_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.region-basic-config";
 
-const REGION_THUMBS_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.region-thumbs-config";
-const LOCALE_THUMBS_CONFIG =
-  "browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.locale-thumbs-config";
-
 const REGION_CONTEXTUAL_AD_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.contextualAds.region-config";
 const LOCALE_CONTEXTUAL_AD_CONFIG =
@@ -95,6 +107,14 @@ const LOCALE_SECTIONS_CONFIG =
 
 const PREF_SHOULD_AS_INITIALIZE_FEEDS =
   "browser.newtabpage.activity-stream.testing.shouldInitializeFeeds";
+
+const PREF_INFERRED_ENABLED =
+  "discoverystream.sections.personalization.inferred.enabled";
+
+const PREF_IMAGE_PROXY_ENABLED =
+  "browser.newtabpage.activity-stream.discoverystream.imageProxy.enabled";
+
+const PREF_IMAGE_PROXY_ENABLED_STORE = "discoverystream.imageProxy.enabled";
 
 export const WEATHER_OPTIN_REGIONS = [
   "AT", // Austria
@@ -136,7 +156,7 @@ export function csvPrefHasValue(stringPrefName, value) {
     throw new Error(`The stringPrefName argument is not a string`);
   }
 
-  const pref = Services.prefs.getStringPref(stringPrefName) || "";
+  const pref = Services.prefs.getStringPref(stringPrefName, "") || "";
   const prefValues = pref
     .split(",")
     .map(s => s.trim())
@@ -160,6 +180,13 @@ function useInferredPersonalization({ geo, locale }) {
   return (
     csvPrefHasValue(REGION_INFERRED_PERSONALIZATION_CONFIG, geo) &&
     csvPrefHasValue(LOCALE_INFERRED_PERSONALIZATION_CONFIG, locale)
+  );
+}
+
+function useSov({ geo, locale }) {
+  return (
+    csvPrefHasValue(REGION_SOV_CONFIG, geo) &&
+    csvPrefHasValue(LOCALE_SOV_CONFIG, locale)
   );
 }
 
@@ -200,13 +227,6 @@ function showTopicLabels({ geo, locale }) {
   return (
     csvPrefHasValue(REGION_TOPIC_LABEL_CONFIG, geo) &&
     csvPrefHasValue(LOCALE_TOPIC_LABEL_CONFIG, locale)
-  );
-}
-
-function showThumbsUpDown({ geo, locale }) {
-  return (
-    csvPrefHasValue(REGION_THUMBS_CONFIG, geo) &&
-    csvPrefHasValue(LOCALE_THUMBS_CONFIG, locale)
   );
 }
 
@@ -798,14 +818,6 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
-    "discoverystream.sections.cards.thumbsUpDown.enabled",
-    {
-      title:
-        "Boolean flag to enable thumbs up/down buttons in the new card UI in recommended stories",
-      value: true,
-    },
-  ],
-  [
     "discoverystream.reportAds.enabled",
     {
       title: "Boolean flag to enable reporting ads from the context menu",
@@ -906,6 +918,13 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "discoverystream.imageProxy.enabled",
+    {
+      title: "Boolean flag to enable image proxying for images on newtab",
+      value: false,
+    },
+  ],
+  [
     "newtabWallpapers.highlightEnabled",
     {
       title: "Boolean flag to show the highlight about the Wallpaper feature",
@@ -953,6 +972,43 @@ export const PREFS_CONFIG = new Map([
     {
       title: "Currently set wallpaper",
       value: "",
+    },
+  ],
+  [
+    "sov.enabled",
+    {
+      title: "Enables share of voice (SOV)",
+      getValue: useSov,
+    },
+  ],
+  [
+    "sov.name",
+    {
+      title:
+        "A unique id, usually this is a timestamp for the day it was generated",
+      value: "SOV-20251122215625",
+    },
+  ],
+  [
+    "sov.frecency.exposure",
+    {
+      title:
+        "Is or was the user eligible for frecency ranked sponsored shortcuts",
+      value: false,
+    },
+  ],
+  [
+    "sov.amp.allocation",
+    {
+      title: "How many positions can be filled from amp",
+      value: "100, 100, 100",
+    },
+  ],
+  [
+    "sov.frecency.allocation",
+    {
+      title: "How many positions can be filled by frecency",
+      value: "0, 0, 0",
     },
   ],
   [
@@ -1137,22 +1193,6 @@ export const PREFS_CONFIG = new Map([
         "Endpoint prefixes (comma-separated) that are allowed to be requested",
       value:
         "https://getpocket.cdn.mozilla.net/,https://firefox-api-proxy.cdn.mozilla.net/,https://spocs.getpocket.com/,https://merino.services.mozilla.com/,https://ads.mozilla.org/",
-    },
-  ],
-  [
-    "discoverystream.thumbsUpDown.enabled",
-    {
-      title: "Allow users to give thumbs up/down on recommended stories",
-      // pref is dynamic
-      getValue: showThumbsUpDown,
-    },
-  ],
-  [
-    "discoverystream.thumbsUpDown.searchTopsitesCompact",
-    {
-      title:
-        "A compact layout of the search/topsites/stories sections to account for new height from thumbs up/down icons ",
-      value: false,
     },
   ],
   [
@@ -1570,6 +1610,7 @@ export class ActivityStream {
     this.initialized = false;
     this.store = new lazy.Store();
     this._defaultPrefs = new lazy.DefaultPrefs(PREFS_CONFIG);
+    this._proxyRegistered = false;
   }
 
   get feeds() {
@@ -1591,6 +1632,7 @@ export class ActivityStream {
     this._updateDynamicPrefs();
     this._defaultPrefs.init();
     Services.obs.addObserver(this, "intl:app-locales-changed");
+    Services.prefs.addObserver(PREF_IMAGE_PROXY_ENABLED, this);
     lazy.NewTabActorRegistry.init();
 
     // Hook up the store and let all feeds and pages initialize
@@ -1609,7 +1651,124 @@ export class ActivityStream {
     );
 
     this.initialized = true;
+
+    this.registerNetworkProxy();
   }
+
+  /**
+   * Registers network proxy channel filter for image requests.
+   * This enables privacy-preserving image proxy for newtab when
+   * inferred personalization is enabled.
+   */
+  registerNetworkProxy() {
+    const enabled = Services.prefs.getBoolPref(PREF_IMAGE_PROXY_ENABLED, false);
+    if (!this._proxyRegistered && enabled) {
+      lazy.ProxyService.registerChannelFilter(this, 0);
+      this._proxyRegistered = true;
+    }
+  }
+
+  /**
+   * Unregisters network proxy channel filter.
+   */
+  unregisterNetworkProxy() {
+    if (this._proxyRegistered) {
+      lazy.ProxyService.unregisterChannelFilter(this);
+      this._proxyRegistered = false;
+    }
+  }
+
+  /**
+   * Retrieves and validates image proxy configuration from prefs/nimbus.
+   *
+   * @returns {object|null} Image proxy config object, or null if disabled/invalid.
+   */
+  getImageProxyConfig() {
+    try {
+      if (!this.store || !this.initialized) {
+        return null;
+      }
+
+      const state = this.store.getState();
+      if (!state || !state.Prefs) {
+        return null;
+      }
+
+      const { values } = state.Prefs;
+
+      const config = values?.trainhopConfig?.imageProxy;
+      if (
+        !config ||
+        !config.enabled ||
+        !config.proxyHost ||
+        !config.proxyPort ||
+        !config.proxyAuthHeader ||
+        !values?.[PREF_INFERRED_ENABLED] ||
+        !values?.[PREF_IMAGE_PROXY_ENABLED_STORE]
+      ) {
+        return null;
+      }
+      return {
+        proxyHost: config.proxyHost,
+        proxyPort: config.proxyPort,
+        proxyAuthHeader: config.proxyAuthHeader,
+        connectionIsolationKey: config.connectionIsolationKey || "",
+        failoverProxy: config.failoverProxy,
+        imageProxyHosts: (config.imageProxyHosts || "")
+          .split(",")
+          .map(host => host.trim()),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * nsIProtocolProxyChannelFilter implementation. Applies MASQUE proxy
+   * to image requests from newtab when configured.
+   *
+   * @param {nsIChannel} channel
+   * @param {nsIProxyInfo} proxyInfo
+   * @param {nsIProtocolProxyChannelFilter} callback
+   */
+  applyFilter(channel, proxyInfo, callback) {
+    const { browsingContext } = channel.loadInfo;
+    let browser = browsingContext?.top?.embedderElement;
+
+    if (!browser || !lazy.AboutNewTabParent.loadedTabs.has(browser)) {
+      callback.onProxyFilterResult(proxyInfo);
+      return;
+    }
+
+    const config = this.getImageProxyConfig();
+
+    if (!config) {
+      callback.onProxyFilterResult(proxyInfo);
+      return;
+    }
+
+    if (
+      config.imageProxyHosts.includes(channel.URI.host) &&
+      channel.URI?.scheme === "https"
+    ) {
+      callback.onProxyFilterResult(
+        lazy.ProxyService.newProxyInfo(
+          "https" /* aType */,
+          config.proxyHost /* aHost */,
+          config.proxyPort /* aPort */,
+          config.proxyAuthHeader /* aProxyAuthorizationHeader */,
+          config.connectionIsolationKey /* aConnectionIsolationKey */,
+          0 /* aFlags */,
+          5000 /* aFailoverTimeout */,
+          config.failoverProxy /* aFailoverProxy */
+        )
+      );
+    } else {
+      callback.onProxyFilterResult(proxyInfo);
+    }
+  }
+
+  QueryInterface = ChromeUtils.generateQI([Ci.nsIProtocolProxyChannelFilter]);
 
   /**
    * Check if an old pref has a custom value to migrate. Clears the pref so that
@@ -1650,8 +1809,10 @@ export class ActivityStream {
     delete this.geo;
 
     Services.obs.removeObserver(this, "intl:app-locales-changed");
+    Services.prefs.removeObserver(PREF_IMAGE_PROXY_ENABLED, this);
 
     this.store.uninit();
+    this.unregisterNetworkProxy();
     this.initialized = false;
   }
 
@@ -1707,11 +1868,24 @@ export class ActivityStream {
     }
   }
 
-  observe(subject, topic) {
+  observe(subject, topic, data) {
     switch (topic) {
       case "intl:app-locales-changed":
       case lazy.Region.REGION_TOPIC:
         this._updateDynamicPrefs();
+        break;
+      case "nsPref:changed":
+        if (data === PREF_IMAGE_PROXY_ENABLED) {
+          const enabled = Services.prefs.getBoolPref(
+            PREF_IMAGE_PROXY_ENABLED,
+            false
+          );
+          if (enabled) {
+            this.registerNetworkProxy();
+          } else {
+            this.unregisterNetworkProxy();
+          }
+        }
         break;
     }
   }

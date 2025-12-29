@@ -30,6 +30,7 @@
 #include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/dom/DocumentPictureInPicture.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/Geolocation.h"
 #include "mozilla/dom/HTMLEmbedElement.h"
@@ -385,6 +386,8 @@ already_AddRefed<BrowsingContext> BrowsingContext::CreateDetached(
     MOZ_DIAGNOSTIC_ASSERT(aOpener->mType == aType);
     fields.Get<IDX_OpenerId>() = aOpener->Id();
     fields.Get<IDX_HadOriginalOpener>() = true;
+    fields.Get<IDX_MessageManagerGroup>() =
+        aOpener->Top()->GetMessageManagerGroup();
 
     if (aType == Type::Chrome && !aParent) {
       // See SetOpener for why we do this inheritance.
@@ -2036,6 +2039,10 @@ nsresult BrowsingContext::CheckFramebusting(nsDocShellLoadState* aLoadState) {
     return NS_OK;
   }
 
+  if (XRE_IsParentProcess()) {
+    return NS_OK;
+  }
+
   // Only applies to top-level navigations.
   if (!IsTop()) {
     return NS_OK;
@@ -2260,7 +2267,6 @@ nsresult BrowsingContext::LoadURI(nsDocShellLoadState* aLoadState,
                  });
     }
   } else {
-    MOZ_DIAGNOSTIC_ASSERT(sourceBC);
     if (!sourceBC) {
       return NS_ERROR_UNEXPECTED;
     }
@@ -2350,6 +2356,7 @@ nsresult BrowsingContext::InternalLoad(nsDocShellLoadState* aLoadState) {
 already_AddRefed<nsDocShellLoadState>
 BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
                                             nsIPrincipal& aSubjectPrincipal,
+                                            Document* aSourceDocument,
                                             ErrorResult& aRv) {
   nsCOMPtr<nsIPrincipal> triggeringPrincipal;
   nsCOMPtr<nsIURI> sourceURI;
@@ -2376,41 +2383,22 @@ BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
     return nullptr;
   }
 
-  // Make the load's referrer reflect changes to the document's URI caused by
-  // push/replaceState, if possible.  First, get the document corresponding to
-  // fp.  If the document's original URI (i.e. its URI before
-  // push/replaceState) matches the principal's URI, use the document's
-  // current URI as the referrer.  If they don't match, use the principal's
-  // URI.
-  //
-  // The triggering principal for this load should be the principal of the
-  // incumbent document (which matches where the referrer information is
-  // coming from) when there is an incumbent document, and the subject
-  // principal otherwise.  Note that the URI in the triggering principal
-  // may not match the referrer URI in various cases, notably including
-  // the cases when the incumbent document's document URI was modified
-  // after the document was loaded.
-
-  nsCOMPtr<nsPIDOMWindowInner> incumbent =
-      do_QueryInterface(mozilla::dom::GetIncumbentGlobal());
-  nsCOMPtr<Document> doc = incumbent ? incumbent->GetDoc() : nullptr;
-
   // Create load info
   RefPtr<nsDocShellLoadState> loadState = new nsDocShellLoadState(aURI);
 
-  if (!doc) {
+  if (!aSourceDocument) {
     // No document; just use our subject principal as the triggering principal.
     loadState->SetTriggeringPrincipal(&aSubjectPrincipal);
     return loadState.forget();
   }
 
   nsCOMPtr<nsIURI> docOriginalURI, docCurrentURI, principalURI;
-  docOriginalURI = doc->GetOriginalURI();
-  docCurrentURI = doc->GetDocumentURI();
-  nsCOMPtr<nsIPrincipal> principal = doc->NodePrincipal();
+  docOriginalURI = aSourceDocument->GetOriginalURI();
+  docCurrentURI = aSourceDocument->GetDocumentURI();
+  nsCOMPtr<nsIPrincipal> principal = aSourceDocument->NodePrincipal();
 
-  triggeringPrincipal = doc->NodePrincipal();
-  referrerPolicy = doc->GetReferrerPolicy();
+  triggeringPrincipal = aSourceDocument->NodePrincipal();
+  referrerPolicy = aSourceDocument->GetReferrerPolicy();
 
   bool urisEqual = false;
   if (docOriginalURI && docCurrentURI && principal) {
@@ -2422,20 +2410,21 @@ BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
     principal->CreateReferrerInfo(referrerPolicy, getter_AddRefs(referrerInfo));
   }
   loadState->SetTriggeringPrincipal(triggeringPrincipal);
-  loadState->SetTriggeringSandboxFlags(doc->GetSandboxFlags());
-  loadState->SetPolicyContainer(doc->GetPolicyContainer());
+  loadState->SetTriggeringSandboxFlags(aSourceDocument->GetSandboxFlags());
+  loadState->SetPolicyContainer(aSourceDocument->GetPolicyContainer());
   if (referrerInfo) {
     loadState->SetReferrerInfo(referrerInfo);
   }
   loadState->SetHasValidUserGestureActivation(
-      doc->HasValidTransientUserGestureActivation());
+      aSourceDocument->HasValidTransientUserGestureActivation());
 
   loadState->SetTextDirectiveUserActivation(
-      doc->ConsumeTextDirectiveUserActivation() ||
+      aSourceDocument->ConsumeTextDirectiveUserActivation() ||
       loadState->HasValidUserGestureActivation());
-  loadState->SetTriggeringWindowId(doc->InnerWindowID());
-  loadState->SetTriggeringStorageAccess(doc->UsingStorageAccess());
-  loadState->SetTriggeringClassificationFlags(doc->GetScriptTrackingFlags());
+  loadState->SetTriggeringWindowId(aSourceDocument->InnerWindowID());
+  loadState->SetTriggeringStorageAccess(aSourceDocument->UsingStorageAccess());
+  loadState->SetTriggeringClassificationFlags(
+      aSourceDocument->GetScriptTrackingFlags());
 
   return loadState.forget();
 }
@@ -2444,8 +2433,8 @@ BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
 // In its current state, this method is not closely following the spec.
 // https://bugzil.la/1974717 tracks the work to align this method with the spec.
 void BrowsingContext::Navigate(
-    nsIURI* aURI, nsIPrincipal& aSubjectPrincipal, ErrorResult& aRv,
-    NavigationHistoryBehavior aHistoryHandling,
+    nsIURI* aURI, Document* aSourceDocument, nsIPrincipal& aSubjectPrincipal,
+    ErrorResult& aRv, NavigationHistoryBehavior aHistoryHandling,
     bool aNeedsCompletelyLoadedDocument,
     nsIStructuredCloneContainer* aNavigationAPIState,
     dom::NavigationAPIMethodTracker* aNavigationAPIMethodTracker) {
@@ -2462,7 +2451,7 @@ void BrowsingContext::Navigate(
   }
 
   RefPtr<nsDocShellLoadState> loadState =
-      CheckURLAndCreateLoadState(aURI, aSubjectPrincipal, aRv);
+      CheckURLAndCreateLoadState(aURI, aSubjectPrincipal, aSourceDocument, aRv);
   if (aRv.Failed()) {
     return;
   }
@@ -2692,6 +2681,28 @@ void BrowsingContext::IncrementHistoryEntryCountForBrowsingContext() {
   (void)SetHistoryEntryCount(GetHistoryEntryCount() + 1);
 }
 
+// https://wicg.github.io/document-picture-in-picture/#focusing-the-opener-window
+static bool ConsumePiPWindowTransientActivation(nsPIDOMWindowOuter* outer) {
+  NS_ENSURE_TRUE(outer, false);
+
+  nsPIDOMWindowInner* inner = outer->GetCurrentInnerWindow();
+  NS_ENSURE_TRUE(inner, false);
+
+  DocumentPictureInPicture* dpip = inner->GetExtantDocumentPictureInPicture();
+  if (!dpip) {
+    return false;
+  }
+  nsGlobalWindowInner* pipWindow = dpip->GetWindow();
+  if (!pipWindow) {
+    return false;
+  }
+
+  WindowContext* wc = pipWindow->GetWindowContext();
+  NS_ENSURE_TRUE(wc, false);
+
+  return wc->ConsumeTransientUserGestureActivation();
+}
+
 std::tuple<bool, bool> BrowsingContext::CanFocusCheck(CallerType aCallerType) {
   nsFocusManager* fm = nsFocusManager::GetFocusManager();
   if (!fm) {
@@ -2713,6 +2724,13 @@ std::tuple<bool, bool> BrowsingContext::CanFocusCheck(CallerType aCallerType) {
         (callerBC ? callerBC : this)
             ->RevisePopupAbuseLevel(PopupBlocker::GetPopupControlState()) <
         PopupBlocker::openBlocked;
+  }
+
+  // Allow the opener to get system focus if the PIP window has transient
+  // activation
+  if (!canFocus && IsTopContent() &&
+      ConsumePiPWindowTransientActivation(GetDOMWindow())) {
+    canFocus = true;
   }
 
   bool isActive = false;

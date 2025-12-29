@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">%s prevez</string>
@@ -68,7 +75,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">Pa vez serret hoc’h holl ivinelloù prevez e vez dilamet ho toupinoù, ho roll istor hag ho roadennoù lec’hienn gant %1$s. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">Pa vez serret hoc’h holl ivinelloù prevez e vez dilamet ho toupinoù, ho roll istor hag ho roadennoù lec’hienn gant %1$s. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -492,6 +499,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">Rannit penaos ho peus graet anaoudegezh gant Firefox ha penaos ec\'h implijit anezhañ gant kevelerien marketing Mozilla. Ne vo morse gwerzhet ar roadennoù-mañ.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Asantiñ ha kregiñ da verdeiñ</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Dibab ul lec’h barrenn-ostilhoù</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -678,8 +689,6 @@
   <string name="preferences_gestures">Jestroù</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Personelaat</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Kennaskit evit goubredañ an ivinelloù, sinedoù, gerioù-tremen ha muioc’h c’hoazh.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
   <string name="preferences_account_default_name_2">Kont Mozilla</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
@@ -998,12 +1007,6 @@
   <string name="preference_experiments_2">Studioù</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">Aotren Mozilla da staliañ ha da luskañ studioù</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Goubredañ hag enrollañ ho roadennoù</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Kennaskit en-dro</string>
   <!-- Preference for removing FxA account -->
@@ -1715,8 +1718,6 @@
   <string name="toast_copy_link_to_clipboard">Eilet er golver</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Kennaskañ ouzh Sync</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Goubredañ hag enrollañ ar roadennoù</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
   <string name="sync_send_to_all">Kas dʼan holl drevnadoù</string>
   <!-- An option from the share dialog to reconnect to sync -->
@@ -2275,8 +2276,6 @@
   <string name="credit_cards_edit_card">Kemmañ ar gartenn</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Niverenn ar gartenn</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Deiziad termen</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Deiziad termen Miz</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3114,11 +3113,9 @@
   <string name="review_prompt_positive_button">Dispar eo!</string>
   <!-- Label for a button opening a feedback forum -->
   <string name="review_prompt_feedback_button">Reiñ hoc’h ali</string>
-  <!--
-    Terms of use pop up prompt
+  <!-- ==== Terms of use pop up prompt ==== -->
 
-    Title for the pop up prompt
-  -->
+  <!-- Title for the pop up prompt -->
   <string name="terms_of_use_prompt_title">Un hizivadur zo da gaout</string>
   <!-- Terms of use link in the pop up prompt message that links to the terms of use -->
   <string name="terms_of_use_prompt_link_terms_of_use">Termenoù implij</string>
@@ -3130,4 +3127,7 @@
   <string name="terms_of_use_prompt_accept">Asantiñ</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Degas soñj din diwezhatoc’h</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

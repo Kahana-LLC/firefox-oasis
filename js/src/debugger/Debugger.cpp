@@ -393,6 +393,11 @@ bool js::ParseEvalOptions(JSContext* cx, HandleValue value,
   }
   options.setHideFromDebugger(ToBoolean(v));
 
+  if (!JS_GetProperty(cx, opts, "bypassCSP", &v)) {
+    return false;
+  }
+  options.setBypassCSP(ToBoolean(v));
+
   if (options.kind() == EvalOptions::EnvKind::GlobalWithExtraOuterBindings) {
     if (!JS_GetProperty(cx, opts, "useInnerBindings", &v)) {
       return false;
@@ -452,8 +457,10 @@ Breakpoint::Breakpoint(Debugger* debugger, HandleObject wrappedDebugger,
 }
 
 void Breakpoint::trace(JSTracer* trc) {
-  MOZ_ASSERT(!IsDeadProxyObject(wrappedDebugger));
+  MOZ_ASSERT_IF(trc->kind() != JS::TracerKind::Moving,
+                !IsDeadProxyObject(wrappedDebugger));
   TraceEdge(trc, &wrappedDebugger, "breakpoint owner");
+
   TraceEdge(trc, &handler, "breakpoint handler");
 }
 

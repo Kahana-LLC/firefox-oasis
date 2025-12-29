@@ -119,6 +119,7 @@
 #include "mozilla/dom/DocGroup.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/DocumentInlines.h"
+#include "mozilla/dom/DocumentPictureInPicture.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/Event.h"
 #include "mozilla/dom/EventTarget.h"
@@ -179,6 +180,7 @@
 #include "mozilla/dom/VRDisplayEventBinding.h"
 #include "mozilla/dom/VREventObserver.h"
 #include "mozilla/dom/VisualViewport.h"
+#include "mozilla/dom/WebCompatBinding.h"
 #include "mozilla/dom/WebIDLGlobalNameHash.h"
 #include "mozilla/dom/WebIdentityHandler.h"
 #include "mozilla/dom/WebTaskSchedulerMainThread.h"
@@ -1272,6 +1274,7 @@ void nsGlobalWindowInner::FreeInnerObjects() {
 
   mConsole = nullptr;
   mCookieStore = nullptr;
+  mDocumentPiP = nullptr;
 
   mPaintWorklet = nullptr;
 
@@ -1467,6 +1470,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(nsGlobalWindowInner)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCrypto)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mConsole)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCookieStore)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mDocumentPiP)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPaintWorklet)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mExternal)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mIntlUtils)
@@ -1837,6 +1841,11 @@ void nsGlobalWindowInner::InitDocumentDependentState(JSContext* aCx) {
 
   if (!mWindowGlobalChild) {
     mWindowGlobalChild = WindowGlobalChild::Create(this);
+  } else {
+    // If the window global existed before the window, it must've come from the
+    // AboutBlankInitializer
+    MOZ_ASSERT(NS_IsAboutBlankAllowQueryAndFragment(GetDocumentURI()),
+               "AboutBlankInitializer should only be used with about:blank");
   }
   MOZ_ASSERT(!GetWindowContext()->HasBeenUserGestureActivated(),
              "WindowContext should always not have user gesture activation at "
@@ -1911,7 +1920,7 @@ nsresult nsGlobalWindowInner::EnsureClientSource() {
 
   // Try to get the reserved client from the LoadInfo.  A Client is
   // reserved at the start of the channel load if there is not an
-  // initial about:blank document that will be reused.  It is also
+  // initial uncommitted about:blank whose window will be reused. It is also
   // created if the channel load encounters a cross-origin redirect.
   if (loadInfo) {
     UniquePtr<ClientSource> reservedClient =
@@ -2137,6 +2146,77 @@ void nsGlobalWindowInner::GetEventTargetParent(EventChainPreVisitor& aVisitor) {
   aVisitor.SetParentTarget(GetParentTarget(), true);
 }
 
+// ckeditor 4 uses UA sniffing to wait for an async load event for its editor
+// iframe. This patch makes it work by delaying the sync-about:blank's load
+// event on such frames. See bug 2002481 and:
+// https://github.com/ckeditor/ckeditor4/blob/c7e59ec199298b6b23f4aa7a7668f18572385bac/plugins/wysiwygarea/plugin.js#L43
+MOZ_CAN_RUN_SCRIPT static bool IsCkEditor4EmptyFrame(Element& aEmbedder) {
+  if (!StaticPrefs::dom_about_blank_ckeditor_hack_enabled()) {
+    return false;
+  }
+  const nsAttrValue* classes = aEmbedder.GetClasses();
+  // We're looking for an <iframe> with a cke_wysiwyg_frame class. That's the
+  // most likely check to fail so do it first.
+  if (!classes ||
+      !classes->Contains(nsGkAtoms::cke_wysiwyg_frame, eCaseMatters)) {
+    return false;
+  }
+  if (!aEmbedder.IsHTMLElement(nsGkAtoms::iframe)) {
+    return false;
+  }
+  // Additionally, we expect it to have an empty src attribute.
+  if (const auto* src = aEmbedder.GetParsedAttr(nsGkAtoms::src);
+      !src || !src->IsEmptyString()) {
+    return false;
+  }
+  // Deal with the blocklist here before checking for the ckeditor version
+  // (which is potentially observable via JS getters).
+  if (aEmbedder.NodePrincipal()->IsURIInPrefList(
+          "dom.about-blank-ckeditor-hack.disabled-domains")) {
+    return false;
+  }
+  // Finally, we also get the version string off the embedder's global to be
+  // extra sure.
+  RefPtr global = aEmbedder.GetOwnerGlobal();
+  if (!global || !global->GetGlobalJSObject()) {
+    return false;
+  }
+  AutoJSAPI jsapi;
+  if (!jsapi.Init(global)) {
+    return false;
+  }
+  CkEditorProperty property;
+  JS::Rooted<JS::Value> v(jsapi.cx(),
+                          JS::ObjectValue(*global->GetGlobalJSObject()));
+  if (!property.Init(jsapi.cx(), v)) {
+    JS_ClearPendingException(jsapi.cx());
+    return false;
+  }
+  const auto* version = [&]() -> const CkEditorVersion* {
+    if (property.mCKEDITOR.WasPassed()) {
+      return &property.mCKEDITOR.Value();
+    }
+    if (property.mJEDITOR.WasPassed()) {
+      return &property.mJEDITOR.Value();
+    }
+    return nullptr;
+  }();
+  if (!version || !StringBeginsWith(version->mVersion, u"4."_ns)) {
+    return false;
+  }
+  aEmbedder.OwnerDoc()->WarnOnceAbout(
+      DeprecatedOperations::eCKEditor4CompatHack);
+  return true;
+}
+
+MOZ_CAN_RUN_SCRIPT static bool NeedsAsyncLoadEventForInitialDocument(
+    nsGlobalWindowInner& aInner, Element& aEmbedder) {
+  if (auto* doc = aInner.GetExtantDoc(); !doc || !doc->IsInitialDocument()) {
+    return false;
+  }
+  return IsCkEditor4EmptyFrame(aEmbedder);
+}
+
 void nsGlobalWindowInner::FireFrameLoadEvent() {
   // If we're not in a content frame, or are at a BrowsingContext tree boundary,
   // such as the content-chrome boundary, don't fire the "load" event.
@@ -2149,8 +2229,13 @@ void nsGlobalWindowInner::FireFrameLoadEvent() {
   //
   // XXX: Bug 1440212 is looking into potentially changing this behaviour to act
   // more like the remote case when in-process.
-  RefPtr<Element> element = GetBrowsingContext()->GetEmbedderElement();
-  if (element) {
+  if (RefPtr<Element> element = GetBrowsingContext()->GetEmbedderElement()) {
+    if (NeedsAsyncLoadEventForInitialDocument(*this, *element)) {
+      (new AsyncEventDispatcher(element, eLoad, CanBubble::eNo))
+          ->PostDOMEvent();
+      return;
+    }
+
     nsEventStatus status = nsEventStatus_eIgnore;
     WidgetEvent event(/* aIsTrusted = */ true, eLoad);
     event.mFlags.mBubbles = false;
@@ -3865,9 +3950,7 @@ void nsGlobalWindowInner::ScrollTo(const ScrollToOptions& aOptions) {
   if (scrollPos.y > maxpx) {
     scrollPos.y = maxpx;
   }
-  auto scrollMode = sf->IsSmoothScroll(aOptions.mBehavior)
-                        ? ScrollMode::SmoothMsd
-                        : ScrollMode::Instant;
+  auto scrollMode = sf->ScrollModeForScrollBehavior(aOptions.mBehavior);
   sf->ScrollToCSSPixels(scrollPos, scrollMode);
 }
 
@@ -3900,9 +3983,7 @@ void nsGlobalWindowInner::ScrollBy(const ScrollToOptions& aOptions) {
     return;
   }
 
-  auto scrollMode = sf->IsSmoothScroll(aOptions.mBehavior)
-                        ? ScrollMode::SmoothMsd
-                        : ScrollMode::Instant;
+  auto scrollMode = sf->ScrollModeForScrollBehavior(aOptions.mBehavior);
   sf->ScrollByCSSPixels(scrollDelta, scrollMode);
 }
 
@@ -3919,9 +4000,7 @@ void nsGlobalWindowInner::ScrollByLines(int32_t numLines,
   // It seems like it would make more sense for ScrollByLines to use
   // SMOOTH mode, but tests seem to depend on the synchronous behaviour.
   // Perhaps Web content does too.
-  ScrollMode scrollMode = sf->IsSmoothScroll(aOptions.mBehavior)
-                              ? ScrollMode::SmoothMsd
-                              : ScrollMode::Instant;
+  ScrollMode scrollMode = sf->ScrollModeForScrollBehavior(aOptions.mBehavior);
   sf->ScrollBy(nsIntPoint(0, numLines), ScrollUnit::LINES, scrollMode);
 }
 
@@ -3938,9 +4017,7 @@ void nsGlobalWindowInner::ScrollByPages(int32_t numPages,
   // It seems like it would make more sense for ScrollByPages to use
   // SMOOTH mode, but tests seem to depend on the synchronous behaviour.
   // Perhaps Web content does too.
-  ScrollMode scrollMode = sf->IsSmoothScroll(aOptions.mBehavior)
-                              ? ScrollMode::SmoothMsd
-                              : ScrollMode::Instant;
+  ScrollMode scrollMode = sf->ScrollModeForScrollBehavior(aOptions.mBehavior);
 
   sf->ScrollBy(nsIntPoint(0, numPages), ScrollUnit::PAGES, scrollMode);
 }
@@ -7329,6 +7406,14 @@ already_AddRefed<CookieStore> nsGlobalWindowInner::CookieStore() {
   return do_AddRef(mCookieStore);
 }
 
+DocumentPictureInPicture* nsGlobalWindowInner::DocumentPictureInPicture() {
+  if (!mDocumentPiP) {
+    mDocumentPiP = MakeRefPtr<class DocumentPictureInPicture>(this);
+  }
+
+  return mDocumentPiP;
+}
+
 bool nsGlobalWindowInner::IsSecureContext() const {
   JS::Realm* realm = js::GetNonCCWObjectRealm(GetWrapperPreserveColor());
   return JS::GetIsSecureContext(realm);
@@ -7430,19 +7515,6 @@ Worklet* nsGlobalWindowInner::GetPaintWorklet(ErrorResult& aRv) {
   }
 
   return mPaintWorklet;
-}
-
-void nsGlobalWindowInner::GetRegionalPrefsLocales(
-    nsTArray<nsString>& aLocales) {
-  MOZ_ASSERT(mozilla::intl::LocaleService::GetInstance());
-
-  AutoTArray<nsCString, 10> rpLocales;
-  mozilla::intl::LocaleService::GetInstance()->GetRegionalPrefsLocales(
-      rpLocales);
-
-  for (const auto& loc : rpLocales) {
-    aLocales.AppendElement(NS_ConvertUTF8toUTF16(loc));
-  }
 }
 
 void nsGlobalWindowInner::GetWebExposedLocales(nsTArray<nsString>& aLocales) {

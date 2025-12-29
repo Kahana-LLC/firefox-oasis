@@ -12,6 +12,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -171,7 +172,7 @@ fun TabsTray(
         modifier = Modifier
             .fillMaxSize()
             .then(shapeModifier)
-            .background(FirefoxTheme.colors.layer1)
+            .background(MaterialTheme.colorScheme.surface)
             .testTag(TabsTrayTestTag.TABS_TRAY),
     ) {
         Box(modifier = Modifier.nestedScroll(rememberNestedScrollInteropConnection())) {
@@ -219,7 +220,6 @@ fun TabsTray(
             HorizontalPager(
                 modifier = Modifier.fillMaxSize(),
                 state = pagerState,
-                beyondViewportPageCount = 2,
                 userScrollEnabled = false,
             ) { position ->
                 when (Page.positionToPage(position = position, enhancementsEnabled = false)) {
@@ -275,6 +275,10 @@ fun TabsTray(
                             syncedTabs = tabsTrayState.syncedTabs,
                             onTabClick = onSyncedTabClick,
                             onTabClose = onSyncedTabClose,
+                            expandedState = tabsTrayState.expandedSyncedTabs,
+                            onSectionExpansionToggled = { index ->
+                                tabsTrayStore.dispatch(TabsTrayAction.SyncedTabsHeaderToggled(index))
+                            },
                         )
                     }
                 }

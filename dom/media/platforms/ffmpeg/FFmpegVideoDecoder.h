@@ -100,6 +100,11 @@ class FFmpegVideoDecoder<LIBAV_VER>
 #endif
   }
 
+#ifdef MOZ_WIDGET_ANDROID
+  Maybe<MediaDataDecoder::PropertyValue> GetDecodeProperty(
+      MediaDataDecoder::PropertyName aName) const override;
+#endif
+
   static AVCodecID GetCodecId(const nsACString& aMimeType);
 
 #if LIBAVCODEC_VERSION_MAJOR >= 57 && LIBAVUTIL_VERSION_MAJOR >= 56
@@ -157,6 +162,8 @@ class FFmpegVideoDecoder<LIBAV_VER>
 #endif
 
   RefPtr<KnowsCompositor> mImageAllocator;
+  RefPtr<ImageContainer> mImageContainer;
+  VideoInfo mInfo;
 
 #ifdef MOZ_USE_HWDECODE
  public:
@@ -234,9 +241,6 @@ class FFmpegVideoDecoder<LIBAV_VER>
   UniquePtr<VideoFramePool<LIBAV_VER>> mVideoFramePool;
   static nsTArray<AVCodecID> mAcceleratedFormats;
 #endif
-
-  RefPtr<ImageContainer> mImageContainer;
-  VideoInfo mInfo;
 
 #if LIBAVCODEC_VERSION_MAJOR >= 58
   class DecodeStats {

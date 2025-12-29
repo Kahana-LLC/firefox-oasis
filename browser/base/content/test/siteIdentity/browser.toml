@@ -1,10 +1,14 @@
 [DEFAULT]
 support-files = [
+  "2-qwac.binding",
+  "2-qwac.html",
+  "2-qwac.html^headers^",
   "head.js",
   "dummy_page.html",
   "!/image/test/mochitest/blue.png",
 ]
 prefs = [
+  "browser.urlbar.trustPanel.featureGate=false",
   "security.certerrors.felt-privacy-v1=true"
 ]
 
@@ -73,6 +77,8 @@ skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && asan", # Bug 1723899
 ]
 
+["browser_identityPopup_qwacs.js"]
+
 ["browser_identity_UI.js"]
 https_first_disabled = true
 
@@ -121,6 +127,9 @@ support-files = [
 
 ["browser_mixed_content_cert_override.js"]
 tags = "mcb"
+skip-if = [
+  "os == 'mac' && os_version == '15.30' && arch == 'aarch64'", # Bug 1997430
+]
 
 support-files = ["test-mixedcontent-securityerrors.html"]
 

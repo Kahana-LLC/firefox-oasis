@@ -2,6 +2,10 @@
  * http://creativecommons.org/publicdomain/zero/1.0/ */
 "use strict";
 
+const { sinon } = ChromeUtils.importESModule(
+  "resource://testing-common/Sinon.sys.mjs"
+);
+
 const UPDATE_TASK_LATENCY = "update-task-latency";
 const SEARCH_LATENCY = "search-latency";
 const INFERENCE_LATENCY = "inference-latency";
@@ -247,6 +251,13 @@ async function prepareSemanticSearchTest({
     return { skip: true };
   }
 
+  // Skip featureGate, Region and other non critical checks.
+  let canUseSemanticStub = sinon.stub(semanticManager, "canUseSemanticSearch");
+  canUseSemanticStub.get(() => true);
+  registerCleanupFunction(() => {
+    canUseSemanticStub.restore();
+  });
+
   semanticManager.embedder.options = CUSTOM_EMBEDDER_OPTIONS;
   await semanticManager.embedder.ensureEngine();
 
@@ -297,7 +308,9 @@ async function runInferenceAndCollectMetrics({
     }
 
     const memUsage = await getTotalMemoryUsage();
-    const metrics = fetchMetrics(res.metrics);
+    const metrics = fetchMetrics(
+      (res.metrics && res.metrics.runTimestamps) || []
+    );
     let embeddingLatency = 0;
 
     for (const [metricName, value] of Object.entries(metrics)) {

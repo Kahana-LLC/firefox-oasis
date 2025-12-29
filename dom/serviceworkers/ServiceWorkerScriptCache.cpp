@@ -676,8 +676,7 @@ nsresult CompareNetwork::Initialize(nsIPrincipal* aPrincipal,
     net::CookieJarSettings::Cast(cookieJarSettings)
         ->SetPartitionKey(aPrincipal->OriginAttributesRef().mPartitionKey);
   } else {
-    net::CookieJarSettings::Cast(cookieJarSettings)
-        ->SetPartitionKey(uri, false);
+    net::CookieJarSettings::Cast(cookieJarSettings)->SetPartitionKey(uri);
   }
 
   // Note that because there is no "serviceworker" RequestContext type, we can
@@ -893,6 +892,12 @@ CompareNetwork::OnStreamComplete(nsIStreamLoader* aLoader,
 
   nsresult rv = NS_ERROR_FAILURE;
   auto guard = MakeScopeExit([&] { NetworkFinish(rv); });
+
+  if (aLen > GetWorkerScriptMaxSizeInBytes()) {
+    rv = NS_ERROR_DOM_ABORT_ERR;  // This will make sure an exception gets
+                                  // thrown to the global.
+    return NS_OK;
+  }
 
   if (NS_WARN_IF(NS_FAILED(aStatus))) {
     rv = (aStatus == NS_ERROR_REDIRECT_LOOP) ? NS_ERROR_DOM_SECURITY_ERR

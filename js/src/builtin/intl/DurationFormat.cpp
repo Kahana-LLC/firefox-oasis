@@ -24,6 +24,7 @@
 #include "builtin/intl/FormatBuffer.h"
 #include "builtin/intl/LanguageTag.h"
 #include "builtin/intl/ListFormat.h"
+#include "builtin/intl/LocaleNegotiation.h"
 #include "builtin/intl/NumberFormat.h"
 #include "builtin/temporal/Duration.h"
 #include "gc/AllocKind.h"
@@ -68,6 +69,8 @@ const JSClass& DurationFormatObject::protoClass_ = PlainObject::class_;
 static bool durationFormat_format(JSContext* cx, unsigned argc, Value* vp);
 static bool durationFormat_formatToParts(JSContext* cx, unsigned argc,
                                          Value* vp);
+static bool durationFormat_supportedLocalesOf(JSContext* cx, unsigned argc,
+                                              Value* vp);
 
 static bool durationFormat_toSource(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
@@ -76,8 +79,7 @@ static bool durationFormat_toSource(JSContext* cx, unsigned argc, Value* vp) {
 }
 
 static const JSFunctionSpec durationFormat_static_methods[] = {
-    JS_SELF_HOSTED_FN("supportedLocalesOf",
-                      "Intl_DurationFormat_supportedLocalesOf", 1, 0),
+    JS_FN("supportedLocalesOf", durationFormat_supportedLocalesOf, 1, 0),
     JS_FS_END,
 };
 
@@ -314,6 +316,7 @@ static auto ToDurationValue(const temporal::Duration& duration,
       return DurationValue{duration.microseconds};
     case TemporalUnit::Nanosecond:
       return DurationValue{duration.nanoseconds};
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
   }
@@ -348,6 +351,7 @@ static PropertyName* DurationDisplayName(temporal::TemporalUnit unit,
       return cx->names().microsecondsDisplay;
     case TemporalUnit::Nanosecond:
       return cx->names().nanosecondsDisplay;
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
   }
@@ -403,6 +407,7 @@ static PropertyName* DurationStyleName(temporal::TemporalUnit unit,
       return cx->names().microsecondsStyle;
     case TemporalUnit::Nanosecond:
       return cx->names().nanosecondsStyle;
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
   }
@@ -481,6 +486,7 @@ static DurationUnitOptions GetUnitOptions(const DurationFormatOptions& options,
       return GET_UNIT_OPTIONS(microseconds);
     case TemporalUnit::Nanosecond:
       return GET_UNIT_OPTIONS(nanoseconds);
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
 
@@ -531,6 +537,7 @@ static void SetUnitOptions(DurationFormatOptions& options,
     case TemporalUnit::Nanosecond:
       SET_UNIT_OPTIONS(nanoseconds);
       return;
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
 
@@ -688,6 +695,7 @@ static std::string_view UnitName(temporal::TemporalUnit unit) {
       return "microsecond";
     case TemporalUnit::Nanosecond:
       return "nanosecond";
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
   }
@@ -721,6 +729,7 @@ static auto PartUnitName(temporal::TemporalUnit unit) {
       return &JSAtomState::microsecond;
     case TemporalUnit::Nanosecond:
       return &JSAtomState::nanosecond;
+    case TemporalUnit::Unset:
     case TemporalUnit::Auto:
       break;
   }
@@ -1791,6 +1800,23 @@ static bool durationFormat_formatToParts(JSContext* cx, unsigned argc,
   CallArgs args = CallArgsFromVp(argc, vp);
   return CallNonGenericMethod<IsDurationFormat, durationFormat_formatToParts>(
       cx, args);
+}
+
+/**
+ * Intl.DurationFormat.supportedLocalesOf ( locales [ , options ] )
+ */
+static bool durationFormat_supportedLocalesOf(JSContext* cx, unsigned argc,
+                                              Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+
+  // Steps 1-3.
+  auto* array = SupportedLocalesOf(cx, AvailableLocaleKind::DurationFormat,
+                                   args.get(0), args.get(1));
+  if (!array) {
+    return false;
+  }
+  args.rval().setObject(*array);
+  return true;
 }
 
 bool js::TemporalDurationToLocaleString(JSContext* cx,

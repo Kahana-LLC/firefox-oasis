@@ -22,8 +22,8 @@ gcloud:
     - model: MediumPhone.arm
       version: 32
       locale: en_US
-    - model: redfin
-      version: 30
+    - model: tokay
+      version: 35
       locale: en_US
     - model: oriole
       version: 31
@@ -33,7 +33,7 @@ gcloud:
       locale: en_US
 
   type: robo
-  robo-script: robo-scripts/default-browser-dismissal.json
+  robo-script: robo-scripts/fenix-robo-script.json
 
 flank:
   project: GOOGLE_PROJECT

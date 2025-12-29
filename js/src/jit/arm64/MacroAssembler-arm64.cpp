@@ -1639,7 +1639,7 @@ CodeOffset MacroAssembler::call(wasm::SymbolicAddress imm) {
   return CodeOffset(currentOffset());
 }
 
-void MacroAssembler::call(const Address& addr) {
+CodeOffset MacroAssembler::call(const Address& addr) {
   vixl::UseScratchRegisterScope temps(this);
   const Register scratch = temps.AcquireX().asUnsized();
   // This sync has been observed (and is expected) to be necessary.
@@ -1647,6 +1647,7 @@ void MacroAssembler::call(const Address& addr) {
   syncStackPtr();
   loadPtr(addr, scratch);
   Blr(ARMRegister(scratch, 64));
+  return CodeOffset(currentOffset());
 }
 
 void MacroAssembler::call(JitCode* c) {
@@ -1860,11 +1861,7 @@ void MacroAssembler::callWithABIPre(uint32_t* stackAdjust, bool callFromWasm) {
   assertStackAlignment(ABIStackAlignment);
 }
 
-void MacroAssembler::callWithABIPost(uint32_t stackAdjust, ABIType result,
-                                     bool callFromWasm) {
-  // wasm operates without the need for dynamic alignment of SP.
-  MOZ_ASSERT(!(dynamicAlignment_ && callFromWasm));
-
+void MacroAssembler::callWithABIPost(uint32_t stackAdjust, ABIType result) {
   // Call boundaries communicate stack via SP, so we must resync PSP now.
   initPseudoStackPtr();
 

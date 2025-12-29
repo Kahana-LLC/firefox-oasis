@@ -10,6 +10,8 @@ import mozilla.components.compose.browser.toolbar.BrowserToolbar
  * Test tags for the [BrowserToolbar] composable.
  */
 object BrowserToolbarTestTags {
+    const val MINIMAL_ADDRESS_BAR = "MINIMAL_ADDRESS_BAR"
+
     /**
      * Test tag for the website origin box while in "display" mode.
      */
@@ -27,9 +29,19 @@ object BrowserToolbarTestTags {
     const val ADDRESSBAR_URL = "ADDRESSBAR_URL"
 
     /**
+     * Test tag for the page load progress bar.
+     */
+    const val ADDRESSBAR_PROGRESSBAR = "ADDRESSBAR_PROGRESSBAR"
+
+    /**
      * Test tag for the unified search selector.
      */
     const val SEARCH_SELECTOR = "SEARCH_SELECTOR"
+
+    /**
+     * Test tag for tabs counter button shown in the toolbar while in "display" mode.
+     */
+    const val TABS_COUNTER = "ADDRESSBAR_TABS_COUNTER"
 
     /**
      * Test tag for the toolbar while in "edit" mode.

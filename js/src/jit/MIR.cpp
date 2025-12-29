@@ -570,6 +570,14 @@ const MDefinition* MDefinition::skipObjectGuards() const {
       result = result->toGuardMultipleShapes()->object();
       continue;
     }
+    if (result->isGuardShapeListToOffset()) {
+      result = result->toGuardShapeListToOffset()->object();
+      continue;
+    }
+    if (result->isGuardMultipleShapesToOffset()) {
+      result = result->toGuardMultipleShapesToOffset()->object();
+      continue;
+    }
     if (result->isGuardNullProto()) {
       result = result->toGuardNullProto()->object();
       continue;
@@ -7179,7 +7187,8 @@ MDefinition* MGuardSpecificInt32::foldsTo(TempAllocator& alloc) {
 
 MDefinition* MGuardShape::foldsTo(TempAllocator& alloc) {
   if (object()->isGuardShape() &&
-      shape() == object()->toGuardShape()->shape()) {
+      shape() == object()->toGuardShape()->shape() && dependency() &&
+      object()->dependency() == dependency()) {
     return object();
   }
   return this;
@@ -7221,6 +7230,28 @@ bool MGuardShapeList::congruentTo(const MDefinition* ins) const {
 }
 
 AliasSet MGuardShapeList::getAliasSet() const {
+  return AliasSet::Load(AliasSet::ObjectFields);
+}
+
+bool MGuardShapeListToOffset::congruentTo(const MDefinition* ins) const {
+  if (!congruentIfOperandsEqual(ins)) {
+    return false;
+  }
+
+  const auto& shapesA = this->shapeList()->shapes();
+  const auto& shapesB = ins->toGuardShapeListToOffset()->shapeList()->shapes();
+  if (!std::equal(shapesA.begin(), shapesA.end(), shapesB.begin(),
+                  shapesB.end()))
+    return false;
+
+  const auto& offsetsA = this->shapeList()->offsets();
+  const auto& offsetsB =
+      ins->toGuardShapeListToOffset()->shapeList()->offsets();
+  return std::equal(offsetsA.begin(), offsetsA.end(), offsetsB.begin(),
+                    offsetsB.end());
+}
+
+AliasSet MGuardShapeListToOffset::getAliasSet() const {
   return AliasSet::Load(AliasSet::ObjectFields);
 }
 
@@ -7304,6 +7335,19 @@ AliasSet MGuardMultipleShapes::getAliasSet() const {
   // store the list of shapes, but that object is internal and not exposed
   // to script, so it doesn't have to be in the alias set.
   return AliasSet::Load(AliasSet::ObjectFields);
+}
+
+AliasSet MGuardMultipleShapesToOffset::getAliasSet() const {
+  return AliasSet::Load(AliasSet::ObjectFields);
+}
+
+AliasSet MLoadFixedSlotFromOffset::getAliasSet() const {
+  return AliasSet::Load(AliasSet::FixedSlot);
+}
+
+AliasSet MLoadDynamicSlotFromOffset::getAliasSet() const {
+  MOZ_ASSERT(slots()->type() == MIRType::Slots);
+  return AliasSet::Load(AliasSet::DynamicSlot);
 }
 
 AliasSet MGuardGlobalGeneration::getAliasSet() const {
@@ -7527,6 +7571,10 @@ AliasSet MGuardNoDenseElements::getAliasSet() const {
 }
 
 AliasSet MIteratorHasIndices::getAliasSet() const {
+  return AliasSet::Load(AliasSet::ObjectFields);
+}
+
+AliasSet MIteratorsMatchAndHaveIndices::getAliasSet() const {
   return AliasSet::Load(AliasSet::ObjectFields);
 }
 
@@ -7849,7 +7897,6 @@ AliasSet MStoreSlotByIteratorIndex::getAliasSet() const {
                          AliasSet::DynamicSlot | AliasSet::Element);
 }
 
-#ifndef JS_CODEGEN_X86
 AliasSet MLoadSlotByIteratorIndexIndexed::getAliasSet() const {
   return AliasSet::Load(AliasSet::ObjectFields | AliasSet::FixedSlot |
                         AliasSet::DynamicSlot | AliasSet::Element);
@@ -7859,7 +7906,6 @@ AliasSet MStoreSlotByIteratorIndexIndexed::getAliasSet() const {
   return AliasSet::Store(AliasSet::ObjectFields | AliasSet::FixedSlot |
                          AliasSet::DynamicSlot | AliasSet::Element);
 }
-#endif
 
 MDefinition* MGuardInt32IsNonNegative::foldsTo(TempAllocator& alloc) {
   MOZ_ASSERT(index()->type() == MIRType::Int32);

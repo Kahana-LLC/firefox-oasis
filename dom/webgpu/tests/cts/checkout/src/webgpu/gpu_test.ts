@@ -19,6 +19,7 @@ import {
   TypedArrayBufferView,
   TypedArrayBufferViewConstructor,
   unreachable,
+  hasFeature,
 } from '../common/util/util.js';
 
 import { kPossibleLimits, kQueryTypeInfo, WGSLLanguageFeature } from './capability_info.js';
@@ -460,7 +461,10 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
    * Note: Try to use one of the more specific skipIf tests if possible.
    */
   skipIfDeviceDoesNotHaveFeature(feature: GPUFeatureName) {
-    this.skipIf(!this.device.features.has(feature), `device does not have feature: '${feature}'`);
+    this.skipIf(
+      !hasFeature(this.device.features, feature),
+      `device does not have feature: '${feature}'`
+    );
   }
 
   /**
@@ -497,7 +501,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       }
       const feature = getRequiredFeatureForTextureFormat(format);
       this.skipIf(
-        !!feature && !this.device.features.has(feature),
+        !!feature && !hasFeature(this.device.features, feature),
         `texture format '${format}' requires feature: '${feature}'`
       );
     }
@@ -603,7 +607,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       this.skipIf(isSintOrUintFormat(format), 'sint/uint formats are not blendable');
       if (is32Float(format)) {
         this.skipIf(
-          !this.device.features.has('float32-blendable'),
+          !hasFeature(this.device.features, 'float32-blendable'),
           `texture format '${format}' is not blendable`
         );
       }
@@ -616,7 +620,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       this.skipIf(isSintOrUintFormat(format), 'sint/uint formats are not filterable');
       if (is32Float(format)) {
         this.skipIf(
-          !this.device.features.has('float32-filterable'),
+          !hasFeature(this.device.features, 'float32-filterable'),
           `texture format '${format}' is not filterable`
         );
       }
@@ -670,6 +674,15 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
   hasLanguageFeature(langFeature: WGSLLanguageFeature) {
     const lf = getGPU(this.rec).wgslLanguageFeatures;
     return lf !== undefined && lf.has(langFeature);
+  }
+
+  /** Skips this test case if the GPUTextureUsage `TRANSIENT_ATTACHMENT` is *not* supported. */
+  skipIfTransientAttachmentNotSupported() {
+    const isTransientAttachmentSupported = 'TRANSIENT_ATTACHMENT' in GPUTextureUsage;
+    this.skipIf(
+      !isTransientAttachmentSupported,
+      'GPUTextureUsage TRANSIENT_ATTACHMENT is not supported'
+    );
   }
 
   /**

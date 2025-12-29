@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "AnchorPositioningUtils.h"
+#include "CSSAlignUtils.h"
 #include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/ComputedStyle.h"
@@ -73,27 +74,6 @@ void nsContainerFrame::SetInitialChildList(ChildListID aListID,
     MOZ_ASSERT(mFrames.IsEmpty(),
                "unexpected second call to SetInitialChildList");
     mFrames = std::move(aChildList);
-  } else if (aListID == FrameChildListID::Backdrop) {
-    MOZ_ASSERT(StyleDisplay()->mTopLayer != StyleTopLayer::None,
-               "Only top layer frames should have backdrop");
-    MOZ_ASSERT(HasAnyStateBits(NS_FRAME_OUT_OF_FLOW),
-               "Top layer frames should be out-of-flow");
-    MOZ_ASSERT(!GetProperty(BackdropProperty()),
-               "We shouldn't have setup backdrop frame list before");
-#ifdef DEBUG
-    {
-      nsIFrame* placeholder = aChildList.FirstChild();
-      MOZ_ASSERT(aChildList.OnlyChild(), "Should have only one backdrop");
-      MOZ_ASSERT(placeholder->IsPlaceholderFrame(),
-                 "The frame to be stored should be a placeholder");
-      MOZ_ASSERT(static_cast<nsPlaceholderFrame*>(placeholder)
-                     ->GetOutOfFlowFrame()
-                     ->IsBackdropFrame(),
-                 "The placeholder should points to a backdrop frame");
-    }
-#endif
-    nsFrameList* list = new (PresShell()) nsFrameList(std::move(aChildList));
-    SetProperty(BackdropProperty(), list);
   } else {
     MOZ_ASSERT_UNREACHABLE("Unexpected child list");
   }
@@ -181,8 +161,8 @@ void nsContainerFrame::RemoveFrame(DestroyContext& aContext,
 }
 
 void nsContainerFrame::DestroyAbsoluteFrames(DestroyContext& aContext) {
-  if (IsAbsoluteContainer()) {
-    GetAbsoluteContainingBlock()->DestroyFrames(aContext);
+  if (auto* absCB = GetAbsoluteContainingBlock()) {
+    absCB->DestroyFrames(aContext);
     MarkAsNotAbsoluteContainingBlock();
   }
 }
@@ -241,7 +221,7 @@ void nsContainerFrame::Destroy(DestroyContext& aContext) {
 
   if (MOZ_UNLIKELY(!mProperties.IsEmpty())) {
     using T = mozilla::FrameProperties::UntypedDescriptor;
-    bool hasO = false, hasOC = false, hasEOC = false, hasBackdrop = false;
+    bool hasO = false, hasOC = false, hasEOC = false;
     mProperties.ForEach([&](const T& aProp, uint64_t) {
       if (aProp == OverflowProperty()) {
         hasO = true;
@@ -249,8 +229,6 @@ void nsContainerFrame::Destroy(DestroyContext& aContext) {
         hasOC = true;
       } else if (aProp == ExcessOverflowContainersProperty()) {
         hasEOC = true;
-      } else if (aProp == BackdropProperty()) {
-        hasBackdrop = true;
       }
       return true;
     });
@@ -270,13 +248,6 @@ void nsContainerFrame::Destroy(DestroyContext& aContext) {
     if (hasEOC) {
       SafelyDestroyFrameListProp(aContext, presShell,
                                  ExcessOverflowContainersProperty());
-    }
-
-    MOZ_ASSERT(!GetProperty(BackdropProperty()) ||
-                   StyleDisplay()->mTopLayer != StyleTopLayer::None,
-               "only top layer frame may have backdrop");
-    if (hasBackdrop) {
-      SafelyDestroyFrameListProp(aContext, presShell, BackdropProperty());
     }
   }
 
@@ -302,10 +273,6 @@ const nsFrameList& nsContainerFrame::GetChildList(ChildListID aListID) const {
     }
     case FrameChildListID::ExcessOverflowContainers: {
       nsFrameList* list = GetExcessOverflowContainers();
-      return list ? *list : nsFrameList::EmptyList();
-    }
-    case FrameChildListID::Backdrop: {
-      nsFrameList* list = GetProperty(BackdropProperty());
       return list ? *list : nsFrameList::EmptyList();
     }
     default:
@@ -334,9 +301,6 @@ void nsContainerFrame::GetChildLists(nsTArray<ChildList>* aLists) const {
       (void)this;  // silence clang -Wunused-lambda-capture in opt builds
       reinterpret_cast<L>(aValue)->AppendIfNonempty(
           aLists, FrameChildListID::ExcessOverflowContainers);
-    } else if (aProp == BackdropProperty()) {
-      reinterpret_cast<L>(aValue)->AppendIfNonempty(aLists,
-                                                    FrameChildListID::Backdrop);
     }
     return true;
   });
@@ -496,8 +460,9 @@ void nsContainerFrame::DisplaySelectionOverlay(nsDisplayListBuilder* aBuilder,
   // look up to see what selection(s) are on this frame
   UniquePtr<SelectionDetails> details = frameSelection->LookUpSelection(
       newContent, offset, 1,
-      IsSelectable() ? nsFrameSelection::IgnoreNormalSelection::No
-                     : nsFrameSelection::IgnoreNormalSelection::Yes);
+      ShouldPaintNormalSelection()
+          ? nsFrameSelection::IgnoreNormalSelection::No
+          : nsFrameSelection::IgnoreNormalSelection::Yes);
   if (!details) {
     return;
   }
@@ -637,14 +602,14 @@ void nsContainerFrame::DoInlinePrefISize(const IntrinsicSizeInput& aInput,
 
 /* virtual */
 LogicalSize nsContainerFrame::ComputeAutoSize(
-    gfxContext* aRenderingContext, WritingMode aWM, const LogicalSize& aCBSize,
-    nscoord aAvailableISize, const LogicalSize& aMargin,
-    const mozilla::LogicalSize& aBorderPadding,
+    const SizeComputationInput& aSizingInput, WritingMode aWM,
+    const LogicalSize& aCBSize, nscoord aAvailableISize,
+    const LogicalSize& aMargin, const mozilla::LogicalSize& aBorderPadding,
     const StyleSizeOverrides& aSizeOverrides, ComputeSizeFlags aFlags) {
   const bool isTableCaption = IsTableCaption();
   // Skip table caption, which requires special sizing - see bug 1109571.
   if (IsAbsolutelyPositionedWithDefiniteContainingBlock() && !isTableCaption) {
-    return ComputeAbsolutePosAutoSize(aRenderingContext, aWM, aCBSize,
+    return ComputeAbsolutePosAutoSize(aSizingInput, aWM, aCBSize,
                                       aAvailableISize, aMargin, aBorderPadding,
                                       aSizeOverrides, aFlags);
   }
@@ -652,7 +617,7 @@ LogicalSize nsContainerFrame::ComputeAutoSize(
   if (aFlags.contains(ComputeSizeFlag::ShrinkWrap)) {
     // Delegate to nsIFrame::ComputeAutoSize() for computing the shrink-wrapping
     // size.
-    result = nsIFrame::ComputeAutoSize(aRenderingContext, aWM, aCBSize,
+    result = nsIFrame::ComputeAutoSize(aSizingInput, aWM, aCBSize,
                                        aAvailableISize, aMargin, aBorderPadding,
                                        aSizeOverrides, aFlags);
   } else {
@@ -667,8 +632,8 @@ LogicalSize nsContainerFrame::ComputeAutoSize(
 
     WritingMode tableWM = GetParent()->GetWritingMode();
     const IntrinsicSizeInput input(
-        aRenderingContext, Some(aCBSize.ConvertTo(GetWritingMode(), aWM)),
-        Nothing());
+        aSizingInput.mRenderingContext,
+        Some(aCBSize.ConvertTo(GetWritingMode(), aWM)), Nothing());
     if (aWM.IsOrthogonalTo(tableWM)) {
       // For an orthogonal caption on a block-dir side of the table, shrink-wrap
       // to min-isize.
@@ -846,21 +811,22 @@ void nsContainerFrame::ReflowAbsoluteFrames(nsPresContext* aPresContext,
                                             ReflowOutput& aDesiredSize,
                                             const ReflowInput& aReflowInput,
                                             nsReflowStatus& aStatus) {
-  if (HasAbsolutelyPositionedChildren()) {
-    AbsoluteContainingBlock* absoluteContainer = GetAbsoluteContainingBlock();
-
+  auto* absoluteContainer = GetAbsoluteContainingBlock();
+  if (absoluteContainer && absoluteContainer->PrepareAbsoluteFrames(this)) {
     // The containing block for the abs pos kids is formed by our padding edge.
-    nsMargin usedBorder = GetUsedBorder();
-    nsRect containingBlock(nsPoint{}, aDesiredSize.PhysicalSize());
-    containingBlock.Deflate(usedBorder);
+    const auto wm = GetWritingMode();
+    LogicalRect cbRect(wm, LogicalPoint(wm), aDesiredSize.Size(wm));
+    cbRect.Deflate(wm, GetLogicalUsedBorder(wm).ApplySkipSides(
+                           PreReflowBlockLevelLogicalSkipSides()));
     // XXX: To optimize the performance, set the flags only when the CB width or
     // height actually changes.
     AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
                             AbsPosReflowFlag::CBWidthChanged,
                             AbsPosReflowFlag::CBHeightChanged};
-    absoluteContainer->Reflow(this, aPresContext, aReflowInput, aStatus,
-                              containingBlock, flags,
-                              &aDesiredSize.mOverflowAreas);
+    absoluteContainer->Reflow(
+        this, aPresContext, aReflowInput, aStatus,
+        cbRect.GetPhysicalRect(wm, aDesiredSize.PhysicalSize()), flags,
+        &aDesiredSize.mOverflowAreas);
   }
 }
 
@@ -1011,6 +977,15 @@ void nsContainerFrame::DisplayOverflowContainers(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
   if (nsFrameList* overflowconts = GetOverflowContainers()) {
     for (nsIFrame* frame : *overflowconts) {
+      BuildDisplayListForChild(aBuilder, frame, aLists);
+    }
+  }
+}
+
+void nsContainerFrame::DisplayPushedAbsoluteFrames(
+    nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
+  for (nsIFrame* frame : GetChildList(FrameChildListID::Absolute)) {
+    if (frame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW)) {
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }
   }
@@ -2446,45 +2421,6 @@ void nsContainerFrame::ConsiderChildOverflow(OverflowAreas& aOverflowAreas,
   }
 }
 
-// Map a raw StyleAlignFlags value to the used one.
-static StyleAlignFlags MapCSSAlignment(StyleAlignFlags aFlags,
-                                       const ReflowInput& aChildRI,
-                                       LogicalAxis aLogicalAxis,
-                                       WritingMode aWM) {
-  // Extract and strip the flag bits
-  StyleAlignFlags alignmentFlags = aFlags & StyleAlignFlags::FLAG_BITS;
-  aFlags &= ~StyleAlignFlags::FLAG_BITS;
-
-  if (aFlags == StyleAlignFlags::NORMAL) {
-    // "the 'normal' keyword behaves as 'start' on replaced
-    // absolutely-positioned boxes, and behaves as 'stretch' on all other
-    // absolutely-positioned boxes."
-    // https://drafts.csswg.org/css-align/#align-abspos
-    // https://drafts.csswg.org/css-align/#justify-abspos
-    aFlags = aChildRI.mFrame->IsReplaced() ? StyleAlignFlags::START
-                                           : StyleAlignFlags::STRETCH;
-  } else if (aFlags == StyleAlignFlags::FLEX_START) {
-    aFlags = StyleAlignFlags::START;
-  } else if (aFlags == StyleAlignFlags::FLEX_END) {
-    aFlags = StyleAlignFlags::END;
-  } else if (aFlags == StyleAlignFlags::LEFT ||
-             aFlags == StyleAlignFlags::RIGHT) {
-    if (aLogicalAxis == LogicalAxis::Inline) {
-      const bool isLeft = (aFlags == StyleAlignFlags::LEFT);
-      aFlags = (isLeft == aWM.IsBidiLTR()) ? StyleAlignFlags::START
-                                           : StyleAlignFlags::END;
-    } else {
-      aFlags = StyleAlignFlags::START;
-    }
-  } else if (aFlags == StyleAlignFlags::BASELINE) {
-    aFlags = StyleAlignFlags::START;
-  } else if (aFlags == StyleAlignFlags::LAST_BASELINE) {
-    aFlags = StyleAlignFlags::END;
-  }
-
-  return (aFlags | alignmentFlags);
-}
-
 StyleAlignFlags nsContainerFrame::CSSAlignmentForAbsPosChild(
     const ReflowInput& aChildRI, LogicalAxis aLogicalAxis) const {
   MOZ_ASSERT(aChildRI.mFrame->IsAbsolutelyPositioned(),
@@ -2493,34 +2429,36 @@ StyleAlignFlags nsContainerFrame::CSSAlignmentForAbsPosChild(
   // `auto` takes from parent's `align-items`.
   StyleAlignFlags alignment =
       aChildRI.mStylePosition->UsedSelfAlignment(aLogicalAxis, Style());
-  return MapCSSAlignment(alignment, aChildRI, aLogicalAxis, GetWritingMode());
+  return CSSAlignUtils::UsedAlignmentForAbsPos(aChildRI.mFrame, alignment,
+                                               aLogicalAxis, GetWritingMode());
 }
 
 StyleAlignFlags
 nsContainerFrame::CSSAlignmentForAbsPosChildWithinContainingBlock(
-    const ReflowInput& aChildRI, LogicalAxis aLogicalAxis,
+    const SizeComputationInput& aSizingInput, LogicalAxis aLogicalAxis,
     const StylePositionArea& aResolvedPositionArea,
     const LogicalSize& aCBSize) const {
-  MOZ_ASSERT(aChildRI.mFrame->IsAbsolutelyPositioned(),
+  MOZ_ASSERT(aSizingInput.mFrame->IsAbsolutelyPositioned(),
              "This method should only be called for abspos children");
   // When determining the position of absolutely-positioned boxes,
   // `auto` behaves as `normal`.
   StyleAlignFlags alignment =
-      aChildRI.mStylePosition->UsedSelfAlignment(aLogicalAxis, nullptr);
+      aSizingInput.mFrame->StylePosition()->UsedSelfAlignment(aLogicalAxis,
+                                                              nullptr);
 
   // Check if position-area is set - if so, it determines the default alignment
   // https://drafts.csswg.org/css-anchor-position/#position-area-alignment
   if (!aResolvedPositionArea.IsNone() && alignment == StyleAlignFlags::NORMAL) {
     const WritingMode cbWM = GetWritingMode();
     const auto anchorResolutionParams = AnchorPosResolutionParams::From(
-        &aChildRI, /* aIgnorePositionArea = */ true);
+        &aSizingInput, /* aIgnorePositionArea = */ true);
     const auto anchorOffsetResolutionParams =
         AnchorPosOffsetResolutionParams::ExplicitCBFrameSize(
             anchorResolutionParams, &aCBSize);
 
     // Check if we have exactly one auto inset in this axis (IMCB situation)
     const auto singleAutoInset =
-        aChildRI.mStylePosition->GetSingleAutoInsetInAxis(
+        aSizingInput.mFrame->StylePosition()->GetSingleAutoInsetInAxis(
             aLogicalAxis, cbWM, anchorOffsetResolutionParams);
 
     // Check if exactly one inset in the axis is auto
@@ -2539,15 +2477,19 @@ nsContainerFrame::CSSAlignmentForAbsPosChildWithinContainingBlock(
                                                   : StyleAlignFlags::START;
       alignment |= StyleAlignFlags::UNSAFE;
     } else {
-      auto keyword = aLogicalAxis == LogicalAxis::Inline
-                         ? aResolvedPositionArea.first
-                         : aResolvedPositionArea.second;
-      // Use normal position-area alignment
-      Servo_ResolvePositionAreaSelfAlignment(&keyword, &alignment);
+      // Use default position-area self-alignment:
+      // https://drafts.csswg.org/css-anchor-position-1/#position-area-alignment
+      const auto axis = ToStyleLogicalAxis(aLogicalAxis);
+      const auto cbSWM = cbWM.ToStyleWritingMode();
+      const auto selfWM =
+          aSizingInput.mFrame->GetWritingMode().ToStyleWritingMode();
+      Servo_ResolvePositionAreaSelfAlignment(&aResolvedPositionArea, axis,
+                                             &cbSWM, &selfWM, &alignment);
     }
   }
 
-  return MapCSSAlignment(alignment, aChildRI, aLogicalAxis, GetWritingMode());
+  return CSSAlignUtils::UsedAlignmentForAbsPos(aSizingInput.mFrame, alignment,
+                                               aLogicalAxis, GetWritingMode());
 }
 
 nsOverflowContinuationTracker::nsOverflowContinuationTracker(
@@ -2827,9 +2769,10 @@ void nsContainerFrame::SanityCheckChildListsBeforeReflow() const {
   const auto didPushItemsBit = IsFlexContainerFrame()
                                    ? NS_STATE_FLEX_DID_PUSH_ITEMS
                                    : NS_STATE_GRID_DID_PUSH_ITEMS;
-  ChildListIDs absLists = {FrameChildListID::Absolute, FrameChildListID::Fixed,
-                           FrameChildListID::OverflowContainers,
-                           FrameChildListID::ExcessOverflowContainers};
+  ChildListIDs absLists = {
+      FrameChildListID::Absolute, FrameChildListID::PushedAbsolute,
+      FrameChildListID::Fixed, FrameChildListID::OverflowContainers,
+      FrameChildListID::ExcessOverflowContainers};
   ChildListIDs itemLists = {FrameChildListID::Principal,
                             FrameChildListID::Overflow};
   for (const nsIFrame* f = this; f; f = f->GetNextInFlow()) {
@@ -2839,9 +2782,8 @@ void nsContainerFrame::SanityCheckChildListsBeforeReflow() const {
                "the process.");
     for (const auto& [list, listID] : f->ChildLists()) {
       if (!itemLists.contains(listID)) {
-        MOZ_ASSERT(
-            absLists.contains(listID) || listID == FrameChildListID::Backdrop,
-            "unexpected non-empty child list");
+        MOZ_ASSERT(absLists.contains(listID),
+                   "unexpected non-empty child list");
         continue;
       }
       for (const auto* child : list) {

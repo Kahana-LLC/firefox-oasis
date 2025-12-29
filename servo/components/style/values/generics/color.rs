@@ -5,6 +5,7 @@
 //! Generic types for color properties.
 
 use crate::color::{mix::ColorInterpolationMethod, AbsoluteColor, ColorFunction};
+use crate::derives::*;
 use crate::values::{
     computed::ToComputedValue, specified::percentage::ToPercentage, ParseError, Parser,
 };
@@ -91,8 +92,15 @@ impl<Color: ToCss, Percentage: ToCss + ToPercentage> ToCss for ColorMix<Color, P
         }
 
         dest.write_str("color-mix(")?;
-        self.interpolation.to_css(dest)?;
-        dest.write_str(", ")?;
+
+        // If the color interpolation method is oklab (which is now the default),
+        // it can be omitted.
+        // See: https://github.com/web-platform-tests/interop/issues/1166
+        if !self.interpolation.is_default() {
+            self.interpolation.to_css(dest)?;
+            dest.write_str(", ")?;
+        }
+
         self.left.to_css(dest)?;
         if !can_omit(&self.left_percentage, &self.right_percentage, true) {
             dest.write_char(' ')?;

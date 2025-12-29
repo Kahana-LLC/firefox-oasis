@@ -18,7 +18,6 @@ UNSUPPORTED_FEATURES = set(
     [
         "tail-call-optimization",
         "Intl.Locale-info",  # Bug 1693576
-        "legacy-regexp",  # Bug 1306461
         "source-phase-imports",
         "source-phase-imports-module-source",
         "import-defer",
@@ -39,7 +38,7 @@ FEATURE_CHECK_NEEDED = {
     "upsert": "!Map.prototype.getOrInsertComputed",  # Bug 1986668
     "immutable-arraybuffer": "!ArrayBuffer.prototype.sliceToImmutable",  # Bug 1952253
 }
-RELEASE_OR_BETA = set()
+RELEASE_OR_BETA = set(["legacy-regexp"])
 SHELL_OPTIONS = {
     "ShadowRealm": "--enable-shadow-realms",
     "symbols-as-weakmap-keys": "--enable-symbols-as-weakmap-keys",
@@ -785,12 +784,7 @@ def fetch_pr_files(inDir, outDir, prNumber, strictTests):
                 assert pageUrl.startswith("https://api.github.com/")
 
                 # Ensure the relative URL marker has the expected format.
-                assert (
-                    rel == 'rel="prev"'
-                    or rel == 'rel="next"'
-                    or rel == 'rel="first"'
-                    or rel == 'rel="last"'
-                )
+                assert rel in {'rel="prev"', 'rel="next"', 'rel="first"', 'rel="last"'}
 
                 # We only need the URL for the next page.
                 if rel == 'rel="next"':

@@ -29,7 +29,7 @@ class TbplFormatter(BaseFormatter):
     """
 
     def __init__(self, compact=False, summary_on_shutdown=False, **kwargs):
-        super(TbplFormatter, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.suite_start_time = None
         self.test_start_times = {}
         self.buffer = None
@@ -42,7 +42,7 @@ class TbplFormatter(BaseFormatter):
     def __call__(self, data):
         if self.summary_on_shutdown:
             self.summary(data)
-        return super(TbplFormatter, self).__call__(data)
+        return super().__call__(data)
 
     @property
     def compact(self):
@@ -223,16 +223,19 @@ class TbplFormatter(BaseFormatter):
 
         status = data["status"]
 
+        subtest = data["subtest"]
+        subtest_str = (" | %s" % subtest) if subtest else ""
+
         if "expected" in data:
             if status in data.get("known_intermittent", []):
                 status = "KNOWN-INTERMITTENT-%s" % status
             else:
                 if not message:
                     message = "- expected %s" % data["expected"]
-                failure_line = "TEST-UNEXPECTED-%s | %s | %s %s\n" % (
+                failure_line = "TEST-UNEXPECTED-%s | %s%s %s\n" % (
                     status,
                     data["test"],
-                    data["subtest"],
+                    subtest_str,
                     message,
                 )
                 if data["expected"] != "PASS":
@@ -240,10 +243,10 @@ class TbplFormatter(BaseFormatter):
                     return failure_line + info_line
                 return failure_line
 
-        return "TEST-%s | %s | %s %s\n" % (
+        return "TEST-%s | %s%s %s\n" % (
             status,
             data["test"],
-            data["subtest"],
+            subtest_str,
             message,
         )
 

@@ -1623,6 +1623,12 @@ interface InputEventInit extends UIEventInit {
     targetRanges?: StaticRange[];
 }
 
+interface InputPickerColor {
+    component1: number;
+    component2: number;
+    component3: number;
+}
+
 interface InspectorCSSPropertyDefinition {
     fromJS: boolean;
     inherits: boolean;
@@ -11838,6 +11844,7 @@ interface HTMLInputElement extends HTMLElement, MozEditableElement, MozImageLoad
     checkValidity(): boolean;
     closeDateTimePicker(): void;
     getAutocompleteInfo(): AutocompleteInfo | null;
+    getColor(): InputPickerColor;
     getDateTimeInputBoxValue(): DateTimeValue;
     getFilesAndDirectories(): Promise<(File | Directory)[]>;
     getMaximum(): number;
@@ -11854,15 +11861,15 @@ interface HTMLInputElement extends HTMLElement, MozEditableElement, MozImageLoad
     reportValidity(): boolean;
     select(): void;
     setCustomValidity(error: string): void;
-    setDateTimePickerState(aIsOpen: boolean): void;
     setFocusState(aIsFocused: boolean): void;
+    setOpenState(aIsOpen: boolean): void;
     setRangeText(replacement: string): void;
     setRangeText(replacement: string, start: number, end: number, selectionMode?: SelectionMode): void;
     setSelectionRange(start: number, end: number, direction?: string): void;
+    setUserInputColor(aColor: InputPickerColor): void;
     showPicker(): void;
     stepDown(n?: number): void;
     stepUp(n?: number): void;
-    updateDateTimePicker(value?: DateTimeValue): void;
     updateValidityState(): void;
     addEventListener<K extends keyof HTMLElementEventMap>(type: K, listener: (this: HTMLInputElement, ev: HTMLElementEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void;
     addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;

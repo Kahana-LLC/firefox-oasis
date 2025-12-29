@@ -35,6 +35,7 @@ const DEFAULT_ENGINE_ICON =
  */
 export class SearchModeSwitcher {
   static DEFAULT_ICON = lazy.UrlbarUtils.ICON.SEARCH_GLASS;
+  static DEFAULT_ICON_KEYWORD_DISABLED = lazy.UrlbarUtils.ICON.GLOBE;
   #popup;
   #input;
   #toolbarbutton;
@@ -66,7 +67,10 @@ export class SearchModeSwitcher {
   async #onPopupShowing() {
     await this.#buildSearchModeList();
     this.#input.view.close({ showFocusBorder: false });
-    Glean.urlbarUnifiedsearchbutton.opened.add(1);
+
+    if (this.#input.sapName == "urlbar") {
+      Glean.urlbarUnifiedsearchbutton.opened.add(1);
+    }
   }
 
   /**
@@ -92,7 +96,9 @@ export class SearchModeSwitcher {
     this.#input.window.openPreferences("paneSearch");
     this.#popup.hidePopup();
 
-    Glean.urlbarUnifiedsearchbutton.picked.settings.add(1);
+    if (this.#input.sapName == "urlbar") {
+      Glean.urlbarUnifiedsearchbutton.picked.settings.add(1);
+    }
   }
 
   /**
@@ -194,7 +200,12 @@ export class SearchModeSwitcher {
   }
 
   observe(_subject, topic, data) {
-    if (!this.#input.window || this.#input.window.closed) {
+    if (
+      !this.#input.window ||
+      this.#input.window.closed ||
+      // TODO bug 2005783 stop observing when input is disconnected.
+      !this.#input.isConnected
+    ) {
       return;
     }
 
@@ -286,8 +297,12 @@ export class SearchModeSwitcher {
     const inSearchMode = this.#input.searchMode;
     if (!lazy.UrlbarPrefs.get("unifiedSearchButton.always")) {
       const keywordEnabled = lazy.UrlbarPrefs.get("keyword.enabled");
-      if (!keywordEnabled && !inSearchMode) {
-        icon = SearchModeSwitcher.DEFAULT_ICON;
+      if (
+        this.#input.sapName != "searchbar" &&
+        !keywordEnabled &&
+        !inSearchMode
+      ) {
+        icon = SearchModeSwitcher.DEFAULT_ICON_KEYWORD_DISABLED;
       }
     } else if (!inSearchMode) {
       // Use default icon set in CSS.
@@ -321,6 +336,16 @@ export class SearchModeSwitcher {
       labelEl.replaceChildren();
     } else {
       labelEl.textContent = label;
+    }
+
+    if (
+      !lazy.UrlbarPrefs.get("keyword.enabled") &&
+      this.#input.sapName != "searchbar"
+    ) {
+      this.#input.document.l10n.setAttributes(
+        this.#toolbarbutton,
+        "urlbar-searchmode-no-keyword"
+      );
     }
   }
 
@@ -495,12 +520,16 @@ export class SearchModeSwitcher {
     this.#popup.hidePopup();
 
     if (engine) {
-      // TODO do we really need to distinguish here?
-      Glean.urlbarUnifiedsearchbutton.picked[
-        engine.isConfigEngine ? "builtin_search" : "addon_search"
-      ].add(1);
+      if (this.#input.sapName == "urlbar") {
+        // TODO do we really need to distinguish here?
+        Glean.urlbarUnifiedsearchbutton.picked[
+          engine.isConfigEngine ? "builtin_search" : "addon_search"
+        ].add(1);
+      }
     } else if (restrict) {
-      Glean.urlbarUnifiedsearchbutton.picked.local_search.add(1);
+      if (this.#input.sapName == "urlbar") {
+        Glean.urlbarUnifiedsearchbutton.picked.local_search.add(1);
+      }
     } else {
       console.warn(
         `Unexpected search: ${JSON.stringify({ engine, restrict, openEngineHomePage })}`

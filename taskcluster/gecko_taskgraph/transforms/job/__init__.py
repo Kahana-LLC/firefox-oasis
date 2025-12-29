@@ -58,6 +58,7 @@ job_description_schema = Schema(
         Optional("index"): task_description_schema["index"],
         Optional("run-on-repo-type"): task_description_schema["run-on-repo-type"],
         Optional("run-on-projects"): task_description_schema["run-on-projects"],
+        Optional("run-on-git-branches"): task_description_schema["run-on-git-branches"],
         Optional("shipping-phase"): task_description_schema["shipping-phase"],
         Optional("shipping-product"): task_description_schema["shipping-product"],
         Optional("always-target"): task_description_schema["always-target"],
@@ -247,6 +248,33 @@ def use_uv(config, jobs):
             env["MOZ_UV_HOME"] = os.path.join(moz_fetches_dir, "uv")
 
             yield job
+
+
+@transforms.add
+def add_perfherder_fetch_content_artifact(config, jobs):
+    for job in jobs:
+        if not job.get("fetches"):
+            yield job
+            continue
+
+        worker = job.setdefault("worker", {})
+        env = worker.setdefault("env", {})
+        artifacts = worker.setdefault("artifacts", [])
+        perfherder_fetch_content_json_path = (
+            "/builds/worker/perf/perfherder-data-fetch-content.json"
+            if worker.get("implementation") == "docker-worker"
+            else "./perf/perfherder-data-fetch-content.json"
+        )
+        artifacts.append(
+            {
+                "type": "file",
+                "name": "public/fetch/perfherder-data-fetch-content.json",
+                "path": perfherder_fetch_content_json_path,
+            }
+        )
+        env["PERFHERDER_FETCH_CONTENT_JSON_PATH"] = perfherder_fetch_content_json_path
+
+        yield job
 
 
 @transforms.add

@@ -146,7 +146,6 @@ fun TopSites(
     onTopSitesItemBound: () -> Unit,
 ) {
     val topSitesToShow = topSites.take(TOP_SITES_TO_SHOW).chunked(TOP_SITES_PER_ROW)
-    val needsInvisibleRow = topSites.size <= (TOP_SITES_TO_SHOW - TOP_SITES_PER_ROW)
 
     Column(
         modifier = Modifier
@@ -192,34 +191,9 @@ fun TopSites(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
-
-                if (needsInvisibleRow) {
-                    InvisibleRow()
-                }
             }
         }
     }
-}
-
-/**
- * Workaround for when the second pager page only has one row, and the pager shrinks to fit. This
- * invisible row mimics top sites items to match the correct height.
- */
-@Composable
-private fun InvisibleRow() {
-    Spacer(modifier = Modifier.height(4.dp + TOP_SITES_FAVICON_CARD_SIZE.dp + 6.dp))
-
-    Text(
-        text = "",
-        style = FirefoxTheme.typography.caption,
-    )
-
-    Text(
-        text = "",
-        fontSize = 10.sp,
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
 }
 
 /**
@@ -436,19 +410,19 @@ private fun TopSiteFaviconCard(
                 color = backgroundColor,
                 shape = RoundedCornerShape(4.dp),
             ) {
-                TopSiteFavicon(url = topSite.url)
+                TopSiteFavicon(topSite = topSite)
             }
         }
     }
 }
 
 @Composable
-private fun TopSiteFavicon(url: String) {
-    when (val favicon = getTopSitesFavicon(url)) {
+private fun TopSiteFavicon(topSite: TopSite) {
+    when (val favicon = getTopSitesFavicon(topSite)) {
         is TopSitesFavicon.ImageUrl -> Favicon(
-            url = url,
+            url = topSite.url,
             size = TOP_SITES_FAVICON_SIZE.dp,
-            imageUrl = favicon.url,
+            imageUrl = favicon.imageUrl,
         )
 
         is TopSitesFavicon.Drawable -> Favicon(

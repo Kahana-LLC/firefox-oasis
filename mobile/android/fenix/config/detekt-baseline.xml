@@ -18,7 +18,7 @@
     <ID>ForbiddenSuppress:BookmarksMiddleware.kt$BookmarksMiddleware$@Suppress("LongMethod", "CognitiveComplexMethod", "CyclomaticComplexMethod")</ID>
     <ID>ForbiddenSuppress:BookmarksReducer.kt$@Suppress("CyclomaticComplexMethod")</ID>
     <ID>ForbiddenSuppress:BookmarksScreen.kt$@Suppress("LongMethod", "CognitiveComplexMethod", "CyclomaticComplexMethod")</ID>
-    <ID>ForbiddenSuppress:BookmarksTelemetryMiddleware.kt$BookmarksTelemetryMiddleware$@Suppress("LongMethod", "CyclomaticComplexMethod")</ID>
+    <ID>ForbiddenSuppress:BookmarksTelemetryMiddleware.kt$BookmarksTelemetryMiddleware$@Suppress("CyclomaticComplexMethod")</ID>
     <ID>ForbiddenSuppress:BrowserToolbarCFRPresenter.kt$BrowserToolbarCFRPresenter$@Suppress("MagicNumber")</ID>
     <ID>ForbiddenSuppress:BrowserToolbarMenuController.kt$DefaultBrowserToolbarMenuController$@Suppress("CognitiveComplexMethod", "LongMethod")</ID>
     <ID>ForbiddenSuppress:BrowserToolbarMenuController.kt$DefaultBrowserToolbarMenuController$@Suppress("CognitiveComplexMethod", "LongMethod", "CyclomaticComplexMethod")</ID>
@@ -87,7 +87,7 @@
     <ID>ForbiddenSuppress:MarketingDataOnboardingPage.kt$@Suppress("LongMethod")</ID>
     <ID>ForbiddenSuppress:MarketingDataOnboardingPageRedesign.kt$@Suppress("LongMethod")</ID>
     <ID>ForbiddenSuppress:Menu.kt$@Suppress("LongMethod", "CognitiveComplexMethod")</ID>
-    <ID>ForbiddenSuppress:MenuDialogFragment.kt$MenuDialogFragment$@Suppress("LongMethod", "CyclomaticComplexMethod", "MagicNumber", "CognitiveComplexMethod")</ID>
+    <ID>ForbiddenSuppress:MenuDialogFragment.kt$MenuDialogFragment$@Suppress("LongMethod", "CyclomaticComplexMethod", "CognitiveComplexMethod")</ID>
     <ID>ForbiddenSuppress:MenuDialogMiddleware.kt$MenuDialogMiddleware$@Suppress("LongParameterList", "CyclomaticComplexMethod")</ID>
     <ID>ForbiddenSuppress:MenuNavigationMiddleware.kt$MenuNavigationMiddleware$@Suppress("CyclomaticComplexMethod", "LongMethod", "CognitiveComplexMethod")</ID>
     <ID>ForbiddenSuppress:MenuTelemetryMiddleware.kt$MenuTelemetryMiddleware$@Suppress("CyclomaticComplexMethod", "LongMethod", "CognitiveComplexMethod")</ID>
@@ -263,12 +263,9 @@
     <ID>UndocumentedPublicClass:DefaultSyncController.kt$SyncController</ID>
     <ID>UndocumentedPublicClass:DefaultSyncInteractor.kt$SyncInteractor</ID>
     <ID>UndocumentedPublicClass:DefaultTopSitesView.kt$DefaultTopSitesView : TopSitesView</ID>
-    <ID>UndocumentedPublicClass:DeleteBrowsingDataController.kt$DefaultDeleteBrowsingDataController : DeleteBrowsingDataController</ID>
-    <ID>UndocumentedPublicClass:DeleteBrowsingDataController.kt$DeleteBrowsingDataController</ID>
     <ID>UndocumentedPublicClass:DeleteBrowsingDataFragment.kt$DeleteBrowsingDataFragment : Fragment</ID>
     <ID>UndocumentedPublicClass:DeleteBrowsingDataItem.kt$DeleteBrowsingDataItem : ConstraintLayout</ID>
     <ID>UndocumentedPublicClass:DeleteBrowsingDataOnQuitFragment.kt$DeleteBrowsingDataOnQuitFragment : PreferenceFragmentCompat</ID>
-    <ID>UndocumentedPublicClass:DeleteBrowsingDataOnQuitType.kt$DeleteBrowsingDataOnQuitType</ID>
     <ID>UndocumentedPublicClass:DesktopFolders.kt$DesktopFolders</ID>
     <ID>UndocumentedPublicClass:DownloadService.kt$DownloadService : AbstractFetchDownloadService</ID>
     <ID>UndocumentedPublicClass:DropDownListPreference.kt$DropDownListPreference : DropDownPreference</ID>
@@ -560,7 +557,7 @@
     <ID>UndocumentedPublicFunction:CollectionCreationView.kt$CollectionCreationView$fun update(state: CollectionCreationState)</ID>
     <ID>UndocumentedPublicFunction:CollectionsListAdapter.kt$CollectionsListAdapter$fun getSelectedCollection()</ID>
     <ID>UndocumentedPublicFunction:Context.kt$fun Context.asActivity()</ID>
-    <ID>UndocumentedPublicFunction:Context.kt$fun Context.getPreferenceKey(@StringRes resourceId: Int): String</ID>
+    <ID>UndocumentedPublicFunction:Context.kt$fun Context.getPreferenceKey( @StringRes resourceId: Int, ): String</ID>
     <ID>UndocumentedPublicFunction:Context.kt$fun Context.settings()</ID>
     <ID>UndocumentedPublicFunction:CounterPreference.kt$CounterPreference$fun increment()</ID>
     <ID>UndocumentedPublicFunction:CounterPreference.kt$CounterPreference$fun underMaxCount()</ID>
@@ -571,12 +568,6 @@
     <ID>UndocumentedPublicFunction:DefaultToolbarMenu.kt$DefaultToolbarMenu$@VisibleForTesting(otherwise = PRIVATE) fun canAddToHomescreen(): Boolean</ID>
     <ID>UndocumentedPublicFunction:DefaultToolbarMenu.kt$DefaultToolbarMenu$@VisibleForTesting(otherwise = PRIVATE) fun shouldShowOpenInApp(): Boolean</ID>
     <ID>UndocumentedPublicFunction:DefaultToolbarMenu.kt$DefaultToolbarMenu$@VisibleForTesting(otherwise = PRIVATE) fun shouldShowReaderViewCustomization(): Boolean</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteBrowsingHistory()</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteCachedFiles()</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteCookiesAndSiteData()</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteDownloads()</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteSitePermissions()</ID>
-    <ID>UndocumentedPublicFunction:DeleteBrowsingDataController.kt$DeleteBrowsingDataController$suspend fun deleteTabs()</ID>
     <ID>UndocumentedPublicFunction:DeleteBrowsingDataOnQuitType.kt$DeleteBrowsingDataOnQuitType$fun getPreferenceKey(context: Context)</ID>
     <ID>UndocumentedPublicFunction:DesktopFolders.kt$DesktopFolders$suspend fun withOptionalDesktopFolders(node: BookmarkNode): BookmarkNode</ID>
     <ID>UndocumentedPublicFunction:DownloadState.kt$fun DownloadState.isActiveDownload(): Boolean</ID>
@@ -594,7 +585,7 @@
     <ID>UndocumentedPublicFunction:FenixOnboarding.kt$FenixOnboarding$fun finish()</ID>
     <ID>UndocumentedPublicFunction:FenixOnboarding.kt$FenixOnboarding$fun userHasBeenOnboarded(): Boolean</ID>
     <ID>UndocumentedPublicFunction:Fragment.kt$fun Fragment.breadcrumb( message: String, data: Map&lt;String, String&gt; = emptyMap(), )</ID>
-    <ID>UndocumentedPublicFunction:Fragment.kt$fun Fragment.getPreferenceKey(@StringRes resourceId: Int): String</ID>
+    <ID>UndocumentedPublicFunction:Fragment.kt$fun Fragment.getPreferenceKey( @StringRes resourceId: Int, ): String</ID>
     <ID>UndocumentedPublicFunction:FxaServer.kt$FxaServer$fun config(context: Context): ServerConfig</ID>
     <ID>UndocumentedPublicFunction:GeckoProvider.kt$GeckoProvider$@Synchronized fun getOrCreateRuntime( context: Context, autofillStorage: Lazy&lt;CreditCardsAddressesStorage&gt;, loginStorage: Lazy&lt;LoginsStorage&gt;, trackingProtectionPolicy: TrackingProtectionPolicy, ): GeckoRuntime</ID>
     <ID>UndocumentedPublicFunction:GroupableRadioButton.kt$GroupableRadioButton$fun addToRadioGroup(radioButton: GroupableRadioButton)</ID>
@@ -647,7 +638,7 @@
     <ID>UndocumentedPublicFunction:MetricsService.kt$MetricsService$fun track(event: Event)</ID>
     <ID>UndocumentedPublicFunction:MozillaProductDetector.kt$MozillaProductDetector$fun getInstalledMozillaProducts(context: Context): List&lt;String&gt;</ID>
     <ID>UndocumentedPublicFunction:MozillaProductDetector.kt$MozillaProductDetector$fun packageIsInstalled(context: Context, packageName: String): Boolean</ID>
-    <ID>UndocumentedPublicFunction:NavController.kt$fun NavController.alreadyOnDestination(@IdRes destId: Int?): Boolean</ID>
+    <ID>UndocumentedPublicFunction:NavController.kt$fun NavController.alreadyOnDestination( @IdRes destId: Int?, ): Boolean</ID>
     <ID>UndocumentedPublicFunction:NavController.kt$fun NavController.navigateSafe( @IdRes resId: Int, directions: NavDirections, )</ID>
     <ID>UndocumentedPublicFunction:NimbusBranchesView.kt$NimbusBranchesView$fun update(state: NimbusBranchesState)</ID>
     <ID>UndocumentedPublicFunction:PasswordRevealHelper.kt$fun togglePasswordReveal(passwordText: TextView, revealPasswordButton: ImageButton)</ID>
@@ -718,7 +709,6 @@
     <ID>UndocumentedPublicFunction:SearchStringValidator.kt$SearchStringValidator$fun isSearchStringValid(client: Client, searchString: String): Result</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$@VisibleForTesting(otherwise = PRIVATE) fun setStrictETP()</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun amoCollectionOverrideConfigured(): Boolean</ID>
-    <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun getDeleteDataOnQuit(type: DeleteBrowsingDataOnQuitType): Boolean</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun getSitePermissionsCustomSettingsRules(): SitePermissionsRules</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun getTabTimeout(): Long</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun getTabTimeoutPingString(): String</ID>
@@ -729,9 +719,7 @@
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun incrementShowLoginsSecureWarningSyncCount()</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun incrementVisitedInstallableCount()</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun recordPasswordsEncryptionKeyGenerated()</ID>
-    <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun setDeleteDataOnQuit(type: DeleteBrowsingDataOnQuitType, value: Boolean)</ID>
     <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun setSitePermissionSettingListener(lifecycleOwner: LifecycleOwner, listener: () -&gt; Unit)</ID>
-    <ID>UndocumentedPublicFunction:Settings.kt$Settings$fun shouldDeleteAnyDataOnQuit()</ID>
     <ID>UndocumentedPublicFunction:ShareCloseView.kt$ShareCloseInteractor$fun onShareClosed()</ID>
     <ID>UndocumentedPublicFunction:ShareCloseView.kt$ShareCloseView$fun setTabs(tabs: List&lt;ShareData&gt;)</ID>
     <ID>UndocumentedPublicFunction:ShareController.kt$DefaultShareController$@VisibleForTesting fun getShareText()</ID>
@@ -756,8 +744,8 @@
     <ID>UndocumentedPublicFunction:SitePermissionsManageExceptionsPhoneFeatureFragment.kt$SitePermissionsManageExceptionsPhoneFeatureFragment$fun initAutoplay(sitePermissions: SitePermissions? = null)</ID>
     <ID>UndocumentedPublicFunction:SitePermissionsManageExceptionsPhoneFeatureFragment.kt$SitePermissionsManageExceptionsPhoneFeatureFragment$fun initNormalFeature()</ID>
     <ID>UndocumentedPublicFunction:SortingStrategy.kt$SortingStrategy$abstract operator fun invoke(logins: List&lt;SavedLogin&gt;): List&lt;SavedLogin&gt;</ID>
-    <ID>UndocumentedPublicFunction:SpannableString.kt$fun SpannableString.setTextColor(context: Context, @AttrRes colorResId: Int)</ID>
-    <ID>UndocumentedPublicFunction:SpannableString.kt$fun SpannableString.setTextSize(context: Context, @Dimension(unit = DP) textSize: Int)</ID>
+    <ID>UndocumentedPublicFunction:SpannableString.kt$fun SpannableString.setTextColor( context: Context, @AttrRes colorResId: Int, )</ID>
+    <ID>UndocumentedPublicFunction:SpannableString.kt$fun SpannableString.setTextSize( context: Context, @Dimension(unit = DP) textSize: Int, )</ID>
     <ID>UndocumentedPublicFunction:StartupActivityLog.kt$StartupActivityLog$@VisibleForTesting(otherwise = NONE) fun getObserversForTesting()</ID>
     <ID>UndocumentedPublicFunction:StartupActivityLog.kt$StartupActivityLog$@VisibleForTesting(otherwise = PRIVATE) fun logEntries(loggerArg: Logger = logger, logLevel: Log.Priority = Log.logLevel)</ID>
     <ID>UndocumentedPublicFunction:StartupActivityLog.kt$StartupActivityLog$fun registerInAppOnCreate( application: Application, processLifecycleOwner: LifecycleOwner = ProcessLifecycleOwner.get(), )</ID>
@@ -793,7 +781,7 @@
     <ID>UndocumentedPublicFunction:TrackingProtectionPanelView.kt$TrackingProtectionPanelView$fun onBackPressed(): Boolean</ID>
     <ID>UndocumentedPublicFunction:Utils.kt$fun BookmarkNode.flatNodeList(excludeSubtreeRoot: String?, depth: Int = 0): List&lt;BookmarkNodeWithDepth&gt;</ID>
     <ID>UndocumentedPublicFunction:Utils.kt$fun rootTitles(context: Context, withMobileRoot: Boolean): Map&lt;String, String&gt;</ID>
-    <ID>UndocumentedPublicFunction:View.kt$fun View.increaseTapArea(@Dimension(unit = DP) extraDps: Int)</ID>
+    <ID>UndocumentedPublicFunction:View.kt$fun View.increaseTapArea( @Dimension(unit = DP) extraDps: Int, )</ID>
     <ID>UndocumentedPublicFunction:View.kt$fun View.removeTouchDelegate()</ID>
     <ID>UndocumentedPublicFunction:WebPushEngineIntegration.kt$WebPushEngineIntegration$fun start()</ID>
     <ID>UndocumentedPublicFunction:WebPushEngineIntegration.kt$WebPushEngineIntegration$fun stop()</ID>

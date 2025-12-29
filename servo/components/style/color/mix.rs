@@ -5,6 +5,7 @@
 //! Color mixing/interpolation.
 
 use super::{AbsoluteColor, ColorFlags, ColorSpace};
+use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
 use crate::values::generics::color::ColorMixFlags;
 use cssparser::Parser;
@@ -81,17 +82,28 @@ impl ColorInterpolationMethod {
         }
     }
 
+    /// Return true if the this is the default method.
+    pub fn is_default(&self) -> bool {
+        self.space == ColorSpace::Oklab
+    }
+
     /// Decides the best method for interpolating between the given colors.
     /// https://drafts.csswg.org/css-color-4/#interpolation-space
     pub fn best_interpolation_between(left: &AbsoluteColor, right: &AbsoluteColor) -> Self {
-        // The preferred color space to use for interpolating colors is Oklab.
-        // However, if either of the colors are in legacy rgb(), hsl() or hwb(),
-        // then interpolation is done in sRGB.
+        // The default color space to use for interpolation is Oklab. However,
+        // if either of the colors are in legacy rgb(), hsl() or hwb(), then
+        // interpolation is done in sRGB.
         if !left.is_legacy_syntax() || !right.is_legacy_syntax() {
-            Self::oklab()
+            Self::default()
         } else {
             Self::srgb()
         }
+    }
+}
+
+impl Default for ColorInterpolationMethod {
+    fn default() -> Self {
+        Self::oklab()
     }
 }
 
@@ -241,43 +253,43 @@ impl AbsoluteColor {
         // Lightness        L
         if matches!(source.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch) {
             if matches!(self.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch) {
-                self.flags
-                    .set(F::C0_IS_NONE, source.flags.contains(F::C0_IS_NONE));
+                self.flags |= source.flags & F::C0_IS_NONE;
             } else if matches!(self.color_space, S::Hsl) {
-                self.flags
-                    .set(F::C2_IS_NONE, source.flags.contains(F::C0_IS_NONE));
+                if source.flags.contains(F::C0_IS_NONE) {
+                    self.flags.insert(F::C2_IS_NONE)
+                }
             }
         } else if matches!(source.color_space, S::Hsl)
             && matches!(self.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch)
         {
-            self.flags
-                .set(F::C0_IS_NONE, source.flags.contains(F::C2_IS_NONE));
+            if source.flags.contains(F::C2_IS_NONE) {
+                self.flags.insert(F::C0_IS_NONE)
+            }
         }
 
         // Colorfulness     C, S
         if matches!(source.color_space, S::Hsl | S::Lch | S::Oklch)
             && matches!(self.color_space, S::Hsl | S::Lch | S::Oklch)
         {
-            self.flags
-                .set(F::C1_IS_NONE, source.flags.contains(F::C1_IS_NONE));
+            self.flags |= source.flags & F::C1_IS_NONE;
         }
 
         // Hue              H
         if matches!(source.color_space, S::Hsl | S::Hwb) {
             if matches!(self.color_space, S::Hsl | S::Hwb) {
-                self.flags
-                    .set(F::C0_IS_NONE, source.flags.contains(F::C0_IS_NONE));
+                self.flags |= source.flags & F::C0_IS_NONE;
             } else if matches!(self.color_space, S::Lch | S::Oklch) {
-                self.flags
-                    .set(F::C2_IS_NONE, source.flags.contains(F::C0_IS_NONE));
+                if source.flags.contains(F::C0_IS_NONE) {
+                    self.flags.insert(F::C2_IS_NONE)
+                }
             }
         } else if matches!(source.color_space, S::Lch | S::Oklch) {
             if matches!(self.color_space, S::Hsl | S::Hwb) {
-                self.flags
-                    .set(F::C0_IS_NONE, source.flags.contains(F::C2_IS_NONE));
+                if source.flags.contains(F::C2_IS_NONE) {
+                    self.flags.insert(F::C0_IS_NONE)
+                }
             } else if matches!(self.color_space, S::Lch | S::Oklch) {
-                self.flags
-                    .set(F::C2_IS_NONE, source.flags.contains(F::C2_IS_NONE));
+                self.flags |= source.flags & F::C2_IS_NONE;
             }
         }
 
@@ -286,10 +298,8 @@ impl AbsoluteColor {
         if matches!(source.color_space, S::Lab | S::Oklab)
             && matches!(self.color_space, S::Lab | S::Oklab)
         {
-            self.flags
-                .set(F::C1_IS_NONE, source.flags.contains(F::C1_IS_NONE));
-            self.flags
-                .set(F::C2_IS_NONE, source.flags.contains(F::C2_IS_NONE));
+            self.flags |= source.flags & F::C1_IS_NONE;
+            self.flags |= source.flags & F::C2_IS_NONE;
         }
     }
 }

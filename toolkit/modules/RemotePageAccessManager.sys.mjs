@@ -56,12 +56,13 @@ export let RemotePageAccessManager = {
         "services.settings.last_update_seconds",
       ],
       RPMGetAppBuildID: ["*"],
-      RPMGetInnerMostURI: ["*"],
+      RPMGetHostForDisplay: ["*"],
       RPMIsWindowPrivate: ["*"],
     },
     "about:home": {
       RPMSendAsyncMessage: ["ActivityStream:ContentToMain"],
       RPMAddMessageListener: ["ActivityStream:MainToContent"],
+      RPMGetFormatURLPref: ["app.support.baseURL"],
     },
     "about:httpsonlyerror": {
       RPMGetFormatURLPref: ["app.support.baseURL"],
@@ -110,7 +111,7 @@ export let RemotePageAccessManager = {
         "security.certerror.hideAddException",
         "security.certerrors.felt-privacy-v1",
       ],
-      RPMGetInnerMostURI: ["*"],
+      RPMGetHostForDisplay: ["*"],
       RPMGetHttpResponseHeader: ["*"],
       RPMIsTRROnlyFailure: ["*"],
       RPMIsFirefox: ["*"],
@@ -126,6 +127,7 @@ export let RemotePageAccessManager = {
     "about:newtab": {
       RPMSendAsyncMessage: ["ActivityStream:ContentToMain"],
       RPMAddMessageListener: ["ActivityStream:MainToContent"],
+      RPMGetFormatURLPref: ["app.support.baseURL"],
     },
     "about:privatebrowsing": {
       RPMSendAsyncMessage: [
@@ -213,6 +215,7 @@ export let RemotePageAccessManager = {
         "browser.contentblocking.report.proxy.enabled",
         "privacy.trackingprotection.cryptomining.enabled",
         "privacy.trackingprotection.fingerprinting.enabled",
+        "privacy.trackingprotection.harmfuladdon.enabled",
         "privacy.trackingprotection.enabled",
         "privacy.trackingprotection.socialtracking.enabled",
         "browser.contentblocking.report.show_mobile_app",

@@ -5,12 +5,12 @@
 addons-page-title = Add-ons Manager
 
 search-header =
-    .placeholder = Search addons.mozilla.org
+    .placeholder = Search Oasis for more addons
     .searchbuttonlabel = Search
 
 ## Variables
 ##   $domain - Domain name where add-ons are available (e.g. addons.mozilla.org)
-
+## 
 list-empty-get-extensions-message =
     Get extensions and themes on <a data-l10n-name="get-extensions">{ $domain }</a>
 
@@ -545,9 +545,9 @@ shortcuts-heading = Manage Extension Shortcuts
 
 default-heading-search-label = Find more add-ons
 addons-heading-search-input =
-    .placeholder = Search addons.mozilla.org
+    .placeholder = Search Oasis for more addons
 addons-heading-search-button =
-    .title = Search addons.mozilla.org
+    .title = Search Oasis for more addons
     .aria-label = Search addons.mozilla.org
 
 addon-page-options-button =

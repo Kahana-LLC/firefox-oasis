@@ -69,6 +69,9 @@ class StyleRuleFront extends FrontClassWithSpec(styleRuleSpec) {
   get type() {
     return this._form.type;
   }
+  get className() {
+    return this._form.className;
+  }
   get line() {
     return this._form.line || -1;
   }
@@ -201,7 +204,6 @@ class StyleRuleFront extends FrontClassWithSpec(styleRuleSpec) {
   }
 }
 
-exports.StyleRuleFront = StyleRuleFront;
 registerFront(StyleRuleFront);
 
 /**

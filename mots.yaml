@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2025-11-17T16:30:56.137888+00:00'
+updated_at: '2025-12-23T16:18:33.726389+00:00'
 export:
   path: ./docs/mots/index.rst
   format: rst
@@ -260,6 +260,10 @@ people:
     bmo_id: 7924
     name: ''
     nick: deanis74
+  - &decoder
+    bmo_id: 395101
+    name: Christian Holler
+    nick: decoder
   - &deian
     bmo_id: 637163
     name: Deian Stefan
@@ -753,6 +757,10 @@ people:
     bmo_id: 636237
     name: Maxx Crawford
     nick: maxx
+  - &mbeier
+    bmo_id: 754437
+    name: Moritz Beier
+    nick: mbeier
   - &mcarare
     bmo_id: 648814
     name: Mihai Adrian Carare
@@ -1163,7 +1171,7 @@ modules:
     description: The top level directory for the Firefox/Gecko tree. Owned by the
       TLMC
     includes:
-      - README.txt
+      - README.md
     meta:
       owners_emeritus:
         - Ben Bangert
@@ -1195,6 +1203,20 @@ modules:
           - *TLMC
         peers: []
         machine_name: performance_regression_policy
+
+      - name: Security Architecture
+        description: Submodule responsible for driving security architecture decisions,
+          performing security reviews, and guiding security decisions.
+        owners:
+          - *decoder
+        peers:
+          - *dveditz
+          - *freddy
+          - *tjr
+          - *bholley
+          - *ckerschb
+          - *sfriedberger
+        machine_name: security_architecture
 
   - machine_name: android_components
     name: Android Components
@@ -3477,9 +3499,10 @@ modules:
         peers:
           - *daisuke
           - *dao
-          - *mak
-          - *standard8
           - *jteow
+          - *mak
+          - *mbeier
+          - *standard8
         meta:
           components:
             - Firefox::Address Bar
@@ -3926,12 +3949,12 @@ modules:
           peers_emeritus:
             - Jared Wein
             - Matthew N
+            - *mak
             - *mconley
         owners:
           - *dao
           - *sthompson
         peers:
-          - *mak
           - *dwalker
           - *nikkis
           - *niklas
@@ -4645,5 +4668,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: cfb3fce3f5f17682ce93b06b7bdca3f585eaaec5
-  export: 63226cccbcfa7f0d59349143a71ab4639e623650
+  config: 0af34a194c8ba9a91345e7284d63a4c9e514daaf
+  export: a4bcaced302a106f29c24fea2980827439aa7edb

@@ -21,8 +21,8 @@
  */
 
 /**
- * pdfjsVersion = 5.4.402
- * pdfjsBuild = 57334bd20
+ * pdfjsVersion = 5.4.486
+ * pdfjsBuild = ff4529d12
  */
 /******/ // The require scope
 /******/ var __webpack_require__ = {};
@@ -1816,7 +1816,7 @@ function renderRichText({
       intent: "richText"
     });
   }
-  fragment.firstChild.classList.add("richText", className);
+  fragment.firstElementChild.classList.add("richText", className);
   container.append(fragment);
 }
 function makePathFromDrawOPS(data) {
@@ -3504,7 +3504,7 @@ class AnnotationEditorUIManager {
   removeLayer(layer) {
     this.#allLayers.delete(layer.pageIndex);
   }
-  async updateMode(mode, editId = null, isFromKeyboard = false, mustEnterInEditMode = false, editComment = false) {
+  async updateMode(mode, editId = null, isFromUser = false, isFromKeyboard = false, mustEnterInEditMode = false, editComment = false) {
     if (this.#mode === mode) {
       return;
     }
@@ -3537,6 +3537,9 @@ class AnnotationEditorUIManager {
     }
     if (mode === AnnotationEditorType.SIGNATURE) {
       await this.#signatureManager?.loadSignatures();
+    }
+    if (isFromUser) {
+      CurrentPointers.clearPointerType();
     }
     this.setEditingState(true);
     await this.#enableAll();
@@ -6292,11 +6295,11 @@ class AnnotationEditor {
     if (nextFirstPosition !== firstPosition) {
       if (nextFirstPosition < firstPosition) {
         for (let i = 0; i < firstPosition - nextFirstPosition; i++) {
-          this.#resizersDiv.append(this.#resizersDiv.firstChild);
+          this.#resizersDiv.append(this.#resizersDiv.firstElementChild);
         }
       } else if (nextFirstPosition > firstPosition) {
         for (let i = 0; i < nextFirstPosition - firstPosition; i++) {
-          this.#resizersDiv.firstChild.before(this.#resizersDiv.lastChild);
+          this.#resizersDiv.firstElementChild.before(this.#resizersDiv.lastElementChild);
         }
       }
       let i = 0;
@@ -6308,7 +6311,7 @@ class AnnotationEditor {
     }
     this.#setResizerTabIndex(0);
     this.#isResizerEnabledForKeyboard = true;
-    this.#resizersDiv.firstChild.focus({
+    this.#resizersDiv.firstElementChild.focus({
       focusVisible: true
     });
     event.preventDefault();
@@ -6539,10 +6542,10 @@ class AnnotationEditor {
   }
   resetAnnotationElement(annotation) {
     const {
-      firstChild
+      firstElementChild
     } = annotation.container;
-    if (firstChild?.nodeName === "DIV" && firstChild.classList.contains("annotationContent")) {
-      firstChild.remove();
+    if (firstElementChild?.nodeName === "DIV" && firstElementChild.classList.contains("annotationContent")) {
+      firstElementChild.remove();
     }
   }
 }
@@ -7087,7 +7090,7 @@ class FontFaceObject {
     } catch (ex) {
       warn(`getPathGenerator - ignoring character: "${ex}".`);
     }
-    const path = makePathFromDrawOPS(cmds);
+    const path = makePathFromDrawOPS(cmds.path);
     if (!this.fontExtraProperties) {
       objs.delete(objId);
     }
@@ -7101,6 +7104,9 @@ class FontFaceObject {
   }
   get disableFontFace() {
     return this.#fontData.disableFontFace ?? false;
+  }
+  set disableFontFace(value) {
+    shadow(this, "disableFontFace", !!value);
   }
   get fontExtraProperties() {
     return this.#fontData.fontExtraProperties ?? false;
@@ -7134,6 +7140,9 @@ class FontFaceObject {
   }
   get bbox() {
     return this.#fontData.bbox;
+  }
+  set bbox(bbox) {
+    shadow(this, "bbox", bbox);
   }
   get fontMatrix() {
     return this.#fontData.fontMatrix;
@@ -7818,6 +7827,23 @@ class PatternInfo {
       return ["Mesh", shadingType, coords, colors, figures, bounds, bbox, background];
     }
     throw new Error(`Unsupported pattern kind: ${kind}`);
+  }
+}
+class FontPathInfo {
+  static write(path) {
+    let data;
+    let buffer;
+    buffer = new ArrayBuffer(path.length * 2);
+    data = new Float16Array(buffer);
+    data.set(path);
+    return buffer;
+  }
+  #buffer;
+  constructor(buffer) {
+    this.#buffer = buffer;
+  }
+  get path() {
+    return new Float16Array(this.#buffer);
   }
 }
 
@@ -10763,14 +10789,17 @@ class CanvasGraphics {
       ctx.scale(textHScale, 1);
     }
     let patternFillTransform, patternStrokeTransform;
-    if (current.patternFill) {
+    const fillStrokeMode = current.textRenderingMode & TextRenderingMode.FILL_STROKE_MASK;
+    const needsFill = fillStrokeMode === TextRenderingMode.FILL || fillStrokeMode === TextRenderingMode.FILL_STROKE;
+    const needsStroke = fillStrokeMode === TextRenderingMode.STROKE || fillStrokeMode === TextRenderingMode.FILL_STROKE;
+    if (needsFill && current.patternFill) {
       ctx.save();
       const pattern = current.fillColor.getPattern(ctx, this, getCurrentTransformInverse(ctx), PathType.FILL, opIdx);
       patternFillTransform = getCurrentTransform(ctx);
       ctx.restore();
       ctx.fillStyle = pattern;
     }
-    if (current.patternStroke) {
+    if (needsStroke && current.patternStroke) {
       ctx.save();
       const pattern = current.strokeColor.getPattern(ctx, this, getCurrentTransformInverse(ctx), PathType.STROKE, opIdx);
       patternStrokeTransform = getCurrentTransform(ctx);
@@ -10780,8 +10809,7 @@ class CanvasGraphics {
     let lineWidth = current.lineWidth;
     const scale = current.textMatrixScale;
     if (scale === 0 || lineWidth === 0) {
-      const fillStrokeMode = current.textRenderingMode & TextRenderingMode.FILL_STROKE_MASK;
-      if (fillStrokeMode === TextRenderingMode.STROKE || fillStrokeMode === TextRenderingMode.FILL_STROKE) {
+      if (needsStroke) {
         lineWidth = this.getSinglePixelWidth();
       }
     } else {
@@ -12689,6 +12717,7 @@ class TextLayer {
     this.#pageWidth = pageWidth;
     this.#pageHeight = pageHeight;
     TextLayer.#ensureMinFontSizeComputed();
+    container.style.setProperty("--min-font-size", TextLayer.#minFontSize);
     setLayerDimensions(container, viewport);
     this.#capability.promise.finally(() => {
       TextLayer.#pendingTextLayers.delete(this);
@@ -12823,16 +12852,10 @@ class TextLayer {
       left = tx[4] + fontAscent * Math.sin(angle);
       top = tx[5] - fontAscent * Math.cos(angle);
     }
-    const scaleFactorStr = "calc(var(--total-scale-factor) *";
     const divStyle = textDiv.style;
-    if (this.#container === this.#rootContainer) {
-      divStyle.left = `${(100 * left / this.#pageWidth).toFixed(2)}%`;
-      divStyle.top = `${(100 * top / this.#pageHeight).toFixed(2)}%`;
-    } else {
-      divStyle.left = `${scaleFactorStr}${left.toFixed(2)}px)`;
-      divStyle.top = `${scaleFactorStr}${top.toFixed(2)}px)`;
-    }
-    divStyle.fontSize = `${scaleFactorStr}${(TextLayer.#minFontSize * fontHeight).toFixed(2)}px)`;
+    divStyle.left = `${(100 * left / this.#pageWidth).toFixed(2)}%`;
+    divStyle.top = `${(100 * top / this.#pageHeight).toFixed(2)}%`;
+    divStyle.setProperty("--font-height", `${fontHeight.toFixed(2)}px`);
     divStyle.fontFamily = fontFamily;
     textDivProperties.fontSize = fontHeight;
     textDiv.setAttribute("role", "presentation");
@@ -12879,10 +12902,6 @@ class TextLayer {
     const {
       style
     } = div;
-    let transform = "";
-    if (TextLayer.#minFontSize > 1) {
-      transform = `scale(${1 / TextLayer.#minFontSize})`;
-    }
     if (properties.canvasWidth !== 0 && properties.hasText) {
       const {
         fontFamily
@@ -12896,14 +12915,11 @@ class TextLayer {
         width
       } = ctx.measureText(div.textContent);
       if (width > 0) {
-        transform = `scaleX(${canvasWidth * this.#scale / width}) ${transform}`;
+        style.setProperty("--scale-x", canvasWidth * this.#scale / width);
       }
     }
     if (properties.angle !== 0) {
-      transform = `rotate(${properties.angle}deg) ${transform}`;
-    }
-    if (transform.length > 0) {
-      style.transform = transform;
+      style.setProperty("--rotate", `${properties.angle}deg`);
     }
   }
   static cleanup() {
@@ -13083,7 +13099,7 @@ function getDocument(src = {}) {
   }
   const docParams = {
     docId,
-    apiVersion: "5.4.402",
+    apiVersion: "5.4.486",
     data,
     password,
     disableAutoFetch,
@@ -14270,6 +14286,8 @@ class WorkerTransport {
           }
           break;
         case "FontPath":
+          this.commonObjs.resolve(id, new FontPathInfo(exportedData));
+          break;
         case "Image":
           this.commonObjs.resolve(id, exportedData);
           break;
@@ -14457,7 +14475,8 @@ class WorkerTransport {
       info: results[0],
       metadata: results[1] ? new Metadata(results[1]) : null,
       contentDispositionFilename: this._fullReader?.filename ?? null,
-      contentLength: this._fullReader?.contentLength ?? null
+      contentLength: this._fullReader?.contentLength ?? null,
+      hasStructTree: results[2]
     }));
     this.#methodPromises.set(name, promise);
     return promise;
@@ -14671,8 +14690,8 @@ class InternalRenderTask {
     }
   }
 }
-const version = "5.4.402";
-const build = "57334bd20";
+const version = "5.4.486";
+const build = "ff4529d12";
 
 ;// ./src/display/editor/color_picker.js
 
@@ -14805,13 +14824,13 @@ class ColorPicker {
       return;
     }
     if (event.target === this.#button) {
-      this.#dropdown.firstChild?.focus();
+      this.#dropdown.firstElementChild?.focus();
       return;
     }
     event.target.nextSibling?.focus();
   }
   _moveToPrevious(event) {
-    if (event.target === this.#dropdown?.firstChild || event.target === this.#button) {
+    if (event.target === this.#dropdown?.firstElementChild || event.target === this.#button) {
       if (this.#isDropdownVisible) {
         this._hideDropdownFromKeyboard();
       }
@@ -14827,14 +14846,14 @@ class ColorPicker {
       this.#openDropdown(event);
       return;
     }
-    this.#dropdown.firstChild?.focus();
+    this.#dropdown.firstElementChild?.focus();
   }
   _moveToEnd(event) {
     if (!this.#isDropdownVisible) {
       this.#openDropdown(event);
       return;
     }
-    this.#dropdown.lastChild?.focus();
+    this.#dropdown.lastElementChild?.focus();
   }
   #keyDown(event) {
     ColorPicker._keyboardManager.exec(this, event);
@@ -21185,7 +21204,6 @@ class DrawingEditor extends AnnotationEditor {
       this._currentParent = null;
       DrawingEditor.#currentDraw = null;
       DrawingEditor.#currentDrawingOptions = null;
-      CurrentPointers.clearPointerType();
       CurrentPointers.clearTimeStamp();
     }
     if (DrawingEditor.#currentDrawingAC) {
@@ -24270,7 +24288,7 @@ class AnnotationEditorLayer {
       return;
     }
     if (editor.parent && editor.annotationElementId) {
-      this.#uiManager.addDeletedAnnotationElement(editor.annotationElementId);
+      this.#uiManager.addDeletedAnnotationElement(editor);
       AnnotationEditor.deleteAnnotationElement(editor);
       editor.annotationElementId = null;
     }
@@ -24802,8 +24820,8 @@ class DrawLayer {
       }
     }
     if (path) {
-      const defs = element.firstChild;
-      const pathElement = defs.firstChild;
+      const defs = element.firstElementChild;
+      const pathElement = defs.firstElementChild;
       this.#updateProperties(pathElement, path);
     }
   }

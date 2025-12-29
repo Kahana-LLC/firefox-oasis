@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
@@ -26,6 +27,7 @@ import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
@@ -428,8 +430,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
             Log.i(TAG, "openNewTab: Trying to click the new tab FAB button")
             composeTestRule.tabsTrayFab().performClick()
             Log.i(TAG, "openNewTab: Clicked the new tab FAB button")
-            SearchRobot().interact()
-            return SearchRobot.Transition()
+            SearchRobot(composeTestRule).interact()
+            return SearchRobot.Transition(composeTestRule)
         }
 
         fun toggleToNormalTabs(interact: TabDrawerRobot.() -> Unit): Transition {
@@ -462,7 +464,7 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
                 .clickAndWaitForNewWindow(waitingTimeShort)
             Log.i(TAG, "clickSignInToSyncButton: Clicked the sign in to sync button and waited for $waitingTimeShort ms for a new window")
             SyncSignInRobot().interact()
-            return SyncSignInRobot.Transition()
+            return SyncSignInRobot.Transition(composeTestRule)
         }
 
         fun openThreeDotMenu(interact: TabDrawerRobot.() -> Unit): Transition {
@@ -477,8 +479,18 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
             Log.i(TAG, "closeAllTabs: Trying to click the \"Close all tabs\" menu button")
             composeTestRule.dropdownMenuItemCloseAllTabs().performClick()
             Log.i(TAG, "closeAllTabs: Clicked the \"Close all tabs\" menu button")
-            HomeScreenRobot().interact()
-            return HomeScreenRobot.Transition()
+
+            val confirmButtonText = getStringResource(R.string.tab_manager_close_all_tabs_dialog_confirm)
+
+            Log.i(TAG, "closeAllTabs: Waiting for the \"$confirmButtonText\" dialog button to be displayed")
+            composeTestRule
+                .onNodeWithText(confirmButtonText, useUnmergedTree = true)
+                .assertIsDisplayed()
+                .performClick()
+            Log.i(TAG, "closeAllTabs: Clicked the \"$confirmButtonText\" dialog button")
+
+            HomeScreenRobot(composeTestRule).interact()
+            return HomeScreenRobot.Transition(composeTestRule)
         }
 
         fun openTab(title: String, interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
@@ -489,8 +501,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
             composeTestRule.tabItem(title).performClick()
             Log.i(TAG, "openTab: Clicked tab with title: $title")
 
-            BrowserRobot().interact()
-            return BrowserRobot.Transition()
+            BrowserRobot(composeTestRule).interact()
+            return BrowserRobot.Transition(composeTestRule)
         }
 
         fun openPrivateTab(position: Int, interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
@@ -500,8 +512,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
                 .performClick()
             Log.i(TAG, "openPrivateTab: Clicked private tab at position: ${position + 1}")
 
-            BrowserRobot().interact()
-            return BrowserRobot.Transition()
+            BrowserRobot(composeTestRule).interact()
+            return BrowserRobot.Transition(composeTestRule)
         }
 
         fun openNormalTab(position: Int, interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
@@ -511,8 +523,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
                 .performClick()
             Log.i(TAG, "openNormalTab: Clicked tab at position: ${position + 1}")
 
-            BrowserRobot().interact()
-            return BrowserRobot.Transition()
+            BrowserRobot(composeTestRule).interact()
+            return BrowserRobot.Transition(composeTestRule)
         }
 
         fun clickTopBar(interact: TabDrawerRobot.() -> Unit): Transition {
@@ -536,8 +548,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
                 Log.i(TAG, "closeTabDrawer: Closed the tabs tray by clicking the handle")
             }
 
-            BrowserRobot().interact()
-            return BrowserRobot.Transition()
+            BrowserRobot(composeTestRule).interact()
+            return BrowserRobot.Transition(composeTestRule)
         }
 
         fun clickSaveCollection(interact: CollectionRobot.() -> Unit): CollectionRobot.Transition {
@@ -545,8 +557,8 @@ class TabDrawerRobot(private val composeTestRule: ComposeTestRule) {
             composeTestRule.collectionsButton().performClick()
             Log.i(TAG, "clickSaveCollection: Clicked collections button")
 
-            CollectionRobot().interact()
-            return CollectionRobot.Transition()
+            CollectionRobot(composeTestRule).interact()
+            return CollectionRobot.Transition(composeTestRule)
         }
 
         fun clickSelectTabsButton(interact: TabDrawerRobot.() -> Unit): Transition {
@@ -585,8 +597,8 @@ private fun clickCollectionsButton(composeTestRule: ComposeTestRule, interact: C
     composeTestRule.collectionsButton().performClick()
     Log.i(TAG, "clickCollectionsButton: Clicked the collections button")
 
-    CollectionRobot().interact()
-    return CollectionRobot.Transition()
+    CollectionRobot(composeTestRule).interact()
+    return CollectionRobot.Transition(composeTestRule)
 }
 
 /**

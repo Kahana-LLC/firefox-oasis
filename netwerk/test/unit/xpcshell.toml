@@ -46,6 +46,8 @@ prefs = [
 
 ["test_1073747.js"]
 
+["test_303_redirect_caching.js"]
+
 ["test_304_headers.js"]
 
 ["test_304_responses.js"]
@@ -57,8 +59,6 @@ prefs = [
 ["test_MIME_params.js"]
 
 ["test_NetUtil.js"]
-
-["test_SuperfluousAuth.js"]
 
 ["test_URIs.js"]
 
@@ -372,6 +372,8 @@ skip-if = [
 
 ["test_cache-entry-id.js"]
 
+["test_cache-entry-write-handle.js"]
+
 ["test_cache2-00-service-get.js"]
 
 ["test_cache2-01-basic.js"]
@@ -485,6 +487,7 @@ run-sequentially = ["true"] # httpd server
 run-sequentially = ["true"] # httpd server
 
 ["test_cache2_compression_dictionary.js"]
+run-sequentially = ["true"]
 
 ["test_cache2_nostore.js"]
 
@@ -593,10 +596,16 @@ prefs = ["content.cors.use_triggering_principal=true"] # See bug 1982916.
 ["test_defaultURI.js"]
 
 ["test_dictionary_compression_dcb.js"]
+run-sequentially = ["true"]
+
+["test_dictionary_replacement.js"]
+run-sequentially = ["true"]
 
 ["test_dictionary_retrieval.js"]
+run-sequentially = ["true"]
 
 ["test_dictionary_storage.js"]
+run-sequentially = ["true"]
 
 ["test_dns_by_type_resolve.js"]
 
@@ -646,7 +655,6 @@ head = "head_channels.js head_cache.js head_cookies.js head_trr.js head_http3.js
 run-if = [
   "!socketprocess_networking",
 ]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_doomentry.js"]
 
@@ -938,6 +946,13 @@ skip-if = [
   # connection. Disable test on MacOS 10.15.
 ]
 
+["test_http3_proxy_ipv6_fallback.js"]
+run-sequentially = ["true"] # node server exceptions dont replay well
+skip-if = [
+  "os == 'android'",
+  "os == 'win' && msix'", # Bug 1808049
+]
+
 ["test_http3_proxy_no_speculative.js"]
 head = "head_cookies.js head_channels.js head_cache.js head_http3.js http3_proxy_common.js"
 run-sequentially = ["true"] # node server exceptions dont replay well
@@ -1047,22 +1062,19 @@ run-sequentially = ["true"] # node server exceptions dont replay well
 ["test_httpssvc_https_upgrade.js"]
 
 ["test_httpssvc_iphint.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_httpssvc_priority.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_httpssvc_retry_with_ech.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [
   "os == 'android' && os_version == '14' && arch == 'x86_64'", # Bug 1622901
   "os == 'win' && os_version == '10.2009' && arch == 'x86_64'", # Bug 1808048
   "os == 'win' && os_version == '11.26100' && arch == 'x86'", # Bug 1808048
   "os == 'win' && os_version == '11.26100' && arch == 'x86_64'", # Bug 1808048
 ]
+run-sequentially = ["true"] # uses common port for ECH server
 
 ["test_httpssvc_retry_without_ech.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [
   "os == 'win' && os_version == '11.26100' && arch == 'x86_64' && msix", # Bug 1808048
 ]
@@ -1102,6 +1114,8 @@ skip-if = [
 ]
 
 ["test_local_network_access.js"]
+
+["test_lna_captive_portal.js"]
 
 ["test_localhost_offline.js"]
 
@@ -1203,8 +1217,6 @@ skip-if = [
 ]
 
 ["test_post.js"]
-
-["test_predictor.js"]
 
 ["test_prio_header_override_forbid.js"]
 
@@ -1461,24 +1473,18 @@ requesttimeoutfactor = 2  # Slow on Linux and Windows
 head = "head_channels.js head_cache.js head_cookies.js head_trr.js head_http3.js trr_common.js"
 
 ["test_trr_additional_section.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_af_fallback.js"]
 
 ["test_trr_blocklist.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_cancel.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_case_sensitivity.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_cname_chain.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_confirmation.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 run-if = [
   "!socketprocess_networking", # confirmation state isn't passed cross-process
 ]
@@ -1487,7 +1493,6 @@ skip-if = [
 ]
 
 ["test_trr_connection_cycle.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 run-if = ["!socketprocess_networking"] # confirmation state isn't passed cross-process
 
 ["test_trr_decoding.js"]
@@ -1504,13 +1509,11 @@ skip-if = [
 ]
 
 ["test_trr_extended_error.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_flags.js"]
 
 ["test_trr_https_fallback.js"]
 requesttimeoutfactor = 4  # Slow on Linux
-run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [
   "os == 'android' && os_version == '14' && arch == 'x86_64'",
   "os == 'win' && os_version == '10.2009' && arch == 'x86_64'",
@@ -1519,7 +1522,6 @@ skip-if = [
 ]
 
 ["test_trr_https_rr_with_cname.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [
   "os == 'android' && os_version == '14' && arch == 'x86_64'",
   "os == 'win' && os_version == '10.2009' && arch == 'x86_64'", # Bug 1808049
@@ -1528,7 +1530,6 @@ skip-if = [
 ]
 
 ["test_trr_httpssvc.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_idle_time.js"]
 run-if = [
@@ -1539,7 +1540,6 @@ skip-if = [
 ]
 
 ["test_trr_nat64.js"]
-run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_trr_noPrefetch.js"]
 
@@ -1562,7 +1562,6 @@ run-if = [
 
 ["test_trr_with_proxy.js"]
 head = "head_channels.js head_cache.js head_cookies.js head_trr.js trr_common.js"
-run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && !fission && socketprocess_networking", # Bug 1808233
 ]
@@ -1600,6 +1599,9 @@ run-sequentially = ["true"] # node server exceptions dont replay well
 run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_websocket_offline.js"]
+
+["test_websocket_proxy.js"]
+head = "head_cookies.js head_channels.js head_cache.js head_http3.js http3_proxy_common.js"
 
 ["test_websocket_server.js"]
 run-sequentially = ["true"] # node server exceptions dont replay well

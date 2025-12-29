@@ -5,7 +5,7 @@
 package org.mozilla.fenix.iconpicker
 
 import mozilla.components.lib.state.Middleware
-import mozilla.components.lib.state.MiddlewareContext
+import mozilla.components.lib.state.Store
 
 /**
  * A middleware for handling side-effects in response to [AppIconAction]s.
@@ -17,7 +17,7 @@ class AppIconMiddleware(
 ) : Middleware<AppIconState, AppIconAction> {
 
     override fun invoke(
-        context: MiddlewareContext<AppIconState, AppIconAction>,
+        store: Store<AppIconState, AppIconAction>,
         next: (AppIconAction) -> Unit,
         action: AppIconAction,
     ) {
@@ -26,9 +26,14 @@ class AppIconMiddleware(
         when (action) {
             is UserAction.Confirmed -> {
                 if (updateAppIcon(old = action.newIcon, new = action.oldIcon)) {
-                    context.dispatch(SystemAction.Applied(action.newIcon))
+                    store.dispatch(SystemAction.Applied(action.newIcon))
                 } else {
-                    context.dispatch(SystemAction.UpdateFailed)
+                    store.dispatch(
+                        SystemAction.UpdateFailed(
+                            oldIcon = action.oldIcon,
+                            newIcon = action.newIcon,
+                        ),
+                    )
                 }
             }
 
@@ -37,8 +42,8 @@ class AppIconMiddleware(
             is SystemAction.Applied,
             is SystemAction.DialogDismissed,
             is SystemAction.SnackbarDismissed,
+            is SystemAction.SnackbarShown,
             is SystemAction.UpdateFailed,
-
                 -> {
                 // no-op
             }

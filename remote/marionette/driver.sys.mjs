@@ -597,7 +597,9 @@ GeckoDriver.prototype.isReftestBrowser = function (element) {
  */
 GeckoDriver.prototype.addBrowser = function (win) {
   let context = new lazy.browser.Context(win, this);
-  let winId = lazy.windowManager.getIdForWindow(win);
+  let winId = lazy.NavigableManager.getIdForBrowsingContext(
+    win.browsingContext
+  );
 
   this.browsers[winId] = context;
   this.curBrowser = this.browsers[winId];
@@ -1393,7 +1395,9 @@ GeckoDriver.prototype.getWindowHandle = function () {
   lazy.assert.open(this.getBrowsingContext({ top: true }));
 
   if (this.context == lazy.Context.Chrome) {
-    return lazy.windowManager.getIdForWindow(this.curBrowser.window);
+    return lazy.NavigableManager.getIdForBrowsingContext(
+      this.currentSession.chromeBrowsingContext
+    );
   }
 
   return this.curBrowser.contentBrowserId;
@@ -1415,7 +1419,9 @@ GeckoDriver.prototype.getWindowHandle = function () {
  */
 GeckoDriver.prototype.getWindowHandles = function () {
   if (this.context == lazy.Context.Chrome) {
-    return lazy.windowManager.chromeWindowHandles.map(String);
+    return lazy.windowManager.windows.map(window =>
+      lazy.NavigableManager.getIdForBrowsingContext(window.browsingContext)
+    );
   }
 
   return lazy.TabManager.getBrowsers({ unloaded: true }).map(browser =>
@@ -1526,6 +1532,47 @@ GeckoDriver.prototype.setWindowRect = async function (cmd) {
 };
 
 /**
+ * Find a specific window matching the provided window handle.
+ *
+ * @param {string} handle
+ *     The unique handle of either a chrome window or a content browser, as
+ *     returned by :js:func:`#getIdForBrowser` or :js:func:`#getIdForWindow`.
+ *
+ * @returns {object|null}
+ *     A window properties object, or `null` if a window cannot be found.
+ *.    @see :js:func:`WindowManager#getWindowProperties`
+ */
+GeckoDriver.prototype._findWindowByHandle = function (handle) {
+  for (const win of lazy.windowManager.windows) {
+    const chromeWindowId = lazy.NavigableManager.getIdForBrowsingContext(
+      win.browsingContext
+    );
+    if (chromeWindowId == handle) {
+      return this.getWindowProperties(win);
+    }
+
+    // Otherwise check if the chrome window has a tab browser, and that it
+    // contains a tab with the wanted window handle.
+    const tabBrowser = lazy.TabManager.getTabBrowser(win);
+    if (tabBrowser && tabBrowser.tabs) {
+      for (let i = 0; i < tabBrowser.tabs.length; ++i) {
+        let contentBrowser = lazy.TabManager.getBrowserForTab(
+          tabBrowser.tabs[i]
+        );
+        let contentWindowId =
+          lazy.NavigableManager.getIdForBrowser(contentBrowser);
+
+        if (contentWindowId == handle) {
+          return this.getWindowProperties(win, { tabIndex: i });
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
  * Switch current top-level browsing context by name or server-assigned
  * ID.  Searches for windows by name, then ID.  Content windows take
  * precedence.
@@ -1554,7 +1601,7 @@ GeckoDriver.prototype.switchToWindow = async function (cmd) {
     lazy.pprint`Expected "focus" to be a boolean, got ${focus}`
   );
 
-  const found = lazy.windowManager.findWindowByHandle(handle);
+  const found = this._findWindowByHandle(handle);
 
   let selected = false;
   if (found) {
@@ -1571,6 +1618,50 @@ GeckoDriver.prototype.switchToWindow = async function (cmd) {
       `Unable to locate window: ${handle}`
     );
   }
+};
+
+/**
+ * A set of properties that describe a window and allow it to be uniquely
+ * identified. The described window can either be a Chrome Window or a
+ * Content Window.
+ *
+ * @typedef {object} WindowProperties
+ * @property {Window} win
+ *     The Chrome Window containing the window. When describing
+ *     a Chrome Window, this is the window itself.
+ * @property {string} id
+ *     The unique id of the containing Chrome Window.
+ * @property {boolean} hasTabBrowser
+ *     `true` if the Chrome Window has a tabBrowser.
+ * @property {number=} tabIndex
+ *     Optional, the index of the specific tab within the window.
+ */
+
+/**
+ * Returns a WindowProperties object, that can be used with :js:func:`GeckoDriver#setWindowHandle`.
+ *
+ * @param {Window} win
+ *     The Chrome Window for which we want to create a properties object.
+ * @param {object=} options
+ * @param {number} options.tabIndex
+ *     Tab index of a specific Content Window in the specified Chrome Window.
+ *
+ * @returns {WindowProperties}
+ *     A window properties object.
+ */
+GeckoDriver.prototype.getWindowProperties = function (win, options = {}) {
+  const { tabIndex } = options;
+
+  if (!Window.isInstance(win)) {
+    throw new TypeError("Invalid argument, expected a Window object");
+  }
+
+  return {
+    win,
+    id: lazy.NavigableManager.getIdForBrowsingContext(win.browsingContext),
+    hasTabBrowser: !!lazy.TabManager.getTabBrowser(win),
+    tabIndex,
+  };
 };
 
 /**
@@ -2831,7 +2922,9 @@ GeckoDriver.prototype.closeChromeWindow = async function () {
   this.currentSession.chromeBrowsingContext = null;
   this.currentSession.contentBrowsingContext = null;
 
-  return lazy.windowManager.chromeWindowHandles.map(String);
+  return lazy.windowManager.windows.map(window =>
+    lazy.NavigableManager.getIdForBrowsingContext(window.browsingContext)
+  );
 };
 
 /** Delete Marionette session. */
@@ -4010,10 +4103,10 @@ GeckoDriver.prototype.commands = {
   "WebDriver:SwitchToParentFrame": GeckoDriver.prototype.switchToParentFrame,
   "WebDriver:SwitchToWindow": GeckoDriver.prototype.switchToWindow,
   "WebDriver:TakeScreenshot": GeckoDriver.prototype.takeScreenshot,
-  "WebDriver:GetGlobalPrivacyControl":
-    GeckoDriver.prototype.getGlobalPrivacyControl,
-  "WebDriver:SetGlobalPrivacyControl":
-    GeckoDriver.prototype.setGlobalPrivacyControl,
+
+  // Global Privacy Control
+  "GPC:GetGlobalPrivacyControl": GeckoDriver.prototype.getGlobalPrivacyControl,
+  "GPC:SetGlobalPrivacyControl": GeckoDriver.prototype.setGlobalPrivacyControl,
 
   // WebAuthn
   "WebAuthn:AddVirtualAuthenticator":

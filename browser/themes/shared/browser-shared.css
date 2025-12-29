@@ -24,6 +24,7 @@
 @import url("chrome://browser/skin/places/editBookmarkPanel.css");
 @import url("chrome://browser/skin/searchbar.css");
 @import url("chrome://browser/skin/sidebar.css");
+@import url("chrome://browser/skin/aiWindowSidebar.css");
 @import url("chrome://browser/skin/customizableui/customizeMode.css");
 @import url("chrome://browser/skin/UITour.css");
 @import url("chrome://browser/skin/formautofill-notification.css");
@@ -621,6 +622,7 @@ menupopup::part(drop-indicator) {
   color: var(--toolbar-color);
   color-scheme: var(--toolbar-color-scheme);
   border-top-color: var(--chrome-content-separator-color);
+  z-index: var(--browser-area-z-index-sidebar);
 
   :root[lwtheme] & {
     background-color: var(--lwt-accent-color);
@@ -1406,4 +1408,53 @@ popupnotificationcontent {
 #BMB_bookmarksToolbar,
 #bookmarksToolbarFolderMenu {
   --menuitem-icon: url("chrome://browser/skin/places/bookmarksToolbar.svg");
+}
+
+/* Oasis Assistant overlay: full-window host for assistant.xhtml */
+:root[oasis-assistant-overlay] #oasis-assistant-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  pointer-events: none;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-overlay > #oasis-assistant-overlay-browser {
+  /* obsolete rule kept for backwards safety; shell now handles layout */
+}
+
+/* Ensure the shell has an opaque white background */
+#oasis-assistant-shell {
+  background: white !important;
+}
+
+/* Ensure the browser element inside has white background */
+#oasis-assistant-overlay-browser {
+  background: white !important;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-chrome-header {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+  background: #F0F6F1 !important;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-chrome-header button {
+  pointer-events: auto !important;
+  z-index: 2147483648 !important;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-chrome-header button:hover {
+  background-color: #E5E7EB !important;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-chrome-header button:active {
+  background-color: #D1D5DB !important;
+}
+
+:root[oasis-assistant-overlay] #oasis-assistant-overlay-browser {
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
 }

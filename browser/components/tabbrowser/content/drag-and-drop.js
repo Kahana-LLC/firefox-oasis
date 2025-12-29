@@ -8,19 +8,22 @@
 {
   const isTab = element => gBrowser.isTab(element);
   const isTabGroupLabel = element => gBrowser.isTabGroupLabel(element);
+  const isSplitViewWrapper = element => gBrowser.isSplitViewWrapper(element);
 
   /**
-   * The elements in the tab strip from `this.ariaFocusableItems` that contain
+   * The elements in the tab strip from `this.dragAndDropElements` that contain
    * logical information are:
    *
    * - <tab> (.tabbrowser-tab)
    * - <tab-group> label element (.tab-group-label)
+   * - <tab-split-view-wrapper>
    *
    * The elements in the tab strip that contain the space inside of the <tabs>
    * element are:
    *
    * - <tab> (.tabbrowser-tab)
    * - <tab-group> label element wrapper (.tab-group-label-container)
+   * - <tab-split-view-wrapper>
    *
    * When working with tab strip items, if you need logical information, you
    * can get it directly, e.g. `element.elementIndex` or `element._tPos`. If
@@ -32,7 +35,7 @@
    * @returns {MozTabbrowserTab|vbox}
    */
   const elementToMove = element => {
-    if (isTab(element)) {
+    if (isTab(element) || isSplitViewWrapper(element)) {
       return element;
     }
     if (isTabGroupLabel(element)) {
@@ -71,6 +74,9 @@
       let tab = this._getDragTarget(event);
       if (!tab) {
         return;
+      }
+      if (tab.splitview) {
+        tab = tab.splitview;
       }
 
       this._tabbrowserTabs.previewPanel?.deactivate(null, { force: true });
@@ -130,7 +136,7 @@
 
           // Pinned tabs in expanded vertical mode are on a grid format and require
           // different logic to drag and drop.
-          if (this._isContainerVerticalPinnedGrid(draggedTab)) {
+          if (this._tabbrowserTabs.isContainerVerticalPinnedGrid(draggedTab)) {
             this._animateExpandedPinnedTabMove(event);
             return;
           }
@@ -195,7 +201,7 @@
         newMargin = pixelsToScroll > 0 ? maxMargin : minMargin;
       } else {
         let newIndex = this._getDropIndex(event);
-        let children = this._tabbrowserTabs.ariaFocusableItems;
+        let children = this._tabbrowserTabs.dragAndDropElements;
         if (newIndex == children.length) {
           let itemRect = children.at(-1).getBoundingClientRect();
           if (this._tabbrowserTabs.verticalMode) {
@@ -270,7 +276,7 @@
         let duplicatedDraggedTab;
         let duplicatedTabs = [];
         let dropTarget =
-          this._tabbrowserTabs.ariaFocusableItems[this._getDropIndex(event)];
+          this._tabbrowserTabs.dragAndDropElements[this._getDropIndex(event)];
         for (let tab of movingTabs) {
           let duplicatedTab = gBrowser.duplicateTab(tab);
           duplicatedTabs.push(duplicatedTab);
@@ -294,7 +300,7 @@
         let isPinned = draggedTab.pinned;
         let numPinned = gBrowser.pinnedTabCount;
 
-        if (this._isContainerVerticalPinnedGrid(draggedTab)) {
+        if (this._tabbrowserTabs.isContainerVerticalPinnedGrid(draggedTab)) {
           // Update both translate axis for pinned vertical expanded tabs
           if (oldTranslateX > 0 && translateOffsetX > tabWidth / 2) {
             newTranslateX += tabWidth;
@@ -307,7 +313,7 @@
             newTranslateY -= tabHeight;
           }
         } else {
-          let tabs = this._tabbrowserTabs.ariaFocusableItems.slice(
+          let tabs = this._tabbrowserTabs.dragAndDropElements.slice(
             isPinned ? 0 : numPinned,
             isPinned ? numPinned : undefined
           );
@@ -376,9 +382,10 @@
           !shouldCreateGroupOnDrop &&
           !shouldDropIntoCollapsedTabGroup &&
           !isTabGroupLabel(draggedTab) &&
+          !isSplitViewWrapper(draggedTab) &&
           !shouldPin &&
           !shouldUnpin;
-        if (this._isContainerVerticalPinnedGrid(draggedTab)) {
+        if (this._tabbrowserTabs.isContainerVerticalPinnedGrid(draggedTab)) {
           shouldTranslate &&=
             (oldTranslateX && oldTranslateX != newTranslateX) ||
             (oldTranslateY && oldTranslateY != newTranslateY);
@@ -498,6 +505,10 @@
         gBrowser.adoptTabGroup(draggedTab.group, {
           elementIndex: this._getDropIndex(event),
         });
+      } else if (isSplitViewWrapper(draggedTab)) {
+        gBrowser.adoptSplitView(draggedTab, {
+          elementIndex: this._getDropIndex(event),
+        });
       } else if (draggedTab) {
         // Move the tabs into this window. To avoid multiple tab-switches in
         // the original window, the selected tab should be adopted last.
@@ -532,8 +543,8 @@
 
         // Restore tab selection
         gBrowser.addRangeToMultiSelectedTabs(
-          this._tabbrowserTabs.ariaFocusableItems[dropIndex],
-          this._tabbrowserTabs.ariaFocusableItems[newIndex - 1]
+          this._tabbrowserTabs.dragAndDropElements[dropIndex],
+          this._tabbrowserTabs.dragAndDropElements[newIndex - 1]
         );
       } else {
         // Pass true to disallow dropping javascript: or data: urls
@@ -579,7 +590,7 @@
             }
           }
 
-          let nextItem = this._tabbrowserTabs.ariaFocusableItems[newIndex];
+          let nextItem = this._tabbrowserTabs.dragAndDropElements[newIndex];
           let tabGroup = isTab(nextItem) && nextItem.group;
           gBrowser.loadTabs(urls, {
             inBackground,
@@ -786,7 +797,7 @@
     _getDropIndex(event) {
       let item = this._getDragTarget(event);
       if (!item) {
-        return this._tabbrowserTabs.ariaFocusableItems.length;
+        return this._tabbrowserTabs.dragAndDropElements.length;
       }
       let isBeforeMiddle;
 
@@ -808,7 +819,7 @@
     }
 
     /**
-     * Returns the tab or tab group label where an event happened, or null if
+     * Returns the tab, tab group label or split view wrapper where an event happened,
      * it didn't occur on a tab or tab group label.
      *
      * @param {Event} event
@@ -822,7 +833,11 @@
     _getDragTarget(event, { ignoreSides = false } = {}) {
       let { target } = event;
       while (target) {
-        if (isTab(target) || isTabGroupLabel(target)) {
+        if (
+          isTab(target) ||
+          isTabGroupLabel(target) ||
+          isSplitViewWrapper(target)
+        ) {
           break;
         }
         target = target.parentNode;
@@ -840,15 +855,6 @@
         }
       }
       return target;
-    }
-
-    _isContainerVerticalPinnedGrid(tab) {
-      return (
-        this._tabbrowserTabs.verticalMode &&
-        tab.pinned &&
-        this._tabbrowserTabs.hasAttribute("expanded") &&
-        !this._tabbrowserTabs.expandOnHover
-      );
     }
 
     #isMovingTab() {
@@ -939,7 +945,7 @@
         // Temporarily disable MousePosTracker while dragging
         MousePosTracker.removeListener(document.defaultView.SidebarController);
       }
-      if (this._isContainerVerticalPinnedGrid(tab)) {
+      if (this._tabbrowserTabs.isContainerVerticalPinnedGrid(tab)) {
         // In expanded vertical mode, the max number of pinned tabs per row is dynamic
         // Set this before adjusting dragged tab's position
         let pinnedTabs = this._tabbrowserTabs.visibleTabs.slice(
@@ -981,7 +987,7 @@
       }
 
       let dataTransferOrderedTabs;
-      if (fromTabList || isTabGroupLabel(tab)) {
+      if (fromTabList || isTabGroupLabel(tab) || isSplitViewWrapper(tab)) {
         // Dragging a group label or an item in the all tabs menu doesn't
         // change the currently selected tabs, and it's not possible to select
         // multiple tabs from the list, thus handle only the dragged tab in
@@ -1175,8 +1181,8 @@
       }
       let isPinned = tab.pinned;
       let numPinned = gBrowser.pinnedTabCount;
-      let allTabs = this._tabbrowserTabs.ariaFocusableItems;
-      let isGrid = this._isContainerVerticalPinnedGrid(tab);
+      let dragAndDropElements = this._tabbrowserTabs.dragAndDropElements;
+      let isGrid = this._tabbrowserTabs.isContainerVerticalPinnedGrid(tab);
       let periphery = document.getElementById(
         "tabbrowser-arrowscrollbox-periphery"
       );
@@ -1219,7 +1225,7 @@
       /** @type {Map<MozTabbrowserTab, DOMRect>} */
       const pinnedTabsOrigBounds = new Map();
 
-      for (let t of allTabs) {
+      for (let t of dragAndDropElements) {
         t = elementToMove(t);
         let tabRect = window.windowUtils.getBoundsWithoutFlushing(t);
 
@@ -1387,7 +1393,7 @@
 
       // Update tabs in the same container as the dragged tabs so as not
       // to fill the space when the dragged tabs become absolute
-      for (let t of allTabs) {
+      for (let t of dragAndDropElements) {
         let tabIsPinned = t.pinned;
         t = elementToMove(t);
         if (!t.hasAttribute("dragtarget")) {
@@ -1454,7 +1460,7 @@
       let addAnimationData = (movingTab, isBeforeSelectedTab) => {
         let lowerIndex = Math.min(movingTab.elementIndex, draggedTabIndex) + 1;
         let higherIndex = Math.max(movingTab.elementIndex, draggedTabIndex);
-        let middleItems = this._tabbrowserTabs.ariaFocusableItems
+        let middleItems = this._tabbrowserTabs.dragAndDropElements
           .slice(lowerIndex, higherIndex)
           .filter(item => !item.multiselected);
         if (!middleItems.length) {
@@ -1551,7 +1557,7 @@
       }
 
       // Slide the relevant tabs to their new position.
-      for (let item of this._tabbrowserTabs.ariaFocusableItems) {
+      for (let item of this._tabbrowserTabs.dragAndDropElements) {
         item = elementToMove(item);
         if (item._moveTogetherSelectedTabsData?.translatePos) {
           let translatePos =
@@ -1596,7 +1602,7 @@
         gBrowser.moveTabAfter(selectedTabs[i], tab);
       }
 
-      for (let item of this._tabbrowserTabs.ariaFocusableItems) {
+      for (let item of this._tabbrowserTabs.dragAndDropElements) {
         item = elementToMove(item);
         item.style.transform = "";
         item.removeAttribute("multiselected-move-together");
@@ -1835,8 +1841,8 @@
 
       let isPinned = draggedTab.pinned;
       let numPinned = gBrowser.pinnedTabCount;
-      let allTabs = this._tabbrowserTabs.ariaFocusableItems;
-      let tabs = allTabs.slice(
+      let dragAndDropElements = this._tabbrowserTabs.dragAndDropElements;
+      let tabs = dragAndDropElements.slice(
         isPinned ? 0 : numPinned,
         isPinned ? numPinned : undefined
       );
@@ -2092,14 +2098,14 @@
         // logically drop the dragged element(s).
         //
         // It's tempting to set `dropElement` to
-        // `this.ariaFocusableItems.at(oldDropElementIndex)`, and that is correct
+        // `this.dragAndDropElements.at(oldDropElementIndex)`, and that is correct
         // for most cases, but there are edge cases:
         //
         // 1) the drop element index range needs to be one larger than the number of
         //    items that can move in the tab strip. The simplest example is when all
         //    tabs are ungrouped and unpinned: for 5 tabs, the drop element index needs
         //    to be able to go from 0 (become the first tab) to 5 (become the last tab).
-        //    `this.ariaFocusableItems.at(5)` would be `undefined` when dragging to the
+        //    `this.dragAndDropElements.at(5)` would be `undefined` when dragging to the
         //    end of the tab strip. In this specific case, it works to fall back to
         //    setting the drop element to the last tab.
         //
@@ -2128,7 +2134,7 @@
             maxElementIndexForDropElement
           );
           let oldDropElementCandidate =
-            this._tabbrowserTabs.ariaFocusableItems.at(index);
+            this._tabbrowserTabs.dragAndDropElements.at(index);
           if (!movingTabsSet.has(oldDropElementCandidate)) {
             dropElement = oldDropElementCandidate;
           }
@@ -2218,7 +2224,7 @@
           : dropElement.elementIndex < numPinned;
         if (isOutOfBounds) {
           // Drop after last pinned tab
-          dropElement = this._tabbrowserTabs.ariaFocusableItems[numPinned - 1];
+          dropElement = this._tabbrowserTabs.dragAndDropElements[numPinned - 1];
           dropBefore = false;
         }
       }
@@ -2423,7 +2429,7 @@
 
       this.#setMovingTabMode(false);
 
-      for (let item of this._tabbrowserTabs.ariaFocusableItems) {
+      for (let item of this._tabbrowserTabs.dragAndDropElements) {
         this._resetGroupTarget(item);
         item = elementToMove(item);
         item.style.transform = "";
@@ -2521,7 +2527,9 @@
       if (isMovingTab) {
         let sourceNode = dt.mozGetDataAt(TAB_DROP_TYPE, 0);
         if (
-          (isTab(sourceNode) || isTabGroupLabel(sourceNode)) &&
+          (isTab(sourceNode) ||
+            isTabGroupLabel(sourceNode) ||
+            isSplitViewWrapper(sourceNode)) &&
           sourceNode.ownerGlobal.isChromeWindow &&
           sourceNode.ownerDocument.documentElement.getAttribute("windowtype") ==
             "navigator:browser"

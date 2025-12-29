@@ -7,12 +7,39 @@
 // This is loaded into chrome windows with the subscript loader. Wrap in
 // a block to prevent accidentally leaking globals onto `window`.
 {
+  ChromeUtils.defineESModuleGetters(this, {
+    DeferredTask: "resource://gre/modules/DeferredTask.sys.mjs",
+  });
+
+  /**
+   * A shared task which updates the urlbar indicator whenever:
+   * - A split view is activated or deactivated.
+   * - The active tab of a split view changes.
+   * - The order of tabs in a split view changes.
+   *
+   * @type {DeferredTask}
+   */
+  const updateUrlbarButton = new DeferredTask(() => {
+    const { activeSplitView, selectedTab } = gBrowser;
+    const button = document.getElementById("split-view-button");
+    if (activeSplitView) {
+      const activeIndex = activeSplitView.tabs.indexOf(selectedTab);
+      button.hidden = false;
+      button.setAttribute("data-active-index", activeIndex);
+    } else {
+      button.hidden = true;
+      button.removeAttribute("data-active-index");
+    }
+  }, 0);
+
   class MozTabSplitViewWrapper extends MozXULElement {
     /** @type {MutationObserver} */
     #tabChangeObserver;
 
     /** @type {MozTabbrowserTab[]} */
     #tabs = [];
+
+    #storedPanelWidths = new WeakMap();
 
     /**
      * @returns {boolean}
@@ -47,6 +74,11 @@
       this.ownerGlobal.addEventListener("TabSelect", this);
 
       this.#observeTabChanges();
+      this.#restorePanelWidths();
+
+      if (this.hasActiveTab) {
+        this.#activate();
+      }
 
       if (this._initialized) {
         return;
@@ -64,6 +96,13 @@
       this.#tabChangeObserver?.disconnect();
       this.ownerGlobal.removeEventListener("TabSelect", this);
       this.#deactivate();
+      this.#resetPanelWidths();
+      this.container.dispatchEvent(
+        new CustomEvent("SplitViewRemoved", {
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
 
     #observeTabChanges() {
@@ -106,14 +145,37 @@
       return Array.from(this.children).filter(node => node.matches("tab"));
     }
 
+    get visible() {
+      return this.tabs.every(tab => tab.visible);
+    }
+
+    /**
+     * Get the list of tab panels from this split view.
+     *
+     * @returns {XULElement[]}
+     */
+    get panels() {
+      const panels = [];
+      for (const { linkedPanel } of this.#tabs) {
+        const el = document.getElementById(linkedPanel);
+        if (el) {
+          panels.push(el);
+        }
+      }
+      return panels;
+    }
+
     /**
      * Show all Split View tabs in the content area.
      */
-    #activate() {
-      gBrowser.showSplitViewPanels(this.#tabs);
-      this.dispatchEvent(
+    #activate(skipShowPanels = false) {
+      updateUrlbarButton.arm();
+      if (!skipShowPanels) {
+        gBrowser.showSplitViewPanels(this.#tabs);
+      }
+      this.container.dispatchEvent(
         new CustomEvent("TabSplitViewActivate", {
-          detail: { tabs: this.#tabs },
+          detail: { tabs: this.#tabs, splitview: this },
           bubbles: true,
         })
       );
@@ -122,14 +184,45 @@
     /**
      * Remove Split View tabs from the content area.
      */
-    #deactivate() {
-      gBrowser.hideSplitViewPanels(this.#tabs);
-      this.dispatchEvent(
+    #deactivate(skipHidePanels = false) {
+      if (!skipHidePanels) {
+        gBrowser.hideSplitViewPanels(this.#tabs);
+      }
+      updateUrlbarButton.arm();
+      this.container.dispatchEvent(
         new CustomEvent("TabSplitViewDeactivate", {
-          detail: { tabs: this.#tabs },
+          detail: { tabs: this.#tabs, splitview: this },
           bubbles: true,
         })
       );
+    }
+
+    /**
+     * Remove customized panel widths. Cache width values so that they can be
+     * restored if this Split View is later reactivated.
+     */
+    #resetPanelWidths() {
+      for (const panel of this.panels) {
+        const width = panel.getAttribute("width");
+        if (width) {
+          this.#storedPanelWidths.set(panel, width);
+          panel.removeAttribute("width");
+          panel.style.removeProperty("width");
+        }
+      }
+    }
+
+    /**
+     * Resize panel widths back to cached values.
+     */
+    #restorePanelWidths() {
+      for (const panel of this.panels) {
+        const width = this.#storedPanelWidths.get(panel);
+        if (width) {
+          panel.setAttribute("width", width);
+          panel.style.setProperty("width", width + "px");
+        }
+      }
     }
 
     /**
@@ -157,6 +250,7 @@
       }
       if (this.hasActiveTab) {
         this.#activate();
+        gBrowser.setIsSplitViewActive(true, this.#tabs);
       }
     }
 
@@ -165,6 +259,16 @@
      */
     unsplitTabs() {
       gBrowser.unsplitTabs(this);
+      gBrowser.setIsSplitViewActive(false, this.#tabs);
+    }
+
+    /**
+     * Replace a tab in the split view with another tab
+     */
+    replaceTab(tabToReplace, newTab) {
+      this.#tabs = this.#tabs.filter(tab => tab != tabToReplace);
+      this.addTabs([newTab]);
+      gBrowser.removeTab(tabToReplace);
     }
 
     /**
@@ -175,6 +279,7 @@
       gBrowser.moveTabBefore(secondTab, firstTab);
       this.#tabs = [secondTab, firstTab];
       gBrowser.showSplitViewPanels(this.#tabs);
+      updateUrlbarButton.arm();
     }
 
     /**
@@ -189,10 +294,11 @@
      */
     on_TabSelect(event) {
       this.hasActiveTab = event.target.splitview === this;
+      gBrowser.setIsSplitViewActive(this.hasActiveTab, this.#tabs);
       if (this.hasActiveTab) {
         this.#activate();
       } else {
-        this.#deactivate();
+        this.#deactivate(true);
       }
     }
   }

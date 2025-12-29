@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">అంతరంగిక %s</string>
@@ -206,6 +213,10 @@
   <string name="onboarding_preferences_dialog_positive_button">పూర్తయింది</string>
   <!-- Terms of service onboarding title card label. 'Firefox' intentionally hardcoded here -->
   <string name="onboarding_welcome_to_firefox" tools:ignore="BrandUsage">Firefoxకి స్వాగతం</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding label for 'Save and continue' button, used by Nimbus experiments. -->
   <string name="onboarding_save_and_continue_button">భద్రపరచి కొనసాగించు</string>
   <!-- Onboarding toolbar selection card label for 'top' option, used by Nimbus experiments. -->
@@ -1184,8 +1195,6 @@
   <string name="credit_cards_edit_card">కార్డును మార్చు</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">కార్డు నెంబరు</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">కాలంచెల్లు తేదీ</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">కాలంచెల్లు తేదీ నెల</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -1431,4 +1440,10 @@
   <!-- Push notification title about old Firefox version. Note: The word "Firefox" should NOT be translated. -->
   <string name="certificate_warning_push_notification_pnw2_title" tools:ignore="BrandUsage,UnusedResources">మీరు Firefox యొక్క పాత వెర్షన్ వాడుతున్నారు</string>
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

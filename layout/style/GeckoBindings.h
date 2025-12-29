@@ -55,6 +55,15 @@ const bool GECKO_IS_NIGHTLY = true;
 const bool GECKO_IS_NIGHTLY = false;
 #endif
 
+template <typename T>
+struct RustSpan {
+  T* begin;
+  size_t length;
+};
+
+template struct RustSpan<const mozilla::dom::Element* const>;
+template struct RustSpan<const nsINode* const>;
+
 #define NS_DECL_THREADSAFE_FFI_REFCOUNTING(class_, name_)  \
   void Gecko_AddRef##name_##ArbitraryThread(class_* aPtr); \
   void Gecko_Release##name_##ArbitraryThread(class_* aPtr);
@@ -83,7 +92,7 @@ const nsINode* Gecko_GetFlattenedTreeParentNode(const nsINode*);
 void Gecko_GetAnonymousContentForElement(const mozilla::dom::Element*,
                                          nsTArray<nsIContent*>*);
 
-const nsTArray<RefPtr<nsINode>>* Gecko_GetAssignedNodes(
+RustSpan<const nsINode* const> Gecko_GetAssignedNodes(
     const mozilla::dom::Element*);
 
 void Gecko_GetQueryContainerSize(const mozilla::dom::Element*,
@@ -109,6 +118,7 @@ const nsINode* Gecko_GetNextStyleChild(mozilla::dom::StyleChildrenIterator*);
 nsAtom* Gecko_Element_ImportedPart(const nsAttrValue*, nsAtom*);
 nsAtom** Gecko_Element_ExportedParts(const nsAttrValue*, nsAtom*,
                                      size_t* aOutLength);
+uint64_t Gecko_Element_GetSubtreeBloomFilter(const mozilla::dom::Element*);
 
 NS_DECL_THREADSAFE_FFI_REFCOUNTING(mozilla::css::SheetLoadDataHolder,
                                    SheetLoadDataHolder);
@@ -147,11 +157,15 @@ const mozilla::PreferenceSheet::Prefs* Gecko_GetPrefSheetPrefs(
 
 bool Gecko_IsTableBorderNonzero(const mozilla::dom::Element* element);
 bool Gecko_IsSelectListBox(const mozilla::dom::Element* element);
+bool Gecko_HasActiveViewTransitionTypes(
+    const mozilla::dom::Document*, const nsTArray<mozilla::StyleCustomIdent>*);
 
 // Attributes.
 #define SERVO_DECLARE_ELEMENT_ATTR_MATCHING_FUNCTIONS(prefix_, implementor_) \
   nsAtom* prefix_##LangValue(implementor_ element);
 
+bool Gecko_LookupAttrValue(const mozilla::dom::Element* aElement,
+                           const nsAtom& aName, nsAString& aResult);
 bool Gecko_AttrEquals(const nsAttrValue*, const nsAtom*, bool aIgnoreCase);
 bool Gecko_AttrDashEquals(const nsAttrValue*, const nsAtom*, bool aIgnoreCase);
 bool Gecko_AttrIncludes(const nsAttrValue*, const nsAtom*, bool aIgnoreCase);
@@ -542,10 +556,10 @@ void Gecko_ContentList_AppendAll(nsSimpleContentList* aContentList,
 // FIXME(emilio): These two below should be a single function that takes a
 // `const DocumentOrShadowRoot*`, but that doesn't make MSVC builds happy for a
 // reason I haven't really dug into.
-const nsTArray<mozilla::dom::Element*>* Gecko_Document_GetElementsWithId(
+RustSpan<const mozilla::dom::Element* const> Gecko_Document_GetElementsWithId(
     const mozilla::dom::Document*, nsAtom* aId);
 
-const nsTArray<mozilla::dom::Element*>* Gecko_ShadowRoot_GetElementsWithId(
+RustSpan<const mozilla::dom::Element* const> Gecko_ShadowRoot_GetElementsWithId(
     const mozilla::dom::ShadowRoot*, nsAtom* aId);
 
 bool Gecko_EvalMozPrefFeature(nsAtom*,

@@ -77,8 +77,6 @@ class nsRefreshDriver;
 class nsRegion;
 class nsTextFrame;
 class nsSubDocumentFrame;
-class nsView;
-class nsViewManager;
 class nsWindowSizes;
 class WeakFrame;
 class ZoomConstraintsClient;
@@ -96,6 +94,7 @@ class GeckoMVMContext;
 class nsDisplayList;
 class nsDisplayListBuilder;
 class OverflowChangedTracker;
+class PresShellWidgetListener;
 class ProfileChunkedBuffer;
 class ScrollContainerFrame;
 class StyleSheet;
@@ -243,7 +242,7 @@ class PresShell final : public nsStubDocumentObserver,
     return mLastOverWindowPointerLocation;
   }
 
-  MOZ_CAN_RUN_SCRIPT void Init(nsPresContext*, nsViewManager*);
+  MOZ_CAN_RUN_SCRIPT void Init(nsPresContext*);
 
   /**
    * All callers are responsible for calling |Destroy| after calling
@@ -312,7 +311,9 @@ class PresShell final : public nsStubDocumentObserver,
    */
   PresShell* GetRootPresShell() const;
 
-  nsViewManager* GetViewManager() const { return mViewManager; }
+  PresShellWidgetListener* GetWidgetListener() const {
+    return mWidgetListener.get();
+  }
 
   nsRefreshDriver* GetRefreshDriver() const;
 
@@ -366,6 +367,13 @@ class PresShell final : public nsStubDocumentObserver,
   MOZ_CAN_RUN_SCRIPT bool ResizeReflowIgnoreOverride(
       const nsSize&, ResizeReflowOptions = ResizeReflowOptions::NoOption);
   MOZ_CAN_RUN_SCRIPT void ForceResizeReflowWithCurrentDimensions();
+  MOZ_CAN_RUN_SCRIPT void FlushDelayedResize();
+  nsSize MaybePendingLayoutViewportSize() const;
+  bool ShouldDelayResize() const;
+  // FIXME: MOZ_CAN_RUN_SCRIPT_BOUNDARY because the aDelay parameter forces us
+  // to effectively not run script.
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY void SetLayoutViewportSize(const nsSize&,
+                                                         bool aDelay);
 
   /** Schedule a resize event if applicable. */
   enum class ResizeEventKind : uint8_t { Regular, Visual };
@@ -399,6 +407,9 @@ class PresShell final : public nsStubDocumentObserver,
 
   void ScrollFrameIntoVisualViewport(Maybe<nsPoint>& aDestination,
                                      const nsRect& aPositionFixedRect,
+                                     const nsIFrame* aPositionFixedFrame,
+                                     ScrollAxis aVertical,
+                                     ScrollAxis aHorizontal,
                                      ScrollFlags aScrollFlags);
 
  public:
@@ -752,8 +763,8 @@ class PresShell final : public nsStubDocumentObserver,
   nsIFrame* GetAbsoluteContainingBlock(nsIFrame* aFrame);
 
   // https://drafts.csswg.org/css-anchor-position-1/#target
-  const nsIFrame* GetAnchorPosAnchor(const nsAtom* aName,
-                                     const nsIFrame* aPositionedFrame) const;
+  nsIFrame* GetAnchorPosAnchor(const nsAtom* aName,
+                               const nsIFrame* aPositionedFrame) const;
   void AddAnchorPosAnchor(const nsAtom* aName, nsIFrame* aFrame);
   void RemoveAnchorPosAnchor(const nsAtom* aName, nsIFrame* aFrame);
   enum class AnchorPosUpdateResult {
@@ -1086,12 +1097,9 @@ class PresShell final : public nsStubDocumentObserver,
   nsresult HandleEvent(nsIFrame* aFrame, WidgetGUIEvent* aEvent,
                        bool aDontRetargetEvents, nsEventStatus* aEventStatus);
   bool ShouldIgnoreInvalidation();
-  /**
-   * Notify that we called Paint with PaintFlags::PaintComposite.
-   * Fires on the presshell for the painted widget.
-   * This is issued at a time when it's safe to modify widget geometry.
-   */
-  MOZ_CAN_RUN_SCRIPT void DidPaintWindow();
+  // Notify that we called PaintWindow() from widget.
+  MOZ_CAN_RUN_SCRIPT
+  void DidPaintWindow();
 
   bool IsVisible() const;
   bool IsUnderHiddenEmbedderElement() const {
@@ -1293,7 +1301,10 @@ class PresShell final : public nsStubDocumentObserver,
     return mNeedLayoutFlush || mNeedStyleFlush;
   }
 
-  void SyncWindowProperties();
+  void MOZ_CAN_RUN_SCRIPT PaintSynchronously();
+  // Ensures the top-level window has the right size constraints /
+  // color-scheme / etc.
+  void SyncWindowPropertiesIfNeeded();
   struct WindowSizeConstraints {
     nsSize mMinSize;
     nsSize mMaxSize;
@@ -1533,7 +1544,10 @@ class PresShell final : public nsStubDocumentObserver,
   /**
    * Calls FrameNeedsReflow on all fixed position children of the root frame.
    */
-  void MarkFixedFramesForReflow(IntrinsicDirty aIntrinsicDirty);
+  void MarkFixedFramesForReflow();
+  // Marks a positioned frame for reflow, assuming that size or position of the
+  // frame might change.
+  void MarkPositionedFrameForReflow(nsIFrame*);
 
   /**
    * Similar to above MarkFixedFramesForReflow, but for sticky position children
@@ -3197,7 +3211,8 @@ class PresShell final : public nsStubDocumentObserver,
   MOZ_KNOWN_LIVE RefPtr<Document> const mDocument;
   MOZ_KNOWN_LIVE RefPtr<nsPresContext> const mPresContext;
   UniquePtr<nsCSSFrameConstructor> mFrameConstructor;
-  nsViewManager* mViewManager;  // [WEAK] docViewer owns it so I don't have to
+  // The object responsible for listening to widget events.
+  UniquePtr<PresShellWidgetListener> mWidgetListener;
   RefPtr<nsFrameSelection> mSelection;
   // The frame selection that last took focus on this shell, which we need to
   // hide if we focus another selection. May or may not be the same as
@@ -3246,6 +3261,9 @@ class PresShell final : public nsStubDocumentObserver,
   // cannot be determined.
   nsTArray<AnchorPosAnchorChange> mLazyAnchorPosAnchorChanges;
 
+  // Note: Does not store implicit anchors, since many elements can be
+  // potential implicit anchors (e.g. pseudo-elements' implicit anchor
+  // is its originating element).
   nsTHashMap<RefPtr<const nsAtom>, nsTArray<nsIFrame*>> mAnchorPosAnchors;
   nsTArray<nsIFrame*> mAnchorPosPositioned;
 
@@ -3335,6 +3353,9 @@ class PresShell final : public nsStubDocumentObserver,
   // Only populated on root content documents.
   nsSize mVisualViewportSize;
 
+  // Layout viewport size that we still haven't committed to the layout tree.
+  Maybe<nsSize> mPendingLayoutViewportSize;
+
   using Arena = nsPresArena<8192, ArenaObjectID, eArenaObjectID_COUNT>;
   Arena mFrameArena;
 
@@ -3413,6 +3434,7 @@ class PresShell final : public nsStubDocumentObserver,
   bool mDidInitialize : 1;
   bool mIsDestroying : 1;
   bool mIsReflowing : 1;
+  bool mIsPainting : 1 = false;
   bool mIsObservingDocument : 1;
 
   // Whether we shouldn't ever get to FlushPendingNotifications. This flag is

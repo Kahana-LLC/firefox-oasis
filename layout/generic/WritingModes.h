@@ -71,6 +71,12 @@ using PhysicalAxes = EnumSet<PhysicalAxis>;
 static constexpr PhysicalAxes kPhysicalAxesBoth{PhysicalAxis::Vertical,
                                                 PhysicalAxis::Horizontal};
 
+inline StyleLogicalAxis ToStyleLogicalAxis(LogicalAxis aLogicalAxis) {
+  return StyleLogicalAxis(aLogicalAxis == LogicalAxis::Block
+                              ? StyleLogicalAxis::Block
+                              : StyleLogicalAxis::Inline);
+}
+
 inline LogicalAxis GetOrthogonalAxis(LogicalAxis aAxis) {
   return aAxis == LogicalAxis::Block ? LogicalAxis::Inline : LogicalAxis::Block;
 }
@@ -474,6 +480,10 @@ class WritingMode {
     mWritingMode = aComputedStyle->WritingMode();
   }
 
+  inline StyleWritingMode ToStyleWritingMode() const {
+    return StyleWritingMode(GetBits());
+  }
+
   /**
    * This function performs fixup for elements with 'unicode-bidi: plaintext',
    * where inline directionality is derived from the Unicode bidi categories
@@ -499,13 +509,8 @@ class WritingMode {
   /**
    * Compare two WritingModes for equality.
    */
-  bool operator==(const WritingMode& aOther) const {
-    return mWritingMode == aOther.mWritingMode;
-  }
-
-  bool operator!=(const WritingMode& aOther) const {
-    return mWritingMode != aOther.mWritingMode;
-  }
+  bool operator==(const WritingMode&) const = default;
+  bool operator!=(const WritingMode&) const = default;
 
   /**
    * Check whether two modes are orthogonal to each other.
@@ -858,11 +863,7 @@ class LogicalPoint {
     CHECK_WRITING_MODE(aOther.GetWritingMode());
     return mPoint == aOther.mPoint;
   }
-
-  bool operator!=(const LogicalPoint& aOther) const {
-    CHECK_WRITING_MODE(aOther.GetWritingMode());
-    return mPoint != aOther.mPoint;
-  }
+  bool operator!=(const LogicalPoint&) const = default;
 
   LogicalPoint operator+(const LogicalPoint& aOther) const {
     CHECK_WRITING_MODE(aOther.GetWritingMode());
@@ -1085,11 +1086,7 @@ class LogicalSize {
     CHECK_WRITING_MODE(aOther.GetWritingMode());
     return mSize == aOther.mSize;
   }
-
-  bool operator!=(const LogicalSize& aOther) const {
-    CHECK_WRITING_MODE(aOther.GetWritingMode());
-    return mSize != aOther.mSize;
-  }
+  bool operator!=(const LogicalSize&) const = default;
 
   LogicalSize operator+(const LogicalSize& aOther) const {
     CHECK_WRITING_MODE(aOther.GetWritingMode());
@@ -1201,14 +1198,11 @@ struct LogicalSides final {
     mSides += aOther;
     return *this;
   }
-  bool operator==(LogicalSides aOther) const {
+  bool operator==(const LogicalSides& aOther) const {
     CHECK_WRITING_MODE(aOther.GetWritingMode());
     return mSides == aOther.mSides;
   }
-  bool operator!=(LogicalSides aOther) const {
-    CHECK_WRITING_MODE(aOther.GetWritingMode());
-    return !(*this == aOther);
-  }
+  bool operator!=(const LogicalSides&) const = default;
 
 #ifdef DEBUG
   WritingMode GetWritingMode() const { return mWritingMode; }
@@ -1514,11 +1508,7 @@ class LogicalMargin {
     CHECK_WRITING_MODE(aMargin.GetWritingMode());
     return mMargin == aMargin.mMargin;
   }
-
-  bool operator!=(const LogicalMargin& aMargin) const {
-    CHECK_WRITING_MODE(aMargin.GetWritingMode());
-    return mMargin != aMargin.mMargin;
-  }
+  bool operator!=(const LogicalMargin&) const = default;
 
   LogicalMargin operator+(const LogicalMargin& aMargin) const {
     CHECK_WRITING_MODE(aMargin.GetWritingMode());

@@ -40,6 +40,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -133,6 +135,7 @@ private fun LoginsList(store: LoginsStore) {
             )
         },
         contentWindowInsets = WindowInsets(0.dp),
+        modifier = Modifier.semantics { testTagsAsResourceId = true },
     ) { paddingValues ->
         if (state.searchText.isNullOrEmpty() && state.loginItems.isEmpty()) {
             EmptyList(dispatcher = store::dispatch, paddingValues = paddingValues)
@@ -149,6 +152,7 @@ private fun LoginsList(store: LoginsStore) {
                     .width(FirefoxTheme.layout.size.containerMaxWidth)
                     .weight(1f, false)
                     .semantics {
+                        testTag = LoginsTestingTags.SAVED_LOGINS_LIST
                         collectionInfo =
                             CollectionInfo(rowCount = state.loginItems.size, columnCount = 1)
                     },
@@ -164,6 +168,9 @@ private fun LoginsList(store: LoginsStore) {
                         isSelected = false,
                         onClick = { store.dispatch(LoginClicked(item)) },
                         description = item.username.trimmed(),
+                        modifier = Modifier.semantics {
+                            testTag = LoginsTestingTags.SAVED_LOGINS_LIST_ITEM + ".${item.url.trimmed()}"
+                        },
                     )
                 }
             }
@@ -185,6 +192,7 @@ private fun AddPasswordItem(
         label = stringResource(R.string.preferences_logins_add_login_2),
         modifier = modifier,
         beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_plus_24),
+        description = stringResource(R.string.saved_logins_add_new_login_button_content_description),
         onClick = { onAddPasswordClicked() },
     )
 }
@@ -306,17 +314,18 @@ private fun LoginsListTopBar(
                 )
             }
 
-            IconButton(onClick = { searchActive = true }, contentDescription = null) {
+            IconButton(
+                onClick = { searchActive = true },
+                contentDescription = stringResource(R.string.preferences_passwords_saved_logins_search_2),
+            ) {
                 Icon(
                     painter = painterResource(iconsR.drawable.mozac_ic_search_24),
-                    contentDescription = stringResource(R.string.preferences_passwords_saved_logins_search_2),
+                    contentDescription = null,
                 )
             }
         },
     )
 }
-
-private val IconButtonHeight = 48.dp
 
 @Composable
 private fun SearchBar(
@@ -330,40 +339,44 @@ private fun SearchBar(
         focusRequester.requestFocus()
     }
 
-    TextField(
-        value = text,
-        placeholder = stringResource(R.string.preferences_passwords_saved_logins_search_2),
-        onValueChange = {
-            store.dispatch(SearchLogins(searchText = it, loginItems = store.state.loginItems))
-        },
-        errorText = "",
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
-        minHeight = IconButtonHeight,
-        trailingIcons = {
-            if (text.isNotBlank()) {
-                IconButton(
-                    onClick = {
-                        store.dispatch(
-                            SearchLogins(
-                                searchText = "",
-                                loginItems = store.state.loginItems,
-                            ),
-                        )
-                    },
-                    contentDescription = null,
-                ) {
-                    Icon(
-                        painter = painterResource(iconsR.drawable.mozac_ic_cross_24),
-                        contentDescription = null,
-                    )
+        TextField(
+            value = text,
+            placeholder = stringResource(R.string.preferences_passwords_saved_logins_search_2),
+            onValueChange = {
+                store.dispatch(SearchLogins(searchText = it, loginItems = store.state.loginItems))
+            },
+            errorText = "",
+            modifier = Modifier
+                .semantics {
+                    testTag = LoginsTestingTags.SAVED_LOGINS_PASSWORD_SEARCH_FIELD
                 }
-            }
-        },
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-    )
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            trailingIcon = {
+                if (text.isNotBlank()) {
+                    IconButton(
+                        onClick = {
+                            store.dispatch(
+                                SearchLogins(
+                                    searchText = "",
+                                    loginItems = store.state.loginItems,
+                                ),
+                            )
+                        },
+                        contentDescription = stringResource(
+                            R.string.saved_logins_clear_search_text_button_content_description,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(iconsR.drawable.mozac_ic_cross_24),
+                            contentDescription = null,
+                        )
+                    }
+                }
+            },
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+        )
 }
 
 @Composable

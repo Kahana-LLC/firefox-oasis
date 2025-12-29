@@ -33,6 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,9 +50,8 @@ import mozilla.components.compose.base.menu.DropdownMenu
 import mozilla.components.compose.base.menu.MenuItem
 import mozilla.components.compose.base.snackbar.Snackbar
 import mozilla.components.compose.base.snackbar.displaySnackbar
+import mozilla.components.compose.base.text.Text
 import mozilla.components.compose.base.textfield.TextField
-import mozilla.components.compose.base.textfield.TextFieldColors
-import mozilla.components.compose.base.textfield.TextFieldStyle
 import mozilla.components.lib.state.ext.observeAsState
 import org.mozilla.fenix.R
 import org.mozilla.fenix.theme.FirefoxTheme
@@ -179,15 +181,11 @@ private fun LoginDetailMenu(
     DropdownMenu(
         menuItems = listOf(
             MenuItem.TextItem(
-                text = mozilla.components.compose.base.text.Text.Resource(
-                    R.string.login_detail_menu_edit_button,
-                ),
+                text = Text.Resource(R.string.login_detail_menu_edit_button),
                 onClick = { store.dispatch(DetailLoginMenuAction.EditLoginMenuItemClicked(loginItem)) },
             ),
             MenuItem.TextItem(
-                text = mozilla.components.compose.base.text.Text.Resource(
-                    R.string.login_detail_menu_delete_button,
-                ),
+                text = Text.Resource(R.string.login_detail_menu_delete_button),
                 onClick = {
                     store.dispatch(
                         DetailLoginMenuAction.DeleteLoginMenuItemClicked(
@@ -204,26 +202,18 @@ private fun LoginDetailMenu(
 
 @Composable
 private fun LoginDetailsUrl(store: LoginsStore, url: String) {
-    Text(
-        text = stringResource(R.string.preferences_passwords_saved_logins_site),
-        style = TextFieldStyle.default().labelStyle,
-        color = TextFieldColors.default().labelColor,
-        modifier = Modifier
-            .padding(horizontal = FirefoxTheme.layout.space.static200)
-            .width(FirefoxTheme.layout.size.containerMaxWidth),
-    )
-
     TextField(
         value = url,
         onValueChange = {},
         isEnabled = false,
         placeholder = "",
         errorText = "",
+        label = stringResource(R.string.preferences_passwords_saved_logins_site),
         modifier = Modifier
             .padding(horizontal = FirefoxTheme.layout.space.static200)
             .wrapContentHeight()
             .width(FirefoxTheme.layout.size.containerMaxWidth),
-        trailingIcons = {
+        trailingIcon = {
             IconButton(
                 onClick = {
                     store.dispatch(DetailLoginAction.GoToSiteClicked(url))
@@ -248,26 +238,18 @@ private fun LoginDetailsUsername(
     val usernameSnackbarText = stringResource(R.string.logins_username_copied)
     val coroutineScope = rememberCoroutineScope()
 
-    Text(
-        text = stringResource(R.string.preferences_passwords_saved_logins_username),
-        style = TextFieldStyle.default().labelStyle,
-        color = TextFieldColors.default().labelColor,
-        modifier = Modifier
-            .padding(horizontal = FirefoxTheme.layout.space.static200)
-            .width(FirefoxTheme.layout.size.containerMaxWidth),
-    )
-
     TextField(
         value = username,
         onValueChange = {},
         isEnabled = false,
         placeholder = "",
         errorText = "",
+        label = stringResource(R.string.preferences_passwords_saved_logins_username),
         modifier = Modifier
             .padding(horizontal = FirefoxTheme.layout.space.static200)
             .wrapContentHeight()
             .width(FirefoxTheme.layout.size.containerMaxWidth),
-        trailingIcons = {
+        trailingIcon = {
             IconButton(
                 onClick = {
                     store.dispatch(DetailLoginAction.CopyUsernameClicked(username))
@@ -302,8 +284,6 @@ private fun LoginDetailsPassword(
 
     Text(
         text = stringResource(R.string.preferences_passwords_saved_logins_password),
-        style = TextFieldStyle.default().labelStyle,
-        color = TextFieldColors.default().labelColor,
         modifier = Modifier
             .padding(horizontal = FirefoxTheme.layout.space.static200)
             .width(FirefoxTheme.layout.size.containerMaxWidth),
@@ -318,9 +298,18 @@ private fun LoginDetailsPassword(
         modifier = Modifier
             .padding(horizontal = FirefoxTheme.layout.space.static200)
             .wrapContentHeight()
-            .width(FirefoxTheme.layout.size.containerMaxWidth),
-        trailingIcons = {
+            .width(FirefoxTheme.layout.size.containerMaxWidth)
+            .semantics {
+                testTagsAsResourceId = true
+                testTag = LoginsTestingTags.LOGIN_DETAILS_PASSWORD_TEXT_FIELD
+            },
+        trailingIcon = {
             EyePasswordIconButton(
+                contentDescription = if (isPasswordVisible) {
+                    Text.Resource(R.string.saved_login_hide_password)
+                } else {
+                    Text.Resource(R.string.saved_login_reveal_password)
+                },
                 isPasswordVisible = isPasswordVisible,
                 onTrailingIconClick = { isPasswordVisible = !isPasswordVisible },
             )

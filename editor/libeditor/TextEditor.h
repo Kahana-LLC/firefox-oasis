@@ -149,6 +149,9 @@ class TextEditor final : public EditorBase,
 
   nsresult OnBlur(const dom::EventTarget* aEventTarget) final;
 
+  [[nodiscard]] Result<widget::IMEState, nsresult> GetPreferredIMEState()
+      const final;
+
   /**
    * The maximum number of characters allowed.
    *   default: -1 (unlimited).
@@ -247,7 +250,14 @@ class TextEditor final : public EditorBase,
    * Return the `Text` node in the anonymous <div>.  Note that the anonymous
    * <div> can have only one `Text` for the storage of the value of this editor.
    */
-  dom::Text* GetTextNode() {
+  enum class IgnoreTextNodeCache : bool { No, Yes };
+  dom::Text* GetTextNode(
+      IgnoreTextNodeCache aIgnoreTextNodeCache = IgnoreTextNodeCache::No) {
+    if (aIgnoreTextNodeCache == IgnoreTextNodeCache::No) {
+      if (Text* const cachedTextNode = GetCachedTextNode()) {
+        return cachedTextNode;
+      }
+    }
     MOZ_DIAGNOSTIC_ASSERT(GetRoot());
     MOZ_DIAGNOSTIC_ASSERT(GetRoot()->GetFirstChild());
     MOZ_DIAGNOSTIC_ASSERT(GetRoot()->GetFirstChild()->IsText());
@@ -256,8 +266,9 @@ class TextEditor final : public EditorBase,
     }
     return GetRoot()->GetFirstChild()->GetAsText();
   }
-  const dom::Text* GetTextNode() const {
-    return const_cast<TextEditor*>(this)->GetTextNode();
+  const dom::Text* GetTextNode(IgnoreTextNodeCache aIgnoreTextNodeCache =
+                                   IgnoreTextNodeCache::No) const {
+    return const_cast<TextEditor*>(this)->GetTextNode(aIgnoreTextNodeCache);
   }
 
  protected:  // May be called by friends.

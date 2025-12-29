@@ -4,6 +4,7 @@
 
 
 import logging
+import os
 import re
 import sys
 import warnings
@@ -333,7 +334,7 @@ def verify_run_task_caches(task, taskgraph, scratch_pad, graph_config, parameter
     command = payload.get("command") or [""]
 
     main_command = command[0] if isinstance(command[0], str) else ""
-    run_task = main_command.endswith("run-task")
+    run_task = os.path.basename(main_command).startswith("run-task")
 
     for cache in payload.get("cache", {}).get(
         "task-reference", payload.get("cache", {})
@@ -351,14 +352,14 @@ def verify_run_task_caches(task, taskgraph, scratch_pad, graph_config, parameter
 
         if not run_task:
             raise Exception(
-                f"{task['label']} is using a cache ({cache}) reserved for run-task "
+                f"{task.label} is using a cache ({cache}) reserved for run-task "
                 "change the task to use run-task or use a different "
                 "cache name"
             )
 
         if suffix not in cache:
             raise Exception(
-                f"{task['label']} is using a cache ({cache}) reserved for run-task "
+                f"{task.label} is using a cache ({cache}) reserved for run-task "
                 "but the cache name is not dependent on the contents "
                 "of run-task; change the cache name to conform to the "
                 "naming requirements"

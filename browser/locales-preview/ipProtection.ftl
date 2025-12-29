@@ -53,11 +53,7 @@ ipprotection-connection-status-on =
 ipprotection-connection-status-off =
   .label = VPN is off
 
-# The panel status card has a header, as well as VPN server location name and connection time displayed under it when the VPN is on.
-# Variables:
-#   $time (String) - The amount of time connected to the proxy as HH:MM:SS (hours, minutes, seconds).
-ipprotection-connection-time = { $time }
-
+# The panel status card has a header, as well as VPN server location name displayed under it when the VPN is on.
 # Location refers to the VPN server geographical position.
 ipprotection-location-title =
   .title = Location selected based on fastest server
@@ -90,6 +86,10 @@ ipprotection-message-generic-error =
   .heading = Couldn’t connect to VPN
   .message = Try again in a few minutes.
 
+ipprotection-message-bandwidth-warning =
+  .heading = You’re almost at your bandwidth limit
+  .message = You have 1 GB of the allocated 150 GB left this month.
+
 ipprotection-message-continuous-onboarding-intro = Turn on VPN to hide your location and add extra encryption to your browsing.
 ipprotection-message-continuous-onboarding-autostart = <a data-l10n-name="setting-link">Set VPN to turn on</a> every time you open { -brand-short-name } for an extra layer of protection.
 ipprotection-message-continuous-onboarding-site-settings = { -brand-short-name } will remember which websites you’ve set to use VPN. Update these in <a data-l10n-name="setting-link">settings</a> anytime.
@@ -102,12 +102,9 @@ ip-protection-description =
 ip-protection-learn-more = Learn more
 
 ip-protection-site-exceptions =
-  .label = Where to use VPN
-  .description = Use VPN for all websites except ones you choose, or for select specific ones.
-ip-protection-site-exceptions-all-sites-radio =
-  .label = All websites (default)
+  .label = Site specific settings
 ip-protection-site-exceptions-all-sites-button =
-  .label = { -firefox-vpn-brand-name } is off for these websites
+  .label = Manage website settings
   .description = No websites added yet
 
 ip-protection-autostart =
@@ -122,20 +119,11 @@ ip-protection-contact-support-link =
 ip-protection-upgrade-link =
   .label = Upgrade to { -mozilla-vpn-brand-name }
 
-# "Select" is an adjective here to describe a setting that allows running the VPN on certain sites only.
-# Not to be confused with the action of selecting a site, which is not at all applicable to this setting.
-ip-protection-site-exceptions-select-sites-radio =
-  .label = Select websites
-ip-protection-site-exceptions-select-sites-button =
-  .label = { -firefox-vpn-brand-name } is on for these websites
-  .description = No websites added yet
-
 ## IP Protection dialogs
 
 ip-protection-exceptions-dialog-window =
   .title = Where to use { -firefox-vpn-brand-name }
 ip-protection-exclusions-desc = Use VPN for all websites except ones on this list. Add websites to this list by turning { -firefox-vpn-brand-name } on or off for any site in the VPN panel.
-ip-protection-inclusions-desc = Use VPN only for select websites. Add websites to this list by turning { -firefox-vpn-brand-name } on or off for any site in the VPN panel.
 
 ipprotection-site-settings-title =
   .title = VPN site settings

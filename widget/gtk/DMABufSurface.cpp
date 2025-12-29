@@ -131,7 +131,7 @@ static const std::string FormatEGLError(EGLint err) {
   }
 }
 
-MOZ_CONSTINIT static RefPtr<GLContext> sSnapshotContext;
+constinit static RefPtr<GLContext> sSnapshotContext;
 static StaticMutex sSnapshotContextMutex MOZ_UNANNOTATED;
 MOZ_RUNINIT static Atomic<int> gNewSurfaceUID(getpid());
 /* Memory reporter stuff */
@@ -1209,14 +1209,16 @@ void DMABufSurfaceRGBA::ReleaseTextures() {
 #endif
   }
 
-  if (mTexture) {
+  const auto& gle = gl::GLContextEGL::Cast(mGL);
+  const auto& egl = gle->mEgl;
+
+  if (mTexture && mGL->MakeCurrent()) {
     mGL->fDeleteTextures(1, &mTexture);
     mTexture = 0;
   }
 
   if (mEGLImage != LOCAL_EGL_NO_IMAGE) {
-    const auto& gle = gl::GLContextEGL::Cast(mGL);
-    gle->mEgl->fDestroyImage(mEGLImage);
+    egl->fDestroyImage(mEGLImage);
     mEGLImage = LOCAL_EGL_NO_IMAGE;
   }
   mGL = nullptr;
@@ -1531,8 +1533,9 @@ size_t DMABufSurfaceYUV::GetUsedMemoryYUV(int32_t aFOURCCFormat, int aWidth,
       // one plane 8b + two planes 8b (half sized).
       return aWidth * aHeight + (aWidth >> 1) * (aHeight >> 1) * 2;
     default:
-      MOZ_DIAGNOSTIC_CRASH(
-          "DMABufSurfaceYUV::GetUsedMemoryYUV(): unknown format!");
+      gfxCriticalError()
+          << "DMABufSurfaceYUV::GetUsedMemoryYUV(): unknown format: "
+          << gfx::hexa(aFOURCCFormat);
       return 0;
   }
 }
@@ -1743,7 +1746,8 @@ bool DMABufSurfaceYUV::CreateYUVPlaneExport(GLContext* aGLContext, int aPlane) {
       break;
     default:
       gfxCriticalError()
-          << "DMABufSurfaceYUV::CreateYUVPlaneExport(): Unsupported format";
+          << "DMABufSurfaceYUV::CreateYUVPlaneExport(): Unsupported format:"
+          << gfx::hexa(mDrmFormats[aPlane]);
       return false;
   }
 

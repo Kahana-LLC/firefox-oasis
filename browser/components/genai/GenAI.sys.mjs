@@ -108,6 +108,12 @@ XPCOMUtils.defineLazyPreferenceGetter(
   "sidebarTools",
   "sidebar.main.tools"
 );
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "shortcutMouseoverCount",
+  "browser.ml.chat.shortcut.onboardingMouseoverCount",
+  0
+);
 
 export const GenAI = {
   // Cache of potentially localized prompt
@@ -389,7 +395,15 @@ export const GenAI = {
     }
     aiActionButton.initialized = true;
 
+    const setAIButtonAriaLabel = (chatProviderName = "localhost") => {
+      document.l10n.setAttributes(aiActionButton, "genai-shortcut-button", {
+        provider: chatProviderName,
+      });
+    };
+
     const document = aiActionButton.ownerDocument;
+    const initialChatProvider = this.chatProviders.get(lazy.chatProvider);
+    setAIButtonAriaLabel(initialChatProvider?.name);
     const buttonActiveState = "icon";
     const buttonDefaultState = "icon ghost";
     const chatShortcutsOptionsPanel = document.getElementById(
@@ -448,18 +462,18 @@ export const GenAI = {
       return mozMessageBarEl;
     };
 
-    // Detect hover to build and open the popup
-    aiActionButton.addEventListener("mouseover", async () => {
-      if (chatShortcutsOptionsPanel.state != "closed") {
-        return;
-      }
-
+    // build the ask popup
+    const buildPopup = async () => {
       aiActionButton.setAttribute("type", buttonActiveState);
       const vbox = chatShortcutsOptionsPanel.querySelector("vbox");
       vbox.innerHTML = "";
 
-      const chatProvider = this.chatProviders.get(lazy.chatProvider);
       const showWarning = this.isContextTooLong(aiActionButton.data.selection);
+      const chatProvider = this.chatProviders.get(lazy.chatProvider);
+
+      if (initialChatProvider !== chatProvider?.name) {
+        setAIButtonAriaLabel(chatProvider?.name);
+      }
 
       // Show warning if selection is too long
       if (showWarning) {
@@ -551,6 +565,35 @@ export const GenAI = {
         provider: this.getProviderId(),
         warning: showWarning,
       });
+    };
+
+    // ask popup shows on mouseover only in the first two times
+    const hasMouseoverOnPopup = () => {
+      const mouseoverCounter = lazy.shortcutMouseoverCount;
+      const maxMouseoverCount = 2;
+
+      if (mouseoverCounter >= maxMouseoverCount) {
+        return;
+      }
+
+      if (chatShortcutsOptionsPanel.state == "closed") {
+        Services.prefs.setIntPref(
+          "browser.ml.chat.shortcut.onboardingMouseoverCount",
+          mouseoverCounter + 1
+        );
+        buildPopup();
+      }
+    };
+
+    aiActionButton.addEventListener("mouseover", hasMouseoverOnPopup);
+
+    // Detect click to build and toggle the popup
+    aiActionButton.addEventListener("click", async () => {
+      if (chatShortcutsOptionsPanel.state != "closed") {
+        chatShortcutsOptionsPanel.hidePopup();
+        return;
+      }
+      buildPopup();
     });
   },
 

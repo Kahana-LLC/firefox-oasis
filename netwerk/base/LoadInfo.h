@@ -42,6 +42,7 @@ namespace net {
 class EarlyHintPreloader;
 class LoadInfoArgs;
 class LoadInfo;
+class WebTransportSessionProxy;
 }  // namespace net
 
 namespace ipc {
@@ -403,6 +404,7 @@ class LoadInfo final : public nsILoadInfo {
            nsIURI* aResultPrincipalURI,
            nsICookieJarSettings* aCookieJarSettings,
            nsIPolicyContainer* aPolicyContainerToInherit,
+           const Maybe<dom::FeaturePolicyInfo>& aContainerFeaturePolicyInfo,
            const nsACString& aTriggeringRemoteType,
            const nsID& aSandboxedNullPrincipalID,
            const Maybe<mozilla::dom::ClientInfo>& aClientInfo,
@@ -457,10 +459,12 @@ class LoadInfo final : public nsILoadInfo {
   void SetIncludeCookiesSecFlag();
   friend class mozilla::dom::XMLHttpRequestMainThread;
 
-  // nsDocShell::OpenInitializedChannel and EarlyHintPreloader::OpenChannel
-  // needs to update the loadInfo with the correct browsingContext.
+  // nsDocShell::OpenInitializedChannel, EarlyHintPreloader::OpenChannel and
+  // WebTransportSessionProxy::AsyncConnectWithClient need to update the
+  // loadInfo with the correct browsingContext.
   friend class ::nsDocShell;
   friend class mozilla::net::EarlyHintPreloader;
+  friend class mozilla::net::WebTransportSessionProxy;
   void UpdateBrowsingContextID(uint64_t aBrowsingContextID) {
     mBrowsingContextID = aBrowsingContextID;
   }

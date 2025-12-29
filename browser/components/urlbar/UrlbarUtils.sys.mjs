@@ -19,6 +19,8 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ContextualIdentityService:
     "resource://gre/modules/ContextualIdentityService.sys.mjs",
+  DEFAULT_FORM_HISTORY_PARAM:
+    "moz-src:///toolkit/components/search/SearchSuggestionController.sys.mjs",
   FormHistory: "resource://gre/modules/FormHistory.sys.mjs",
   KeywordUtils: "resource://gre/modules/KeywordUtils.sys.mjs",
   PlacesUIUtils: "moz-src:///browser/components/places/PlacesUIUtils.sys.mjs",
@@ -160,6 +162,7 @@ export var UrlbarUtils = {
     SEARCH_GLASS: "chrome://global/skin/icons/search-glass.svg",
     TRENDING: "chrome://global/skin/icons/trending.svg",
     TIP: "chrome://global/skin/icons/lightbulb.svg",
+    GLOBE: "chrome://global/skin/icons/defaultFavicon.svg",
   },
 
   // The number of results by which Page Up/Down move the selection.
@@ -180,9 +183,9 @@ export var UrlbarUtils = {
   // Whether a result should be highlighted up to the point the user has typed
   // or after that point.
   HIGHLIGHT: Object.freeze({
-    NONE: 0,
     TYPED: 1,
     SUGGESTED: 2,
+    ALL: 3,
   }),
 
   // UrlbarProviderPlaces's autocomplete results store their titles and tags
@@ -404,6 +407,7 @@ export var UrlbarUtils = {
    *     TYPED: match ranges matching the tokens; or
    *     SUGGESTED: match ranges for words not matching the tokens and the
    *                endings of words that start with a token.
+   *     ALL: match all ranges of str.
    * @returns {Array} An array: [
    *            [matchIndex_0, matchLength_0],
    *            [matchIndex_1, matchLength_1],
@@ -413,6 +417,14 @@ export var UrlbarUtils = {
    *          The array is sorted by match indexes ascending.
    */
   getTokenMatches(tokens, str, highlightType) {
+    if (highlightType == this.HIGHLIGHT.ALL) {
+      return [[0, str.length]];
+    }
+
+    if (!tokens?.length) {
+      return [];
+    }
+
     // Only search a portion of the string, because not more than a certain
     // amount of characters are visible in the UI, matching over what is visible
     // would be expensive and pointless.
@@ -769,7 +781,7 @@ export var UrlbarUtils = {
       Services.io.speculativeConnect(
         uri,
         window.gBrowser.contentPrincipal,
-        null,
+        window.docShell.QueryInterface(Ci.nsIInterfaceRequestor),
         false
       );
     } catch (ex) {
@@ -1158,7 +1170,7 @@ export var UrlbarUtils = {
     }
     return lazy.FormHistory.update({
       op: "bump",
-      fieldname: input.formHistoryName,
+      fieldname: lazy.DEFAULT_FORM_HISTORY_PARAM,
       value,
       source,
     });
@@ -1729,7 +1741,7 @@ export var UrlbarUtils = {
    *   The text content to give the node.
    * @param {Array} highlights
    *   Array of highlights as returned by `UrlbarUtils.getTokenMatches()` or
-   *   `UrlbarResult.payloadAndSimpleHighlights()`.
+   *   `UrlbarResult.getDisplayableValueAndHighlights()`.
    */
   addTextContentWithHighlights(parentNode, textContent, highlights) {
     parentNode.textContent = "";
@@ -1866,9 +1878,6 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
           },
         },
       },
-      displayUrl: {
-        type: "string",
-      },
       frecency: {
         type: "number",
       },
@@ -1906,9 +1915,6 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "string",
       },
       descriptionL10n: L10N_SCHEMA,
-      displayUrl: {
-        type: "string",
-      },
       engine: {
         type: "string",
       },
@@ -1993,14 +1999,8 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
       dismissalKey: {
         type: "string",
       },
-      displayUrl: {
-        type: "string",
-      },
       dupedHeuristic: {
         type: "boolean",
-      },
-      fallbackTitle: {
-        type: "string",
       },
       frecency: {
         type: "number",
@@ -2034,9 +2034,6 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "string",
       },
       provider: {
-        type: "string",
-      },
-      qsSuggestion: {
         type: "string",
       },
       requestId: {
@@ -2100,9 +2097,6 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
     type: "object",
     required: ["keyword", "url"],
     properties: {
-      displayUrl: {
-        type: "string",
-      },
       icon: {
         type: "string",
       },
@@ -2150,9 +2144,6 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
     required: ["device", "url", "lastUsed"],
     properties: {
       device: {
-        type: "string",
-      },
-      displayUrl: {
         type: "string",
       },
       icon: {
@@ -2342,8 +2333,6 @@ export class UrlbarQueryContext {
    *   If it's false, then `allowRemoteResults` will do its usual checks to
    *   determine whether remote results are allowed. If it's true, then
    *   `allowRemoteResults` will immediately return false. Defaults to false.
-   * @param {string} [options.formHistoryName]
-   *   The name under which the local form history is registered.
    */
   constructor(options) {
     // Clone to make sure all properties belong to the system realm.
@@ -2372,7 +2361,6 @@ export class UrlbarQueryContext {
      */
     const optionalProperties = [
       ["currentPage", v => typeof v == "string" && !!v.length],
-      ["formHistoryName", v => typeof v == "string" && !!v.length],
       ["prohibitRemoteResults", () => true, false],
       ["providers", v => Array.isArray(v) && !!v.length],
       ["searchMode", v => v && typeof v == "object"],
@@ -2440,12 +2428,6 @@ export class UrlbarQueryContext {
    *   Indicates if the first result has been changed changed.
    */
   firstResultChanged = false;
-
-  /**
-   * @type {string}
-   *   The form history name to use when saving search history.
-   */
-  formHistoryName;
 
   /**
    * @type {UrlbarResult}
@@ -2640,7 +2622,12 @@ export class UrlbarQueryContext {
 
     // Disallow remote results for strings containing tokens that look like URIs
     // to avoid disclosing information about networks and passwords.
-    if (this.fixupInfo?.href && !this.fixupInfo?.isSearch) {
+    // (Unless the search is happening in the searchbar.)
+    if (
+      this.sapName != "searchbar" &&
+      this.fixupInfo?.href &&
+      !this.fixupInfo?.isSearch
+    ) {
       return false;
     }
 
@@ -3395,7 +3382,7 @@ export class L10nCache {
    *   If this is set, apply substring highlighting to the corresponding l10n
    *   arguments in `args`. Each value in this object should be an array of
    *   highlights as returned by `UrlbarUtils.getTokenMatches()` or
-   *   `UrlbarResult.payloadAndSimpleHighlights()`.
+   *   `UrlbarResult.getDisplayableValueAndHighlights()`.
    * @param {string} [options.attribute]
    *   If the string applies to an attribute on the element, pass the name of
    *   the attribute. The string in the Fluent file should define a value for

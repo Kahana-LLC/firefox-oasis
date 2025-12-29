@@ -14,7 +14,6 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
-import org.mozilla.fenix.Config
 import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.GleanMetrics.AppTheme
 import org.mozilla.fenix.GleanMetrics.CustomizationSettings
@@ -94,28 +93,35 @@ class CustomizationFragment : PreferenceFragmentCompat() {
     }
 
     private fun updateToolbarShortcut() {
-        val simpleCategory = requirePreference<PreferenceCategory>(
-            R.string.pref_key_customization_category_toolbar_simple_shortcut,
-        )
-        val expandedCategory = requirePreference<PreferenceCategory>(
-            R.string.pref_key_customization_category_toolbar_expanded_shortcut,
+        val category = requirePreference<PreferenceCategory>(
+            R.string.pref_key_customization_category_toolbar_shortcut,
         )
         val settings = requireContext().settings()
         val isExpandedToolbarEnabled = settings.shouldUseExpandedToolbar && isTallWindow() && !isWideWindow()
+        val shouldShowShortcutCategory = settings.shouldShowToolbarCustomization &&
+                settings.shouldUseComposableToolbar &&
+                settings.toolbarRedesignEnabled
 
-        simpleCategory.isVisible =
-            settings.shouldShowToolbarCustomization &&
-                    Config.channel.isNightlyOrDebug &&
-                    settings.shouldUseComposableToolbar &&
-                    settings.toolbarRedesignEnabled &&
-                    !isExpandedToolbarEnabled
-
-        expandedCategory.isVisible =
-            settings.shouldShowToolbarCustomization &&
-                    Config.channel.isNightlyOrDebug &&
-                    settings.shouldUseComposableToolbar &&
-                    settings.toolbarRedesignEnabled &&
-                    isExpandedToolbarEnabled
+        category.isVisible = shouldShowShortcutCategory
+        if (shouldShowShortcutCategory) {
+            val shortcutPreference = if (isExpandedToolbarEnabled) {
+                ToolbarExpandedShortcutPreference(requireContext()).apply {
+                    key = getString(R.string.pref_key_toolbar_expanded_shortcut)
+                    layoutResource = R.layout.preference_toolbar_shortcut
+                }
+            } else {
+                ToolbarSimpleShortcutPreference(requireContext()).apply {
+                    key = getString(R.string.pref_key_toolbar_simple_shortcut)
+                    layoutResource = R.layout.preference_toolbar_shortcut
+                }
+            }
+            category.apply {
+                removeAll()
+                addPreference(shortcutPreference)
+                val shortcutOptions = shortcutPreference.getShortcutOptions()
+                shortcutOptions.forEach(::addPreference)
+            }
+        }
     }
 
     private fun setupRadioGroups() {

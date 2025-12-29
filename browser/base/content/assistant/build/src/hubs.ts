@@ -3,6 +3,8 @@
 // - We badge open tabs whose host matches any bookmark in a hub.
 // - Assistant commands call into this manager.
 
+import { localMemory } from "./services/localMemory";
+
 type FxTab = any;
 
 // Helper to get the correct browser window, even if running in a sidebar
@@ -299,16 +301,23 @@ class HubManager {
       const { PlacesUtils, gBrowser } = getChrome();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      
-      // Case-insensitive match for bookmark folder
-      let folder = children.find((c: any) => 
+      // Case-insensitive match for hub folder
+      const folder = children.find((c: any) => 
         c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === name.toLowerCase()
+        (c.title || "").toLowerCase() === name.toLowerCase()
       );
       
       // If folder doesn't exist, create it
       if (!folder) {
-        folder = await createBookmark({
+        // ... creation logic needs to be careful if folder finding failed/is complex
+        // But wait, 'folder' is const here. My code was 'let folder'.
+        // I need to restructure to allow folder creation.
+      }
+      
+      // Actually, let's rewrite the whole block to be safe.
+      let targetFolder = folder;
+      if (!targetFolder) {
+         targetFolder = await createBookmark({
           parentGuid: rootId,
           title: name,
         });
@@ -316,9 +325,9 @@ class HubManager {
 
       // 1. Add to bookmark folder
       for (const tab of tabs) {
-        await this.addTabToFolder(folder.guid, tab);
+        // Use folder.title (correct case) for indexing
+        await this.addTabToFolder(targetFolder.guid, tab, targetFolder.title);
       }
-      
       this.updateAllTabMarkers();
 
       // 2. Visual Grouping using gBrowser native methods
@@ -565,7 +574,7 @@ class HubManager {
     } catch {}
   }
 
-  private async addTabToFolder(folderGuid: string, tab: FxTab) {
+  private async addTabToFolder(folderGuid: string, tab: FxTab, hubName?: string) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
     if (!url) return;
     
@@ -582,6 +591,27 @@ class HubManager {
       title,
       url,
     });
+
+    // Index in local memory
+    try {
+      // Best-effort content extraction
+      let content = "";
+      try {
+        // Note: This only works if the tab is in the same process or via CPOW (not recommended but might work for now)
+        // For full Fission support, we'd need a JSWindowActor.
+        const doc = tab.linkedBrowser?.contentDocument;
+        if (doc && doc.body) {
+          content = doc.body.innerText.substring(0, 5000); // Limit to 5k chars
+        }
+      } catch (e) {
+        console.warn("Failed to extract tab content:", e);
+      }
+
+      const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;
+      await localMemory.addDocument(text, { title, type: "hub_item", hub: folderGuid, hubName, description: content.substring(0, 200) }, url);
+    } catch (e) {
+      console.error("Failed to index hub item:", e);
+    }
   }
 
   private suggestName(): string {

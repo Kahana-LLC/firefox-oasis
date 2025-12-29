@@ -9,7 +9,7 @@ import mozilla.components.compose.browser.toolbar.store.BrowserToolbarAction
 import mozilla.components.compose.browser.toolbar.store.BrowserToolbarInteraction.BrowserToolbarEvent.Source
 import mozilla.components.compose.browser.toolbar.store.BrowserToolbarState
 import mozilla.components.lib.state.Middleware
-import mozilla.components.lib.state.MiddlewareContext
+import mozilla.components.lib.state.Store
 import org.mozilla.fenix.GleanMetrics.Toolbar
 import org.mozilla.fenix.home.toolbar.DisplayActions.MenuClicked
 import org.mozilla.fenix.home.toolbar.TabCounterInteractions.AddNewPrivateTab
@@ -22,14 +22,18 @@ import org.mozilla.fenix.telemetry.ACTION_MENU_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_TAB_COUNTER_CLICKED
 import org.mozilla.fenix.telemetry.ACTION_TAB_COUNTER_LONG_CLICKED
 import org.mozilla.fenix.telemetry.SOURCE_ADDRESS_BAR
+import org.mozilla.fenix.telemetry.SOURCE_BROWSER_END
+import org.mozilla.fenix.telemetry.SOURCE_BROWSER_START
 import org.mozilla.fenix.telemetry.SOURCE_NAVIGATION_BAR
+import org.mozilla.fenix.telemetry.SOURCE_PAGE_END
+import org.mozilla.fenix.telemetry.SOURCE_PAGE_START
 
 /**
  * [Middleware] responsible for recording telemetry of actions triggered by compose toolbars.
  */
 class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, BrowserToolbarAction> {
     override fun invoke(
-        context: MiddlewareContext<BrowserToolbarState, BrowserToolbarAction>,
+        store: Store<BrowserToolbarState, BrowserToolbarAction>,
         next: (BrowserToolbarAction) -> Unit,
         action: BrowserToolbarAction,
     ) {
@@ -65,14 +69,15 @@ class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, Browse
 
     private fun trackToolbarEvent(
         toolbarActionRecord: ToolbarActionRecord,
-        source: Source = Source.AddressBar,
+        source: Source = Source.Unknown,
     ) {
         when (source) {
-            Source.AddressBar ->
+            is Source.AddressBar ->
                 Toolbar.buttonTapped.record(
                     Toolbar.ButtonTappedExtra(
                         source = SOURCE_ADDRESS_BAR,
                         item = toolbarActionRecord.action,
+                        extra = source.telemetryName(),
                     ),
                 )
 
@@ -83,6 +88,16 @@ class BrowserToolbarTelemetryMiddleware : Middleware<BrowserToolbarState, Browse
                         item = toolbarActionRecord.action,
                     ),
                 )
+
+            Source.Unknown -> return
         }
     }
 }
+
+internal fun Source.AddressBar.telemetryName(): String =
+    when (this) {
+        Source.AddressBar.BrowserStart -> SOURCE_BROWSER_START
+        Source.AddressBar.PageStart -> SOURCE_PAGE_START
+        Source.AddressBar.PageEnd -> SOURCE_PAGE_END
+        Source.AddressBar.BrowserEnd -> SOURCE_BROWSER_END
+    }

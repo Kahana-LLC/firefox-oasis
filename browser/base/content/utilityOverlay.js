@@ -13,6 +13,8 @@ var { XPCOMUtils } = ChromeUtils.importESModule(
 
 ChromeUtils.defineESModuleGetters(this, {
   AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   BrowserUtils: "resource://gre/modules/BrowserUtils.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   ContextualIdentityService:
@@ -62,6 +64,9 @@ Object.defineProperty(this, "BROWSER_NEW_TAB_URL", {
       ) {
         return "about:privatebrowsing";
       }
+    }
+    if (AIWindow.isAIWindowActive(window)) {
+      return AIWindow.newTabURL;
     }
     return AboutNewTab.newTabURL;
   },
@@ -560,9 +565,9 @@ function makeURLAbsolute(aBase, aUrl) {
 
 function getHelpLinkURL(aHelpTopic) {
   var url = Services.urlFormatter.formatURLPref("app.support.baseURL");
-  return url + aHelpTopic;
+  return url;
 }
-
+//  + aHelpTopic
 function openHelpLink(aHelpTopic) {
   openTrustedLinkIn(getHelpLinkURL(aHelpTopic), "tab");
 }

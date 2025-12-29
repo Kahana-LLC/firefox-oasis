@@ -41,9 +41,10 @@ struct nsStyleVisibility;
 class nsComputedDOMStyle;
 namespace mozilla {
 class ComputedStyle;
-struct IntrinsicSize;
-struct ReflowInput;
 struct AnchorPosResolutionCache;
+class AnchorPosReferenceData;
+struct IntrinsicSize;
+struct SizeComputationInput;
 
 }  // namespace mozilla
 
@@ -86,10 +87,7 @@ struct ContainSizeAxes {
   bool IsBoth() const { return mIContained && mBContained; }
   bool IsAny() const { return mIContained || mBContained; }
 
-  bool operator==(const ContainSizeAxes& aOther) const {
-    return mIContained == aOther.mIContained &&
-           mBContained == aOther.mBContained;
-  }
+  bool operator==(const ContainSizeAxes&) const = default;
 
   /**
    * Return a contained size from an uncontained size.
@@ -214,10 +212,8 @@ struct nsStyleImageLayers {
              mYRepeat == mozilla::StyleImageLayerRepeat::Space;
     }
 
-    bool operator==(const Repeat& aOther) const {
-      return mXRepeat == aOther.mXRepeat && mYRepeat == aOther.mYRepeat;
-    }
-    bool operator!=(const Repeat& aOther) const { return !(*this == aOther); }
+    bool operator==(const Repeat& aOther) const = default;
+    bool operator!=(const Repeat& aOther) const = default;
   };
 
   struct Layer {
@@ -279,7 +275,7 @@ struct nsStyleImageLayers {
     // An equality operator that compares the images using URL-equality
     // rather than pointer-equality.
     bool operator==(const Layer& aOther) const;
-    bool operator!=(const Layer& aOther) const { return !(*this == aOther); }
+    bool operator!=(const Layer& aOther) const = default;
   };
 
   // The (positive) number of computed values of each property, since
@@ -383,23 +379,41 @@ using AnchorResolvedMargin =
 
 // Base set of parameters required to resolve a reference to an anchor.
 struct AnchorPosResolutionParams {
+  struct AutoResolutionOverrideParams {
+    // Whether anchor-center is being used on the horizontal axis.
+    bool mHAnchorCenter = false;
+    // Whether anchor-center is being used on the vertical axis.
+    bool mVAnchorCenter = false;
+    // Whether position-area is being used.
+    bool mPositionAreaInUse = false;
+
+    AutoResolutionOverrideParams() = default;
+    AutoResolutionOverrideParams(
+        const nsIFrame* aFrame,
+        const mozilla::AnchorPosResolutionCache* aCache);
+    explicit AutoResolutionOverrideParams(const nsIFrame* aFrame);
+
+    bool OverriddenToZero(mozilla::StylePhysicalAxis aAxis) const;
+  };
   // Frame of the anchor positioned element.
   // If nullptr, skips anchor lookup and returns invalid, resolving fallbacks.
   const nsIFrame* mFrame;
   // Position property of the element in question.
   mozilla::StylePositionProperty mPosition;
-  // position-area property of the element in question.
-  mozilla::StylePositionArea mPositionArea;
   // Cache data used for anchor resolution.
   mozilla::AnchorPosResolutionCache* const mCache;
+  // Set of parameters that override `auto` values to 0, if the default
+  // anchor is valid.
+  AutoResolutionOverrideParams mAutoResolutionOverrideParams;
 
   // Helper functions for creating anchor resolution parameters.
   // Defined in corresponding header files.
   static inline AnchorPosResolutionParams From(
       const nsIFrame* aFrame,
       mozilla::AnchorPosResolutionCache* aAnchorPosResolutionCache = nullptr);
-  static inline AnchorPosResolutionParams From(
-      const mozilla::ReflowInput* aRI, bool aIgnorePositionArea = false);
+  static AnchorPosResolutionParams From(
+      const mozilla::SizeComputationInput* aSizingInput,
+      bool aIgnorePositionArea = false);
   static inline AnchorPosResolutionParams From(
       const nsComputedDOMStyle* aComputedDOMStyle);
 };
@@ -414,10 +428,17 @@ struct AnchorResolvedMarginHelper {
   static AnchorResolvedMargin FromUnresolved(
       const mozilla::StyleMargin& aValue, mozilla::StylePhysicalAxis aAxis,
       const AnchorPosResolutionParams& aParams) {
-    if (!aValue.HasAnchorPositioningFunction()) {
+    auto resolved = [&]() {
+      if (aValue.HasAnchorPositioningFunction()) {
+        return ResolveAnchor(aValue, aAxis, aParams);
+      }
       return AnchorResolvedMargin::NonOwning(&aValue);
+    }();
+    if (resolved->IsAuto() &&
+        aParams.mAutoResolutionOverrideParams.OverriddenToZero(aAxis)) {
+      return Zero();
     }
-    return ResolveAnchor(aValue, aAxis, aParams);
+    return resolved;
   }
 
  private:
@@ -493,9 +514,9 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleMargin {
 
   mozilla::StyleRect<mozilla::StyleMargin> mMargin;
   mozilla::StyleRect<mozilla::StyleLength> mScrollMargin;
-  // TODO: Add support for overflow-clip-margin: <visual-box> and maybe
-  // per-axis/side clipping, see https://github.com/w3c/csswg-drafts/issues/7245
-  mozilla::StyleLength mOverflowClipMargin;
+  // TODO: Add support per-axis/side clipping, see
+  // https://github.com/w3c/csswg-drafts/issues/7245
+  mozilla::StyleOverflowClipMargin mOverflowClipMargin;
 };
 
 struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStylePadding {
@@ -772,19 +793,28 @@ struct AnchorResolvedInsetHelper {
     return value;
   }
 
+  static const mozilla::StyleInset& ZeroValue() {
+    static const auto value = mozilla::StyleInset::LengthPercentage(
+        mozilla::StyleLengthPercentage::Zero());
+    return value;
+  }
+
   static AnchorResolvedInset FromUnresolved(
       const mozilla::StyleInset& aValue, mozilla::Side aSide,
       const AnchorPosOffsetResolutionParams& aParams) {
-    if (!aValue.HasAnchorPositioningFunction()) {
-      // If `position-area` is used "Any auto inset properties resolve to 0":
-      // https://drafts.csswg.org/css-anchor-position-1/#valdef-position-area-position-area
-      if (aValue.IsAuto() && !aParams.mBaseParams.mPositionArea.IsNone()) {
-        return AnchorResolvedInset::UniquelyOwning(
-            new mozilla::StyleInset(mozilla::LengthPercentage::Zero()));
+    auto resolved = [&]() {
+      if (aValue.HasAnchorPositioningFunction()) {
+        return ResolveAnchor(aValue, mozilla::ToStylePhysicalSide(aSide),
+                             aParams);
       }
       return AnchorResolvedInset::NonOwning(&aValue);
+    }();
+    if (resolved->IsAuto() &&
+        aParams.mBaseParams.mAutoResolutionOverrideParams.OverriddenToZero(
+            mozilla::ToStylePhysicalAxis(aSide))) {
+      return AnchorResolvedInset::NonOwning(&ZeroValue());
     }
-    return ResolveAnchor(aValue, mozilla::ToStylePhysicalSide(aSide), aParams);
+    return resolved;
   }
 
  private:
@@ -820,10 +850,10 @@ struct AnchorResolvedSizeHelper {
   static AnchorResolvedSize FromUnresolved(
       const mozilla::StyleSize& aValue, mozilla::StylePhysicalAxis aAxis,
       const AnchorPosResolutionParams& aParams) {
-    if (!aValue.HasAnchorPositioningFunction()) {
-      return AnchorResolvedSize::NonOwning(&aValue);
+    if (aValue.HasAnchorPositioningFunction()) {
+      return ResolveAnchor(aValue, aAxis, aParams);
     }
-    return ResolveAnchor(aValue, aAxis, aParams);
+    return AnchorResolvedSize::NonOwning(&aValue);
   }
 
   static AnchorResolvedSize Overridden(const mozilla::StyleSize& aSize) {
@@ -870,10 +900,10 @@ struct AnchorResolvedMaxSizeHelper {
   static AnchorResolvedMaxSize FromUnresolved(
       const mozilla::StyleMaxSize& aValue, mozilla::StylePhysicalAxis aAxis,
       const AnchorPosResolutionParams& aParams) {
-    if (!aValue.HasAnchorPositioningFunction()) {
-      return AnchorResolvedMaxSize::NonOwning(&aValue);
+    if (aValue.HasAnchorPositioningFunction()) {
+      return ResolveAnchor(aValue, aAxis, aParams);
     }
-    return ResolveAnchor(aValue, aAxis, aParams);
+    return AnchorResolvedMaxSize::NonOwning(&aValue);
   }
   static AnchorResolvedMaxSize MaxContent() {
     return AnchorResolvedMaxSize::NonOwning(&MaxContentValue());
@@ -1477,9 +1507,7 @@ struct StyleTransition {
   StyleTransitionBehavior GetBehavior() const { return mBehavior; }
 
   bool operator==(const StyleTransition& aOther) const;
-  bool operator!=(const StyleTransition& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator!=(const StyleTransition&) const = default;
 
  private:
   StyleComputedTimingFunction mTimingFunction{
@@ -1509,9 +1537,7 @@ struct StyleAnimation {
   const StyleAnimationTimeline& GetTimeline() const { return mTimeline; }
 
   bool operator==(const StyleAnimation& aOther) const;
-  bool operator!=(const StyleAnimation& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator!=(const StyleAnimation&) const = default;
 
  private:
   StyleComputedTimingFunction mTimingFunction{
@@ -1534,12 +1560,8 @@ struct StyleScrollTimeline {
   nsAtom* GetName() const { return mName.AsAtom(); }
   StyleScrollAxis GetAxis() const { return mAxis; }
 
-  bool operator==(const StyleScrollTimeline& aOther) const {
-    return mName == aOther.mName && mAxis == aOther.mAxis;
-  }
-  bool operator!=(const StyleScrollTimeline& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator==(const StyleScrollTimeline&) const = default;
+  bool operator!=(const StyleScrollTimeline&) const = default;
 
  private:
   StyleTimelineName mName;
@@ -1554,13 +1576,8 @@ struct StyleViewTimeline {
   StyleScrollAxis GetAxis() const { return mAxis; }
   const StyleViewTimelineInset& GetInset() const { return mInset; }
 
-  bool operator==(const StyleViewTimeline& aOther) const {
-    return mName == aOther.mName && mAxis == aOther.mAxis &&
-           mInset == aOther.mInset;
-  }
-  bool operator!=(const StyleViewTimeline& aOther) const {
-    return !(*this == aOther);
-  }
+  bool operator==(const StyleViewTimeline&) const = default;
+  bool operator!=(const StyleViewTimeline&) const = default;
 
  private:
   StyleTimelineName mName;

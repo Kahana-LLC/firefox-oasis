@@ -379,6 +379,7 @@ class MarkupView extends EventEmitter {
     this._initShortcuts();
 
     this._walkerEventListener = new WalkerEventListener(this.inspector, {
+      "anchor-name-change": this._onWalkerNodeStatesChanged,
       "container-type-change": this._onWalkerNodeStatesChanged,
       "display-change": this._onWalkerNodeStatesChanged,
       "scrollable-change": this._onWalkerNodeStatesChanged,
@@ -386,7 +387,7 @@ class MarkupView extends EventEmitter {
       mutations: this._onWalkerMutations,
     });
 
-    this.resourceCommand = this.inspector.toolbox.resourceCommand;
+    this.resourceCommand = this.inspector.commands.resourceCommand;
     this.resourceCommand.watchResources(
       [this.resourceCommand.TYPES.ROOT_NODE],
       {
@@ -1058,6 +1059,10 @@ class MarkupView extends EventEmitter {
     // TODO: use resource api listeners?
     if (nodeFront) {
       nodeFront.walkerFront.on(
+        "anchor-name-change",
+        this._onWalkerNodeStatesChanged
+      );
+      nodeFront.walkerFront.on(
         "container-type-change",
         this._onWalkerNodeStatesChanged
       );
@@ -1306,7 +1311,7 @@ class MarkupView extends EventEmitter {
 
   _onCopy(evt) {
     // Ignore copy events from editors
-    if (this._isInputOrTextarea(evt.target)) {
+    if (this.isInputOrTextareaOrInCodeMirrorEditor(evt.target)) {
       return;
     }
 
@@ -1448,7 +1453,7 @@ class MarkupView extends EventEmitter {
    * Key shortcut listener.
    */
   _onShortcut(name, event) {
-    if (this._isInputOrTextarea(event.target)) {
+    if (this.isInputOrTextareaOrInCodeMirrorEditor(event.target)) {
       return;
     }
 
@@ -1472,11 +1477,19 @@ class MarkupView extends EventEmitter {
   }
 
   /**
-   * Check if a node is an input or textarea
+   * Check if a node is used to type text (i.e. an input or textarea, or in a CodeMirror editor)
    */
-  _isInputOrTextarea(element) {
+  isInputOrTextareaOrInCodeMirrorEditor(element) {
     const name = element.tagName.toLowerCase();
-    return name === "input" || name === "textarea";
+    if (name === "input" || name === "textarea") {
+      return true;
+    }
+
+    if (element.closest(".cm-editor")) {
+      return true;
+    }
+
+    return false;
   }
 
   /**

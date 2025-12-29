@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">Ichinan %s</string>
@@ -64,7 +71,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s yeruyüj ri taq acookie, natab\'äl chuqa\' taq rutzij ruxaq k\'amaya\'l toq ye\'atz\'apij ronojel ri ichinan taq awi\'. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s yeruyüj ri taq acookie, natab\'äl chuqa\' taq rutzij ruxaq k\'amaya\'l toq ye\'atz\'apij ronojel ri ichinan taq awi\'. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -359,6 +366,10 @@
   <string name="juno_onboarding_add_search_widget_positive_button" tools:ignore="BrandUsage,UnusedResources">Titz\'aqatisäx ruwidget Firefox</string>
   <!-- Text for the button to dismiss the screen and move on with the flow -->
   <string name="juno_onboarding_add_search_widget_negative_button" tools:ignore="UnusedResources">Wakami mani</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!--
     Search Widget
 
@@ -492,8 +503,6 @@
   <string name="preferences_gestures">B\'anoj paläj</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Tichinäx</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Tatikirisaj molojri\'ïl richin ye\'axïm taq ruwi\', taq yaketal, ewan tzij chuqa\' juley chik.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
   <string name="preferences_account_default_name_2">Rub\'i\' rutaqoya\'l Mozilla</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
@@ -680,12 +689,6 @@
   <string name="preference_experiments_2">Taq tijonïk</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">Taya\' q\'ij chi ri Mozilla nuyäk chuqa\' nub\'än taq tijonïk</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Tixim chuqa\' Tiyak Atzij</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Titikirisäx molojri\'ïl richin nok chik</string>
   <!-- Preference for removing FxA account -->
@@ -1160,8 +1163,6 @@
   <string name="toast_copy_link_to_clipboard">Wachib\'en pa molwuj</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Tatikirisaj molojri\'ïl pa Sync</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Tixim chuqa\' tiyak tzij</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
   <string name="sync_send_to_all">Titaq pa ronojel okisab\'äl</string>
   <!-- An option from the share dialog to reconnect to sync -->
@@ -1614,8 +1615,6 @@
   <string name="credit_cards_edit_card">Tinuk\' tarjeta\'</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Rajilab\'al Tarjeta\'</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Q\'in Nik\'is Ruq\'ijul</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Ik\' Nik\'is Ruq\'ijul</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -1872,4 +1871,10 @@
   <!-- Translations feature -->
 
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

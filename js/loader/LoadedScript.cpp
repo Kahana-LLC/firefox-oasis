@@ -13,9 +13,10 @@
 
 #include "mozilla/dom/ScriptLoadContext.h"  // ScriptLoadContext
 #include "jsfriendapi.h"
-#include "js/Modules.h"       // JS::{Get,Set}ModulePrivate
-#include "LoadContextBase.h"  // LoadContextBase
-#include "nsIChannel.h"       // nsIChannel
+#include "js/Modules.h"                 // JS::{Get,Set}ModulePrivate
+#include "js/experimental/JSStencil.h"  // JS::SizeOfStencil
+#include "LoadContextBase.h"            // LoadContextBase
+#include "nsIChannel.h"                 // nsIChannel
 
 namespace JS::loader {
 
@@ -41,7 +42,7 @@ NS_INTERFACE_MAP_END
 //
 // NOTE: nsIURI doesn't have to be touched here because it cannot be a part
 //       of cycle.
-NS_IMPL_CYCLE_COLLECTION(LoadedScript, mFetchOptions, mCacheInfo)
+NS_IMPL_CYCLE_COLLECTION(LoadedScript, mFetchOptions, mCacheEntry)
 
 NS_IMPL_CYCLE_COLLECTING_ADDREF(LoadedScript)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(LoadedScript)
@@ -52,9 +53,10 @@ LoadedScript::LoadedScript(ScriptKind aKind,
     : mDataType(DataType::eUnknown),
       mKind(aKind),
       mReferrerPolicy(aReferrerPolicy),
-      mBytecodeOffset(0),
+      mSerializedStencilOffset(0),
       mCacheEntryId(InvalidCacheEntryId),
       mIsDirty(false),
+      mTookLongInPreviousRuns(false),
       mFetchOptions(aFetchOptions),
       mURI(aURI),
       mReceivedScriptTextLength(0) {
@@ -66,9 +68,10 @@ LoadedScript::LoadedScript(const LoadedScript& aOther)
     : mDataType(DataType::eCachedStencil),
       mKind(aOther.mKind),
       mReferrerPolicy(aOther.mReferrerPolicy),
-      mBytecodeOffset(0),
+      mSerializedStencilOffset(0),
       mCacheEntryId(aOther.mCacheEntryId),
       mIsDirty(aOther.mIsDirty),
+      mTookLongInPreviousRuns(aOther.mTookLongInPreviousRuns),
       mFetchOptions(aOther.mFetchOptions),
       mURI(aOther.mURI),
       mBaseURL(aOther.mBaseURL),
@@ -76,12 +79,12 @@ LoadedScript::LoadedScript(const LoadedScript& aOther)
       mStencil(aOther.mStencil) {
   MOZ_ASSERT(mFetchOptions);
   MOZ_ASSERT(mURI);
-  // NOTE: This is only for the stencil case.
-  //       The script text and the bytecode are not reflected.
+  // NOTE: This is only for the cached stencil case.
+  //       The script text and the serialized stencil are not reflected.
   MOZ_DIAGNOSTIC_ASSERT(aOther.mDataType == DataType::eCachedStencil);
   MOZ_DIAGNOSTIC_ASSERT(mStencil);
   MOZ_ASSERT(!mScriptData);
-  MOZ_ASSERT(mSRIAndBytecode.empty());
+  MOZ_ASSERT(mSRIAndSerializedStencil.empty());
 }
 
 LoadedScript::~LoadedScript() {
@@ -134,9 +137,12 @@ size_t LoadedScript::SizeOfIncludingThis(
     }
   }
 
-  bytes += mSRIAndBytecode.sizeOfExcludingThis(aMallocSizeOf);
+  bytes += mSRIAndSerializedStencil.sizeOfExcludingThis(aMallocSizeOf);
 
-  // NOTE: Stencil is reported by SpiderMonkey.
+  if (mStencil) {
+    bytes += JS::SizeOfStencil(mStencil, aMallocSizeOf);
+  }
+
   return bytes;
 }
 

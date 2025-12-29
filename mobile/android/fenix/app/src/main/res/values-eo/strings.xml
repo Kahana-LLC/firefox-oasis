@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">%s en reĝimo de privata retumo</string>
@@ -82,7 +89,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s forigos viajn kuketojn, historion kaj retejajn datumojn kiam vi fermos ĉiujn viajn privatajn langetojn. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s forigos viajn kuketojn, historion kaj retejajn datumojn kiam vi fermos ĉiujn viajn privatajn langetojn. %2$s</string>
   <!--
     Description of private browsing mode displayed to users on the homepage when they enable private mode.
     %1$s is the name of the app (for example "Firefox").
@@ -615,6 +622,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">Rakontu pri kiel vi malkovris Firefox kaj la fakton ke vi ĝin uzas al la marketikaj asociitoj de Mozilla. Tiuj datumoj neniam estos venditaj.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Akcepti kaj komenci retumi</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Elektu lokon por la ilaro</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -813,8 +824,6 @@
   <string name="preferences_gestures">Gestoj</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Personecigi</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Komencu seancon por speguli langetojn, legosignojn, pasvortojn kaj pli.</string>
   <!-- Preference description shown in the banner prompting the user to sign in for sync features -->
   <string name="preferences_sign_in_description">Speguli langetojn, legosignojn, pasvortojn kaj pli.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -1052,14 +1061,20 @@
   <string name="alternative_app_icon_group_gradients">Gamoj</string>
   <!-- Title for the "Other" group of alternative app icon variants in the icon picker screen. This group includes retro, pixel art, themed, and artist-created icons. -->
   <string name="alternative_app_icon_group_other" tools:ignore="UnusedResources" moz:removedIn="146">Aliaj</string>
+  <!-- Title for the "Featured" group of alternative app icon variants in the icon picker screen. This group includes retro, pixel art, themed, and artist-created icons. -->
+  <string name="alternative_app_icon_group_featured">Reliefigita</string>
   <!-- Title to show in alert when user selects an alternative app icon -->
   <string name="restart_warning_dialog_title">Ĉu ŝanĝi la emblemon de la apo?</string>
   <!-- Message to warn users that applying an alternative app icon may require an app restart. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
   <string name="restart_warning_dialog_body_2">La programo povus fermiĝi. Simple tuŝetu vian brile novan emblemon por denove malfermi %1$s.</string>
+  <!-- Message to warn users that applying an alternative app icon may require an app restart and will remove existing shortcuts because of the OS limitations. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
+  <string name="restart_and_shortcuts_removal_warning_dialog_body">Ŝanĝo de la emblemo forigos ĉiujn retejojn kaj ŝparvojojn konservitaj de vi en la hejmekrano. %1$s povus fermiĝi. Tuŝetu vian novan emblemon por remalfermi.</string>
   <!-- Dialog button text for confirming the possible app restart and new icon selection -->
   <string name="restart_warning_dialog_button_positive_2">Ŝanĝi emblemon</string>
   <!-- Dialog button text for cancelling app icon change -->
   <string name="restart_warning_dialog_button_negative">Nuligi</string>
+  <!-- Error message snackbar shown after the user tried to apply the new icon but the Android OS threw an error while updating existing app shortcuts (e.g. private mode shortcut) -->
+  <string name="shortcuts_update_error">Nesukcesa ĝisdatigo de la emblemo de programo. Forigu ekzistantajn ŝparvojojn kaj provu denove.</string>
   <!--
     Add-ons general availability nimbus message
 
@@ -1204,10 +1219,8 @@
   <!--
     Turn On Sync Preferences
 
-    Header of the Sync and save your data preference view
+    Header of the Sign in preference view
   -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Speguli kaj konservi viajn datumojn</string>
-  <!-- Header of the Sign in preference view -->
   <string name="preferences_sign_in">Komenci seancon</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Komenci seancon por rekonekti</string>
@@ -1486,8 +1499,6 @@
   <string name="tab_tray_multiselect_menu_content_description">Dividi menuon de langetoj</string>
   <!-- Title text displayed for a homepage tab in the tabs tray. -->
   <string name="tab_tray_homepage_tab">Eka paĝo</string>
-  <!-- Title text displayed for a homepage tab in the tabs tray. %s is a placeholder that will be replaced by app name. -->
-  <string name="tab_tray_homepage_tab_2" tools:ignore="UnusedResources" moz:removedIn="145">Eka paĝo de %s</string>
   <!-- Content description (not visible, for screen readers etc.): Removes tab from collection button. Removes the selected tab from collection when pressed -->
   <string name="remove_tab_from_collection">Forigi langeton el kolekto</string>
   <!-- Text for button to enter multiselect mode in tabs tray -->
@@ -1726,6 +1737,12 @@
   <string name="webcompat_reporter_etp_checkbox_text">Sendi retadresojn blokitaj de la protekto kontraŭ spurado</string>
   <!-- Description text for the checkbox on the “Report broken site” screen for sending URLS blocked by Enhanced Tracking Protection. It informs the user when checked, the report will include the list of URLs that were blocked by Enhanced Tracking Protection on the current page. -->
   <string name="webcompat_reporter_etp_checkbox_description">La plibonigita protekto kontraŭ spurado povas bloki spurilojn kaj skriptojn, kiuj estas bezonataj por bona funkciado de kelkaj retejoj.</string>
+  <!-- The button text for the preview report button to view a preview of the report. -->
+  <string name="webcompat_reporter_preview_report">Antaŭvidi raporton</string>
+  <!-- The title shown at the top of the WebCompat Report preview panel. This appears after the user taps the “Preview” button before sending a report. -->
+  <string name="webcompat_reporter_preview_bottom_sheet_header">Antaŭvido de la raporto</string>
+  <!-- Label for the “Send” button shown in the WebCompat Report preview panel, which the user taps to submit the report. -->
+  <string name="webcompat_reporter_preview_bottom_sheet_send">Sendi</string>
   <!--
     These reason strings are dropdown options on a WebCompat reporter form, indicating what is broken on the site.
 
@@ -2082,8 +2099,6 @@
   <string name="toast_copy_link_to_clipboard">Kopiita al la tondujo</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Komenci seancon en Speguli</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Speguli kaj konservi datumojn</string>
   <!-- An option from the three dot menu to sign in -->
   <string name="sync_menu_sign_in">Komenci seancon</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
@@ -2340,6 +2355,16 @@
   <string name="preference_enhanced_tracking_protection_allow_list_baseline" tools:ignore="UnusedResources" moz:removedIn="144">Permesi al %1$s aŭtomate apliki esceptojn, kiuj bezonatas por eviti gravan misfunkciadon en retejoj.</string>
   <!-- Preference description for the checkbox setting for "convenience" exceptions (a set of content blocking exceptions applied to fix convenience site features). -->
   <string name="preference_enhanced_tracking_protection_allow_list_convenience" tools:ignore="UnusedResources" moz:removedIn="144">Aŭtomate apliki esceptojn ankaŭ kiam ili bezonatas por solvi negravajn problemojn aŭ por permesi aliron al praktikaj trajtoj.</string>
+  <!-- Preference label for the enhanced tracking protection option to fix major site issues caused by tracker blocking -->
+  <string name="preference_enhanced_tracking_protection_allow_list_baseline_2">Solvi gravajn retejajn problemojn (rekomendata)</string>
+  <!-- Preference label for the enhanced tracking protection option to fix minor site issues caused by tracker blocking -->
+  <string name="preference_enhanced_tracking_protection_allow_list_convenience_label">Solvi negravajn retejajn problemojn</string>
+  <!-- Preference description for the enhanced tracking protection option to fix minor site issues caused by tracker blocking -->
+  <string name="preference_enhanced_tracking_protection_allow_list_convenience_description">Tio devas esti uzata kune kun solvoj por gravaj problemoj.</string>
+  <!-- Preference sub header for the enhanced tracking protection options to fix issues caused by tracker blocking -->
+  <string name="preference_enhanced_tracking_protection_allow_list_subheader">Solvi retejajn problemojn</string>
+  <!-- Learn more text for the enhanced tracking protection options to fix issues caused by tracker blocking -->
+  <string name="preference_enhanced_tracking_protection_allow_list_learn_more">Pli da informo</string>
   <!--
     Dialog that appears after user tries to uncheck the baseline exceptions preference under Strict or Custom tracking protection
 
@@ -2728,14 +2753,16 @@
   <string name="preferences_addresses_sync_addresses_across_devices">Speguli adresojn inter aparatoj</string>
   <!-- Preference option for syncing addresses across devices. This is displayed when the user is signed into sync -->
   <string name="preferences_addresses_sync_addresses">Speguli adresojn</string>
+  <!-- Content description navigating back from autofill settings screen. -->
+  <string name="autofill_settings_navigate_back_button_content_description">Malantaŭen</string>
   <!-- Title of the "Add card" screen -->
   <string name="credit_cards_add_card">Aldoni kreditkarton</string>
+  <!-- Content description for the "credit card feature" top bar back button -->
+  <string name="credit_cards_navigate_back_button_content_description">Iri reen</string>
   <!-- Title of the "Edit card" screen -->
   <string name="credit_cards_edit_card">Modifi kreditkarton</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Numero de kreditkarto</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Dato de senvalidiĝo</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Monato de senvalidiĝo</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3575,6 +3602,8 @@
   <string name="microsurvey_close_handle_content_description">Fermi demandaron</string>
   <!-- Content description for "X" button that is closing microsurvey. -->
   <string name="microsurvey_close_button_content_description">Fermi</string>
+  <!-- The title of the autofill tab in the Debug Drawer. -->
+  <string name="debug_drawer_autofill_title">Iloj por aŭtomata plenigo</string>
   <!--
     Debug drawer logins
 
@@ -3848,10 +3877,30 @@
   <!-- Label for a button opening a feedback forum -->
   <string name="review_prompt_feedback_button">Komenti</string>
   <!--
-    Terms of use pop up prompt
+    Settings Search Strings
 
-    Title for the pop up prompt
+    Title of Settings Search. "Search" is a verb here
   -->
+  <string name="settings_search_title">Agordoj de serĉo</string>
+  <!-- Content description (not visible, for screen readers etc.) for the button to clear the search field for settings search -->
+  <string name="content_description_settings_search_clear_search">Viŝi serĉon</string>
+  <!-- Content description (not visible, for screen readers etc.) for the button to navigate back to the Settings page from the Settings Search screen. -->
+  <string name="content_description_settings_search_navigate_back">Iri reen</string>
+  <!-- Message displayed when the search field in the Settings Search screen is empty -->
+  <string name="settings_search_empty_query_placeholder">Neniu ĵusa serĉo</string>
+  <!-- Message when error happens with Settings Search -->
+  <string name="settings_search_error_message" tools:ignore="UnusedResources" moz:removedIn="147">Eraro okazis</string>
+  <!-- Text of button allowing to clear history of recent searches done in the settings screen. -->
+  <string name="settings_search_clear_recent_searches_message">Viŝi ĉion</string>
+  <!-- Section header for recent search results -->
+  <string name="settings_search_recent_searches_section_header">Ĵusaj serĉaj rezultoj</string>
+  <!-- Message displayed when the search field is not empty but search results is empty. -->
+  <string name="settings_search_no_results_title">Neniu rezulto</string>
+  <!-- Sub-message displayed when the search field is not empty but search results is empty. -->
+  <string name="settings_search_no_results_message">Ĉu eble provi alian serĉon?</string>
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- Title for the pop up prompt -->
   <string name="terms_of_use_prompt_title">Ni havas ĝisdatigon</string>
   <!--
     Message for the terms of use pop up prompt
@@ -3875,4 +3924,7 @@
   <string name="terms_of_use_prompt_accept">Akcepti</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Rememorigi poste</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

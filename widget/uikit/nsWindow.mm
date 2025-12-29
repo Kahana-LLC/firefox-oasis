@@ -412,11 +412,7 @@ class nsAutoRetainUIKitObject {
   if (!mGeckoChild->IsVisible()) return;
 
   mWaitingForPaint = NO;
-
-  LayoutDeviceIntRect geckoBounds = mGeckoChild->GetBounds();
-  LayoutDeviceIntRegion region(geckoBounds);
-
-  mGeckoChild->PaintWindow(region);
+  mGeckoChild->PaintWindow();
 }
 
 // Called asynchronously after setNeedsDisplay in order to avoid entering the
@@ -958,26 +954,13 @@ void nsWindow::SetFocus(Raise, mozilla::dom::CallerType) {
   [mNativeView becomeFirstResponder];
 }
 
-void nsWindow::WillPaintWindow() {
+void nsWindow::PaintWindow() {
   if (mWidgetListener) {
-    mWidgetListener->WillPaintWindow(this);
+    mWidgetListener->PaintWindow(this);
   }
 }
 
-bool nsWindow::PaintWindow(LayoutDeviceIntRegion aRegion) {
-  if (!mWidgetListener) return false;
-
-  bool returnValue = false;
-  returnValue = mWidgetListener->PaintWindow(this, aRegion);
-
-  if (mWidgetListener) {
-    mWidgetListener->DidPaintWindow();
-  }
-
-  return returnValue;
-}
-
-void nsWindow::ReportMoveEvent() { NotifyWindowMoved(mBounds.x, mBounds.y); }
+void nsWindow::ReportMoveEvent() { NotifyWindowMoved(mBounds.TopLeft()); }
 
 void nsWindow::ReportSizeModeEvent(nsSizeMode aMode) {
   if (mWidgetListener) {
@@ -1001,12 +984,11 @@ void nsWindow::ReportSizeEvent() {
   LayoutDeviceIntRect innerBounds = GetClientBounds();
 
   if (mWidgetListener) {
-    mWidgetListener->WindowResized(this, innerBounds.width, innerBounds.height);
+    mWidgetListener->WindowResized(this, innerBounds.Size());
   }
 
   if (mAttachedWidgetListener) {
-    mAttachedWidgetListener->WindowResized(this, innerBounds.width,
-                                           innerBounds.height);
+    mAttachedWidgetListener->WindowResized(this, innerBounds.Size());
   }
 }
 
@@ -1141,13 +1123,11 @@ layers::NativeLayerRoot* nsWindow::GetNativeLayerRoot() {
 }
 
 void nsWindow::HandleMainThreadCATransaction() {
-  WillPaintWindow();
-
   // Trigger a synchronous OMTC composite. This will call NextSurface and
   // NotifySurfaceReady on the compositor thread to update mNativeLayerRoot's
   // contents, and the main thread (this thread) will wait inside PaintWindow
   // during that time.
-  PaintWindow(LayoutDeviceIntRegion(GetBounds()));
+  PaintWindow();
 
   {
     // Apply the changes inside mNativeLayerRoot to the underlying CALayers. Now

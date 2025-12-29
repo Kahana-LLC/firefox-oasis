@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">Yksityinen %s</string>
@@ -54,6 +61,8 @@
   <string name="tab_manager_empty_synced_tabs_page_description">Kirjaudu sisään hallitaksesi synkronoituja välilehtiä kaikilla laitteillasi.</string>
   <!-- The action text displayed on the synced tabs page when the user is not logged into an account, prompting the user to sign into their account. When clicked, it takes the user to the account sign-in flow. -->
   <string name="tab_manager_empty_synced_tabs_page_sign_in_cta">Kirjaudu sisään</string>
+  <!-- Text for the button used to show all stories -->
+  <string name="homepage_all_stories">Kaikki tarinat</string>
   <!--
     Home - Bookmarks
 
@@ -82,7 +91,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s poistaa evästeet, historian ja sivustotiedot, kun suljet kaikki yksityiset välilehdet. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s poistaa evästeet, historian ja sivustotiedot, kun suljet kaikki yksityiset välilehdet. %2$s</string>
   <!--
     Description of private browsing mode displayed to users on the homepage when they enable private mode.
     %1$s is the name of the app (for example "Firefox").
@@ -615,6 +624,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">Jaa Mozillan markkinointikumppaneiden kanssa, miten löysit Firefoxin ja kuinka käytät sitä. Näitä tietoja ei koskaan myydä.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Hyväksy ja aloita selaaminen</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Valitse työkalupalkin sijoitus</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -813,8 +826,6 @@
   <string name="preferences_gestures">Eleet</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Mukauta</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Kirjaudu sisään synkronoidaksesi välilehtesi, kirjanmerkkisi, salasanasi ja muita tietoja.</string>
   <!-- Preference description shown in the banner prompting the user to sign in for sync features -->
   <string name="preferences_sign_in_description">Synkronoi välilehdet, kirjanmerkit, salasanat ja paljon muuta.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -1058,6 +1069,8 @@
   <string name="restart_warning_dialog_title">Vaihdetaanko sovelluksen kuvake?</string>
   <!-- Message to warn users that applying an alternative app icon may require an app restart. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
   <string name="restart_warning_dialog_body_2">Sovellus saattaa sulkeutua. Napauta uutta kiiltävää kuvaketta avataksesi %1$sin uudelleen.</string>
+  <!-- Message to warn users that applying an alternative app icon may require an app restart and will remove existing shortcuts because of the OS limitations. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
+  <string name="restart_and_shortcuts_removal_warning_dialog_body">Kuvakkeen vaihtaminen poistaa kaikki sivustot ja pikakuvakkeet, jotka olet tallentanut aloitusnäyttöön.\n\n%1$s saattaa sulkeutua. Avaa uudelleen napauttamalla uutta kuvaketta.</string>
   <!-- Dialog button text for confirming the possible app restart and new icon selection -->
   <string name="restart_warning_dialog_button_positive_2">Vaihda kuvake</string>
   <!-- Dialog button text for cancelling app icon change -->
@@ -1208,10 +1221,8 @@
   <!--
     Turn On Sync Preferences
 
-    Header of the Sync and save your data preference view
+    Header of the Sign in preference view
   -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Synkronoi ja tallenna tietosi</string>
-  <!-- Header of the Sign in preference view -->
   <string name="preferences_sign_in">Kirjaudu sisään</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Kirjaudu yhdistääksesi uudelleen</string>
@@ -1460,6 +1471,8 @@
   <string name="tab_drawer_fab_content">Yksityinen</string>
   <!-- Text for the new tab button to indicate syncing command on the synced tabs page -->
   <string name="tab_drawer_fab_sync">Synkronoi</string>
+  <!-- Text for the tab search bar placeholder -->
+  <string name="tab_manager_search_bar_placeholder">Hae välilehdistä</string>
   <!-- Text shown in the menu for sharing all tabs -->
   <string name="tab_tray_menu_item_share">Jaa kaikki välilehdet</string>
   <!-- Text shown in the menu to view recently closed tabs -->
@@ -1472,6 +1485,14 @@
   <string name="tab_tray_menu_tab_settings">Välilehtiasetukset</string>
   <!-- Text shown in the menu for closing all tabs -->
   <string name="tab_tray_menu_item_close">Sulje kaikki välilehdet</string>
+  <!-- Text shown as the title of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_title">Suljetaanko kaikki välilehdet?</string>
+  <!-- Text shown in the body of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_body">Tämä sulkee kaikki avoimet välilehdet.</string>
+  <!-- Text shown on the confirm button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_confirm">Sulje välilehdet</string>
+  <!-- Text shown on the cancel button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_cancel">Peruuta</string>
   <!-- Text shown in the multiselect menu for bookmarking selected tabs. -->
   <string name="tab_tray_multiselect_menu_item_bookmark">Lisää kirjanmerkeiksi</string>
   <!-- Content description (not visible, for screen readers etc.): Bookmarks selected tabs. -->
@@ -1490,8 +1511,6 @@
   <string name="tab_tray_multiselect_menu_content_description">Valittujen välilehtien valikko</string>
   <!-- Title text displayed for a homepage tab in the tabs tray. -->
   <string name="tab_tray_homepage_tab">Kotisivu</string>
-  <!-- Title text displayed for a homepage tab in the tabs tray. %s is a placeholder that will be replaced by app name. -->
-  <string name="tab_tray_homepage_tab_2" tools:ignore="UnusedResources" moz:removedIn="145">%sin aloitussivu</string>
   <!-- Content description (not visible, for screen readers etc.): Removes tab from collection button. Removes the selected tab from collection when pressed -->
   <string name="remove_tab_from_collection">Poista välilehti kokoelmasta</string>
   <!-- Text for button to enter multiselect mode in tabs tray -->
@@ -1502,6 +1521,8 @@
   <string name="close_tab_title">Sulje välilehti %s</string>
   <!-- Content description (not visible, for screen readers etc.): Opens the open tabs menu when pressed -->
   <string name="open_tabs_menu">Avointen välilehtien valikko</string>
+  <!-- Content description (not visible, for screen readers etc.): Return to tab manager -->
+  <string name="tab_manager_search_bar_back_content_description">Palaa välilehtien hallintaan</string>
   <!-- Open tabs menu item to save tabs to collection -->
   <string name="tabs_menu_save_to_collection1">Tallenna välilehdet kokoelmaan</string>
   <!-- Text for the menu button to delete a collection -->
@@ -1518,6 +1539,8 @@
   <string name="delete_from_history">Poista historiasta</string>
   <!-- Postfix for private WebApp titles. %1$s is the name of the app (for example "Firefox"). -->
   <string name="pwa_site_controls_title_private">%1$s (yksityinen tila)</string>
+  <!-- Content description (not visible, for screen readers etc.) for the button to open the Tab Search feature to search through tabs. -->
+  <string name="tab_manager_open_tab_search">Avaa välilehtihaku</string>
   <!--
     History
 
@@ -2092,8 +2115,6 @@
   <string name="toast_copy_link_to_clipboard">Kopioitu leikepöydälle</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Kirjaudu sisään Synciin</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Synkronoi ja tallenna tiedot</string>
   <!-- An option from the three dot menu to sign in -->
   <string name="sync_menu_sign_in">Kirjaudu sisään</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
@@ -2682,6 +2703,10 @@
   <string name="edit_login_navigate_back_button_content_description">Siirry taaksepäin</string>
   <!-- Content description, used by tools like screenreaders, to press on the edit login button. -->
   <string name="edit_login_button_content_description">Muokkaa kirjautumistietoa</string>
+  <!-- Content description, used by tools like screenreaders, to press on the add new login button. -->
+  <string name="saved_logins_add_new_login_button_content_description">Lisää uusi kirjautumistieto</string>
+  <!-- Content description, used by tools like screenreaders, to press on the clear search text button. -->
+  <string name="saved_logins_clear_search_text_button_content_description">Tyhjennä hakuteksti</string>
   <!-- Content Description (for screenreaders etc) read for the button to open a site in logins -->
   <string name="saved_login_open_site">Avaa sivusto selaimessa</string>
   <!-- Content Description (for screenreaders etc) read for the button to reveal a password in logins -->
@@ -2748,14 +2773,16 @@
   <string name="preferences_addresses_sync_addresses_across_devices">Synkronoi osoitteet laitteiden välillä</string>
   <!-- Preference option for syncing addresses across devices. This is displayed when the user is signed into sync -->
   <string name="preferences_addresses_sync_addresses">Synkronoi osoitteet</string>
+  <!-- Content description navigating back from autofill settings screen. -->
+  <string name="autofill_settings_navigate_back_button_content_description">Takaisin</string>
   <!-- Title of the "Add card" screen -->
   <string name="credit_cards_add_card">Lisää kortti</string>
+  <!-- Content description for the "credit card feature" top bar back button -->
+  <string name="credit_cards_navigate_back_button_content_description">Siirry taaksepäin</string>
   <!-- Title of the "Edit card" screen -->
   <string name="credit_cards_edit_card">Muokkaa korttia</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Kortin numero</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Vanhenemispäivä</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Vanhenemispäivän kuukausi</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3882,7 +3909,7 @@
   <!-- Message displayed when the search field in the Settings Search screen is empty -->
   <string name="settings_search_empty_query_placeholder">Ei viimeaikaisia hakuja</string>
   <!-- Message when error happens with Settings Search -->
-  <string name="settings_search_error_message">Tapahtui virhe</string>
+  <string name="settings_search_error_message" tools:ignore="UnusedResources" moz:removedIn="147">Tapahtui virhe</string>
   <!-- Text of button allowing to clear history of recent searches done in the settings screen. -->
   <string name="settings_search_clear_recent_searches_message">Tyhjennä kaikki</string>
   <!-- Section header for recent search results -->
@@ -3891,11 +3918,9 @@
   <string name="settings_search_no_results_title">Mitään ei löytynyt</string>
   <!-- Sub-message displayed when the search field is not empty but search results is empty. -->
   <string name="settings_search_no_results_message">Kokeile eri hakuehtoja</string>
-  <!--
-    Terms of use pop up prompt
+  <!-- ==== Terms of use pop up prompt ==== -->
 
-    Title for the pop up prompt
-  -->
+  <!-- Title for the pop up prompt -->
   <string name="terms_of_use_prompt_title">Meillä on päivitys</string>
   <!--
     Message for the terms of use pop up prompt
@@ -3919,4 +3944,20 @@
   <string name="terms_of_use_prompt_accept">Hyväksy</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Muistuta myöhemmin</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
+
+  <!--
+    Privacy notice homepage banner
+
+    A message we show the user on the homepage when there is a new version of the privacy notice. 'Firefox' is intentionally hardcoded.
+    %1$s is replaced by an active link using privacy_notice_updated_homepage_message_privacy_notice as text (Privacy Notice)
+    %2$s is replaced by an active link using privacy_notice_updated_homepage_message_learn_more as text (Learn more)
+  -->
+  <string name="privacy_notice_updated_homepage_message" tools:ignore="BrandUsage,UnusedResources">Olemme päivittäneet %1$s vastaamaan Firefoxin uusimpia ominaisuuksia. %2$s</string>
+  <!-- The first active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_privacy_notice" tools:ignore="UnusedResources">tietosuojakäytännön</string>
+  <!-- The second active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_learn_more" tools:ignore="UnusedResources">Lue lisää</string>
 </resources>

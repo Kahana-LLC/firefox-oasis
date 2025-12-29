@@ -793,7 +793,7 @@ pub fn namespace_empty_string<Impl: SelectorImpl>() -> Impl::NamespaceUrl {
     Impl::NamespaceUrl::default()
 }
 
-type SelectorData<Impl> = ThinArc<SpecificityAndFlags, Component<Impl>>;
+pub(super) type SelectorData<Impl> = ThinArc<SpecificityAndFlags, Component<Impl>>;
 
 /// Whether a selector may match a featureless host element, and whether it may match other
 /// elements.
@@ -2720,14 +2720,7 @@ impl<Impl: SelectorImpl> ToCss for Component<Impl> {
             },
             Has(ref list) => {
                 dest.write_str(":has(")?;
-                let mut first = true;
-                for RelativeSelector { ref selector, .. } in list.iter() {
-                    if !first {
-                        dest.write_str(", ")?;
-                    }
-                    first = false;
-                    selector.to_css(dest)?;
-                }
+                serialize_selector_list(list.iter().map(|rel| &rel.selector), dest)?;
                 dest.write_str(")")
             },
             NonTSPseudoClass(ref pseudo) => pseudo.to_css(dest),
@@ -2803,7 +2796,7 @@ where
     input.skip_whitespace();
 
     if parse_relative != ParseRelative::No {
-        let combinator = try_parse_combinator::<P, Impl>(input);
+        let combinator = try_parse_combinator(input);
         match parse_relative {
             ParseRelative::ForHas => {
                 builder.push_simple_selector(Component::RelativeSelectorAnchor);
@@ -2828,7 +2821,7 @@ where
             ParseRelative::No => unreachable!(),
         }
     }
-    'outer_loop: loop {
+    loop {
         // Parse a sequence of simple selectors.
         let empty = parse_compound_selector(parser, &mut state, input, &mut builder)?;
         if empty {
@@ -2849,10 +2842,10 @@ where
             break;
         }
 
-        let combinator = if let Ok(c) = try_parse_combinator::<P, Impl>(input) {
+        let combinator = if let Ok(c) = try_parse_combinator(input) {
             c
         } else {
-            break 'outer_loop;
+            break;
         };
 
         if !state.allows_combinators() {
@@ -2864,7 +2857,7 @@ where
     return Ok(Selector(builder.build(parse_relative)));
 }
 
-fn try_parse_combinator<'i, 't, P, Impl>(input: &mut CssParser<'i, 't>) -> Result<Combinator, ()> {
+fn try_parse_combinator<'i, 't>(input: &mut CssParser<'i, 't>) -> Result<Combinator, ()> {
     let mut any_whitespace = false;
     loop {
         let before_this_token = input.state();
@@ -3437,7 +3430,9 @@ where
     Impl: SelectorImpl,
 {
     debug_assert!(parser.parse_has());
-    if state.intersects(SelectorParsingState::DISALLOW_RELATIVE_SELECTOR) {
+    if state.intersects(
+        SelectorParsingState::DISALLOW_RELATIVE_SELECTOR | SelectorParsingState::AFTER_PSEUDO,
+    ) {
         return Err(input.new_custom_error(SelectorParseErrorKind::InvalidState));
     }
     // Nested `:has()` is disallowed, mark it as such.

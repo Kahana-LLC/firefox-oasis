@@ -16,7 +16,6 @@
 #include "mozilla/gfx/2D.h"
 #include "nsCOMPtr.h"
 #include "nsContentUtils.h"
-#include "nsIURI.h"
 #include "nsNetUtil.h"
 
 NS_IMPL_NS_NEW_SVG_ELEMENT(Image)
@@ -121,7 +120,8 @@ SVGImageElement::PreserveAspectRatio() {
 }
 
 already_AddRefed<DOMSVGAnimatedString> SVGImageElement::Href() {
-  return mStringAttributes[HREF].IsExplicitlySet()
+  return mStringAttributes[HREF].IsExplicitlySet() ||
+                 !mStringAttributes[XLINK_HREF].IsExplicitlySet()
              ? mStringAttributes[HREF].ToDOMAnimatedString(this)
              : mStringAttributes[XLINK_HREF].ToDOMAnimatedString(this);
 }
@@ -334,6 +334,19 @@ void SVGImageElement::DidAnimateAttribute(int32_t aNameSpaceID,
     QueueImageTask(mSrcURI, /* aAlwaysLoad = */ true, /* aNotify = */ true);
   }
   SVGImageElementBase::DidAnimateAttribute(aNameSpaceID, aAttribute);
+}
+
+void SVGImageElement::AddSizeOfExcludingThis(nsWindowSizes& aSizes,
+                                             size_t* aNodeSize) const {
+  SVGElement::AddSizeOfExcludingThis(aSizes, aNodeSize);
+
+  // It is okay to include the size of mSrcURI here even though it might have
+  // strong references from elsewhere because the URI was created for this
+  // object, in nsImageLoadingContent::StringToURI(). Only objects that created
+  // their own URI will call nsIURI::SizeOfIncludingThis().
+  if (mSrcURI) {
+    *aNodeSize += mSrcURI->SizeOfIncludingThis(aSizes.mState.mMallocSizeOf);
+  }
 }
 
 }  // namespace mozilla::dom

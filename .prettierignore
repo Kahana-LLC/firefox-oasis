@@ -689,7 +689,6 @@ dom/tests/mochitest/chrome/test_intlUtils_isAppLocaleRTL.html
 dom/tests/mochitest/chrome/test_nodesFromRect.html
 dom/tests/mochitest/chrome/test_queryCaretRect.html
 dom/tests/mochitest/chrome/test_selectAtPoint.html
-dom/tests/mochitest/chrome/test_window_getRegionalPrefsLocales.html
 dom/tests/mochitest/chrome/window_focus.xhtml
 dom/tests/mochitest/general/file_clonewrapper.html
 dom/tests/mochitest/general/file_focusrings.html
@@ -1388,6 +1387,7 @@ dom/media/platforms/ffmpeg/ffmpeg58/
 dom/media/platforms/ffmpeg/ffmpeg59/
 dom/media/platforms/ffmpeg/ffmpeg60/
 dom/media/platforms/ffmpeg/ffmpeg61/
+dom/media/platforms/ffmpeg/ffmpeg62/
 dom/media/platforms/ffmpeg/libav53/
 dom/media/platforms/ffmpeg/libav54/
 dom/media/platforms/ffmpeg/libav55/
@@ -1790,8 +1790,8 @@ toolkit/components/uniffi-bindgen-gecko-js/fixtures/generated
 tools/@types/generated/
 tools/@types/subs/
 tools/browsertime/package.json
-tools/browsertime/package-lock.json
 tools/ts/error_list.json
 tools/ts/test/baselines/
 try_task_config.json
 xpcom/idl-parser/xpidl/fixtures/xpctest.d.json
+**/package-lock.json

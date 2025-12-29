@@ -115,7 +115,7 @@ def filter_for_repo_type(task, parameters):
 def filter_for_project(task, parameters):
     """Filter tasks by project.  Optionally enable nightlies."""
     run_on_projects = set(task.attributes.get("run_on_projects", []))
-    return match_run_on_projects(parameters["project"], run_on_projects)
+    return match_run_on_projects(parameters, run_on_projects)
 
 
 def filter_for_hg_branch(task, parameters):
@@ -1222,12 +1222,9 @@ def _filter_by_release_project(parameters):
     if target_project is None:
         raise Exception("Unknown or unspecified release type in simulation run.")
 
-    def filter_for_target_project(task):
-        """Filter tasks by project.  Optionally enable nightlies."""
-        run_on_projects = set(task.attributes.get("run_on_projects", []))
-        return match_run_on_projects(target_project, run_on_projects)
-
-    return filter_for_target_project
+    params = parameters.copy()
+    params["project"] = target_project
+    return lambda task: filter_for_project(task, params)
 
 
 def filter_out_android_on_esr(parameters, task):
@@ -1574,7 +1571,7 @@ def target_tasks_perftest_fenix_startup(full_task_graph, parameters, graph_confi
     for name, task in full_task_graph.tasks.items():
         if task.kind != "perftest":
             continue
-        if "fenix" in name and "startup" in name and "simpleperf" not in name:
+        if "fenix" in name and "startup" in name and "profiling" not in name:
             yield name
 
 

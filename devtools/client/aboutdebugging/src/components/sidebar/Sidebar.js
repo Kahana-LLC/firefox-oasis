@@ -43,7 +43,7 @@ const RefreshDevicesButton = createFactory(
   require("resource://devtools/client/aboutdebugging/src/components/sidebar/RefreshDevicesButton.js")
 );
 const FIREFOX_ICON =
-  "chrome://devtools/skin/images/aboutdebugging-firefox-logo.svg";
+  "chrome://devtools/skin/images/kahana_logo.svg";
 const CONNECT_ICON = "chrome://devtools/skin/images/settings.svg";
 const GLOBE_ICON =
   "chrome://devtools/skin/images/aboutdebugging-globe-icon.svg";
@@ -158,7 +158,7 @@ class Sidebar extends PureComponent {
   renderFooter() {
     const HELP_ICON_SRC = "chrome://global/skin/icons/help.svg";
     const SUPPORT_URL =
-      "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/";
+      "https://kahana.co/docs";
 
     return dom.footer(
       {

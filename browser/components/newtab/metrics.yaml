@@ -1243,30 +1243,6 @@ newtab.search:
     send_in_pings:
       - newtab
 
-newtab.handoff_preference:
-  enabled:
-    lifetime: application
-    type: boolean
-    description: >
-      Records whether the
-      browser.newtabpage.activity-stream.improvesearch.handoffToAwesomebar preference is
-      enabled or disabled
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1864496
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1892148
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1940643
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1978995
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1864496
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1892148
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1940643
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1978995
-    data_sensitivity:
-      - interaction
-    expires: 151
-    notification_emails:
-      - fx-search-telemetry@mozilla.com
-
 topsites:
   enabled:
     lifetime: application
@@ -2108,59 +2084,6 @@ pocket:
     send_in_pings:
       - spoc
 
-  thumb_voting_interaction:
-    type: event
-    description: >
-      Recorded when a thumbs up/down on a tile is clicked.
-      Only happens on click. Not on middle-click. Not on "Open in new Tab"-like
-      options in the context menu.
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1902099
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1937200
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1902099
-    data_sensitivity:
-      - interaction
-    notification_emails:
-      - mcrawford@mozilla.com
-    expires: never
-    extra_keys:
-      newtab_visit_id: *newtab_visit_id
-      recommendation_id: *recommendation_id
-      tile_id: *pocket_tile_id
-      format: *format
-      position: *pocket_position
-      thumbs_up:
-        description: >
-          If the user clicked thumbs up.
-        type: boolean
-      thumbs_down:
-        description: >
-          If the user clicked thumbs down.
-        type: boolean
-      scheduled_corpus_item_id: *scheduled_corpus_item_id
-      corpus_item_id: *corpus_item_id
-      received_rank: *received_rank
-      recommended_at: *recommended_at
-      topic:
-        description: The topic of the recommendation. Like "entertainment".
-        type: string
-      section:
-        description: >
-          If event belongs in a section, the name of the section
-        type: string
-      section_position:
-        description: >
-          If event belongs in a section, the numeric position of the section
-        type: string
-      is_section_followed: *is_section_followed
-      content_redacted:
-        description: >
-          Are content details sent separately in the newtab_content ping
-        type: boolean
-    send_in_pings:
-      - newtab
-
 newtab_content:
 
   experiment_name:
@@ -2494,57 +2417,6 @@ newtab_content:
     send_in_pings:
       - newtab-content
 
-  thumb_voting_interaction:
-    type: event
-    description: >
-      Recorded when a thumbs up/down on a tile is clicked.
-      Only happens on click. Not on middle-click. Not on "Open in new Tab"-like
-      options in the context menu.
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1902099
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1937200
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1902099
-    data_sensitivity:
-      - interaction
-    notification_emails:
-      - mcrawford@mozilla.com
-    expires: never
-    extra_keys:
-      recommendation_id: *recommendation_id
-      tile_id: *pocket_tile_id
-      format: *format
-      position: *pocket_position
-      thumbs_up:
-        description: >
-          If the user clicked thumbs up.
-        type: boolean
-      thumbs_down:
-        description: >
-          If the user clicked thumbs down.
-        type: boolean
-      scheduled_corpus_item_id: *scheduled_corpus_item_id
-      corpus_item_id: *corpus_item_id
-      received_rank: *received_rank
-      recommended_at: *recommended_at
-      topic:
-        description: The topic of the recommendation. Like "entertainment".
-        type: string
-      section:
-        description: >
-          If event belongs in a section, the name of the section
-        type: string
-      section_position:
-        description: >
-          If event belongs in a section, the numberic position of the section
-        type: string
-      is_section_followed:
-        description: >
-          If event belongs in a section, if that section is followed
-        type: boolean
-    send_in_pings:
-      - newtab-content
-
   sections_impression:
     type: event
     description: >
@@ -2749,6 +2621,107 @@ newtab_content:
       - newtab-content
     no_lint:
       - HIGHER_DATA_SENSITIVITY_REQUIRED
+
+  top_sites_click:
+    type: event
+    description: >
+      Recorded when a top sites tile is clicked.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_sensitivity:
+      - interaction
+    notification_emails:
+      - nbarrett@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    extra_keys:
+      advertiser_name: *advertiser_name
+      tile_id: *tile_id
+      is_sponsored: *is_sponsored
+      position: *topsite_position
+      visible_topsites: *visible_topsites
+      frecency_boosted: &frecency_boosted
+        description: >
+          Whether the top site was frecency boosted
+        type: boolean
+      frecency_boosted_has_exposure: &frecency_boosted_has_exposure
+        description: >
+          Whether the user had the option to see frecency boosted shortcuts
+        type: boolean
+    send_in_pings:
+      - newtab-content
+
+  top_sites_impression:
+    type: event
+    description: >
+      Recorded when a top sites tile is visible to the user.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_sensitivity:
+      - interaction
+    notification_emails:
+      - nbarrett@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    extra_keys:
+      advertiser_name: *advertiser_name
+      tile_id: *tile_id
+      is_sponsored: *is_sponsored
+      position: *topsite_position
+      visible_topsites: *visible_topsites
+      frecency_boosted: *frecency_boosted
+      frecency_boosted_has_exposure: *frecency_boosted_has_exposure
+    send_in_pings:
+      - newtab-content
+
+  top_sites_dismiss:
+    type: event
+    description: >
+      Recorded when the "Dismiss" menu item in the three-dots menu of a topsite
+      is clicked.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_sensitivity:
+      - interaction
+    notification_emails:
+      - nbarrett@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    extra_keys:
+      advertiser_name: *advertiser_name
+      tile_id: *tile_id
+      is_sponsored: *is_sponsored
+      position: *topsite_position
+    send_in_pings:
+      - newtab-content
+
+  top_sites_show_privacy_click:
+    type: event
+    description: >
+      Recorded when the "Our sponsors & your privacy" menu item in the three-dots menu of a topsite
+      is clicked.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2003048
+    data_sensitivity:
+      - interaction
+    notification_emails:
+      - nbarrett@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    extra_keys:
+      advertiser_name: *advertiser_name
+      tile_id: *tile_id
+      position: *topsite_position
+    send_in_pings:
+      - newtab-content
 
 top_sites: # Replacement for PingCentre "topsites-impression|click" pings.
   ping_type:

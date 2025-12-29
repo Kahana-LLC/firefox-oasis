@@ -245,6 +245,9 @@ void InspectorUtils::GetChildrenForNode(nsINode& aNode,
     }
   }
   nsIContent* parent = aNode.AsContent();
+  if (auto* node = nsLayoutUtils::GetBackdropPseudo(parent)) {
+    aResult.AppendElement(node);
+  }
   if (auto* node = nsLayoutUtils::GetMarkerPseudo(parent)) {
     aResult.AppendElement(node);
   }
@@ -288,6 +291,9 @@ class ReadOnlyInspectorDeclaration final : public nsDOMCSSDeclaration {
   }
   void GetPropertyValue(NonCustomCSSPropertyId aId, nsACString& aValue) final {
     Servo_DeclarationBlock_GetPropertyValueByNonCustomId(mRaw, aId, &aValue);
+  }
+  bool HasLonghandProperty(const nsACString& aPropName) final {
+    return Servo_DeclarationBlock_HasLonghandProperty(mRaw, &aPropName);
   }
   void IndexedGetter(uint32_t aIndex, bool& aFound,
                      nsACString& aPropName) final {
@@ -565,15 +571,16 @@ static uint32_t CollectAtRules(ServoCSSRuleList& aRuleList,
     // so the DevTools team gets notified and can decide if it should be
     // displayed.
     switch (rule->Type()) {
+      case StyleCssRuleType::CustomMedia:
       case StyleCssRuleType::Media:
       case StyleCssRuleType::Supports:
       case StyleCssRuleType::LayerBlock:
+      case StyleCssRuleType::PositionTry:
       case StyleCssRuleType::Property:
       case StyleCssRuleType::Container: {
         (void)aResult.AppendElement(OwningNonNull(*rule), fallible);
         break;
       }
-      case StyleCssRuleType::CustomMedia:
       case StyleCssRuleType::Style:
       case StyleCssRuleType::Import:
       case StyleCssRuleType::Document:
@@ -589,7 +596,6 @@ static uint32_t CollectAtRules(ServoCSSRuleList& aRuleList,
       case StyleCssRuleType::FontPaletteValues:
       case StyleCssRuleType::Scope:
       case StyleCssRuleType::StartingStyle:
-      case StyleCssRuleType::PositionTry:
       case StyleCssRuleType::NestedDeclarations:
         break;
     }

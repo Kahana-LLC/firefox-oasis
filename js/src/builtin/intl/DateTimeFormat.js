@@ -70,6 +70,21 @@ function resolveDateTimeFormatInternals(lazyDateTimeFormatData) {
     localeData
   );
 
+  // Changes from "Intl era and monthCode" proposal.
+  //
+  // https://tc39.es/proposal-intl-era-monthcode/#sec-createdatetimeformat
+  if (r.ca === "islamic") {
+    ReportWarning(JSMSG_ISLAMIC_FALLBACK);
+
+    // Fallback to "islamic-tbla" calendar.
+    r.ca = "islamic-tbla";
+  } else if (r.ca === "islamic-rgsa") {
+    // Fallback to "islamic-tbla" calendar for 147 uplift compatibility.
+    // The above warning text isn't suitable, and per 2025-12 TG2 meeting
+    // treatment as unknown is expected going forward (bug 2005702).
+    r.ca = "islamic-tbla";
+  }
+
   // Steps 19-22.
   internalProps.locale = r.locale;
   internalProps.calendar = r.ca;
@@ -598,26 +613,6 @@ function InitializeDateTimeFormat(
   return dateTimeFormat;
 }
 /* eslint-enable complexity */
-
-/**
- * Returns the subset of the given locale list for which this locale list has a
- * matching (possibly fallback) locale. Locales appear in the same order in the
- * returned list as in the input list.
- *
- * Spec: ECMAScript Internationalization API Specification, 12.3.2.
- */
-function Intl_DateTimeFormat_supportedLocalesOf(locales /*, options*/) {
-  var options = ArgumentsLength() > 1 ? GetArgument(1) : undefined;
-
-  // Step 1.
-  var availableLocales = "DateTimeFormat";
-
-  // Step 2.
-  var requestedLocales = CanonicalizeLocaleList(locales);
-
-  // Step 3.
-  return SupportedLocales(availableLocales, requestedLocales, options);
-}
 
 /**
  * DateTimeFormat internal properties.

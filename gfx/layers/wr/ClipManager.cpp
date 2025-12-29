@@ -8,7 +8,6 @@
 
 #include "DisplayItemClipChain.h"
 #include "FrameMetrics.h"
-#include "mozilla/ReverseIterator.h"
 #include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/layers/StackingContextHelper.h"
@@ -16,6 +15,7 @@
 #include "mozilla/StaticPrefs_apz.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 #include "nsDisplayList.h"
+#include "nsLayoutUtils.h"
 #include "nsRefreshDriver.h"
 #include "nsStyleStructInlines.h"
 #include "UnitTransforms.h"
@@ -23,8 +23,7 @@
 static mozilla::LazyLogModule sClipLog("wr.clip");
 #define CLIP_LOG(...) MOZ_LOG(sClipLog, LogLevel::Debug, (__VA_ARGS__))
 
-namespace mozilla {
-namespace layers {
+namespace mozilla::layers {
 
 ClipManager::ClipManager() : mManager(nullptr), mBuilder(nullptr) {}
 
@@ -156,15 +155,6 @@ void ClipManager::PopOverrideForASR(const ActiveScrolledRoot* aASR) {
   }
 }
 
-void ClipManager::PushStickyItem(const nsDisplayStickyPosition* aItem) {
-  mStickyItemStack.push_back(aItem);
-}
-
-void ClipManager::PopStickyItem() {
-  MOZ_ASSERT(!mStickyItemStack.empty());
-  mStickyItemStack.pop_back();
-}
-
 wr::WrSpatialId ClipManager::SpatialIdAfterOverride(
     const wr::WrSpatialId& aSpatialId) {
   auto it = mASROverride.find(aSpatialId);
@@ -191,6 +181,7 @@ wr::WrSpaceAndClipChain ClipManager::SwitchItem(nsDisplayListBuilder* aBuilder,
   }
   const ActiveScrolledRoot* asr = aItem->GetActiveScrolledRoot();
   DisplayItemType type = aItem->GetType();
+  const ActiveScrolledRoot* stickyAsr = nullptr;
   if (type == DisplayItemType::TYPE_STICKY_POSITION) {
     // For sticky position items, the ASR is computed differently depending on
     // whether the item has a fixed descendant or not. But for WebRender
@@ -199,6 +190,8 @@ wr::WrSpaceAndClipChain ClipManager::SwitchItem(nsDisplayListBuilder* aBuilder,
     // the sticky item.
     auto* sticky = static_cast<nsDisplayStickyPosition*>(aItem);
     asr = sticky->GetContainerASR();
+    stickyAsr = ActiveScrolledRoot::GetStickyASRFromFrame(sticky->Frame());
+    MOZ_ASSERT(stickyAsr);
   }
 
   CLIP_LOG("processing item %p (%s) asr %p clip %p, inherited = %p\n", aItem,
@@ -208,13 +201,12 @@ wr::WrSpaceAndClipChain ClipManager::SwitchItem(nsDisplayListBuilder* aBuilder,
   // In most cases we can combine the leaf of the clip chain with the clip rect
   // of the display item. This reduces the number of clip items, which avoids
   // some overhead further down the pipeline.
-  bool separateLeaf = false;
-  if (clip && clip->mASR == asr && clip->mClip.GetRoundedRectCount() == 0) {
-    // Container display items are not currently supported because the clip
-    // rect of a stacking context is not handled the same as normal display
-    // items.
-    separateLeaf = !aItem->GetChildren();
-  }
+  // Container display items are not currently supported because the clip
+  // rect of a stacking context is not handled the same as normal display
+  // items.
+  const bool separateLeaf = clip && clip->mASR == asr &&
+                            clip->mClip.GetRoundedRectCount() == 0 &&
+                            !aItem->GetChildren();
 
   // Zoom display items report their bounds etc using the parent document's
   // APD because zoom items act as a conversion layer between the two different
@@ -250,20 +242,25 @@ wr::WrSpaceAndClipChain ClipManager::SwitchItem(nsDisplayListBuilder* aBuilder,
     clip = clip->mParent;
   }
 
-  // There are two ASR chains here that we need to be fully defined. One is the
-  // ASR chain pointed to by |asr|. The other is the
-  // ASR chain pointed to by clip->mASR. We pick the leafmost
-  // of these two chains because that one will include the other. Calling
-  // DefineSpatialNodes with this leafmost ASR will recursively define all the
-  // ASRs that we care about for this item, but will not actually push
-  // anything onto the WR stack.
-  const ActiveScrolledRoot* leafmostASR = asr;
-  if (clip) {
-    leafmostASR = ActiveScrolledRoot::PickDescendant(leafmostASR, clip->mASR);
+  // There are up to three ASR chains here that we need to be fully defined:
+  //  1. The ASR chain pointed to by |asr|
+  //  2. The ASR chain pointed to by clip->mASR
+  //  3. For a sticky item, the ASR chain pointed to by the item's sticky ASR.
+  //     This one is needed so that when we create WebRender commands for the
+  //     sticky item, we can give WebRender accurate information about the
+  //     spatial node we're in.
+  // These chains will often be the same, or one will include the other,
+  // but we can't rely on that always being the case, so we make a
+  // DefineSpatialNodes call on all three. These calls will recursively
+  // define all the ASRs that we care about for this item, but will not
+  // actually push anything onto the WR stack.
+  (void)DefineSpatialNodes(aBuilder, asr, aItem);
+  if (clip && clip->mASR != asr) {
+    (void)DefineSpatialNodes(aBuilder, clip->mASR, aItem);
   }
-  Maybe<wr::WrSpatialId> leafmostId =
-      DefineSpatialNodes(aBuilder, leafmostASR, aItem);
-  (void)leafmostId;
+  if (stickyAsr && stickyAsr != asr) {
+    (void)DefineSpatialNodes(aBuilder, stickyAsr, aItem);
+  }
 
   // Define all the clips in the item's clip chain, and obtain a clip chain id
   // for it.
@@ -378,19 +375,6 @@ static nscoord NegativePart(nscoord min, nscoord max) {
   return 0;
 }
 
-const nsDisplayStickyPosition* ClipManager::FindStickyItemFromFrame(
-    const nsIFrame* aStickyFrame) const {
-  // Iterate in reverse order as the sticky item is more likely to be at
-  // the top of the stack.
-  for (const nsDisplayStickyPosition* item :
-       mozilla::Reversed(mStickyItemStack)) {
-    if (item->Frame() == aStickyFrame) {
-      return item;
-    }
-  }
-  return nullptr;
-}
-
 Maybe<wr::WrSpatialId> ClipManager::DefineStickyNode(
     nsDisplayListBuilder* aBuilder, Maybe<wr::WrSpatialId> aParentSpatialId,
     const ActiveScrolledRoot* aASR, nsDisplayItem* aItem) {
@@ -417,22 +401,21 @@ Maybe<wr::WrSpatialId> ClipManager::DefineStickyNode(
   float auPerDevPixel = stickyFrame->PresContext()->AppUnitsPerDevPixel();
 
   nsRect itemBounds;
-  nsPoint toReferenceFrame;
 
-  const nsDisplayStickyPosition* stickyItem =
-      FindStickyItemFromFrame(stickyFrame);
-  if (stickyItem) {
-    bool snap;
-    itemBounds = stickyItem->GetBounds(aBuilder, &snap);
-    toReferenceFrame = stickyItem->ToReferenceFrame();
-  } else {
-    MOZ_ASSERT(false,
-               "Cannot find sticky item in ClipManager::DefineStickyNode, "
-               "using fallback bounds which may be inaccurate");
-    itemBounds = stickyFrame->GetRect() +
-                 aBuilder->ToReferenceFrame(stickyFrame->GetParent());
-    toReferenceFrame = aBuilder->ToReferenceFrame(stickyFrame);
-  }
+  // Make both itemBounds and scrollPort be relative to the reference frame
+  // of the sticky frame's parent.
+  nsRect scrollPort =
+      stickyScrollContainer->ScrollContainer()->GetScrollPortRect();
+  const nsIFrame* referenceFrame =
+      aBuilder->FindReferenceFrameFor(stickyFrame->GetParent());
+  nsRect transformedBounds = stickyFrame->GetRectRelativeToSelf();
+  DebugOnly transformResult = nsLayoutUtils::TransformRect(
+      stickyFrame, referenceFrame, transformedBounds);
+  MOZ_ASSERT(transformResult == nsLayoutUtils::TRANSFORM_SUCCEEDED);
+  itemBounds = transformedBounds;
+  scrollPort = scrollPort +
+               stickyScrollContainer->ScrollContainer()->GetOffsetToCrossDoc(
+                   referenceFrame);
 
   Maybe<float> topMargin;
   Maybe<float> rightMargin;
@@ -445,17 +428,6 @@ Maybe<wr::WrSpatialId> ClipManager::DefineStickyNode(
   nsRectAbsolute outer;
   nsRectAbsolute inner;
   stickyScrollContainer->GetScrollRanges(stickyFrame, &outer, &inner);
-
-  nsPoint offset =
-      stickyScrollContainer->ScrollContainer()->GetOffsetToCrossDoc(
-          stickyFrame) +
-      toReferenceFrame;
-
-  // Adjust the scrollPort coordinates to be relative to the reference frame,
-  // so that it is in the same space as everything else.
-  nsRect scrollPort =
-      stickyScrollContainer->ScrollContainer()->GetScrollPortRect();
-  scrollPort += offset;
 
   // The following computations make more sense upon understanding the
   // semantics of "inner" and "outer", which is explained in the comment on
@@ -698,59 +670,53 @@ Maybe<wr::WrSpatialId> ClipManager::DefineSpatialNodes(
 Maybe<wr::WrClipChainId> ClipManager::DefineClipChain(
     const DisplayItemClipChain* aChain, int32_t aAppUnitsPerDevPixel) {
   MOZ_ASSERT(!mCacheStack.empty());
-  AutoTArray<wr::WrClipId, 6> allClipIds;
-  ClipIdMap& cache = mCacheStack.top();
-  // Iterate through the clips in the current item's clip chain, define them
-  // in WR, and put their IDs into |clipIds|.
-  for (const DisplayItemClipChain* chain = aChain; chain;
-       chain = chain->mParent) {
-    MOZ_DIAGNOSTIC_ASSERT(chain->mOnStack || !chain->mASR ||
-                          chain->mASR->mFrame);
-
-    if (!chain->mClip.HasClip()) {
-      // This item in the chain is a no-op, skip over it
-      continue;
-    }
-
-    auto emplaceResult = cache.try_emplace(chain);
-    auto& chainClipIds = emplaceResult.first->second;
-    if (!emplaceResult.second) {
-      // Found it in the currently-active cache, so just use the id we have for
-      // it.
-      CLIP_LOG("cache[%p] => hit\n", chain);
-      allClipIds.AppendElements(chainClipIds);
-      continue;
-    }
-
-    LayoutDeviceRect clip = LayoutDeviceRect::FromAppUnits(
-        chain->mClip.GetClipRect(), aAppUnitsPerDevPixel);
-    AutoTArray<wr::ComplexClipRegion, 6> wrRoundedRects;
-    chain->mClip.ToComplexClipRegions(aAppUnitsPerDevPixel, wrRoundedRects);
-
-    wr::WrSpatialId space = GetSpatialId(chain->mASR);
-    // Define the clip
-    space = SpatialIdAfterOverride(space);
-
-    auto rectClipId =
-        mBuilder->DefineRectClip(Some(space), wr::ToLayoutRect(clip));
-    CLIP_LOG("cache[%p] <= %zu\n", chain, rectClipId.id);
-    chainClipIds.AppendElement(rectClipId);
-
-    for (const auto& complexClip : wrRoundedRects) {
-      auto complexClipId =
-          mBuilder->DefineRoundedRectClip(Some(space), complexClip);
-      CLIP_LOG("cache[%p] <= %zu\n", chain, complexClipId.id);
-      chainClipIds.AppendElement(complexClipId);
-    }
-
-    allClipIds.AppendElements(chainClipIds);
-  }
-
-  if (allClipIds.IsEmpty()) {
+  if (!aChain) {
     return Nothing();
   }
 
-  return Some(mBuilder->DefineClipChain(allClipIds));
+  ClipIdMap& cache = mCacheStack.top();
+  MOZ_DIAGNOSTIC_ASSERT(aChain->mOnStack || !aChain->mASR ||
+                        aChain->mASR->mFrame);
+
+  if (auto iter = cache.find(aChain); iter != cache.end()) {
+    // Found it in the currently-active cache, so just use the id we have for
+    // it.
+    CLIP_LOG("cache[%p] => hit\n", aChain);
+    return iter->second.mWrChainID;
+  }
+
+  const auto parentChain =
+      DefineClipChain(aChain->mParent, aAppUnitsPerDevPixel);
+  if (!aChain->mClip.HasClip()) {
+    cache[aChain] = {parentChain};
+    // This item in the chain is a no-op, skip over it
+    return parentChain;
+  }
+
+  auto clip = LayoutDeviceRect::FromAppUnits(aChain->mClip.GetClipRect(),
+                                             aAppUnitsPerDevPixel);
+  AutoTArray<wr::ComplexClipRegion, 6> wrRoundedRects;
+  aChain->mClip.ToComplexClipRegions(aAppUnitsPerDevPixel, wrRoundedRects);
+  wr::WrSpatialId space = GetSpatialId(aChain->mASR);
+  // Define the clip
+  space = SpatialIdAfterOverride(space);
+  // Iterate through the clips in the current item's clip chain, define them
+  // in WR, and put their IDs into |clipIds|.
+  AutoTArray<wr::WrClipId, 6> clipChainClipIds;
+  auto rectClipId =
+      mBuilder->DefineRectClip(Some(space), wr::ToLayoutRect(clip));
+  CLIP_LOG("cache[%p] <= %zu\n", aChain, rectClipId.id);
+  clipChainClipIds.AppendElement(rectClipId);
+
+  for (const auto& complexClip : wrRoundedRects) {
+    auto complexClipId =
+        mBuilder->DefineRoundedRectClip(Some(space), complexClip);
+    CLIP_LOG("cache[%p] <= %zu\n", aChain, complexClipId.id);
+    clipChainClipIds.AppendElement(complexClipId);
+  }
+  auto id = Some(mBuilder->DefineClipChain(clipChainClipIds, parentChain));
+  cache[aChain] = {id};
+  return id;
 }
 
 ClipManager::~ClipManager() {
@@ -804,5 +770,4 @@ wr::WrSpaceAndClipChain ClipManager::ItemClips::GetSpaceAndClipChain() const {
   return spaceAndClipChain;
 }
 
-}  // namespace layers
-}  // namespace mozilla
+}  // namespace mozilla::layers

@@ -252,6 +252,21 @@ class OnboardingFragment : Fragment() {
                     pagesToDisplay.sequencePosition(OnboardingPageUiData.Type.SYNC_SIGN_IN),
                 )
             },
+            onNotificationPermissionButtonClick = {
+                requireComponents.notificationsDelegate.requestNotificationPermission()
+                telemetryRecorder.onNotificationPermissionClick(
+                    sequenceId = pagesToDisplay.telemetrySequenceId(),
+                    sequencePosition =
+                        pagesToDisplay.sequencePosition(OnboardingPageUiData.Type.NOTIFICATION_PERMISSION),
+                )
+            },
+            onSkipNotificationClick = {
+                telemetryRecorder.onSkipTurnOnNotificationsClick(
+                    sequenceId = pagesToDisplay.telemetrySequenceId(),
+                    sequencePosition =
+                        pagesToDisplay.sequencePosition(OnboardingPageUiData.Type.NOTIFICATION_PERMISSION),
+                )
+            },
             onAddFirefoxWidgetClick = {
                 telemetryRecorder.onAddSearchWidgetClick(
                     pagesToDisplay.telemetrySequenceId(),
@@ -503,7 +518,7 @@ class OnboardingFragment : Fragment() {
             text = getString(R.string.juno_onboarding_privacy_notice_text),
             linkTextState = LinkTextState(
                 text = getString(R.string.juno_onboarding_privacy_notice_text),
-                url = SupportUtils.getMozillaPageUrl(SupportUtils.MozillaPage.PRIVATE_NOTICE),
+                url = SupportUtils.getMozillaPageUrl(SupportUtils.MozillaPage.PRIVACY_NOTICE),
                 onClick = {
                     SupportUtils.launchSandboxCustomTab(
                         context = requireContext(),

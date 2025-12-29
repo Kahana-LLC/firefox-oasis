@@ -97,6 +97,8 @@
     <command id="Tools:Downloads" />
     <command id="Tools:Addons" />
     <command id="cmd_openUnifiedExtensionsPanel" />
+    <command id="Tools:AIWindow" />
+    <command id="Tools:ClassicWindow" />
     <command id="Tools:Sanitize" />
     <command id="Tools:PrivateBrowsing" />
     <command id="Browser:Screenshot" />

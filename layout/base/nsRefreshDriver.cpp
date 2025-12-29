@@ -60,6 +60,7 @@
 #include "mozilla/TaskController.h"
 #include "mozilla/VsyncDispatcher.h"
 #include "mozilla/VsyncTaskManager.h"
+#include "mozilla/dom/AnimationTimelinesController.h"
 #include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/CallbackDebuggerNotification.h"
 #include "mozilla/dom/ContentChild.h"
@@ -94,7 +95,6 @@
 #include "nsPresContext.h"
 #include "nsTextFrame.h"
 #include "nsTransitionManager.h"
-#include "nsViewManager.h"
 
 #if defined(MOZ_WIDGET_ANDROID)
 #  include "VRManagerChild.h"
@@ -2040,11 +2040,7 @@ void nsRefreshDriver::UpdateRemoteFrameEffects() {
 }
 
 static void UpdateAndReduceAnimations(Document& aDocument) {
-  for (DocumentTimeline* tl :
-       ToTArray<AutoTArray<RefPtr<DocumentTimeline>, 32>>(
-           aDocument.Timelines())) {
-    tl->WillRefresh();
-  }
+  aDocument.TimelinesController().WillRefresh();
 
   if (nsPresContext* pc = aDocument.GetPresContext()) {
     if (pc->EffectCompositor()->NeedsReducing()) {
@@ -2628,10 +2624,11 @@ bool nsRefreshDriver::PaintIfNeeded() {
     }
     mCompositionPayloads.Clear();
   }
-  RefPtr<nsViewManager> vm = mPresContext->PresShell()->GetViewManager();
+  RefPtr<PresShell> ps = mPresContext->PresShell();
   {
     PaintTelemetry::AutoRecordPaint record;
-    vm->ProcessPendingUpdates();
+    ps->SyncWindowPropertiesIfNeeded();
+    ps->PaintSynchronously();
     // Paint our popups.
     if (nsXULPopupManager* pm = nsXULPopupManager::GetInstance()) {
       pm->PaintPopups(this);

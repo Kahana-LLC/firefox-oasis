@@ -25,6 +25,7 @@
 #  include "mozilla/net/GeckoViewContentChannelParent.h"
 #endif
 #include "mozilla/net/DocumentChannelParent.h"
+#include "mozilla/net/CacheEntryWriteHandleParent.h"
 #include "mozilla/net/AltDataOutputStreamParent.h"
 #include "mozilla/net/DNSRequestParent.h"
 #include "mozilla/net/IPCTransportProvider.h"
@@ -52,8 +53,6 @@
 #include "nsEscape.h"
 #include "SerializedLoadContext.h"
 #include "nsAuthInformationHolder.h"
-#include "nsINetworkPredictor.h"
-#include "nsINetworkPredictorVerifier.h"
 #include "nsISpeculativeConnect.h"
 #include "nsFileChannel.h"
 #include "nsHttpHandler.h"
@@ -223,13 +222,41 @@ bool NeckoParent::DeallocPWebrtcTCPSocketParent(
   return true;
 }
 
-PAltDataOutputStreamParent* NeckoParent::AllocPAltDataOutputStreamParent(
-    const nsACString& type, const int64_t& predictedSize,
+PCacheEntryWriteHandleParent* NeckoParent::AllocPCacheEntryWriteHandleParent(
     PHttpChannelParent* channel) {
   HttpChannelParent* chan = static_cast<HttpChannelParent*>(channel);
+  CacheEntryWriteHandleParent* parent = chan->AllocCacheEntryWriteHandle();
+  parent->AddRef();
+  return parent;
+}
+
+bool NeckoParent::DeallocPCacheEntryWriteHandleParent(
+    PCacheEntryWriteHandleParent* aActor) {
+  CacheEntryWriteHandleParent* parent =
+      static_cast<CacheEntryWriteHandleParent*>(aActor);
+  parent->Release();
+  return true;
+}
+
+PAltDataOutputStreamParent* NeckoParent::AllocPAltDataOutputStreamParent(
+    const nsACString& type, const int64_t& predictedSize,
+    mozilla::Maybe<mozilla::NotNull<mozilla::net::PHttpChannelParent*>>&
+        channel,
+    mozilla::Maybe<mozilla::NotNull<PCacheEntryWriteHandleParent*>>& handle) {
+  MOZ_ASSERT(channel || handle);
+
+  nsresult rv;
   nsCOMPtr<nsIAsyncOutputStream> stream;
-  nsresult rv = chan->OpenAlternativeOutputStream(type, predictedSize,
-                                                  getter_AddRefs(stream));
+  if (channel) {
+    HttpChannelParent* chan = static_cast<HttpChannelParent*>(channel->get());
+    rv = chan->OpenAlternativeOutputStream(type, predictedSize,
+                                           getter_AddRefs(stream));
+  } else {
+    CacheEntryWriteHandleParent* h =
+        static_cast<CacheEntryWriteHandleParent*>(handle->get());
+    rv = h->OpenAlternativeOutputStream(type, predictedSize,
+                                        getter_AddRefs(stream));
+  }
   AltDataOutputStreamParent* parent = new AltDataOutputStreamParent(stream);
   parent->AddRef();
   // If the return value was not NS_OK, the error code will be sent
@@ -547,49 +574,6 @@ bool NeckoParent::DeallocPTransportProviderParent(
   RefPtr<TransportProviderParent> provider =
       dont_AddRef(static_cast<TransportProviderParent*>(aActor));
   return true;
-}
-
-/* Predictor Messages */
-mozilla::ipc::IPCResult NeckoParent::RecvPredPredict(
-    nsIURI* aTargetURI, nsIURI* aSourceURI, const uint32_t& aReason,
-    const OriginAttributes& aOriginAttributes, const bool& hasVerifier) {
-  // Get the current predictor
-  nsresult rv = NS_OK;
-  nsCOMPtr<nsINetworkPredictor> predictor;
-  predictor = mozilla::components::Predictor::Service(&rv);
-  NS_ENSURE_SUCCESS(rv, IPC_OK());
-
-  nsCOMPtr<nsINetworkPredictorVerifier> verifier;
-  if (hasVerifier) {
-    verifier = do_QueryInterface(predictor);
-  }
-  predictor->PredictNative(aTargetURI, aSourceURI, aReason, aOriginAttributes,
-                           verifier);
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult NeckoParent::RecvPredLearn(
-    nsIURI* aTargetURI, nsIURI* aSourceURI, const uint32_t& aReason,
-    const OriginAttributes& aOriginAttributes) {
-  // Get the current predictor
-  nsresult rv = NS_OK;
-  nsCOMPtr<nsINetworkPredictor> predictor;
-  predictor = mozilla::components::Predictor::Service(&rv);
-  NS_ENSURE_SUCCESS(rv, IPC_OK());
-
-  predictor->LearnNative(aTargetURI, aSourceURI, aReason, aOriginAttributes);
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult NeckoParent::RecvPredReset() {
-  // Get the current predictor
-  nsresult rv = NS_OK;
-  nsCOMPtr<nsINetworkPredictor> predictor;
-  predictor = mozilla::components::Predictor::Service(&rv);
-  NS_ENSURE_SUCCESS(rv, IPC_OK());
-
-  predictor->Reset();
-  return IPC_OK();
 }
 
 mozilla::ipc::IPCResult NeckoParent::RecvRequestContextLoadBegin(

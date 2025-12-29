@@ -207,8 +207,10 @@ class MessageLogger:
             raise ValueError
 
     def _fix_subtest_name(self, message):
-        """Make sure subtest name is a string"""
-        if "subtest" in message and not isinstance(message["subtest"], str):
+        """Ensure test_status messages have a subtest field and convert it to a string"""
+        if message.get("action") == "test_status" and "subtest" not in message:
+            message["subtest"] = None
+        elif message.get("subtest") is not None:
             message["subtest"] = str(message["subtest"])
 
     def _fix_test_name(self, message):
@@ -714,7 +716,7 @@ class SSLTunnel:
         self.webServer = options.webServer
         self.webSocketPort = options.webSocketPort
 
-        self.customCertRE = re.compile("^cert=(?P<nickname>[0-9a-zA-Z_ ]+)")
+        self.customCertRE = re.compile("^cert=(?P<nickname>[0-9a-zA-Z_ -]+)")
         self.clientAuthRE = re.compile("^clientauth=(?P<clientauth>[a-z]+)")
         self.redirRE = re.compile("^redir=(?P<redirhost>[0-9a-zA-Z_ .]+)")
 
@@ -2488,21 +2490,20 @@ toolbar#nav-bar {
         if options.flavor == "browser":
             if options.timeout:
                 test_timeout = options.timeout
+            elif mozinfo.info["asan"] or mozinfo.info["debug"]:
+                # browser-chrome tests use a fairly short default timeout of 45 seconds;
+                # this is sometimes too short on asan and debug, where we expect reduced
+                # performance.
+                self.log.info(
+                    "Increasing default timeout to 90 seconds (asan or debug)"
+                )
+                test_timeout = 90
+            elif mozinfo.info["tsan"]:
+                # tsan builds need even more time
+                self.log.info("Increasing default timeout to 120 seconds (tsan)")
+                test_timeout = 120
             else:
-                if mozinfo.info["asan"] or mozinfo.info["debug"]:
-                    # browser-chrome tests use a fairly short default timeout of 45 seconds;
-                    # this is sometimes too short on asan and debug, where we expect reduced
-                    # performance.
-                    self.log.info(
-                        "Increasing default timeout to 90 seconds (asan or debug)"
-                    )
-                    test_timeout = 90
-                elif mozinfo.info["tsan"]:
-                    # tsan builds need even more time
-                    self.log.info("Increasing default timeout to 120 seconds (tsan)")
-                    test_timeout = 120
-                else:
-                    test_timeout = 45
+                test_timeout = 45
         elif options.flavor in ("a11y", "chrome"):
             test_timeout = 45
 
@@ -3323,8 +3324,7 @@ toolbar#nav-bar {
                     for key in self.expectedError:
                         full_key = [x for x in testsToRun if key in x]
                         if full_key:
-                            if testsToRun.index(full_key[0]) < firstFail:
-                                firstFail = testsToRun.index(full_key[0])
+                            firstFail = min(firstFail, testsToRun.index(full_key[0]))
                     testsToRun = testsToRun[firstFail + 1 :]
                     if testsToRun == []:
                         status = -1
@@ -3524,11 +3524,7 @@ toolbar#nav-bar {
                 # Currently for automation, the pref defaults to true (but can be
                 # overridden with --setpref).
                 "sessionHistoryInParent": not options.disable_fission
-                or not self.extraPrefs.get(
-                    "fission.disableSessionHistoryInParent",
-                    mozinfo.info["os"] == "android"
-                    and not mozinfo.info.get("early_beta_or_earlier", False),
-                ),
+                or not self.extraPrefs.get("fission.disableSessionHistoryInParent"),
                 "socketprocess_e10s": self.extraPrefs.get(
                     "network.process.enabled", False
                 ),
@@ -4261,9 +4257,8 @@ toolbar#nav-bar {
             ):
                 key = message["test"].split("/")[-1].strip()
                 if key not in self.harness.expectedError:
-                    self.harness.expectedError[key] = message.get(
-                        "message", message["subtest"]
-                    ).strip()
+                    error_msg = message.get("message") or message.get("subtest") or ""
+                    self.harness.expectedError[key] = error_msg.strip()
             return message
 
         def countline(self, message):
@@ -4309,6 +4304,7 @@ toolbar#nav-bar {
                 and self.dump_screen_on_timeout
                 and message["action"] == "test_status"
                 and "expected" in message
+                and message["subtest"] is not None
                 and "Test timed out" in message["subtest"]
             ):
                 self.harness.dumpScreen(self.utilityPath)

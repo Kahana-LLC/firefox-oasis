@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">نجی %s</string>
@@ -64,7 +71,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">جدوں وی آپݨیاں نجی ٹیباں نوں بند کردے او تاں %1$s تہاڈے کوکیاں، تاریخ تے سائیٹ ڈیٹے نوں ہٹا دندا اے۔ %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">جدوں وی آپݨیاں نجی ٹیباں نوں بند کردے او تاں %1$s تہاڈے کوکیاں، تاریخ تے سائیٹ ڈیٹے نوں ہٹا دندا اے۔ %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -370,6 +377,10 @@
   <string name="juno_onboarding_add_search_widget_positive_button" tools:ignore="BrandUsage,UnusedResources">فائرفاکس وجیٹ جوڑو</string>
   <!-- Text for the button to dismiss the screen and move on with the flow -->
   <string name="juno_onboarding_add_search_widget_negative_button" tools:ignore="UnusedResources">ہݨے نہیں</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!--
     Search Widget
 
@@ -511,8 +522,6 @@
   <string name="preferences_gestures">اشارے</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">چݨندا کرو</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">جدوں لوگ‌این کیتا ٹیباں، اتے پتے، پاس‌ورڈ تے ہور ملا جا سکدے ہن۔</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
   <string name="preferences_account_default_name_2">موزیلا کھاتا</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
@@ -762,12 +771,6 @@
   <string name="preference_experiments_2">گھوکھاں</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">موزیلے نوں مطالعے انسٹال کرن تے چلاوݨ دے اجازت دیو</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">آپݨا ڈیٹا ہم وقت کرو تے سنبھالو</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">مڑ کنیکٹ کرن لئی سائین ان کرو</string>
   <!-- Preference for removing FxA account -->
@@ -1265,8 +1268,6 @@
   <string name="toast_copy_link_to_clipboard">کلپ‌بورڈ چ کاپی کیتا</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">لنک کرن لئی سائین ان کرو</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">ڈیٹا ہم وقت کرو تے سنبھالو</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
   <string name="sync_send_to_all">سارے ڈوائیساں تے بھیجو</string>
   <!-- An option from the share dialog to reconnect to sync -->
@@ -1569,4 +1570,10 @@
   <!-- Translations feature -->
 
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

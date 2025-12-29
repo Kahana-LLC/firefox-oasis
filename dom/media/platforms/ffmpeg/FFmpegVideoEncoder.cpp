@@ -118,11 +118,19 @@ struct H264LiteralSetting {
   H264Setting get() const { return {mValue, mString.AsString()}; }
 };
 
+#if LIBAVCODEC_VERSION_MAJOR < 62
 static constexpr H264LiteralSetting H264Profiles[]{
     {FF_PROFILE_H264_BASELINE, "baseline"_ns},
     {FF_PROFILE_H264_MAIN, "main"_ns},
     {FF_PROFILE_H264_EXTENDED, ""_ns},
     {FF_PROFILE_H264_HIGH, "high"_ns}};
+#else
+static constexpr H264LiteralSetting H264Profiles[]{
+    {AV_PROFILE_H264_BASELINE, "baseline"_ns},
+    {AV_PROFILE_H264_MAIN, "main"_ns},
+    {AV_PROFILE_H264_EXTENDED, ""_ns},
+    {AV_PROFILE_H264_HIGH, "high"_ns}};
+#endif
 
 static Maybe<H264Setting> GetH264Profile(const H264_PROFILE& aProfile) {
   switch (aProfile) {
@@ -309,9 +317,20 @@ bool FFmpegVideoEncoder<LIBAV_VER>::SvcEnabled() const {
   return mConfig.mScalabilityMode != ScalabilityMode::None;
 }
 
+bool FFmpegVideoEncoder<LIBAV_VER>::ShouldTryHardware() const {
+#ifdef MOZ_WIDGET_ANDROID
+  // On Android, the MediaCodec encoders are the only ones available to us,
+  // which may be implemented in hardware or software.
+  if (mCodecID == AV_CODEC_ID_H264 || mCodecID == AV_CODEC_ID_HEVC) {
+    return true;
+  }
+#endif
+  return mConfig.mHardwarePreference != HardwarePreference::RequireSoftware;
+}
+
 MediaResult FFmpegVideoEncoder<LIBAV_VER>::InitEncoder() {
   MediaResult result(NS_ERROR_DOM_MEDIA_NOT_SUPPORTED_ERR);
-  if (mConfig.mHardwarePreference != HardwarePreference::RequireSoftware) {
+  if (ShouldTryHardware()) {
     result = InitEncoderInternal(/* aHardware */ true);
   }
   // TODO(aosmond): We should be checking here for RequireHardware, but we fail

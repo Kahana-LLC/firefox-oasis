@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">%s nyamuni</string>
@@ -64,7 +71,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s mupus réréméh, jujutan, jeung data loka anjeun nalika anjeun nutup sakabéh jandéla nyamuni. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s mupus réréméh, jujutan, jeung data loka anjeun nalika anjeun nutup sakabéh jandéla nyamuni. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -382,6 +389,10 @@
   <string name="juno_onboarding_add_search_widget_positive_button" tools:ignore="BrandUsage,UnusedResources">Tambahkeun wijet Firefox</string>
   <!-- Text for the button to dismiss the screen and move on with the flow -->
   <string name="juno_onboarding_add_search_widget_negative_button" tools:ignore="UnusedResources">Moal waka</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!--
     Search Widget
 
@@ -523,8 +534,6 @@
   <string name="preferences_gestures">Réngkak</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Sesuaikeun</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Asup pikeun nyingkronkeun tab, markah, kecap sandi, jeung sajabana.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
   <string name="preferences_account_default_name_2">Akun Mozilla</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
@@ -774,12 +783,6 @@
   <string name="preference_experiments_2">Studi</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">Ngidinan Mozilla masang jeung ngajalankeun studi</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Singkronkeun tur simpen data anjeun</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Asup pikeun nyambungkeun deui</string>
   <!-- Preference for removing FxA account -->
@@ -1299,8 +1302,6 @@
   <string name="toast_copy_link_to_clipboard">Ditiron kana papan klip</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Asup ka Sync</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Singkronkeun tur simpen data</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
   <string name="sync_send_to_all">Kirim ka sadaya parangkat</string>
   <!-- An option from the share dialog to reconnect to sync -->
@@ -1803,8 +1804,6 @@
   <string name="credit_cards_edit_card">Ropéa kartu</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Nomer Kartu</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Tanggal Kadaluarsa</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Bulan Kadaluwarsa</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -2531,4 +2530,10 @@
   -->
   <string name="beta_feature">BETA</string>
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

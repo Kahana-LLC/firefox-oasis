@@ -7,6 +7,7 @@
 use super::AllowQuirks;
 use crate::color::mix::ColorInterpolationMethod;
 use crate::color::{parsing, AbsoluteColor, ColorFunction, ColorSpace};
+use crate::derives::*;
 use crate::media_queries::Device;
 use crate::parser::{Parse, ParserContext};
 use crate::values::computed::{Color as ComputedColor, Context, ToComputedValue};
@@ -15,7 +16,7 @@ use crate::values::generics::color::{
 };
 use crate::values::specified::Percentage;
 use crate::values::{normalize, CustomIdent};
-use cssparser::{BasicParseErrorKind, ParseErrorKind, Parser, Token};
+use cssparser::{match_ignore_ascii_case, BasicParseErrorKind, ParseErrorKind, Parser, Token};
 use std::fmt::{self, Write};
 use std::io::Write as IoWrite;
 use style_traits::{CssType, CssWriter, KeywordsCollectFn, ParseError, StyleParseErrorKind};
@@ -33,8 +34,15 @@ impl ColorMix {
         input.expect_function_matching("color-mix")?;
 
         input.parse_nested_block(|input| {
-            let interpolation = ColorInterpolationMethod::parse(context, input)?;
-            input.expect_comma()?;
+            // If the color interpolation method is omitted, default to "in oklab".
+            // See: https://github.com/web-platform-tests/interop/issues/1166
+            let interpolation = input
+                .try_parse(|input| -> Result<_, ParseError<'i>> {
+                    let interpolation = ColorInterpolationMethod::parse(context, input)?;
+                    input.expect_comma()?;
+                    Ok(interpolation)
+                })
+                .unwrap_or_default();
 
             let try_parse_percentage = |input: &mut Parser| -> Option<Percentage> {
                 input

@@ -46,7 +46,7 @@ info = {
     "bits": unknown,
     "has_sandbox": unknown,
     "display": None,
-    "automation": bool(os.environ.get("MOZ_AUTOMATION", False)),  # noqa PLW1508
+    "automation": bool(os.environ.get("MOZ_AUTOMATION")),
 }
 (system, node, release, version, machine, processor) = platform.uname()
 (bits, linkage) = platform.architecture()
@@ -65,7 +65,7 @@ if system in ["Microsoft", "Windows"]:
 
     # 2009 == 22H2 software update.  These are the build numbers
     # we use 2009 as the "build" which maps to what taskcluster tasks see
-    if build_number in [22621, 19045]:
+    if build_number in {22621, 19045}:
         build_number = 2009
 
     os_version = f"{major}.{build_number}"
@@ -157,8 +157,8 @@ info.update(
     }
 )
 
-# we want to transition to this instead of using `!debug`, etc.
-info["arch"] = info["processor"]
+if info.get("arch", "") != "aarch64":
+    info["arch"] = info["processor"]
 
 
 if info["os"] == "linux":
@@ -193,7 +193,9 @@ def sanitize(info):
         else:
             info["processor"] = "x86"
             info["bits"] = 32
-    info["arch"] = info["processor"]
+
+    if info.get("arch", "") != "aarch64":
+        info["arch"] = info["processor"]
 
 
 # method for updating information

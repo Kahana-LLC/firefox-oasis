@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">نجی %s</string>
@@ -180,6 +187,10 @@
   <string name="search_engine_suggestions_title">%s تلاش کریں</string>
   <!-- Search engine suggestion description text -->
   <string name="search_engine_suggestions_description">ایڈریس بار سے براہ راست تلاش کریں</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Text preview for smaller sized widgets -->
   <string name="search_widget_text_short">تلاش کریں</string>
   <!-- Text preview for larger sized widgets -->
@@ -1066,8 +1077,6 @@
   <string name="credit_cards_edit_card">کارڈ میں تدوین کریں</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">کارڈ نمبر</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">میعاد ختم ہونے کی تاریخ</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">میعاد ختم ہونے کی تاریخ کا مہینہ</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -1204,4 +1213,10 @@
   <!-- Translations feature -->
 
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

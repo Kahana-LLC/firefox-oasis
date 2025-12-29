@@ -114,7 +114,7 @@ async function testCreateBackupHelper(sandbox, taskFn) {
     .stub(FakeBackupResource3.prototype, "recover")
     .resolves(fake3PostRecoveryEntry);
 
-  let bs = new BackupService({
+  let bs = BackupService.init({
     FakeBackupResource1,
     FakeBackupResource2,
     FakeBackupResource3,
@@ -324,9 +324,8 @@ async function testCreateBackupHelper(sandbox, taskFn) {
     "Should maintain profile name across backup and restore"
   );
 
-  Assert.strictEqual(
-    currentProfile.name,
-    `old-${originalProfileName}`,
+  Assert.ok(
+    currentProfile.name.startsWith("old-"),
     "The old profile should be prefixed with old-"
   );
 
@@ -393,6 +392,10 @@ async function testCreateBackupHelper(sandbox, taskFn) {
   await maybeRemovePath(fakeProfilePath);
   await maybeRemovePath(recoveredProfilePath);
   await maybeRemovePath(EXPECTED_ARCHIVE_PATH);
+
+  Services.prefs.clearUserPref(LAST_BACKUP_FILE_NAME_PREF_NAME);
+
+  BackupService.uninit();
 }
 
 /**

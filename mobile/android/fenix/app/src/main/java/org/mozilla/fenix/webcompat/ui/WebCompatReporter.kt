@@ -5,8 +5,8 @@
 package org.mozilla.fenix.webcompat.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,19 +16,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,12 +52,12 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import mozilla.components.compose.base.Dropdown
 import mozilla.components.compose.base.button.FilledButton
+import mozilla.components.compose.base.button.OutlinedButton
 import mozilla.components.compose.base.button.TextButton
 import mozilla.components.compose.base.menu.MenuItem
 import mozilla.components.compose.base.modifier.thenConditional
 import mozilla.components.compose.base.text.Text.Resource
 import mozilla.components.compose.base.textfield.TextField
-import mozilla.components.compose.base.theme.AcornTheme
 import mozilla.components.lib.state.ext.observeAsState
 import org.mozilla.fenix.Config
 import org.mozilla.fenix.R
@@ -90,6 +89,8 @@ fun WebCompatReporter(
 
     var previewSheetVisible by remember { mutableStateOf(false) }
 
+    val scrollState = rememberScrollState()
+
     BackHandler {
         store.dispatch(WebCompatReporterAction.BackPressed)
     }
@@ -100,15 +101,19 @@ fun WebCompatReporter(
                 onBackClick = {
                     store.dispatch(WebCompatReporterAction.BackPressed)
                 },
+                scrollState = scrollState,
             )
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { paddingValues ->
         Column(
             modifier = Modifier
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(paddingValues)
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .width(FirefoxTheme.layout.size.containerMaxWidth),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             LinkText(
                 text = stringResource(
@@ -226,111 +231,85 @@ fun WebCompatReporter(
                     Text(
                         text = stringResource(id = R.string.webcompat_reporter_etp_checkbox_text),
                         color = MaterialTheme.colorScheme.onSurface,
-                        style = AcornTheme.typography.body1,
+                        style = FirefoxTheme.typography.body1,
                     )
 
                     Text(
                         text = stringResource(id = R.string.webcompat_reporter_etp_checkbox_description),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = AcornTheme.typography.body2,
+                        style = FirefoxTheme.typography.body2,
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
+            OutlinedButton(
+                text = stringResource(id = R.string.webcompat_reporter_preview_report),
                 modifier = Modifier
-                    .clickable {
-                   previewSheetVisible = true
-                   store.dispatch(WebCompatReporterAction.OpenPreviewClicked)
-                }
-                    .padding(vertical = 8.dp)
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(id = R.string.webcompat_reporter_preview_report),
-                    modifier = Modifier,
-                    color = FirefoxTheme.colors.textPrimary,
-                    style = FirefoxTheme.typography.subtitle2,
+                contentColor = MaterialTheme.colorScheme.primary,
+                onClick = {
+                    previewSheetVisible = true
+                    store.dispatch(WebCompatReporterAction.OpenPreviewClicked)
+                },
+            )
 
-                )
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrowhead_right),
-                    contentDescription = "",
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            HorizontalDivider()
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
+            FilledButton(
+                text = stringResource(id = R.string.webcompat_reporter_send),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .semantics {
+                        testTagsAsResourceId = true
+                        testTag = BROKEN_SITE_REPORTER_SEND_BUTTON
+                    },
+                enabled = state.isSubmitEnabled,
             ) {
-                // Note: the "Add more info" button is not meant for Release, so we're only
-                // enabling it in Beta and Nightly/Debug
-                if (Config.channel.isBeta || Config.channel.isNightlyOrDebug) {
-                    Text(
-                        text = stringResource(id = R.string.webcompat_reporter_add_more_info),
-                        modifier = Modifier
-                            .clickable {
-                                store.dispatch(WebCompatReporterAction.SendMoreInfoClicked)
-                            },
-                        style = FirefoxTheme.typography.body2,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        textDecoration = TextDecoration.Underline,
-                    )
+                store.dispatch(WebCompatReporterAction.SendReportClicked)
+            }
 
-                    Spacer(modifier = Modifier.width(24.dp))
-                }
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(
-                        text = stringResource(id = R.string.webcompat_reporter_cancel),
-                        onClick = {
-                            store.dispatch(WebCompatReporterAction.CancelClicked)
+            TextButton(
+                text = stringResource(id = R.string.webcompat_reporter_cancel),
+                modifier = Modifier
+                    .fillMaxWidth(),
+                onClick = {
+                    store.dispatch(WebCompatReporterAction.CancelClicked)
+                },
+            )
+
+            // Note: the "Add more info" button is not meant for Release, so we're only
+            // enabling it in Beta and Nightly/Debug
+            if (Config.channel.isBeta || Config.channel.isNightlyOrDebug) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(id = R.string.webcompat_reporter_add_more_info),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            store.dispatch(WebCompatReporterAction.AddMoreInfoClicked)
                         },
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    FilledButton(
-                        text = stringResource(id = R.string.webcompat_reporter_send),
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .semantics {
-                                testTagsAsResourceId = true
-                                testTag = BROKEN_SITE_REPORTER_SEND_BUTTON
-                            },
-                        enabled = state.isSubmitEnabled,
-                    ) {
-                        store.dispatch(WebCompatReporterAction.SendReportClicked)
-                    }
-                }
+                    style = FirefoxTheme.typography.body2.copy(textAlign = TextAlign.Center),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    textDecoration = TextDecoration.Underline,
+                )
             }
         }
     }
 
     if (previewSheetVisible) {
-            WebCompatReporterPreviewSheet(
-                previewJSON = state.previewJSON,
-                onDismissRequest = { previewSheetVisible = false },
-                onSendClick = { store.dispatch(WebCompatReporterAction.SendReportClicked) },
-                isSendButtonEnabled = state.isSubmitEnabled,
-            )
-        }
+        WebCompatReporterPreviewSheet(
+            previewJSON = state.previewJSON,
+            onDismissRequest = { previewSheetVisible = false },
+            onSendClick = { store.dispatch(WebCompatReporterAction.SendReportClicked) },
+            isSendButtonEnabled = state.isSubmitEnabled,
+        )
     }
+}
 
 /**
  * Helper function used to obtain the list of dropdown menu items derived from [BrokenSiteReason].
@@ -356,6 +335,7 @@ private fun WebCompatReporterState.toDropdownItems(
 @Composable
 private fun TempAppBar(
     onBackClick: () -> Unit,
+    scrollState: ScrollState,
 ) {
     TopAppBar(
         title = {
@@ -375,6 +355,13 @@ private fun TempAppBar(
         windowInsets = WindowInsets(
             top = 0.dp,
             bottom = 0.dp,
+        ),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = if (scrollState.canScrollBackward) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
         ),
     )
 }

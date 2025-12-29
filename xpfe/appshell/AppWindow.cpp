@@ -161,7 +161,8 @@ NS_INTERFACE_MAP_END
 nsresult AppWindow::Initialize(nsIAppWindow* aParent, nsIAppWindow* aOpener,
                                int32_t aInitialWidth, int32_t aInitialHeight,
                                bool aIsHiddenWindow,
-                               widget::InitData& widgetInitData) {
+                               widget::InitData& widgetInitData,
+                               nsIOpenWindowInfo* aOpenWindowInfo) {
   nsresult rv;
   nsCOMPtr<nsIWidget> parentWidget;
 
@@ -238,9 +239,9 @@ nsresult AppWindow::Initialize(nsIAppWindow* aParent, nsIAppWindow* aOpener,
   mDocShell->SetTreeOwner(mChromeTreeOwner);
 
   r.MoveTo(0, 0);
-  NS_ENSURE_SUCCESS(
-      mDocShell->InitWindow(mWindow, r.X(), r.Y(), r.Width(), r.Height()),
-      NS_ERROR_FAILURE);
+  NS_ENSURE_SUCCESS(mDocShell->InitWindow(mWindow, r.X(), r.Y(), r.Width(),
+                                          r.Height(), aOpenWindowInfo, nullptr),
+                    NS_ERROR_FAILURE);
 
   // Attach a WebProgress listener.during initialization...
   mDocShell->AddProgressListener(this, nsIWebProgress::NOTIFY_STATE_NETWORK);
@@ -500,13 +501,6 @@ NS_IMETHODIMP AppWindow::RollupAllPopups() {
 // AppWindow::nsIBaseWindow
 //*****************************************************************************
 
-NS_IMETHODIMP AppWindow::InitWindow(nsIWidget* parentWidget, int32_t x,
-                                    int32_t y, int32_t cx, int32_t cy) {
-  // XXX First Check In
-  NS_ASSERTION(false, "Not Yet Implemented");
-  return NS_OK;
-}
-
 NS_IMETHODIMP AppWindow::Destroy() {
   nsCOMPtr<nsIAppWindow> kungFuDeathGrip(this);
 
@@ -751,8 +745,8 @@ nsresult AppWindow::MoveResize(const Maybe<DesktopPoint>& aPosition,
   return NS_OK;
 }
 
-NS_IMETHODIMP AppWindow::Center(nsIAppWindow* aRelative, bool aScreen,
-                                bool aAlert) {
+nsresult AppWindow::CenterImpl(nsIAppWindow* aRelative, bool aScreen,
+                               bool aAlert, bool aAllowCenteringForSizeChange) {
   DesktopIntRect rect;
   bool screenCoordinates = false, windowCoordinates = false;
   nsresult result;
@@ -820,10 +814,18 @@ NS_IMETHODIMP AppWindow::Center(nsIAppWindow* aRelative, bool aScreen,
   SetPositionDesktopPix(newPos.x, newPos.y);
 
   // If moving the window caused it to change size, re-do the centering.
-  if (GetSize() != ourDevSize) {
-    return Center(aRelative, aScreen, aAlert);
+  // Allow only one recursion here.
+  if (GetSize() != ourDevSize && aAllowCenteringForSizeChange) {
+    return CenterImpl(aRelative, aScreen, aAlert,
+                      /* aAllowCenteringForSizeChange */ false);
   }
   return NS_OK;
+}
+
+NS_IMETHODIMP AppWindow::Center(nsIAppWindow* aRelative, bool aScreen,
+                                bool aAlert) {
+  return CenterImpl(aRelative, aScreen, aAlert,
+                    /* aAllowCenteringForSizeChange */ true);
 }
 
 NS_IMETHODIMP AppWindow::GetParentWidget(nsIWidget** aParentWidget) {
@@ -1087,6 +1089,10 @@ void AppWindow::OnChromeLoaded() {
     mChromeLoaded = true;
     ApplyChromeFlags();
     SyncAttributesToWidget();
+    if (RefPtr ps = GetPresShell()) {
+      // Sync window properties now, before showing the window.
+      ps->SyncWindowPropertiesIfNeeded();
+    }
     if (mWindow) {
       SizeShell();
       if (mShowAfterLoad) {
@@ -2314,8 +2320,8 @@ void AppWindow::SetContentScrollbarVisibility(bool aVisible) {
 }
 
 void AppWindow::ApplyChromeFlags() {
-  nsCOMPtr<dom::Element> window = GetWindowDOMElement();
-  if (!window) {
+  nsCOMPtr<dom::Element> root = GetWindowDOMElement();
+  if (!root) {
     return;
   }
 
@@ -2356,7 +2362,19 @@ void AppWindow::ApplyChromeFlags() {
   // Note that if we're not actually changing the value this will be a no-op,
   // so no need to compare to the old value.
   IgnoredErrorResult rv;
-  window->SetAttribute(u"chromehidden"_ns, newvalue, rv);
+  root->SetAttribute(u"chromehidden"_ns, newvalue, rv);
+
+  // Also set the IsDocumentPiP on the chrome browsing context
+  if ((mChromeFlags &
+       nsIWebBrowserChrome::CHROME_DOCUMENT_PICTURE_IN_PICTURE) ==
+      nsIWebBrowserChrome::CHROME_DOCUMENT_PICTURE_IN_PICTURE) {
+    nsCOMPtr<mozIDOMWindowProxy> windowProxy;
+    GetWindowDOMWindow(getter_AddRefs(windowProxy));
+    if (nsCOMPtr<nsPIDOMWindowOuter> window = do_QueryInterface(windowProxy)) {
+      nsresult rv = window->GetBrowsingContext()->SetIsDocumentPiP(true);
+      NS_ENSURE_SUCCESS_VOID(rv);
+    }
+  }
 }
 
 NS_IMETHODIMP
@@ -2603,9 +2621,8 @@ PresShell* AppWindow::GetPresShell() {
   return mDocShell->GetPresShell();
 }
 
-bool AppWindow::WindowMoved(nsIWidget* aWidget, int32_t x, int32_t y) {
-  nsXULPopupManager* pm = nsXULPopupManager::GetInstance();
-  if (pm) {
+void AppWindow::WindowMoved(nsIWidget*, const LayoutDeviceIntPoint&) {
+  if (nsXULPopupManager* pm = nsXULPopupManager::GetInstance()) {
     nsCOMPtr<nsPIDOMWindowOuter> window =
         mDocShell ? mDocShell->GetWindow() : nullptr;
     pm->AdjustPopupsOnWindowChange(window);
@@ -2623,14 +2640,13 @@ bool AppWindow::WindowMoved(nsIWidget* aWidget, int32_t x, int32_t y) {
   // Persist position, but not immediately, in case this OS is firing
   // repeated move events as the user drags the window
   PersistentAttributesDirty(PersistentAttribute::Position, Async);
-  return false;
 }
 
-bool AppWindow::WindowResized(nsIWidget* aWidget, int32_t aWidth,
-                              int32_t aHeight) {
+void AppWindow::WindowResized(nsIWidget* aWidget,
+                              const LayoutDeviceIntSize& aSize) {
   mDominantClientSize = false;
   if (mDocShell) {
-    mDocShell->SetPositionAndSize(0, 0, aWidth, aHeight, 0);
+    mDocShell->SetPositionAndSize(0, 0, aSize.width, aSize.height, 0);
   }
   // Persist size, but not immediately, in case this OS is firing
   // repeated size events as the user drags the sizing handle
@@ -2652,7 +2668,6 @@ bool AppWindow::WindowResized(nsIWidget* aWidget, int32_t aWidth,
     case FullscreenChangeState::NotChanging:
       break;
   }
-  return true;
 }
 
 bool AppWindow::RequestWindowClose(nsIWidget* aWidget) {
@@ -2894,8 +2909,7 @@ static bool sWaitingForHiddenWindowToLoadNativeMenus =
 #  endif
     ;
 
-MOZ_CONSTINIT static nsTArray<LoadNativeMenusListener>
-    sLoadNativeMenusListeners;
+constinit static nsTArray<LoadNativeMenusListener> sLoadNativeMenusListeners;
 
 static void BeginLoadNativeMenus(Document* aDoc, nsIWidget* aParentWindow);
 
@@ -3175,18 +3189,16 @@ PresShell* AppWindow::WidgetListenerDelegate::GetPresShell() {
   return mAppWindow->GetPresShell();
 }
 
-bool AppWindow::WidgetListenerDelegate::WindowMoved(nsIWidget* aWidget,
-                                                    int32_t aX, int32_t aY,
-                                                    ByMoveToRect) {
+void AppWindow::WidgetListenerDelegate::WindowMoved(
+    nsIWidget* aWidget, const LayoutDeviceIntPoint& aPoint, ByMoveToRect) {
   RefPtr<AppWindow> holder = mAppWindow;
-  return holder->WindowMoved(aWidget, aX, aY);
+  holder->WindowMoved(aWidget, aPoint);
 }
 
-bool AppWindow::WidgetListenerDelegate::WindowResized(nsIWidget* aWidget,
-                                                      int32_t aWidth,
-                                                      int32_t aHeight) {
+void AppWindow::WidgetListenerDelegate::WindowResized(
+    nsIWidget* aWidget, const LayoutDeviceIntSize& aSize) {
   RefPtr<AppWindow> holder = mAppWindow;
-  return holder->WindowResized(aWidget, aWidth, aHeight);
+  holder->WindowResized(aWidget, aSize);
 }
 
 bool AppWindow::WidgetListenerDelegate::RequestWindowClose(nsIWidget* aWidget) {

@@ -47,14 +47,18 @@ class ScriptLoadRequestList;
 /*
  * ScriptLoadRequest
  *
- * ScriptLoadRequest is a generic representation of a JavaScript script that
- * will be loaded by a Script/Module loader. This representation is used by the
- * DOM ScriptLoader and will be used by workers and MOZJSComponentLoader.
+ * ScriptLoadRequest is a generic representation of a request/response for
+ * JavaScript file that will be loaded by a Script/Module loader. This
+ * representation is used by the following:
+ *   - DOM ScriptLoader / ModuleLoader
+ *   - worker ScriptLoader / ModuleLoader
+ *   - worklet ScriptLoader
+ *   - SyncModuleLoader
  *
- * The ScriptLoadRequest contains information about the kind of script (classic
- * or module), the URI, and the ScriptFetchOptions associated with the script.
- * It is responsible for holding the script data once the fetch is complete, or
- * if the request is cached, the bytecode.
+ * The ScriptLoadRequest contains information specific to the current request,
+ * such as the kind of script (classic, module, etc), and the reference to the
+ * LoadedScript which contains the information independent of the current
+ * request, such as the URI, the ScriptFetchOptions, etc.
  *
  * Relationship to ScriptLoadContext:
  *
@@ -264,6 +268,9 @@ class ScriptLoadRequest : public nsISupports,
   bool HasDirtyCache() const { return mHasDirtyCache_; }
   void SetHasDirtyCache() { mHasDirtyCache_ = true; }
 
+  bool HadPostponed() const { return mHadPostponed_; }
+  void SetHadPostponed() { mHadPostponed_ = true; }
+
  public:
   // Fields.
 
@@ -273,7 +280,7 @@ class ScriptLoadRequest : public nsISupports,
   // Are we still waiting for a load to complete?
   State mState;
 
-  // Request source, not cached bytecode.
+  // Request source, not cached serialized Stencil.
   bool mFetchSourceOnly : 1;
 
   // Becomes true if this has source map url.
@@ -288,6 +295,9 @@ class ScriptLoadRequest : public nsISupports,
   // This request should go to necko, and when the response is received,
   // the cache should be either revived or evicted.
   bool mHasDirtyCache_ : 1;
+
+  // Set to true if this script had already been postponed in the scheduling.
+  bool mHadPostponed_ : 1;
 
   enum class CachingPlan : uint8_t {
     // This is not yet considered for caching.
@@ -325,12 +335,7 @@ class ScriptLoadRequest : public nsISupports,
   // worklets as the file name in compile options.
   nsAutoCString mURL;
 
-  // The loaded script holds the source / bytecode which is loaded.
-  //
-  // Currently it is used to hold information which are needed by the Debugger.
-  // Soon it would be used as a way to dissociate the LoadRequest from the
-  // loaded value, such that multiple request referring to the same content
-  // would share the same loaded script.
+  // The loaded script holds the data which can be shared among similar requests
   RefPtr<LoadedScript> mLoadedScript;
 
   // LoadContext for augmenting the load depending on the loading

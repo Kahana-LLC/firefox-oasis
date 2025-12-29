@@ -56,7 +56,9 @@
 #include "util/NativeStack.h"
 #include "util/Text.h"
 #include "util/WindowsWrapper.h"
-#include "vm/BytecodeUtil.h"  // JSDVG_IGNORE_STACK
+#include "js/friend/DumpFunctions.h"  // for stack trace utilities
+#include "js/Printer.h"               // for FixedBufferPrinter
+#include "vm/BytecodeUtil.h"          // JSDVG_IGNORE_STACK
 #include "vm/ErrorObject.h"
 #include "vm/ErrorReporting.h"
 #include "vm/FrameIter.h"
@@ -277,6 +279,8 @@ static void MaybeReportOutOfMemoryForDifferentialTesting() {
 void JSContext::onOutOfMemory() {
   runtime()->hadOutOfMemory = true;
   gc::AutoSuppressGC suppressGC(this);
+
+  requestInterrupt(js::InterruptReason::OOMStackTrace);
 
   /* Report the oom. */
   if (JS::OutOfMemoryCallback oomCallback = runtime()->oomCallback) {
@@ -1067,11 +1071,9 @@ void js::MicroTaskQueueElement::trace(JSTracer* trc) {
   auto* queue = cx->jobQueue.ref();
 
   if (!queue || value.isGCThing()) {
-    TraceEdge(trc, &value, "microtask-queue-entry");
+    TraceRoot(trc, &value, "microtask-queue-entry");
   } else {
-    // It's OK to use unbarriered address here because this is not a GC thing
-    // and so there are no worthwhile barriers to consider here.
-    queue->traceNonGCThingMicroTask(trc, value.unbarrieredAddress());
+    queue->traceNonGCThingMicroTask(trc, &value);
   }
 }
 
@@ -1163,7 +1165,7 @@ JS_PUBLIC_API bool JS::HasDebuggerMicroTasks(JSContext* cx) {
 struct SavedMicroTaskQueueImpl : public JS::SavedMicroTaskQueue {
   explicit SavedMicroTaskQueueImpl(JSContext* cx) : savedQueues(cx) {
     savedQueues = js::MakeUnique<js::MicroTaskQueueSet>(cx);
-    std::swap(cx->microTaskQueues, savedQueues.get());
+    std::swap(cx->microTaskQueues.get(), savedQueues.get());
   }
   ~SavedMicroTaskQueueImpl() override = default;
   JS::PersistentRooted<js::UniquePtr<js::MicroTaskQueueSet>> savedQueues;
@@ -1186,7 +1188,7 @@ JS_PUBLIC_API void JS::RestoreMicroTaskQueue(
   // There's only one impl, so we know this is safe.
   SavedMicroTaskQueueImpl* savedQueueImpl =
       static_cast<SavedMicroTaskQueueImpl*>(savedQueue.get());
-  std::swap(savedQueueImpl->savedQueues.get(), cx->microTaskQueues);
+  std::swap(savedQueueImpl->savedQueues.get(), cx->microTaskQueues.get());
 }
 
 JS_PUBLIC_API size_t JS::GetRegularMicroTaskCount(JSContext* cx) {
@@ -1292,9 +1294,19 @@ JSContext::JSContext(JSRuntime* runtime, const JS::ContextOptions& options)
       canSkipEnqueuingJobs(this, false),
       promiseRejectionTrackerCallback(this, nullptr),
       promiseRejectionTrackerCallbackData(this, nullptr),
-      insideExclusiveDebuggerOnEval(this, nullptr) {
+      oomStackTraceBuffer_(this, nullptr),
+      oomStackTraceBufferValid_(this, false),
+      bypassCSPForDebugger(this, false),
+      insideExclusiveDebuggerOnEval(this, nullptr),
+      microTaskQueues(this) {
   MOZ_ASSERT(static_cast<JS::RootingContext*>(this) ==
              JS::RootingContext::get(this));
+
+  if (JS::Prefs::experimental_capture_oom_stack_trace()) {
+    // Allocate pre-allocated buffer for OOM stack traces
+    oomStackTraceBuffer_ =
+        static_cast<char*>(js_calloc(OOMStackTraceBufferSize));
+  }
 }
 
 JSContext::~JSContext() {
@@ -1324,7 +1336,39 @@ JSContext::~JSContext() {
     irregexp::DestroyIsolate(isolate.ref());
   }
 
+  // Free the pre-allocated OOM stack trace buffer
+  if (oomStackTraceBuffer_) {
+    js_free(oomStackTraceBuffer_);
+  }
+
   TlsContext.set(nullptr);
+}
+
+void JSContext::unsetOOMStackTrace() { oomStackTraceBufferValid_ = false; }
+
+const char* JSContext::getOOMStackTrace() const {
+  if (!oomStackTraceBufferValid_ || !oomStackTraceBuffer_) {
+    return nullptr;
+  }
+  return oomStackTraceBuffer_;
+}
+
+bool JSContext::hasOOMStackTrace() const { return oomStackTraceBufferValid_; }
+
+void JSContext::captureOOMStackTrace() {
+  // Clear any existing stack trace
+  oomStackTraceBufferValid_ = false;
+
+  if (!oomStackTraceBuffer_) {
+    return;  // Buffer not available
+  }
+
+  // Write directly to pre-allocated buffer to avoid any memory allocation
+  FixedBufferPrinter fbp(oomStackTraceBuffer_, OOMStackTraceBufferSize);
+  js::DumpBacktrace(this, fbp);
+  MOZ_ASSERT(strlen(oomStackTraceBuffer_) < OOMStackTraceBufferSize);
+
+  oomStackTraceBufferValid_ = true;
 }
 
 void JSContext::setRuntime(JSRuntime* rt) {
@@ -1536,14 +1580,8 @@ void JSContext::trace(JSTracer* trc) {
     irregexp::TraceIsolate(trc, isolate.ref());
   }
 #ifdef ENABLE_WASM_JSPI
-  wasm().promiseIntegration.trace(trc);
+  wasm().trace(trc);
 #endif
-
-  // Skip tracing the microtask queues on minor GC as we will be updating
-  // nursery pointers through the store buffer instead.
-  if (!trc->isTenuringTracer() && microTaskQueues) {
-    microTaskQueues->trace(trc);
-  }
 }
 
 JS::NativeStackLimit JSContext::stackLimitForJitCode(JS::StackKind kind) {
@@ -1722,9 +1760,6 @@ AutoUnsafeCallWithABI::AutoUnsafeCallWithABI(UnsafeABIStrictness strictness)
       break;
     case UnsafeABIStrictness::AllowPendingExceptions:
       checkForPendingException_ = !JS_IsExceptionPending(cx_);
-      break;
-    case UnsafeABIStrictness::AllowThrownExceptions:
-      checkForPendingException_ = false;
       break;
   }
 

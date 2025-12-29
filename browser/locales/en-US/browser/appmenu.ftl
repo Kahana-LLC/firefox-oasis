@@ -311,19 +311,19 @@ appmenuitem-report-broken-site =
 
 appmenuitem-sign-in-account = Sign in to your account
 
-appmenuitem-monitor-title = { -monitor-brand-short-name }
-appmenuitem-monitor-description = Get data breach alerts
-appmenuitem-relay-title = { -relay-brand-short-name }
-appmenuitem-relay-description = Mask your real email and phone
-appmenuitem-services-relay-description = Launch email masks dashboard
-appmenuitem-vpn-title = { -mozilla-vpn-brand-name }
-appmenuitem-vpn-description = Protect your online activity
+## appmenuitem-monitor-title = { -monitor-brand-short-name }
+## appmenuitem-monitor-description = Get data breach alerts
+## appmenuitem-relay-title = { -relay-brand-short-name }
+## appmenuitem-relay-description = Mask your real email and phone
+## appmenuitem-services-relay-description = Launch email masks dashboard
+## appmenuitem-vpn-title = { -mozilla-vpn-brand-name }
+## appmenuitem-vpn-description = Protect your online activity
 
 appmenu-services-header = My services
 # "Mozilla" is intentionally hardcoded to prevent forks from replacing it
 # with their own vendor name, since these tools are created and maintained by
 # Mozilla.
-appmenu-other-protection-header2 = Try other protection tools from Mozilla:
+#appmenu-other-protection-header2 = Try other protection tools from Mozilla:
 
 ## Profiles panel
 

@@ -2,9 +2,8 @@
 
 import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
-import org.gradle.internal.logging.text.StyledTextOutput.Style
-import org.gradle.internal.logging.text.StyledTextOutputFactory
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 import static org.gradle.api.tasks.testing.TestResult.ResultType
 
 buildscript {
@@ -277,6 +276,10 @@ subprojects {
             logging.removeStandardErrorListener(listener)
         }
     }
+
+    tasks.withType(AbstractTestTask).configureEach {
+        failOnNoDiscoveredTests = false
+    }
 }
 
 if (findProject(":geckoview") == null) {
@@ -387,7 +390,6 @@ tasks.register("ktlint", JavaExec) {
     args "samples/**/*.kt"
     args "!**/build/**/*.kt"
     args "buildSrc/**/*.kt"
-    args "--baseline=ktlint-baseline.xml"
     args "--reporter=json,output=build/reports/ktlint/ktlint.json"
     args "--reporter=plain"
 }
@@ -402,7 +404,6 @@ tasks.register("ktlintFormat", JavaExec) {
     args "samples/**/*.kt"
     args "!**/build/**/*.kt"
     args "buildSrc/**/*.kt"
-    args "--baseline=ktlint-baseline.xml"
     args "--reporter=json,output=build/reports/ktlint/ktlintFormat.json"
     args "--reporter=plain"
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")

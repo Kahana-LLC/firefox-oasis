@@ -335,6 +335,8 @@ class nsWindow final : public nsIWidget {
 
   bool IsRTL() const { return mIsRTL; }
 
+  bool ShouldAssociateWithWinAppSDK() const;
+
   /**
    * AssociateDefaultIMC() associates or disassociates the default IMC for
    * the window.
@@ -576,7 +578,7 @@ class nsWindow final : public nsIWidget {
    * Event handlers
    */
   void OnDestroy() override;
-  bool OnResize(const LayoutDeviceIntSize& aSize);
+  void OnResize(const LayoutDeviceIntSize& aSize);
   void OnSizeModeChange();
   bool OnGesture(WPARAM wParam, LPARAM lParam);
   bool OnTouch(WPARAM wParam, LPARAM lParam);
@@ -849,9 +851,6 @@ class nsWindow final : public nsIWidget {
 
   // Whether we're in the process of sending a WM_SETTEXT ourselves
   bool mSendingSetText = false;
-
-  // Whether we're a PIP window.
-  bool mPIPWindow : 1;
 
   // Whether we are asked to render a mica backdrop.
   bool mMicaBackdrop : 1;

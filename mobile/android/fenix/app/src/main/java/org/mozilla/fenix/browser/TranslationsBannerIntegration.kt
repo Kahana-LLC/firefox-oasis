@@ -12,7 +12,9 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.isVisible
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -22,11 +24,11 @@ import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.lib.state.ext.flowScoped
 import mozilla.components.lib.state.ext.observeAsComposableState
 import mozilla.components.lib.state.helpers.AbstractBinding
+import mozilla.components.support.utils.KeyboardState
+import mozilla.components.support.utils.keyboardAsState
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.store.BrowserScreenState
 import org.mozilla.fenix.browser.store.BrowserScreenStore
-import org.mozilla.fenix.compose.utils.KeyboardState
-import org.mozilla.fenix.compose.utils.keyboardAsState
 import org.mozilla.fenix.databinding.FragmentBrowserBinding
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.theme.FirefoxTheme
@@ -39,13 +41,16 @@ import org.mozilla.fenix.translations.TranslationToolbar
  * @param browserScreenStore [BrowserScreenStore] to sync the current translations status from.
  * @param binding [FragmentBrowserBinding] to inflate the banner into when needed.
  * @param onExpand invoked when user wants to expand the translations controls.
+ * @param mainDispatcher The [CoroutineDispatcher] on which the state observation and updates will occur.
+ *                       Defaults to [Dispatchers.Main].
  */
 class TranslationsBannerIntegration(
     private val browserStore: BrowserStore,
     private val browserScreenStore: BrowserScreenStore,
     private val binding: FragmentBrowserBinding,
     private val onExpand: () -> Unit = {},
-) : AbstractBinding<BrowserScreenState>(browserScreenStore) {
+    mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
+) : AbstractBinding<BrowserScreenState>(browserScreenStore, mainDispatcher) {
 
     private var browserFlowScope: CoroutineScope? = null
 

@@ -15,7 +15,6 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/SharedThreadPool.h"
 #include "mozilla/TaskController.h"
-#include "mozilla/XPCOM.h"
 #include "mozJSModuleLoader.h"
 #include "nsXULAppAPI.h"
 
@@ -110,6 +109,10 @@
 #include "gfxPlatform.h"
 
 #include "mozilla/GeckoTrace.h"
+
+#ifdef XP_IOS
+#  include <CoreFoundation/CoreFoundation.h>
+#endif
 
 using base::AtExitManager;
 using mozilla::ipc::IOThreadParent;
@@ -222,6 +225,18 @@ class OggReporter final : public nsIMemoryReporter,
 
 NS_IMPL_ISUPPORTS(OggReporter, nsIMemoryReporter)
 
+#ifdef XP_IOS
+// Check if iOS LockdownMode is enabled, which blocks the JIT everywhere.
+static bool IsLockdownModeEnabled() {
+  CFPropertyListRef prefValue = CFPreferencesCopyValue(
+      CFSTR("LDMGlobalEnabled"), kCFPreferencesAnyApplication,
+      kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+  bool enabled = prefValue == kCFBooleanTrue;
+  if (prefValue) CFRelease(prefValue);
+  return enabled;
+}
+#endif
+
 static bool sInitializedJS = false;
 
 static void InitializeJS() {
@@ -236,6 +251,11 @@ static void InitializeJS() {
       mozilla::StaticPrefs::javascript_options_main_process_disable_jit()) {
     JS::DisableJitBackend();
   }
+#ifdef XP_IOS
+  else if (IsLockdownModeEnabled()) {
+    JS::DisableJitBackend();
+  }
+#endif
 
   // Set all JS::Prefs.
   SET_JS_PREFS_FROM_BROWSER_PREFS;

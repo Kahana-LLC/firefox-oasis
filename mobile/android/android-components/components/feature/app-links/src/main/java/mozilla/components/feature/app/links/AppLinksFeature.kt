@@ -31,8 +31,13 @@ import mozilla.components.support.ktx.android.content.appName
 internal const val MAX_SUCCESSIVE_DIALOG_MILLIS_LIMIT: Int = 500 // 0.5 seconds
 
 internal val WALLET_SCHEMES: Array<String> = arrayOf(
-    "openid4vp", "mdoc", "mdoc-openid4vp", "haip",
-    "eudi-wallet", "eudi-openid4vp", "openid-credential-offer",
+    "openid4vp",
+    "mdoc",
+    "mdoc-openid4vp",
+    "haip",
+    "eudi-wallet",
+    "eudi-openid4vp",
+    "openid-credential-offer",
 )
 
 /**
@@ -80,34 +85,19 @@ class AppLinksFeature(
     override fun start() {
         scope = store.flowScoped { flow ->
             flow.mapNotNull { state -> state.findTabOrCustomTabOrSelectedTab(sessionId) }
-                // monitor either appIntent OR url changes
-                .distinctUntilChangedBy { session ->
-                    val content = session.content
-                    content.appIntent to content.url
+                .distinctUntilChangedBy {
+                    it.content.appIntent
                 }
                 .collect { sessionState ->
-                    val content = sessionState.content
-                    val intent = content.appIntent
-                    val url = content.url
-
-                    if (intent != null) {
+                    sessionState.content.appIntent?.let {
                         handleAppIntent(
                             sessionState = sessionState,
-                            url = intent.url,
-                            appIntent = intent.appIntent,
-                            fallbackUrl = intent.fallbackUrl,
-                            appName = intent.appName,
+                            url = it.url,
+                            appIntent = it.appIntent,
+                            fallbackUrl = it.fallbackUrl,
+                            appName = it.appName,
                         )
-
-                        // Clear the consumed app intent so we don't re-handle it
                         store.dispatch(ContentAction.ConsumeAppIntentAction(sessionState.id))
-                    } else {
-                        // No appIntent present, but url changed, remove the external application prompt
-                        findPreviousDialogFragment()?.let {
-                            if (it.triggerUrl != url) {
-                                fragmentManager?.beginTransaction()?.remove(it)?.commit()
-                            }
-                        }
                     }
                 }
         }
@@ -213,13 +203,7 @@ class AppLinksFeature(
             return
         }
 
-        getOrCreateDialog(
-            isPrivate = isPrivate,
-            isWallet = isWallet,
-            triggerUrl = sessionState.content.url,
-            url = url,
-            targetAppName = appName,
-        ).apply {
+        getOrCreateDialog(isPrivate, isWallet, url, appName).apply {
             onConfirmRedirect = { isCheckboxTicked ->
                 if (isCheckboxTicked) {
                     alwaysOpenCheckboxAction?.invoke()
@@ -236,7 +220,6 @@ class AppLinksFeature(
     internal fun getOrCreateDialog(
         isPrivate: Boolean,
         isWallet: Boolean,
-        triggerUrl: String?,
         url: String,
         targetAppName: String?,
     ): RedirectDialogFragment {
@@ -276,7 +259,6 @@ class AppLinksFeature(
             dialogMessageString = dialogMessage,
             showCheckbox = if (isPrivate || isWallet) false else alwaysOpenCheckboxAction != null,
             maxSuccessiveDialogMillisLimit = MAX_SUCCESSIVE_DIALOG_MILLIS_LIMIT,
-            triggerUrl = triggerUrl,
         )
     }
 

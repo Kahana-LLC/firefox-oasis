@@ -4426,9 +4426,9 @@ CodeOffset MacroAssembler::call(wasm::SymbolicAddress imm) {
   return call(CallReg);
 }
 
-void MacroAssembler::call(const Address& addr) {
+CodeOffset MacroAssembler::call(const Address& addr) {
   loadPtr(addr, CallReg);
-  call(CallReg);
+  return call(CallReg);
 }
 
 void MacroAssembler::call(JitCode* c) {
@@ -4611,13 +4611,12 @@ void MacroAssembler::callWithABIPre(uint32_t* stackAdjust, bool callFromWasm) {
   }
 }
 
-void MacroAssembler::callWithABIPost(uint32_t stackAdjust, ABIType result,
-                                     bool callFromWasm) {
+void MacroAssembler::callWithABIPost(uint32_t stackAdjust, ABIType result) {
   if (secondScratchReg_ != lr) {
     ma_mov(secondScratchReg_, lr);
   }
 
-  if (!ARMFlags::UseHardFpABI()) {
+  if (abiArgs_.abi() == ABIKind::System && !ARMFlags::UseHardFpABI()) {
     switch (result) {
       case ABIType::Float64:
         // Move double from r0/r1 to ReturnFloatReg.

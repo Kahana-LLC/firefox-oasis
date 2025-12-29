@@ -710,9 +710,17 @@ def default_wasm_jspi(
         return
 
     if simulator:
-        return simulator[0] in ("arm64", "arm", "loong64", "riscv64")
+        return simulator[0] in ("arm64", "arm", "loong64", "mips64", "riscv64")
 
-    if target.cpu in ("x86_64", "x86", "aarch64", "arm", "loongarch64", "riscv64"):
+    if target.cpu in (
+        "x86_64",
+        "x86",
+        "aarch64",
+        "arm",
+        "loongarch64",
+        "mips64",
+        "riscv64",
+    ):
         return True
 
 
@@ -737,16 +745,30 @@ def wasm_jspi(value, jit_enabled, simulator, no_experimental, target):
     if not jit_enabled:
         die("--enable-wasm-jspi requires --enable-jit")
 
-    if simulator and simulator[0] not in ("arm64", "arm", "loong64", "riscv64"):
+    if simulator and simulator[0] not in (
+        "arm64",
+        "arm",
+        "loong64",
+        "mips64",
+        "riscv64",
+    ):
         die(
-            "--enable-wasm-jspi is only supported for arm64/arm/loong64/riscv64 simulators"
+            "--enable-wasm-jspi is only supported for arm64/arm/loong64/mips64/riscv64 simulators"
         )
 
-    if target.cpu in ("x86_64", "x86", "aarch64", "arm", "loongarch64", "riscv64"):
+    if target.cpu in (
+        "x86_64",
+        "x86",
+        "aarch64",
+        "arm",
+        "loongarch64",
+        "mips64",
+        "riscv64",
+    ):
         return True
 
     die(
-        "--enable-wasm-jspi only possible when targeting the x86_64/x86/arm64/arm/loongarch64/riscv64 jits"
+        "--enable-wasm-jspi only possible when targeting the x86_64/x86/arm64/arm/loongarch64/mips64/riscv64 jits"
     )
 
 
@@ -1000,29 +1022,65 @@ set_define("ENABLE_WASM_MEMORY_CONTROL", wasm_memory_control)
 # ===========================
 
 
-@depends(milestone.is_nightly)
-def default_wasm_branch_hinting(is_nightly):
-    if is_nightly:
+option(
+    "--disable-wasm-branch-hinting",
+    default=True,
+    help="{Enable|Disable} WebAssembly branch hinting",
+)
+
+set_config(
+    "ENABLE_WASM_BRANCH_HINTING",
+    depends_if("--enable-wasm-branch-hinting")(lambda x: True),
+)
+set_define(
+    "ENABLE_WASM_BRANCH_HINTING",
+    depends_if("--enable-wasm-branch-hinting")(lambda x: True),
+)
+
+
+# Support for WebAssembly Custom Page Sizes
+# =====================================================
+
+
+@depends(milestone.is_nightly, "--enable-simulator", target)
+def default_wasm_custom_page_sizes(is_nightly, simulator, target):
+    if simulator and (simulator[0] != "arm64"):
+        return
+
+    if is_nightly and target.cpu in ("x86_64", "x86", "aarch64"):
         return True
 
 
 option(
-    "--enable-wasm-branch-hinting",
-    default=default_wasm_branch_hinting,
-    help="{Enable|Disable} WebAssembly Branch hints",
+    "--enable-wasm-custom-page-sizes",
+    default=default_wasm_custom_page_sizes,
+    help="{Enable|Disable} WebAssembly Custom Page Sizes",
 )
 
 
-@depends("--enable-wasm-branch-hinting", "--wasm-no-experimental")
-def wasm_branch_hinting(value, no_experimental):
+@depends(
+    "--enable-wasm-custom-page-sizes",
+    "--enable-simulator",
+    target,
+    "--wasm-no-experimental",
+)
+def wasm_custom_page_sizes(value, simulator, target, no_experimental):
     if no_experimental or not value:
         return
 
-    return True
+    if simulator and (simulator[0] != "arm64"):
+        return
+
+    if target.cpu in ("x86_64", "x86", "aarch64"):
+        return True
+
+    die(
+        "--enable-wasm-custom-page-sizes only possible when targeting the x86_64/x86/arm64 jits"
+    )
 
 
-set_config("ENABLE_WASM_BRANCH_HINTING", wasm_branch_hinting)
-set_define("ENABLE_WASM_BRANCH_HINTING", wasm_branch_hinting)
+set_config("ENABLE_WASM_CUSTOM_PAGE_SIZES", wasm_custom_page_sizes)
+set_define("ENABLE_WASM_CUSTOM_PAGE_SIZES", wasm_custom_page_sizes)
 
 
 # Enable static checking using sixgill
@@ -1109,7 +1167,7 @@ def enable_system_icu_option(enable_system_icu):
 
 
 system_icu = pkg_check_modules(
-    "MOZ_ICU", "icu-uc icu-i18n >= 76.1", when="--with-system-icu"
+    "MOZ_ICU", "icu-uc icu-i18n >= 78.1", when="--with-system-icu"
 )
 
 

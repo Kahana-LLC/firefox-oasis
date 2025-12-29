@@ -5,7 +5,9 @@
 //! CSS handling for the [`basic-shape`](https://drafts.csswg.org/css-shapes/#typedef-basic-shape)
 //! types that are generic over their `ToCss` implementations.
 
+use crate::derives::*;
 use crate::values::animated::{lists, Animate, Procedure, ToAnimatedZero};
+use crate::values::computed::Percentage;
 use crate::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use crate::values::generics::{
     border::GenericBorderRadius,
@@ -221,6 +223,7 @@ pub enum GenericBasicShape<Angle, Position, LengthPercentage, BasicShapeRect> {
     PathOrShape(
         #[animation(field_bound)]
         #[css(field_bound)]
+        #[compute(field_bound)]
         GenericPathOrShapeFunction<Angle, Position, LengthPercentage>,
     ),
 }
@@ -415,7 +418,11 @@ pub enum GenericPathOrShapeFunction<Angle, Position, LengthPercentage> {
     /// Defines a path with SVG path syntax.
     Path(Path),
     /// Defines a shape function, which is identical to path() but it uses the CSS syntax.
-    Shape(#[css(field_bound)] Shape<Angle, Position, LengthPercentage>),
+    Shape(
+        #[css(field_bound)]
+        #[compute(field_bound)]
+        Shape<Angle, Position, LengthPercentage>,
+    ),
 }
 
 // https://drafts.csswg.org/css-shapes/#typedef-fill-rule
@@ -649,6 +656,7 @@ pub struct Shape<Angle, Position, LengthPercentage> {
     /// The shape command data. Note that the starting point will be the first command in this
     /// slice.
     // Note: The first command is always GenericShapeCommand::Move.
+    #[compute(field_bound)]
     pub commands: crate::OwnedSlice<GenericShapeCommand<Angle, Position, LengthPercentage>>,
 }
 
@@ -768,9 +776,15 @@ pub enum GenericShapeCommand<Angle, Position, LengthPercentage> {
         point: CommandEndPoint<Position, LengthPercentage>,
     },
     /// The hline command.
-    HLine { by_to: ByTo, x: LengthPercentage },
+    HLine {
+        #[compute(field_bound)]
+        x: AxisEndPoint<LengthPercentage>,
+    },
     /// The vline command.
-    VLine { by_to: ByTo, y: LengthPercentage },
+    VLine {
+        #[compute(field_bound)]
+        y: AxisEndPoint<LengthPercentage>,
+    },
     /// The cubic Bézier curve command.
     CubicCurve {
         point: CommandEndPoint<Position, LengthPercentage>,
@@ -825,16 +839,12 @@ where
                 dest.write_str("line ")?;
                 point.to_css(dest)
             },
-            HLine { by_to, ref x } => {
+            HLine { ref x } => {
                 dest.write_str("hline ")?;
-                by_to.to_css(dest)?;
-                dest.write_char(' ')?;
                 x.to_css(dest)
             },
-            VLine { by_to, ref y } => {
+            VLine { ref y } => {
                 dest.write_str("vline ")?;
-                by_to.to_css(dest)?;
-                dest.write_char(' ')?;
                 y.to_css(dest)
             },
             CubicCurve {
@@ -904,53 +914,6 @@ where
     }
 }
 
-/// This indicates the command is absolute or relative.
-/// https://drafts.csswg.org/css-shapes-2/#typedef-shape-by-to
-#[derive(
-    Animate,
-    Clone,
-    ComputeSquaredDistance,
-    Copy,
-    Debug,
-    Deserialize,
-    MallocSizeOf,
-    Parse,
-    PartialEq,
-    Serialize,
-    SpecifiedValueInfo,
-    ToAnimatedValue,
-    ToAnimatedZero,
-    ToComputedValue,
-    ToCss,
-    ToResolvedValue,
-    ToShmem,
-)]
-#[repr(u8)]
-pub enum ByTo {
-    /// This indicates that the <coordinate-pair>s are relative to the command’s starting point.
-    By,
-    /// This relative to the top-left corner of the reference box.
-    To,
-}
-
-impl ByTo {
-    /// Return true if it is absolute, i.e. it is To.
-    #[inline]
-    pub fn is_abs(&self) -> bool {
-        matches!(self, ByTo::To)
-    }
-
-    /// Create ByTo based on the flag if it is absolute.
-    #[inline]
-    pub fn new(is_abs: bool) -> Self {
-        if is_abs {
-            Self::To
-        } else {
-            Self::By
-        }
-    }
-}
-
 /// Defines the end point of the command, which can be specified in absolute or relative coordinates,
 /// determined by their "to" or "by" components respectively.
 /// https://drafts.csswg.org/css-shapes/#typedef-shape-command-end-point
@@ -958,8 +921,8 @@ impl ByTo {
 #[derive(
     Animate,
     Clone,
-    Copy,
     ComputeSquaredDistance,
+    Copy,
     Debug,
     Deserialize,
     MallocSizeOf,
@@ -1002,6 +965,138 @@ impl<Position, LengthPercentage> CommandEndPoint<Position, LengthPercentage> {
                 dest.write_str("by ")?;
                 coord.to_css(dest)
             },
+        }
+    }
+}
+
+/// Defines the end point for the commands <horizontal-line-command> and <vertical-line-command>, which
+/// can be specified in absolute or relative values, determined by their "to" or "by" components respectively.
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-horizontal-line-command
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-vertical-line-command
+#[allow(missing_docs)]
+#[derive(
+    Animate,
+    Clone,
+    Copy,
+    ComputeSquaredDistance,
+    Debug,
+    Deserialize,
+    MallocSizeOf,
+    PartialEq,
+    Parse,
+    Serialize,
+    SpecifiedValueInfo,
+    ToAnimatedValue,
+    ToAnimatedZero,
+    ToComputedValue,
+    ToResolvedValue,
+    ToShmem,
+)]
+#[repr(u8)]
+pub enum AxisEndPoint<LengthPercentage> {
+    ToPosition(#[compute(field_bound)] AxisPosition<LengthPercentage>),
+    ByCoordinate(LengthPercentage),
+}
+
+impl<LengthPercentage> AxisEndPoint<LengthPercentage> {
+    /// Return true if it is absolute, i.e. it is To.
+    #[inline]
+    pub fn is_abs(&self) -> bool {
+        matches!(self, AxisEndPoint::ToPosition(_))
+    }
+}
+
+impl<LengthPercentage: ToCss> ToCss for AxisEndPoint<LengthPercentage> {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        if self.is_abs() {
+            dest.write_str("to ")?;
+        } else {
+            dest.write_str("by ")?;
+        }
+        match self {
+            AxisEndPoint::ToPosition(pos) => pos.to_css(dest),
+            AxisEndPoint::ByCoordinate(coord) => coord.to_css(dest),
+        }
+    }
+}
+
+/// Defines how the absolutely positioned end point for <horizontal-line-command> and
+/// <vertical-line-command> is positioned.
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-horizontal-line-command
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-vertical-line-command
+#[allow(missing_docs)]
+#[derive(
+    Animate,
+    Clone,
+    ComputeSquaredDistance,
+    Copy,
+    Debug,
+    Deserialize,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToAnimatedValue,
+    ToAnimatedZero,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+)]
+#[repr(u8)]
+pub enum AxisPosition<LengthPercentage> {
+    LengthPercent(LengthPercentage),
+    Keyword(AxisPositionKeyword),
+}
+
+/// The set of position keywords used in <horizontal-line-command> and <vertical-line-command>
+/// for absolute positioning. Note: this is the shared union list between hline and vline, so
+/// not every value is valid for either. I.e. hline cannot be positioned with top or y-start.
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-horizontal-line-command
+/// https://drafts.csswg.org/css-shapes-1/#typedef-shape-vertical-line-command
+#[allow(missing_docs)]
+#[derive(
+    Animate,
+    Clone,
+    ComputeSquaredDistance,
+    Copy,
+    Debug,
+    Deserialize,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToAnimatedValue,
+    ToAnimatedZero,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+)]
+#[repr(u8)]
+pub enum AxisPositionKeyword {
+    Center,
+    Left,
+    Right,
+    Top,
+    Bottom,
+    XStart,
+    XEnd,
+    YStart,
+    YEnd,
+}
+
+impl AxisPositionKeyword {
+    /// Returns the axis position keyword as its corresponding percentage.
+    #[inline]
+    pub fn as_percentage(&self) -> Percentage {
+        match self {
+            Self::Center => Percentage(0.5),
+            Self::Left | Self::Top | Self::XStart | Self::YStart => Percentage(0.),
+            Self::Right | Self::Bottom | Self::XEnd | Self::YEnd => Percentage(1.),
         }
     }
 }
@@ -1073,7 +1168,7 @@ pub enum ControlPoint<Position, LengthPercentage> {
 
 impl<Position, LengthPercentage> ControlPoint<Position, LengthPercentage> {
     /// Serialize <control-point>
-    pub fn to_css<W>(&self, dest: &mut CssWriter<W>, is_endpoint_abs: bool) -> fmt::Result
+    pub fn to_css<W>(&self, dest: &mut CssWriter<W>, is_end_point_abs: bool) -> fmt::Result
     where
         W: Write,
         Position: ToCss,
@@ -1081,7 +1176,7 @@ impl<Position, LengthPercentage> ControlPoint<Position, LengthPercentage> {
     {
         match self {
             ControlPoint::Absolute(pos) => pos.to_css(dest),
-            ControlPoint::Relative(point) => point.to_css(dest, is_endpoint_abs),
+            ControlPoint::Relative(point) => point.to_css(dest, is_end_point_abs),
         }
     }
 }
@@ -1113,22 +1208,19 @@ pub struct RelativeControlPoint<LengthPercentage> {
 }
 
 impl<LengthPercentage: ToCss> RelativeControlPoint<LengthPercentage> {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>, is_endpoint_abs: bool) -> fmt::Result
+    fn to_css<W>(&self, dest: &mut CssWriter<W>, is_end_point_abs: bool) -> fmt::Result
     where
         W: Write,
     {
         self.coord.to_css(dest)?;
-        let should_omit_reference = match self.reference {
-            ControlReference::None => true,
-            ControlReference::Start => !is_endpoint_abs,
-            ControlReference::Origin => is_endpoint_abs,
-            ControlReference::End => false,
-        };
-        if !should_omit_reference {
-            dest.write_str(" from ")?;
-            self.reference.to_css(dest)?;
+        match self.reference {
+            ControlReference::Origin if is_end_point_abs => Ok(()),
+            ControlReference::Start if !is_end_point_abs => Ok(()),
+            other => {
+                dest.write_str(" from ")?;
+                other.to_css(dest)
+            },
         }
-        Ok(())
     }
 }
 
@@ -1142,9 +1234,9 @@ impl<LengthPercentage: ComputeSquaredDistance> ComputeSquaredDistance
 
 /// Defines the point of reference for a <relative-control-point>.
 ///
-/// The default `None` is equivalent to `Origin` or `Start`, depending on
-/// whether the associated <command-end-point> is absolutely or relatively
-/// positioned, respectively.
+/// When a reference is not specified, depending on whether the associated
+/// <command-end-point> is absolutely or relatively positioned, the default
+/// will be `Origin` or `Start`, respectively.
 /// https://drafts.csswg.org/css-shapes/#typedef-shape-relative-control-point
 #[allow(missing_docs)]
 #[derive(
@@ -1168,8 +1260,6 @@ impl<LengthPercentage: ComputeSquaredDistance> ComputeSquaredDistance
 )]
 #[repr(C)]
 pub enum ControlReference {
-    #[css(skip)]
-    None,
     Start,
     End,
     Origin,
@@ -1240,9 +1330,12 @@ impl Animate for ArcSweep {
         use num_traits::FromPrimitive;
         // If an arc command has different <arc-sweep> between its starting and ending list, then
         // the interpolated result uses cw for any progress value between 0 and 1.
-        (*self as i32)
-            .animate(&(*other as i32), procedure)
-            .map(|v| ArcSweep::from_u8((v > 0) as u8).unwrap_or(ArcSweep::Ccw))
+        // Note: we cast progress from f64->f32->f64 to drop tiny noise near 0.0.
+        let progress = procedure.weights().1 as f32 as f64;
+        let procedure = Procedure::Interpolate { progress };
+        (*self as i32 as f32)
+            .animate(&(*other as i32 as f32), procedure)
+            .map(|v| ArcSweep::from_u8((v > 0.) as u8).unwrap_or(ArcSweep::Ccw))
     }
 }
 
@@ -1286,9 +1379,12 @@ impl Animate for ArcSize {
         use num_traits::FromPrimitive;
         // If it has different <arc-size> keywords, then the interpolated result uses large for any
         // progress value between 0 and 1.
-        (*self as i32)
-            .animate(&(*other as i32), procedure)
-            .map(|v| ArcSize::from_u8((v > 0) as u8).unwrap_or(ArcSize::Small))
+        // Note: we cast progress from f64->f32->f64 to drop tiny noise near 0.0.
+        let progress = procedure.weights().1 as f32 as f64;
+        let procedure = Procedure::Interpolate { progress };
+        (*self as i32 as f32)
+            .animate(&(*other as i32 as f32), procedure)
+            .map(|v| ArcSize::from_u8((v > 0.) as u8).unwrap_or(ArcSize::Small))
     }
 }
 

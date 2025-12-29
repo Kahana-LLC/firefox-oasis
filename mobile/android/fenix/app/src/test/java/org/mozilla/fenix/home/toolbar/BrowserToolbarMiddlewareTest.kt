@@ -117,7 +117,7 @@ class BrowserToolbarMiddlewareTest {
         every { testContext.settings().isTabStripEnabled } returns false
         every { testContext.settings().tabManagerEnhancementsEnabled } returns false
         every { testContext.settings().shouldShowToolbarCustomization } returns false
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BOOKMARK.value
+        every { testContext.settings().toolbarExpandedShortcut } returns ShortcutType.BOOKMARK.value
     }
 
     @Test
@@ -670,7 +670,7 @@ class BrowserToolbarMiddlewareTest {
             action.contentDescription,
         )
         assertFalse(action.showPrivacyMask)
-        assertEquals(TabCounterClicked(Source.AddressBar), action.onClick)
+        assertEquals(TabCounterClicked(Source.Unknown), action.onClick)
         assertNotNull(action.onLongClick)
     }
 
@@ -685,7 +685,7 @@ class BrowserToolbarMiddlewareTest {
         assertEquals(iconsR.drawable.mozac_ic_ellipsis_vertical_24, action.drawableResId)
         assertEquals(R.string.content_description_menu, action.contentDescription)
         assertEquals(ActionButton.State.DEFAULT, action.state)
-        assertEquals(MenuClicked(source = Source.AddressBar), action.onClick)
+        assertEquals(MenuClicked(source = Source.Unknown), action.onClick)
         assertNull(action.onLongClick)
     }
 
@@ -755,7 +755,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use translate shortcut WHEN initializing toolbar THEN show DISABLED Translate in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.TRANSLATE.value
+        every { testContext.settings().toolbarExpandedShortcut } returns ShortcutType.TRANSLATE.value
 
         val (_, toolbarStore) = buildMiddlewareAndAddToStore()
 
@@ -767,7 +767,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use homepage shortcut WHEN initializing toolbar THEN show DISABLED Homepage in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.HOMEPAGE.value
+        every { testContext.settings().toolbarExpandedShortcut } returns ShortcutType.HOMEPAGE.value
 
         val (_, toolbarStore) = buildMiddlewareAndAddToStore()
 
@@ -779,7 +779,7 @@ class BrowserToolbarMiddlewareTest {
     fun `GIVEN expanded toolbar use back shortcut WHEN initializing toolbar THEN show DISABLED Back in navigation actions`() = runTest {
         every { testContext.settings().shouldShowToolbarCustomization } returns true
         every { testContext.settings().shouldUseExpandedToolbar } returns true
-        every { testContext.settings().toolbarExpandedShortcutKey } returns ShortcutType.BACK.value
+        every { testContext.settings().toolbarExpandedShortcut } returns ShortcutType.BACK.value
 
         val (_, toolbarStore) = buildMiddlewareAndAddToStore()
 
@@ -919,7 +919,7 @@ class BrowserToolbarMiddlewareTest {
     private fun expectedToolbarButton(
         tabCount: Int = 0,
         isPrivate: Boolean = false,
-        source: Source = Source.AddressBar,
+        source: Source = Source.AddressBar.BrowserEnd,
     ) = TabCounterAction(
         count = tabCount,
         contentDescription = if (isPrivate) {
@@ -960,7 +960,7 @@ class BrowserToolbarMiddlewareTest {
 
     private fun expectedMenuButton(
         highlighted: Boolean = false,
-        source: Source = Source.AddressBar,
+        source: Source = Source.AddressBar.BrowserEnd,
     ) = ActionButtonRes(
         drawableResId = iconsR.drawable.mozac_ic_ellipsis_vertical_24,
         contentDescription = R.string.content_description_menu,
@@ -982,7 +982,7 @@ class BrowserToolbarMiddlewareTest {
         onClick = FakeClicked,
     )
 
-    private fun expectedNewTabButton(source: Source = Source.AddressBar) = ActionButtonRes(
+    private fun expectedNewTabButton(source: Source = Source.AddressBar.BrowserEnd) = ActionButtonRes(
         drawableResId = iconsR.drawable.mozac_ic_plus_24,
         contentDescription = R.string.home_screen_shortcut_open_new_tab_2,
         onClick = AddNewTab(source),

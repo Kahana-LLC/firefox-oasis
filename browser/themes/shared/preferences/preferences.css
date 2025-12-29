@@ -14,6 +14,7 @@
   --heading-font-size-xlarge: var(--font-size-xlarge);
   --heading-font-size-large: var(--font-size-large);
   --heading-font-size-medium: var(--font-size-medium);
+  --select-max-width: 20rem;
   user-select: text;
 }
 
@@ -68,7 +69,8 @@
 
 #mainPrefPane {
   width: 100%;
-  padding: 0;
+  /* at some point we'll end up removing the sticky element using z-index above this that cuts off the top of the focus outline in https://bugzilla.mozilla.org/show_bug.cgi?id=1867385, but we're adding padding intentionally until then */
+  padding: calc(var(--focus-outline-offset) + var(--focus-outline-width)) 0 0;
 }
 
 html|div[data-category],
@@ -233,14 +235,18 @@ radio {
   list-style-image: url("chrome://browser/skin/preferences/category-sync.svg");
 }
 
+#category-ai-features > .category-icon {
+  list-style-image: url("chrome://global/skin/icons/highlights.svg");
+}
+
 #category-experimental > .category-icon {
   list-style-image: url("chrome://global/skin/icons/experiments.svg");
 }
 
 #category-more-from-mozilla > .category-icon {
-  list-style-image: url("chrome://browser/skin/preferences/mozilla-logo.svg");
+  list-style-image: url();
 }
-
+/* "chrome://browser/skin/preferences/mozilla-logo.svg" */
 /* All panes */
 
 .info-icon,
@@ -257,12 +263,6 @@ radio {
   #dataMigrationGroup {
     display: none;
   }
-}
-
-#dataMigration {
-  /* This should really be using baseline, but that doesn't work properly with
-   * the <description> and XUL <button> markup. */
-  align-items: center;
 }
 
 .extension-controlled {
@@ -741,8 +741,26 @@ html|dialog,
   margin-block: 0 4px;
 }
 
-#noFxaSignIn {
+button#noFxaSignIn {
   margin-inline-start: 8px;
+}
+
+#syncConfigured {
+  --box-icon-start-fill: var(--icon-color-success);
+}
+
+#syncNotConfigured,
+#noFxaSignIn {
+  --box-icon-start-fill: var(--icon-color-warning);
+}
+
+#syncSetup {
+  white-space: nowrap;
+}
+
+#syncNow,
+#syncing {
+  min-width: 150px;
 }
 
 .fxaSyncIllustration {
@@ -776,6 +794,16 @@ html|dialog,
   -moz-context-properties: fill;
   fill: #ffbf00;
   margin-inline: 4px 8px;
+}
+
+#fxaLoginVerified {
+  --box-icon-size: calc(var(--icon-size-xlarge) * 2);
+  --box-icon-border-radius: var(--border-radius-circle);
+
+  &[description] {
+    --box-label-alignment: end;
+    --box-description-alignment: start;
+  }
 }
 
 #syncStatusContainer {
@@ -1254,7 +1282,7 @@ richlistitem .text-link:hover {
   background-image: url("chrome://browser/skin/device-phone.svg");
 }
 
-#mozilla-vpn {
+/* #mozilla-vpn {
   background-image: url("chrome://browser/skin/preferences/vpn-logo.svg");
 }
 
@@ -1264,7 +1292,7 @@ richlistitem .text-link:hover {
 
 #firefox-relay {
   background-image: url("chrome://browser/skin/preferences/relay-logo.svg");
-}
+} */
 
 #solo-ai {
   background-image: url("chrome://browser/skin/preferences/solo-ai-logo.svg");
@@ -1382,11 +1410,22 @@ richlistitem .text-link:hover {
 }
 /** SRD web-appearance-chooser control END **/
 
+/** SRD rows control for Homepage START **/
+setting-group[groupid="homepage"] {
+  --select-max-width: fit-content;
+  --select-min-width: 15em;
+}
+/** SRD rows control for Homepage END **/
+
 /** SRD rows control for New Tab START **/
 setting-group[groupid="home"] {
   --select-max-width: 17rem;
 }
 /** SRD rows control for New Tab END **/
+
+setting-group[groupid="aiFeatures"] {
+  --select-max-width: fit-content;
+}
 
 #translations-manage-install-list {
   height: 220px;
@@ -1417,6 +1456,10 @@ setting-group[groupid="home"] {
 #translations-manage-error {
   color: var(--text-color-error);
   margin: var(--space-large) 0;
+}
+
+.translations-download-language-error {
+  background-color: var(--background-color-critical);
 }
 
 .hidden-category {
@@ -1498,4 +1541,38 @@ setting-group[groupid="home"] {
 
 #browserContainersbox moz-message-bar {
   margin-block-start: 0;
+}
+
+#etpBannerEl {
+  border-radius: var(--border-radius-large);
+  background-clip: content-box;
+  background-image:
+    url("chrome://browser/content/preferences/etp-advanced-banner.svg"),
+    radial-gradient(94.12% 34.67% at 50% 50%, rgba(159, 116, 255, 0.5) 0%, rgba(159, 116, 255, 0) 100%), linear-gradient(135deg, #592acb 0%, #ab43e7 100%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  height: 128px;
+}
+
+#etpLevelWarning {
+  --promo-image-position: top;
+}
+
+#category-sync,#fxaNoLoginStatus{
+  display: none !important;
+}
+
+#etpResetButtonGroup {
+  display: flex;
+  gap: var(--space-small);
+}
+
+#addresses-list-header,
+#payments-list-header {
+  --box-label-font-weight: var(--heading-font-weight);
+}
+
+.box-header-bold {
+  --box-label-font-weight: var(--heading-font-weight);
 }

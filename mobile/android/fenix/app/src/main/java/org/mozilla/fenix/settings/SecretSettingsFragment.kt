@@ -95,12 +95,44 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
                             context.settings().shouldShowToolbarCustomization = false
                         }
                     }
+                    requirePreference<SwitchPreference>(R.string.pref_key_should_show_custom_tab_extensions).apply {
+                        val shouldEnableCustomTabExtensions = newOption || context.settings().enableMenuRedesign
+                        isEnabled = shouldEnableCustomTabExtensions
+                        when (shouldEnableCustomTabExtensions) {
+                            true -> {
+                                summary = null
+                            }
+
+                            false -> {
+                                isChecked = false
+                                summary = getString(R.string.preferences_debug_settings_custom_tab_extensions_summary)
+                                context.settings().shouldShowCustomTabExtensions = false
+                            }
+                        }
+                    }
+                    requirePreference<SwitchPreference>(
+                        R.string.pref_key_use_minimal_bottom_toolbar_while_entering_text,
+                    ).apply {
+                        isEnabled = newOption
+                        when (newOption) {
+                            true -> {
+                                summary = null
+                            }
+
+                            false -> {
+                                isEnabled = context.settings().shouldUseComposableToolbar
+                                summary = when (context.settings().shouldUseComposableToolbar) {
+                                    true -> null
+                                    false -> getString(R.string.preferences_debug_settings_toolbar_redesign_summary)
+                                }
+                            }
+                        }
+                    }
                 }
                 true
             }
         }
         requirePreference<SwitchPreference>(R.string.pref_key_enable_toolbar_customization).apply {
-            isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().shouldShowToolbarCustomization
             val newOption = context.settings().toolbarRedesignEnabled
             isEnabled = newOption
@@ -140,6 +172,17 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
+        requirePreference<SwitchPreference>(R.string.pref_key_use_minimal_bottom_toolbar_while_entering_text).apply {
+            isVisible = Config.channel.isNightlyOrDebug
+            isEnabled = context.settings().shouldUseComposableToolbar
+            isChecked = context.settings().shouldUseMinimalBottomToolbarWhenEnteringText
+            summary = when (context.settings().shouldUseComposableToolbar) {
+                true -> null
+                false -> getString(R.string.preferences_debug_settings_toolbar_redesign_summary)
+            }
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreference>(R.string.pref_key_use_scroll_data_for_dynamic_toolbar).apply {
             isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().useNewDynamicToolbarBehaviour
@@ -160,6 +203,38 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
         requirePreference<SwitchPreference>(R.string.pref_key_enable_menu_redesign).apply {
             isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().enableMenuRedesign
+            onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newValue ->
+                (newValue as? Boolean)?.let { newOption ->
+                    context.settings().enableMenuRedesign = newOption
+                    requirePreference<SwitchPreference>(R.string.pref_key_should_show_custom_tab_extensions).apply {
+                        val shouldEnableCustomTabExtensions = newOption || context.settings().shouldUseComposableToolbar
+                        isEnabled = shouldEnableCustomTabExtensions
+                        when (shouldEnableCustomTabExtensions) {
+                            true -> {
+                                summary = null
+                            }
+
+                            false -> {
+                                isChecked = false
+                                summary = getString(R.string.preferences_debug_settings_custom_tab_extensions_summary)
+                                context.settings().shouldShowCustomTabExtensions = false
+                            }
+                        }
+                    }
+                }
+                true
+            }
+        }
+
+        requirePreference<SwitchPreference>(R.string.pref_key_should_show_custom_tab_extensions).apply {
+            isVisible = Config.channel.isDebug
+            isChecked = context.settings().shouldShowCustomTabExtensions
+            val newOption = context.settings().enableMenuRedesign || context.settings().shouldUseComposableToolbar
+            isEnabled = newOption
+            summary = when (newOption) {
+                true -> null
+                false -> getString(R.string.preferences_debug_settings_custom_tab_extensions_summary)
+            }
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
@@ -172,6 +247,11 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
         requirePreference<SwitchPreference>(R.string.pref_key_enable_homepage_as_new_tab).apply {
             isVisible = Config.channel.isNightlyOrDebug
             isChecked = context.settings().enableHomepageAsNewTab
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
+        requirePreference<SwitchPreference>(R.string.pref_key_enable_firefox_labs).apply {
+            isChecked = context.settings().enableFirefoxLabs
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
@@ -365,6 +445,12 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
+        requirePreference<SwitchPreference>(R.string.pref_key_terms_latest_date).apply {
+            isVisible = Config.channel.isNightlyOrDebug || Config.channel.isBeta
+            isChecked = context.settings().isTermsOfUsePublishedDebugDateEnabled
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreference>(R.string.pref_key_debug_terms_trigger_time).apply {
             isVisible = Config.channel.isNightlyOrDebug || Config.channel.isBeta
             isChecked = context.settings().isDebugTermsOfServiceTriggerTimeEnabled
@@ -386,6 +472,17 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
         requirePreference<SwitchPreference>(R.string.pref_key_enable_relay_email_masks).apply {
             isVisible = Config.channel.isDebug
             isChecked = context.settings().isRelayFeatureEnabled
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
+        requirePreference<SwitchPreference>(R.string.pref_key_enable_persistent_onboarding).apply {
+            isChecked = context.settings().enablePersistentOnboarding
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
+        requirePreference<SwitchPreference>(R.string.pref_key_tab_search).apply {
+            isVisible = true
+            isChecked = context.settings().tabSearchEnabled
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
     }

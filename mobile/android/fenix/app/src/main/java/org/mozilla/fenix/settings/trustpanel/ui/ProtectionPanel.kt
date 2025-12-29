@@ -64,10 +64,14 @@ import org.mozilla.fenix.settings.trustpanel.store.AutoplayValue
 import org.mozilla.fenix.settings.trustpanel.store.WebsiteInfoState
 import org.mozilla.fenix.settings.trustpanel.store.WebsitePermission
 import org.mozilla.fenix.theme.FirefoxTheme
+import java.security.cert.X509Certificate
 import mozilla.components.ui.icons.R as iconsR
 
 private val BANNER_ROUNDED_CORNER_SHAPE = RoundedCornerShape(
-    topStart = 28.dp, topEnd = 28.dp, bottomStart = 4.dp, bottomEnd = 4.dp,
+    topStart = 28.dp,
+    topEnd = 28.dp,
+    bottomStart = 4.dp,
+    bottomEnd = 4.dp,
 )
 
 private const val DROPDOWN_TEXT_WIDTH_FRACTION = 0.5f
@@ -88,6 +92,7 @@ internal fun ProtectionPanel(
     onPrivacySecuritySettingsClick: () -> Unit,
     onAutoplayValueClick: (AutoplayValue) -> Unit,
     onToggleablePermissionClick: (WebsitePermission.Toggleable) -> Unit,
+    onViewCertificateClick: (X509Certificate) -> Unit,
 ) {
     val isSiteProtectionEnabled = isTrackingProtectionEnabled && isGlobalTrackingProtectionEnabled
     MenuScaffold(
@@ -108,8 +113,8 @@ internal fun ProtectionPanel(
             if (!isLocalPdf) {
                 MenuBadgeItem(
                     label = stringResource(id = R.string.protection_panel_etp_toggle_label),
-                    checked = isTrackingProtectionEnabled && isGlobalTrackingProtectionEnabled,
-                    description = if (isTrackingProtectionEnabled && isGlobalTrackingProtectionEnabled) {
+                    checked = isSiteProtectionEnabled,
+                    description = if (isSiteProtectionEnabled) {
                         stringResource(id = R.string.protection_panel_etp_toggle_enabled_description_2)
                     } else {
                         stringResource(id = R.string.protection_panel_etp_toggle_disabled_description_2)
@@ -119,7 +124,7 @@ internal fun ProtectionPanel(
                     } else {
                         stringResource(id = R.string.protection_panel_etp_toggle_off)
                     },
-                    enabled = (isSiteProtectionEnabled),
+                    enabled = isGlobalTrackingProtectionEnabled,
                     onClick = onTrackingProtectionToggleClick,
                 )
 
@@ -162,6 +167,7 @@ internal fun ProtectionPanel(
                         id = R.string.connection_security_panel_verified_by,
                         websiteInfoState.certificateName,
                     ),
+                    onClick = { websiteInfoState.certificate?.let { onViewCertificateClick(it) } },
                 )
             } else {
                 MenuItem(
@@ -440,7 +446,7 @@ private fun ProtectionPanelPreview() {
                     isSecured = true,
                     websiteUrl = "https://www.mozilla.org",
                     websiteTitle = "Mozilla",
-                    certificateName = "",
+                    certificate = null,
                 ),
                 icon = null,
                 isTrackingProtectionEnabled = true,
@@ -460,6 +466,7 @@ private fun ProtectionPanelPreview() {
                 onPrivacySecuritySettingsClick = {},
                 onAutoplayValueClick = {},
                 onToggleablePermissionClick = {},
+                onViewCertificateClick = {},
             )
         }
     }

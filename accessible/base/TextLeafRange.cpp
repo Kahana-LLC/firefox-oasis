@@ -1084,18 +1084,49 @@ TextLeafPoint TextLeafPoint::FindNextWordStartSameAcc(
 /* static */
 TextLeafPoint TextLeafPoint::GetCaret(Accessible* aAcc) {
   if (LocalAccessible* localAcc = aAcc->AsLocal()) {
-    // Use HyperTextAccessible::CaretOffset. Eventually, we'll want to move
-    // that code into TextLeafPoint, but existing code depends on it living in
-    // HyperTextAccessible (including caret events).
-    HyperTextAccessible* ht = HyperTextFor(localAcc);
-    if (!ht) {
-      return TextLeafPoint();
+    // Use the HyperTextAccessible caret offset. Eventually, we'll want to move
+    // that code into TextLeafPoint, but existing code depends on it being based
+    // on HyperTextAccessible (including caret events).
+    int32_t htOffset = -1;
+    // Try the cached caret.
+    HyperTextAccessible* ht = SelectionMgr()->AccessibleWithCaret(&htOffset);
+    if (ht) {
+      MOZ_ASSERT(htOffset != -1);
+    } else {
+      // There is no cached caret, but there might still be a caret; see bug
+      // 1425112.
+      ht = HyperTextFor(localAcc);
+      if (!ht) {
+        return TextLeafPoint();
+      }
+      // An offset can only refer to a child, but the caret might be in a deeper
+      // descendant. Walk to the deepest HyperTextAccessible using CaretOffset.
+      bool gotCaret = false;
+      for (;;) {
+        htOffset = ht->CaretOffset();
+        if (htOffset == -1) {
+          break;
+        }
+        // A descendant might return -1 in some cases, but it's okay as long as
+        // the call on the outermost HyperTextAccessible succeeds.
+        gotCaret = true;
+        LocalAccessible* child = ht->GetChildAtOffset(htOffset);
+        if (!child) {
+          break;
+        }
+        if (HyperTextAccessible* childHt = child->AsHyperText()) {
+          ht = childHt;
+        } else {
+          break;
+        }
+      }
+      if (!gotCaret) {
+        return TextLeafPoint();
+      }
     }
-    int32_t htOffset = ht->CaretOffset();
-    if (htOffset == -1) {
-      return TextLeafPoint();
-    }
-    TextLeafPoint point = ht->ToTextLeafPoint(htOffset);
+    // As noted above, CaretOffset on a descendant might return -1. Use 0 in
+    // that case.
+    TextLeafPoint point = ht->ToTextLeafPoint(htOffset == -1 ? 0 : htOffset);
     if (!point) {
       // Bug 1905021: This happens in the wild, but we don't understand why.
       // ToTextLeafPoint should only fail if the HyperText offset is invalid,
@@ -2014,14 +2045,10 @@ already_AddRefed<AccAttributes> TextLeafPoint::GetTextAttributes(
   if (mAcc->IsLocal()) {
     attrs = GetTextAttributesLocalAcc(aIncludeDefaults);
   } else {
-    attrs = new AccAttributes();
     if (aIncludeDefaults) {
-      Accessible* parent = mAcc->Parent();
-      if (parent && parent->IsRemote() && parent->IsHyperText()) {
-        if (auto defAttrs = parent->AsRemote()->GetCachedTextAttributes()) {
-          defAttrs->CopyTo(attrs);
-        }
-      }
+      attrs = mAcc->AsRemote()->DefaultTextAttributes();
+    } else {
+      attrs = new AccAttributes();
     }
     if (auto thisAttrs = mAcc->AsRemote()->GetCachedTextAttributes()) {
       thisAttrs->CopyTo(attrs);
@@ -2036,11 +2063,9 @@ TextLeafPoint TextLeafPoint::FindTextAttrsStart(nsDirection aDirection,
   if (mIsEndOfLineInsertionPoint) {
     return AdjustEndOfLine().FindTextAttrsStart(aDirection, aIncludeOrigin);
   }
-  const bool isRemote = mAcc->IsRemote();
   RefPtr<const AccAttributes> lastAttrs;
   if (mAcc->IsText()) {
-    lastAttrs = isRemote ? mAcc->AsRemote()->GetCachedTextAttributes()
-                         : GetTextAttributesLocalAcc();
+    lastAttrs = GetTextAttributes();
   }
   if (aIncludeOrigin && aDirection == eDirNext && mOffset == 0) {
     if (!mAcc->IsText()) {
@@ -2054,11 +2079,7 @@ TextLeafPoint TextLeafPoint::FindTextAttrsStart(nsDirection aDirection,
     if (!point.mAcc || !point.mAcc->IsText()) {
       return *this;
     }
-    // For RemoteAccessible, we can get attributes from the cache without any
-    // calculation or copying.
-    RefPtr<const AccAttributes> attrs =
-        isRemote ? point.mAcc->AsRemote()->GetCachedTextAttributes()
-                 : point.GetTextAttributesLocalAcc();
+    RefPtr<const AccAttributes> attrs = point.GetTextAttributes();
     if (attrs && lastAttrs && !attrs->Equal(lastAttrs)) {
       return *this;
     }
@@ -2100,10 +2121,9 @@ TextLeafPoint TextLeafPoint::FindTextAttrsStart(nsDirection aDirection,
     if (!point.mAcc || !point.mAcc->IsText()) {
       break;
     }
-    RefPtr<const AccAttributes> attrs =
-        isRemote ? point.mAcc->AsRemote()->GetCachedTextAttributes()
-                 : point.GetTextAttributesLocalAcc();
-    if (!lastAttrs || (attrs && !attrs->Equal(lastAttrs))) {
+    RefPtr<const AccAttributes> attrs = point.GetTextAttributes();
+    if (((!lastAttrs || !attrs) && attrs != lastAttrs) ||
+        (attrs && !attrs->Equal(lastAttrs))) {
       // The attributes change here. If we're moving forward, we want to return
       // this point.
       if (aDirection == eDirNext) {

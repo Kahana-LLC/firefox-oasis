@@ -101,20 +101,41 @@ export class PrefsFeed {
   }
 
   /**
-   * Handler for when experiment data updates.
+   * Computes the trainhop config by processing all enrollments.
+   * Supports two formats:
+   * - Single payload: { type: "feature", payload: { "enabled": true, ... }}
+   * - Multi-payload: { type: "multi-payload", payload: [{ type: "feature", payload: { "enabled": true, ... }}] }
+   * Both formats output the same structure: { "feature": { "enabled": true, ... }}
    */
-  onTrainhopExperimentUpdated() {
+  _getTrainhopConfig() {
     const allEnrollments =
       lazy.NimbusFeatures.newtabTrainhop.getAllEnrollments() || [];
 
-    // Combine all trainhop experiments keyed by type.
-    // Rules for duplicates:
-    // - Experiments take precedence over rollouts (this is expected).
-    // - If multiple experiments or multiple rollouts exist for the same type,
-    //   only the first is kept. This is nondeterministic and considered an error;
-    //   those experiments/rollouts should be relaunched.
-    const value = {};
-    allEnrollments.reduce((accumulator, currentValue) => {
+    let enrollmentsToProcess = [];
+
+    allEnrollments.forEach(enrollment => {
+      if (
+        enrollment?.value?.type === "multi-payload" &&
+        Array.isArray(enrollment?.value?.payload)
+      ) {
+        enrollment.value.payload.forEach(item => {
+          if (item?.type && item?.payload) {
+            enrollmentsToProcess.push({
+              value: {
+                type: item.type,
+                payload: item.payload,
+              },
+              meta: enrollment.meta,
+            });
+          }
+        });
+      } else if (enrollment?.value?.type) {
+        enrollmentsToProcess.push(enrollment);
+      }
+    });
+
+    const valueObj = {};
+    enrollmentsToProcess.reduce((accumulator, currentValue) => {
       if (currentValue?.value?.type) {
         if (
           !accumulator[currentValue.value.type] ||
@@ -122,19 +143,27 @@ export class PrefsFeed {
             !currentValue.meta.isRollout)
         ) {
           accumulator[currentValue.value.type] = currentValue;
-          // Shorten the data chain.
-          value[currentValue.value.type] = currentValue.value.payload;
+          valueObj[currentValue.value.type] = currentValue.value.payload;
         }
       }
       return accumulator;
     }, {});
+
+    return valueObj;
+  }
+
+  /**
+   * Handler for when experiment data updates.
+   */
+  onTrainhopExperimentUpdated() {
+    const valueObj = this._getTrainhopConfig();
 
     this.store.dispatch(
       ac.BroadcastToContent({
         type: at.PREF_CHANGED,
         data: {
           name: "trainhopConfig",
-          value,
+          value: valueObj,
         },
       })
     );
@@ -292,16 +321,6 @@ export class PrefsFeed {
       "browser.topsites.useRemoteSetting"
     );
 
-    // Read the pref for search hand-off from firefox.js and store it
-    // in our internal list of prefs to watch
-    let handoffToAwesomebarPrefValue = Services.prefs.getBoolPref(
-      "browser.newtabpage.activity-stream.improvesearch.handoffToAwesomebar"
-    );
-    values["improvesearch.handoffToAwesomebar"] = handoffToAwesomebarPrefValue;
-    this._prefMap.set("improvesearch.handoffToAwesomebar", {
-      value: handoffToAwesomebarPrefValue,
-    });
-
     // Add experiment values and default values
     values.featureConfig = lazy.NimbusFeatures.newtab.getAllVariables() || {};
     values.pocketConfig =
@@ -310,7 +329,8 @@ export class PrefsFeed {
       lazy.NimbusFeatures.newtabSmartShortcuts.getAllVariables() || {};
     values.widgetsConfig =
       lazy.NimbusFeatures.newtabWidgets.getAllVariables() || {};
-    this._setBoolPref(values, "logowordmark.alwaysVisible", true);
+    values.trainhopConfig = this._getTrainhopConfig();
+    this._setBoolPref(values, "logowordmark.alwaysVisible", false);
     this._setBoolPref(values, "feeds.section.topstories", false);
     this._setBoolPref(values, "discoverystream.enabled", false);
     this._setBoolPref(values, "discoverystream.hardcoded-basic-layout", false);

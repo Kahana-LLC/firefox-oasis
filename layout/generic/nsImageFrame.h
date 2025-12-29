@@ -251,7 +251,7 @@ class nsImageFrame : public nsAtomicContainerFrame, public nsIReflowCallback {
   }
 
   SizeComputationResult ComputeSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -458,7 +458,7 @@ class nsDisplayImage final : public nsPaintedDisplayItem {
 
   nsRect GetBounds(bool* aSnap) const {
     *aSnap = true;
-    return Frame()->GetContentRectRelativeToSelf() + ToReferenceFrame();
+    return Frame()->InkOverflowRectRelativeToSelf() + ToReferenceFrame();
   }
 
   nsRect GetBounds(nsDisplayListBuilder*, bool* aSnap) const final {

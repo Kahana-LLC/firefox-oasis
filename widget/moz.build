@@ -234,6 +234,7 @@ EXPORTS.mozilla.widget += [
     "ScreenManager.h",
     "TextRecognition.h",
     "ThemeChangeKind.h",
+    "ThemeDrawing.h",
     "WidgetLogging.h",
     "WidgetMessageUtils.h",
     "WindowOcclusionState.h",
@@ -366,7 +367,6 @@ LOCAL_INCLUDES += [
     "/layout/painting",
     "/layout/xul",
     "/layout/xul/tree/",
-    "/view",
     "/widget",
     "/widget/headless",
 ]

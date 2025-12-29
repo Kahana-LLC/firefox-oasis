@@ -251,6 +251,9 @@ enum class BatchRemovalOrder {
 };
 
 struct BatchRemovalState {
+  // Whether we're the fist kid getting removed in the batch. Note that that's
+  // different to whether we're the first _child_, if we're removing
+  // back-to-front.
   bool mIsFirst = true;
 };
 
@@ -283,7 +286,7 @@ class nsMutationGuard {
    * years for sGeneration to fully wrap around so we can ignore a guard living
    * through a full wrap around.
    */
-  bool Mutated(uint8_t aIgnoreCount) {
+  bool Mutated(uint8_t aIgnoreCount) const {
     return (sGeneration - mStartingGeneration) > aIgnoreCount;
   }
 
@@ -1047,18 +1050,15 @@ class nsINode : public mozilla::dom::EventTarget {
 
   template <BatchRemovalOrder aOrder = BatchRemovalOrder::FrontToBack>
   void RemoveAllChildren(bool aNotify) {
-    if (!HasChildren()) {
-      return;
-    }
     BatchRemovalState state{};
-    do {
+    while (HasChildren()) {
       nsIContent* nodeToRemove = aOrder == BatchRemovalOrder::FrontToBack
                                      ? GetFirstChild()
                                      : GetLastChild();
       RemoveChildNode(nodeToRemove, aNotify, &state, nullptr,
                       MutationEffectOnScript::KeepTrustWorthiness);
       state.mIsFirst = false;
-    } while (HasChildren());
+    }
   }
 
   /**
@@ -1712,6 +1712,12 @@ class nsINode : public mozilla::dom::EventTarget {
   bool IsGeneratedContentContainerForMarker() const {
     return IsRootOfNativeAnonymousSubtree() &&
            mNodeInfo->NameAtom() == nsGkAtoms::mozgeneratedcontentmarker;
+  }
+
+  /** Whether this is the container of a ::backdrop pseudo-element. */
+  bool IsGeneratedContentContainerForBackdrop() const {
+    return IsRootOfNativeAnonymousSubtree() &&
+           mNodeInfo->NameAtom() == nsGkAtoms::mozgeneratedcontentbackdrop;
   }
 
   /**

@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">%s’a veşartî</string>
@@ -66,7 +73,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s dema ku hûn hemî tabloyên xwe yên taybet digirin, çerezên we, dîrok û daneyên malperê jê dibe. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s dema ku hûn hemî tabloyên xwe yên taybet digirin, çerezên we, dîrok û daneyên malperê jê dibe. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -459,6 +466,10 @@
   <string name="onboarding_marketing_title_1" tools:ignore="UnusedResources">Tiştekî dawî</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Piştrast bike û dest bi gerê bike</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding label for 'Save and continue' button, used by Nimbus experiments. -->
   <string name="onboarding_save_and_continue_button">Qeyd bike û dewam bike</string>
   <!-- Onboarding toolbar selection card label for 'top' option, used by Nimbus experiments. -->
@@ -617,8 +628,6 @@
   <string name="preferences_gestures">Hereketên tiliyan</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Taybet bike</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Ji bo senkronîzekirina hilpekînan, bijareyan, şîfreyan û tiştên din têkevê.</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
   <string name="preferences_account_sync_error">Ji bo senkronîzekirinê bidomînî, dîsa girê bide</string>
   <!-- Preference for language -->
@@ -866,12 +875,6 @@
   <string name="preference_experiments_2">Lêkolîn</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">Destûrê bide Mozillayê ku lêkolînan saz bike û bimeşîne</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Senkronîze bike û daneyên xwe qeyd bike</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Ji bo dîsa girê bibî, têkeve</string>
   <!-- Preference for removing FxA account -->
@@ -1458,8 +1461,6 @@
   <string name="toast_copy_link_to_clipboard">Li panoyê hat kopîkirin</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Têkeve Sync’ê</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Senkronîze bike û daneyan qeyd bike</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
   <string name="sync_send_to_all">Ji hemû cîhazan re bişîne</string>
   <!-- An option from the share dialog to reconnect to sync -->
@@ -1907,8 +1908,6 @@
   <string name="credit_cards_edit_card">Kartê serast bike</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Hejmara kartê</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Dema dawî ya bikaranînê</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Tarîxa dawî ya bikaranînê - Meh</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -2439,4 +2438,10 @@
   -->
   <string name="beta_feature">BETA</string>
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

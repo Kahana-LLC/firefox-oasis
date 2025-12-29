@@ -717,6 +717,23 @@ HttpConnectionBase* ConnectionEntry::GetH2orH3ActiveConn() {
   return nullptr;
 }
 
+already_AddRefed<nsHttpConnection> ConnectionEntry::GetH2TunnelActiveConn() {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+
+  for (const auto& conn : mActiveConns) {
+    RefPtr<nsHttpConnection> connTCP = do_QueryObject(conn);
+    if (connTCP && connTCP->UsingSpdy() && connTCP->CanDirectlyActivate()) {
+      LOG(
+          ("GetH2TunnelActiveConn() request for ent %p %s "
+           "found an H2 tunnel connection %p\n",
+           this, mConnInfo->HashKey().get(), connTCP.get()));
+      return connTCP.forget();
+    }
+  }
+
+  return nullptr;
+}
+
 void ConnectionEntry::CloseActiveConnections() {
   while (mActiveConns.Length()) {
     RefPtr<HttpConnectionBase> conn(mActiveConns[0]);
@@ -1050,14 +1067,14 @@ bool ConnectionEntry::MaybeProcessCoalescingKeys(nsIDNSAddrRecord* dnsRecord,
 
 nsresult ConnectionEntry::CreateDnsAndConnectSocket(
     nsAHttpTransaction* trans, uint32_t caps, bool speculative,
-    bool isFromPredictor, bool urgentStart, bool allow1918,
+    bool urgentStart, bool allow1918,
     PendingTransactionInfo* pendingTransInfo) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   MOZ_ASSERT((speculative && !pendingTransInfo) ||
              (!speculative && pendingTransInfo));
 
-  RefPtr<DnsAndConnectSocket> sock = new DnsAndConnectSocket(
-      mConnInfo, trans, caps, speculative, isFromPredictor, urgentStart);
+  RefPtr<DnsAndConnectSocket> sock =
+      new DnsAndConnectSocket(mConnInfo, trans, caps, speculative, urgentStart);
 
   if (speculative) {
     sock->SetAllow1918(allow1918);

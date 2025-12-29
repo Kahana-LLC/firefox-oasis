@@ -72,6 +72,15 @@ static nsSize GetDeviceSize(const Document& aDocument) {
     return CSSPixel::ToAppUnits(deviceSize.value());
   }
 
+  // Media queries in documents should use an override set with WebDriver BiDi
+  // if it exists.
+  if (dom::BrowsingContext* bc = aDocument.GetBrowsingContext()) {
+    Maybe<CSSIntSize> screenSize = bc->GetScreenAreaOverride();
+    if (screenSize.isSome()) {
+      return CSSPixel::ToAppUnits(screenSize.value());
+    }
+  }
+
   nsPresContext* pc = aDocument.GetPresContext();
   // NOTE(emilio): We should probably figure out how to return an appropriate
   // device size here, though in a multi-screen world that makes no sense
@@ -221,15 +230,18 @@ StyleDisplayMode Gecko_MediaFeatures_GetDisplayMode(const Document* aDocument) {
     }
   }
 
-  static_assert(static_cast<int32_t>(DisplayMode::Browser) ==
-                        static_cast<int32_t>(StyleDisplayMode::Browser) &&
-                    static_cast<int32_t>(DisplayMode::Minimal_ui) ==
-                        static_cast<int32_t>(StyleDisplayMode::MinimalUi) &&
-                    static_cast<int32_t>(DisplayMode::Standalone) ==
-                        static_cast<int32_t>(StyleDisplayMode::Standalone) &&
-                    static_cast<int32_t>(DisplayMode::Fullscreen) ==
-                        static_cast<int32_t>(StyleDisplayMode::Fullscreen),
-                "DisplayMode must mach nsStyleConsts.h");
+  static_assert(
+      static_cast<int32_t>(DisplayMode::Browser) ==
+              static_cast<int32_t>(StyleDisplayMode::Browser) &&
+          static_cast<int32_t>(DisplayMode::Minimal_ui) ==
+              static_cast<int32_t>(StyleDisplayMode::MinimalUi) &&
+          static_cast<int32_t>(DisplayMode::Standalone) ==
+              static_cast<int32_t>(StyleDisplayMode::Standalone) &&
+          static_cast<int32_t>(DisplayMode::Fullscreen) ==
+              static_cast<int32_t>(StyleDisplayMode::Fullscreen) &&
+          static_cast<int32_t>(DisplayMode::Picture_in_picture) ==
+              static_cast<int32_t>(StyleDisplayMode::PictureInPicture),
+      "DisplayMode must mach nsStyleConsts.h");
 
   dom::BrowsingContext* browsingContext = aDocument->GetBrowsingContext();
   if (!browsingContext) {

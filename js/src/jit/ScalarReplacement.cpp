@@ -294,8 +294,11 @@ static bool IsObjectEscaped(MDefinition* ins, MInstruction* newObject,
           // toDefinition should normally never fail, since they don't get
           // captured by resume points.
           MDefinition* def = (*i)->consumer()->toDefinition();
-          MOZ_ASSERT(def->op() == MDefinition::Opcode::StoreDynamicSlot ||
-                     def->op() == MDefinition::Opcode::LoadDynamicSlot);
+          MOZ_ASSERT(
+              def->op() == MDefinition::Opcode::StoreDynamicSlot ||
+              def->op() == MDefinition::Opcode::LoadDynamicSlot ||
+              def->op() == MDefinition::Opcode::StoreDynamicSlotFromOffset ||
+              def->op() == MDefinition::Opcode::LoadDynamicSlotFromOffset);
         }
 #endif
         break;
@@ -3895,7 +3898,6 @@ bool ObjectKeysReplacer::escapes(MInstruction* ins) {
         const Shape* shape = objectKeys()->resultShape();
         MOZ_DIAGNOSTIC_ASSERT(shape);
         auto* guard = def->toGuardShape();
-        MOZ_DIAGNOSTIC_ASSERT(shape == guard->shape());
         if (shape != guard->shape()) {
           JitSpewDef(JitSpew_Escape, "has a non-matching guard shape\n", def);
           return true;

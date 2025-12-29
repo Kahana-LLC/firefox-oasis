@@ -73,6 +73,7 @@
 #include "mozilla/net/SocketProcessChild.h"
 #include "mozilla/intl/LocaleService.h"
 #include "mozilla/ipc/URIUtils.h"
+#include "mozilla/glean/GleanPings.h"
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/AntiTrackingRedirectHeuristic.h"
 #include "mozilla/DynamicFpiRedirectHeuristic.h"
@@ -214,9 +215,9 @@ already_AddRefed<nsHttpHandler> nsHttpHandler::GetInstance() {
 static nsCString ImageAcceptHeader() {
   nsCString mimeTypes;
 
-  if (mozilla::StaticPrefs::image_avif_enabled()) {
-    mimeTypes.Append("image/avif,");
-  }
+#ifdef MOZ_AV1
+  mimeTypes.Append("image/avif,");
+#endif
 
   if (mozilla::StaticPrefs::image_jxl_enabled()) {
     mimeTypes.Append("image/jxl,");
@@ -239,9 +240,9 @@ static nsCString DocumentAcceptHeader() {
 
   // we also insert all of the image formats before */* when the pref is set
   if (mozilla::StaticPrefs::network_http_accept_include_images()) {
-    if (mozilla::StaticPrefs::image_avif_enabled()) {
-      mimeTypes.Append("image/avif,");
-    }
+#ifdef MOZ_AV1
+    mimeTypes.Append("image/avif,");
+#endif
 
     if (mozilla::StaticPrefs::image_jxl_enabled()) {
       mimeTypes.Append("image/jxl,");
@@ -258,7 +259,9 @@ static nsCString DocumentAcceptHeader() {
 Atomic<bool, Relaxed> nsHttpHandler::sParentalControlsEnabled(false);
 
 nsHttpHandler::nsHttpHandler()
-    : mIdleTimeout(PR_SecondsToInterval(10)),
+    : mAuthCache(new nsHttpAuthCache()),
+      mPrivateAuthCache(new nsHttpAuthCache()),
+      mIdleTimeout(PR_SecondsToInterval(10)),
       mSpdyTimeout(
           PR_SecondsToInterval(StaticPrefs::network_http_http2_timeout())),
       mResponseTimeout(PR_SecondsToInterval(300)),
@@ -321,7 +324,6 @@ static const char* gCallbackPrefs[] = {
     SECURITY_PREFIX,
     DOM_SECURITY_PREFIX,
     "image.http.accept",
-    "image.avif.enabled",
     "image.jxl.enabled",
     nullptr,
 };
@@ -509,6 +511,7 @@ nsresult nsHttpHandler::Init() {
     obsService->AddObserver(this, "network:socket-process-crashed", true);
     obsService->AddObserver(this, "network:reset_third_party_roots_check",
                             true);
+    obsService->AddObserver(this, "idle-daily", true);
 
     if (!IsNeckoChild()) {
       obsService->AddObserver(this, "net:current-browser-id", true);
@@ -1577,13 +1580,6 @@ void nsHttpHandler::PrefsChanged(const char* pref) {
     if (NS_SUCCEEDED(rv)) mEnablePersistentHttpsCaching = cVar;
   }
 
-  if (PREF_CHANGED(HTTP_PREF("phishy-userpass-length"))) {
-    rv = Preferences::GetInt(HTTP_PREF("phishy-userpass-length"), &val);
-    if (NS_SUCCEEDED(rv)) {
-      mPhishyUserPassLength = (uint8_t)std::clamp(val, 0, 0xff);
-    }
-  }
-
   if (PREF_CHANGED(HTTP_PREF("http2.timeout"))) {
     mSpdyTimeout = PR_SecondsToInterval(
         std::clamp(StaticPrefs::network_http_http2_timeout(), 1, 0xffff));
@@ -1943,9 +1939,8 @@ void nsHttpHandler::PrefsChanged(const char* pref) {
     }
   }
 
-  const bool imageAcceptPrefChanged = PREF_CHANGED("image.http.accept") ||
-                                      PREF_CHANGED("image.avif.enabled") ||
-                                      PREF_CHANGED("image.jxl.enabled");
+  const bool imageAcceptPrefChanged =
+      PREF_CHANGED("image.http.accept") || PREF_CHANGED("image.jxl.enabled");
 
   if (imageAcceptPrefChanged) {
     nsAutoCString userSetImageAcceptHeader;
@@ -2276,8 +2271,8 @@ nsHttpHandler::GetAltSvcCacheKeys(nsTArray<nsCString>& value) {
 
 NS_IMETHODIMP
 nsHttpHandler::GetAuthCacheKeys(nsTArray<nsCString>& aValues) {
-  mAuthCache.CollectKeys(aValues);
-  mPrivateAuthCache.CollectKeys(aValues);
+  mAuthCache->CollectKeys(aValues);
+  mPrivateAuthCache->CollectKeys(aValues);
   return NS_OK;
 }
 
@@ -2297,8 +2292,8 @@ nsHttpHandler::Observe(nsISupports* subject, const char* topic,
     mHandlerActive = false;
 
     // clear cache of all authentication credentials.
-    mAuthCache.ClearAll();
-    mPrivateAuthCache.ClearAll();
+    mAuthCache->ClearAll();
+    mPrivateAuthCache->ClearAll();
     if (mWifiTickler) mWifiTickler->Cancel();
 
     // Inform nsIOService that network is tearing down.
@@ -2327,8 +2322,8 @@ nsHttpHandler::Observe(nsISupports* subject, const char* topic,
     MOZ_ASSERT(NS_SUCCEEDED(rv));
     mAltSvcCache = MakeUnique<AltSvcCache>();
   } else if (!strcmp(topic, "net:clear-active-logins")) {
-    mAuthCache.ClearAll();
-    mPrivateAuthCache.ClearAll();
+    mAuthCache->ClearAll();
+    mPrivateAuthCache->ClearAll();
   } else if (!strcmp(topic, "net:cancel-all-connections")) {
     if (mConnMgr) {
       mConnMgr->AbortAndCloseAllConnections(0, nullptr);
@@ -2361,7 +2356,7 @@ nsHttpHandler::Observe(nsISupports* subject, const char* topic,
          nsCOMPtr<nsIURI> uri = do_QueryInterface(subject);
 #endif
   } else if (!strcmp(topic, "last-pb-context-exited")) {
-    mPrivateAuthCache.ClearAll();
+    mPrivateAuthCache->ClearAll();
     if (mAltSvcCache) {
       mAltSvcCache->ClearAltServiceMappings();
     }
@@ -2430,8 +2425,14 @@ nsHttpHandler::Observe(nsISupports* subject, const char* topic,
     ShutdownConnectionManager();
     mConnMgr = nullptr;
     (void)InitConnectionMgr();
+  } else if (!strcmp(topic, "idle-daily")) {
+    // Submit the local-network-access ping once per day
+    if (XRE_IsParentProcess()) {
+#if defined(EARLY_BETA_OR_EARLIER)  // Submit custom telemetry ping.
+      glean_pings::LocalNetworkAccess.Submit();
+#endif
+    }
   }
-
   return NS_OK;
 }
 

@@ -14,13 +14,16 @@
 #include "mozilla/RefPtr.h"
 #include "mozilla/ServoStyleConsts.h"
 #include "mozilla/dom/CSSKeywordValue.h"
+#include "mozilla/dom/CSSMathSum.h"
+#include "mozilla/dom/CSSNumericArray.h"
+#include "mozilla/dom/CSSStyleRule.h"
 #include "mozilla/dom/CSSStyleValue.h"
+#include "mozilla/dom/CSSUnitValue.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/StylePropertyMapReadOnlyBinding.h"
 #include "nsCSSProps.h"
 #include "nsComputedDOMStyle.h"
 #include "nsCycleCollectionParticipant.h"
-#include "nsQueryObject.h"
 #include "nsReadableUtils.h"
 
 namespace mozilla::dom {
@@ -81,13 +84,36 @@ struct DeclarationTraits<ComputedStyleDeclarations> {
   }
 };
 
-// XXX StyleRuleDeclarations go here
+// Specialization for style rule
+struct StyleRuleDeclarations {};
+template <>
+struct DeclarationTraits<StyleRuleDeclarations> {
+  static StylePropertyTypedValueResult Get(const CSSStyleRule* aRule,
+                                           const nsACString& aProperty,
+                                           ErrorResult& aRv) {
+    MOZ_ASSERT(aRule);
+
+    auto result = StylePropertyTypedValueResult::None();
+
+    if (!aRule->GetDeclarationBlock().GetPropertyTypedValue(aProperty,
+                                                            result)) {
+      return result;
+    }
+
+    return result;
+  }
+};
 
 }  // namespace
 
-StylePropertyMapReadOnly::StylePropertyMapReadOnly(
-    nsCOMPtr<nsISupports> aParent, bool aComputed)
-    : mParent(std::move(aParent)), mDeclarations(aComputed) {
+StylePropertyMapReadOnly::StylePropertyMapReadOnly(Element* aElement,
+                                                   bool aComputed)
+    : mParent(aElement), mDeclarations(aElement, aComputed) {
+  MOZ_ASSERT(mParent);
+}
+
+StylePropertyMapReadOnly::StylePropertyMapReadOnly(CSSStyleRule* aRule)
+    : mParent(aRule), mDeclarations(aRule) {
   MOZ_ASSERT(mParent);
 }
 
@@ -98,7 +124,17 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(StylePropertyMapReadOnly)
   NS_INTERFACE_MAP_ENTRY(nsISupports)
 NS_INTERFACE_MAP_END
 
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(StylePropertyMapReadOnly, mParent)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(StylePropertyMapReadOnly)
+NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(StylePropertyMapReadOnly)
+  // Clear out our weak pointers.
+  tmp->mDeclarations.Unlink();
+
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mParent)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK_PRESERVED_WRAPPER
+NS_IMPL_CYCLE_COLLECTION_UNLINK_END
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(StylePropertyMapReadOnly)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mParent)
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
 nsISupports* StylePropertyMapReadOnly::GetParentObject() const {
   return mParent;
@@ -111,17 +147,16 @@ JSObject* StylePropertyMapReadOnly::WrapObject(
 
 // start of StylePropertyMapReadOnly Web IDL implementation
 
+// https://drafts.css-houdini.org/css-typed-om-1/#dom-stylepropertymapreadonly-get
+//
 // XXX This is not yet fully implemented and optimized!
 void StylePropertyMapReadOnly::Get(const nsACString& aProperty,
                                    OwningUndefinedOrCSSStyleValue& aRetVal,
                                    ErrorResult& aRv) const {
-  // XXX This QO wouldn't be needed if we had RefPtr<Element> mElement
-  RefPtr<Element> element = do_QueryObject(mParent);
-  if (!element) {
-    aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+  if (!mParent) {
+    aRv.Throw(NS_ERROR_UNEXPECTED);
     return;
   }
-
   // Step 2.
 
   NonCustomCSSPropertyId id = nsCSSProps::LookupProperty(aProperty);
@@ -136,43 +171,91 @@ void StylePropertyMapReadOnly::Get(const nsACString& aProperty,
 
   // Step 4.
 
-  auto result = declarations.Get(element, aProperty, aRv);
+  auto result = declarations.Get(aProperty, aRv);
   if (aRv.Failed()) {
     return;
   }
 
-  // XXX Consider switch on result.tag
-  if (result.IsTyped()) {
-    auto typedValue = result.AsTyped();
+  // XXX Move the creation of CSSStyleValue to a dedicated class for example
+  // CSSStyleValueFactory and eventually split the handling of tags into
+  // separate methods to make the code more readable and accessible for
+  // CSSStyleValue::Parse. See bug 2004057
 
-    MOZ_ASSERT(typedValue.IsKeyword());
-    auto value = typedValue.AsKeyword();
+  RefPtr<CSSStyleValue> styleValue;
 
-    auto keywordValue = MakeRefPtr<CSSKeywordValue>(mParent, value);
+  switch (result.tag) {
+    case StylePropertyTypedValueResult::Tag::Typed: {
+      const auto& typedValue = result.AsTyped();
 
-    aRetVal.SetAsCSSStyleValue() = std::move(keywordValue);
-    return;
+      switch (typedValue.tag) {
+        case StyleTypedValue::Tag::Keyword:
+          styleValue =
+              MakeRefPtr<CSSKeywordValue>(mParent, typedValue.AsKeyword());
+          break;
+
+        case StyleTypedValue::Tag::Numeric: {
+          auto numericValue = typedValue.AsNumeric();
+
+          switch (numericValue.tag) {
+            case StyleNumericValue::Tag::Unit: {
+              auto unitValue = numericValue.AsUnit();
+
+              styleValue = MakeRefPtr<CSSUnitValue>(mParent, unitValue.value,
+                                                    unitValue.unit);
+              break;
+            }
+
+            case StyleNumericValue::Tag::Sum: {
+              auto mathSum = numericValue.AsSum();
+
+              nsTArray<RefPtr<CSSNumericValue>> values;
+
+              for (const auto& value : mathSum.values) {
+                // XXX Only supporting units for now
+                if (value.IsUnit()) {
+                  auto unitValue = value.AsUnit();
+
+                  values.AppendElement(MakeRefPtr<CSSUnitValue>(
+                      mParent, unitValue.value, unitValue.unit));
+                }
+              }
+
+              auto array =
+                  MakeRefPtr<CSSNumericArray>(mParent, std::move(values));
+
+              styleValue = MakeAndAddRef<CSSMathSum>(mParent, std::move(array));
+              break;
+            }
+          }
+
+          break;
+        }
+      }
+      break;
+    }
+
+    case StylePropertyTypedValueResult::Tag::Unsupported: {
+      auto propertyId = CSSPropertyId::FromIdOrCustomProperty(id, aProperty);
+      auto rawBlock = result.AsUnsupported();
+      auto block = MakeRefPtr<DeclarationBlock>(rawBlock.Consume());
+      styleValue = MakeRefPtr<CSSUnsupportedValue>(mParent, propertyId,
+                                                   std::move(block));
+      break;
+    }
+
+    case StylePropertyTypedValueResult::Tag::None:
+      break;
   }
 
-  if (result.IsUnsupported()) {
-    auto propertyId = CSSPropertyId::FromIdOrCustomProperty(id, aProperty);
-
-    auto rawBlock = result.AsUnsupported();
-
-    auto block = MakeRefPtr<DeclarationBlock>(rawBlock.Consume());
-
-    auto unsupportedValue =
-        MakeRefPtr<CSSUnsupportedValue>(mParent, propertyId, std::move(block));
-
-    aRetVal.SetAsCSSStyleValue() = std::move(unsupportedValue);
-    return;
+  if (styleValue) {
+    aRetVal.SetAsCSSStyleValue() = std::move(styleValue);
+  } else {
+    aRetVal.SetUndefined();
   }
-
-  MOZ_ASSERT(result.IsNone());
-
-  aRetVal.SetUndefined();
 }
 
+// https://drafts.css-houdini.org/css-typed-om-1/#dom-stylepropertymapreadonly-getall
+//
 // XXX This is not yet fully implemented and optimized!
 void StylePropertyMapReadOnly::GetAll(const nsACString& aProperty,
                                       nsTArray<RefPtr<CSSStyleValue>>& aRetVal,
@@ -223,14 +306,34 @@ size_t StylePropertyMapReadOnly::SizeOfIncludingThis(
 }
 
 StylePropertyTypedValueResult StylePropertyMapReadOnly::Declarations::Get(
-    Element* aElement, const nsACString& aProperty, ErrorResult& aRv) const {
-  if (mComputed) {
-    return DeclarationTraits<ComputedStyleDeclarations>::Get(aElement,
+    const nsACString& aProperty, ErrorResult& aRv) const {
+  switch (mKind) {
+    case Kind::Inline:
+      return DeclarationTraits<InlineStyleDeclarations>::Get(mElement,
                                                              aProperty, aRv);
-  }
 
-  return DeclarationTraits<InlineStyleDeclarations>::Get(aElement, aProperty,
-                                                         aRv);
+    case Kind::Computed:
+      return DeclarationTraits<ComputedStyleDeclarations>::Get(mElement,
+                                                               aProperty, aRv);
+
+    case Kind::Rule:
+      return DeclarationTraits<StyleRuleDeclarations>::Get(mRule, aProperty,
+                                                           aRv);
+  }
+  MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE("Bad kind value!");
+}
+
+void StylePropertyMapReadOnly::Declarations::Unlink() {
+  switch (mKind) {
+    case Kind::Inline:
+    case Kind::Computed:
+      mElement = nullptr;
+      break;
+
+    case Kind::Rule:
+      mRule = nullptr;
+      break;
+  }
 }
 
 }  // namespace mozilla::dom

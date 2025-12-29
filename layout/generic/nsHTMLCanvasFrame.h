@@ -54,7 +54,7 @@ class nsHTMLCanvasFrame final : public nsContainerFrame {
   void UnionChildOverflow(mozilla::OverflowAreas&, bool aAsIfScrolled) override;
 
   SizeComputationResult ComputeSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -64,6 +64,8 @@ class nsHTMLCanvasFrame final : public nsContainerFrame {
   void Reflow(nsPresContext* aPresContext, ReflowOutput& aDesiredSize,
               const ReflowInput& aReflowInput,
               nsReflowStatus& aStatus) override;
+
+  nsRect GetDestRect(const nsRect& aFrameContentBox) const;
 
 #ifdef ACCESSIBILITY
   mozilla::a11y::AccType AccessibleType() override;

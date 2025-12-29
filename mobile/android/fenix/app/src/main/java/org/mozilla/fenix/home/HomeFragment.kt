@@ -40,6 +40,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavController
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import com.google.android.material.appbar.AppBarLayout
@@ -66,6 +67,8 @@ import mozilla.components.lib.state.ext.consumeFlow
 import mozilla.components.lib.state.ext.consumeFrom
 import mozilla.components.lib.state.ext.flow
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
+import mozilla.components.support.utils.KeyboardState
+import mozilla.components.support.utils.keyboardAsState
 import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.GleanMetrics.HomeScreen
@@ -93,8 +96,6 @@ import org.mozilla.fenix.components.components
 import org.mozilla.fenix.components.toolbar.BottomToolbarContainerView
 import org.mozilla.fenix.compose.snackbar.Snackbar
 import org.mozilla.fenix.compose.snackbar.SnackbarState
-import org.mozilla.fenix.compose.utils.KeyboardState
-import org.mozilla.fenix.compose.utils.keyboardAsState
 import org.mozilla.fenix.databinding.FragmentHomeBinding
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.getBottomToolbarHeight
@@ -126,6 +127,7 @@ import org.mozilla.fenix.home.sessioncontrol.SessionControlControllerCallback
 import org.mozilla.fenix.home.sessioncontrol.SessionControlInteractor
 import org.mozilla.fenix.home.store.HomeToolbarStoreBuilder
 import org.mozilla.fenix.home.store.HomepageState
+import org.mozilla.fenix.home.termsofuse.DefaultPrivacyNoticeBannerController
 import org.mozilla.fenix.home.toolbar.DefaultToolbarController
 import org.mozilla.fenix.home.toolbar.FenixHomeToolbar
 import org.mozilla.fenix.home.toolbar.HomeNavigationBar
@@ -154,15 +156,22 @@ import org.mozilla.fenix.pbmlock.NavigationOrigin
 import org.mozilla.fenix.pbmlock.observePrivateModeLock
 import org.mozilla.fenix.perf.MarkersFragmentLifecycleCallbacks
 import org.mozilla.fenix.perf.StartupTimeline
-import org.mozilla.fenix.reviewprompt.ShowPlayStoreReviewPrompt
+import org.mozilla.fenix.reviewprompt.ShowReviewPromptBinding
 import org.mozilla.fenix.search.SearchDialogFragment
 import org.mozilla.fenix.search.awesomebar.AwesomeBarComposable
 import org.mozilla.fenix.search.toolbar.DefaultSearchSelectorController
 import org.mozilla.fenix.search.toolbar.SearchSelectorMenu
+import org.mozilla.fenix.settings.deletebrowsingdata.DefaultDeleteBrowsingDataController
 import org.mozilla.fenix.snackbar.FenixSnackbarDelegate
 import org.mozilla.fenix.snackbar.SnackbarBinding
 import org.mozilla.fenix.tabstray.Page
 import org.mozilla.fenix.tabstray.TabsTrayAccessPoint
+import org.mozilla.fenix.termsofuse.store.DefaultPrivacyNoticeBannerRepository
+import org.mozilla.fenix.termsofuse.store.PrivacyNoticeBannerAction
+import org.mozilla.fenix.termsofuse.store.PrivacyNoticeBannerMiddleware
+import org.mozilla.fenix.termsofuse.store.PrivacyNoticeBannerState
+import org.mozilla.fenix.termsofuse.store.PrivacyNoticeBannerStore
+import org.mozilla.fenix.termsofuse.store.PrivacyNoticeBannerTelemetryMiddleware
 import org.mozilla.fenix.termsofuse.store.Surface
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.utils.allowUndo
@@ -222,6 +231,14 @@ class HomeFragment : Fragment() {
     private val store: BrowserStore
         get() = requireComponents.core.store
 
+    private val privacyNoticeBannerRepository by lazy {
+        DefaultPrivacyNoticeBannerRepository(
+            settings = requireComponents.settings,
+        )
+    }
+
+    private lateinit var privacyNoticeBannerStore: PrivacyNoticeBannerStore
+
     private var _sessionControlController: SessionControlController? = null
     private val sessionControlController: SessionControlController
         get() = _sessionControlController!!
@@ -266,7 +283,14 @@ class HomeFragment : Fragment() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             voiceSearchFeature?.get()?.handleVoiceSearchResult(result.resultCode, result.data)
         }
-    private val showPlayStoreReviewPrompt = ViewBoundFeatureWrapper<ShowPlayStoreReviewPrompt>()
+    private val showReviewPromptBinding = ViewBoundFeatureWrapper<ShowReviewPromptBinding>()
+
+    private val destinationChangedListener =
+        NavController.OnDestinationChangedListener { _, destination, _ ->
+            if (destination.id != R.id.homeFragment) {
+                privacyNoticeBannerStore.dispatch(PrivacyNoticeBannerAction.OnNavigatedAwayFromHome)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // DO NOT ADD ANYTHING ABOVE THIS getProfilerTime CALL!
@@ -460,6 +484,18 @@ class HomeFragment : Fragment() {
             view = binding.root,
         )
 
+        privacyNoticeBannerStore = PrivacyNoticeBannerStore(
+            initialState = PrivacyNoticeBannerState(
+                visible = privacyNoticeBannerRepository.shouldShowPrivacyNoticeBanner(),
+            ),
+            middleware = listOf(
+                PrivacyNoticeBannerMiddleware(
+                    repository = privacyNoticeBannerRepository,
+                ),
+                PrivacyNoticeBannerTelemetryMiddleware(),
+            ),
+        )
+
         _sessionControlController = DefaultSessionControlController(
             activityRef = WeakReference(activity),
             settings = components.settings,
@@ -573,6 +609,9 @@ class HomeFragment : Fragment() {
                 marsUseCases = components.useCases.marsUseCases,
                 viewLifecycleScope = viewLifecycleOwner.lifecycleScope,
             ),
+            privacyNoticeBannerController = DefaultPrivacyNoticeBannerController(
+                privacyNoticeBannerStore = privacyNoticeBannerStore,
+            ),
         )
 
         nullableToolbarView = buildToolbar(activity)
@@ -637,6 +676,23 @@ class HomeFragment : Fragment() {
                 interactor = sessionControlInteractor,
                 homeFragment = this,
                 homeActivity = activity,
+                deleteBrowsingDataController = DefaultDeleteBrowsingDataController(
+                    deleteDataUseCases = DefaultDeleteBrowsingDataController.DeleteDataUseCases(
+                        removeAllTabs = activity.components.useCases.tabsUseCases.removeAllTabs,
+                        removeAllDownloads = activity.components.useCases.downloadUseCases.removeAllDownloads,
+                    ),
+                    dataStorage = DefaultDeleteBrowsingDataController.DataStorage(
+                        history = activity.components.core.historyStorage,
+                        permissions = activity.components.core.permissionStorage,
+                    ),
+                    stores = DefaultDeleteBrowsingDataController.Stores(
+                        appStore = activity.components.appStore,
+                        browserStore = activity.components.core.store,
+                    ),
+                    engine = activity.components.core.engine,
+                    settings = activity.components.settings,
+                    coroutineContext = activity.lifecycleScope.coroutineContext,
+                ),
             )
         }
 
@@ -800,7 +856,11 @@ class HomeFragment : Fragment() {
         )
     }
 
-    private fun updateToolbarViewUI(@DrawableRes id: Int, showDivider: Boolean, elevation: Float) {
+    private fun updateToolbarViewUI(
+        @DrawableRes id: Int,
+        showDivider: Boolean,
+        elevation: Float,
+    ) {
         (toolbarView as? HomeToolbarView)?.updateBackground(id)
         toolbarView.updateDividerVisibility(showDivider)
         toolbarView.layout.elevation = elevation
@@ -934,8 +994,8 @@ class HomeFragment : Fragment() {
             view = view,
         )
 
-        showPlayStoreReviewPrompt.set(
-            feature = ShowPlayStoreReviewPrompt(
+        showReviewPromptBinding.set(
+            feature = ShowReviewPromptBinding(
                 appStore = requireComponents.appStore,
                 promptController = requireComponents.playStoreReviewPromptController,
                 activityRef = WeakReference(activity),
@@ -978,6 +1038,9 @@ class HomeFragment : Fragment() {
                         }
                     }
                     val keyboardState by keyboardAsState()
+                    val privacyNoticeBannerState = privacyNoticeBannerStore.flow().collectAsState(
+                        initial = privacyNoticeBannerStore.state,
+                    )
 
                     LaunchedEffect(isInPortrait, keyboardState) {
                         updateLayoutParams<ViewGroup.MarginLayoutParams> {
@@ -993,6 +1056,7 @@ class HomeFragment : Fragment() {
                         MiddleSearchHomepage(
                             state = HomepageState.build(
                                 appState = appState.value,
+                                privacyNoticeBannerState = privacyNoticeBannerState.value,
                                 settings = settings,
                                 browsingModeManager = browsingModeManager,
                             ),
@@ -1010,6 +1074,7 @@ class HomeFragment : Fragment() {
                         Homepage(
                             state = HomepageState.build(
                                 appState = appState.value,
+                                privacyNoticeBannerState = privacyNoticeBannerState.value,
                                 settings = settings,
                                 browsingModeManager = browsingModeManager,
                             ),
@@ -1153,6 +1218,8 @@ class HomeFragment : Fragment() {
     override fun onStart() {
         super.onStart()
 
+        findNavController().addOnDestinationChangedListener(destinationChangedListener)
+
         subscribeToTabCollections()
 
         requireComponents.backgroundServices.accountManagerAvailableQueue.runIfReadyOrQueue {
@@ -1255,6 +1322,12 @@ class HomeFragment : Fragment() {
         // Counterpart to the update in onResume to keep the last access timestamp of the selected
         // tab up-to-date.
         requireComponents.useCases.sessionUseCases.updateLastAccess()
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        findNavController().removeOnDestinationChangedListener(destinationChangedListener)
     }
 
     private fun subscribeToTabCollections(): Observer<List<TabCollection>> {

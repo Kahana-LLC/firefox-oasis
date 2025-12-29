@@ -112,6 +112,7 @@ export class BaseContent extends React.PureComponent {
     this.handleDismissDownloadHighlight =
       this.handleDismissDownloadHighlight.bind(this);
     this.applyBodyClasses = this.applyBodyClasses.bind(this);
+    this.toggleSectionsMgmtPanel = this.toggleSectionsMgmtPanel.bind(this);
     this.state = {
       fixedSearch: false,
       firstVisibleTimestamp: null,
@@ -120,6 +121,7 @@ export class BaseContent extends React.PureComponent {
       wallpaperTheme: "",
       showDownloadHighlightOverride: null,
       visible: false,
+      showSectionsMgmtPanel: false,
     };
   }
 
@@ -235,6 +237,20 @@ export class BaseContent extends React.PureComponent {
     if (wallpapersEnabled) {
       this.updateWallpaper();
     }
+
+    this._onHashChange = () => {
+      const hash = globalThis.location?.hash || "";
+      if (hash === "#customize" || hash === "#customize-topics") {
+        this.openCustomizationMenu();
+
+        if (hash === "#customize-topics") {
+          this.toggleSectionsMgmtPanel();
+        }
+      }
+    };
+
+    this._onHashChange();
+    globalThis.addEventListener("hashchange", this._onHashChange);
   }
 
   componentDidUpdate(prevProps) {
@@ -309,6 +325,9 @@ export class BaseContent extends React.PureComponent {
         VISIBILITY_CHANGE_EVENT,
         this._onVisibilityChange
       );
+    }
+    if (this._onHashChange) {
+      globalThis.removeEventListener("hashchange", this._onHashChange);
     }
   }
 
@@ -469,11 +488,15 @@ export class BaseContent extends React.PureComponent {
     let url = "";
     let color = "transparent";
     let newTheme = colorMode;
+    let backgroundPosition = "center";
 
     // if no selected wallpaper fallback to browser/theme styles
     if (!selectedWallpaper) {
       global.document?.body.style.removeProperty("--newtab-wallpaper");
       global.document?.body.style.removeProperty("--newtab-wallpaper-color");
+      global.document?.body.style.removeProperty(
+        "--newtab-wallpaper-backgroundPosition"
+      );
       global.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
       return;
     }
@@ -482,6 +505,8 @@ export class BaseContent extends React.PureComponent {
     if (selectedWallpaper === "custom" && uploadedWallpaperUrl) {
       url = uploadedWallpaperUrl;
       color = "transparent";
+      // Note: There is no method to set a specific background position for custom wallpapers
+      backgroundPosition = "center";
       newTheme = uploadedWallpaperTheme || colorMode;
     } else if (wallpaperList) {
       const wallpaper = wallpaperList.find(
@@ -498,6 +523,7 @@ export class BaseContent extends React.PureComponent {
         // standard wallpaper & solid colors
       } else if (selectedWallpaper) {
         url = wallpaper?.wallpaperUrl || "";
+        backgroundPosition = wallpaper?.background_position || "center";
         color = wallpaper?.solid_color || "transparent";
         newTheme = wallpaper?.theme || colorMode;
         // if a solid color, determine if dark or light
@@ -511,6 +537,10 @@ export class BaseContent extends React.PureComponent {
     global.document?.body.style.setProperty(
       "--newtab-wallpaper",
       `url(${url})`
+    );
+    global.document?.body.style.setProperty(
+      "--newtab-wallpaper-backgroundPosition",
+      backgroundPosition
     );
     global.document?.body.style.setProperty(
       "--newtab-wallpaper-color",
@@ -573,6 +603,12 @@ export class BaseContent extends React.PureComponent {
 
   isWallpaperColorDark([r, g, b]) {
     return 0.2125 * r + 0.7154 * g + 0.0721 * b <= 110;
+  }
+
+  toggleSectionsMgmtPanel() {
+    this.setState(prevState => ({
+      showSectionsMgmtPanel: !prevState.showSectionsMgmtPanel,
+    }));
   }
 
   shouldDisplayTopicSelectionModal() {
@@ -642,7 +678,6 @@ export class BaseContent extends React.PureComponent {
       !prefs["feeds.topsites"] &&
       !pocketEnabled &&
       filteredSections.filter(section => section.enabled).length === 0;
-    const searchHandoffEnabled = prefs["improvesearch.handoffToAwesomebar"];
     const enabledSections = {
       topSitesEnabled: prefs["feeds.topsites"],
       pocketEnabled: prefs["feeds.section.topstories"],
@@ -712,10 +747,6 @@ export class BaseContent extends React.PureComponent {
       mayHaveWeather
         ? "is-tall"
         : "";
-
-    const hasThumbsUpDownLayout =
-      prefs["discoverystream.thumbsUpDown.searchTopsitesCompact"];
-    const hasThumbsUpDown = prefs["discoverystream.thumbsUpDown.enabled"];
     const sectionsEnabled = prefs["discoverystream.sections.enabled"];
     const topicLabelsEnabled = prefs["discoverystream.topicLabels.enabled"];
     const sectionsCustomizeMenuPanelEnabled =
@@ -760,7 +791,6 @@ export class BaseContent extends React.PureComponent {
         "only-topsites",
       noSectionsEnabled && "no-sections",
       prefs["logowordmark.alwaysVisible"] && "visible-logo",
-      hasThumbsUpDownLayout && hasThumbsUpDown && "thumbs-ui-compact",
     ]
       .filter(v => v)
       .join(" ");
@@ -815,7 +845,6 @@ export class BaseContent extends React.PureComponent {
                     showLogo={
                       noSectionsEnabled || prefs["logowordmark.alwaysVisible"]
                     }
-                    handoffEnabled={searchHandoffEnabled}
                     {...props.Search}
                   />
                 </ErrorBoundary>
@@ -870,6 +899,8 @@ export class BaseContent extends React.PureComponent {
             mayHaveTimerWidget={mayHaveTimerWidget}
             mayHaveListsWidget={mayHaveListsWidget}
             showing={customizeMenuVisible}
+            toggleSectionsMgmtPanel={this.toggleSectionsMgmtPanel}
+            showSectionsMgmtPanel={this.state.showSectionsMgmtPanel}
           />
           {this.shouldShowOMCHighlight("CustomWallpaperHighlight") && (
             <MessageWrapper dispatch={this.props.dispatch}>

@@ -355,6 +355,12 @@ void JitScript::ensureProfileString(JSContext* cx, JSScript* script) {
   if (!profileString_) {
     oomUnsafe.crash("Failed to allocate profile string");
   }
+}
+
+void JitScript::ensureProfilerScriptSource(JSContext* cx, JSScript* script) {
+  MOZ_ASSERT(cx->runtime()->geckoProfiler().enabled());
+
+  AutoEnterOOMUnsafeRegion oomUnsafe;
   if (!cx->runtime()->geckoProfiler().insertScriptSource(
           script->scriptSource())) {
     oomUnsafe.crash("Failed to insert profiled script source");
@@ -944,7 +950,7 @@ void JitScript::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
                                        size_t* data, size_t* allocSites) const {
   *data += mallocSizeOf(this);
 
-  forEachICScript([=](const ICScript* script) {
+  forEachICScript([=, this](const ICScript* script) {
     // |data| already includes the outer ICScript because it's part of the
     // JitScript.
     if (script != &icScript_) {
@@ -982,7 +988,7 @@ JitScript* ICScript::outerJitScript() {
 // 5. The hash will change if the set of shapes stored in ShapeListSnapshot
 //    is changed by stub folding or GC (the shapes in ShapeListObject are weak
 //    pointers).
-HashNumber ICScript::hash() {
+HashNumber ICScript::hash(JSContext* cx) {
   HashNumber h = 0;
   for (size_t i = 0; i < numICEntries(); i++) {
     ICStub* stub = icEntry(i).firstStub();
@@ -1009,6 +1015,27 @@ HashNumber ICScript::hash() {
               for (size_t i = 0; i < numShapes; i++) {
                 Shape* shape = shapesObject->getUnbarriered(i);
                 h = mozilla::AddToHash(h, shape);
+              }
+              // Also include the GC number to handle the case where we bail
+              // out, add an additional shape, remove this new shape during GC,
+              // and then recompile with the current set of shapes.
+              // See bug 2002447.
+              h = mozilla::AddToHash(h, cx->runtime()->gc.majorGCCount());
+            }
+            break;
+          }
+          case CacheOp::GuardMultipleShapesToOffset: {
+            auto args = reader.argsForGuardMultipleShapesToOffset();
+            JSObject* shapes =
+                stubInfo->getStubField<StubField::Type::JSObject>(
+                    stub->toCacheIRStub(), args.shapesOffset);
+            auto* shapesObject = &shapes->as<ShapeListWithOffsetsObject>();
+            size_t numShapes = shapesObject->numShapes();
+            if (ShapeListSnapshot::shouldSnapshot(numShapes)) {
+              for (size_t i = 0; i < numShapes; i++) {
+                Shape* shape = shapesObject->getShapeUnbarriered(i);
+                h = mozilla::AddToHash(h, shape);
+                h = mozilla::AddToHash(h, shapesObject->getOffset(i));
               }
             }
             break;

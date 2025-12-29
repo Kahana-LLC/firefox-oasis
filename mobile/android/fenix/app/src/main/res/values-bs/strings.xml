@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">Privatni %s</string>
@@ -82,7 +89,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s briše vaše kolačiće, historiju i podatke o web stranici kada zatvorite sve svoje privatne tabove. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s briše vaše kolačiće, historiju i podatke o web stranici kada zatvorite sve svoje privatne tabove. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -608,6 +615,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">Podijelite kako ste otkrili Firefox i kako ga koristite s Mozilla-inim marketinškim partnerima. Ovi podaci se nikada ne prodaju.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Slažete se i počnite pretraživati</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Odaberite položaj trake sa alatima</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -802,8 +813,6 @@
   <string name="preferences_gestures">Gestovi</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Prilagodi</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Prijavite se da sinhronizujete tabove, oznake, lozinke i još mnogo toga.</string>
   <!-- Preference description shown in the banner prompting the user to sign in for sync features -->
   <string name="preferences_sign_in_description">Sinhronizujte svoje tabove, zabilješke, lozinke i više.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -1193,10 +1202,8 @@
   <!--
     Turn On Sync Preferences
 
-    Header of the Sync and save your data preference view
+    Header of the Sign in preference view
   -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Sinhronizujte i sačuvajte svoje podatke</string>
-  <!-- Header of the Sign in preference view -->
   <string name="preferences_sign_in">Prijava</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Prijavite se radi ponovnog povezivanja</string>
@@ -2053,8 +2060,6 @@
   <string name="toast_copy_link_to_clipboard">Kopirano u međuspremnik</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Prijavite se na Sync</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Sinhroniziraj i sačuvaj podatke</string>
   <!-- An option from the three dot menu to sign in -->
   <string name="sync_menu_sign_in">Prijava</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
@@ -2701,8 +2706,6 @@
   <string name="credit_cards_edit_card">Uredi karticu</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Broj kartice</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Datum isteka</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Mjesec isteka</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3764,11 +3767,9 @@
   <string name="review_prompt_feedback_header">Žao nam je što imate problema. Javite nam kako možemo poboljšati %1$s.</string>
   <!-- Label for a button opening a feedback forum -->
   <string name="review_prompt_feedback_button">Dajte povratnu informaciju</string>
-  <!--
-    Terms of use pop up prompt
+  <!-- ==== Terms of use pop up prompt ==== -->
 
-    Title for the pop up prompt
-  -->
+  <!-- Title for the pop up prompt -->
   <string name="terms_of_use_prompt_title">Imamo ažuriranje</string>
   <!--
     Message for the terms of use pop up prompt
@@ -3792,4 +3793,7 @@
   <string name="terms_of_use_prompt_accept">Prihvati</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Podsjeti me kasnije</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

@@ -1261,7 +1261,13 @@ class GeckoEngineSession(
             screenY: Int,
             element: GeckoSession.ContentDelegate.ContextElement,
         ) {
-            val hitResult = handleLongClick(element.srcUri, element.type, element.linkUri, element.title)
+            val hitResult = handleLongClick(
+                elementSrc = element.srcUri,
+                elementType = element.type,
+                uri = element.linkUri,
+                title = element.title,
+                linkText = element.linkText,
+            )
             hitResult?.let {
                 notifyObservers { onLongPress(it) }
             }
@@ -1517,7 +1523,22 @@ class GeckoEngineSession(
         }
     }
 
-    fun handleLongClick(elementSrc: String?, elementType: Int, uri: String? = null, title: String? = null): HitResult? {
+    /**
+     * Handles long click events.
+     *
+     * @param elementSrc The source of the element.
+     * @param elementType The type of the element.
+     * @param uri The (optional) URI of the element.
+     * @param title The (optional) title of the element.
+     * @param linkText The (optional) link text of the element.
+     */
+    fun handleLongClick(
+        elementSrc: String?,
+        elementType: Int,
+        uri: String? = null,
+        title: String? = null,
+        linkText: String? = null,
+    ): HitResult? {
         return when (elementType) {
             GeckoSession.ContentDelegate.ContextElement.TYPE_AUDIO ->
                 elementSrc?.let {
@@ -1545,7 +1566,7 @@ class GeckoEngineSession(
                         else -> HitResult.UNKNOWN(it)
                     }
                 } ?: uri?.let {
-                    HitResult.UNKNOWN(it)
+                    HitResult.UNKNOWN(src = it, linkText = linkText)
                 }
             }
             else -> HitResult.UNKNOWN("")
@@ -1624,6 +1645,7 @@ class GeckoEngineSession(
                 WebRequestError.ERROR_SAFEBROWSING_UNWANTED_URI -> ErrorType.ERROR_SAFEBROWSING_UNWANTED_URI
                 WebRequestError.ERROR_SAFEBROWSING_HARMFUL_URI -> ErrorType.ERROR_SAFEBROWSING_HARMFUL_URI
                 WebRequestError.ERROR_SAFEBROWSING_PHISHING_URI -> ErrorType.ERROR_SAFEBROWSING_PHISHING_URI
+                WebRequestError.ERROR_HARMFULADDON_URI -> ErrorType.ERROR_HARMFULADDON_URI
                 WebRequestError.ERROR_HTTPS_ONLY -> ErrorType.ERROR_HTTPS_ONLY
                 WebRequestError.ERROR_BAD_HSTS_CERT -> ErrorType.ERROR_BAD_HSTS_CERT
                 else -> ErrorType.UNKNOWN

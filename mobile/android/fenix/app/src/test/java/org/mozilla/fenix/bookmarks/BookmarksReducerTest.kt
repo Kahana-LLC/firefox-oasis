@@ -10,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mozilla.fenix.components.appstate.AppAction
 
 class BookmarksReducerTest {
     @Test
@@ -529,6 +530,70 @@ class BookmarksReducerTest {
     }
 
     @Test
+    fun `GIVEN we are on the select folder screen WHEN search is clicked THEN select folder enters search mode`() {
+        val state = BookmarksState.default.copy(
+            bookmarksSelectFolderState = BookmarksSelectFolderState(
+                outerSelectionGuid = "selection guid",
+                isSearching = false,
+            ),
+        )
+
+        val result = bookmarksReducer(state, SelectFolderAction.SearchClicked)
+
+        assertTrue(result.bookmarksSelectFolderState!!.isSearching)
+    }
+
+    @Test
+    fun `GIVEN select folder search is active WHEN dismissed THEN select folder exits search mode`() {
+        val state = BookmarksState.default.copy(
+            bookmarksSelectFolderState = BookmarksSelectFolderState(
+                outerSelectionGuid = "selection guid",
+                isSearching = true,
+            ),
+        )
+
+        val result = bookmarksReducer(state, SelectFolderAction.SearchDismissed)
+
+        assertFalse(result.bookmarksSelectFolderState!!.isSearching)
+    }
+
+    @Test
+    fun `GIVEN we are on the select folder screen WHEN the search query changes THEN persist the new query`() {
+        val folder1 =
+            SelectFolderItem(
+                0,
+                BookmarkItem
+                .Folder(
+                    title = "one folder",
+                    guid = "",
+                    position = null,
+                ),
+            )
+        val folder2 =
+            SelectFolderItem(
+                0,
+                BookmarkItem
+                .Folder(
+                    title = "other",
+                    guid = "",
+                    position = null,
+                ),
+            )
+        val state = BookmarksState.default.copy(
+            bookmarksSelectFolderState = BookmarksSelectFolderState(
+                folders = listOf(folder1, folder2),
+                outerSelectionGuid = "selection guid",
+                searchQuery = "one folder",
+            ),
+        )
+
+        val newQuery = "other"
+        val result = bookmarksReducer(state, SelectFolderAction.SearchQueryUpdated(newQuery))
+
+        assertEquals(newQuery, result.bookmarksSelectFolderState!!.searchQuery)
+    }
+
+    @Test
     fun `GIVEN we are on the select folder screen WHEN folders are loaded THEN attach loaded folders on the select screen state`() {
         val state = BookmarksState.default.copy(
             bookmarksSelectFolderState = BookmarksSelectFolderState(outerSelectionGuid = "selection guid"),
@@ -551,6 +616,49 @@ class BookmarksReducerTest {
             bookmarksSelectFolderState = BookmarksSelectFolderState(
                 outerSelectionGuid = "selection guid",
                 folders = folders,
+                filteredFolders = folders,
+                isLoading = false,
+                isSearching = false,
+            ),
+        )
+
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `GIVEN we are on the select folder screen and search is active WHEN filtered folders are loaded THEN filtered folders gets updated`() {
+        val bookmarksFolder = SelectFolderItem(0, BookmarkItem.Folder("Bookmarks", "guid0", null))
+        val folders = listOf(
+            bookmarksFolder,
+            SelectFolderItem(1, BookmarkItem.Folder("Nested One", "guid0", null)),
+            SelectFolderItem(2, BookmarkItem.Folder("Nested Two", "guid0", null)),
+            SelectFolderItem(2, BookmarkItem.Folder("Nested Two", "guid0", null)),
+            SelectFolderItem(1, BookmarkItem.Folder("Nested One", "guid0", null)),
+            SelectFolderItem(2, BookmarkItem.Folder("Nested Two", "guid1", null)),
+            SelectFolderItem(3, BookmarkItem.Folder("Nested Three", "guid0", null)),
+            SelectFolderItem(0, BookmarkItem.Folder("Nested 0", "guid0", null)),
+        )
+
+        val state = BookmarksState.default.copy(
+            bookmarksSelectFolderState =
+                BookmarksSelectFolderState(
+                    outerSelectionGuid = "selection guid",
+                    folders = folders,
+                    isSearching = true,
+                ),
+        )
+
+        val filteredFolders = folders.filter { it.title.startsWith("bookmarks", ignoreCase = true) }
+
+        val result = bookmarksReducer(state, SelectFolderAction.FilteredFoldersLoaded(filteredFolders))
+
+        val expected = state.copy(
+            bookmarksSelectFolderState = BookmarksSelectFolderState(
+                outerSelectionGuid = "selection guid",
+                folders = folders,
+                filteredFolders = listOf(bookmarksFolder),
+                isLoading = false,
+                isSearching = true,
             ),
         )
 
@@ -588,9 +696,52 @@ class BookmarksReducerTest {
             bookmarksSelectFolderState = state.bookmarksSelectFolderState?.copy(
                 outerSelectionGuid = "guid0",
             ),
+            bookmarksSnackbarState = BookmarksSnackbarState.BookmarkMoved("title", "Nested 0"),
         )
 
         assertEquals(expected, result)
+    }
+
+    @Test
+    fun `GIVEN we are on the select folder screen and the bookmark has a url longer than 25 characters WHEN a folder is clicked THEN update the truncate the title and display a snackbar with the truncated title`() {
+        val longTitle = "https://www.firefox.com/en-US/?utm_source=www.mozilla.org&utm_medium=referral&utm_campaign=nav&utm_content=firefox"
+        val state = BookmarksState.default.copy(
+            bookmarksEditBookmarkState = BookmarksEditBookmarkState(
+                bookmark = generateBookmark().copy(title = longTitle),
+                folder = BookmarkItem.Folder("Bookmarks", "guid0", null),
+            ),
+            bookmarksSelectFolderState = BookmarksSelectFolderState(
+                outerSelectionGuid = "guid0",
+                folders = listOf(
+                    SelectFolderItem(0, BookmarkItem.Folder("Bookmarks", "guid0", null)),
+                    SelectFolderItem(0, BookmarkItem.Folder("Nested 0", "guid0", null)),
+                ),
+            ),
+        )
+
+        val result = bookmarksReducer(
+            state = state,
+            action = SelectFolderAction.ItemClicked(
+                folder = SelectFolderItem(0, BookmarkItem.Folder("Nested 0", "guid0", null)),
+            ),
+        )
+
+        val expected = state.copy(
+            bookmarksEditBookmarkState = state.bookmarksEditBookmarkState?.copy(
+                folder = BookmarkItem.Folder("Nested 0", "guid0", null),
+                edited = true,
+            ),
+            bookmarksSelectFolderState = state.bookmarksSelectFolderState?.copy(
+                outerSelectionGuid = "guid0",
+            ),
+            bookmarksSnackbarState = BookmarksSnackbarState.BookmarkMoved(formatBookmarkTitle(longTitle), "Nested 0"),
+        )
+
+        assertEquals(expected, result)
+
+        val finalResult = bookmarksReducer(result, BackClicked)
+
+        assertEquals(BookmarksSnackbarState.BookmarkMoved(formatBookmarkTitle(longTitle), "Nested 0"), finalResult.bookmarksSnackbarState)
     }
 
     @Test

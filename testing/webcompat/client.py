@@ -46,6 +46,20 @@ class Client:
                 level,
             )
 
+    async def maybe_enable_font_inflation(self):
+        # GVE does not enable font inflation by default. We want to match Fenix.
+        if self.session.capabilities["platformName"] != "android":
+            return
+        with self.using_context("chrome"):
+            self.execute_script(
+                r"""
+                  const minTwips = "font.size.inflation.minTwips";
+                  if (!Services.prefs.getIntPref(minTwips)) {
+                    Services.prefs.setIntPref(minTwips, 120);
+                  }
+                """
+            )
+
     async def maybe_override_platform(self):
         if hasattr(self, "_platform_override_checked"):
             return
@@ -525,6 +539,7 @@ class Client:
     async def navigate(self, url, timeout=90, no_skip=False, **kwargs):
         await self.await_interventions_started()
         await self.maybe_override_platform()
+        await self.maybe_enable_font_inflation()
         try:
             return await asyncio.wait_for(
                 asyncio.ensure_future(self._navigate(url, **kwargs)), timeout=timeout
@@ -1545,7 +1560,7 @@ class Client:
     async def test_aceomni_pan_and_zoom_works(self, url):
         await self.navigate(url, wait="none")
         img = self.await_css("#imageZoom", is_displayed=True)
-        await self.stall(1)
+        await self.stall(2)
 
         def get_zoom_x():
             return self.execute_script(

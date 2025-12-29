@@ -10,7 +10,9 @@ import static org.mozilla.geckoview.GeckoSession.GeckoPrintException.ERROR_NO_PR
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.Point;
@@ -50,6 +52,9 @@ import java.io.InputStream;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.security.Principal;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -291,6 +296,7 @@ public class GeckoSession {
   private float mViewportLeft;
   private float mViewportTop;
   private float mViewportZoom = 1.0f;
+  private ScrollPositionUpdate mLastScrollPositionUpdate = null;
   private int mKeyboardHeight = 0; // The software keyboard height, 0 if it's hidden.
 
   //
@@ -580,7 +586,8 @@ public class GeckoSession {
                     message.getString("alt"),
                     message.getString("elementType"),
                     message.getString("elementSrc"),
-                    message.getString("textContent"));
+                    message.getString("textContent"),
+                    message.getString("linkText"));
 
             delegate.onContextMenu(
                 GeckoSession.this, message.getInt("screenX"), message.getInt("screenY"), elem);
@@ -3427,7 +3434,17 @@ public class GeckoSession {
   @UiThread
   public void setCompositorScrollDelegate(final @Nullable CompositorScrollDelegate delegate) {
     ThreadUtils.assertOnUiThread();
+    if (mCompositorScrollDelegate == delegate) {
+      return;
+    }
+
     mCompositorScrollDelegate = delegate;
+
+    // Notify the newly registered delegate immediately about the
+    // most recent update, if there is one.
+    if (mCompositorScrollDelegate != null && mLastScrollPositionUpdate != null) {
+      mCompositorScrollDelegate.onScrollChanged(this, mLastScrollPositionUpdate);
+    }
   }
 
   /**
@@ -3921,8 +3938,18 @@ public class GeckoSession {
       /** The source URI (src) of the element. Set for (nested) media elements. */
       public final @Nullable String srcUri;
 
-      /** The text content of the element */
+      /**
+       * The text content of the element
+       *
+       * @deprecated This field is deprecated, please use {@link ContextElement#linkText} to
+       *     retrieve the text associated with a link element.
+       */
+      @Deprecated
+      @DeprecationSchedule(id = "context-element-api-updates", version = 151)
       public final @Nullable String textContent;
+
+      /** The link text of the element */
+      public final @Nullable String linkText;
 
       // TODO: Bug 1595822 make public
       final List<WebExtension.Menu> extensionMenus;
@@ -3937,6 +3964,7 @@ public class GeckoSession {
        * @param typeStr The type of the element.
        * @param srcUri The source URI (src).
        * @param textContent The text content.
+       * @param linkText The link text content.
        */
       protected ContextElement(
           final @Nullable String baseUri,
@@ -3945,7 +3973,8 @@ public class GeckoSession {
           final @Nullable String altText,
           final @NonNull String typeStr,
           final @Nullable String srcUri,
-          final @Nullable String textContent) {
+          final @Nullable String textContent,
+          final @Nullable String linkText) {
         this.baseUri = baseUri;
         this.linkUri = linkUri;
         this.title = title;
@@ -3954,6 +3983,7 @@ public class GeckoSession {
         this.srcUri = srcUri;
         this.textContent = textContent;
         this.extensionMenus = null;
+        this.linkText = linkText;
       }
 
       /**
@@ -3965,7 +3995,11 @@ public class GeckoSession {
        * @param altText The alternative text (alt).
        * @param typeStr The type of the element.
        * @param srcUri The source URI (src).
+       * @deprecated This constructor has been deprecated and will be removed in a future version.
+       *     Please use the other overloaded constructors.
        */
+      @Deprecated
+      @DeprecationSchedule(id = "context-element-api-updates", version = 151)
       protected ContextElement(
           final @Nullable String baseUri,
           final @Nullable String linkUri,
@@ -3973,7 +4007,7 @@ public class GeckoSession {
           final @Nullable String altText,
           final @NonNull String typeStr,
           final @Nullable String srcUri) {
-        this(baseUri, linkUri, title, altText, typeStr, srcUri, null);
+        this(baseUri, linkUri, title, altText, typeStr, srcUri, null, null);
       }
 
       private static int getType(final String name) {
@@ -6926,12 +6960,15 @@ public class GeckoSession {
   /**
    * Get a matrix for transforming from screen coordinates to Android's current window coordinates.
    *
+   * @param activity an Activity of this window.
    * @param matrix Matrix to be replaced by the transformation matrix.
    * @see <a
    *     href="https://developer.android.com/guide/topics/large-screens/multi-window-support#window_metrics">...</a>
    */
+  @SuppressLint("BlockedPrivateApi")
   @UiThread
-  /* package */ void getScreenToWindowManagerOffsetMatrix(@NonNull final Matrix matrix) {
+  /* package */ void getScreenToWindowManagerOffsetMatrix(
+      @NonNull final Activity activity, @NonNull final Matrix matrix) {
     ThreadUtils.assertOnUiThread();
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -6943,8 +6980,33 @@ public class GeckoSession {
       return;
     }
 
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      try {
+        // Android 9/10 hides WindowConfiguration object.
+        final Configuration config = activity.getResources().getConfiguration();
+        final Field windowConfigurationField =
+            Configuration.class.getDeclaredField("windowConfiguration");
+        windowConfigurationField.setAccessible(true);
+        final Object windowConfig = windowConfigurationField.get(config);
+        final Method getBoundsMethod;
+        if (activity.isInMultiWindowMode()) {
+          getBoundsMethod = windowConfig.getClass().getDeclaredMethod("getBounds");
+        } else {
+          getBoundsMethod = windowConfig.getClass().getDeclaredMethod("getAppBounds");
+        }
+        final Rect currentWindowRect = (Rect) getBoundsMethod.invoke(windowConfig);
+        matrix.postTranslate(-currentWindowRect.left, -currentWindowRect.top);
+      } catch (final NoSuchMethodException
+          | NoSuchFieldException
+          | IllegalAccessException
+          | InvocationTargetException e) {
+        Log.e(LOGTAG, "Could not convert from screen coordinate to window manager coordinate", e);
+      }
+      return;
+    }
+
     // TODO(m_kato): Bug 1678531
-    // How to get window coordinate on Android 7-10 that supports split window?
+    // How to get window coordinate on Android 8 that supports split window?
   }
 
   /**
@@ -7835,6 +7897,7 @@ public class GeckoSession {
     update.scrollY = scrollY;
     update.zoom = zoom;
     update.source = source;
+    mLastScrollPositionUpdate = update;
     if (mCompositorScrollDelegate != null) {
       mCompositorScrollDelegate.onScrollChanged(this, update);
     }

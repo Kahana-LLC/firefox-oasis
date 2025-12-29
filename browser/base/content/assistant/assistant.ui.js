@@ -173,169 +173,160 @@ function securelyClearSession() {
 const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
+const emptyState = document.getElementById("empty-state");
 
-// Modernize the Send button
+// Function to hide empty state when messages are added
+function hideEmptyState() {
+  if (emptyState && !emptyState.classList.contains('hidden')) {
+    emptyState.classList.add('hidden');
+  }
+}
+
+// Replace send button with SVG icon button
+go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="36" height="36" rx="18" fill="#7A9200"/>
+  <path d="M18 26V10M18 10L24 16M18 10L12 16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
 go.style.cssText = `
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
   border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
+  background: transparent;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 go.addEventListener("mouseenter", () => {
   go.style.transform = "translateY(-1px)";
-  go.style.boxShadow = "0 4px 8px rgba(102, 126, 234, 0.3)";
+  go.style.opacity = "0.9";
 });
 go.addEventListener("mouseleave", () => {
   go.style.transform = "translateY(0)";
-  go.style.boxShadow = "0 2px 4px rgba(102, 126, 234, 0.2)";
+  go.style.opacity = "1";
 });
 
-// Stop button
+// Voice button with microphone icon
 const bar = document.getElementById("bar") || q.parentElement;
-const stop = document.createElement("button");
-stop.textContent = "Stop";
-stop.disabled = true;
-stop.style.cssText = `
-  padding: 10px 20px;
-  border-radius: 12px;
-  border: none;
-  background: #ef4444;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: not-allowed;
-  transition: all 0.2s ease;
-  opacity: 0.5;
-`;
-bar.appendChild(stop);
 
-// Define setBusy function with modern styling for stop button
+// Create input row wrapper
+const inputRow = document.createElement("div");
+inputRow.id = "input-row";
+
+// Add just the input field to input row
+if (q.parentElement === bar) {
+  inputRow.appendChild(q);
+}
+bar.appendChild(inputRow);
+
+// Create buttons row for feedback, voice, and send
+const buttonsRow = document.createElement("div");
+buttonsRow.id = "buttons-row";
+bar.appendChild(buttonsRow);
+
+const voiceBtn = document.createElement("button");
+voiceBtn.id = "voice-btn";
+voiceBtn.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
+</svg>`;
+voiceBtn.style.cssText = `
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+voiceBtn.addEventListener("mouseenter", () => {
+  voiceBtn.style.transform = "translateY(-1px)";
+  voiceBtn.style.opacity = "0.9";
+});
+voiceBtn.addEventListener("mouseleave", () => {
+  voiceBtn.style.transform = "translateY(0)";
+  voiceBtn.style.opacity = "1";
+});
+
+// Feedback button with text - positioned below input
+const feedbackBtn = document.createElement("button");
+feedbackBtn.id = "feedback-btn";
+feedbackBtn.textContent = "Feedback?";
+feedbackBtn.style.cssText = `
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: var(--primary-green, #7A9200);
+  font-weight: 500;
+  border-radius: 8px;
+  white-space: nowrap;
+`;
+feedbackBtn.title = "Submit feedback";
+feedbackBtn.addEventListener("mouseenter", () => {
+  feedbackBtn.style.background = "var(--primary-50, #F2F4E5)";
+});
+feedbackBtn.addEventListener("mouseleave", () => {
+  feedbackBtn.style.background = "transparent";
+});
+feedbackBtn.addEventListener("click", () => {
+  try {
+    const feedbackUrl = "https://tally.so/r/3jkNN6";
+    if (typeof openWebLinkIn === 'function') {
+      openWebLinkIn(feedbackUrl, "tab", {});
+    } else if (window.top && window.top.openWebLinkIn) {
+      window.top.openWebLinkIn(feedbackUrl, "tab", {});
+    } else {
+      window.open(feedbackUrl, "_blank");
+    }
+  } catch (error) {
+    console.log("Could not open feedback URL:", error);
+  }
+});
+
+// Add all buttons to buttons row: feedback, voice, send
+buttonsRow.appendChild(feedbackBtn);
+buttonsRow.appendChild(voiceBtn);
+if (go.parentElement === bar) {
+  buttonsRow.appendChild(go);
+}
+
+// Define setBusy function with send button toggle to pause
 let busy = false;
 let stopped = false;
 
 function setBusy(v) {
   busy = v;
   q.disabled = v;
-  go.disabled = v;
-  stop.disabled = !v;
-  go.textContent = v ? "…" : "Send";
   
-  // Update stop button styling based on state
+  // Toggle send button to pause icon when busy
   if (v) {
-    stop.style.cssText = `
-      padding: 10px 20px;
-      border-radius: 12px;
-      border: none;
-      background: #ef4444;
-      color: white;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      opacity: 1;
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
-    `;
-    // Add hover effects when enabled
-    const stopHoverEnter = () => {
-      stop.style.transform = "translateY(-1px)";
-      stop.style.boxShadow = "0 4px 8px rgba(239, 68, 68, 0.3)";
-    };
-    const stopHoverLeave = () => {
-      stop.style.transform = "translateY(0)";
-      stop.style.boxShadow = "0 2px 4px rgba(239, 68, 68, 0.2)";
-    };
-    stop.addEventListener("mouseenter", stopHoverEnter);
-    stop.addEventListener("mouseleave", stopHoverLeave);
+    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+    </svg>`;
+    go.title = "Click to stop";
   } else {
-    stop.style.cssText = `
-      padding: 10px 20px;
-      border-radius: 12px;
-      border: none;
-      background: #ef4444;
-      color: white;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: not-allowed;
-      transition: all 0.2s ease;
-      opacity: 0.5;
-    `;
+    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#7A9200"/>
+      <path d="M18 26V10M18 10L24 16M18 10L12 16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    go.title = "Send message";
   }
 }
 
-// Clear context button
-const clearContext = document.createElement("button");
-clearContext.textContent = "Clear Context";
-clearContext.style.cssText = `
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  color: #374151;
-  font-weight: 500;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-`;
-clearContext.title = "Clear conversation history (start fresh)";
-clearContext.addEventListener("mouseenter", () => {
-  clearContext.style.background = "#f9fafb";
-  clearContext.style.borderColor = "#d1d5db";
-  clearContext.style.transform = "translateY(-1px)";
-  clearContext.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
-clearContext.addEventListener("mouseleave", () => {
-  clearContext.style.background = "white";
-  clearContext.style.borderColor = "#e5e7eb";
-  clearContext.style.transform = "translateY(0)";
-  clearContext.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
-});
-bar.appendChild(clearContext);
-clearContext.addEventListener("click", () => {
-  resetAssistantSession();
-  append("\n🔄 Conversation context cleared. Starting fresh!\n");
-});
-
-// Microphone button
-const micButton = document.createElement("button");
-micButton.innerHTML = "🎤";
-micButton.style.cssText = `
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
+// Use the voiceBtn as micButton for compatibility with existing code
+const micButton = voiceBtn;
 micButton.title = "Click to start voice input";
-micButton.addEventListener("mouseenter", () => {
-  if (!isRecording) {
-    micButton.style.background = "#f9fafb";
-    micButton.style.borderColor = "#d1d5db";
-    micButton.style.transform = "translateY(-1px)";
-    micButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-  }
-});
-micButton.addEventListener("mouseleave", () => {
-  if (!isRecording) {
-    micButton.style.background = "white";
-    micButton.style.borderColor = "#e5e7eb";
-    micButton.style.transform = "translateY(0)";
-    micButton.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.05)";
-  }
-});
-bar.appendChild(micButton);
 
 let isRecording = false;
 
@@ -351,22 +342,25 @@ micButton.addEventListener("click", async () => {
   }
 
   if (isRecording) {
-    // Stop recording
-    micButton.innerHTML = "⏹️";
+    // Stop recording - show stop icon while processing
+    micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+    </svg>`;
     micButton.disabled = true;
     micButton.style.cssText = `
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: 1px solid #ef4444;
-      background: #fee2e2;
+      padding: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
+      border: none;
+      background: transparent;
       cursor: not-allowed;
-      font-size: 18px;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.8;
+      opacity: 0.6;
     `;
     
     try {
@@ -383,44 +377,66 @@ micButton.addEventListener("click", async () => {
       append(`\n❌ Transcription failed: ${error.message}\n`);
     } finally {
       isRecording = false;
-      micButton.innerHTML = "🎤";
+      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
+      </svg>`;
       micButton.disabled = false;
       micButton.style.cssText = `
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid #e5e7eb;
-        background: white;
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        border: none;
+        background: transparent;
         cursor: pointer;
-        font-size: 18px;
         transition: all 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-right: 8px;
       `;
       micButton.title = "Click to start voice input";
     }
   } else {
-    // Start recording
+    // Start recording - change to stop icon from Figma design
     try {
       await voiceInputService.startRecording();
       isRecording = true;
-      micButton.innerHTML = "⏹️";
+      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+        <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
+      </svg>`;
       micButton.style.cssText = `
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid #ef4444;
-        background: #fee2e2;
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        border: none;
+        background: transparent;
         cursor: pointer;
-        font-size: 18px;
         transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-right: 8px;
+        animation: pulse 1.5s ease-in-out infinite;
       `;
       micButton.title = "Click to stop recording";
       append("\n🎤 Recording... Click again to stop.\n");
+      
+      // Add pulse animation for recording state
+      if (!document.getElementById('recording-pulse-style')) {
+        const style = document.createElement('style');
+        style.id = 'recording-pulse-style';
+        style.textContent = `
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
     } catch (error) {
       console.error("Recording error:", error);
       append(`\n❌ Failed to start recording: ${error.message}\n`);
@@ -562,41 +578,35 @@ function updateAuthUI(authenticated, user = null) {
         sendButton.disabled = !authenticated;
     }
     
-    // Update auth status display - wait for element to exist
-    waitForElement('#authStatus').then(authStatus => {
-        console.log('Auth status element found:', authStatus);
-        const statusSpan = authStatus.querySelector('span:last-child');
-        if (statusSpan) {
-            if (authenticated) {
-                statusSpan.textContent = `Signed in as ${user?.email || 'User'}`;
-                statusSpan.style.color = '#51cf66';
-                console.log('Updated auth status to authenticated');
-            } else {
-                statusSpan.textContent = 'Not Authenticated';
-                statusSpan.style.color = '#ff6b6b';
-                console.log('Updated auth status to not authenticated');
-            }
-        } else {
-            console.warn('Status span not found within authStatus');
-        }
-    }).catch(error => {
-        console.warn('Auth status element not found:', error.message);
-    });
+    // Update dropdown menu if it exists
+    if (typeof updateDropdownMenu === 'function') {
+        updateDropdownMenu();
+    }
     
-    // Show/hide auth buttons - wait for element to exist
-    waitForElement('#authButtons').then(authButtons => {
-        console.log('Auth buttons container found:', authButtons);
-        const loginButton = authButtons.querySelector('.login-btn');
-        const signupButton = authButtons.querySelector('.signup-btn');
-        const menuButton = authButtons.querySelector('.menu-btn');
-
-        if (loginButton) loginButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (signupButton) signupButton.style.display = authenticated ? 'none' : 'inline-block';
-        if (menuButton) menuButton.style.display = authenticated ? 'inline-block' : 'none';
+    // Update authentication banner (wrapped in try-catch for Firefox chrome context)
+    try {
+        const authBanner = document.getElementById('authBanner');
+        const bannerUserEmail = document.getElementById('bannerUserEmail');
+        const hideBanner = sessionStorage.getItem("hideBanner");
         
-    }).catch(error => {
-        console.warn('Auth buttons container not found:', error.message);
-    });
+        if (authBanner && bannerUserEmail) {
+            if (authenticated && user?.email && !hideBanner) {
+                authBanner.style.display = "flex";
+                bannerUserEmail.textContent = user.email;
+                console.log('Auth banner shown for:', user.email);
+            } else {
+                authBanner.style.display = "none";
+            }
+        }
+    } catch (error) {
+        // Banner elements not yet in DOM, will be updated on next call
+        console.log('Auth banner not yet available:', error.name);
+    }
+    
+    // Clear banner preference when logging out
+    if (!authenticated) {
+        sessionStorage.removeItem("hideBanner");
+    }
     
     console.log('Auth UI updated:', { authenticated, user: user?.email });
     
@@ -766,162 +776,7 @@ window.addEventListener('message', async (event) => {
     }
 });
 
-// Add a simple "Check Authentication" button for after OAuth
-function addAuthCheckButton() {
-    // Check if button already exists
-    if (document.getElementById('checkAuthBtn')) {
-        return;
-    }
-    
-    // Try to find the auth header, if not found, add it to the log area
-    let authHeader = document.getElementById('authHeader');
-    if (!authHeader) {
-        // Create auth header in the log area
-        const log = document.getElementById('log');
-        if (log) {
-            authHeader = document.createElement('div');
-            authHeader.id = 'authHeader';
-            authHeader.style.cssText = `
-                background: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
-                padding: 12px;
-                margin: 8px 0;
-                text-align: center;
-            `;
-            log.appendChild(authHeader);
-        } else {
-            return;
-        }
-    }
-    
-    const checkAuthBtn = document.createElement('button');
-    checkAuthBtn.id = 'checkAuthBtn';
-    checkAuthBtn.textContent = 'Check Authentication';
-    checkAuthBtn.style.cssText = `
-        background: #10b981;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-size: 12px;
-        cursor: pointer;
-        margin-left: 10px;
-        font-weight: 500;
-    `;
-    
-    checkAuthBtn.addEventListener('click', async () => {
-        // Create a more detailed input dialog for the full OAuth data
-        const instructions = `Please copy the FULL callback URL from your browser address bar and paste it here.
-        
-The URL should look like:
-https://kahana.co/oauth-callback#access_token=...&expires_at=...&expires_in=...&provider_token=...&refresh_token=...&token_type=bearer
-
-Or just paste the access_token part if you prefer:`;
-        
-        const input = prompt(instructions);
-        if (input && input.trim()) {
-            try {
-                console.log('Processing OAuth data manually...');
-                
-                let authData = {};
-                
-                // Check if it's a full URL or just a token
-                if (input.includes('#')) {
-                    // It's a full URL, parse it
-                    const url = new URL(input);
-                    const hashParams = new URLSearchParams(url.hash.substring(1));
-                    
-                    authData = {
-                        access_token: hashParams.get('access_token'),
-                        refresh_token: hashParams.get('refresh_token'),
-                        expires_at: hashParams.get('expires_at'),
-                        expires_in: hashParams.get('expires_in'),
-                        token_type: hashParams.get('token_type'),
-                        timestamp: Date.now(),
-                        source: 'manual_url'
-                    };
-                } else {
-                    // It's just a token, create minimal auth data
-                    authData = {
-                        access_token: input.trim(),
-                        refresh_token: '', // We'll need to handle this differently
-                        timestamp: Date.now(),
-                        source: 'manual_token'
-                    };
-                }
-                
-                console.log('Auth data:', authData);
-                
-                // Try to set the session with the auth data
-                if (window.supabaseAuth && window.supabaseAuth.supabase && authData.access_token) {
-                    console.log('Setting session with auth data...');
-                    const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
-                        access_token: authData.access_token,
-                        refresh_token: authData.refresh_token || ''
-                    });
-                    
-                    if (error) {
-                        console.error('Failed to set session:', error.message);
-                        showAuthError(`Authentication failed: ${error.message}`);
-                    } else {
-                        console.log('Session set successfully for user:', data.user?.id);
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Save session securely
-                        if (data.session) {
-                            securelySaveSession(data.session);
-                        }
-
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    }
-                    return;
-                }
-                
-                // Fallback: Use the OAuth callback handler
-                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                    const result = await window.supabaseAuth.handleOAuthCallbackData(authData);
-                    if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        
-                        // Update the UI immediately
-                        updateAuthUI(true, data.user);
-                        
-                        // Also reload after a delay to ensure everything is synced
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    } else {
-                        showAuthError(`Authentication failed: ${result.error}`);
-                    }
-                } else {
-                    showAuthError('Authentication service not available.');
-                }
-            } catch (error) {
-                console.error('Error processing OAuth data:', error);
-                showAuthError('Error processing OAuth data. Please try again.');
-            }
-        }
-    });
-    
-    authHeader.appendChild(checkAuthBtn);
-}
-
-// Add the check authentication button
-setTimeout(addAuthCheckButton, 1000);
-
-// Also try to add it immediately
-addAuthCheckButton();
-
-// Try multiple times to ensure the button gets added
-setTimeout(addAuthCheckButton, 2000);
-setTimeout(addAuthCheckButton, 3000);
+// Check Authentication button and feature removed
 
 // Handle successful authentication
 function handleAuthSuccess(authData) {
@@ -1002,120 +857,473 @@ function showAuthError(message) {
     }, 5000);
 }
 
-// Create a clean authentication header
+// Create draggable top bar with window controls
 const authHeader = document.createElement("div");
 authHeader.style.cssText = `
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 35px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #F0F6F1;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.20);
+  cursor: grab;
+  z-index: 2147483647;
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin: 16px;
+`;
+document.body.appendChild(authHeader);
+
+// Add padding to main content to account for fixed header
+const mainElement = log.parentElement;
+mainElement.style.paddingTop = "64px";
+
+// Left side: Logo + Title
+const leftSection = document.createElement("div");
+leftSection.style.cssText = `
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+// Sloth logo
+const logoContainer = document.createElement("div");
+logoContainer.style.cssText = `
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+logoContainer.innerHTML = `
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="16.5" cy="16.5" rx="12.5" ry="10.5" fill="#978455"/>
+    <ellipse cx="16.5" cy="18.5" rx="10.5" ry="8.5" fill="#F8FAF2"/>
+    <ellipse cx="10.3268" cy="19.2453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 19.2453)" fill="#978455"/>
+    <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 12 18)" fill="#F8FAF2"/>
+    <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7334 14)" fill="#978455"/>
+    <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 18)" fill="#F8FAF2"/>
+  </svg>
+`;
+leftSection.appendChild(logoContainer);
+
+// Title
+const titleText = document.createElement("p");
+titleText.textContent = "Oasis AI";
+titleText.style.cssText = `
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-headings, #333);
+  line-height: 24px;
+`;
+leftSection.appendChild(titleText);
+
+authHeader.appendChild(leftSection);
+
+// Right side: Window controls + Menu buttons
+const rightSection = document.createElement("div");
+rightSection.style.cssText = `
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+// Minimize button
+const minimizeBtn = document.createElement("button");
+minimizeBtn.innerHTML = `−`;
+minimizeBtn.title = "Minimize";
+minimizeBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
   font-size: 14px;
-  font-weight: 500;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
 `;
-bar.parentElement.insertBefore(authHeader, bar);
+minimizeBtn.addEventListener("mouseenter", () => {
+  minimizeBtn.style.backgroundColor = "#E5E7EB";
+});
+minimizeBtn.addEventListener("mouseleave", () => {
+  minimizeBtn.style.backgroundColor = "#F0F6F1";
+});
 
-// Auth status display
-const authStatus = document.createElement("div");
-authStatus.id = "authStatus";
-authStatus.style.cssText = "display: flex; align-items: center; gap: 8px;";
-authStatus.innerHTML = `
-  <span style="font-size: 16px;">🔒</span>
-  <span>Not Authenticated</span>
+let minimizeClickTimeout = null;
+minimizeBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (minimizeClickTimeout) {
+    console.log("Minimize click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Minimize button clicked, parent:", window.parent !== window);
+  try {
+    window.parent.postMessage({ type: "oasisOverlayMinimize" }, "*");
+    console.log("Minimize message sent successfully");
+    
+    // Set debounce timeout
+    minimizeClickTimeout = setTimeout(() => {
+      minimizeClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending minimize message:", err);
+  }
+}, true);
+rightSection.appendChild(minimizeBtn);
+
+// Maximize/Expand button with toggle
+let isMaximized = false;
+const expandBtn = document.createElement("button");
+expandBtn.innerHTML = `⛶`;
+expandBtn.title = "Maximize";
+expandBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
 `;
-authHeader.appendChild(authStatus);
+expandBtn.addEventListener("mouseenter", () => {
+  expandBtn.style.backgroundColor = "#E5E7EB";
+});
+expandBtn.addEventListener("mouseleave", () => {
+  expandBtn.style.backgroundColor = "#F0F6F1";
+});
 
-// Auth buttons container
+let expandClickTimeout = null;
+expandBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (expandClickTimeout) {
+    console.log("Expand click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Expand button clicked, isMaximized:", isMaximized, "parent:", window.parent !== window);
+  try {
+    if (isMaximized) {
+      // Restore to normal size
+      window.parent.postMessage({ type: "oasisOverlayExitFullscreen" }, "*");
+      expandBtn.title = "Maximize";
+      isMaximized = false;
+      console.log("Restore message sent successfully");
+    } else {
+      // Maximize
+      window.parent.postMessage({ type: "oasisOverlayExpand" }, "*");
+      expandBtn.title = "Restore";
+      isMaximized = true;
+      console.log("Maximize message sent successfully");
+    }
+    
+    // Set debounce timeout
+    expandClickTimeout = setTimeout(() => {
+      expandClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending expand message:", err);
+  }
+}, true);
+rightSection.appendChild(expandBtn);
+
+// Close button
+const closeBtn = document.createElement("button");
+closeBtn.innerHTML = `✕`;
+closeBtn.title = "Close";
+closeBtn.style.cssText = `
+  border: 0;
+  background: #F0F6F1;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s ease;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+`;
+closeBtn.addEventListener("mouseenter", () => {
+  closeBtn.style.backgroundColor = "#E5E7EB";
+});
+closeBtn.addEventListener("mouseleave", () => {
+  closeBtn.style.backgroundColor = "#F0F6F1";
+});
+
+let closeClickTimeout = null;
+closeBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  
+  // Debounce to prevent double-clicks
+  if (closeClickTimeout) {
+    console.log("Close click ignored (debounce)");
+    return;
+  }
+  
+  console.log("Close button clicked, parent:", window.parent !== window);
+  try {
+    window.parent.postMessage({ type: "oasisOverlayClose" }, "*");
+    console.log("Close message sent successfully");
+    
+    // Set debounce timeout
+    closeClickTimeout = setTimeout(() => {
+      closeClickTimeout = null;
+    }, 300);
+  } catch (err) {
+    console.error("Error sending close message:", err);
+  }
+}, true);
+rightSection.appendChild(closeBtn);
+
+// Separator
+const separator = document.createElement("div");
+separator.style.cssText = `
+  width: 1px;
+  height: 20px;
+  background: #E5E7EB;
+  margin: 0 4px;
+`;
+rightSection.appendChild(separator);
+
+// Three-dot menu button
+const menuButton = document.createElement("button");
+menuButton.className = "menu-btn";
+menuButton.innerHTML = `
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="6" r="1.5" fill="#333"/>
+    <circle cx="12" cy="12" r="1.5" fill="#333"/>
+    <circle cx="12" cy="18" r="1.5" fill="#333"/>
+  </svg>
+`;
+menuButton.style.cssText = `
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
+`;
+menuButton.addEventListener("mouseenter", () => {
+  menuButton.style.opacity = "0.7";
+});
+menuButton.addEventListener("mouseleave", () => {
+  menuButton.style.opacity = "1";
+});
+rightSection.appendChild(menuButton);
+
+authHeader.appendChild(rightSection);
+
+// Make header draggable - RAF smoothing with light damping
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let accumulatedDeltaX = 0;
+let accumulatedDeltaY = 0;
+let rafId = null;
+
+function sendDragUpdate() {
+  if (!isDragging) {
+    rafId = null;
+    return;
+  }
+  
+  if (Math.abs(accumulatedDeltaX) > 0.1 || Math.abs(accumulatedDeltaY) > 0.1) {
+    window.parent.postMessage({
+      type: "oasisOverlayMoveRelative",
+      deltaX: accumulatedDeltaX,
+      deltaY: accumulatedDeltaY
+    }, "*");
+    
+    accumulatedDeltaX = 0;
+    accumulatedDeltaY = 0;
+  }
+  
+  rafId = requestAnimationFrame(sendDragUpdate);
+}
+
+authHeader.addEventListener("mousedown", (e) => {
+  // Don't start drag when clicking buttons or menu
+  if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
+    return;
+  }
+  isDragging = true;
+  lastMouseX = e.screenX;
+  lastMouseY = e.screenY;
+  accumulatedDeltaX = 0;
+  accumulatedDeltaY = 0;
+  authHeader.style.cursor = "grabbing";
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (!rafId) {
+    rafId = requestAnimationFrame(sendDragUpdate);
+  }
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+  
+  const deltaX = e.screenX - lastMouseX;
+  const deltaY = e.screenY - lastMouseY;
+  
+  accumulatedDeltaX += deltaX;
+  accumulatedDeltaY += deltaY;
+  
+  lastMouseX = e.screenX;
+  lastMouseY = e.screenY;
+});
+
+document.addEventListener("mouseup", () => {
+  if (isDragging) {
+    isDragging = false;
+    authHeader.style.cursor = "grab";
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+});
+
+// Create authentication banner (shown when authenticated)
+const authBanner = document.createElement("div");
+authBanner.id = "authBanner";
+authBanner.style.cssText = `
+  display: none;
+  background-color: #f2f4e5;
+  padding: 8px 16px;
+  border-radius: 8px;
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+`;
+
+const bannerText = document.createElement("p");
+bannerText.style.cssText = `
+  margin: 0;
+  font-size: 12px;
+  color: #808080;
+  line-height: 20px;
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+`;
+
+const signedInLabel = document.createElement("span");
+signedInLabel.textContent = "Signed in as";
+bannerText.appendChild(signedInLabel);
+
+const userEmail = document.createElement("span");
+userEmail.id = "bannerUserEmail";
+userEmail.style.cssText = `
+  text-decoration: underline;
+  color: #808080;
+`;
+bannerText.appendChild(userEmail);
+
+authBanner.appendChild(bannerText);
+
+// Close button for banner
+const bannerCloseBtn = document.createElement("button");
+bannerCloseBtn.innerHTML = `
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 4L4 12M4 4L12 12" stroke="#7A9200" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+`;
+bannerCloseBtn.style.cssText = `
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 64px;
+  transition: background-color 0.2s ease;
+`;
+bannerCloseBtn.addEventListener("mouseenter", () => {
+  bannerCloseBtn.style.backgroundColor = "rgba(122, 146, 0, 0.1)";
+});
+bannerCloseBtn.addEventListener("mouseleave", () => {
+  bannerCloseBtn.style.backgroundColor = "transparent";
+});
+bannerCloseBtn.addEventListener("click", () => {
+  authBanner.style.display = "none";
+  // Store preference to not show banner again in this session
+  sessionStorage.setItem("hideBanner", "true");
+});
+authBanner.appendChild(bannerCloseBtn);
+
+// Insert banner after header
+log.parentElement.insertBefore(authBanner, log);
+
+// Hidden auth buttons for login/signup (will be shown in dropdown)
 const authButtons = document.createElement("div");
 authButtons.id = "authButtons";
-authButtons.style.cssText = "display: flex; gap: 8px;";
-authHeader.appendChild(authButtons);
+authButtons.style.display = "none";
 
 const loginButton = document.createElement("button");
 loginButton.textContent = "Sign In";
 loginButton.className = "login-btn";
-loginButton.style.cssText = `
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-loginButton.addEventListener("mouseenter", () => {
-  loginButton.style.background = "rgba(255,255,255,0.3)";
-  loginButton.style.transform = "translateY(-1px)";
-  loginButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-loginButton.addEventListener("mouseleave", () => {
-  loginButton.style.background = "rgba(255,255,255,0.2)";
-  loginButton.style.transform = "translateY(0)";
-  loginButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
 authButtons.appendChild(loginButton);
 
 const signupButton = document.createElement("button");
 signupButton.textContent = "Sign Up";
 signupButton.className = "signup-btn";
-signupButton.style.cssText = `
-  background: white;
-  color: #667eea;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-signupButton.addEventListener("mouseenter", () => {
-  signupButton.style.background = "#f9fafb";
-  signupButton.style.transform = "translateY(-1px)";
-  signupButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-signupButton.addEventListener("mouseleave", () => {
-  signupButton.style.background = "white";
-  signupButton.style.transform = "translateY(0)";
-  signupButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
 authButtons.appendChild(signupButton);
 
-// Create three-dot menu button
-const menuButton = document.createElement("button");
-menuButton.className = "menu-btn";
-menuButton.innerHTML = "&#8942;"; // Vertical ellipsis
-menuButton.style.cssText = `
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 12px;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 8px 12px;
-  display: none;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-menuButton.addEventListener("mouseenter", () => {
-  menuButton.style.background = "rgba(255,255,255,0.3)";
-  menuButton.style.transform = "translateY(-1px)";
-  menuButton.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
-});
-menuButton.addEventListener("mouseleave", () => {
-  menuButton.style.background = "rgba(255,255,255,0.2)";
-  menuButton.style.transform = "translateY(0)";
-  menuButton.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-});
-authButtons.appendChild(menuButton);
+// Hidden auth status (for backwards compatibility)
+const authStatus = document.createElement("div");
+authStatus.id = "authStatus";
+authStatus.style.display = "none";
 
 // Create dropdown menu
 const dropdownMenu = document.createElement("div");
@@ -1133,51 +1341,106 @@ dropdownMenu.style.cssText = `
   overflow: hidden;
   min-width: 160px;
 `;
-authHeader.appendChild(dropdownMenu);
+document.body.appendChild(dropdownMenu);
 
-// Dropdown items
-const dropdownItems = [
-    { label: "Account", action: () => alert("Account clicked") },
-    { label: "Subscription", action: () => alert("Subscription clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Settings", action: () => alert("Settings clicked") },
-    { label: "Logout", action: () => {
-        logout();
-        securelyClearSession();
-    }}
-];
-
-dropdownItems.forEach(item => {
-    const menuItem = document.createElement("a");
-    menuItem.textContent = item.label;
-    menuItem.style.cssText = `
-        display: block;
-        padding: 10px 16px;
-        color: #374151;
-        text-decoration: none;
-        cursor: pointer;
-        font-size: 14px;
-        transition: all 0.15s ease;
-        border-bottom: 1px solid #f3f4f6;
-    `;
-    if (item.label === "Logout") {
-        menuItem.style.color = "#ef4444";
-        menuItem.style.borderBottom = "none";
+// Function to update dropdown menu based on auth state
+function updateDropdownMenu() {
+    dropdownMenu.innerHTML = "";
+    
+    if (isAuthenticated && currentUser) {
+        // Show user info
+        const userInfo = document.createElement("div");
+        userInfo.style.cssText = `
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        `;
+        userInfo.innerHTML = `
+            <div style="font-size: 13px; color: #6b7280;">Signed in as</div>
+            <div style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">${currentUser.email}</div>
+        `;
+        dropdownMenu.appendChild(userInfo);
+        
+        // Authenticated menu items
+        const authenticatedItems = [
+            { label: "Account", action: () => { alert("Account settings coming soon"); dropdownMenu.style.display = "none"; }},
+            { label: "Settings", action: () => { alert("Settings coming soon"); dropdownMenu.style.display = "none"; }},
+            { label: "Sign Out", action: () => {
+                logout();
+                securelyClearSession();
+                dropdownMenu.style.display = "none";
+            }}
+        ];
+        
+        authenticatedItems.forEach((item, index) => {
+            const menuItem = document.createElement("a");
+            menuItem.textContent = item.label;
+            menuItem.style.cssText = `
+                display: block;
+                padding: 10px 16px;
+                color: ${item.label === "Sign Out" ? "#ef4444" : "#374151"};
+                text-decoration: none;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.15s ease;
+                ${index < authenticatedItems.length - 1 ? "border-bottom: 1px solid #f3f4f6;" : ""}
+            `;
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = item.label === "Sign Out" ? "#fee2e2" : "#f9fafb";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+            menuItem.addEventListener("click", item.action);
+            dropdownMenu.appendChild(menuItem);
+        });
+    } else {
+        // Not authenticated menu items
+        const unauthenticatedItems = [
+            { label: "Sign In", action: () => {
+                showLoginForm();
+                dropdownMenu.style.display = "none";
+            }},
+            { label: "Sign Up", action: () => {
+                showSignupForm();
+                dropdownMenu.style.display = "none";
+            }}
+        ];
+        
+        unauthenticatedItems.forEach((item, index) => {
+            const menuItem = document.createElement("a");
+            menuItem.textContent = item.label;
+            menuItem.style.cssText = `
+                display: block;
+                padding: 12px 16px;
+                color: #374151;
+                text-decoration: none;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.15s ease;
+                ${index === 0 ? "border-bottom: 1px solid #e5e7eb;" : ""}
+            `;
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = "#f9fafb";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+            menuItem.addEventListener("click", item.action);
+            dropdownMenu.appendChild(menuItem);
+        });
     }
-    menuItem.addEventListener("mouseenter", () => {
-        menuItem.style.backgroundColor = item.label === "Logout" ? "#fee2e2" : "#f9fafb";
-    });
-    menuItem.addEventListener("mouseleave", () => {
-        menuItem.style.backgroundColor = "transparent";
-    });
-    menuItem.addEventListener("click", item.action);
-    dropdownMenu.appendChild(menuItem);
-});
+}
 
 // Toggle dropdown menu
-menuButton.addEventListener("click", () => {
+menuButton.addEventListener("click", (e) => {
+    e.stopPropagation();
     const isDisplayed = dropdownMenu.style.display === "block";
     dropdownMenu.style.display = isDisplayed ? "none" : "block";
+    if (!isDisplayed) {
+        updateDropdownMenu();
+    }
 });
 
 // Hide dropdown if clicked outside
@@ -1188,9 +1451,63 @@ document.addEventListener("click", (event) => {
 });
 
 
+// Legacy append function for backward compatibility
 function append(text) {
-  log.textContent += text;
+  // For system messages, create a simple text node
+  if (text.includes('🔓') || text.includes('Session') || text.includes('📚')) {
+    const systemMsg = document.createElement("div");
+    systemMsg.style.cssText = `
+      color: #999;
+      font-size: 12px;
+      text-align: center;
+      margin: 8px 0;
+    `;
+    systemMsg.textContent = text.trim();
+    log.appendChild(systemMsg);
+  }
   log.scrollTop = log.scrollHeight;
+}
+
+// Add user message bubble
+function addUserMessage(text) {
+  hideEmptyState(); // Hide empty state when adding first message
+  
+  const messageContainer = document.createElement("div");
+  messageContainer.className = "message-bubble message-user";
+  
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  messageContent.textContent = text;
+  
+  messageContainer.appendChild(messageContent);
+  log.appendChild(messageContainer);
+  log.scrollTop = log.scrollHeight;
+}
+
+// Add AI response bubble
+function addAIMessage(text) {
+  hideEmptyState(); // Hide empty state when adding first message
+  
+  const messageContainer = document.createElement("div");
+  messageContainer.className = "message-bubble message-ai";
+  
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  messageContent.textContent = text;
+  
+  messageContainer.appendChild(messageContent);
+  log.appendChild(messageContainer);
+  log.scrollTop = log.scrollHeight;
+  
+  return messageContent; // Return reference for streaming updates
+}
+
+// Update existing AI message (for streaming)
+function updateAIMessage(element, text) {
+  if (element && element.classList.contains('message-content')) {
+    element.textContent = text;
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
 
@@ -1751,6 +2068,8 @@ async function logout() {
   }
 }
 
+let currentAIMessageElement = null;
+
 async function send() {
   if (busy) return;
   
@@ -1764,9 +2083,16 @@ async function send() {
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
-  append(`\n> ${prompt}\n`);
+  
+  // Add user message bubble
+  addUserMessage(prompt);
+  
   stopped = false;
   setBusy(true);
+
+  // Create AI response bubble
+  currentAIMessageElement = addAIMessage("");
+  let fullResponse = "";
 
   try {
     // Double-check authentication before making the API call
@@ -1777,15 +2103,17 @@ async function send() {
     // Session context is automatically managed
     await runAssistantStream(prompt, (chunk) => {
       if (!stopped) {
-        append(chunk);
+        fullResponse += chunk;
+        updateAIMessage(currentAIMessageElement, fullResponse);
+        
         // Forward the chunk to iframe if it exists
         if (typeof window.notifyIframeCommandResult === 'function') {
           window.notifyIframeCommandResult(chunk);
         }
       }
     });
+    
     if (!stopped) {
-      append("\n");
       // Forward completion to iframe
       if (typeof window.notifyIframeCommandResult === 'function') {
         window.notifyIframeCommandResult("\n");
@@ -1796,7 +2124,7 @@ async function send() {
       ? `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`
       : `Error: ${e?.message || e}`;
     
-    append(`\n${errorMessage}\n`);
+    updateAIMessage(currentAIMessageElement, errorMessage);
     
     // Forward error to iframe if we're in main window
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
@@ -1804,17 +2132,27 @@ async function send() {
     }
   } finally {
     setBusy(false);
+    currentAIMessageElement = null;
   }
 }
 
-go.addEventListener("click", send);
+go.addEventListener("click", () => {
+  if (busy) {
+    // Stop the current operation
+    stopped = true;
+    setBusy(false);
+    append("\n(stopped)\n");
+  } else {
+    // Send message
+    send();
+  }
+});
 q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
-stop.addEventListener("click", () => { stopped = true; setBusy(false); append("\n(stopped)\n"); });
 loginButton.addEventListener("click", showLoginForm);
 signupButton.addEventListener("click", showSignupForm);
 
-// Initialize UI
-updateAuthUI();
+// Initialize UI - start with unauthenticated state
+updateAuthUI(false, null);
 
 // Check for existing authentication on load
 async function checkExistingAuth() {

@@ -1940,7 +1940,7 @@ ImgDrawResult nsCSSRendering::BuildWebRenderDisplayItemsForStyleImageLayer(
 }
 
 static bool IsOpaqueBorderEdge(const nsStyleBorder& aBorder,
-                               mozilla::Side aSide) {
+                               mozilla::Side aSide, const nsIFrame* aForFrame) {
   if (aBorder.GetComputedBorder().Side(aSide) == 0) {
     return true;
   }
@@ -1962,19 +1962,16 @@ static bool IsOpaqueBorderEdge(const nsStyleBorder& aBorder,
   if (!aBorder.mBorderImageSource.IsNone()) {
     return false;
   }
-
-  StyleColor color = aBorder.BorderColorFor(aSide);
-  // We don't know the foreground color here, so if it's being used
-  // we must assume it might be transparent.
-  return !color.MaybeTransparent();
+  return NS_GET_A(aBorder.BorderColorFor(aSide).CalcColor(aForFrame)) == 255;
 }
 
 /**
  * Returns true if all border edges are either missing or opaque.
  */
-static bool IsOpaqueBorder(const nsStyleBorder& aBorder) {
+static bool IsOpaqueBorder(const nsStyleBorder& aBorder,
+                           const nsIFrame* aForFrame) {
   for (const auto i : mozilla::AllPhysicalSides()) {
-    if (!IsOpaqueBorderEdge(aBorder, i)) {
+    if (!IsOpaqueBorderEdge(aBorder, i, aForFrame)) {
       return false;
     }
   }
@@ -2144,7 +2141,8 @@ void nsCSSRendering::GetImageLayerClip(
     haveRoundedCorners = GetRadii(aForFrame, aBorder, aBorderArea,
                                   clipBorderArea, aClipState->mRadii);
   }
-  bool isSolidBorder = aWillPaintBorder && IsOpaqueBorder(aBorder);
+  const bool isSolidBorder =
+      aWillPaintBorder && IsOpaqueBorder(aBorder, aForFrame);
   if (isSolidBorder && layerClip == StyleGeometryBox::BorderBox) {
     // If we have rounded corners, we need to inflate the background
     // drawing area a bit to avoid seams between the border and
@@ -4209,11 +4207,10 @@ void nsCSSRendering::PaintDecorationLine(
 void nsCSSRendering::PaintDecorationLineInternal(
     nsIFrame* aFrame, DrawTarget& aDrawTarget,
     const PaintDecorationLineParams& aParams, Rect aRect) {
-  Float lineThickness = std::max(NS_round(aParams.lineSize.height), 1.0);
-
+  const Float lineThickness = aParams.lineSize.height;
   DeviceColor color = ToDeviceColor(aParams.color);
   ColorPattern colorPat(color);
-  StrokeOptions strokeOptions(lineThickness);
+  StrokeOptions strokeOptions(aParams.lineSize.height);
   DrawOptions drawOptions;
 
   Float dash[2];
@@ -4491,8 +4488,7 @@ Rect nsCSSRendering::DecorationLineToPath(
     return path;
   }
 
-  Float lineThickness = std::max(NS_round(aParams.lineSize.height), 1.0);
-
+  const Float lineThickness = aParams.lineSize.height;
   // The block-direction position should be set to the middle of the line.
   if (aParams.vertical) {
     rect.x += lineThickness / 2;
@@ -4548,8 +4544,7 @@ gfxRect nsCSSRendering::GetTextDecorationRectInternal(
   // and horizontal coordinates at the end if vertical was requested.
   gfxRect r(left, 0, right - left, 0);
 
-  gfxFloat lineThickness = NS_round(aParams.lineSize.height);
-  lineThickness = std::max(lineThickness, 1.0);
+  const gfxFloat lineThickness = aParams.lineSize.height;
   gfxFloat defaultLineThickness = NS_round(aParams.defaultLineThickness);
   defaultLineThickness = std::max(defaultLineThickness, 1.0);
 

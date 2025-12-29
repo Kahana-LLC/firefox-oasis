@@ -116,18 +116,51 @@ enum class MemoryUsage { None = false, Unshared = 1, Shared = 2 };
 
 // The asm.js valid heap lengths are precisely the WASM valid heap lengths for
 // ARM greater or equal to MinHeapLength
-static const size_t MinHeapLength = PageSize;
+static const size_t MinHeapLength = StandardPageSizeBytes;
 // An asm.js heap can in principle be up to INT32_MAX bytes but requirements
 // on the format restrict it further to the largest pseudo-ARM-immediate.
 // See IsValidAsmJSHeapLength().
 static const uint64_t MaxHeapLength = 0x7f000000;
+
+// Because ARM has a fixed-width instruction encoding, ARM can only express a
+// limited subset of immediates (in a single instruction).
+static const uint64_t HighestValidARMImmediate = 0xff000000;
+
+//  Heap length on ARM should fit in an ARM immediate. We approximate the set
+//  of valid ARM immediates with the predicate:
+//    2^n for n in [16, 24)
+//  or
+//    2^24 * n for n >= 1.
+static bool IsValidARMImmediate(uint32_t i) {
+  bool valid = (IsPowerOfTwo(i) || (i & 0x00ffffff) == 0);
+
+  MOZ_ASSERT_IF(valid, i % StandardPageSizeBytes == 0);
+
+  return valid;
+}
+
+static uint64_t RoundUpToNextValidARMImmediate(uint64_t i) {
+  MOZ_ASSERT(i <= HighestValidARMImmediate);
+  static_assert(HighestValidARMImmediate == 0xff000000,
+                "algorithm relies on specific constant");
+
+  if (i <= 16 * 1024 * 1024) {
+    i = i ? mozilla::RoundUpPow2(i) : 0;
+  } else {
+    i = (i + 0x00ffffff) & ~0x00ffffff;
+  }
+
+  MOZ_ASSERT(IsValidARMImmediate(i));
+
+  return i;
+}
 
 static uint64_t RoundUpToNextValidAsmJSHeapLength(uint64_t length) {
   if (length <= MinHeapLength) {
     return MinHeapLength;
   }
 
-  return wasm::RoundUpToNextValidARMImmediate(length);
+  return RoundUpToNextValidARMImmediate(length);
 }
 
 static uint64_t DivideRoundingUp(uint64_t a, uint64_t b) {
@@ -1079,7 +1112,9 @@ class MOZ_STACK_CLASS ModuleValidatorShared {
     MemoryUsage usage;
     uint64_t minLength;
 
-    uint64_t minPages() const { return DivideRoundingUp(minLength, PageSize); }
+    uint64_t minPages() const {
+      return DivideRoundingUp(minLength, StandardPageSizeBytes);
+    }
 
     Memory() = default;
   };
@@ -2059,7 +2094,8 @@ class MOZ_STACK_CLASS ModuleValidator : public ModuleValidatorShared {
       return false;
     }
 
-    Limits limits = Limits(mask + 1, Nothing(), Shareable::False);
+    Limits limits =
+        Limits(mask + 1, Nothing(), Shareable::False, PageSize::Standard);
     codeMeta_->asmJSSigToTableIndex[sigIndex] = codeMeta_->tables.length();
     if (!codeMeta_->tables.emplaceBack(limits, RefType::func(),
                                        /* initExpr */ Nothing(),
@@ -2124,6 +2160,7 @@ class MOZ_STACK_CLASS ModuleValidator : public ModuleValidatorShared {
       limits.initial = memory_.minPages();
       limits.maximum = Nothing();
       limits.addressType = AddressType::I32;
+      limits.pageSize = PageSize::Standard;
       if (!codeMeta_->memories.append(MemoryDesc(limits))) {
         return nullptr;
       }
@@ -7393,9 +7430,10 @@ bool js::IsValidAsmJSHeapLength(size_t length) {
   }
 
   // The heap length is limited by what a wasm memory32 can handle.
-  if (length > MaxMemoryBytes(AddressType::I32)) {
+  if (length > MaxMemoryBytes(AddressType::I32, wasm::PageSize::Standard)) {
     return false;
   }
 
-  return wasm::IsValidARMImmediate(length);
+  // asm.js specifies that the heap size must fit in an ARM immediate.
+  return IsValidARMImmediate(length);
 }

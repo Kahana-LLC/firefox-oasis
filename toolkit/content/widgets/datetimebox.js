@@ -434,7 +434,7 @@ this.DateTimeBoxWidget = class {
   setPickerState(aIsOpen) {
     this.log("picker is now " + (aIsOpen ? "opened" : "closed"));
     this.mIsPickerOpen = aIsOpen;
-    this.mInputElement.setDateTimePickerState(aIsOpen);
+    this.mInputElement.setOpenState(aIsOpen);
     // Calendar button's expanded state mirrors this.mIsPickerOpen
     this.updateCalendarButtonState(this.mIsPickerOpen);
   }
@@ -485,12 +485,6 @@ this.DateTimeBoxWidget = class {
   closeDateTimePicker() {
     if (this.mIsPickerOpen) {
       this.mInputElement.closeDateTimePicker();
-    }
-  }
-
-  notifyPicker() {
-    if (this.mIsPickerOpen && this.isAnyFieldAvailable(true)) {
-      this.mInputElement.updateDateTimePicker(this.getCurrentValue());
     }
   }
 
@@ -1034,8 +1028,6 @@ this.DateTimeBoxWidget = class {
         this.setFieldValue(this.mMillisecField, millisecond || 0);
       }
     }
-
-    this.notifyPicker();
   }
 
   setInputValueFromFields() {
@@ -1048,9 +1040,6 @@ this.DateTimeBoxWidget = class {
       } else {
         this.mInputElement.updateValidityState();
       }
-      // We still need to notify picker in case any of the field has
-      // changed.
-      this.notifyPicker();
       return;
     }
 
@@ -1111,7 +1100,6 @@ this.DateTimeBoxWidget = class {
       return;
     }
     this.log("setInputValueFromFields: " + value);
-    this.notifyPicker();
     this.mInputElement.setUserInput(value);
   }
 

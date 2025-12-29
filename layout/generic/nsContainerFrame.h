@@ -203,7 +203,7 @@ class nsContainerFrame : public nsSplittableFrame {
    * classes derived from nsContainerFrame want.
    */
   virtual mozilla::LogicalSize ComputeAutoSize(
-      gfxContext* aRenderingContext, mozilla::WritingMode aWM,
+      const SizeComputationInput& aSizingInput, mozilla::WritingMode aWM,
       const mozilla::LogicalSize& aCBSize, nscoord aAvailableISize,
       const mozilla::LogicalSize& aMargin,
       const mozilla::LogicalSize& aBorderPadding,
@@ -437,6 +437,16 @@ class nsContainerFrame : public nsSplittableFrame {
                                  const nsDisplayListSet& aLists);
 
   /**
+   * Add pushed absolute frames to the display list.
+   *
+   * Note: for an absolute frame's first-in-flow without the
+   * NS_FRAME_IS_PUSHED_OUT_OF_FLOW bit, it will be painted through its
+   * placeholder frame.
+   */
+  void DisplayPushedAbsoluteFrames(nsDisplayListBuilder* aBuilder,
+                                   const nsDisplayListSet& aLists);
+
+  /**
    * Builds display lists for the children. The background
    * of each child is placed in the Content() list (suitable for inline
    * children and other elements that behave like inlines,
@@ -472,7 +482,8 @@ class nsContainerFrame : public nsSplittableFrame {
    * on its type (By overriding `CSSAlignmentForAbsPosChild`).
    */
   mozilla::StyleAlignFlags CSSAlignmentForAbsPosChildWithinContainingBlock(
-      const ReflowInput& aChildRI, mozilla::LogicalAxis aLogicalAxis,
+      const SizeComputationInput& aSizingInput,
+      mozilla::LogicalAxis aLogicalAxis,
       const mozilla::StylePositionArea& aResolvedPositionArea,
       const mozilla::LogicalSize& aContainingBlockSize) const;
 
@@ -485,7 +496,6 @@ class nsContainerFrame : public nsSplittableFrame {
   NS_DECLARE_FRAME_PROPERTY_FRAMELIST(OverflowProperty)
   NS_DECLARE_FRAME_PROPERTY_FRAMELIST(OverflowContainersProperty)
   NS_DECLARE_FRAME_PROPERTY_FRAMELIST(ExcessOverflowContainersProperty)
-  NS_DECLARE_FRAME_PROPERTY_FRAMELIST(BackdropProperty)
 
   // Only really used on nsBlockFrame instances, but the caller thinks it could
   // have arbitrary nsContainerFrames.

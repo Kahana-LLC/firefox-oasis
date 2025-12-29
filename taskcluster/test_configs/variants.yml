@@ -317,28 +317,6 @@ socketprocess:
                 - "--setpref=media.peerconnection.mtransport_process=true"
                 - "--setpref=network.process.enabled=true"
 
-socketprocess_networking:
-    description: "{description} with networking on socket process enabled"
-    component: "Core::Networking"
-    expiration: "2026-03-01"
-    suffix: "spi-nw"
-    mozinfo: "socketprocess_networking"
-    when:
-        $eval: '
-                (
-                    "linux" in task["test-platform"]
-                    || "windows" in task["test-platform"]
-                    || "macosx" in task["test-platform"]
-                ) && (
-                    "mochitest" in task["try-name"]
-                    || "xpcshell" == task["try-name"]
-                )'
-    merge:
-        mozharness:
-            extra-options:
-                - "--setpref=network.process.enabled=true"
-                - "--setpref=network.http.network_access_on_socket_process.enabled=true"
-
 # -
 # Webrender DComp variants for Win10
 
@@ -676,14 +654,3 @@ privatebrowsing-inc-origin-init:
         mozharness:
             extra-options:
                 - "--setpref=browser.privatebrowsing.autostart=true"
-
-navigation-api:
-    description: "{description} with Navigation API enabled"
-    component: "Core::DOM: Navigation"
-    expiration: "2026-05-01"
-    suffix: "nav"
-    mozinfo: "navigationApi"
-    merge:
-        mozharness:
-            extra-options:
-                - "--setpref=dom.navigation.webidl.enabled=true"

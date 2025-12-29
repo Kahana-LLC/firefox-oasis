@@ -529,7 +529,6 @@ nsresult nsHttpConnectionMgr::SpeculativeConnect(
     args->mTrans->SetParallelSpeculativeConnectLimit(
         overrider->GetParallelSpeculativeConnectLimit());
     args->mTrans->SetIgnoreIdle(overrider->GetIgnoreIdle());
-    args->mTrans->SetIsFromPredictor(overrider->GetIsFromPredictor());
     args->mTrans->SetAllow1918(overrider->GetAllow1918());
   }
 
@@ -1342,7 +1341,7 @@ nsresult nsHttpConnectionMgr::MakeNewConnection(
   }
 
   nsresult rv = ent->CreateDnsAndConnectSocket(
-      trans, trans->Caps(), false, false,
+      trans, trans->Caps(), false,
       trans->GetClassOfService().Flags() & nsIClassOfService::UrgentStart, true,
       pendingTransInfo);
   if (NS_FAILED(rv)) {
@@ -1401,6 +1400,49 @@ nsresult nsHttpConnectionMgr::TryDispatchTransaction(
   // step 0
   // look for existing spdy connection - that's always best because it is
   // essentially pipelining without head of line blocking
+
+  // For WebSocket/WebTransport through H3 proxy, we need to create a TCP
+  // tunnel through the H3 proxy first. But if there's already an H2 session
+  // available (from a previously established tunnel), we should use that
+  // instead of creating a new tunnel.
+  // The WebSocket transaction doesn't have a connection set (it was queued
+  // without one in DnsAndConnectSocket::SetupConn to avoid triggering reclaim
+  // when we clear it here).
+  if ((trans->IsWebsocketUpgrade() || trans->IsForWebTransport()) &&
+      ent->IsHttp3ProxyConnection()) {
+    // First check if there's an H2 session available (from existing tunnel)
+    // This handles the case where the tunnel was already established and the
+    // WebSocket transaction was reset to wait for H2 negotiation.
+    // We can't use GetH2orH3ActiveConn because it skips H3 proxy entries when
+    // looking for H2 connections. We use GetH2TunnelActiveConn to directly
+    // look for an H2 tunnel connection in the active connections.
+    RefPtr<nsHttpConnection> h2Tunnel = ent->GetH2TunnelActiveConn();
+    if (h2Tunnel) {
+      LOG(
+          ("TryDispatchTransaction: WebSocket through H3 proxy - using "
+           "existing H2 tunnel"));
+      return TryDispatchExtendedCONNECTransaction(ent, trans, h2Tunnel);
+    }
+
+    // No H2 session available yet - create a tunnel through the H3 proxy
+    RefPtr<HttpConnectionBase> conn = GetH2orH3ActiveConn(ent, true, false);
+    RefPtr<HttpConnectionUDP> connUDP = do_QueryObject(conn);
+    if (connUDP) {
+      LOG(("TryDispatchTransaction: WebSocket through HTTP/3 proxy"));
+      RefPtr<HttpConnectionBase> tunnelConn;
+      nsresult rv =
+          connUDP->CreateTunnelStream(trans, getter_AddRefs(tunnelConn), true);
+      if (NS_FAILED(rv)) {
+        return rv;
+      }
+      ent->InsertIntoActiveConns(tunnelConn);
+      tunnelConn->SetInTunnel();
+      if (trans->IsWebsocketUpgrade()) {
+        trans->SetIsHttp2Websocket(true);
+      }
+      return DispatchTransaction(ent, trans, tunnelConn);
+    }
+  }
 
   RefPtr<HttpConnectionBase> conn = GetH2orH3ActiveConn(
       ent,
@@ -3543,8 +3585,6 @@ void nsHttpConnectionMgr::DoSpeculativeConnectionInternal(
           ? *aTrans->ParallelSpeculativeConnectLimit()
           : gHttpHandler->ParallelSpeculativeConnectLimit();
   bool ignoreIdle = aTrans->IgnoreIdle() ? *aTrans->IgnoreIdle() : false;
-  bool isFromPredictor =
-      aTrans->IsFromPredictor() ? *aTrans->IsFromPredictor() : false;
   bool allow1918 = aTrans->Allow1918() ? *aTrans->Allow1918() : false;
 
   bool keepAlive = aTrans->Caps() & NS_HTTP_ALLOW_KEEPALIVE;
@@ -3555,24 +3595,14 @@ void nsHttpConnectionMgr::DoSpeculativeConnectionInternal(
       !(keepAlive && aEnt->RestrictConnections()) &&
       !AtActiveConnectionLimit(aEnt, aTrans->Caps())) {
     nsresult rv = aEnt->CreateDnsAndConnectSocket(aTrans, aTrans->Caps(), true,
-                                                  isFromPredictor, false,
-                                                  allow1918, nullptr);
+                                                  false, allow1918, nullptr);
     if (NS_FAILED(rv)) {
-      glean::networking::speculative_connect_outcome
-          .Get("aborted_socket_fail"_ns)
-          .Add(1);
       LOG(
           ("DoSpeculativeConnectionInternal Transport socket creation "
            "failure: %" PRIx32 "\n",
            static_cast<uint32_t>(rv)));
-    } else {
-      glean::networking::speculative_connect_outcome.Get("successful"_ns)
-          .Add(1);
     }
   } else {
-    glean::networking::speculative_connect_outcome
-        .Get("aborted_socket_limit"_ns)
-        .Add(1);
     LOG(
         ("DoSpeculativeConnectionInternal Transport ci=%s "
          "not created due to existing connection count:%d",

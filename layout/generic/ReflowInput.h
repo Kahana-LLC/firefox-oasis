@@ -368,6 +368,12 @@ struct ReflowInput : public SizeComputationInput {
   // unconstrained dimensions replaced by zero.
   nsSize ComputedSizeAsContainerIfConstrained() const;
 
+  // Return the physical content box relative to the frame itself.
+  nsRect ComputedPhysicalContentBoxRelativeToSelf() const {
+    auto bp = ComputedPhysicalBorderPadding();
+    return nsRect(nsPoint(bp.left, bp.top), ComputedPhysicalSize());
+  }
+
   // Get the writing mode of the containing block, to resolve float/clear
   // logical sides appropriately.
   WritingMode GetCBWritingMode() const;
@@ -527,14 +533,6 @@ struct ReflowInput : public SizeComputationInput {
     // If true, then children of this frame can generate class A breakpoints
     // for paginated reflow.
     bool mCanHaveClassABreakpoints : 1;
-
-    // If set:
-    // (1) This frame is absolutely-positioned,
-    // (2) Inset in that axis are non-auto, and
-    // (3) Size in that axis is `auto` & resolved as fit-content size.
-    // Automatic margin computation in this case requires waiting until
-    // the frame reflows to compute the fit-content size.
-    bool mDeferAutoMarginComputation : 1;
   };
   Flags mFlags;
 
@@ -976,14 +974,5 @@ struct ReflowInput : public SizeComputationInput {
 };
 
 }  // namespace mozilla
-
-inline AnchorPosResolutionParams AnchorPosResolutionParams::From(
-    const mozilla::ReflowInput* aRI, bool aIgnorePositionArea) {
-  const mozilla::StylePositionArea posArea =
-      aIgnorePositionArea ? mozilla::StylePositionArea{}
-                          : aRI->mStylePosition->mPositionArea;
-  return {aRI->mFrame, aRI->mStyleDisplay->mPosition, posArea,
-          aRI->mAnchorPosResolutionCache};
-}
 
 #endif  // mozilla_ReflowInput_h

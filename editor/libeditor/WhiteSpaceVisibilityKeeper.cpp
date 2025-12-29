@@ -1326,7 +1326,8 @@ WhiteSpaceVisibilityKeeper::NormalizeWhiteSpacesToSplitAt(
       if (auto* const element = Element::FromNode(previousContent)) {
         if (HTMLEditUtils::IsBlockElement(
                 *element, BlockInlineCheck::UseComputedDisplayStyle) ||
-            HTMLEditUtils::IsNonEditableReplacedContent(*element)) {
+            !HTMLEditUtils::IsContainerNode(*element) ||
+            HTMLEditUtils::IsReplacedElement(*element)) {
           break;
         }
         // Ignore invisible inline elements
@@ -1365,7 +1366,8 @@ WhiteSpaceVisibilityKeeper::NormalizeWhiteSpacesToSplitAt(
       if (auto* const element = Element::FromNode(nextContent)) {
         if (HTMLEditUtils::IsBlockElement(
                 *element, BlockInlineCheck::UseComputedDisplayStyle) ||
-            HTMLEditUtils::IsNonEditableReplacedContent(*element)) {
+            !HTMLEditUtils::IsContainerNode(*element) ||
+            HTMLEditUtils::IsReplacedElement(*element)) {
           break;
         }
         // Ignore invisible inline elements
@@ -2397,12 +2399,13 @@ WhiteSpaceVisibilityKeeper::DeleteContentNodeAndJoinTextNodesAroundIt(
         WSScanResult nextThingOfCaretPoint =
             WSRunScanner::ScanInclusiveNextVisibleNodeOrBlockBoundary(
                 {}, pointToPutCaret);
-        if (nextThingOfCaretPoint.ReachedBRElement() ||
-            nextThingOfCaretPoint.ReachedPreformattedLineBreak()) {
+        Maybe<EditorLineBreak> lineBreak;
+        if (nextThingOfCaretPoint.ReachedLineBreak()) {
+          lineBreak.emplace(
+              nextThingOfCaretPoint.CreateEditorLineBreak<EditorLineBreak>());
           nextThingOfCaretPoint =
               WSRunScanner::ScanInclusiveNextVisibleNodeOrBlockBoundary(
-                  {}, nextThingOfCaretPoint
-                          .PointAfterReachedContent<EditorRawDOMPoint>());
+                  {}, lineBreak->After<EditorRawDOMPoint>());
         }
         if (nextThingOfCaretPoint.ReachedBlockBoundary()) {
           const EditorDOMPoint atBlockBoundary =
@@ -2420,6 +2423,24 @@ WhiteSpaceVisibilityKeeper::DeleteContentNodeAndJoinTextNodesAroundIt(
           }
           if (NS_WARN_IF(!aContentToDelete.IsInComposedDoc())) {
             return Err(NS_ERROR_EDITOR_UNEXPECTED_DOM_TREE);
+          }
+          // If the previous content ends with an invisible line break, let's
+          // delete it.
+          if (lineBreak.isSome() && lineBreak->IsInComposedDoc()) {
+            const WSScanResult prevThing =
+                WSRunScanner::ScanPreviousVisibleNodeOrBlockBoundary(
+                    {}, lineBreak->To<EditorRawDOMPoint>(), &aEditingHost);
+            if (!prevThing.ReachedLineBoundary()) {
+              Result<EditorDOMPoint, nsresult> pointOrError =
+                  aHTMLEditor.DeleteLineBreakWithTransaction(
+                      lineBreak.ref(), nsIEditor::eStrip, aEditingHost);
+              if (MOZ_UNLIKELY(pointOrError.isErr())) {
+                NS_WARNING(
+                    "HTMLEditor::DeleteLineBreakWithTransaction() failed");
+                return pointOrError.propagateErr();
+              }
+              trackPointToPutCaret->Flush(StopTracking::No);
+            }
           }
         }
       }

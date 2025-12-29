@@ -8,7 +8,6 @@ package org.mozilla.fenix.tabstray.ui.syncedtabs
 
 import android.content.res.Configuration
 import androidx.annotation.VisibleForTesting
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,10 +27,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -48,12 +46,12 @@ import mozilla.components.feature.syncedtabs.view.SyncedTabsView
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.list.ExpandableListHeader
 import org.mozilla.fenix.tabstray.TabsTrayTestTag
+import org.mozilla.fenix.tabstray.syncedtabs.OnSectionExpansionToggled
 import org.mozilla.fenix.tabstray.syncedtabs.SyncedTabsListItem
 import org.mozilla.fenix.tabstray.ui.tabitems.BasicTabListItem
 import org.mozilla.fenix.theme.FirefoxTheme
 import mozilla.components.browser.storage.sync.Tab as SyncTab
-
-private const val EXPANDED_BY_DEFAULT = true
+import mozilla.components.ui.icons.R as iconsR
 private val CardRoundedCornerShape = RoundedCornerShape(12.dp)
 
 /**
@@ -72,6 +70,8 @@ typealias OnTabCloseClick = (deviceId: String, tab: SyncTab) -> Unit
  * @param syncedTabs The tab UI items to be displayed.
  * @param onTabClick The lambda for handling clicks on synced tabs.
  * @param onTabCloseClick The lambda for handling clicks on a synced tab's close button.
+ * @param expandedState A list of expanded state properties for the synced tabs.
+ * @param onSectionExpansionToggled A lambda for handling section expansion/collapse
  */
 @SuppressWarnings("LongMethod", "CognitiveComplexMethod")
 @Composable
@@ -79,11 +79,10 @@ fun SyncedTabsList(
     syncedTabs: List<SyncedTabsListItem>,
     onTabClick: OnTabClick,
     onTabCloseClick: OnTabCloseClick,
+    expandedState: List<Boolean>,
+    onSectionExpansionToggled: OnSectionExpansionToggled,
 ) {
     val listState = rememberLazyListState()
-    val expandedState =
-        remember(syncedTabs) { syncedTabs.map { EXPANDED_BY_DEFAULT }.toMutableStateList() }
-
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter,
@@ -106,7 +105,7 @@ fun SyncedTabsList(
                                 headerText = syncedTabItem.displayName,
                                 expanded = sectionExpanded,
                             ) {
-                                expandedState[index] = !sectionExpanded
+                                onSectionExpansionToggled.invoke(index)
                             }
                         }
 
@@ -252,7 +251,7 @@ private fun SyncedTabsErrorItem(
                 FilledButton(
                     text = it.buttonText,
                     modifier = Modifier.fillMaxWidth(),
-                    icon = painterResource(R.drawable.ic_sign_in),
+                    icon = painterResource(iconsR.drawable.mozac_ic_avatar_circle_fill_24),
                     onClick = it.onClick,
                 )
             }
@@ -289,7 +288,7 @@ private fun SyncedTabsNoTabsItem() {
 @FlexibleWindowLightDarkPreview
 private fun SyncedTabsListItemsPreview() {
     FirefoxTheme {
-        Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
+        Surface {
             SyncedTabsSectionHeader(headerText = "Google Pixel Pro Max +Ultra 5000")
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -324,7 +323,7 @@ private fun SyncedTabsListItemsPreview() {
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
 private fun SyncedTabsErrorPreview() {
     FirefoxTheme {
-        Box(Modifier.background(MaterialTheme.colorScheme.surface)) {
+        Surface {
             SyncedTabsErrorItem(
                 errorText = stringResource(R.string.synced_tabs_no_tabs),
                 errorButton = SyncedTabsListItem.ErrorButton(
@@ -340,12 +339,15 @@ private fun SyncedTabsErrorPreview() {
 @Composable
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
 private fun SyncedTabsListPreview() {
+    val syncedTabsList = getFakeSyncedTabList()
     FirefoxTheme {
-        Box(Modifier.background(MaterialTheme.colorScheme.surface)) {
+        Surface {
             SyncedTabsList(
-                syncedTabs = getFakeSyncedTabList(),
+                syncedTabs = syncedTabsList,
                 onTabClick = { println("Tab clicked") },
                 onTabCloseClick = { _, _ -> println("Tab closed") },
+                onSectionExpansionToggled = {},
+                expandedState = syncedTabsList.map { true },
             )
         }
     }

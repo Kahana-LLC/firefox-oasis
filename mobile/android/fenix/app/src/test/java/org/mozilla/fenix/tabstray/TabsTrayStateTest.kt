@@ -5,6 +5,7 @@
 package org.mozilla.fenix.tabstray
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import mozilla.components.browser.state.state.createTab
 import mozilla.components.compose.base.menu.MenuItem
 import mozilla.components.compose.base.text.Text
 import org.junit.Assert.assertEquals
@@ -212,6 +213,85 @@ class TabsTrayStateTest {
             (menuItems[1] as MenuItem.TextItem).text,
             Text.Resource(R.string.tab_tray_multiselect_menu_item_close),
         )
+    }
+
+    /**
+    *  [TabsTrayState.searchIconVisible] coverage
+    */
+
+    @Test
+    fun `WHEN the user is on the normal tabs page THEN the search icon is visible`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.NormalTabs,
+            tabSearchEnabled = true,
+        )
+        assertTrue(testState.searchIconVisible)
+    }
+
+    @Test
+    fun `GIVEN Tab Search is not enabled WHEN the user is on the normal tabs page THEN the search icon is not visible`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.NormalTabs,
+            tabSearchEnabled = false,
+        )
+        assertFalse(testState.searchIconVisible)
+    }
+
+    @Test
+    fun `WHEN the user is on the private tabs page THEN the search icon is visible`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.PrivateTabs,
+            tabSearchEnabled = true,
+        )
+        assertTrue(testState.searchIconVisible)
+    }
+
+    @Test
+    fun `WHEN the user is on the synced tabs page THEN the search icon is not visible`() {
+        val testState = TabsTrayState(selectedPage = Page.SyncedTabs)
+        assertFalse(testState.searchIconVisible)
+    }
+
+    /**
+     *  [TabsTrayState.searchIconEnabled] coverage
+     */
+
+    @Test
+    fun `GIVEN the user has no normal tabs open WHEN the user is on the normal tabs page THEN the search icon is disabled`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.NormalTabs,
+            normalTabs = emptyList(),
+        )
+        assertFalse(testState.searchIconEnabled)
+    }
+
+    @Test
+    fun `GIVEN the user has at least one normal tab open WHEN the user is on the normal tabs page THEN the search icon is disabled`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.NormalTabs,
+            normalTabs = listOf(createTab(url = "url")),
+            tabSearchEnabled = true,
+        )
+        assertTrue(testState.searchIconEnabled)
+    }
+
+    @Test
+    fun `GIVEN the user has no private tabs open WHEN the user is on the private tabs page THEN the search icon is disabled`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.PrivateTabs,
+            privateTabs = emptyList(),
+        )
+        assertFalse(testState.searchIconEnabled)
+    }
+
+    @Test
+    fun `GIVEN the user has at least one private tab open WHEN the user is on the private tabs page THEN the search icon is disabled`() {
+        val testState = TabsTrayState(
+            selectedPage = Page.PrivateTabs,
+            privateTabs = listOf(createTab(url = "url")),
+            tabSearchEnabled = true,
+        )
+        assertTrue(testState.searchIconEnabled)
     }
 
     private fun initMenuItems(

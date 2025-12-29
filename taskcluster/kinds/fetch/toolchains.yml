@@ -143,11 +143,11 @@ mpfr-3.1.4:
     description: mpfr 3.1.4 source code
     fetch:
         type: static-url
-        url: http://www.mpfr.org/mpfr-3.1.4/mpfr-3.1.4.tar.bz2
+        url: https://ftpmirror.gnu.org/gnu/mpfr/mpfr-3.1.4.tar.bz2
         sha256: d3103a80cdad2407ed581f3618c4bed04e0c92d1cf771a65ead662cc397f7775
         size: 1279284
         gpg-signature:
-            sig-url: "{url}.asc"
+            sig-url: "{url}.sig"
             key-path: build/unix/build-gcc/07F3DBBECC1A39605078094D980C197698C3739D.key
         artifact-name: mpfr-source.tar.zst
         strip-components: 1
@@ -283,6 +283,8 @@ hfsplus-tools:
         url: https://src.fedoraproject.org/repo/pkgs/hfsplus-tools/diskdev_cmds-540.1.linux3.tar.gz/0435afc389b919027b69616ad1b05709/diskdev_cmds-540.1.linux3.tar.gz
         sha256: b01b203a97f9a3bf36a027c13ddfc59292730552e62722d690d33bd5c24f5497
         size: 411205
+        headers:
+            - "Accept: application/octet-stream"
 
 xar:
     description: xar source code
@@ -382,19 +384,19 @@ clang-17:
         repo: https://github.com/llvm/llvm-project
         revision: 6009708b4367171ccdbf4b5905cb6a803753fe18
 
-clang-19:
-    description: clang 19.1.7 source code
-    fetch:
-        type: git
-        repo: https://github.com/llvm/llvm-project
-        revision: cd708029e0b2869e80abe31ddb175f7c35361f90
-
 clang-20:
     description: clang 20.1.8 source code
     fetch:
         type: git
         repo: https://github.com/llvm/llvm-project
         revision: 87f0227cb60147a26a1eeb4fb06e3b505e9c7261
+
+clang-21:
+    description: clang 21.1.7 source code
+    fetch:
+        type: git
+        repo: https://github.com/llvm/llvm-project
+        revision: 292dc2b86f66e39f4b85ec8b185fd8b60f5213ce
 
 clang-trunk:
     description: clang main branch source code
@@ -408,24 +410,23 @@ clang-trunk:
 # We build stable rust from source so the resulting compiler acts as a nightly
 # rust compiler, allowing to use unstable features like -Zbuild-std and
 # sanitizers.
-rust-1.81.0:
-    description: Rust 1.81.0 source code
+rust-1.83.0:
+    description: Rust 1.83.0 source code
     fetch:
         type: git
         include-dot-git: true
         repo: https://github.com/rust-lang/rust/
-        # NOTE: This is 1.81.0 and then some, to accommodate compiling some 1.82.0 code without
-        # breaking patches we use for sanitizers. See
-        # <https://bugzilla.mozilla.org/show_bug.cgi?id=1915537> for follow-up.
-        revision: ab1527f1d6560168f9fd36fa8cd7ba677c1d36ad
+        revision: 90b35a6239c3d8bdabc530a6a0816f7ff89a0aaf
 
 rust-nightly:
     description: Rust nightly source code
+    attributes:
+        cached_task: false
     fetch:
         type: git
         include-dot-git: true
         repo: https://github.com/rust-lang/rust/
-        branch: master
+        branch: main
 
 wasi-sdk:
     description: wasi-sdk-20 source code
@@ -560,7 +561,7 @@ samply:
     fetch:
         type: git
         repo: https://github.com/mstange/samply
-        revision: da75c28f367454c621e690eeb4e44ec2ebb29a78
+        revision: c947d6339a9bea6c5659c6317796c5061d0fd7e6
 
 nodejs-12-linux64:
     description: nodejs 12 for x64 linux
@@ -765,7 +766,7 @@ mozilla-pdf.js:
     fetch:
         type: git
         repo: https://github.com/mozilla/pdf.js
-        revision: 81cf42df470f85eb60150bdffca380e3eee79c08
+        revision: 2ac8185956b0e222cbb798a9d455e82bca954462
 
 xmlstarlet-1.6.1:
     description: xmlstarlet for Android Performance Tests

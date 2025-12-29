@@ -46,6 +46,11 @@ from mozpack.copier import FileRegistry
 from mozpack.manifests import InstallManifest, UnreadableInstallManifest
 from variables import get_buildid
 
+# Global variables
+
+RUST_GITHUB = "github.com/rust-lang/rust"
+FIREFOX_GITHUB = "github.com/mozilla-firefox/firefox"
+
 # Utility classes
 
 
@@ -327,7 +332,7 @@ def TryGetGitRepoInfoFromHg(srcdir):
             "hg", "-R", srcdir, "log", "-r", rev, "-T", "{extras.git_commit}"
         )
         if git_commit:
-            git_root = "https://github.com/mozilla-firefox/firefox"
+            git_root = f"https://{FIREFOX_GITHUB}"
             return GitRepoInfo(srcdir, git_commit, git_root)
     return None
 
@@ -449,8 +454,8 @@ def SourceIndex(fileStream, outputPath, vcs_root, s3_bucket):
         + "VERCTRL=http\r\n"
         + "SRCSRV: variables ------------------------------------------\r\n"
         + "SRCSRVVERCTRL=http\r\n"
-        + "RUST_GITHUB_TARGET=https://github.com/rust-lang/rust/raw/%var4%/%var3%\r\n"
-        + "FIREFOX_GITHUB_TARGET=https://github.com/mozilla/firefox/raw/%var4%/%var3%\r\n"
+        + f"RUST_GITHUB_TARGET=https://{RUST_GITHUB}/raw/%var4%/%var3%\r\n"
+        + f"FIREFOX_GITHUB_TARGET=https://{FIREFOX_GITHUB}/raw/%var4%/%var3%\r\n"
     )
     pdbStreamFile.write("HGSERVER=" + vcs_root + "\r\n")
     pdbStreamFile.write("HG_TARGET=%hgserver%/raw-file/%var4%/%var3%\r\n")
@@ -529,7 +534,7 @@ class Dumper:
             rust_srcdir = "/rustc/" + rust_sha
             self.srcdirs.append(rust_srcdir)
             Dumper.srcdirRepoInfo[rust_srcdir] = GitRepoInfo(
-                rust_srcdir, rust_sha, "https://github.com/rust-lang/rust/"
+                rust_srcdir, rust_sha, f"https://{RUST_GITHUB}/"
             )
 
     # subclasses override this
@@ -708,11 +713,11 @@ class Dumper:
                             (vcs, bucket, source_file, nothing) = filename.split(":", 3)
                             sourceFileStream += sourcepath + "*S3_TARGET*"
                             sourceFileStream += source_file + "\r\n"
-                        elif filename.startswith("git:github.com/rust-lang/rust:"):
+                        elif filename.startswith(f"git:{RUST_GITHUB}:"):
                             (vcs, repo, source_file, revision) = filename.split(":", 3)
                             sourceFileStream += sourcepath + "*RUST_GITHUB_TARGET*"
                             sourceFileStream += source_file + "*" + revision + "\r\n"
-                        elif filename.startswith("git:github.com/mozilla/firefox:"):
+                        elif filename.startswith(f"git:{FIREFOX_GITHUB}:"):
                             (vcs, repo, source_file, revision) = filename.split(":", 3)
                             sourceFileStream += sourcepath + "*FIREFOX_GITHUB_TARGET*"
                             sourceFileStream += source_file + "*" + revision + "\r\n"
@@ -804,10 +809,7 @@ class Dumper:
                 print(
                     "PERFHERDER_DATA: %s" % json.dumps(perfherder_data), file=sys.stderr
                 )
-                if (
-                    "MOZ_AUTOMATION" in os.environ
-                    or "SNAPCRAFT_BUILD_INFO" in os.environ
-                ):
+                if "MOZ_AUTOMATION" in os.environ or "MOZ_SNAP_BUILD" in os.environ:
                     upload_dir = Path(os.environ.get("UPLOAD_DIR"))
                     upload_dir.mkdir(parents=True, exist_ok=True)
                     upload_path = upload_dir / "perfherder-data-compiler-metrics.json"

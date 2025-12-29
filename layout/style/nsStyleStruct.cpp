@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "AnchorPositioningUtils.h"
 #include "CounterStyleManager.h"
 #include "ImageLoader.h"
 #include "imgIContainer.h"
@@ -34,6 +35,7 @@
 #include "nsCOMPtr.h"
 #include "nsCRTGlue.h"
 #include "nsCSSProps.h"
+#include "nsContainerFrame.h"
 #include "nsDeviceContext.h"
 #include "nsIURI.h"
 #include "nsIURIMutator.h"
@@ -285,6 +287,77 @@ static StyleRect<T> StyleRectWithAllSides(const T& aSide) {
   return {aSide, aSide, aSide, aSide};
 }
 
+bool AnchorPosResolutionParams::AutoResolutionOverrideParams::OverriddenToZero(
+    StylePhysicalAxis aAxis) const {
+  if (mPositionAreaInUse) {
+    // If `position-area` is used "Any auto inset properties resolve to 0":
+    // https://drafts.csswg.org/css-anchor-position-1/#valdef-position-area-position-area
+    return true;
+  }
+
+  // If `anchor-center` is used with a valid anchor, "auto inset
+  // properties resolve to 0" on that axis:
+  // https://drafts.csswg.org/css-anchor-position-1/#anchor-center
+  if (aAxis == StylePhysicalAxis::Vertical) {
+    return mVAnchorCenter;
+  }
+  MOZ_ASSERT(aAxis == StylePhysicalAxis::Horizontal);
+  return mHAnchorCenter;
+}
+
+static AnchorPosResolutionParams::AutoResolutionOverrideParams
+GetAutoResolutionOverrideParams(const nsIFrame* aFrame,
+                                bool aDefaultAnchorValid) {
+  if (!aFrame) {
+    return {};
+  }
+  nsIFrame* parent = aFrame->GetParent();
+  if (!parent || !aFrame->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW) ||
+      !aDefaultAnchorValid) {
+    return {};
+  }
+
+  const auto* stylePos = aFrame->StylePosition();
+  const auto cbwm = parent->GetWritingMode();
+
+  auto checkAxis = [&](LogicalAxis aAxis) {
+    StyleAlignFlags alignment =
+        stylePos->UsedSelfAlignment(aAxis, parent->Style());
+    return (alignment & ~StyleAlignFlags::FLAG_BITS) ==
+           StyleAlignFlags::ANCHOR_CENTER;
+  };
+
+  const auto horizontalLogicalAxis =
+      cbwm.IsVertical() ? LogicalAxis::Block : LogicalAxis::Inline;
+  AnchorPosResolutionParams::AutoResolutionOverrideParams result;
+  result.mHAnchorCenter = checkAxis(horizontalLogicalAxis);
+  result.mVAnchorCenter = checkAxis(GetOrthogonalAxis(horizontalLogicalAxis));
+  result.mPositionAreaInUse = !stylePos->mPositionArea.IsNone();
+  return result;
+}
+
+AnchorPosResolutionParams::AutoResolutionOverrideParams::
+    AutoResolutionOverrideParams(
+        const nsIFrame* aFrame, const mozilla::AnchorPosResolutionCache* aCache)
+    : AutoResolutionOverrideParams{GetAutoResolutionOverrideParams(
+          aFrame, aCache && aCache->mDefaultAnchorCache.mAnchor)} {}
+
+AnchorPosResolutionParams::AutoResolutionOverrideParams::
+    AutoResolutionOverrideParams(const nsIFrame* aFrame)
+    : AutoResolutionOverrideParams{
+          GetAutoResolutionOverrideParams(aFrame, [&]() {
+            if (!aFrame) {
+              return false;
+            }
+            const auto* references =
+                aFrame->GetProperty(nsIFrame::AnchorPosReferences());
+            if (!references || !references->mDefaultAnchorName) {
+              // It is presumed that this is called on a reflowed frame.
+              return false;
+            }
+            return references->Lookup(references->mDefaultAnchorName)->isSome();
+          }())} {}
+
 AnchorResolvedMargin AnchorResolvedMarginHelper::ResolveAnchor(
     const StyleMargin& aValue, StylePhysicalAxis aAxis,
     const AnchorPosResolutionParams& aParams) {
@@ -323,7 +396,8 @@ nsStyleMargin::nsStyleMargin()
     : mMargin(StyleRectWithAllSides(
           StyleMargin::LengthPercentage(LengthPercentage::Zero()))),
       mScrollMargin(StyleRectWithAllSides(StyleLength{0.})),
-      mOverflowClipMargin(StyleLength::Zero()) {
+      mOverflowClipMargin(
+          {StyleLength::Zero(), StyleOverflowClipMarginBox::PaddingBox}) {
   MOZ_COUNT_CTOR(nsStyleMargin);
 }
 
@@ -1014,7 +1088,7 @@ nsStylePosition::nsStylePosition()
       mMinHeight(StyleSize::Auto()),
       mMaxHeight(StyleMaxSize::None()),
       mPositionAnchor(StylePositionAnchor::None()),
-      mPositionVisibility(StylePositionVisibility::ALWAYS),
+      mPositionVisibility(StylePositionVisibility::ANCHORS_VISIBLE),
       mPositionTryFallbacks(StylePositionTryFallbacks()),
       mPositionTryOrder(StylePositionTryOrder::Normal),
       mFlexBasis(StyleFlexBasis::Size(StyleSize::Auto())),
@@ -1257,7 +1331,7 @@ nsChangeHint nsStylePosition::CalcDifference(
       mPositionArea != aNewData.mPositionArea) {
     // We need to reflow in order to update the `AnchorPosReferences`
     // property at minimum.
-    hint |= nsChangeHint_NeedReflow;
+    hint |= nsChangeHint_NeedReflow | nsChangeHint_ReflowChangesSizeOrPosition;
   }
 
   if (mAspectRatio != aNewData.mAspectRatio) {

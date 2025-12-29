@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">ສ່ວນຕົວ %s</string>
@@ -82,7 +89,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s ລຶບຄຸກກີ້, ປະຫວັດ, ແລະ ຂໍ້ມູນເວັບໄຊຂອງທ່ານ ເມື່ອທ່ານປິດແທັບສ່ວນຕົວທັງໝົດຂອງທ່ານ. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s ລຶບຄຸກກີ້, ປະຫວັດ, ແລະ ຂໍ້ມູນເວັບໄຊຂອງທ່ານ ເມື່ອທ່ານປິດແທັບສ່ວນຕົວທັງໝົດຂອງທ່ານ. %2$s</string>
   <!--
     Description of private browsing mode displayed to users on the homepage when they enable private mode.
     %1$s is the name of the app (for example "Firefox").
@@ -613,6 +620,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">ແບ່ງປັນວິທີທີ່ທ່ານຄົ້ນພົບ Firefox, ແລະ ທີ່ທ່ານໃຊ້ມັນ, ກັບຄູ່ຮ່ວມການຕະຫຼາດຂອງ Mozilla. ຂໍ້ມູນນີ້ບໍ່ເຄີຍຖືກຂາຍ.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">ຕົກລົງເຫັນດີ ແລະ ເລີ່ມຊອກຫາ</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">ເລືອກການຈັດວາງແຖບເຄື່ອງມື</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -811,8 +822,6 @@
   <string name="preferences_gestures">ທ່າທາງ</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">ການປັບແຕ່ງ</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Sync ແທັບ, ບຸກມາກ, ລະຫັດຜ່ານ ແລະ ອື່ນໆຂອງທ່ານ.</string>
   <!-- Preference description shown in the banner prompting the user to sign in for sync features -->
   <string name="preferences_sign_in_description">ຊິ້ງແຖບ, ບຸກມາກ, ລະຫັດຜ່ານ ແລະ ອື່ນໆອີກ.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -1202,10 +1211,8 @@
   <!--
     Turn On Sync Preferences
 
-    Header of the Sync and save your data preference view
+    Header of the Sign in preference view
   -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">ຊິງຄ໌ແລະບັນທຶກຂໍ້ມູນ</string>
-  <!-- Header of the Sign in preference view -->
   <string name="preferences_sign_in">ເຂົ້າສູ່ລະບົບ</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">ເຂົ້າສູ່ລະບົບເພື່ອເຊື່ອມຕໍ່ຄືນໃຫມ່</string>
@@ -1472,8 +1479,6 @@
   <string name="tab_tray_multiselect_menu_content_description">ເລືອກເມນູແທັບແລ້ວ</string>
   <!-- Title text displayed for a homepage tab in the tabs tray. -->
   <string name="tab_tray_homepage_tab">ຫນ້າທຳອິດ</string>
-  <!-- Title text displayed for a homepage tab in the tabs tray. %s is a placeholder that will be replaced by app name. -->
-  <string name="tab_tray_homepage_tab_2" tools:ignore="UnusedResources" moz:removedIn="145">%s ໜ້າຫຼັກ</string>
   <!-- Content description (not visible, for screen readers etc.): Removes tab from collection button. Removes the selected tab from collection when pressed -->
   <string name="remove_tab_from_collection">ລຶບແຖບອອກຈາກບ່ອນເກັບສະສົມ</string>
   <!-- Text for button to enter multiselect mode in tabs tray -->
@@ -2066,8 +2071,6 @@
   <string name="toast_copy_link_to_clipboard">ສຳເນົາໃສ່ຄລິບບອດແລ້ວ</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">ລົງຊື່ເຂົ້າໃຊ້ເພື່ອ Sync</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">ຊິງຄ໌ແລະບັນທຶກຂໍ້ມູນ</string>
   <!-- An option from the three dot menu to sign in -->
   <string name="sync_menu_sign_in">ເຂົ້າສູ່ລະບົບ</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
@@ -2646,8 +2649,6 @@
   <string name="credit_cards_edit_card">ແກ້ໄຂບັດ</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">ເລກບັດ</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">ວັນ​ຫມົດ​ອາ​ຍຸ</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">ເດືອນຫມົດອາຍຸ</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3026,4 +3027,9 @@
 
   <!-- The title of the search widget task for the setup checklist -->
   <string name="setup_checklist_task_search_widget_2">ສຳຫຼວດ widget ຄົ້ນຫາ</string>
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

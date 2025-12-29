@@ -69,7 +69,7 @@ TEST_SUITES = {
         "mach_command": "firefox-ui-update",
         "kwargs": {},
     },
-    "marionette": {
+    "marionette-integration": {
         "aliases": ("mn",),
         "build_flavor": "marionette",
         "mach_command": "marionette-test",
@@ -447,7 +447,8 @@ _test_flavors = {
     "crashtest": "crashtest",
     "firefox-ui-functional": "firefox-ui-functional",
     "firefox-ui-update": "firefox-ui-update",
-    "marionette": "marionette",
+    "marionette-integration": "marionette-integration",
+    "marionette-unittest": "marionette-unittest",
     "mochitest": "mochitest-plain",
     "puppeteer": "puppeteer",
     "python": "python",
@@ -604,7 +605,7 @@ class BuildBackendLoader(TestLoader):
 
 class TestManifestLoader(TestLoader):
     def __init__(self, *args, **kwargs):
-        super(TestManifestLoader, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.finder = FileFinder(self.topsrcdir)
         self.reader = self.mozbuild_reader(config_mode="empty")
         self.variables = {f"{k}_MANIFESTS": v[0] for k, v in TEST_MANIFESTS.items()}
@@ -669,7 +670,7 @@ class TestResolver(MozbuildObject):
 
     def __init__(self, *args, **kwargs):
         loader_cls = kwargs.pop("loader_cls", BuildBackendLoader)
-        super(TestResolver, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.load_tests = self._spawn(loader_cls)
         self._tests = []
@@ -919,8 +920,7 @@ class TestResolver(MozbuildObject):
 
         for p in sorted(candidate_paths):
             tests = self.tests_by_path[p]
-            for test in fltr(tests):
-                yield test
+            yield from fltr(tests)
 
     def is_puppeteer_path(self, path):
         if path is None:
@@ -1225,9 +1225,7 @@ class TestResolver(MozbuildObject):
 
                 full_path = mozpath.join(tests_root, path)  # absolute path on disk
                 src_path = mozpath.relpath(full_path, self.topsrcdir)
-                test_tags = self.get_test_tags(
-                    [], manifests[manifest].get("metadata_path", ""), path
-                )
+                test_tags = self.get_test_tags([], data.get("metadata_path", ""), path)
 
                 for test in tests:
                     testobj = {

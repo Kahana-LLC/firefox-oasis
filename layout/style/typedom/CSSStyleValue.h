@@ -27,11 +27,19 @@ namespace dom {
 
 class GlobalObject;
 class CSSKeywordValue;
+class CSSMathSum;
+class CSSUnitValue;
 class CSSUnsupportedValue;
 
 class CSSStyleValue : public nsISupports, public nsWrapperCache {
  public:
-  enum class ValueType { Uninitialized, Unsupported, Keyword };
+  enum class ValueType {
+    Uninitialized,
+    UnsupportedValue,
+    KeywordValue,
+    UnitValue,
+    MathSum,
+  };
 
   explicit CSSStyleValue(nsCOMPtr<nsISupports> aParent);
 
@@ -60,6 +68,8 @@ class CSSStyleValue : public nsISupports, public nsWrapperCache {
 
   // end of CSSStyleValue Web IDL declarations
 
+  ValueType GetValueType() const { return mValueType; }
+
   bool IsCSSUnsupportedValue() const;
 
   // Defined in CSSUnsupportedValue.cpp
@@ -75,6 +85,16 @@ class CSSStyleValue : public nsISupports, public nsWrapperCache {
 
   // Defined in CSSKeywordValue.cpp
   CSSKeywordValue& GetAsCSSKeywordValue();
+
+  bool IsCSSUnitValue() const;
+
+  // Defined in CSSUnitValue.cpp
+  CSSUnitValue& GetAsCSSUnitValue();
+
+  bool IsCSSMathSum() const;
+
+  // Defined in CSSMathSum.cpp
+  CSSMathSum& GetAsCSSMathSum();
 
  protected:
   virtual ~CSSStyleValue() = default;

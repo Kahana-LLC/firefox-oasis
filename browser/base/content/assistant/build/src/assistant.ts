@@ -21,6 +21,7 @@ import {
   NewWindowCommand,
   OrganizeWindowsCommand,
   ShowURLCommand,
+  SearchMemoryCommand,
   RemoveTabFromHubCommand,
   Command,
   CmdResult,
@@ -148,6 +149,7 @@ You have the following workers available:
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
+- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
@@ -155,7 +157,8 @@ You have the following workers available:
 3.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
 4.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
 5.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
-6.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
+6.  **Handle Failures:** If a tool returns "No matches found" or an error, DO NOT retry the same action. Choose "chat" to inform the user.
+7.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -295,7 +298,6 @@ export async function runAssistantStream(
     new NewWindowCommand(),
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
-    new RemoveTabFromHubCommand(),
   ];
   const graph = await buildGraph(commands);
   

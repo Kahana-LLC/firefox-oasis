@@ -84,7 +84,6 @@ import mozilla.components.lib.fetch.httpurlconnection.HttpURLConnectionClient
 import mozilla.components.lib.publicsuffixlist.PublicSuffixList
 import mozilla.components.service.digitalassetlinks.local.StatementApi
 import mozilla.components.service.digitalassetlinks.local.StatementRelationChecker
-import mozilla.components.service.fxrelay.FxRelay
 import mozilla.components.service.location.LocationService
 import mozilla.components.service.sync.logins.SyncableLoginsStorage
 import mozilla.components.support.base.android.NotificationsDelegate
@@ -272,10 +271,6 @@ open class DefaultComponents(private val applicationContext: Context) {
         StatementRelationChecker(StatementApi(client))
     }
 
-    val relayService by lazy {
-        FxRelay("https://relay.firefox.com")
-    }
-
     // Intent
     val tabIntentProcessor by lazy {
         TabIntentProcessor(tabsUseCases, searchUseCases.newTabSearch)
@@ -329,7 +324,6 @@ open class DefaultComponents(private val applicationContext: Context) {
             SimpleBrowserMenuItem("Save to PDF") {
                 sessionUseCases.saveToPdf.invoke()
             },
-
             SimpleBrowserMenuItem("Translate (auto)") {
                 var detectedFrom =
                     store.state.selectedTab?.translationsState?.translationEngineState
@@ -353,16 +347,6 @@ open class DefaultComponents(private val applicationContext: Context) {
             },
             SimpleBrowserMenuItem("Restore after crash") {
                 sessionUseCases.crashRecovery.invoke()
-            },
-            SimpleBrowserMenuItem("Relay") {
-                MainScope().launch {
-                    val addressList = relayService.fetchAllAddresses()
-                    Toast.makeText(
-                        applicationContext,
-                        "Fetched ${addressList.size} addresses",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
             },
             BrowserMenuDivider(),
         )

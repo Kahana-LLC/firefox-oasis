@@ -8,6 +8,7 @@ support-files = [
 ["browser_aboutCertError.js"]
 skip-if = [
   "os == 'mac' && os_version == '10.15' && arch == 'x86_64' && opt",
+  "os == 'mac' && os_version == '15.30' && arch == 'aarch64'", # Bug 1996741
 ]
 
 ["browser_aboutCertError_cca_telemetry.js"]
@@ -31,11 +32,17 @@ support-files = [
 
 ["browser_aboutCertError_noSubjectAltName.js"]
 
+["browser_aboutCertError_notYetValid.js"]
+
 ["browser_aboutCertError_offlineSupport.js"]
 
 ["browser_aboutCertError_offlineSupport_feltPrivacyV1.js"]
 
+["browser_aboutCertError_revoked.js"]
+
 ["browser_aboutCertError_telemetry.js"]
+
+["browser_aboutCertError_untrustedIssuer.js"]
 
 ["browser_aboutDialog_distribution.js"]
 skip-if = [
@@ -60,6 +67,8 @@ support-files = [
   "iframe_page_csp.html",
   "csp_iframe.sjs",
 ]
+
+["browser_aboutNetError_httpAuthDisabled.js"]
 
 ["browser_aboutNetError_internet_connection_offline.js"]
 

@@ -17,6 +17,7 @@ ChromeUtils.defineESModuleGetters(this, {
   HomePage: "resource:///modules/HomePage.sys.mjs",
   JsonSchemaValidator:
     "resource://gre/modules/components-utils/JsonSchemaValidator.sys.mjs",
+  NewTabContentPing: "resource://newtab/lib/NewTabContentPing.sys.mjs",
   sinon: "resource://testing-common/Sinon.sys.mjs",
   TelemetryController: "resource://gre/modules/TelemetryController.sys.mjs",
   TelemetryFeed: "resource://newtab/lib/TelemetryFeed.sys.mjs",
@@ -591,6 +592,10 @@ add_task(async function test_endSession_no_ping_on_no_visibility_event() {
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
   Services.prefs.setBoolPref(PREF_EVENT_TELEMETRY, true);
   let instance = new TelemetryFeed();
+
+  let sandbox = sinon.createSandbox();
+  sandbox.stub(instance, "configureContentPing");
+
   instance.addSession("foo");
 
   Services.telemetry.clearEvents();
@@ -602,6 +607,8 @@ add_task(async function test_endSession_no_ping_on_no_visibility_event() {
 
   Services.prefs.clearUserPref(PREF_TELEMETRY);
   Services.prefs.clearUserPref(PREF_EVENT_TELEMETRY);
+
+  sandbox.restore();
 });
 
 add_task(async function test_endSession_send_ping() {
@@ -616,6 +623,7 @@ add_task(async function test_endSession_send_ping() {
   let sandbox = sinon.createSandbox();
   sandbox.stub(instance, "createSessionEndEvent");
   sandbox.stub(instance.utEvents, "sendSessionEndEvent");
+  sandbox.stub(instance, "configureContentPing");
 
   let session = instance.addSession("foo");
 
@@ -1417,6 +1425,7 @@ add_task(async function test_sendPageTakeoverData_homepage_category() {
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
   sandbox.stub(HomePage, "get").returns("https://searchprovider.com");
+  sandbox.stub(instance, "configureContentPing");
   instance._classifySite = () => Promise.resolve("other");
 
   await instance.sendPageTakeoverData();
@@ -1440,6 +1449,7 @@ add_task(async function test_sendPageTakeoverData_newtab_category_custom() {
     .stub(AboutNewTab, "newTabURL")
     .get(() => "https://searchprovider.com");
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
+  sandbox.stub(instance, "configureContentPing");
   instance._classifySite = () => Promise.resolve("other");
 
   await instance.sendPageTakeoverData();
@@ -1459,6 +1469,7 @@ add_task(async function test_sendPageTakeoverData_newtab_category_custom() {
   Services.fog.testResetFOG();
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
+  sandbox.stub(instance, "configureContentPing");
   instance._classifySite = () => Promise.resolve("other");
 
   await instance.sendPageTakeoverData();
@@ -1482,6 +1493,7 @@ add_task(async function test_sendPageTakeoverData_newtab_category_extension() {
   sandbox.stub(ExtensionSettingsStore, "getSetting").returns({ id: ID });
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
+  sandbox.stub(instance, "configureContentPing");
   instance._classifySite = () => Promise.resolve("other");
 
   await instance.sendPageTakeoverData();
@@ -1502,6 +1514,7 @@ add_task(async function test_sendPageTakeoverData_newtab_disabled() {
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
   Services.prefs.setBoolPref("browser.newtabpage.enabled", false);
+  sandbox.stub(instance, "configureContentPing");
   instance._classifySite = () => Promise.resolve("other");
 
   await instance.sendPageTakeoverData();
@@ -1522,6 +1535,7 @@ add_task(async function test_sendPageTakeoverData_homepage_disabled() {
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
   sandbox.stub(HomePage, "overridden").get(() => true);
+  sandbox.stub(instance, "configureContentPing");
 
   await instance.sendPageTakeoverData();
   Assert.equal(Glean.newtab.homepageCategory.testGetValue(), "disabled");
@@ -1537,6 +1551,7 @@ add_task(async function test_sendPageTakeoverData_newtab_ping() {
   Services.fog.testResetFOG();
 
   Services.prefs.setBoolPref(PREF_TELEMETRY, true);
+  sandbox.stub(instance, "configureContentPing");
 
   let pingSubmitted = new Promise(resolve => {
     GleanPings.newtab.testBeforeNextSubmit(reason => {
@@ -1598,13 +1613,14 @@ add_task(
           is_sponsored: String(false),
           position: String(POS_1),
           recommendation_id: "decaf-c0ff33",
-          tile_id: String(1),
+          content_redacted: String(true),
         });
         Assert.deepEqual(pocketImpressions[1].extra, {
           newtab_visit_id: SESSION_ID,
           is_sponsored: String(true),
           position: String(POS_2),
           tile_id: String(2),
+          content_redacted: String(true),
         });
         Assert.equal(Glean.pocket.shim.testGetValue(), SHIM);
         Assert.deepEqual(
@@ -2411,8 +2427,9 @@ add_task(
     Assert.deepEqual(clicks[0].extra, {
       newtab_visit_id: SESSION_ID,
       is_sponsored: String(true),
-      position: ACTION_POSITION,
+      position: String(ACTION_POSITION),
       tile_id: String(448685088),
+      content_redacted: String(true),
     });
 
     await pingSubmitted;
@@ -2420,88 +2437,6 @@ add_task(
     sandbox.restore();
   }
 );
-
-add_task(
-  async function test_handleDiscoveryStreamUserEvent_thumbs_down_event() {
-    info(
-      "TelemetryFeed.handleDiscoveryStreamUserEvent instruments a thumbs down" +
-        " event of an organic story"
-    );
-
-    let sandbox = sinon.createSandbox();
-    let instance = new TelemetryFeed();
-    Services.fog.testResetFOG();
-    const ACTION_POSITION = 42;
-    let action = actionCreators.DiscoveryStreamUserEvent({
-      event: "POCKET_THUMBS_DOWN",
-      action_position: ACTION_POSITION,
-      value: {
-        card_type: "organic",
-        recommendation_id: "decaf-c0ff33",
-        tile_id: 314623757745896,
-        thumbs_down: true,
-        thumbs_up: false,
-      },
-    });
-
-    const SESSION_ID = "decafc0ffee";
-    sandbox.stub(instance.sessions, "get").returns({ session_id: SESSION_ID });
-
-    instance.handleDiscoveryStreamUserEvent(action);
-
-    let thumbVotes = Glean.pocket.thumbVotingInteraction.testGetValue();
-    Assert.equal(thumbVotes.length, 1, "Recorded 1 thumbs down");
-    Assert.deepEqual(thumbVotes[0].extra, {
-      newtab_visit_id: SESSION_ID,
-      recommendation_id: "decaf-c0ff33",
-      tile_id: String(314623757745896),
-      thumbs_down: String(true),
-      thumbs_up: String(false),
-    });
-
-    sandbox.restore();
-  }
-);
-
-add_task(async function test_handleDiscoveryStreamUserEvent_thumbs_up_event() {
-  info(
-    "TelemetryFeed.handleDiscoveryStreamUserEvent instruments a thumbs up" +
-      " event of an organic story"
-  );
-
-  let sandbox = sinon.createSandbox();
-  let instance = new TelemetryFeed();
-  Services.fog.testResetFOG();
-  const ACTION_POSITION = 42;
-  let action = actionCreators.DiscoveryStreamUserEvent({
-    event: "POCKET_THUMBS_DOWN",
-    action_position: ACTION_POSITION,
-    value: {
-      card_type: "organic",
-      recommendation_id: "decaf-c0ff33",
-      tile_id: 314623757745896,
-      thumbs_down: false,
-      thumbs_up: true,
-    },
-  });
-
-  const SESSION_ID = "decafc0ffee";
-  sandbox.stub(instance.sessions, "get").returns({ session_id: SESSION_ID });
-
-  instance.handleDiscoveryStreamUserEvent(action);
-
-  let thumbVotes = Glean.pocket.thumbVotingInteraction.testGetValue();
-  Assert.equal(thumbVotes.length, 1, "Recorded 1 thumbs down");
-  Assert.deepEqual(thumbVotes[0].extra, {
-    newtab_visit_id: SESSION_ID,
-    recommendation_id: "decaf-c0ff33",
-    tile_id: String(314623757745896),
-    thumbs_down: String(false),
-    thumbs_up: String(true),
-  });
-
-  sandbox.restore();
-});
 
 add_task(
   async function test_handleAboutSponsoredTopSites_record_showPrivacyClick() {
@@ -2692,6 +2627,44 @@ add_task(async function test_handleBlockUrl_no_record_dismiss_on_no_session() {
     !Glean.topsites.dismiss.testGetValue(),
     "Should not have recorded a dismiss"
   );
+
+  sandbox.restore();
+});
+
+add_task(function test_randomizeOrganicContentEvent() {
+  info(
+    "TelemetryFeed._randomizeOrganicContentEvent should return true or false" +
+      " based on the given probability"
+  );
+  let sandbox = sinon.createSandbox();
+  let instance = new TelemetryFeed();
+
+  const computeRec = id => ({
+    corpus_item_id: `item-${id}`,
+    topic: "a",
+    is_sponsored: false,
+    section_id: "section",
+    section_position: 3,
+  });
+  const allRecs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(computeRec);
+  sandbox.stub(instance, "getRecommendationCount").returns(allRecs.length);
+  sandbox.stub(instance, "getAllRecommendations").returns(allRecs);
+  instance._privateRandomContentTelemetryProbablityValues = { epsilon: 30 };
+  let decideStub = sandbox.stub(NewTabContentPing, "decideWithProbability");
+  decideStub.returns(true);
+  let result = instance.randomizeOrganicContentEvent(allRecs[0]);
+  Assert.equal(result, allRecs[0]);
+  Assert.ok(decideStub.calledOnce, "decideWithProbability was called once");
+  const [probUsed] = decideStub.firstCall.args;
+  Assert.greater(probUsed, 0.9); // Epsilon 30 is very high probability
+  Assert.less(probUsed, 1.01);
+
+  // Run again - randomization kicks in
+  decideStub.returns(false);
+  sandbox.stub(NewTabContentPing, "secureRandIntInRange").returns(3);
+  result = instance.randomizeOrganicContentEvent(allRecs[0]);
+  Assert.equal(probUsed, decideStub.lastCall.args[0]);
+  Assert.deepEqual(result, allRecs[3]);
 
   sandbox.restore();
 });

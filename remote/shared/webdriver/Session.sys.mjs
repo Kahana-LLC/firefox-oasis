@@ -32,9 +32,20 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "chrome://remote/content/webdriver-bidi/WebDriverBiDiConnection.sys.mjs",
   WebSocketHandshake:
     "chrome://remote/content/server/WebSocketHandshake.sys.mjs",
+  windowManager: "chrome://remote/content/shared/WindowManager.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "logger", () => lazy.Log.get());
+
+// Bug 1999693: This preference is a temporary workaround until clients can use
+// the unhandledPromptBehavior capability to decide if file pickers should be
+// dismissed or not.
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "dismissFilePickersEnabled",
+  "remote.bidi.dismiss_file_pickers.enabled",
+  false
+);
 
 XPCOMUtils.defineLazyServiceGetter(
   lazy,
@@ -285,11 +296,7 @@ export class WebDriverSession {
 
     // Start the tracking of browsing contexts to create Navigable ids.
     lazy.NavigableManager.startTracking();
-
-    // Temporarily dismiss all file pickers.
-    // Bug 1999693: File pickers should only be dismissed when the unhandled
-    // prompt behaviour for type "file" is not set to "ignore".
-    lazy.FilePickerHandler.dismissFilePickers(this);
+    lazy.windowManager.startTracking();
 
     webDriverSessions.set(this.#id, this);
   }
@@ -300,8 +307,7 @@ export class WebDriverSession {
     // Stop the tracking of browsing contexts when no WebDriver
     // session exists anymore.
     lazy.NavigableManager.stopTracking();
-
-    lazy.FilePickerHandler.allowFilePickers(this);
+    lazy.windowManager.stopTracking();
 
     lazy.unregisterProcessDataActor();
 
@@ -328,6 +334,12 @@ export class WebDriverSession {
         this._onMessageHandlerProtocolEvent
       );
       this.#messageHandler.destroy();
+
+      // Note: do not check lazy.dismissFilePickersEnabled, the preference might
+      // have been updated at runtime. allowFilePickers(this) is safe to call,
+      // if there was no corresponding dismissFilePickers(this), it will be a
+      // no-op.
+      lazy.FilePickerHandler.allowFilePickers(this);
     }
 
     for (const id of this.#chromeProtocolHandles.keys()) {
@@ -373,6 +385,15 @@ export class WebDriverSession {
         "message-handler-protocol-event",
         this._onMessageHandlerProtocolEvent
       );
+
+      // Bug 2005673: Only enable dismissing file pickers lazily if the session
+      // explicitly starts handling BiDi commands.
+      if (lazy.dismissFilePickersEnabled) {
+        // Temporarily dismiss all file pickers.
+        // Bug 1999693: File pickers should only be dismissed when the unhandled
+        // prompt behaviour for type "file" is not set to "ignore".
+        lazy.FilePickerHandler.dismissFilePickers(this);
+      }
     }
 
     return this.#messageHandler;

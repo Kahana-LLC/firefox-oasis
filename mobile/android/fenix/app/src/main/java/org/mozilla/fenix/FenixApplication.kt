@@ -280,6 +280,8 @@ open class FenixApplication : LocaleAwareApplication(), Provider {
                     settings().hasMadeMarketingTelemetrySelection,
                 isDailyUsagePingEnabled = settings().isDailyUsagePingEnabled,
             )
+        } else {
+            components.distributionIdManager.startAdjustIfSkippingConsentScreen()
         }
         setupPush()
 
@@ -946,6 +948,11 @@ open class FenixApplication : LocaleAwareApplication(), Provider {
                     else -> "simple"
                 },
             )
+
+            if (settings.shouldShowToolbarCustomization) {
+                toolbarSimpleShortcut.set(settings.toolbarSimpleShortcut)
+                toolbarExpandedShortcut.set(settings.toolbarExpandedShortcut)
+            }
 
             enhancedTrackingProtection.set(
                 when {

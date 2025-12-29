@@ -281,9 +281,7 @@ class RaptorGatherer(FrameworkGatherer):
         :return str: A formatted string containing the reference link to the
             documented metric.
         """
-        metric_heading = super(RaptorGatherer, self)._get_metric_heading(
-            metric, metrics_info
-        )
+        metric_heading = super()._get_metric_heading(metric, metrics_info)
         return f"`{metric} <raptor-metrics.html#{metric_heading.lower().replace(' ', '-')}>`__"
 
     def get_test_list(self):
@@ -414,7 +412,9 @@ class RaptorGatherer(FrameworkGatherer):
                         values += [
                             (
                                 "\u2705"
-                                if match_run_on_projects(x, task["run_on_projects"])
+                                if match_run_on_projects(
+                                    {"project": x}, task["run_on_projects"]
+                                )
                                 else "\u274C"
                             )
                             for x in BRANCHES
@@ -632,7 +632,9 @@ class TalosGatherer(FrameworkGatherer):
                     values += [
                         (
                             "\u2705"
-                            if match_run_on_projects(x, task["run_on_projects"])
+                            if match_run_on_projects(
+                                {"project": x}, task["run_on_projects"]
+                            )
                             else "\u274C"
                         )
                         for x in BRANCHES

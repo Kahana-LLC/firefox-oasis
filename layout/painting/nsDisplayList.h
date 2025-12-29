@@ -199,6 +199,30 @@ struct ActiveScrolledRoot {
     return Depth(aOne) <= Depth(aTwo) ? aOne : aTwo;
   }
 
+  static const ActiveScrolledRoot* LowestCommonAncestor(
+      const ActiveScrolledRoot* aOne, const ActiveScrolledRoot* aTwo) {
+    uint32_t depth1 = Depth(aOne);
+    uint32_t depth2 = Depth(aTwo);
+    if (depth1 > depth2) {
+      for (uint32_t i = 0; i < (depth1 - depth2); ++i) {
+        MOZ_ASSERT(aOne);
+        aOne = aOne->mParent;
+      }
+    } else if (depth1 < depth2) {
+      for (uint32_t i = 0; i < (depth2 - depth1); ++i) {
+        MOZ_ASSERT(aTwo);
+        aTwo = aTwo->mParent;
+      }
+    }
+    while (aOne != aTwo) {
+      MOZ_ASSERT(aOne);
+      MOZ_ASSERT(aTwo);
+      aOne = aOne->mParent;
+      aTwo = aTwo->mParent;
+    }
+    return aOne;
+  }
+
   static const ActiveScrolledRoot* PickDescendant(
       const ActiveScrolledRoot* aOne, const ActiveScrolledRoot* aTwo) {
     MOZ_ASSERT(IsAncestor(aOne, aTwo) || IsAncestor(aTwo, aOne));
@@ -1084,10 +1108,10 @@ class nsDisplayListBuilder {
     nsDisplayListBuilder* mBuilder;
     const nsIFrame* mPrevFrame;
     const nsIFrame* mPrevReferenceFrame;
-    nsPoint mPrevOffset;
-    Maybe<nsPoint> mPrevAdditionalOffset;
     nsRect mPrevVisibleRect;
     nsRect mPrevDirtyRect;
+    nsPoint mPrevOffset;
+    Maybe<nsPoint> mPrevAdditionalOffset;
     gfx::CompositorHitTestInfo mPrevCompositorHitTestInfo;
     bool mPrevAncestorHasApzAwareEventHandler;
     bool mPrevBuildingInvisibleItems;
@@ -1182,12 +1206,10 @@ class nsDisplayListBuilder {
           mSavedActiveScrolledRoot(aBuilder->mCurrentActiveScrolledRoot),
           mContentClipASR(aBuilder->ClipState().GetContentClipASR()),
           mDescendantsStartIndex(aBuilder->mActiveScrolledRoots.Length()),
-          mUsed(false),
           mOldScrollParentId(aBuilder->mCurrentScrollParentId),
           mOldForceLayer(aBuilder->mForceLayerForScrollParent),
           mOldContainsNonMinimalDisplayPort(
-              mBuilder->mContainsNonMinimalDisplayPort),
-          mCanBeScrollParent(false) {}
+              mBuilder->mContainsNonMinimalDisplayPort) {}
 
     void SetCurrentScrollParentId(ViewID aScrollId) {
       // Update the old scroll parent id.
@@ -1270,11 +1292,11 @@ class nsDisplayListBuilder {
      * EnterScrollFrame / InsertScrollFrame is called per instance of this
      * class.
      */
-    bool mUsed;
     ViewID mOldScrollParentId;
+    bool mUsed = false;
     bool mOldForceLayer;
     bool mOldContainsNonMinimalDisplayPort;
-    bool mCanBeScrollParent;
+    bool mCanBeScrollParent = false;
   };
 
   /**
@@ -1824,6 +1846,11 @@ class nsDisplayListBuilder {
   void SetIsDestroying() { mIsDestroying = true; }
   bool IsDestroying() const { return mIsDestroying; }
 
+  nsTHashMap<nsPtrHashKey<const nsIFrame>, bool>&
+  AsyncScrollsWithAnchorHashmap() {
+    return mAsyncScrollsWithAnchor;
+  }
+
  private:
   bool MarkOutOfFlowFrameForDisplay(nsIFrame* aDirtyFrame, nsIFrame* aFrame,
                                     const nsRect& aVisibleRect,
@@ -1970,6 +1997,12 @@ class nsDisplayListBuilder {
   nsRect mCaretRect;
 
   Preserves3DContext mPreserves3DCtx;
+
+  // For frames which are anchored, and compensate for scroll (according to the
+  // spec definition), whether the frame should async scroll with the anchor. It
+  // might be disabled for things that are limitations of our current
+  // implementation (one-axis only, transforms).
+  nsTHashMap<nsPtrHashKey<const nsIFrame>, bool> mAsyncScrollsWithAnchor;
 
   uint8_t mBuildingPageNum = 0;
 
@@ -3138,13 +3171,8 @@ struct LinkedListIterator {
     return *this;
   }
 
-  bool operator==(const LinkedListIterator<T>& aOther) const {
-    return mNode == aOther.mNode;
-  }
-
-  bool operator!=(const LinkedListIterator<T>& aOther) const {
-    return mNode != aOther.mNode;
-  }
+  bool operator==(const LinkedListIterator<T>&) const = default;
+  bool operator!=(const LinkedListIterator<T>&) const = default;
 
   const T operator*() const {
     MOZ_ASSERT(mNode);
@@ -3373,7 +3401,7 @@ class nsDisplayList {
     for (nsDisplayItem* item : TakeItems()) {
       items.AppendElement(Item(item));
     }
-    items.StableSort(aComparator);
+    items.template StableSort<SortBoundsCheck::Disable>(aComparator);
 
     for (Item& item : items) {
       AppendToTop(item);

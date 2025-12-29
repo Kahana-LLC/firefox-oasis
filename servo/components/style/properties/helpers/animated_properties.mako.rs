@@ -25,7 +25,9 @@ use std::ptr;
 use std::mem;
 use rustc_hash::FxHashMap;
 use super::ComputedValues;
+use crate::derives::*;
 use crate::properties::OwnedPropertyDeclarationId;
+use crate::dom::AttributeProvider;
 use crate::values::animated::{Animate, Procedure, ToAnimatedValue, ToAnimatedZero};
 use crate::values::animated::effects::AnimatedFilter;
 #[cfg(feature = "gecko")] use crate::values::computed::TransitionProperty;
@@ -35,6 +37,7 @@ use crate::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use crate::values::generics::effects::Filter;
 use void::{self, Void};
 use crate::properties_and_values::value::CustomAnimatedValue;
+use debug_unreachable::debug_unreachable;
 
 /// Convert NonCustomCSSPropertyId to TransitionProperty
 #[cfg(feature = "gecko")]
@@ -253,6 +256,7 @@ impl AnimationValue {
         context: &mut Context,
         style: &ComputedValues,
         initial: &ComputedValues,
+        attr_provider: &dyn AttributeProvider,
     ) -> Option<Self> {
         use super::PropertyDeclarationVariantRepr;
 
@@ -375,6 +379,7 @@ impl AnimationValue {
                         context.builder.stylist.unwrap(),
                         context,
                         &mut cache,
+                        attr_provider,
                     )
                 };
                 return AnimationValue::from_declaration(
@@ -382,6 +387,7 @@ impl AnimationValue {
                     context,
                     style,
                     initial,
+                    attr_provider,
                 )
             },
             PropertyDeclaration::Custom(ref declaration) => {
@@ -389,6 +395,7 @@ impl AnimationValue {
                     declaration,
                     context,
                     initial,
+                    attr_provider
                 )?)
             },
             _ => return None // non animatable properties will get included because of shorthands. ignore.

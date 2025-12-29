@@ -8,6 +8,8 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   assert: "chrome://remote/content/shared/webdriver/Assert.sys.mjs",
+  BrowsingContextListener:
+    "chrome://remote/content/shared/listeners/BrowsingContextListener.sys.mjs",
   ContextDescriptorType:
     "chrome://remote/content/shared/messagehandler/MessageHandler.sys.mjs",
   error: "chrome://remote/content/shared/webdriver/Errors.sys.mjs",
@@ -63,22 +65,35 @@ const ScriptEvaluateResultType = {
  */
 
 class ScriptModule extends RootBiDiModule {
+  #contextListener;
   #preloadScriptMap;
+  #realmInfoMap;
   #subscribedEvents;
 
   constructor(messageHandler) {
     super(messageHandler);
 
+    this.#contextListener = new lazy.BrowsingContextListener();
+    this.#contextListener.on("attached", this.#onContextAttached);
+
     // Map in which the keys are UUIDs, and the values are structs
     // of the type PreloadScript.
     this.#preloadScriptMap = new Map();
+
+    // Map with browsing contexts as keys and realm info object
+    // as values.
+    this.#realmInfoMap = new WeakMap();
 
     // Set of event names which have active subscriptions.
     this.#subscribedEvents = new Set();
   }
 
   destroy() {
+    this.#contextListener.off("attached", this.#onContextAttached);
+    this.#contextListener.destroy();
+
     this.#preloadScriptMap = null;
+    this.#realmInfoMap = null;
     this.#subscribedEvents = null;
   }
 
@@ -432,9 +447,15 @@ class ScriptModule extends RootBiDiModule {
     }
 
     const { contextId, realmId, sandbox } = this.#assertTarget(target);
-    const context = await this.#getContextFromTarget({ contextId, realmId });
+    const context = await this.#getContextFromTarget({
+      contextId,
+      realmId,
+      supportsChromeScope: true,
+    });
+
     const serializationOptionsWithDefaults =
       lazy.setDefaultAndAssertSerializationOptions(serializationOptions);
+
     const evaluationResult = await this._forwardToWindowGlobal(
       "callFunctionDeclaration",
       context.id,
@@ -547,9 +568,15 @@ class ScriptModule extends RootBiDiModule {
     this.#assertResultOwnership(resultOwnership);
 
     const { contextId, realmId, sandbox } = this.#assertTarget(target);
-    const context = await this.#getContextFromTarget({ contextId, realmId });
+    const context = await this.#getContextFromTarget({
+      contextId,
+      realmId,
+      supportsChromeScope: true,
+    });
+
     const serializationOptionsWithDefaults =
       lazy.setDefaultAndAssertSerializationOptions(serializationOptions);
+
     const evaluationResult = await this._forwardToWindowGlobal(
       "evaluateExpression",
       context.id,
@@ -855,9 +882,13 @@ class ScriptModule extends RootBiDiModule {
     return rv;
   }
 
-  async #getContextFromTarget({ contextId, realmId }) {
+  async #getContextFromTarget({
+    contextId,
+    realmId,
+    supportsChromeScope = false,
+  }) {
     if (contextId !== null) {
-      return this._getNavigable(contextId);
+      return this._getNavigable(contextId, { supportsChromeScope });
     }
 
     const destination = {
@@ -865,11 +896,11 @@ class ScriptModule extends RootBiDiModule {
         type: lazy.ContextDescriptorType.All,
       },
     };
-    const realms = await this.#getRealmInfos(destination);
-    const realm = realms.find(el => el.realm == realmId);
+    const realmInfos = await this.#getRealmInfos(destination);
+    const realm = realmInfos.find(info => info.realm == realmId);
 
     if (realm && realm.context !== null) {
-      return this._getNavigable(realm.context);
+      return this._getNavigable(realm.context, { supportsChromeScope });
     }
 
     throw new lazy.error.NoSuchFrameError(`Realm with id ${realmId} not found`);
@@ -903,24 +934,51 @@ class ScriptModule extends RootBiDiModule {
       .filter(realm => realm.context !== null);
   }
 
+  #hasEventSubscriptionToContextCreated(browsingContext) {
+    const sessionData =
+      this.messageHandler.sessionData.getSessionDataForContext(
+        "browsingContext",
+        "event",
+        browsingContext
+      );
+
+    return sessionData.some(
+      item => item.value === "browsingContext.contextCreated"
+    );
+  }
+
+  #onContextAttached = (eventName, data) => {
+    const { browsingContext } = data;
+    // If there is a subscription for "browsingContext.contextCreated" event,
+    // do not send "script.realmCreated" event yet and
+    // wait until the "browsingContext.contextCreated" event is submitted
+    if (
+      this.#realmInfoMap.has(browsingContext) &&
+      !this.#hasEventSubscriptionToContextCreated(browsingContext)
+    ) {
+      this.#sendDelayedRealmCreatedEvent(browsingContext);
+    }
+  };
+
+  #onContextCreatedSubmitted = (eventName, { browsingContext }) => {
+    if (this.#realmInfoMap.has(browsingContext)) {
+      this.#sendDelayedRealmCreatedEvent(browsingContext);
+    }
+  };
+
   #onRealmCreated = (eventName, { realmInfo }) => {
     // Resolve browsing context to a TabManager id.
     const context = lazy.NavigableManager.getIdForBrowsingContext(
       realmInfo.context
     );
-    const browsingContextId = realmInfo.context.id;
 
-    // Do not emit the event, if the browsing context is gone.
+    // Do not emit the event, if the browsing context is gone or not created yet.
     if (context === null) {
+      // Save the realm info to send it when the browsing context is ready.
+      this.#realmInfoMap.set(realmInfo.context, realmInfo);
       return;
     }
-
-    realmInfo.context = context;
-    this._emitEventForBrowsingContext(
-      browsingContextId,
-      "script.realmCreated",
-      realmInfo
-    );
+    this.#sendRealmCreatedEvent(realmInfo, realmInfo.context, context);
   };
 
   #onRealmDestroyed = (eventName, { realm, context }) => {
@@ -929,25 +987,55 @@ class ScriptModule extends RootBiDiModule {
     });
   };
 
-  #startListingOnRealmCreated() {
+  #sendDelayedRealmCreatedEvent(browsingContext) {
+    const realmInfo = this.#realmInfoMap.get(browsingContext);
+    // Resolve browsing context to a TabManager id.
+    const browsingContextId = lazy.NavigableManager.getIdForBrowsingContext(
+      realmInfo.context
+    );
+    this.#sendRealmCreatedEvent(realmInfo, browsingContext, browsingContextId);
+    this.#realmInfoMap.delete(browsingContext);
+  }
+
+  #sendRealmCreatedEvent(realmInfo, context, browsingContextId) {
+    realmInfo.context = browsingContextId;
+
+    this._emitEventForBrowsingContext(
+      context.id,
+      "script.realmCreated",
+      realmInfo
+    );
+  }
+
+  #startListeningOnRealmCreated() {
     if (!this.#subscribedEvents.has("script.realmCreated")) {
       this.messageHandler.on("realm-created", this.#onRealmCreated);
+      this.messageHandler.on(
+        "browsingContext._contextCreatedEmitted",
+        this.#onContextCreatedSubmitted
+      );
+      this.#contextListener.startListening();
     }
   }
 
-  #stopListingOnRealmCreated() {
+  #stopListeningOnRealmCreated() {
     if (this.#subscribedEvents.has("script.realmCreated")) {
       this.messageHandler.off("realm-created", this.#onRealmCreated);
+      this.messageHandler.off(
+        "browsingContext._contextCreatedEmitted",
+        this.#onContextCreatedSubmitted
+      );
+      this.#contextListener.stopListening();
     }
   }
 
-  #startListingOnRealmDestroyed() {
+  #startListeningOnRealmDestroyed() {
     if (!this.#subscribedEvents.has("script.realmDestroyed")) {
       this.messageHandler.on("realm-destroyed", this.#onRealmDestroyed);
     }
   }
 
-  #stopListingOnRealmDestroyed() {
+  #stopListeningOnRealmDestroyed() {
     if (this.#subscribedEvents.has("script.realmDestroyed")) {
       this.messageHandler.off("realm-destroyed", this.#onRealmDestroyed);
     }
@@ -956,12 +1044,12 @@ class ScriptModule extends RootBiDiModule {
   #subscribeEvent(event) {
     switch (event) {
       case "script.realmCreated": {
-        this.#startListingOnRealmCreated();
+        this.#startListeningOnRealmCreated();
         this.#subscribedEvents.add(event);
         break;
       }
       case "script.realmDestroyed": {
-        this.#startListingOnRealmDestroyed();
+        this.#startListeningOnRealmDestroyed();
         this.#subscribedEvents.add(event);
         break;
       }
@@ -971,12 +1059,12 @@ class ScriptModule extends RootBiDiModule {
   #unsubscribeEvent(event) {
     switch (event) {
       case "script.realmCreated": {
-        this.#stopListingOnRealmCreated();
+        this.#stopListeningOnRealmCreated();
         this.#subscribedEvents.delete(event);
         break;
       }
       case "script.realmDestroyed": {
-        this.#stopListingOnRealmDestroyed();
+        this.#stopListeningOnRealmDestroyed();
         this.#subscribedEvents.delete(event);
         break;
       }

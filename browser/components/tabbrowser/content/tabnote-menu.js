@@ -7,6 +7,10 @@
 // This is loaded into chrome windows with the subscript loader. Wrap in
 // a block to prevent accidentally leaking globals onto `window`.
 {
+  const { TabNotes } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/tabnotes/TabNotes.sys.mjs"
+  );
+
   class MozTabbrowserTabNoteMenu extends MozXULElement {
     static markup = /*html*/ `
     <panel
@@ -62,7 +66,9 @@
     #panel;
     #noteField;
     #titleNode;
+    /** @type {MozTabbrowserTab} */
     #currentTab = null;
+    /** @type {boolean} */
     #createMode;
 
     connectedCallback() {
@@ -142,35 +148,45 @@
       return "bottomleft topleft";
     }
 
+    /**
+     * @param {MozTabbrowserTab} tab
+     */
     openPanel(tab) {
-      this.#currentTab = tab;
-      let url = this.#currentTab.linkedBrowser.currentURI.spec;
-      let note = gBrowser.TabNotes.get(url);
-
-      if (note) {
-        this.createMode = false;
-        this.#noteField.value = note;
-      } else {
-        this.createMode = true;
+      if (!TabNotes.isEligible(tab)) {
+        return;
       }
-      this.#panel.addEventListener(
-        "popupshown",
-        () => {
-          this.#noteField.focus();
-        },
-        {
-          once: true,
+      this.#currentTab = tab;
+
+      TabNotes.get(tab).then(note => {
+        if (note) {
+          this.createMode = false;
+          this.#noteField.value = note.text;
+        } else {
+          this.createMode = true;
         }
-      );
-      this.#panel.openPopup(tab, {
-        position: this.#panelPosition,
+
+        this.#panel.addEventListener(
+          "popupshown",
+          () => {
+            this.#noteField.focus();
+          },
+          {
+            once: true,
+          }
+        );
+        this.#panel.openPopup(tab, {
+          position: this.#panelPosition,
+        });
       });
     }
 
     saveNote() {
-      let url = this.#currentTab.linkedBrowser.currentURI.spec;
       let note = this.#noteField.value;
-      gBrowser.TabNotes.set(url, note);
+
+      if (TabNotes.isEligible(this.#currentTab) && note.length) {
+        TabNotes.set(this.#currentTab, note);
+      }
+
       this.#panel.hidePopup();
     }
   }

@@ -385,7 +385,6 @@ class nsHttpChannel final : public HttpBaseChannel,
   [[nodiscard]] nsresult ContinueOnStartRequest1(nsresult);
   [[nodiscard]] nsresult ContinueOnStartRequest2(nsresult);
   [[nodiscard]] nsresult ContinueOnStartRequest3(nsresult);
-  [[nodiscard]] nsresult ContinueOnStartRequest4(nsresult);
 
   void OnClassOfServiceUpdated();
 
@@ -845,6 +844,8 @@ class nsHttpChannel final : public HttpBaseChannel,
   void SetHTTPSSVCRecord(already_AddRefed<nsIDNSHTTPSSVCRecord>&& aRecord);
 
   void RecordOnStartTelemetry(nsresult aStatus, bool aIsNavigation);
+
+  void MaybeGenerateNELReport();
 
   // Timer used to delay the network request, or to trigger the network
   // request if retrieving the cache entry takes too long.

@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">%s en privao</string>
@@ -66,7 +73,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s desanicia les cookies, l\'historial y los datos de los sitios cuando zarres toles llingüetes privaes. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s desanicia les cookies, l\'historial y los datos de los sitios cuando zarres toles llingüetes privaes. %2$s</string>
   <!--
     Clickable portion of the explanation for private browsing that links the user to our
     about privacy page.
@@ -286,6 +293,10 @@
   <string name="onboarding_welcome_to_firefox" tools:ignore="BrandUsage">Afáyate en Firefox</string>
   <!-- Used as text for the link in onboarding_term_of_service_line_one_2. -->
   <string name="onboarding_term_of_service_line_one_link_text_2" tools:ignore="BrandUsage">Términos d\'usu de Mozilla</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Text preview for smaller sized widgets -->
   <string name="search_widget_text_short">Buscar</string>
   <!-- Text preview for larger sized widgets -->
@@ -381,8 +392,6 @@
   <string name="preferences_gestures">Xestos</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Personalización</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Anicia la sesión pa sincronizar les llingüetes, los marcadores, les contraseñes y muncho más.</string>
   <!-- Preference text for account title when there was an error syncing FxA -->
   <string name="preferences_account_sync_error">Volvi conectate pa siguir cola sincronización</string>
   <!-- Preference for language -->
@@ -509,12 +518,6 @@
   <string name="preference_experiments_2">Estudios</string>
   <!-- Summary for studies preferences -->
   <string name="preference_experiments_summary_2">Permite a Mozilla qu\'instale o execute estudios</string>
-  <!--
-    Turn On Sync Preferences
-
-    Header of the Sync and save your data preference view
-  -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Sincronización y guardáu de datos</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Aniciar la sesión pa volver conectar</string>
   <!-- Preference for removing FxA account -->
@@ -1298,8 +1301,6 @@
   <string name="credit_cards_add_card">Amiestu d\'una tarxeta</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Númberu de la tarxeta</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Data de caducidá</string>
   <!-- The header for the name on the credit card -->
   <string name="credit_cards_name_on_card">Titular de la tarxeta</string>
   <!-- The text for the "Delete card" button for deleting a credit card -->
@@ -1549,4 +1550,10 @@
   <!-- Push notification message about old Firefox version -->
   <string name="certificate_warning_push_notification_pnw3_message" tools:ignore="UnusedResources">Dalgunes funciones van dexar de funcionar mañana.</string>
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

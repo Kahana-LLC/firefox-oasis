@@ -4,6 +4,7 @@
 
 //! Geometry in flow-relative space.
 
+use crate::derives::*;
 use crate::properties::style_structs;
 use euclid::default::{Point2D, Rect, SideOffsets2D, Size2D};
 use euclid::num::Zero;
@@ -113,7 +114,7 @@ bitflags!(
         const WRITING_MODE_HORIZONTAL_TB = 0;
         /// * writing-mode: vertical_rl;
         const WRITING_MODE_VERTICAL_RL = WritingMode::VERTICAL.bits();
-        /// * writing-mode: vertcail-lr;
+        /// * writing-mode: vertical-lr;
         const WRITING_MODE_VERTICAL_LR = WritingMode::VERTICAL.bits() |
                                          WritingMode::VERTICAL_LR.bits() |
                                          WritingMode::LINE_INVERTED.bits();
@@ -220,6 +221,11 @@ impl WritingMode {
     #[inline]
     pub fn is_vertical(&self) -> bool {
         self.intersects(WritingMode::VERTICAL)
+    }
+
+    #[inline]
+    pub fn is_vertical_rl(&self) -> bool {
+        self.is_vertical() && !self.is_vertical_lr()
     }
 
     #[inline]

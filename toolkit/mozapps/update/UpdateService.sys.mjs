@@ -2111,7 +2111,7 @@ class UpdatePatch {
    * @param   patch
    *          A <patch> element to initialize this object with
    * @throws if patch has a size of 0
-   * @constructor
+   * @class
    */
   constructor(patch) {
     this._properties = {};
@@ -2324,7 +2324,7 @@ class Update {
    * @param   update
    *          An <update> element to initialize this object with
    * @throws if the update contains no patches
-   * @constructor
+   * @class
    */
   constructor(update) {
     this._patches = [];
@@ -2701,7 +2701,7 @@ export class UpdateService {
    * UpdateService
    * A Service for managing the discovery and installation of software updates.
    *
-   * @constructor
+   * @class
    */
   constructor() {
     LOG("Creating UpdateService");
@@ -3275,7 +3275,22 @@ export class UpdateService {
           let uri = "chrome://mozapps/content/update/updateElevation.xhtml";
           let features =
             "chrome,centerscreen,resizable=no,titlebar,toolbar=no,dialog=no";
-          Services.ww.openWindow(null, uri, "Update:Elevation", features, null);
+
+          // The following timeout is intended to make the elevation dialog
+          // appear on top of any browser windows after startup. In the past,
+          // this dialog would frequently be displayed first, then getting
+          // obscured by browser windows. The timeout period is arbitrary and
+          // may be adjusted, but this seemed to work well during initial
+          // testing. See bug 1273536 for more info.
+          lazy.setTimeout(() => {
+            Services.ww.openWindow(
+              null,
+              uri,
+              "Update:Elevation",
+              features,
+              null
+            );
+          }, 2000);
         }
       }
     } else if (
@@ -4608,7 +4623,7 @@ export class UpdateManager {
   /**
    * A service to manage active and past updates.
    *
-   * @constructor
+   * @class
    */
   constructor() {
     this.internal = {
@@ -5958,7 +5973,7 @@ class Downloader {
    *          update mode.
    * @param   updateService
    *          The update service that created this downloader.
-   * @constructor
+   * @class
    */
   constructor(updateService) {
     LOG("Creating Downloader");

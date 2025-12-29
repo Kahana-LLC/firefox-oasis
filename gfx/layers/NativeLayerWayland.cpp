@@ -606,7 +606,7 @@ RefPtr<WaylandBuffer> NativeLayerRootWayland::BorrowExternalBuffer(
 NativeLayerWayland::NativeLayerWayland(NativeLayerRootWayland* aRootLayer,
                                        const IntSize& aSize, bool aIsOpaque)
     : mRootLayer(aRootLayer), mIsOpaque(aIsOpaque), mSize(aSize) {
-  mSurface = new WaylandSurface(mRootLayer->GetRootWaylandSurface(), mSize);
+  mSurface = new WaylandSurface(mRootLayer->GetRootWaylandSurface());
 #ifdef MOZ_LOGGING
   mSurface->SetLoggingWidget(this);
 #endif
@@ -794,16 +794,30 @@ void NativeLayerWayland::UpdateLayerPlacementLocked(
 
   mSurface->SetTransformFlippedLocked(aProofOfLock, transform2D._11 < 0.0,
                                       transform2D._22 < 0.0);
+
+  // TODO! Downscale introduces rounding errors here.
   auto unscaledRect =
       gfx::RoundedToInt(surfaceRectClipped / UnknownScaleFactor(mScale));
-  mSurface->MoveLocked(aProofOfLock, unscaledRect.TopLeft());
-  mSurface->SetViewPortDestLocked(aProofOfLock, unscaledRect.Size());
+  auto rect = DesktopIntRect::FromUnknownRect(unscaledRect);
+  mSurface->MoveLocked(aProofOfLock, rect.TopLeft());
+  mSurface->SetViewPortDestLocked(aProofOfLock, rect.Size());
+
+  LOGVERBOSE(
+      "NativeLayerWayland::UpdateLayerPlacement(): destination [%d,%d] -> [%d "
+      "x %d]",
+      rect.x, rect.y, rect.width, rect.height);
 
   auto transform2DInversed = transform2D.Inverse();
   Rect bufferClip = transform2DInversed.TransformBounds(surfaceRectClipped);
-  mSurface->SetViewPortSourceRectLocked(
-      aProofOfLock,
+  auto viewportRect = gfx::RoundedToInt(
       bufferClip.Intersect(Rect(0, 0, mSize.width, mSize.height)));
+
+  LOGVERBOSE(
+      "NativeLayerWayland::UpdateLayerPlacement(): source [%d,%d] -> [%d x %d]",
+      viewportRect.x, viewportRect.y, viewportRect.width, viewportRect.height);
+
+  mSurface->SetViewPortSourceRectLocked(
+      aProofOfLock, DesktopIntRect::FromUnknownRect(viewportRect));
 }
 
 void NativeLayerWayland::RenderLayer(double aScale) {
@@ -864,7 +878,7 @@ bool NativeLayerWayland::Map(WaylandSurfaceLock* aParentWaylandSurfaceLock) {
   MOZ_DIAGNOSTIC_ASSERT(mNeedsMainThreadUpdate != MainThreadUpdate::Map);
 
   if (!mSurface->MapLocked(surfaceLock, aParentWaylandSurfaceLock,
-                           gfx::IntPoint(0, 0))) {
+                           DesktopIntPoint())) {
     gfxCriticalError() << "NativeLayerWayland::Map() failed!";
     return false;
   }

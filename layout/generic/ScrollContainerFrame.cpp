@@ -1877,12 +1877,12 @@ class ScrollContainerFrame::AsyncSmoothMSDScroll final
                        ScrollTriggeredByScript aTriggeredByScript)
       : mXAxisModel(aInitialPosition.x, aInitialDestination.x,
                     aInitialVelocity.width,
-                    StaticPrefs::layout_css_scroll_behavior_spring_constant(),
-                    StaticPrefs::layout_css_scroll_behavior_damping_ratio()),
+                    StaticPrefs::layout_css_scroll_snap_spring_constant(),
+                    StaticPrefs::layout_css_scroll_snap_damping_ratio()),
         mYAxisModel(aInitialPosition.y, aInitialDestination.y,
                     aInitialVelocity.height,
-                    StaticPrefs::layout_css_scroll_behavior_spring_constant(),
-                    StaticPrefs::layout_css_scroll_behavior_damping_ratio()),
+                    StaticPrefs::layout_css_scroll_snap_spring_constant(),
+                    StaticPrefs::layout_css_scroll_snap_damping_ratio()),
         mRange(aRange),
         mStartPosition(aInitialPosition),
         mLastRefreshTime(aStartTime),
@@ -4340,7 +4340,26 @@ nsRect ScrollContainerFrame::RestrictToRootDisplayPort(
       FissionAutostart()) {
     return true;
   }
-  return aFrame->PresShell()->GetRootPresShell()->HasSeenAnchorPos();
+  return StaticPrefs::apz_async_scroll_css_anchor_pos_AtStartup() &&
+         aFrame->PresShell()->GetRootPresShell()->HasSeenAnchorPos();
+}
+
+bool ScrollContainerFrame::DecideScrollableLayerEnsureDisplayport(
+    nsDisplayListBuilder* aBuilder) {
+  MOZ_ASSERT(ShouldActivateAllScrollFrames(aBuilder, this));
+  nsIContent* content = GetContent();
+  bool hasDisplayPort = DisplayPortUtils::HasDisplayPort(content);
+
+  // Note this intentionally differs from DecideScrollableLayer below by not
+  // checking ShouldActivateAllScrollFrames.
+  if (!hasDisplayPort && aBuilder->IsPaintingToWindow() &&
+      nsLayoutUtils::AsyncPanZoomEnabled(this) && WantAsyncScroll()) {
+    DisplayPortUtils::SetMinimalDisplayPortDuringPainting(content, PresShell());
+    hasDisplayPort = true;
+  }
+
+  mWillBuildScrollableLayer = hasDisplayPort || mZoomableByAPZ;
+  return mWillBuildScrollableLayer;
 }
 
 bool ScrollContainerFrame::DecideScrollableLayer(
@@ -4362,18 +4381,7 @@ bool ScrollContainerFrame::DecideScrollableLayer(
   if (aSetBase && !hasDisplayPort && aBuilder->IsPaintingToWindow() &&
       ShouldActivateAllScrollFrames(aBuilder, this) &&
       nsLayoutUtils::AsyncPanZoomEnabled(this) && WantAsyncScroll()) {
-    // SetDisplayPortMargins calls TriggerDisplayPortExpiration which starts a
-    // display port expiry timer for display ports that do expire. However
-    // minimal display ports do not expire, so the display port has to be
-    // marked before the SetDisplayPortMargins call so the expiry timer
-    // doesn't get started.
-    content->SetProperty(nsGkAtoms::MinimalDisplayPort,
-                         reinterpret_cast<void*>(true));
-
-    DisplayPortUtils::SetDisplayPortMargins(
-        content, PresShell(), DisplayPortMargins::Empty(content),
-        DisplayPortUtils::ClearMinimalDisplayPortProperty::No, 0,
-        DisplayPortUtils::RepaintMode::DoNotRepaint);
+    DisplayPortUtils::SetMinimalDisplayPortDuringPainting(content, PresShell());
     hasDisplayPort = true;
   }
 
@@ -7750,7 +7758,9 @@ bool ScrollContainerFrame::CanApzScrollInTheseDirections(
 
 bool ScrollContainerFrame::SmoothScrollVisual(
     const nsPoint& aVisualViewportOffset,
-    FrameMetrics::ScrollOffsetUpdateType aUpdateType) {
+    FrameMetrics::ScrollOffsetUpdateType aUpdateType, ScrollMode aMode) {
+  MOZ_ASSERT(aMode == ScrollMode::Smooth || aMode == ScrollMode::SmoothMsd);
+
   bool canDoApzSmoothScroll =
       nsLayoutUtils::AsyncPanZoomEnabled(this) && WantAsyncScroll();
   if (!canDoApzSmoothScroll) {
@@ -7777,7 +7787,7 @@ bool ScrollContainerFrame::SmoothScrollVisual(
 
   UniquePtr<ScrollSnapTargetIds> snapTargetIds;
   // Perform the scroll.
-  ApzSmoothScrollTo(mDestination, ScrollMode::SmoothMsd,
+  ApzSmoothScrollTo(mDestination, aMode,
                     aUpdateType == FrameMetrics::eRestore
                         ? ScrollOrigin::Restore
                         : ScrollOrigin::Other,
@@ -7819,6 +7829,17 @@ bool ScrollContainerFrame::IsSmoothScroll(dom::ScrollBehavior aBehavior) const {
               StyleScrollBehavior::Smooth);
 }
 
+ScrollMode ScrollContainerFrame::ScrollModeForScrollBehavior(
+    dom::ScrollBehavior aBehavior) const {
+  if (!IsSmoothScroll(aBehavior)) {
+    return ScrollMode::Instant;
+  }
+
+  return StaticPrefs::layout_css_scroll_behavior_same_physics_as_user_input()
+             ? ScrollMode::Smooth
+             : ScrollMode::SmoothMsd;
+}
+
 nsTArray<ScrollPositionUpdate> ScrollContainerFrame::GetScrollUpdates() const {
   return mScrollUpdates.Clone();
 }
@@ -7830,22 +7851,10 @@ void ScrollContainerFrame::AppendScrollUpdate(
 }
 
 void ScrollContainerFrame::ScheduleScrollAnimations() {
-  nsIContent* content = GetContent();
-  MOZ_ASSERT(content && content->IsElement(),
-             "The ScrollContainerFrame should have the element.");
-
-  const Element* elementOrPseudo = content->AsElement();
-  PseudoStyleType pseudo = elementOrPseudo->GetPseudoElementType();
-  if (pseudo != PseudoStyleType::NotPseudo &&
-      !AnimationUtils::IsSupportedPseudoForAnimations(pseudo)) {
-    // This is not an animatable pseudo element, and so we don't generate
-    // scroll-timeline for it.
-    return;
-  }
-
-  const auto [element, request] =
-      AnimationUtils::GetElementPseudoPair(elementOrPseudo);
-  ProgressTimelineScheduler::ScheduleAnimations(element, request);
+  auto* rd = PresContext()->RefreshDriver();
+  MOZ_ASSERT(rd);
+  // This schedules UpdateAnimationsAndSendEvents in the HTML loop.
+  rd->EnsureAnimationUpdate();
 }
 
 nsSize ScrollContainerFrame::GetSizeForWindowInnerSize() const {

@@ -465,9 +465,6 @@ jinxed==1.3.0  \
     --hash=sha256:1593124b18a41b7a3da3b078471442e51dbad3d77b4d4f2b0c26ab6f7d660dbf \
     --hash=sha256:b993189f39dc2d7504d802152671535b06d380b26d78070559551cbf92df4fc5
     # via blessed
-jsmin==3.0.1 \
-    --hash=sha256:c0959a121ef94542e807a674142606f7e90214a2b3d1eb17300244bbb5cc2bfc
-    # via mozilla-third-party-python-vendor-dir
 json-e==4.8.0 \
     --hash=sha256:51ead93962912d701c6f1a6a0b27cc34bb2cb8397a82affd8adb2401898e27ea \
     --hash=sha256:91a50ba4e1a9e6d40c36c0601d68acda9ae44ca2817525e09938b2c82ce23572
@@ -575,9 +572,9 @@ mozilla-repo-urls==0.1.1 \
     # via
     #   mozilla-third-party-python-vendor-dir
     #   taskcluster-taskgraph
-mozilla-taskgraph==4.0.0 \
-    --hash=sha256:104271dfc41ed7f6e47783bc161e6911104a4a6f83bb55a5afb0f75cac9ed54d \
-    --hash=sha256:6bb6091febda3731f89e8a5af9ed75bf83f0667cc9d36c2b02c8304450099c5b
+mozilla-taskgraph==4.0.1 \
+    --hash=sha256:2b3dc28d9b4c3bf5fdcf90e68b2518e57c478052782406229f451152c8f262d9 \
+    --hash=sha256:64167d71ddb79207dadd5a5d554c0e4ab239cc797bf138356528ec19d3837b49
     # via mozilla-third-party-python-vendor-dir
 mozilla-version==4.1.0 \
     --hash=sha256:816b0cd03456105f49ad8661e47934e66118f84ddae38c4193082f297396a7ed \
@@ -1038,9 +1035,9 @@ taskcluster==91.1.0 \
     # via
     #   mozilla-third-party-python-vendor-dir
     #   taskcluster-taskgraph
-taskcluster-taskgraph==17.2.1 \
-    --hash=sha256:8b3b252d5b23e5244c648e10659ba3306826a0b6c2e573b951558c6183fea54a \
-    --hash=sha256:bfb3d3757c9f1345ec6148cfd88b3c2ee3e0791b4411dd3d7e33195583e00660
+taskcluster-taskgraph==18.0.3 \
+    --hash=sha256:612c9267f24b195f0b0e3ec409eae8a5b3e5b977d9a2643055125ef8adee00c7 \
+    --hash=sha256:d37e46f07c1ee98df3d0fc4915f6b66d115dd3faba5249907626ff378e6a3971
     # via
     #   mozilla-taskgraph
     #   mozilla-third-party-python-vendor-dir

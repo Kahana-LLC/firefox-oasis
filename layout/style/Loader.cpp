@@ -57,7 +57,6 @@
 #include "nsICookieJarSettings.h"
 #include "nsIHttpChannel.h"
 #include "nsIHttpChannelInternal.h"
-#include "nsINetworkPredictor.h"
 #include "nsIPrincipal.h"
 #include "nsIScriptError.h"
 #include "nsIScriptSecurityManager.h"
@@ -1154,11 +1153,6 @@ nsresult Loader::LoadSheetSyncInternal(SheetLoadData& aLoadData,
   // channel to make error recovery simpler.
   auto streamLoader = MakeRefPtr<StreamLoader>(aLoadData);
 
-  if (mDocument) {
-    net::PredictorLearn(aLoadData.mURI, mDocument->GetDocumentURI(),
-                        nsINetworkPredictor::LEARN_LOAD_SUBRESOURCE, mDocument);
-  }
-
   // Synchronous loads should only be used internally. Therefore no CORS
   // policy is needed.
   nsCOMPtr<nsIChannel> channel;
@@ -1444,10 +1438,6 @@ nsresult Loader::LoadSheetAsyncInternal(SheetLoadData& aLoadData,
   // model is: Necko owns the stream loader, which owns the load data,
   // which owns us
   auto streamLoader = MakeRefPtr<StreamLoader>(aLoadData);
-  if (mDocument) {
-    net::PredictorLearn(aLoadData.mURI, mDocument->GetDocumentURI(),
-                        nsINetworkPredictor::LEARN_LOAD_SUBRESOURCE, mDocument);
-  }
 
 #ifdef DEBUG
   {
@@ -1945,7 +1935,7 @@ Result<Loader::LoadSheetResult, nsresult> Loader::LoadStyleLink(
   nsresult rv = CheckContentPolicy(
       loadingPrincipal, principal, aInfo.mURI, requestingNode, aInfo.mNonce,
       StylePreloadKind::None, aInfo.mCORSMode, aInfo.mIntegrity);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
+  if (NS_FAILED(rv)) {
     // Don't fire the error event if our document is loaded as data.  We're
     // supposed to not even try to do loads in that case... Unfortunately, we
     // implement that via nsDataDocumentContentPolicy, which doesn't have a good

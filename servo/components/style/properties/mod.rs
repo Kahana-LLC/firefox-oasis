@@ -20,6 +20,8 @@ pub mod generated {
 }
 
 use crate::custom_properties::{self, ComputedCustomProperties};
+use crate::derives::*;
+use crate::dom::AttributeProvider;
 #[cfg(feature = "gecko")]
 use crate::gecko_bindings::structs::{CSSPropertyId, NonCustomCSSPropertyId, RefPtr};
 use crate::logical_geometry::WritingMode;
@@ -29,7 +31,7 @@ use crate::stylesheets::Origin;
 use crate::stylist::Stylist;
 use crate::values::{computed, serialize_atom_name};
 use arrayvec::{ArrayVec, Drain as ArrayVecDrain};
-use cssparser::{Parser, ParserInput};
+use cssparser::{match_ignore_ascii_case, Parser, ParserInput};
 use rustc_hash::FxHashMap;
 use servo_arc::Arc;
 use std::{
@@ -747,7 +749,14 @@ fn parse_non_custom_property_declaration_value_into<'i>(
     };
 
     input.reset(&start);
-    input.look_for_arbitrary_substitution_functions(&["var", "env"]);
+    input.look_for_arbitrary_substitution_functions(
+        if static_prefs::pref!("layout.css.attr.enabled") {
+            &["var", "env", "attr"]
+        } else {
+            &["var", "env"]
+        },
+    );
+
     let err = match parse_entirely_into(declarations, input) {
         Ok(()) => {
             input.seen_arbitrary_substitution_functions();
@@ -1423,6 +1432,7 @@ impl UnparsedValue {
         stylist: &Stylist,
         computed_context: &computed::Context,
         shorthand_cache: &'cache mut ShorthandsWithPropertyReferencesCache,
+        attr_provider: &dyn AttributeProvider,
     ) -> Cow<'cache, PropertyDeclaration> {
         let invalid_at_computed_value_time = || {
             let keyword = if longhand_id.inherited() {
@@ -1457,6 +1467,7 @@ impl UnparsedValue {
             custom_properties,
             stylist,
             computed_context,
+            attr_provider,
         ) {
             Ok(css) => css,
             Err(..) => return invalid_at_computed_value_time(),

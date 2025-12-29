@@ -356,9 +356,6 @@ with modules["NETWORK"]:
     errors["NS_ERROR_BAD_HSTS_CERT"] = FAILURE(89)
     # Error parsing the status line of an HTTP response
     errors["NS_ERROR_PARSING_HTTP_STATUS_LINE"] = FAILURE(90)
-    # The user refused to navigate to a potentially unsafe URL with
-    # embedded credentials/superfluos authentication.
-    errors["NS_ERROR_SUPERFLUOS_AUTH"] = FAILURE(91)
     # The user attempted basic HTTP authentication while
     # the basic_http_auth pref is disabled
     errors["NS_ERROR_BASIC_HTTP_AUTH_DISABLED"] = FAILURE(92)
@@ -815,6 +812,11 @@ with modules["EDITOR"]:
     # non-collapsed range crosses editing host boundaries.
     errors["NS_ERROR_EDITOR_NO_EDITABLE_RANGE"] = FAILURE(4)
 
+    # An error code that indicates that there is no deletable selection ranges
+    # even though there are some editable ranges.  E.g., if each editable range
+    # is in a replaced element or a void element.
+    errors["NS_ERROR_EDITOR_NO_DELETABLE_RANGE"] = FAILURE(5)
+
     errors["NS_SUCCESS_EDITOR_ELEMENT_NOT_FOUND"] = SUCCESS(1)
     errors["NS_SUCCESS_EDITOR_FOUND_TARGET"] = SUCCESS(2)
 
@@ -956,6 +958,7 @@ with modules["URILOADER"]:
     errors["NS_ERROR_SOCIALTRACKING_URI"] = FAILURE(43)
     errors["NS_ERROR_EMAILTRACKING_URI"] = FAILURE(44)
     errors["NS_ERROR_RESTRICTED_CONTENT"] = FAILURE(45)
+    errors["NS_ERROR_HARMFULADDON_URI"] = FAILURE(46)
     # Used when "Save Link As..." doesn't see the headers quickly enough to
     # choose a filename.  See nsContextMenu.js.
     errors["NS_ERROR_SAVE_LINK_AS_TIMEOUT"] = FAILURE(32)
@@ -1193,6 +1196,7 @@ with modules["DOM_MEDIA"]:
     errors["NS_ERROR_DOM_MEDIA_RANGE_ERR"] = FAILURE(105)
     errors["NS_ERROR_DOM_MEDIA_TYPE_ERR"] = FAILURE(106)
     errors["NS_ERROR_DOM_MEDIA_MEDIA_ENGINE_INITIALIZATION_ERR"] = FAILURE(107)
+    errors["NS_ERROR_DOM_MEDIA_DROPPED_BY_ENCODER_ERR"] = FAILURE(108)
 
 # =======================================================================
 # 42: NS_ERROR_MODULE_URL_CLASSIFIER

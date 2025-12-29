@@ -5,10 +5,36 @@ support-files = [
   "!/gfx/layers/apz/test/mochitest/apz_test_utils.js",
 ]
 
+["browser_document_command_copy.js"]
+
+["browser_document_command_cut.js"]
+
+["browser_document_command_paste.js"]
+
+["browser_document_command_paste_contextmenu.js"]
+skip-if = [
+  "headless", # bug 1989339
+]
+
+["browser_document_command_paste_contextmenu_ext.js"]
+skip-if = [
+  "headless", # bug 1989339
+]
+
+["browser_document_command_paste_contextmenu_suppression.js"]
+
+["browser_document_command_paste_contextmenu_suppression_ext.js"]
+
 ["browser_navigator_clipboard_clickjacking.js"]
 support-files = ["simple_navigator_clipboard_keydown.html"]
 run-if = [
   "os != 'win'", # The popupmenus dismiss when access keys for disabled items are pressed on windows
+]
+
+["browser_navigator_clipboard_contextmenu_dismiss.js"]
+support-files = [
+  "file_toplevel.html",
+  "file_iframe.html",
 ]
 
 ["browser_navigator_clipboard_contextmenu_suppression.js"]
@@ -18,6 +44,7 @@ support-files = [
 ]
 skip-if = [
   "headless", # bug 1989339
+  "a11y_checks", # bug 2001749
 ]
 
 ["browser_navigator_clipboard_contextmenu_suppression_ext.js"]
@@ -42,6 +69,7 @@ skip-if = [
 support-files = ["simple_page_ext.html"]
 skip-if = [
   "headless", # bug 1989339
+  "a11y_checks", # bug 2001749
 ]
 
 ["browser_navigator_clipboard_readText_multiple.js"]
@@ -52,10 +80,12 @@ support-files = [
 skip-if = [
   "headless", # bug 1989339
 ]
+
 ["browser_navigator_clipboard_read_ext.js"]
 support-files = ["simple_page_ext.html"]
 skip-if = [
   "headless", # bug 1989339
+  "a11y_checks", # bug 2001749
 ]
 
 ["browser_navigator_clipboard_touch.js"]

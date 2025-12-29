@@ -2110,20 +2110,31 @@ export class UrlbarView {
       title.removeAttribute("aria-label");
     }
 
-    this.#updateOverflowTooltip(title, result.title);
+    this.#updateOverflowTooltip(
+      title,
+      result.getDisplayableValueAndHighlights("title").value
+    );
 
     let tagsContainer = item._elements.get("tagsContainer");
     if (tagsContainer) {
       tagsContainer.textContent = "";
-      if (result.payload.tags && result.payload.tags.length) {
+
+      let { value: tags, highlights } = result.getDisplayableValueAndHighlights(
+        "tags",
+        {
+          tokens: this.#queryContext.tokens,
+        }
+      );
+
+      if (tags?.length) {
         tagsContainer.append(
-          ...result.payload.tags.map((tag, i) => {
+          ...tags.map((tag, i) => {
             const element = this.#createElement("span");
             element.className = "urlbarView-tag";
             lazy.UrlbarUtils.addTextContentWithHighlights(
               element,
               tag,
-              result.payloadHighlights.tags[i]
+              highlights[i]
             );
             return element;
           })
@@ -2209,7 +2220,6 @@ export class UrlbarView {
         break;
       case lazy.UrlbarUtils.RESULT_TYPE.URL:
         if (result.providerName == "UrlbarProviderClipboard") {
-          result.payload.displayUrl = "";
           actionSetter = () => {
             this.#l10nCache.setElementL10n(action, {
               id: "urlbar-result-action-visit-from-clipboard",
@@ -2231,7 +2241,12 @@ export class UrlbarView {
         }
       // fall-through
       default:
-        if (result.heuristic && !result.payload.title) {
+        if (
+          result.heuristic &&
+          result.payload.url &&
+          result.providerName != "UrlbarProviderHistoryUrlHeuristic" &&
+          !result.autofill?.noVisitAction
+        ) {
           isVisitAction = true;
         } else if (
           (result.providerName != lazy.UrlbarProviderQuickSuggest.name ||
@@ -2273,21 +2288,25 @@ export class UrlbarView {
     item.toggleAttribute("has-url", setURL);
     let url = item._elements.get("url");
     if (setURL) {
-      let displayedUrl = result.payload.displayUrl;
-      let urlHighlights = result.payloadHighlights.displayUrl || [];
+      let { value: displayedUrl, highlights } =
+        result.getDisplayableValueAndHighlights("url", {
+          tokens: this.#queryContext.tokens,
+          isURL: true,
+        });
+      this.#updateOverflowTooltip(url, displayedUrl);
+
       if (lazy.UrlbarUtils.isTextDirectionRTL(displayedUrl, this.window)) {
         // Stripping the url prefix may change the initial text directionality,
         // causing parts of it to jump to the end. To prevent that we insert a
         // LRM character in place of the prefix.
         displayedUrl = "\u200e" + displayedUrl;
-        urlHighlights = this.#offsetHighlights(urlHighlights, 1);
+        highlights = this.#offsetHighlights(highlights, 1);
       }
       lazy.UrlbarUtils.addTextContentWithHighlights(
         url,
         displayedUrl,
-        urlHighlights
+        highlights
       );
-      this.#updateOverflowTooltip(url, result.payload.displayUrl);
     } else {
       url.textContent = "";
       this.#updateOverflowTooltip(url, "");
@@ -2324,9 +2343,13 @@ export class UrlbarView {
   #setRowSelectable(item, isRowSelectable) {
     item.toggleAttribute("row-selectable", isRowSelectable);
     item._content.toggleAttribute("selectable", isRowSelectable);
+
+    // Set or remove role="option" on the inner. "option" should be set iff the
+    // row is selectable. Some providers may set a different role if the inner
+    // is not selectable, so when removing it, only do so if it's "option".
     if (isRowSelectable) {
       item._content.setAttribute("role", "option");
-    } else {
+    } else if (item._content.getAttribute("role") == "option") {
       item._content.removeAttribute("role");
     }
   }
@@ -2430,6 +2453,7 @@ export class UrlbarView {
       if (update.l10n) {
         this.#l10nCache.setElementL10n(node, update.l10n);
       } else if (update.hasOwnProperty("textContent")) {
+        this.#l10nCache.removeElementL10n(node);
         lazy.UrlbarUtils.addTextContentWithHighlights(
           node,
           update.textContent,
@@ -3131,10 +3155,14 @@ export class UrlbarView {
     }
 
     this.#l10nCache.removeElementL10n(titleNode);
+
+    let titleAndHighlights = result.getDisplayableValueAndHighlights("title", {
+      tokens: this.#queryContext.tokens,
+    });
     lazy.UrlbarUtils.addTextContentWithHighlights(
       titleNode,
-      result.title,
-      result.titleHighlights
+      titleAndHighlights.value,
+      titleAndHighlights.highlights
     );
   }
 
@@ -3162,9 +3190,6 @@ export class UrlbarView {
    *   The DOM node for the result's action.
    */
   #setSwitchTabActionChiclet(result, actionNode) {
-    this.#l10nCache.setElementL10n(actionNode, {
-      id: "urlbar-result-action-switch-tab",
-    });
     actionNode.classList.add("urlbarView-switchToTab");
 
     let contextualIdentityAction = actionNode.parentNode.querySelector(
@@ -3181,6 +3206,7 @@ export class UrlbarView {
       if (!contextualIdentityAction) {
         contextualIdentityAction = actionNode.cloneNode(true);
         contextualIdentityAction.classList.add("action-contextualidentity");
+        this.#l10nCache.removeElementL10n(contextualIdentityAction);
         actionNode.parentNode.insertBefore(
           contextualIdentityAction,
           actionNode
@@ -3205,6 +3231,7 @@ export class UrlbarView {
     ) {
       if (!tabGroupAction) {
         tabGroupAction = actionNode.cloneNode(true);
+        this.#l10nCache.removeElementL10n(tabGroupAction);
         actionNode.parentNode.insertBefore(tabGroupAction, actionNode);
       }
 
@@ -3212,6 +3239,10 @@ export class UrlbarView {
     } else {
       tabGroupAction?.remove();
     }
+
+    this.#l10nCache.setElementL10n(actionNode, {
+      id: "urlbar-result-action-switch-tab",
+    });
   }
 
   #addContextualIdentityToSwitchTabChiclet(result, actionNode) {
@@ -3704,7 +3735,7 @@ export class UrlbarView {
         title.textContent =
           localSearchMode || engine
             ? this.#queryContext.searchString
-            : result.title;
+            : result.getDisplayableValueAndHighlights("title").value;
 
         // Set the restyled-search attribute so the action text and title
         // separator are shown or hidden via CSS as appropriate.

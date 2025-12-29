@@ -41,11 +41,11 @@ use neqo_transport::{
     Error as TransportError, Output, OutputBatch, RandomConnectionIdGenerator, StreamId, Version,
 };
 use nserror::{
-    nsresult, NS_BASE_STREAM_WOULD_BLOCK, NS_ERROR_CONNECTION_REFUSED, NS_ERROR_FAILURE,
-    NS_ERROR_FILE_ALREADY_EXISTS, NS_ERROR_ILLEGAL_VALUE, NS_ERROR_INVALID_ARG,
-    NS_ERROR_NET_HTTP3_PROTOCOL_ERROR, NS_ERROR_NET_INTERRUPT, NS_ERROR_NET_RESET,
-    NS_ERROR_NET_TIMEOUT, NS_ERROR_NOT_AVAILABLE, NS_ERROR_NOT_CONNECTED, NS_ERROR_OUT_OF_MEMORY,
-    NS_ERROR_SOCKET_ADDRESS_IN_USE, NS_ERROR_UNEXPECTED, NS_OK, NS_ERROR_DOM_INVALID_HEADER_NAME,
+    nsresult, NS_BASE_STREAM_WOULD_BLOCK, NS_ERROR_CONNECTION_REFUSED,
+    NS_ERROR_DOM_INVALID_HEADER_NAME, NS_ERROR_FILE_ALREADY_EXISTS, NS_ERROR_ILLEGAL_VALUE,
+    NS_ERROR_INVALID_ARG, NS_ERROR_NET_HTTP3_PROTOCOL_ERROR, NS_ERROR_NET_INTERRUPT,
+    NS_ERROR_NET_RESET, NS_ERROR_NET_TIMEOUT, NS_ERROR_NOT_AVAILABLE, NS_ERROR_NOT_CONNECTED,
+    NS_ERROR_OUT_OF_MEMORY, NS_ERROR_SOCKET_ADDRESS_IN_USE, NS_ERROR_UNEXPECTED, NS_OK,
 };
 use nsstring::{nsACString, nsCString};
 use thin_vec::ThinVec;
@@ -560,7 +560,7 @@ impl NeqoHttp3Conn {
     fn record_stats_in_glean(&self) {
         use firefox_on_glean::metrics::networking as glean;
         use neqo_common::Ecn;
-        use neqo_transport::ecn;
+        use neqo_transport::{ecn, CongestionEvent};
 
         // Metric values must be recorded as integers. Glean does not support
         // floating point distributions. In order to represent values <1, they
@@ -672,12 +672,35 @@ impl NeqoHttp3Conn {
             }
         }
 
-        // Ignore connections into the void.
+        // Ignore connections into the void for metrics where it makes sense.
         if stats.packets_rx != 0 {
+            // Calculate and collect packet loss ratio.
             if let Ok(loss) =
                 i64::try_from((stats.lost * PRECISION_FACTOR_USIZE) / stats.packets_tx)
             {
                 glean::http_3_loss_ratio.accumulate_single_sample_signed(loss);
+            } else {
+                let msg = "Failed to convert ratio to i64 for use with glean";
+                qwarn!("{msg}");
+                debug_assert!(false, "{msg}");
+            }
+
+            // Count whether the connection exited slow start.
+            if stats.cc.slow_start_exited {
+                glean::http_3_slow_start_exited.get("exited").add(1);
+            } else {
+                glean::http_3_slow_start_exited.get("not_exited").add(1);
+            }
+        }
+
+        // Ignore connections that never had loss induced congestion events (and prevent dividing by zero).
+        if stats.cc.congestion_events[CongestionEvent::Loss] != 0 {
+            if let Ok(spurious) = i64::try_from(
+                (stats.cc.congestion_events[CongestionEvent::Spurious] * PRECISION_FACTOR_USIZE)
+                    / stats.cc.congestion_events[CongestionEvent::Loss],
+            ) {
+                glean::http_3_spurious_congestion_event_ratio
+                    .accumulate_single_sample_signed(spurious);
             } else {
                 let msg = "Failed to convert ratio to i64 for use with glean";
                 qwarn!("{msg}");
@@ -2398,6 +2421,7 @@ pub unsafe extern "C" fn neqo_http3conn_webtransport_set_sendorder(
 ///
 /// Note that this conversion is specific to `neqo_glue`, i.e. does not aim to
 /// implement a general-purpose conversion.
+/// Treat NS_ERROR_NET_RESET as a generic retryable error for the upper layer.
 ///
 /// Modeled after
 /// [`ErrorAccordingToNSPR`](https://searchfox.org/mozilla-central/rev/a965e3c683ecc035dee1de72bd33a8d91b1203ed/netwerk/base/nsSocketTransport2.cpp#164-168).
@@ -2448,16 +2472,6 @@ fn into_nsresult(e: &io::Error) -> nsresult {
 
         // TODO: nightly-only for now <https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.FilesystemLoop>.
         // io::ErrorKind::FilesystemLoop => NS_ERROR_FILE_UNRESOLVABLE_SYMLINK,
-
-        // > NSPR's socket code can return these, but they're not worth breaking out
-        // > into their own error codes, distinct from NS_ERROR_FAILURE:
-        // >
-        // > PR_BAD_DESCRIPTOR_ERROR
-        // > PR_INVALID_ARGUMENT_ERROR
-        //
-        // <https://searchfox.org/mozilla-central/rev/a965e3c683ecc035dee1de72bd33a8d91b1203ed/netwerk/base/nsSocketTransport2.cpp#231>
-        io::ErrorKind::InvalidInput => NS_ERROR_FAILURE,
-
         io::ErrorKind::TimedOut => NS_ERROR_NET_TIMEOUT,
         io::ErrorKind::Interrupted => NS_ERROR_NET_INTERRUPT,
 
@@ -2477,7 +2491,7 @@ fn into_nsresult(e: &io::Error) -> nsresult {
         | io::ErrorKind::InvalidData
         | io::ErrorKind::WriteZero
         | io::ErrorKind::Unsupported
-        | io::ErrorKind::Other => NS_ERROR_FAILURE,
+        | io::ErrorKind::Other => NS_ERROR_NET_RESET,
 
         // TODO: available since Rust v1.83.0 only
         // <https://doc.rust-lang.org/std/io/enum.ErrorKind.html>.
@@ -2491,11 +2505,13 @@ fn into_nsresult(e: &io::Error) -> nsresult {
         // | io::ErrorKind::ArgumentListTooLong
         // | io::ErrorKind::NetworkDown
         // | io::ErrorKind::StaleNetworkFileHandle
-        // | io::ErrorKind::StorageFull => NS_ERROR_FAILURE,
+        // | io::ErrorKind::StorageFull => NS_ERROR_NET_RESET,
 
         // TODO: nightly-only for now <https://doc.rust-lang.org/std/io/enum.ErrorKind.html>.
-        // io::ErrorKind::CrossesDevices | io::ErrorKind::InvalidFilename => NS_ERROR_FAILURE,
-        _ => NS_ERROR_FAILURE,
+        // io::ErrorKind::CrossesDevices
+        // | io::ErrorKind::InvalidFilename
+        // | io::ErrorKind::InvalidInput => NS_ERROR_NET_RESET,
+        _ => NS_ERROR_NET_RESET,
     }
 }
 

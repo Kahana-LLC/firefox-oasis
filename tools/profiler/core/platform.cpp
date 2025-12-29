@@ -2475,7 +2475,8 @@ static void MergeStacks(
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmIon ||
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmBaseline ||
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmOther) {
-        aCollector.CollectWasmFrame(jsFrame.profilingCategory(), jsFrame.label);
+        aCollector.CollectWasmOrSyncJITFrame(jsFrame.profilingCategory(),
+                                             jsFrame.label, jsFrame.sourceId);
       } else if (jsFrame.kind ==
                  JS::ProfilingFrameIterator::Frame_BaselineInterpreter) {
         // Materialize a ProfilingStackFrame similar to the C++ Interpreter. We
@@ -5349,7 +5350,7 @@ void SamplerThread::SpyOnUnregisteredThreads() {
       /* aWindowInfo = */ nsTArray<WindowInfo>{},
       /* aUtilityInfo = */ nsTArray<UtilityInfo>{},
       /* aChild = */ 0
-#ifdef XP_DARWIN
+#ifdef XP_MACOSX
       ,
       /* aChildTask = */ MACH_PORT_NULL
 #endif  // XP_DARWIN
@@ -5646,9 +5647,22 @@ static void NotifyObservers(const char* aTopic,
     return;
   }
 
+  // Notify C++ observers through the ObserverService
   if (nsCOMPtr<nsIObserverService> os = services::GetObserverService()) {
     os->NotifyObservers(aSubject, aTopic, nullptr);
   }
+
+#if defined(GP_OS_android)
+  // In the parent process, notify the GeckoJavaSampler when the profiler is
+  // started / stopped.
+  if (XRE_IsParentProcess()) {
+    if (strcmp(aTopic, "profiler-started") == 0) {
+      java::GeckoJavaSampler::NotifyProfilerStateChanged(true);
+    } else if (strcmp(aTopic, "profiler-stopped") == 0) {
+      java::GeckoJavaSampler::NotifyProfilerStateChanged(false);
+    }
+  }
+#endif
 }
 
 [[nodiscard]] static RefPtr<GenericPromise> NotifyProfilerStarted(

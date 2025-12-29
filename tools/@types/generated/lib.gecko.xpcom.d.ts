@@ -836,7 +836,6 @@ interface nsIAlertNotification extends nsISupports {
 
 interface nsIAlertsService extends nsISupports {
   showAlert(aAlert: nsIAlertNotification, aAlertListener?: nsIObserver): void;
-  showAlertNotification(aImageURL: string, aTitle: string, aText: string, aTextClickable?: boolean, aCookie?: string, aAlertListener?: nsIObserver, aName?: string, aDir?: string, aLang?: string, aData?: string, aPrincipal?: nsIPrincipal, aInPrivateBrowsing?: boolean, aRequireInteraction?: boolean): void;
   closeAlert(aName?: string, aContextClosed?: boolean): void;
   getHistory(): string[];
   teardown(): void;
@@ -5441,6 +5440,7 @@ interface nsILoginManager extends nsISupports {
   addLogins(aLogins: any): Promise<any>;
   removeLogin(aLogin: nsILoginInfo): void;
   modifyLogin(oldLogin: nsILoginInfo, newLoginData: nsISupports): void;
+  modifyLoginAsync(oldLogin: nsILoginInfo, newLoginData: nsISupports): Promise<any>;
   recordPasswordUse(aLogin: nsILoginInfo, aPrivateContextWithoutExplicitConsent: boolean, aLoginType: string, aFilled: boolean): void;
   removeAllUserFacingLogins(): void;
   removeAllLogins(): void;

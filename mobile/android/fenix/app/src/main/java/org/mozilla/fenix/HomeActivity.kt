@@ -169,6 +169,7 @@ import org.mozilla.fenix.utils.AccessibilityUtils.announcePrivateModeForAccessib
 import org.mozilla.fenix.utils.Settings
 import org.mozilla.fenix.utils.changeAppLauncherIcon
 import java.util.Locale
+import mozilla.components.ui.icons.R as iconsR
 
 /**
  * The main activity of the application. The application is primarily a single Activity (this one)
@@ -397,10 +398,11 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
         window.setupPersistentInsets()
 
         binding = ActivityHomeBinding.inflate(layoutInflater)
+        val isLauncherIntent = intent.toSafeIntent().isLauncherIntent
 
         val shouldShowOnboarding = settings().shouldShowOnboarding(
             hasUserBeenOnboarded = components.fenixOnboarding.userHasBeenOnboarded(),
-            isLauncherIntent = intent.toSafeIntent().isLauncherIntent,
+            isLauncherIntent = isLauncherIntent,
         )
 
         // This is a temporary solution to determine if we should show the marketing onboarding card.
@@ -1192,7 +1194,7 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
             setSupportActionBar(navigationToolbar)
             // Add ids to this that we don't want to have a toolbar back button
             setupNavigationToolbar()
-            setNavigationIcon(R.drawable.ic_back_button)
+            setNavigationIcon(iconsR.drawable.mozac_ic_back_24)
 
             isToolbarInflated = true
         }

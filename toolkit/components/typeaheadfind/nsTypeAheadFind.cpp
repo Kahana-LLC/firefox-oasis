@@ -503,12 +503,6 @@ nsresult nsTypeAheadFind::FindItNow(uint32_t aMode, bool aIsLinksOnly,
       }
       mSelectionController = do_GetWeakReference(selectionController);
 
-      // Reveal hidden-until-found and closed details elements for the match.
-      // https://html.spec.whatwg.org/#interaction-with-details-and-hidden=until-found
-      if (RefPtr startNode = returnRange->GetStartContainer()) {
-        startNode->QueueAncestorRevealingAlgorithm();
-      }
-
       // Select the found text
       if (selection) {
         selection->RemoveAllRanges(IgnoreErrors());
@@ -524,20 +518,33 @@ nsresult nsTypeAheadFind::FindItNow(uint32_t aMode, bool aIsLinksOnly,
                       getter_AddRefs(mFoundLink));
       }
 
-      // Change selection color to ATTENTION and scroll to it.  Careful: we
-      // must wait until after we goof with focus above before changing to
-      // ATTENTION, or when we MoveFocus() and the selection is not on a
-      // link, we'll blur, which will lose the ATTENTION.
+      // Change selection color to ATTENTION.  Careful: we must wait until
+      // after we goof with focus above before changing to ATTENTION, or when
+      // we MoveFocus() and the selection is not on a link, we'll blur, which
+      // will lose the ATTENTION.
       if (selectionController) {
-        // Beware! This may flush notifications via synchronous
-        // ScrollSelectionIntoView.
         SetSelectionModeAndRepaint(nsISelectionController::SELECTION_ATTENTION);
-        selectionController->ScrollSelectionIntoView(
-            SelectionType::eNormal,
-            nsISelectionController::SELECTION_WHOLE_SELECTION,
-            ScrollAxis(WhereToScroll::Center), ScrollAxis(), ScrollFlags::None,
-            SelectionScrollMode::SyncFlush);
       }
+
+      NS_DispatchToMainThread(NS_NewRunnableFunction(
+          "AncestorRevealingAlgorithm",
+          [self = RefPtr{this}, returnRange = RefPtr{returnRange},
+           selectionController = nsCOMPtr{selectionController}]()
+              MOZ_CAN_RUN_SCRIPT_BOUNDARY_LAMBDA {
+                // Reveal hidden-until-found and closed details elements.
+                // https://html.spec.whatwg.org/#interaction-with-details-and-hidden=until-found
+                if (RefPtr startNode = returnRange->GetStartContainer()) {
+                  startNode->AncestorRevealingAlgorithm(IgnoreErrors());
+                }
+                // Scroll to the selection.
+                if (selectionController) {
+                  selectionController->ScrollSelectionIntoView(
+                      SelectionType::eNormal,
+                      nsISelectionController::SELECTION_WHOLE_SELECTION,
+                      ScrollAxis(WhereToScroll::Center), ScrollAxis(),
+                      ScrollFlags::None, SelectionScrollMode::SyncFlush);
+                }
+              }));
 
       SetCurrentWindow(window);
       *aResult = hasWrapped ? FIND_WRAPPED : FIND_FOUND;
@@ -954,23 +961,30 @@ nsresult nsTypeAheadFind::FindInternal(uint32_t aMode,
 void nsTypeAheadFind::GetSelection(PresShell* aPresShell,
                                    nsISelectionController** aSelCon,
                                    Selection** aDOMSel) {
-  if (!aPresShell) return;
-
-  // if aCurrentNode is nullptr, get selection for document
+  *aSelCon = nullptr;
   *aDOMSel = nullptr;
 
-  nsPresContext* presContext = aPresShell->GetPresContext();
-
-  nsIFrame* frame = aPresShell->GetRootFrame();
-
-  if (presContext && frame) {
-    frame->GetSelectionController(presContext, aSelCon);
-    if (*aSelCon) {
-      RefPtr<Selection> sel =
-          (*aSelCon)->GetSelection(nsISelectionController::SELECTION_NORMAL);
-      sel.forget(aDOMSel);
-    }
+  if (MOZ_UNLIKELY(!aPresShell)) {
+    return;
   }
+
+  nsPresContext* const presContext = aPresShell->GetPresContext();
+  if (MOZ_UNLIKELY(!presContext)) {
+    return;
+  }
+
+  nsIFrame* const frame = aPresShell->GetRootFrame();
+  if (MOZ_UNLIKELY(!frame)) {
+    return;
+  }
+
+  nsCOMPtr<nsISelectionController> selCon = frame->GetSelectionController();
+  RefPtr<Selection> sel;
+  if (selCon) {
+    sel = selCon->GetSelection(nsISelectionController::SELECTION_NORMAL);
+  }
+  selCon.forget(aSelCon);
+  sel.forget(aDOMSel);
 }
 
 NS_IMETHODIMP

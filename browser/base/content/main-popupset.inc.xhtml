@@ -70,7 +70,15 @@
     <menuitem id="context_bookmarkTab"
               data-lazy-l10n-id="tab-context-bookmark-tab"/>
     <menuitem id="context_addNote" hidden="true" data-lazy-l10n-id="tab-context-add-note" />
-    <menuitem id="context_editNote" hidden="true" data-lazy-l10n-id="tab-context-edit-note" />
+    <menu id="context_updateNote"
+      hidden="true"
+      data-lazy-l10n-id="tab-context-update-note">
+      <menupopup id="tabUpdateOptionsMenu">
+        <menuitem id="context_editNote" data-lazy-l10n-id="tab-context-edit-note" />
+        <menuitem id="context_deleteNote" data-lazy-l10n-id="tab-context-delete-note" />
+      </menupopup>
+    </menu>
+
     <menu id="context_moveTabOptions"
           data-lazy-l10n-id="tab-context-move-tabs"
           data-l10n-args='{"tabCount": 1}'>
@@ -99,7 +107,7 @@
           data-l10n-args='{"tabCount": 1}'>
       <menupopup id="context_sendTabToDevicePopupMenu" class="sync-ui-item"/>
     </menu>
-    <menuseparator id="context_sendTabToDeviceSeparator"/>
+    <menuseparator id="context_sendTabToDeviceSeparator" class="sync-ui-item"/>
     <menuitem id="context_closeTab"
               data-lazy-l10n-id="tab-context-close-n-tabs"
               data-l10n-args='{"tabCount": 1}'/>
@@ -416,6 +424,16 @@
               id="sidebar-synced-tabs-context-copy-link"/>
   </menupopup>
 
+  <menupopup id="split-view-menu">
+    <menuitem command="splitViewCmd_separateTabs"
+              data-l10n-id="split-view-menuitem-separate-tabs"/>
+    <menuitem command="splitViewCmd_reverseTabs"
+              data-l10n-id="split-view-menuitem-reverse-tabs"/>
+    <menuseparator/>
+    <menuitem command="splitViewCmd_closeTabs"
+              data-l10n-id="split-view-menuitem-close-both-tabs"/>
+  </menupopup>
+
   <menupopup id="toolbar-context-menu">
     <menuitem id="toolbar-context-manage-extension"
               data-lazy-l10n-id="toolbar-context-menu-manage-extension"
@@ -552,6 +570,7 @@
       </html:div>
     </html:div>
     <html:div class="tab-preview-thumbnail-container"></html:div>
+    <html:div class="tab-note-text-container"></html:div>
   </panel>
 
   <panel id="tabgroup-preview-panel"

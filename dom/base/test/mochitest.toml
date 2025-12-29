@@ -175,6 +175,7 @@ support-files = [
   "referrer_change_server.sjs",
   "file_change_policy_redirect.html",
   "file_bug1198095.js",
+  "file_bug1126851_post_unload.html",
   "file_bug1250148.sjs",
   "file_bug1268962.sjs",
   "iframe_meta_refresh.sjs",
@@ -305,8 +306,6 @@ run-if = [
 ["test_bug238409.html"]
 
 ["test_bug254337.html"]
-
-["test_bug270145.xhtml"]
 
 ["test_bug276037-1.html"]
 
@@ -1090,6 +1089,8 @@ skip-if = [
   "http3",
 ]
 
+["test_ckeditor4_compat_hack.html"]
+
 ["test_clearTimeoutIntervalNoArg.html"]
 
 ["test_clipboard_nbsp.html"]
@@ -1434,6 +1435,7 @@ support-files = ["file_sandbox_and_document_uri.html"]
 ["test_setInterval_uncatchable_exception.html"]
 skip-if = [
   "asan",
+  "ccov",
   "opt",
   "tsan",
 ]

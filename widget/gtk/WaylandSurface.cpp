@@ -15,7 +15,9 @@
 #include <fcntl.h>
 #include "ScreenHelperGTK.h"
 #include "DMABufFormats.h"
+#include "nsWindow.h"
 #include "mozilla/gfx/gfxVars.h"
+#include "mozilla/gfx/Logging.h"
 #ifdef MOZ_LOGGING
 #  include "EncoderConfig.h"
 #endif
@@ -86,14 +88,14 @@ bool WaylandSurface::IsOpaqueRegionEnabled() {
   return sIsOpaqueRegionEnabled;
 }
 
-WaylandSurface::WaylandSurface(RefPtr<WaylandSurface> aParent,
-                               gfx::IntSize aSize)
-    : mSizeScaled(aSize), mParent(aParent) {
-  LOGWAYLAND("WaylandSurface::WaylandSurface(), parent [%p] size [%d x %d]",
-             mParent ? mParent->GetLoggingWidget() : nullptr, mSizeScaled.width,
-             mSizeScaled.height);
+WaylandSurface::WaylandSurface(RefPtr<WaylandSurface> aParent)
+    : mParent(aParent) {
+  LOGWAYLAND("WaylandSurface::WaylandSurface(), parent [%p]",
+             mParent ? mParent->GetLoggingWidget() : nullptr);
   struct wl_compositor* compositor = WaylandDisplayGet()->GetCompositor();
   mSurface = wl_compositor_create_surface(compositor);
+  LOGWAYLAND("    created surface %p ID %d", (void*)mSurface,
+             wl_proxy_get_id((struct wl_proxy*)mSurface));
   MOZ_RELEASE_ASSERT(mSurface, "Can't create wl_surface!");
 }
 
@@ -404,7 +406,7 @@ void WaylandSurface::VisibleCallbackHandler() {
 bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
                                wl_surface* aParentWLSurface,
                                WaylandSurfaceLock* aParentWaylandSurfaceLock,
-                               gfx::IntPoint aSubsurfacePosition,
+                               DesktopIntPoint aSubsurfacePosition,
                                bool aSubsurfaceDesync) {
   LOGWAYLAND("WaylandSurface::MapLocked()");
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
@@ -466,21 +468,19 @@ bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
     EnableDMABufFormatsLocked(aProofOfLock, mDMABufFormatRefreshCallback);
   }
 
-  LOGWAYLAND("    created surface %p ID %d", (void*)mSurface,
-             wl_proxy_get_id((struct wl_proxy*)mSurface));
   return true;
 }
 
 bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
                                wl_surface* aParentWLSurface,
-                               gfx::IntPoint aSubsurfacePosition) {
+                               DesktopIntPoint aSubsurfacePosition) {
   return MapLocked(aProofOfLock, aParentWLSurface, nullptr, aSubsurfacePosition,
                    /* aSubsurfaceDesync */ true);
 }
 
 bool WaylandSurface::MapLocked(const WaylandSurfaceLock& aProofOfLock,
                                WaylandSurfaceLock* aParentWaylandSurfaceLock,
-                               gfx::IntPoint aSubsurfacePosition) {
+                               DesktopIntPoint aSubsurfacePosition) {
   return MapLocked(aProofOfLock, nullptr, aParentWaylandSurfaceLock,
                    aSubsurfacePosition,
                    /* aSubsurfaceDesync */ false);
@@ -544,8 +544,8 @@ void WaylandSurface::UnmapLocked(WaylandSurfaceLock& aSurfaceLock) {
   ClearScaleLocked(aSurfaceLock);
 
   MozClearPointer(mViewport, wp_viewport_destroy);
-  mViewportDestinationSize = gfx::IntSize(-1, -1);
-  mViewportSourceRect = gfx::Rect(-1, -1, -1, -1);
+  mViewportDestinationSize = DesktopIntSize(-1, -1);
+  mViewportSourceRect = DesktopIntRect(-1, -1, -1, -1);
 
   MozClearPointer(mFractionalScaleListener, wp_fractional_scale_v1_destroy);
   MozClearPointer(mSubsurface, wl_subsurface_destroy);
@@ -608,7 +608,7 @@ void WaylandSurface::CommitLocked(const WaylandSurfaceLock& aProofOfLock,
 }
 
 void WaylandSurface::MoveLocked(const WaylandSurfaceLock& aProofOfLock,
-                                gfx::IntPoint aPosition) {
+                                DesktopIntPoint aPosition) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
   MOZ_DIAGNOSTIC_ASSERT(mIsMapped);
 
@@ -617,7 +617,7 @@ void WaylandSurface::MoveLocked(const WaylandSurfaceLock& aProofOfLock,
   }
 
   MOZ_DIAGNOSTIC_ASSERT(mSubsurface);
-  LOGWAYLAND("WaylandSurface::MoveLocked() [%d,%d]", (int)aPosition.x,
+  LOGWAYLAND("WaylandSurface::MoveLocked() unscaled [%d,%d]", (int)aPosition.x,
              (int)aPosition.y);
   mSubsurfacePosition = aPosition;
   wl_subsurface_set_position(mSubsurface, aPosition.x, aPosition.y);
@@ -725,6 +725,8 @@ bool WaylandSurface::EnableFractionalScaleLocked(
     std::function<void(void)> aFractionalScaleCallback, bool aManageViewport) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
 
+  LOGWAYLAND("WaylandSurface::SetupFractionalScale()");
+
   MOZ_DIAGNOSTIC_ASSERT(!mFractionalScaleListener);
   auto* manager = WaylandDisplayGet()->GetFractionalScaleManager();
   if (!manager) {
@@ -742,29 +744,36 @@ bool WaylandSurface::EnableFractionalScaleLocked(
   // regular rendering uses Viewport for fraction scale only.
   if (aManageViewport &&
       !CreateViewportLocked(aProofOfLock, /* aFollowsSizeChanges */ true)) {
+    LOGWAYLAND("WaylandSurface::SetupFractionalScale() failed");
     return false;
   }
   mFractionalScaleCallback = std::move(aFractionalScaleCallback);
 
+  if (mViewportFollowsSizeChanges) {
+    SetViewPortDestLocked(aProofOfLock, mSize);
+  }
+
   // Init scale to default values and load ceiled screen scale from GdkWindow.
   // We use it as fallback before we get mScreenScale from system.
   mScaleType = ScaleType::Fractional;
-
-  LOGWAYLAND("WaylandSurface::SetupFractionalScale()");
   return true;
 }
 
 bool WaylandSurface::EnableCeiledScaleLocked(
     const WaylandSurfaceLock& aProofOfLock) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
+  LOGWAYLAND("WaylandSurface::EnableCeiledScaleLocked()");
 
   if (!CreateViewportLocked(aProofOfLock, /* aFollowsSizeChanges */ true)) {
+    LOGWAYLAND("WaylandSurface::EnableCeiledScaleLocked() failed");
     return false;
   }
 
-  mScaleType = ScaleType::Ceiled;
+  if (mViewportFollowsSizeChanges) {
+    SetViewPortDestLocked(aProofOfLock, mSize);
+  }
 
-  LOGWAYLAND("WaylandSurface::EnableCeiledScaleLocked()");
+  mScaleType = ScaleType::Ceiled;
   return true;
 }
 
@@ -784,22 +793,8 @@ void WaylandSurface::SetCeiledScaleLocked(
   }
 }
 
-void WaylandSurface::SetSizeLocked(const WaylandSurfaceLock& aProofOfLock,
-                                   gfx::IntSize aSizeScaled,
-                                   gfx::IntSize aSizeUnscaled) {
-  MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
-  LOGVERBOSE(
-      "WaylandSurface::SetSizeLocked(): Size [%d x %d] unscaled size [%d x %d]",
-      aSizeScaled.width, aSizeScaled.height, aSizeUnscaled.width,
-      aSizeUnscaled.height);
-  mSizeScaled = aSizeScaled;
-  if (mViewportFollowsSizeChanges) {
-    SetViewPortDestLocked(aProofOfLock, aSizeUnscaled);
-  }
-}
-
 void WaylandSurface::SetViewPortDestLocked(
-    const WaylandSurfaceLock& aProofOfLock, gfx::IntSize aDestSize) {
+    const WaylandSurfaceLock& aProofOfLock, const DesktopIntSize& aDestSize) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
   if (!mViewport) {
     return;
@@ -807,47 +802,51 @@ void WaylandSurface::SetViewPortDestLocked(
   if (mViewportDestinationSize == aDestSize) {
     return;
   }
+  mViewportDestinationSize = aDestSize;
   LOGWAYLAND("WaylandSurface::SetViewPortDestLocked(): Size [%d x %d]",
-             aDestSize.width, aDestSize.height);
-  if (aDestSize.width < 1 || aDestSize.height < 1) {
+             mViewportDestinationSize.width, mViewportDestinationSize.height);
+  if (mViewportDestinationSize.width < 1 ||
+      mViewportDestinationSize.height < 1) {
     NS_WARNING(
         nsPrintfCString(
             "WaylandSurface::SetViewPortDestLocked(%s): Wrong coordinates!",
-            ToString(aDestSize).c_str())
+            ToString(mViewportDestinationSize).c_str())
             .get());
-    aDestSize.width = aDestSize.height = -1;
+    mViewportDestinationSize.width = mViewportDestinationSize.height = -1;
   }
-  mViewportDestinationSize = aDestSize;
   wp_viewport_set_destination(mViewport, mViewportDestinationSize.width,
                               mViewportDestinationSize.height);
   mSurfaceNeedsCommit = true;
 }
 
 void WaylandSurface::SetViewPortSourceRectLocked(
-    const WaylandSurfaceLock& aProofOfLock, gfx::Rect aRect) {
+    const WaylandSurfaceLock& aProofOfLock, const DesktopIntRect& aRect) {
   MOZ_DIAGNOSTIC_ASSERT(&aProofOfLock == mSurfaceLock);
 
   if (!mViewport || mViewportSourceRect == aRect) {
     return;
   }
+  mViewportSourceRect = aRect;
 
   LOGWAYLAND(
-      "WaylandSurface::SetViewPortSourceRectLocked(): [%f, %f] -> [%f x %f]",
-      aRect.x, aRect.y, aRect.width, aRect.height);
+      "WaylandSurface::SetViewPortSourceRectLocked(): [%d, %d] -> [%d x %d]",
+      mViewportSourceRect.x, mViewportSourceRect.y, mViewportSourceRect.width,
+      mViewportSourceRect.height);
 
   // Don't throw protocol error with bad coords
-  if (aRect.x < 0 || aRect.y < 0 || aRect.width < 1 || aRect.height < 1) {
+  if (mViewportSourceRect.x < 0 || mViewportSourceRect.y < 0 ||
+      mViewportSourceRect.width < 1 || mViewportSourceRect.height < 1) {
     NS_WARNING(nsPrintfCString("WaylandSurface::SetViewPortSourceRectLocked(%s)"
                                ": Wrong coordinates!",
                                ToString(aRect).c_str())
                    .get());
-    aRect.x = aRect.y = aRect.width = aRect.height = -1;
+    mViewportSourceRect = DesktopIntRect(-1, -1, -1, -1);
   }
 
-  mViewportSourceRect = aRect;
-  wp_viewport_set_source(
-      mViewport, wl_fixed_from_double(aRect.x), wl_fixed_from_double(aRect.y),
-      wl_fixed_from_double(aRect.width), wl_fixed_from_double(aRect.height));
+  wp_viewport_set_source(mViewport, wl_fixed_from_int(mViewportSourceRect.x),
+                         wl_fixed_from_int(mViewportSourceRect.y),
+                         wl_fixed_from_int(mViewportSourceRect.width),
+                         wl_fixed_from_int(mViewportSourceRect.height));
   mSurfaceNeedsCommit = true;
 }
 
@@ -945,14 +944,30 @@ bool WaylandSurface::RemoveOpaqueSurfaceHandlerLocked(
   return true;
 }
 
+LayoutDeviceIntSize WaylandSurface::GetScaledSize(
+    const DesktopIntSize& aSize) const {
+  DesktopIntRect rect(
+      gUseStableRounding ? mSubsurfacePosition : DesktopIntPoint(), aSize);
+
+  auto scaledRect =
+      LayoutDeviceIntRect::Round(rect * DesktopToLayoutDeviceScale(GetScale()));
+
+  LOGVERBOSE(
+      "WaylandSurface::GetScaledSize() pos [%d, %d] size [%d x %d] scale %f "
+      "scaled [%d x %d]",
+      (int)mSubsurfacePosition.x, (int)mSubsurfacePosition.y, aSize.width,
+      aSize.height, GetScale(), scaledRect.width, scaledRect.height);
+  return scaledRect.Size();
+}
+
 wl_egl_window* WaylandSurface::GetEGLWindow(DesktopIntSize aSize) {
   LOGWAYLAND("WaylandSurface::GetEGLWindow() eglwindow %p", (void*)mEGLWindow);
 
   WaylandSurfaceLock lock(this);
   MOZ_DIAGNOSTIC_ASSERT(mSurface, "Missing wl_surface!");
 
-  auto scaledSize = LayoutDeviceIntSize::Round(
-      aSize * DesktopToLayoutDeviceScale(GetScale()));
+  mSize = aSize;
+  auto scaledSize = GetScaledSize(aSize);
 
   if (!mEGLWindow) {
     mEGLWindow =
@@ -960,42 +975,61 @@ wl_egl_window* WaylandSurface::GetEGLWindow(DesktopIntSize aSize) {
     LOGWAYLAND(
         "WaylandSurface::GetEGLWindow() created eglwindow [%p] size %d x %d",
         (void*)mEGLWindow, scaledSize.width, scaledSize.height);
+    if (!mEGLWindow) {
+      gfxCriticalError()
+          << "Failed to create EGLWindow - we can't paint anything!";
+    }
   } else {
     LOGWAYLAND("WaylandSurface::GetEGLWindow() resized to %d x %d",
                scaledSize.width, scaledSize.height);
     wl_egl_window_resize(mEGLWindow, scaledSize.width, scaledSize.height, 0, 0);
   }
 
-  if (mEGLWindow) {
-    SetSizeLocked(lock, scaledSize.ToUnknownSize(), aSize.ToUnknownSize());
-  }
-
   return mEGLWindow;
 }
 
-// Return false if scale factor doesn't match buffer size.
-// We need to skip painting in such case do avoid Wayland compositor freaking.
-bool WaylandSurface::SetEGLWindowSize(LayoutDeviceIntSize aSize) {
+void WaylandSurface::SetSize(DesktopIntSize aSize) {
   WaylandSurfaceLock lock(this);
 
-  // We may be called after unmap so we're missing egl window completelly.
-  // In such case don't return false which would block compositor.
-  // We return true here and don't block flush WebRender queue.
-  // We'll be repainted if our window become visible again anyway.
-  MOZ_DIAGNOSTIC_ASSERT(mEGLWindow, "Missing ELG window?");
-
-  auto unscaledSize =
-      DesktopIntSize::Round(aSize / DesktopToLayoutDeviceScale(GetScale()));
+  mSize = aSize;
+  auto scaledSize = GetScaledSize(aSize);
 
   LOGVERBOSE(
-      "WaylandSurface::SetEGLWindowSize() scaled [%d x %d] unscaled [%d x %d] "
-      "scale %f",
-      aSize.width, aSize.height, unscaledSize.width, unscaledSize.height,
-      GetScale());
+      "WaylandSurface::SetSize() size [%d x %d] "
+      "scale %f scaled [%d x %d]",
+      aSize.width, aSize.height, GetScale(), scaledSize.width,
+      scaledSize.height);
+}
 
-  wl_egl_window_resize(mEGLWindow, aSize.width, aSize.height, 0, 0);
-  SetSizeLocked(lock, aSize.ToUnknownSize(), unscaledSize.ToUnknownSize());
-  return true;
+void WaylandSurface::ApplyEGLWindowSize(LayoutDeviceIntSize aEGLWindowSize) {
+  // Apply the surface changes by OpenGL swap buffer operation.
+  WaylandSurfaceLock lock(this, /* aSkipCommit */ true);
+
+  auto scale = GetScale();
+  auto surfaceSize = GetScaledSize(mSize);
+  bool sizeMatches = aEGLWindowSize == surfaceSize;
+
+  LOGWAYLAND(
+      "WaylandSurface::ApplyEGLWindowSize()"
+      " EGL window size [%d x %d] surface (scaled) size [%d x %d] "
+      "fractional scale %f matches %d",
+      aEGLWindowSize.width, aEGLWindowSize.height, surfaceSize.width,
+      surfaceSize.height, scale, sizeMatches);
+
+  if (mViewportFollowsSizeChanges) {
+    DesktopIntSize viewportSize;
+    if (!sizeMatches) {
+      viewportSize = DesktopIntSize::Round(aEGLWindowSize /
+                                           DesktopToLayoutDeviceScale(scale));
+    } else {
+      viewportSize = mSize;
+    }
+    SetViewPortDestLocked(lock, viewportSize);
+  }
+  if (mEGLWindow) {
+    wl_egl_window_resize(mEGLWindow, aEGLWindowSize.width,
+                         aEGLWindowSize.height, 0, 0);
+  }
 }
 
 void WaylandSurface::InvalidateRegionLocked(
@@ -1083,16 +1117,27 @@ bool WaylandSurface::AttachLocked(const WaylandSurfaceLock& aSurfaceLock,
 
   auto scale = GetScale();
   LayoutDeviceIntSize bufferSize = aBuffer->GetSize();
-  // TODO: rounding?
-  SetSizeLocked(aSurfaceLock, gfx::IntSize(bufferSize.width, bufferSize.height),
-                gfx::IntSize((int)round(bufferSize.width / scale),
-                             (int)round(bufferSize.height / scale)));
-
+  auto surfaceSize = GetScaledSize(mSize);
+  bool sizeMatches = bufferSize.width == surfaceSize.width &&
+                     bufferSize.height == surfaceSize.height;
   LOGWAYLAND(
       "WaylandSurface::AttachLocked() transactions [%d] WaylandBuffer [%p] "
-      "attached [%d] size [%d x %d] fractional scale %f",
+      "attached [%d] buffer size [%d x %d] surface (scaled) size [%d x %d] "
+      "fractional scale %f matches %d",
       (int)mBufferTransactions.Length(), aBuffer.get(), aBuffer->IsAttached(),
-      bufferSize.width, bufferSize.height, scale);
+      bufferSize.width, bufferSize.height, surfaceSize.width,
+      surfaceSize.height, scale, sizeMatches);
+
+  if (mViewportFollowsSizeChanges) {
+    DesktopIntSize viewportSize;
+    if (!sizeMatches) {
+      viewportSize =
+          DesktopIntSize::Round(bufferSize / DesktopToLayoutDeviceScale(scale));
+    } else {
+      viewportSize = mSize;
+    }
+    SetViewPortDestLocked(aSurfaceLock, viewportSize);
+  }
 
   auto* transaction = GetNextTransactionLocked(aSurfaceLock, aBuffer);
   if (!transaction) {
@@ -1113,7 +1158,6 @@ void WaylandSurface::RemoveAttachedBufferLocked(
 
   LOGWAYLAND("WaylandSurface::RemoveAttachedBufferLocked()");
 
-  SetSizeLocked(aSurfaceLock, gfx::IntSize(0, 0), gfx::IntSize(0, 0));
   wl_surface_attach(mSurface, nullptr, 0, 0);
   mLatestAttachedBuffer = 0;
   mSurfaceNeedsCommit = true;
@@ -1174,7 +1218,7 @@ GdkWindow* WaylandSurface::GetGdkWindow() const {
   return mGdkWindow;
 }
 
-double WaylandSurface::GetScale() {
+double WaylandSurface::GetScale() const {
 #ifdef MOZ_LOGGING
   static float lastLoggedScale = 0.0;
 #endif

@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:moz="http://mozac.org/tools">
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">Huliðs %s</string>
@@ -54,6 +61,8 @@
   <string name="tab_manager_empty_synced_tabs_page_description">Skráðu þig inn til að stýra samstilltum flipum úr öllum tækjunum þínum.</string>
   <!-- The action text displayed on the synced tabs page when the user is not logged into an account, prompting the user to sign into their account. When clicked, it takes the user to the account sign-in flow. -->
   <string name="tab_manager_empty_synced_tabs_page_sign_in_cta">Skrá inn</string>
+  <!-- Text for the button used to show all stories -->
+  <string name="homepage_all_stories">Allar sögur</string>
   <!--
     Home - Bookmarks
 
@@ -82,7 +91,7 @@
     %1$s is the name of the app (for example "Firefox").
     %2$s is a link using felt_privacy_info_card_subtitle_link_text as text
   -->
-  <string name="felt_privacy_info_card_subtitle_2">%1$s eyðir vefkökunum þínum, vafurferli og gögnum vefsvæðisins þegar þú lokar öllum huliðsflipum þínum. %2$s</string>
+  <string name="felt_privacy_info_card_subtitle_2" tools:ignore="UnusedResources" moz:removedIn="147">%1$s eyðir vefkökunum þínum, vafurferli og gögnum vefsvæðisins þegar þú lokar öllum huliðsflipum þínum. %2$s</string>
   <!--
     Description of private browsing mode displayed to users on the homepage when they enable private mode.
     %1$s is the name of the app (for example "Firefox").
@@ -615,6 +624,10 @@
   <string name="onboarding_marketing_body_1" tools:ignore="BrandUsage,UnusedResources">Deila því hvernig þú uppgötvaðir Firefox og að þú notar hann með markaðstækniaðilum Mozilla. Þessi gögn eru aldrei seld.</string>
   <!-- Marketing onboarding page button label variant. Button to confirm choice and start browsing. -->
   <string name="onboarding_marketing_positive_button_1" tools:ignore="UnusedResources">Samþykkja og byrja að vafra</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Onboarding header for the toolbar selection card, used by Nimbus experiments. -->
   <string name="onboarding_customize_toolbar_title" tools:ignore="UnusedResources">Veldu staðsetningu verkfærastikunnar</string>
   <!-- Onboarding sub header for toolbar selection card, used by Nimbus experiments. -->
@@ -813,8 +826,6 @@
   <string name="preferences_gestures">Bendingar</string>
   <!-- Preference for settings related to visual options -->
   <string name="preferences_customize">Sérsníða</string>
-  <!-- Preference description for banner about signing in -->
-  <string name="preferences_sign_in_description_2" tools:ignore="UnusedResources" moz:removedIn="145">Skráðu þig inn til að samstilla flipana þína, bókamerki, lykilorð og fleira.</string>
   <!-- Preference description shown in the banner prompting the user to sign in for sync features -->
   <string name="preferences_sign_in_description">Samstilltu flipa, bókamerki, lykilorð og fleira.</string>
   <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -842,7 +853,7 @@
   <!-- Preference title for switch preference to show a clipboard suggestion when searching -->
   <string name="preferences_show_clipboard_suggestions">Sýna tillögur á klippispjaldi</string>
   <!-- Preference title for switch preference to suggest browsing history when searching -->
-  <string name="preferences_search_browsing_history">Sýna ferilsögu</string>
+  <string name="preferences_search_browsing_history">Leita í vafurferli</string>
   <!-- Preference title for switch preference to suggest bookmarks when searching -->
   <string name="preferences_search_bookmarks">Leita í bókamerkjum</string>
   <!-- Preference title for switch preference to show shortcuts when searching -->
@@ -1058,6 +1069,8 @@
   <string name="restart_warning_dialog_title">Skipta um forritstákn?</string>
   <!-- Message to warn users that applying an alternative app icon may require an app restart. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
   <string name="restart_warning_dialog_body_2">Forritið gæti lokað. Ýttu bara á nýja fína táknið til að opna %1$s aftur.</string>
+  <!-- Message to warn users that applying an alternative app icon may require an app restart and will remove existing shortcuts because of the OS limitations. Whether or not the app closes depends on what version of Android it is, so we use the word "may" instead of "will". %1$s is replaced by the brand name (e.g. Firefox). -->
+  <string name="restart_and_shortcuts_removal_warning_dialog_body">Ef þú breytir tákninu verða allar síður og flýtileiðir sem þú hefur vistað á heimaskjánum fjarlægðar.\n\n%1$s gæti lokað. Ýttu á nýja táknið til að opna aftur.</string>
   <!-- Dialog button text for confirming the possible app restart and new icon selection -->
   <string name="restart_warning_dialog_button_positive_2">Skipta um tákn</string>
   <!-- Dialog button text for cancelling app icon change -->
@@ -1208,10 +1221,8 @@
   <!--
     Turn On Sync Preferences
 
-    Header of the Sync and save your data preference view
+    Header of the Sign in preference view
   -->
-  <string name="preferences_sync_2" tools:ignore="UnusedResources" moz:removedIn="145">Samstilla og vista gögn</string>
-  <!-- Header of the Sign in preference view -->
   <string name="preferences_sign_in">Skrá inn</string>
   <!-- Preference for reconnecting to FxA sync -->
   <string name="preferences_sync_sign_in_to_reconnect">Skráðu þig inn til að tengjast aftur</string>
@@ -1460,6 +1471,8 @@
   <string name="tab_drawer_fab_content">Einka</string>
   <!-- Text for the new tab button to indicate syncing command on the synced tabs page -->
   <string name="tab_drawer_fab_sync">Samstiling</string>
+  <!-- Text for the tab search bar placeholder -->
+  <string name="tab_manager_search_bar_placeholder">Leita í flipunum þínum</string>
   <!-- Text shown in the menu for sharing all tabs -->
   <string name="tab_tray_menu_item_share">Deila flipum</string>
   <!-- Text shown in the menu to view recently closed tabs -->
@@ -1472,6 +1485,14 @@
   <string name="tab_tray_menu_tab_settings">Stillingar flipa</string>
   <!-- Text shown in the menu for closing all tabs -->
   <string name="tab_tray_menu_item_close">Loka öllum flipum</string>
+  <!-- Text shown as the title of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_title">Loka öllum flipum?</string>
+  <!-- Text shown in the body of the Close all tabs confirmation dialog in Tab Manager -->
+  <string name="tab_manager_close_all_tabs_dialog_body">Þetta mun loka öllum opnum flipum.</string>
+  <!-- Text shown on the confirm button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_confirm">Loka flipum</string>
+  <!-- Text shown on the cancel button in the Close all tabs confirmation dialog -->
+  <string name="tab_manager_close_all_tabs_dialog_cancel">Hætta við</string>
   <!-- Text shown in the multiselect menu for bookmarking selected tabs. -->
   <string name="tab_tray_multiselect_menu_item_bookmark">Bókamerki</string>
   <!-- Content description (not visible, for screen readers etc.): Bookmarks selected tabs. -->
@@ -1490,8 +1511,6 @@
   <string name="tab_tray_multiselect_menu_content_description">Valmynd valinna flipa</string>
   <!-- Title text displayed for a homepage tab in the tabs tray. -->
   <string name="tab_tray_homepage_tab">Upphafssíða</string>
-  <!-- Title text displayed for a homepage tab in the tabs tray. %s is a placeholder that will be replaced by app name. -->
-  <string name="tab_tray_homepage_tab_2" tools:ignore="UnusedResources" moz:removedIn="145">Heimasíða %s</string>
   <!-- Content description (not visible, for screen readers etc.): Removes tab from collection button. Removes the selected tab from collection when pressed -->
   <string name="remove_tab_from_collection">Fjarlæga flipann úr safni</string>
   <!-- Text for button to enter multiselect mode in tabs tray -->
@@ -1502,6 +1521,8 @@
   <string name="close_tab_title">Loka flipa %s</string>
   <!-- Content description (not visible, for screen readers etc.): Opens the open tabs menu when pressed -->
   <string name="open_tabs_menu">Opnaðu flipa valmyndina</string>
+  <!-- Content description (not visible, for screen readers etc.): Return to tab manager -->
+  <string name="tab_manager_search_bar_back_content_description">Fara aftur í flipastýringuna</string>
   <!-- Open tabs menu item to save tabs to collection -->
   <string name="tabs_menu_save_to_collection1">Vista flipa í safn</string>
   <!-- Text for the menu button to delete a collection -->
@@ -1518,6 +1539,8 @@
   <string name="delete_from_history">Eyða úr vafurferli</string>
   <!-- Postfix for private WebApp titles. %1$s is the name of the app (for example "Firefox"). -->
   <string name="pwa_site_controls_title_private">%1$s (huliðshamur)</string>
+  <!-- Content description (not visible, for screen readers etc.) for the button to open the Tab Search feature to search through tabs. -->
+  <string name="tab_manager_open_tab_search">Opna flipaleit</string>
   <!--
     History
 
@@ -2092,8 +2115,6 @@
   <string name="toast_copy_link_to_clipboard">Afritað á klippispjald</string>
   <!-- An option from the share dialog to sign into sync -->
   <string name="sync_sign_in">Skráðu þig inn til að samstilla</string>
-  <!-- An option from the three dot menu to sync and save data -->
-  <string name="sync_menu_sync_and_save_data" tools:ignore="UnusedResources" moz:removedIn="145">Samstilla og vista gögn</string>
   <!-- An option from the three dot menu to sign in -->
   <string name="sync_menu_sign_in">Innskráning</string>
   <!-- An option from the share dialog to send link to all other sync devices -->
@@ -2682,6 +2703,10 @@
   <string name="edit_login_navigate_back_button_content_description">Fara til baka</string>
   <!-- Content description, used by tools like screenreaders, to press on the edit login button. -->
   <string name="edit_login_button_content_description">Breyta innskráningu</string>
+  <!-- Content description, used by tools like screenreaders, to press on the add new login button. -->
+  <string name="saved_logins_add_new_login_button_content_description">Bæta við nýrri innskráningu</string>
+  <!-- Content description, used by tools like screenreaders, to press on the clear search text button. -->
+  <string name="saved_logins_clear_search_text_button_content_description">Hreinsa leitartexta</string>
   <!-- Content Description (for screenreaders etc) read for the button to open a site in logins -->
   <string name="saved_login_open_site">Opna vefsvæði í vafra</string>
   <!-- Content Description (for screenreaders etc) read for the button to reveal a password in logins -->
@@ -2748,14 +2773,16 @@
   <string name="preferences_addresses_sync_addresses_across_devices">Samstilla vistföng milli tækja</string>
   <!-- Preference option for syncing addresses across devices. This is displayed when the user is signed into sync -->
   <string name="preferences_addresses_sync_addresses">Samstilla vistföng</string>
+  <!-- Content description navigating back from autofill settings screen. -->
+  <string name="autofill_settings_navigate_back_button_content_description">Til baka</string>
   <!-- Title of the "Add card" screen -->
   <string name="credit_cards_add_card">Bæta við korti</string>
+  <!-- Content description for the "credit card feature" top bar back button -->
+  <string name="credit_cards_navigate_back_button_content_description">Fara til baka</string>
   <!-- Title of the "Edit card" screen -->
   <string name="credit_cards_edit_card">Breyta greiðslukorti</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Kortanúmer</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Gildistími</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Mánuður gildistíma</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -3882,7 +3909,7 @@
   <!-- Message displayed when the search field in the Settings Search screen is empty -->
   <string name="settings_search_empty_query_placeholder">Engar nýlegar leitir</string>
   <!-- Message when error happens with Settings Search -->
-  <string name="settings_search_error_message">Villa kom upp</string>
+  <string name="settings_search_error_message" tools:ignore="UnusedResources" moz:removedIn="147">Villa kom upp</string>
   <!-- Text of button allowing to clear history of recent searches done in the settings screen. -->
   <string name="settings_search_clear_recent_searches_message">Hreinsa allt</string>
   <!-- Section header for recent search results -->
@@ -3891,11 +3918,9 @@
   <string name="settings_search_no_results_title">Ekkert fannst</string>
   <!-- Sub-message displayed when the search field is not empty but search results is empty. -->
   <string name="settings_search_no_results_message">Kannski prófa aðra leit?</string>
-  <!--
-    Terms of use pop up prompt
+  <!-- ==== Terms of use pop up prompt ==== -->
 
-    Title for the pop up prompt
-  -->
+  <!-- Title for the pop up prompt -->
   <string name="terms_of_use_prompt_title">Við erum með uppfærslu</string>
   <!--
     Message for the terms of use pop up prompt
@@ -3919,4 +3944,20 @@
   <string name="terms_of_use_prompt_accept">Samþykkja</string>
   <!-- Label for a button to postpone accepting the terms of use -->
   <string name="terms_of_use_prompt_postpone">Minna mig á seinna</string>
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
+
+  <!--
+    Privacy notice homepage banner
+
+    A message we show the user on the homepage when there is a new version of the privacy notice. 'Firefox' is intentionally hardcoded.
+    %1$s is replaced by an active link using privacy_notice_updated_homepage_message_privacy_notice as text (Privacy Notice)
+    %2$s is replaced by an active link using privacy_notice_updated_homepage_message_learn_more as text (Learn more)
+  -->
+  <string name="privacy_notice_updated_homepage_message" tools:ignore="BrandUsage,UnusedResources">Við höfum uppfært %1$s til að endurspegla nýjustu eiginleikana í Firefox. %2$s</string>
+  <!-- The first active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_privacy_notice" tools:ignore="UnusedResources">Meðferð persónuupplýsinga</string>
+  <!-- The second active link used in privacy_notice_updated_homepage_message -->
+  <string name="privacy_notice_updated_homepage_message_learn_more" tools:ignore="UnusedResources">Kanna nánar</string>
 </resources>

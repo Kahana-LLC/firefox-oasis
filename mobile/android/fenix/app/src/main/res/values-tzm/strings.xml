@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+
 <resources>
   <!-- App name for private browsing mode. %s is the name of the app (for example "Firefox"). -->
   <string name="app_name_private_5">Uslig %s</string>
@@ -59,6 +66,10 @@
   <string name="search_suggestions_onboarding_do_not_allow_button">Ad ur ssirig</string>
   <!-- Search engine suggestion title text. %s is the name of the suggested engine. -->
   <string name="search_engine_suggestions_title">Rzu %s</string>
+  <!-- ==== Project "Nova" onboarding strings ==== -->
+
+  <!-- ==== End of Project "Nova" onboarding strings ==== -->
+
   <!-- Text preview for smaller sized widgets -->
   <string name="search_widget_text_short">Rzu</string>
   <!-- Text preview for larger sized widgets -->
@@ -307,8 +318,6 @@
   <string name="credit_cards_edit_card">Ẓreg takarḍa</string>
   <!-- The header for the card number of a credit card -->
   <string name="credit_cards_card_number">Uṭṭun n tkarḍa</string>
-  <!-- The header for the expiration date of a credit card -->
-  <string name="credit_cards_expiration_date">Azemz n taggara</string>
   <!-- The label for the expiration date month of a credit card to be used by a11y services -->
   <string name="credit_cards_expiration_date_month">Ayyur n uzemz n taggar</string>
   <!-- The label for the expiration date year of a credit card to be used by a11y services -->
@@ -346,4 +355,10 @@
   <!-- Translations feature -->
 
   <!-- TextField Design System Component -->
+
+  <!-- ==== Terms of use pop up prompt ==== -->
+
+  <!-- ==== Experiment strings. ==== -->
+
+  <!-- ==== End of Terms of use popup prompt. ==== -->
 </resources>

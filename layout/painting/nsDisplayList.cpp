@@ -108,7 +108,6 @@
 #include "nsTextFrame.h"
 #include "nsTextPaintStyle.h"
 #include "nsTransitionManager.h"
-#include "nsViewManager.h"
 
 namespace mozilla {
 
@@ -537,11 +536,14 @@ void nsDisplayListBuilder::AutoCurrentActiveScrolledRootSetter::
 
   // finiteBoundsASR is the leafmost ASR that all items created during
   // object's lifetime have finite bounds with respect to.
-  const ActiveScrolledRoot* finiteBoundsASR =
-      mBuilder->IsInViewTransitionCapture()
-          ? aActiveScrolledRoot
-          : ActiveScrolledRoot::PickDescendant(mContentClipASR,
-                                               aActiveScrolledRoot);
+  // TODO(bug 2001862): Explanation may need revising.
+  const ActiveScrolledRoot* finiteBoundsASR = aActiveScrolledRoot;
+  if (!mBuilder->IsInViewTransitionCapture()) {
+    finiteBoundsASR =
+        ActiveScrolledRoot::IsAncestor(aActiveScrolledRoot, mContentClipASR)
+            ? mContentClipASR
+            : aActiveScrolledRoot;
+  }
 
   // mCurrentContainerASR is adjusted so that it's still an ancestor of
   // finiteBoundsASR.
@@ -870,6 +872,7 @@ void nsDisplayListBuilder::EndFrame() {
   mActiveScrolledRoots.Clear();
   FreeClipChains();
   FreeTemporaryItems();
+  mAsyncScrollsWithAnchor.Clear();
   nsCSSRendering::EndFrameTreesLocked();
 }
 
@@ -5848,7 +5851,9 @@ nsDisplayStickyPosition::nsDisplayStickyPosition(
     const ActiveScrolledRoot* aActiveScrolledRoot,
     ContainerASRType aContainerASRType, const ActiveScrolledRoot* aContainerASR)
     : nsDisplayOwnLayer(aBuilder, aFrame, aList, aActiveScrolledRoot,
-                        aContainerASRType),
+                        aContainerASRType, nsDisplayOwnLayerFlags::None,
+                        layers::ScrollbarData{},
+                        /*aForceActive=*/true, /*aClearClipChain=*/true),
       mContainerASR(aContainerASR),
       mShouldFlatten(false) {
   MOZ_COUNT_CTOR(nsDisplayStickyPosition);
@@ -8303,7 +8308,8 @@ static Maybe<wr::WrClipChainId> CreateSimpleClipRegion(
       return Nothing();
   }
 
-  wr::WrClipChainId clipChainId = aBuilder.DefineClipChain({clipId}, true);
+  wr::WrClipChainId clipChainId = aBuilder.DefineClipChain(
+      {&clipId, 1}, aBuilder.CurrentClipChainIdIfNotRoot());
 
   return Some(clipChainId);
 }
@@ -8369,7 +8375,8 @@ static Maybe<wr::WrClipChainId> CreateWRClipPathAndMasks(
   wr::WrClipId clipId =
       aBuilder.DefineImageMaskClip(mask.ref(), points, fillRule);
 
-  wr::WrClipChainId clipChainId = aBuilder.DefineClipChain({clipId}, true);
+  wr::WrClipChainId clipChainId = aBuilder.DefineClipChain(
+      {&clipId, 1}, aBuilder.CurrentClipChainIdIfNotRoot());
 
   return Some(clipChainId);
 }
@@ -8665,7 +8672,10 @@ bool nsDisplayFilters::CreateWebRenderCommands(
         mFrame->PresContext()->AppUnitsPerDevPixel());
     auto clipId =
         aBuilder.DefineRectClip(Nothing(), wr::ToLayoutRect(devPxRect));
-    clipChainId = aBuilder.DefineClipChain({clipId}, true).id;
+    clipChainId = aBuilder
+                      .DefineClipChain({&clipId, 1},
+                                       aBuilder.CurrentClipChainIdIfNotRoot())
+                      .id;
   } else {
     clipChainId = aBuilder.CurrentClipChainId();
   }
@@ -8840,7 +8850,7 @@ PaintTelemetry::AutoRecordPaint::~AutoRecordPaint() {
 }
 
 static nsIFrame* GetSelfOrPlaceholderFor(nsIFrame* aFrame) {
-  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_FLOAT)) {
+  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW)) {
     return aFrame;
   }
 
@@ -8865,10 +8875,10 @@ nsDisplayListBuilder::AutoBuildingDisplayList::AutoBuildingDisplayList(
     : mBuilder(aBuilder),
       mPrevFrame(aBuilder->mCurrentFrame),
       mPrevReferenceFrame(aBuilder->mCurrentReferenceFrame),
-      mPrevOffset(aBuilder->mCurrentOffsetToReferenceFrame),
-      mPrevAdditionalOffset(aBuilder->mAdditionalOffset),
       mPrevVisibleRect(aBuilder->mVisibleRect),
       mPrevDirtyRect(aBuilder->mDirtyRect),
+      mPrevOffset(aBuilder->mCurrentOffsetToReferenceFrame),
+      mPrevAdditionalOffset(aBuilder->mAdditionalOffset),
       mPrevCompositorHitTestInfo(aBuilder->mCompositorHitTestInfo),
       mPrevAncestorHasApzAwareEventHandler(
           aBuilder->mAncestorHasApzAwareEventHandler),

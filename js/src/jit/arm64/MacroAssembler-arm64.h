@@ -933,6 +933,9 @@ class MacroAssemblerCompat : public vixl::MacroAssembler {
   inline void loadStackPtr(const Address& src);
   inline void storeStackPtr(const Address& dest);
 
+  inline void loadStackPtrFromPrivateValue(const Address& src);
+  inline void storeStackPtrToPrivateValue(const Address& dest);
+
   // StackPointer testing functions.
   inline void branchTestStackPtr(Condition cond, Imm32 rhs, Label* label);
   inline void branchStackPtr(Condition cond, Register rhs, Label* label);
@@ -1331,13 +1334,6 @@ class MacroAssemblerCompat : public vixl::MacroAssembler {
   }
   void unboxDouble(const ValueOperand& src, FloatRegister dest) {
     Fmov(ARMFPRegister(dest, 64), ARMRegister(src.valueReg(), 64));
-  }
-
-  void unboxArgObjMagic(const ValueOperand& src, Register dest) {
-    MOZ_CRASH("unboxArgObjMagic");
-  }
-  void unboxArgObjMagic(const Address& src, Register dest) {
-    MOZ_CRASH("unboxArgObjMagic");
   }
 
   void unboxBoolean(const ValueOperand& src, Register dest) {

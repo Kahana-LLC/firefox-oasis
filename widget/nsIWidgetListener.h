@@ -21,6 +21,7 @@ class nsMenuPopupFrame;
 
 namespace mozilla {
 class PresShell;
+class PresShellWidgetListener;
 }  // namespace mozilla
 
 /**
@@ -42,8 +43,10 @@ class nsIWidgetListener {
    */
   virtual nsIAppWindow* GetAppWindow() { return nullptr; }
 
-  /** If this listener is for a view, return it. */
-  virtual nsView* GetView() { return nullptr; }
+  /** If this listener is for a pres shell, return it. */
+  virtual mozilla::PresShellWidgetListener* GetAsPresShellWidgetListener() {
+    return nullptr;
+  }
 
   /** If this listener is for an nsMenuPopupFrame, return it. */
   virtual nsMenuPopupFrame* GetAsMenuPopupFrame() { return nullptr; }
@@ -52,23 +55,18 @@ class nsIWidgetListener {
   virtual mozilla::PresShell* GetPresShell() { return nullptr; }
 
   /**
-   * Called when a window is moved to location (x, y). Returns true if the
-   * notification was handled. Coordinates are outer window screen coordinates.
+   * Called when a window is moved to location.
+   * Coordinates are outer window screen coordinates.
    */
   enum class ByMoveToRect : bool { No, Yes };
-  virtual bool WindowMoved(nsIWidget* aWidget, int32_t aX, int32_t aY,
-                           ByMoveToRect) {
-    return false;
-  }
+  virtual void WindowMoved(nsIWidget*, const mozilla::LayoutDeviceIntPoint&,
+                           ByMoveToRect) {}
 
   /**
-   * Called when a window is resized to (width, height). Returns true if the
-   * notification was handled. Coordinates are outer window screen coordinates.
+   * Called when a window is resized.
+   * Coordinates are outer window screen coordinates.
    */
-  virtual bool WindowResized(nsIWidget* aWidget, int32_t aWidth,
-                             int32_t aHeight) {
-    return false;
-  }
+  virtual void WindowResized(nsIWidget*, const mozilla::LayoutDeviceIntSize&) {}
 
   /**
    * Called when the size mode (minimized, maximized, fullscreen) is changed.
@@ -78,11 +76,9 @@ class nsIWidgetListener {
   virtual void DynamicToolbarMaxHeightChanged(mozilla::ScreenIntCoord aHeight) {
   }
   virtual void DynamicToolbarOffsetChanged(mozilla::ScreenIntCoord aOffset) {}
-#ifdef MOZ_WIDGET_ANDROID
   /** Called when the software keyboard appears/disappears. */
   virtual void KeyboardHeightChanged(mozilla::ScreenIntCoord aHeight) {}
   virtual void AndroidPipModeChanged(bool) {}
-#endif
 
   /** Called when the macOS titlebar is shown while in fullscreen. */
   virtual void MacFullscreenMenubarOverlapChanged(
@@ -110,33 +106,9 @@ class nsIWidgetListener {
    */
   virtual bool RequestWindowClose(nsIWidget* aWidget) { return false; }
 
-  /*
-   * Indicate that a paint is about to occur on this window. This is called
-   * at a time when it's OK to change the geometry of this widget or of
-   * other widgets. Must be called before every call to PaintWindow.
-   */
+  /** Paint the window if needed. */
   MOZ_CAN_RUN_SCRIPT_BOUNDARY
-  virtual void WillPaintWindow(nsIWidget* aWidget) {}
-
-  /**
-   * Paint the specified region of the window. Returns true if the
-   * notification was handled.
-   * This is called at a time when it is not OK to change the geometry of
-   * this widget or of other widgets.
-   */
-  MOZ_CAN_RUN_SCRIPT_BOUNDARY
-  virtual bool PaintWindow(nsIWidget* aWidget,
-                           mozilla::LayoutDeviceIntRegion aRegion) {
-    return false;
-  }
-  /**
-   * Indicates that a paint occurred.
-   * This is called at a time when it is OK to change the geometry of
-   * this widget or of other widgets.
-   * Must be called after every call to PaintWindow.
-   */
-  MOZ_CAN_RUN_SCRIPT_BOUNDARY
-  virtual void DidPaintWindow() {}
+  virtual void PaintWindow(nsIWidget* aWidget) {}
 
   virtual void DidCompositeWindow(mozilla::layers::TransactionId aTransactionId,
                                   const mozilla::TimeStamp& aCompositeStart,

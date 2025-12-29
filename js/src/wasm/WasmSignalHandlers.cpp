@@ -544,6 +544,10 @@ struct AutoHandlingTrap {
   MOZ_RELEASE_ASSERT(&instance->code() == codeBlock->code ||
                      trap == Trap::IndirectCallBadSig);
 
+  // Ensure the active FP has a valid instance pointer that the trap stub can
+  // use.
+  ((FrameWithInstances*)frame)->setCalleeInstance(instance);
+
   JSContext* cx =
       instance->realm()->runtimeFromAnyThread()->mainContextFromAnyThread();
   MOZ_RELEASE_ASSERT(!assertCx || cx == assertCx);
@@ -999,6 +1003,7 @@ bool wasm::MemoryAccessTraps(const RegisterState& regs, uint8_t* addr,
     case Trap::OutOfBounds:
       break;
     case Trap::NullPointerDereference:
+    case Trap::BadCast:
       break;
 #  ifdef WASM_HAS_HEAPREG
     case Trap::IndirectCallToNull:
@@ -1010,9 +1015,15 @@ bool wasm::MemoryAccessTraps(const RegisterState& regs, uint8_t* addr,
       return false;
   }
 
-  const Instance& instance =
-      *GetNearestEffectiveInstance(Frame::fromUntaggedWasmExitFP(regs.fp));
+  // This is a safe and expected wasm trap. This guarantees that FP is pointing
+  // at a wasm frame.
+  FrameWithInstances* frame = (FrameWithInstances*)(regs.fp);
+  Instance& instance = *GetNearestEffectiveInstance(frame);
   MOZ_ASSERT(&instance.code() == codeBlock->code);
+
+  // Ensure the active FP has a valid instance pointer that the trap stub can
+  // use.
+  frame->setCalleeInstance(&instance);
 
   switch (trap) {
     case Trap::OutOfBounds:
@@ -1021,6 +1032,7 @@ bool wasm::MemoryAccessTraps(const RegisterState& regs, uint8_t* addr,
       }
       break;
     case Trap::NullPointerDereference:
+    case Trap::BadCast:
       if ((uintptr_t)addr >= NullPtrGuardSize) {
         return false;
       }
@@ -1061,6 +1073,16 @@ bool wasm::HandleIllegalInstruction(const RegisterState& regs,
   if (!codeBlock->code->lookupTrap(regs.pc, &trap, &trapSite)) {
     return false;
   }
+
+  // This is a safe and expected wasm trap. This guarantees that FP is pointing
+  // at a wasm frame.
+  FrameWithInstances* frame = (FrameWithInstances*)(regs.fp);
+  Instance& instance = *GetNearestEffectiveInstance(frame);
+  MOZ_ASSERT(&instance.code() == codeBlock->code);
+
+  // Ensure the active FP has a valid instance pointer that the trap stub can
+  // use.
+  frame->setCalleeInstance(&instance);
 
   JSContext* cx = TlsContext.get();  // Cold simulator helper function
   jit::JitActivation* activation = cx->activation()->asJit();

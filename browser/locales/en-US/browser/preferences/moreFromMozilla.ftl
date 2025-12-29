@@ -34,10 +34,9 @@ more-from-moz-firefox-relay-button = Visit Website
 
 ## These strings are for the Get a Demo card in about:preferences moreFromMozilla page
 
-more-from-moz-mozilla-monitor-title = Get a Demo
-more-from-moz-mozilla-monitor-us-description = Book a personalized demo to see how Oasis can transform your enterprise.
-more-from-moz-mozilla-monitor-global-description = Schedule a demo to see Oasis in action and learn how we'll help you deploy it securely across your organization.
-more-from-moz-mozilla-monitor-button = Schedule Demo
+more-from-moz-mozilla-monitor-title = { -mozmonitor-brand-name }
+more-from-moz-mozilla-monitor-global-description = Get alerts when your data has been in a breach.
+more-from-moz-mozilla-monitor-button = Get { -monitor-brand-short-name }
 
 ## These strings are for the Solo card in about:preferences moreFromMozilla page
 

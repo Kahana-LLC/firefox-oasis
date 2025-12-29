@@ -3,6 +3,11 @@
 
 "use strict";
 
+const TEST_PATH = getRootDirectory(gTestPath).replace(
+  "chrome://mochitests/content",
+  "https://example.com"
+);
+
 add_setup(async function () {
   await SpecialPowers.pushPrefEnv({
     set: [["dom.security.https_first", false]],
@@ -24,12 +29,18 @@ async function setupSplitView() {
   info("Add tabs into an active split view.");
   await BrowserTestUtils.switchTab(gBrowser, tabs[0]);
   const splitView = gBrowser.addTabSplitView(tabs);
+  const tabpanels = document.getElementById("tabbrowser-tabpanels");
+  await BrowserTestUtils.waitForMutationCondition(
+    tabpanels,
+    { attributes: true },
+    () => tabpanels.hasAttribute("splitview")
+  );
   for (const tab of tabs) {
     const tabPanel = document.getElementById(tab.linkedPanel);
     await BrowserTestUtils.waitForMutationCondition(
       tabPanel,
       { attributes: true },
-      () => tabPanel.classList.contains("split-view-panel")
+      () => tabPanel.classList.contains("split-view-panel-active")
     );
   }
 
@@ -37,9 +48,13 @@ async function setupSplitView() {
 }
 
 async function activateCommand(panel, command) {
-  const footerMenu = panel.querySelector(".split-view-footer-menu");
+  const footerMenu = document.getElementById("split-view-menu");
   const promiseShown = BrowserTestUtils.waitForPopupEvent(footerMenu, "shown");
-  footerMenu.openPopup();
+  const { menuButtonElement } = panel.querySelector("split-view-footer");
+  // Only the urlbar menu is focusable, not the footer menu.
+  AccessibilityUtils.setEnv({ focusableRule: false });
+  EventUtils.synthesizeMouseAtCenter(menuButtonElement, {});
+  AccessibilityUtils.resetEnv();
   await promiseShown;
   const item = footerMenu.querySelector(`menuitem[command="${command}"]`);
   footerMenu.activateItem(item);
@@ -106,8 +121,23 @@ add_task(async function test_security_warning() {
     "No security warning for HTTPS."
   );
 
-  info("Load an insecure website.");
+  info("Load a site with an icon.");
   let promiseLoaded = BrowserTestUtils.browserLoaded(tab2.linkedBrowser);
+  BrowserTestUtils.startLoadingURIString(
+    tab2.linkedBrowser,
+    TEST_PATH + "file_withicon.html"
+  );
+  await promiseLoaded;
+  if (!BrowserTestUtils.isVisible(footer.iconElement)) {
+    await BrowserTestUtils.waitForEvent(footer.iconElement, "load");
+  }
+  Assert.ok(
+    BrowserTestUtils.isVisible(footer.iconElement),
+    "Show favicon for secure sites."
+  );
+
+  info("Load an insecure website.");
+  promiseLoaded = BrowserTestUtils.browserLoaded(tab2.linkedBrowser);
   BrowserTestUtils.startLoadingURIString(
     tab2.linkedBrowser,
     "http://example.com/" // eslint-disable-line @microsoft/sdl/no-insecure-url
@@ -117,6 +147,11 @@ add_task(async function test_security_warning() {
     BrowserTestUtils.isVisible(footer.securityElement),
     "Security warning for HTTP."
   );
+  Assert.ok(
+    footer.iconElement.hidden,
+    "Icon is deliberately hidden for insecure sites."
+  );
+  Assert.ok(!footer.iconElement.src, "Icon has no src for insecure sites.");
 
   info("Load a local site.");
   promiseLoaded = BrowserTestUtils.browserLoaded(tab2.linkedBrowser);
@@ -184,4 +219,34 @@ add_task(async function test_menu_close_tabs() {
   );
   await activateCommand(inactivePanel, "splitViewCmd_closeTabs");
   await promiseTabsClosed;
+});
+
+add_task(async function test_findbar_displayed_over_footer() {
+  const { tabs, splitView } = await setupSplitView();
+  const [tab1, tab2] = tabs;
+  await SimpleTest.promiseFocus(tab1.linkedBrowser);
+
+  info("Activate Find in Page within the second panel.");
+  const findbar = await gBrowser.getFindBar(tab2);
+  const promiseFindbarOpen = BrowserTestUtils.waitForEvent(
+    findbar,
+    "findbaropen"
+  );
+  findbar.open();
+  await promiseFindbarOpen;
+
+  const panel = document.getElementById(tab2.linkedPanel);
+  const footer = panel.querySelector("split-view-footer");
+  const footerRect = footer.getBoundingClientRect();
+  Assert.ok(
+    !footer.contains(
+      document.elementFromPoint(
+        footerRect.left + footerRect.width / 2,
+        footerRect.top + footerRect.height / 2
+      )
+    ),
+    "Findbar is displayed over split view footer."
+  );
+
+  splitView.close();
 });

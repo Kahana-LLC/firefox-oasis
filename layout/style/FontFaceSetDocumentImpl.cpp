@@ -20,7 +20,6 @@
 #include "nsDOMNavigationTiming.h"
 #include "nsFontFaceLoader.h"
 #include "nsIDocShell.h"
-#include "nsINetworkPredictor.h"
 #include "nsISupportsPriority.h"
 #include "nsIWebNavigation.h"
 #include "nsPresContext.h"
@@ -319,9 +318,6 @@ nsresult FontFaceSetDocumentImpl::StartLoad(gfxUserFontEntry* aUserFontEntry,
     mLoaders.PutEntry(fontLoader);
   }
 
-  net::PredictorLearn(src.mURI->get(), mDocument->GetDocumentURI(),
-                      nsINetworkPredictor::LEARN_LOAD_SUBRESOURCE, loadGroup);
-
   if (NS_SUCCEEDED(rv)) {
     fontLoader->StartedLoading(streamLoader);
     // let the font entry remember the loader, in case we need to cancel it
@@ -411,6 +407,12 @@ bool FontFaceSetDocumentImpl::UpdateRules(
   // re-download resources in the (common) case where at least some of the
   // same rules are still present.
   nsTArray<FontFaceRecord> oldRecords = std::move(mRuleFaces);
+
+  // We reverse the oldRecords array because we will most likely be using the
+  // entries in the order they were originally added, and constantly removing
+  // the first element is inefficient if the array is large; it's better if
+  // we're most often removing elements from the end.
+  oldRecords.Reverse();
 
   // Remove faces from the font family records; we need to re-insert them
   // because we might end up with faces in a different order even if they're
@@ -524,8 +526,9 @@ bool FontFaceSetDocumentImpl::InsertRuleFontFace(
   // This is a rule backed FontFace.  First, we check in aOldRecords; if
   // the FontFace for the rule exists there, just move it to the new record
   // list, and put the entry into the appropriate family.
-  for (size_t i = 0; i < aOldRecords.Length(); ++i) {
-    FontFaceRecord& rec = aOldRecords[i];
+  // Note that aOldRecords was reversed, so we search it from the end.
+  for (size_t i = aOldRecords.Length(); i > 0;) {
+    FontFaceRecord& rec = aOldRecords[--i];
 
     const bool matches =
         rec.mOrigin == Some(aSheetType) &&
@@ -572,9 +575,11 @@ bool FontFaceSetDocumentImpl::InsertRuleFontFace(
       mOwner->InsertRuleFontFace(owner, aSheetType);
     }
 
-    // note the set has been modified if an old rule was skipped to find
-    // this one - something has been dropped, or ordering changed
-    return i > 0;
+    // Return that the set has been modified if an old rule was skipped to find
+    // this one: something has been dropped, or ordering changed.
+    // Note that the record at index i has been removed, so Length() is now the
+    // original last-element index.
+    return i < aOldRecords.Length();
   }
 
   RefPtr<FontFace> fontFace =

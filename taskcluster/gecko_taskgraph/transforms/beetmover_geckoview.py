@@ -6,9 +6,8 @@ Transform the beetmover task into an actual task description.
 """
 
 
-from copy import deepcopy
-
 from taskgraph.transforms.base import TransformSequence
+from taskgraph.util.copy import deepcopy
 from taskgraph.util.dependencies import get_primary_dependency
 from taskgraph.util.schema import Schema, optionally_keyed_by, resolve_keyed_by
 from voluptuous import Optional, Required
@@ -78,7 +77,7 @@ def resolve_keys(config, jobs):
             job,
             "bucket-scope",
             item_name=job["label"],
-            **{"release-level": release_level(config.params["project"])},
+            **{"release-level": release_level(config.params)},
         )
         yield job
 

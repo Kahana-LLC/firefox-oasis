@@ -89,8 +89,6 @@ support-files = [
 
 ["test_bug1161721.html"]
 
-["test_bug1170911.html"]
-
 ["test_bug1208217.html"]
 
 ["test_bug1313753.html"]
@@ -199,7 +197,7 @@ skip-if = [
 skip-if = [
   "os == 'android'", # Window sizes cannot be controled on android; Windows
   "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && display == 'wayland'", # Decorations arrive async and mess up the resize intermittently on automation.
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt", # Bug 1604152
+  "os == 'linux' && os_version == '24.04' && arch == 'x86_64'", # Bug 1604152, 1974454
 ]
 
 ["test_resource_timing.html"]
