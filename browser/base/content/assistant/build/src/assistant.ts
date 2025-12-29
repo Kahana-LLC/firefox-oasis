@@ -21,6 +21,7 @@ import {
   NewWindowCommand,
   OrganizeWindowsCommand,
   ShowURLCommand,
+  RemoveTabFromHubCommand,
   Command,
   CmdResult,
 } from "./commands";
@@ -294,6 +295,7 @@ export async function runAssistantStream(
     new NewWindowCommand(),
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
+    new RemoveTabFromHubCommand(),
   ];
   const graph = await buildGraph(commands);
   
