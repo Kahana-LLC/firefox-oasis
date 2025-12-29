@@ -1,5 +1,6 @@
 import { hubs, CreateHubOpts, DeleteHubOpts } from "./hubs";
 import { localMemory } from "./services/localMemory";
+import { subscriptionService } from "./services/subscription";
 
 export type CmdResult = { message: string };
 
@@ -123,11 +124,37 @@ export class OpenTabCommand implements Command {
   description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
   async execute(args: any): Promise<CmdResult> {
     const { topWin } = getChrome();
-    const url = args?.url;
+    let url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
+
+    // If it doesn't look like a URL (no dots, or has spaces), treat it as a "Smart Open" (I'm Feeling Lucky)
+    // This allows "Open youtube music" to redirect to "music.youtube.com"
+    const isUrlLike = url.includes(".") && !url.includes(" ");
+    
+    if (!isUrlLike) {
+        // Use DuckDuckGo "I'm Feeling Ducky" (backslash) to redirect to the first result
+        // Google's btnI often shows a "Redirect Notice" page. DDG is smoother.
+        url = "https://duckduckgo.com/?q=\\" + encodeURIComponent(url);
+    } else {
+        // It looks like a URL (e.g. "google.com"), use Firefox's fixup (adds https://, etc.)
+        try {
+            const Services = (topWin as any).Services || (window as any).Services;
+            if (Services?.uriFixup) {
+                const flags = 2 | 4; // ALLOW_KEYWORD_LOOKUP | FIX_SCHEME_TYPOS
+                const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+                if (fixed?.preferredURI) {
+                    url = fixed.preferredURI.spec;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to fixup URI:", e);
+        }
+    }
+
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened ${url}` };
+    const display = !isUrlLike ? args?.url : url;
+    return { message: `Opened ${display}` };
   }
 }
 
@@ -416,5 +443,26 @@ export class SearchMemoryCommand implements Command {
     }).join("\n\n");
     
     return { message: `Found ${results.length} matches:\n${out}` };
+  }
+}
+
+export class ShowSubscriptionCommand implements Command {
+  commandName = "show_subscription";
+  description = "Show the current subscription plan and usage options.";
+  async execute(_args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+    
+    // Check usage simply to report it? Or just open the page?
+    // Let's get stats first to show in the message before redirecting
+    const stats = await subscriptionService.checkAvailability();
+    const url = subscriptionService.getSubscriptionUrl();
+    
+    // Open the pricing/billing page
+    topWin.openTrustedLinkIn(url, "tab");
+
+    return { 
+        message: `Opened subscription page.\nUsage this month: ${stats.totalUnits} units / ${stats.limit} limit.` 
+    };
   }
 }
