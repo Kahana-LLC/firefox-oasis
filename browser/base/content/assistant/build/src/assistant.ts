@@ -337,23 +337,21 @@ export async function runAssistantStream(
     { recursionLimit: 16 }
   );
 
-  let lastFull = "";
+  let combinedSessionString = "";
+  let isSaved = false;
   let stepCount = 0;
+
   for await (const state of stream as any) {
     stepCount++;
     console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
     
     if ("__end__" in state) {
-      // Save conversation turn automatically
-      console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
-      if (lastFull) {
-        console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-        pushCurrentTurn(prompt, lastFull);
-        
-        // Track Usage on successful completion (fire and forget)
+      console.log(`🔚 Stream ended. combined length: ${combinedSessionString.length}`);
+      if (combinedSessionString && !isSaved) {
+        console.log(`✅ Saving turn to session: "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+        pushCurrentTurn(prompt, combinedSessionString);
         subscriptionService.trackUsage(inputType);
-      } else {
-        console.log(`⚠️ NOT saving turn - lastFull is empty!`);
+        isSaved = true;
       }
       break;
     }
@@ -366,23 +364,25 @@ export async function runAssistantStream(
         text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
       else if (lastMsg?.content != null) text = String(lastMsg.content);
 
-      if (text && text !== lastFull) {
-        const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
-        onChunk(delta);
-        lastFull = text;
-        console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
+      if (text) {
+          // Since our nodes return complete messages (not streaming tokens), 
+          // we can just append and emit.
+          // Note: If we had token streaming, we'd need per-message buffering.
+          // For now, assume atomic messages.
+          const newContent = text + "\n";
+          onChunk(newContent);
+          combinedSessionString += newContent;
       }
     }
   }
-  console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
+  console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}`);
 
   // SAFETY: Always save the turn even if we didn't hit __end__
-  if (lastFull) {
-    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-    pushCurrentTurn(prompt, lastFull);
-    // Ensure usage is tracked even if we missed the __end__ event
+  if (combinedSessionString && !isSaved) {
+    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+    pushCurrentTurn(prompt, combinedSessionString);
     subscriptionService.trackUsage(inputType);
   }
   
-  return lastFull || "(no output)";
+  return combinedSessionString || "(no output)";
 }

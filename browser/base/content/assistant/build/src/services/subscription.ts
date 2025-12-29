@@ -1,4 +1,5 @@
 import { supabaseAuth } from "./supabase";
+import { localMemory } from "./localMemory";
 
 // Plan Limits (Units per month)
 // Plan A ($20): 1500 units
@@ -60,6 +61,9 @@ export class SubscriptionService {
         // Optimistically update cache
         this.cachedUsage += units;
         console.log(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
+        
+        // Fail-safe: Save to local memory immediately so we don't lose it if DB fails
+        localMemory.saveUsage(user.id, this.cachedUsage).catch(e => console.error("Failed to save local usage:", e));
 
         // Async fire-and-forget insert to not block UI
         const supabase = (supabaseAuth as any).supabase;
@@ -111,44 +115,32 @@ export class SubscriptionService {
 
     private async refreshUsageData(userId: string): Promise<void> {
         const supabase = (supabaseAuth as any).supabase;
+        console.log("refreshUsageData: syncing usage...");
 
         // 1. Get User Plan Limit
-        // Query user_plans table to find active plan, join with plans table
-        // For mvp speed, we might assume a default or fetch directly.
-        // Let's try to fetch user_plans first.
-        
         let limit = DEFAULT_LIMIT;
 
-        const { data: planData, error: planError } = await supabase
+        const { data: planData } = await supabase
             .from('user_plans')
             .select(`
                 plan_id,
-                plans (
-                    name,
-                    llm_call_limit
-                )
+                plans ( name, llm_call_limit )
             `)
             .eq('user_id', userId)
             .eq('is_active', true)
             .single();
 
         if (planData && planData.plans) {
-             // Map plan name to our constants if llm_call_limit is null, 
-             // or use the DB limit if present
              const dbLimit = planData.plans.llm_call_limit;
              const planName = (planData.plans.name || "").toLowerCase();
-             
-             if (dbLimit) {
-                 limit = dbLimit;
-             } else if (PLAN_LIMITS[planName]) {
-                 limit = PLAN_LIMITS[planName];
-             }
+             if (dbLimit) limit = dbLimit;
+             else if (PLAN_LIMITS[planName]) limit = PLAN_LIMITS[planName];
         }
 
         this.cachedLimit = limit;
 
-        // 2. Get Current Month Usage
-        // Sum usage_count from llm_usage for the current month
+        // 2. Get Current Month Usage from DB
+        let dbTotal = 0;
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -160,9 +152,19 @@ export class SubscriptionService {
             .gte('timestamp', startOfMonth.toISOString());
 
         if (usageData) {
-            const total = usageData.reduce((acc: number, row: any) => acc + (row.usage_count || 0), 0);
-            this.cachedUsage = total;
+            dbTotal = usageData.reduce((acc: number, row: any) => acc + (row.usage_count || 0), 0);
         }
+        
+        if (usageError) {
+             console.warn("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
+        }
+
+        // 3. Get Local Usage (Fail-safe)
+        const localTotal = await localMemory.getUsage(userId);
+
+        // 4. Reconcile: Take the MAX (never go backwards)
+        this.cachedUsage = Math.max(dbTotal, localTotal);
+        console.log(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
 
         this.lastFetchTime = Date.now();
     }
