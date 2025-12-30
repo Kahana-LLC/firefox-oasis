@@ -119,6 +119,13 @@ const SANITIZE_ON_SHUTDOWN_PREFS_ONLY_V2 = [
   "privacy.clearOnShutdown_v2.siteSettings",
 ];
 
+const SECURITY_PRIVACY_STATUS_CARD_ENABLED =
+  Services.prefs.getBoolPref("browser.settings-redesign.enabled", false) ||
+  Services.prefs.getBoolPref(
+    "browser.settings-redesign.securityPrivacyStatus.enabled",
+    false
+  );
+
 Preferences.addAll([
   // Content blocking / Tracking Protection
   { id: "privacy.trackingprotection.enabled", type: "bool" },
@@ -287,7 +294,7 @@ Preferences.addAll([
   { id: "media.setsinkid.enabled", type: "bool" },
 ]);
 
-if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
+if (SECURITY_PRIVACY_STATUS_CARD_ENABLED) {
   Preferences.addAll([
     // Security and Privacy Warnings
     { id: "privacy.ui.status_card.testing.show_issue", type: "bool" },
@@ -352,7 +359,7 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
       type: "bool",
     },
     {
-      id: "browser.preferences.config_warning.warningPrivelegedConstraint.dismissed",
+      id: "browser.preferences.config_warning.warningPrivilegedConstraint.dismissed",
       type: "bool",
     },
     {
@@ -449,10 +456,6 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
     },
     {
       id: "security.fileuri.strict_origin_policy",
-      type: "bool",
-    },
-    {
-      id: "security.disallow_privilegedabout_remote_script_loads",
       type: "bool",
     },
     {
@@ -883,7 +886,7 @@ class WarningSettingConfig {
   }
 }
 
-if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
+if (SECURITY_PRIVACY_STATUS_CARD_ENABLED) {
   Preferences.addSetting(
     new WarningSettingConfig(
       "warningTest",
@@ -1156,9 +1159,8 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
 
   Preferences.addSetting(
     new WarningSettingConfig(
-      "warningPrivelegedConstraint",
+      "warningPrivilegedConstraint",
       {
-        rsl: "security.disallow_privilegedabout_remote_script_loads",
         shfa: "dom.security.skip_html_fragment_assertion",
         xhtmlcsp: "security.browser_xhtml_csp.enabled",
         allowUDPEE: "security.allow_unsafe_dangerous_privileged_evil_eval",
@@ -1171,7 +1173,6 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
           "dom.security.skip_remote_script_assertion_in_system_priv_context",
       },
       ({
-        rsl,
         shfa,
         xhtmlcsp,
         allowUDPEE,
@@ -1181,7 +1182,6 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
         allowParentUnrestrictedJSLoads,
         skipRemoteScriptAssertionInSystem,
       }) =>
-        (!rsl.value && !rsl.locked) ||
         (!xhtmlcsp.value && !xhtmlcsp.locked) ||
         (shfa.value && !shfa.locked) ||
         (allowUDPEE.value && !allowUDPEE.locked) ||
@@ -1267,149 +1267,157 @@ if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
       true
     )
   );
-}
 
-/** @type {SettingControlConfig[]} */
-const SECURITY_WARNINGS = [
-  {
-    l10nId: "security-privacy-issue-warning-test",
-    id: "warningTest",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-fingerprinters",
-    id: "warningAllowFingerprinters",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-third-party-cookies",
-    id: "warningThirdPartyCookies",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-password-manager",
-    id: "warningPasswordManager",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-popup-blocker",
-    id: "warningPopupBlocker",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-extension-install",
-    id: "warningExtensionInstall",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-safe-browsing",
-    id: "warningSafeBrowsing",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-doh",
-    id: "warningDoH",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-ech",
-    id: "warningECH",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-ct",
-    id: "warningCT",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-crlite",
-    id: "warningCRLite",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-certificate-pinning",
-    id: "warningCertificatePinning",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-tlsmin",
-    id: "warningTLSMin",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-tlsmax",
-    id: "warningTLSMax",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-proxy-autodetection",
-    id: "warningProxyAutodetection",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-content-resource-uri",
-    id: "warningContentResourceURI",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-worker-mime",
-    id: "warningWorkerMIME",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-top-level-data-uri",
-    id: "warningTopLevelDataURI",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-active-mixed-content",
-    id: "warningActiveMixedContent",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-inner-html-ltgt",
-    id: "warningInnerHTMLltgt",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-file-uri-origin",
-    id: "warningFileURIOrigin",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-priveleged-constraint",
-    id: "warningPrivelegedConstraint",
-  },
-  {
-    l10nId: "security-privacy-issue-warning-process-sandbox",
-    id: "warningProcessSandbox",
-  },
-];
+  /** @type {SettingControlConfig[]} */
+  const SECURITY_WARNINGS = [
+    {
+      l10nId: "security-privacy-issue-warning-test",
+      id: "warningTest",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-fingerprinters",
+      id: "warningAllowFingerprinters",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-third-party-cookies",
+      id: "warningThirdPartyCookies",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-password-manager",
+      id: "warningPasswordManager",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-popup-blocker",
+      id: "warningPopupBlocker",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-extension-install",
+      id: "warningExtensionInstall",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-safe-browsing",
+      id: "warningSafeBrowsing",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-doh",
+      id: "warningDoH",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-ech",
+      id: "warningECH",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-ct",
+      id: "warningCT",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-crlite",
+      id: "warningCRLite",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-certificate-pinning",
+      id: "warningCertificatePinning",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-tlsmin",
+      id: "warningTLSMin",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-tlsmax",
+      id: "warningTLSMax",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-proxy-autodetection",
+      id: "warningProxyAutodetection",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-content-resource-uri",
+      id: "warningContentResourceURI",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-worker-mime",
+      id: "warningWorkerMIME",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-top-level-data-uri",
+      id: "warningTopLevelDataURI",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-active-mixed-content",
+      id: "warningActiveMixedContent",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-inner-html-ltgt",
+      id: "warningInnerHTMLltgt",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-file-uri-origin",
+      id: "warningFileURIOrigin",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-privileged-constraint",
+      id: "warningPrivilegedConstraint",
+    },
+    {
+      l10nId: "security-privacy-issue-warning-process-sandbox",
+      id: "warningProcessSandbox",
+    },
+  ];
 
-Preferences.addSetting(
-  /** @type {{ makeSecurityWarningItems: () => SettingControlConfig[] } & SettingConfig} */ ({
-    id: "securityWarningsGroup",
-    makeSecurityWarningItems() {
-      return SECURITY_WARNINGS.map(({ id, l10nId }) => ({
-        id,
-        l10nId,
-        control: "moz-box-item",
-        options: [
-          {
-            control: "moz-button",
-            l10nId: "issue-card-reset-button",
-            controlAttrs: { slot: "actions", size: "small", id: "reset" },
-          },
-          {
-            control: "moz-button",
-            l10nId: "issue-card-dismiss-button",
-            controlAttrs: {
-              slot: "actions",
-              size: "small",
-              iconsrc: "chrome://global/skin/icons/close.svg",
-              id: "dismiss",
+  Preferences.addSetting(
+    /** @type {{ makeSecurityWarningItems: () => SettingControlConfig[] } & SettingConfig} */ ({
+      id: "securityWarningsGroup",
+      makeSecurityWarningItems() {
+        return SECURITY_WARNINGS.map(({ id, l10nId }) => ({
+          id,
+          l10nId,
+          control: "moz-box-item",
+          options: [
+            {
+              control: "moz-button",
+              l10nId: "issue-card-reset-button",
+              controlAttrs: { slot: "actions", size: "small", id: "reset" },
             },
-          },
-        ],
-      }));
-    },
-    getControlConfig(config) {
-      if (!config.items) {
-        return { ...config, items: this.makeSecurityWarningItems() };
-      }
-      return config;
-    },
-  })
-);
+            {
+              control: "moz-button",
+              l10nId: "issue-card-dismiss-button",
+              controlAttrs: {
+                slot: "actions",
+                size: "small",
+                iconsrc: "chrome://global/skin/icons/close.svg",
+                id: "dismiss",
+              },
+            },
+          ],
+        }));
+      },
+      getControlConfig(config) {
+        if (!config.items) {
+          return { ...config, items: this.makeSecurityWarningItems() };
+        }
+        return config;
+      },
+    })
+  );
 
-Preferences.addSetting({
-  id: "privacyCard",
-  deps: [
-    "appUpdateStatus",
-    "trackerCount",
-    "etpStrictEnabled",
-    ...SECURITY_WARNINGS.map(warning => warning.id),
-  ],
-});
+  Preferences.addSetting({
+    id: "privacyCard",
+    deps: [
+      "appUpdateStatus",
+      "trackerCount",
+      "etpStrictEnabled",
+      ...SECURITY_WARNINGS.map(warning => warning.id),
+    ],
+  });
+
+  Preferences.addSetting({
+    id: "warningCard",
+    deps: SECURITY_WARNINGS.map(warning => warning.id),
+    visible: deps => {
+      return Object.values(deps).some(depSetting => depSetting.visible);
+    },
+  });
+}
 
 Preferences.addSetting({
   id: "ipProtectionVisible",
@@ -3719,9 +3727,8 @@ var gPrivacyPane = {
    */
   init() {
     initSettingGroup("nonTechnicalPrivacy");
-    if (Services.prefs.getBoolPref("privacy.ui.status_card", false)) {
-      initSettingGroup("securityPrivacyStatus");
-    }
+    initSettingGroup("securityPrivacyStatus");
+    initSettingGroup("securityPrivacyWarnings");
     initSettingGroup("httpsOnly");
     initSettingGroup("browsingProtection");
     initSettingGroup("cookiesAndSiteData");

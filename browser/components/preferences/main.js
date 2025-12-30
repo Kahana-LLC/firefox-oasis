@@ -2704,17 +2704,33 @@ SettingGroupManager.registerGroups({
     ],
   },
   securityPrivacyStatus: {
+    inProgress: true,
     items: [
       {
         id: "privacyCard",
         control: "security-privacy-card",
       },
+    ],
+  },
+  securityPrivacyWarnings: {
+    inProgress: true,
+    items: [
       {
-        id: "securityWarningsGroup",
-        control: "moz-box-group",
+        id: "warningCard",
+        l10nId: "security-privacy-issue-card",
+        control: "moz-card",
         controlAttrs: {
-          type: "list",
+          type: "accordion",
         },
+        items: [
+          {
+            id: "securityWarningsGroup",
+            control: "moz-box-group",
+            controlAttrs: {
+              type: "list",
+            },
+          },
+        ],
       },
     ],
   },
@@ -2943,7 +2959,7 @@ SettingGroupManager.registerGroups({
       },
       {
         id: "requireOSAuthForPasswords",
-        l10nId: "forms-os-reauth",
+        l10nId: "forms-os-reauth-2",
       },
       {
         id: "allowWindowSSO",
@@ -2969,7 +2985,7 @@ SettingGroupManager.registerGroups({
             items: [
               {
                 id: "usePrimaryPassword",
-                l10nId: "forms-primary-pw-use",
+                l10nId: "forms-primary-pw-use-2",
                 control: "moz-box-item",
                 supportPage: "primary-password-stored-logins",
               },
