@@ -22,9 +22,12 @@ import {
   OrganizeWindowsCommand,
   ShowURLCommand,
   SearchMemoryCommand,
+  RemoveTabFromHubCommand,
+  ShowSubscriptionCommand,
   Command,
   CmdResult,
 } from "./commands";
+import { subscriptionService } from "./services/subscription";
 
 // Expose Supabase auth for UI
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -66,7 +69,8 @@ const GraphState = Annotation.Root({
     default: () => [],
   }),
   next: Annotation<string>({
-    reducer: (x, y) => y ?? x ?? END,
+    // CHANGE: Overwrite previous value
+    reducer: (_, y) => y ?? END, 
     default: () => END,
   }),
   lastWorker: Annotation<string>({
@@ -78,7 +82,8 @@ const GraphState = Annotation.Root({
     default: () => 0,
   }),
   args: Annotation<Record<string, any>>({
-    reducer: (x, y) => (y ? { ...(x || {}), ...y } : x),
+    // CHANGE: Overwrite previous arguments
+    reducer: (_, y) => y ?? {}, 
     default: () => ({}),
   }),
 });
@@ -109,13 +114,14 @@ async function buildGraph(commands: Command[]) {
     // Node: run the command and emit a message that clearly identifies the tool's output.
     const node = async (state: typeof GraphState.State) => {
       const result: CmdResult = await command.execute(state.args);
-      const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
+      const content = `\n[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
-        // Clear state to prevent re-running the same tool
-        lastWorker: "",
+        lastWorker: command.commandName,
         repeatCount: 0,
-        args: {},
+        // ADD THESE TWO LINES:
+        next: "supervisor", 
+        args: {}, 
       };
     };
 
@@ -152,12 +158,12 @@ You have the following workers available:
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
-2.  **Extract Arguments:** When the user mentions tab numbers (e.g., "tab 2", "the first tab", "second one"), convert to { index: N } where N is 1-based.
-3.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
-4.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
-5.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
-6.  **Handle Failures:** If a tool returns "No matches found" or an error, DO NOT retry the same action. Choose "chat" to inform the user.
-7.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
+2.  **Break Down the Plan:** Read the USER's latest message. Break it down into a chronological list of necessary steps/commands.
+3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
+4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
+5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
+6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
+7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -170,6 +176,10 @@ You MUST respond with a JSON object that follows this schema:
 }
 \`\`\`
 
+**IMPORTANT**: 
+- If the user says "Open X and then Y", you MUST output the command for X first. Wait for the result. Then output the command for Y.
+- Do NOT output "FINISH" until both X and Y are done.
+
 **Examples**
 User: "Open a new tab to google.com"
 → { "next": "open_tab", "args": { "url": "google.com" } }
@@ -177,14 +187,9 @@ User: "Open a new tab to google.com"
 User: "Close tab 3"
 → { "next": "close_tab", "args": { "index": 3 } }
 
-User: "Close the second tab"
-→ { "next": "close_tab", "args": { "index": 2 } }
-
-User: "Split tab 1 and 2"
-→ { "next": "split_tabs", "args": { "indices": [1, 2] } }
-
-User: "Split tabs 1, 2, and 3"
-→ { "next": "split_tabs", "args": { "indices": [1, 2, 3] } }
+User: "Open google.com. Then open yahoo.com."
+→ First: { "next": "open_tab", "args": { "url": "google.com" } }
+→ (After output): { "next": "open_tab", "args": { "url": "yahoo.com" } }
 
 User: "List all tabs" then "close the first one"
 → First: { "next": "list_tabs", "args": {} }
@@ -226,28 +231,35 @@ Remember: You ARE stateful within this conversation. The history is right there 
   };
 
   const supervisorNode = async (s: typeof GraphState.State) => {
-    const options = [END, ...memberNames, "chat"];
+    const options = [END, ...memberNames, "chat", "FINISH"];
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
-
-    // Use only the messages from the current graph execution for routing decisions.
-    const messages = s.messages;
-    const out = await routeRemote(systemPrompt, toWire(messages), options);
+  
+    const out = await routeRemote(systemPrompt, toWire(s.messages), options);
     const nextTool = out?.next;
     const nextArgs = out?.args || {};
+  
+    // CHECK: If the tool just finished and the LLM tries to call it again, force to chat
+    const lastMsg = s.messages[s.messages.length - 1];
+    const isToolOutput = msgText(lastMsg).includes("[Tool Output for");
+    
+    console.log(`🕵️ Supervisor Check: lastWorker=${s.lastWorker}, nextTool=${nextTool}, isToolOutput=${isToolOutput}`);
 
-    // The supervisor can return "FINISH" to end the conversation.
-    if (nextTool === "FINISH") {
-      return { next: END };
+    if (isToolOutput && nextTool === s.lastWorker) {
+      console.log(`🛑 Stopping recursion: ${nextTool} repeated immediately after output.`);
+      return { next: "chat", args: {} };
     }
-
-    // If the supervisor selected a valid tool, use it.
+  
+    // Handle explicit completion
+    if (nextTool === "FINISH" || nextTool === END) {
+      return { next: END, args: {} };
+    }
+  
     if (nextTool && memberNames.includes(nextTool)) {
       return { next: nextTool, args: nextArgs };
     }
-
-    // Otherwise, fall back to chat. This handles conversational replies.
+  
     return { next: "chat", args: {} };
   };
 
@@ -270,13 +282,24 @@ Remember: You ARE stateful within this conversation. The history is right there 
 // Streaming variant used by the UI for live updates
 export async function runAssistantStream(
   prompt: string,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  inputType: 'text' | 'voice' = 'text' // Add inputType parameter
 ): Promise<string> {
-  const isAuthenticated = await supabaseAuth. isAuthenticated();
+  const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
     const msg = "Please sign in to use the assistant.";
     onChunk(msg);
     return msg;
+  }
+
+  // Check Subscription Limits
+  const stats = await subscriptionService.checkAvailability();
+  if (stats.isLimitReached) {
+      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
+      onChunk(msg);
+      // Open the subscription page automatically? Optional.
+      // subscriptionService.getSubscriptionUrl();
+      return msg;
   }
 
   const commands: Command[] = [
@@ -293,11 +316,13 @@ export async function runAssistantStream(
     new ListHubsCommand(),
     new RenameHubCommand(),
     new AddTabToHubCommand(),
+    new RemoveTabFromHubCommand(),
     new OpenHubCommand(),
     new NewWindowCommand(),
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
     new SearchMemoryCommand(),
+    new ShowSubscriptionCommand(),
   ];
   const graph = await buildGraph(commands);
   
@@ -312,20 +337,21 @@ export async function runAssistantStream(
     { recursionLimit: 16 }
   );
 
-  let lastFull = "";
+  let combinedSessionString = "";
+  let isSaved = false;
   let stepCount = 0;
+
   for await (const state of stream as any) {
     stepCount++;
     console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
     
     if ("__end__" in state) {
-      // Save conversation turn automatically
-      console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
-      if (lastFull) {
-        console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-        pushCurrentTurn(prompt, lastFull);
-      } else {
-        console.log(`⚠️ NOT saving turn - lastFull is empty!`);
+      console.log(`🔚 Stream ended. combined length: ${combinedSessionString.length}`);
+      if (combinedSessionString && !isSaved) {
+        console.log(`✅ Saving turn to session: "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+        pushCurrentTurn(prompt, combinedSessionString);
+        subscriptionService.trackUsage(inputType);
+        isSaved = true;
       }
       break;
     }
@@ -338,21 +364,25 @@ export async function runAssistantStream(
         text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
       else if (lastMsg?.content != null) text = String(lastMsg.content);
 
-      if (text && text !== lastFull) {
-        const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
-        onChunk(delta);
-        lastFull = text;
-        console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
+      if (text) {
+          // Since our nodes return complete messages (not streaming tokens), 
+          // we can just append and emit.
+          // Note: If we had token streaming, we'd need per-message buffering.
+          // For now, assume atomic messages.
+          const newContent = text + "\n";
+          onChunk(newContent);
+          combinedSessionString += newContent;
       }
     }
   }
-  console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
+  console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}`);
 
   // SAFETY: Always save the turn even if we didn't hit __end__
-  if (lastFull) {
-    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-    pushCurrentTurn(prompt, lastFull);
+  if (combinedSessionString && !isSaved) {
+    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+    pushCurrentTurn(prompt, combinedSessionString);
+    subscriptionService.trackUsage(inputType);
   }
   
-  return lastFull || "(no output)";
+  return combinedSessionString || "(no output)";
 }

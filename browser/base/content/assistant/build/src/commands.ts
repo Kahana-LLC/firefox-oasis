@@ -1,5 +1,6 @@
 import { hubs, CreateHubOpts, DeleteHubOpts } from "./hubs";
 import { localMemory } from "./services/localMemory";
+import { subscriptionService } from "./services/subscription";
 
 export type CmdResult = { message: string };
 
@@ -55,24 +56,31 @@ export class OrganizeWindowsCommand implements Command {
     const { topWin } = getChrome();
     if (!topWin) return { message: "Browser UI not available." };
 
-    // Access Services.jsm via ChromeUtils
-    const { ChromeUtils } = topWin;
-    if (!ChromeUtils) return { message: "ChromeUtils not available." };
-    const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+    // Access Services.jsm via global Services or ChromeUtils
+    const Services = (topWin as any).Services || (window as any).Services;
+    
+    if (!Services) {
+        return { message: "Services module not available." };
+    }
 
     const windowManager = Services.wm;
     const windows = windowManager.getEnumerator("navigator:browser");
     const browserWindows = [];
 
     while (windows.hasMoreElements()) {
-      browserWindows.push(windows.getNext());
+      const win = windows.getNext();
+      // Filter for visible, non-minimized windows if possible, or just all browser windows
+      if (!win.closed && win.document.documentElement.getAttribute("windowtype") === "navigator:browser") {
+          browserWindows.push(win);
+      }
     }
 
     if (browserWindows.length < 2) {
       return { message: "You need at least two windows to organize." };
     }
 
-    const screen = topWin.screen;
+    // Use the screen of the first window as the target screen
+    const screen = browserWindows[0].screen;
     const availWidth = screen.availWidth;
     const availHeight = screen.availHeight;
     const availLeft = screen.availLeft || 0;
@@ -82,12 +90,17 @@ export class OrganizeWindowsCommand implements Command {
 
     for (let i = 0; i < numWindows; i++) {
       const win = browserWindows[i];
+      // Ensure the window is restored (not minimized/maximized) before resizing
+      if (win.windowState !== 1) { // 1 is STATE_NORMAL
+          win.restore();
+      }
+      
       const xPos = availLeft + (windowWidth * i);
       win.resizeTo(windowWidth, availHeight);
       win.moveTo(xPos, availTop);
     }
 
-    return { message: `Organized ${numWindows} windows.` };
+    return { message: `Organized ${numWindows} windows side-by-side.` };
   }
 }
 
@@ -111,11 +124,37 @@ export class OpenTabCommand implements Command {
   description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
   async execute(args: any): Promise<CmdResult> {
     const { topWin } = getChrome();
-    const url = args?.url;
+    let url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
+
+    // If it doesn't look like a URL (no dots, or has spaces), treat it as a "Smart Open" (I'm Feeling Lucky)
+    // This allows "Open youtube music" to redirect to "music.youtube.com"
+    const isUrlLike = url.includes(".") && !url.includes(" ");
+    
+    if (!isUrlLike) {
+        // Use DuckDuckGo "I'm Feeling Ducky" (backslash) to redirect to the first result
+        // Google's btnI often shows a "Redirect Notice" page. DDG is smoother.
+        url = "https://duckduckgo.com/?q=\\" + encodeURIComponent(url);
+    } else {
+        // It looks like a URL (e.g. "google.com"), use Firefox's fixup (adds https://, etc.)
+        try {
+            const Services = (topWin as any).Services || (window as any).Services;
+            if (Services?.uriFixup) {
+                const flags = 2 | 4; // ALLOW_KEYWORD_LOOKUP | FIX_SCHEME_TYPOS
+                const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+                if (fixed?.preferredURI) {
+                    url = fixed.preferredURI.spec;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to fixup URI:", e);
+        }
+    }
+
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened ${url}` };
+    const display = !isUrlLike ? args?.url : url;
+    return { message: `Opened ${display}` };
   }
 }
 
@@ -190,7 +229,7 @@ export class CreateHubCommand implements Command {
     const name = args?.name || "";
     const include = args?.include || "none";
     const res = await hubs.create(name, { include });
-    return { message: `Created bookmark folder "${res.name}" (${res.count} items).` };
+    return { message: `Created hub "${res.name}" with ${res.count} items.` };
   }
 }
 
@@ -203,7 +242,7 @@ export class DeleteHubCommand implements Command {
     const closeTabs = args?.closeTabs || false;
     const res = await hubs.delete(name, { closeTabs });
     if (res.removed === 0) return { message: `No hub named "${name}".` };
-    return { message: `Deleted bookmark folder "${res.name}" (${res.removed} items${closeTabs ? "; tabs closed" : ""}).` };
+    return { message: `Deleted hub "${res.name}" (${res.removed} items removed).` };
   }
 }
 
@@ -213,7 +252,7 @@ export class ListHubsCommand implements Command {
   async execute(_args: any): Promise<CmdResult> {
     const items = await hubs.list();
     if (!items.length) return { message: "No bookmark folder hubs yet." };
-    return { message: items.map(h => `• ${h.name} (${h.count})`).join("\n") };
+    return { message: items.map(h => `- ${h.name} (${h.count})`).join("\n") };
   }
 }
 
@@ -225,18 +264,67 @@ export class RenameHubCommand implements Command {
     const to = args?.to;
     if (!from || !to) return { message: "Please provide old and new hub names." };
     const r = await hubs.rename(from, to);
-    return { message: r.ok ? `Renamed bookmark folder "${from}" → "${to}".` : `Could not rename "${from}". ${r.msg || ""}` };
+    return { message: r.ok ? `Renamed "${from}" to "${to}".` : `Rename failed: ${r.msg || "unknown error"}` };
   }
 }
 
 export class AddTabToHubCommand implements Command {
   commandName = "add_tab_to_hub";
-  description = "Add the current tab to a bookmark folder hub. Accepts arguments: { name: string }.";
+  description = "Add tabs to a bookmark folder hub. Accepts arguments: { name: string, query?: string } (query matches title/URL). If no query, adds current tab.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
-    if (!name) return { message: "Which hub should I add this tab to?" };
-    const r = await hubs.addCurrentTab(name);
-    return { message: r.ok ? `Added current tab to bookmark folder "${name}".` : "Failed to add tab." };
+    if (!name) return { message: "Which hub should I add tabs to?" };
+    
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI not available." };
+
+    const query = args?.query?.toLowerCase();
+    let tabsToAdd: any[] = [];
+
+    if (query) {
+      // Find all tabs matching the query
+      tabsToAdd = Array.from(gBrowser.tabs).filter((t: any) => {
+        const title = (t.label || "").toLowerCase();
+        const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+        return title.includes(query) || url.includes(query);
+      });
+      
+      if (tabsToAdd.length === 0) {
+        return { message: `No tabs found matching "${args.query}".` };
+      }
+    } else {
+      // Default to current tab
+      tabsToAdd = [gBrowser.selectedTab];
+    }
+
+    const r = await hubs.addTabs(name, tabsToAdd);
+    
+    if (!r.ok) return { message: `Failed to add tabs to "${name}".` };
+    
+    const count = tabsToAdd.length;
+    return { message: `Added ${count} tab(s) to hub "${name}".` };
+  }
+}
+
+export class RemoveTabFromHubCommand implements Command {
+  commandName = "remove_tab_from_hub";
+  description = "Remove a tab from a bookmark folder hub. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
+  async execute(args: any): Promise<CmdResult> {
+    const name = args?.name;
+    if (!name) return { message: "Which hub?" };
+    
+    let url = args?.url;
+    if (!url) {
+        const { gBrowser } = getChrome();
+        if (gBrowser) {
+            url = gBrowser.selectedTab?.linkedBrowser?.currentURI?.spec;
+        }
+    }
+    
+    if (!url) return { message: "Could not determine URL to remove." };
+
+    const r = await hubs.removeUrl(name, url);
+    return { message: r.ok ? `Removed URL from hub "${name}" and ungrouped any matching tabs.` : `Failed to remove URL from hub "${name}" (maybe not found).` };
   }
 }
 
@@ -248,7 +336,7 @@ export class OpenHubCommand implements Command {
     if (!name) return { message: "Which hub should I open?" };
     const where = args?.where || "tabs";
     const r = await hubs.openHub(name, where);
-    return { message: r.ok ? `Opened bookmark folder "${name}" in ${where}.` : `Failed to open "${name}".` };
+    return { message: r.ok ? `Opened hub "${name}" in ${where}.` : `Failed to open hub "${name}".` };
   }
 }
 
@@ -355,5 +443,26 @@ export class SearchMemoryCommand implements Command {
     }).join("\n\n");
     
     return { message: `Found ${results.length} matches:\n${out}` };
+  }
+}
+
+export class ShowSubscriptionCommand implements Command {
+  commandName = "show_subscription";
+  description = "Show the current subscription plan and usage options.";
+  async execute(_args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+    
+    // Check usage simply to report it? Or just open the page?
+    // Let's get stats first to show in the message before redirecting
+    const stats = await subscriptionService.checkAvailability();
+    const url = subscriptionService.getSubscriptionUrl();
+    
+    // Open the pricing/billing page
+    topWin.openTrustedLinkIn(url, "tab");
+
+    return { 
+        message: `Opened subscription page.\nUsage this month: ${stats.totalUnits} units / ${stats.limit} limit.` 
+    };
   }
 }

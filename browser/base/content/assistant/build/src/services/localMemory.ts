@@ -19,6 +19,10 @@ interface MemoryDB extends DBSchema {
     value: MemoryDoc;
     indexes: { "by-timestamp": number; "by-url": string };
   };
+  usage: {
+    key: string;
+    value: { userId: string; count: number; timestamp: number };
+  };
 }
 
 class LocalMemoryService {
@@ -27,14 +31,19 @@ class LocalMemoryService {
   private isIndexDirty: boolean = true;
 
   constructor() {
-    this.dbPromise = openDB<MemoryDB>("oasis-memory", 1, {
-      upgrade(db) {
-        const store = db.createObjectStore("documents", {
-          keyPath: "id",
-          autoIncrement: true,
-        });
-        store.createIndex("by-timestamp", "timestamp");
-        store.createIndex("by-url", "url", { unique: false });
+    this.dbPromise = openDB<MemoryDB>("oasis-memory", 2, {
+      upgrade(db, oldVersion, newVersion, transaction) {
+        if (oldVersion < 1) {
+            const store = db.createObjectStore("documents", {
+            keyPath: "id",
+            autoIncrement: true,
+            });
+            store.createIndex("by-timestamp", "timestamp");
+            store.createIndex("by-url", "url", { unique: false });
+        }
+        if (oldVersion < 2) {
+            db.createObjectStore("usage", { keyPath: "userId" });
+        }
       },
     });
 
@@ -157,6 +166,17 @@ class LocalMemoryService {
       score: r.score,
       metadata: r.metadata,
     }));
+  }
+  async getUsage(userId: string): Promise<number> {
+    const db = await this.dbPromise;
+    const record = await db.get("usage", userId);
+    return record?.count || 0;
+  }
+
+  async saveUsage(userId: string, count: number) {
+    const db = await this.dbPromise;
+    await db.put("usage", { userId, count, timestamp: Date.now() });
+    console.log(`[LocalMemory] Saved usage for ${userId}: ${count}`);
   }
 }
 
