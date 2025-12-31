@@ -2,6 +2,65 @@ import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js
 // Try to get Services from global scope or import it
 const Services = window.Services || ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
+const MIXPANEL_TOKEN = "4a23d4890cf107ac290b2d5e878e2561";
+let __oasisAnonId = null;
+function getDistinctId() {
+  try {
+    const key = "oasis_anon_distinct_id";
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const v = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random());
+    sessionStorage.setItem(key, v);
+    return v;
+  } catch (e) {
+    if (!__oasisAnonId) __oasisAnonId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random());
+    return __oasisAnonId;
+  }
+}
+function mpTrack(event, props = {}) {
+  const distinct = (window.oasisAuthState?.user?.id || window.oasisAuthState?.user?.email || getDistinctId());
+  const body = [{
+    event,
+    properties: {
+      token: MIXPANEL_TOKEN,
+      distinct_id: distinct,
+      authenticated: !!window.oasisAuthState?.isAuthenticated,
+      user_email: window.oasisAuthState?.user?.email || null,
+      user_id: window.oasisAuthState?.user?.id || null,
+      ...props
+    }
+  }];
+  try {
+    const data = btoa(JSON.stringify(body));
+    fetch("https://api.mixpanel.com/track?ip=1", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "data=" + encodeURIComponent(data),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
+function mpIdentify(user) {
+  const distinct = (user?.id || user?.email || getDistinctId());
+  const body = [{
+    $token: MIXPANEL_TOKEN,
+    $distinct_id: distinct,
+    $set: {
+      $email: user?.email || undefined
+    }
+  }];
+  try {
+    const data = btoa(JSON.stringify(body));
+    fetch("https://api.mixpanel.com/engage#profile-set", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "data=" + encodeURIComponent(data),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
+mpTrack("assistant_ui_loaded");
+
 // Import voice input service - it will be bundled
 let voiceInputService = null;
 try {
@@ -22,6 +81,8 @@ async function checkCurrentAuthStatus() {
     const restoredSession = await securelyLoadSession();
     if (restoredSession) {
         console.log('Session restored from secure storage', restoredSession.user?.email);
+
+        mpTrack("auth_check_restored", { email: restoredSession.user?.email || null });
         updateAuthUI(true, restoredSession.user);
         
         // Verify with Supabase (background check)
@@ -49,6 +110,7 @@ async function checkCurrentAuthStatus() {
             if (user && !error) {
                 console.log('User is already authenticated (Supabase):', user.email);
                 updateAuthUI(true, user);
+                mpTrack("auth_check_authenticated", { email: user.email });
                 
                 // Ensure session is saved
                 const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
@@ -58,13 +120,16 @@ async function checkCurrentAuthStatus() {
             } else {
                 console.log('User is not authenticated');
                 updateAuthUI(false);
+                mpTrack("auth_check_unauthenticated");
             }
         } catch (error) {
             console.error('Error checking auth status:', error);
             updateAuthUI(false);
+            mpTrack("auth_check_error", { message: error?.message || String(error) });
         } finally {
             initialAuthCheckComplete = true;
             console.log('Initial auth check completed');
+            mpTrack("auth_check_complete");
         }
     }
 }
@@ -117,8 +182,10 @@ async function securelySaveSession(session) {
         // Add new login
         await Services.logins.addLoginAsync(loginInfo);
         console.log("Session securely saved to Password Manager (overwrote existing: " + !!existingLogin + ")");
+        mpTrack("secure_session_saved", { had_existing: !!existingLogin });
     } catch (e) {
         console.error("Failed to save session securely:", e);
+        mpTrack("secure_session_save_error", { message: e?.message || String(e) });
     }
 }
 
@@ -140,18 +207,22 @@ async function securelyLoadSession() {
 
                 if (!error && data.session) {
                     console.log("Supabase session restored successfully");
+                    mpTrack("secure_session_restore_success");
                     return data.session;
                 } else {
                     console.warn("Failed to restore Supabase session:", error);
                     // If restore fails (e.g. expired), clear it
                     securelyClearSession();
+                    mpTrack("secure_session_restore_failed", { message: error?.message || String(error) });
                 }
             }
         } else {
             console.log("No secure session found");
+            mpTrack("secure_session_not_found");
         }
     } catch (e) {
         console.error("Failed to load secure session:", e);
+        mpTrack("secure_session_load_error", { message: e?.message || String(e) });
     }
     return null;
 }
@@ -165,22 +236,16 @@ function securelyClearSession() {
             }
         }
         console.log("Secure session cleared");
+        mpTrack("secure_session_cleared");
     } catch (e) {
         console.error("Failed to clear secure session:", e);
+        mpTrack("secure_session_clear_error", { message: e?.message || String(e) });
     }
 }
 
 const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
-const emptyState = document.getElementById("empty-state");
-
-// Function to hide empty state when messages are added
-function hideEmptyState() {
-  if (emptyState && !emptyState.classList.contains('hidden')) {
-    emptyState.classList.add('hidden');
-  }
-}
 
 // Replace send button with SVG icon button
 go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -279,6 +344,7 @@ feedbackBtn.addEventListener("mouseleave", () => {
   feedbackBtn.style.background = "transparent";
 });
 feedbackBtn.addEventListener("click", () => {
+  mpTrack("feedback_open");
   try {
     const feedbackUrl = "https://tally.so/r/3jkNN6";
     if (typeof openWebLinkIn === 'function') {
@@ -290,6 +356,7 @@ feedbackBtn.addEventListener("click", () => {
     }
   } catch (error) {
     console.log("Could not open feedback URL:", error);
+    mpTrack("feedback_open_error", { message: error?.message || String(error) });
   }
 });
 
@@ -329,6 +396,7 @@ const micButton = voiceBtn;
 micButton.title = "Click to start voice input";
 
 let isRecording = false;
+let micStartTs = 0;
 
 micButton.addEventListener("click", async () => {
   if (!isAuthenticated) {
@@ -365,16 +433,20 @@ micButton.addEventListener("click", async () => {
     
     try {
       const transcribedText = await voiceInputService.stopRecording();
+      mpTrack("mic_stop", { duration_ms: Date.now() - micStartTs });
       
       if (transcribedText && transcribedText.trim()) {
         q.value = transcribedText;
         append(`\n🎤 Transcribed: ${transcribedText}\n`);
+        mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
       } else {
         append("\n⚠️ No speech detected.\n");
+        mpTrack("mic_transcribe_empty");
       }
     } catch (error) {
       console.error("Transcription error:", error);
       append(`\n❌ Transcription failed: ${error.message}\n`);
+      mpTrack("mic_transcribe_error", { message: error.message });
     } finally {
       isRecording = false;
       micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -402,6 +474,8 @@ micButton.addEventListener("click", async () => {
     // Start recording - change to stop icon from Figma design
     try {
       await voiceInputService.startRecording();
+      mpTrack("mic_start");
+      micStartTs = Date.now();
       isRecording = true;
       micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="36" height="36" rx="18" fill="#f8faf2"/>
@@ -452,17 +526,20 @@ let currentUser = null;
 function setupCrossFrameAuthSync() {
     // Check if we're in an iframe (popup) or main window
     const isInIframe = window !== window.top;
+    try { mpTrack("crossframe_init", { is_iframe: isInIframe }); } catch (e) {}
     
     // Listen for messages from parent window (if in iframe) or iframe (if parent)
     window.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'OASIS_AUTH_STATE_CHANGE') {
             console.log('Received auth state change from parent:', event.data);
             const { authenticated, user } = event.data;
+            try { mpTrack("crossframe_auth_state_received", { authenticated: !!authenticated, email: user?.email || null }); } catch (e) {}
             updateAuthUI(authenticated, user);
         } else if (event.data && event.data.type === 'OASIS_COMMAND_RESULT') {
             // Handle command results from parent window (if in iframe)
             console.log('Received command result from parent:', event.data);
             const { result, error } = event.data;
+            try { mpTrack("crossframe_command_result_received", { has_error: !!error }); } catch (e) {}
             if (error) {
                 append(`\nError: ${error}\n`);
             } else if (result) {
@@ -481,6 +558,7 @@ function setupCrossFrameAuthSync() {
                     authenticated,
                     user
                 }, '*');
+                try { mpTrack("crossframe_auth_state_sent", { authenticated: !!authenticated, email: user?.email || null }); } catch (e) {}
                 console.log('Sent auth state change to iframe:', { authenticated, user: user?.email });
             }
         } catch (error) {
@@ -498,6 +576,7 @@ function setupCrossFrameAuthSync() {
                     result,
                     error
                 }, '*');
+                try { mpTrack("crossframe_command_result_sent", { has_error: !!error }); } catch (e) {}
                 console.log('Sent command result to iframe:', { result, error });
             }
         } catch (error) {
@@ -535,6 +614,7 @@ function waitForElement(selector, timeout = 1000) {
         
         setTimeout(() => {
             observer.disconnect();
+            try { mpTrack("element_wait_timeout", { selector, timeout }); } catch (e) {}
             reject(new Error(`Element ${selector} not found within ${timeout}ms`));
         }, timeout);
     });
@@ -563,13 +643,16 @@ function updateAuthUI(authenticated, user = null) {
             inputField.placeholder = 'Ask me anything...';
             inputField.disabled = false;
             console.log('Input field enabled for authenticated user');
+            mpTrack("input_state", { disabled: false });
         } else {
             inputField.placeholder = 'Please sign in first...';
             inputField.disabled = true;
             console.log('Input field disabled for unauthenticated user');
+            mpTrack("input_state", { disabled: true });
         }
     } else {
         console.warn('Input field not found');
+        mpTrack("input_not_found");
     }
     
     // Update send button
@@ -594,8 +677,10 @@ function updateAuthUI(authenticated, user = null) {
                 authBanner.style.display = "flex";
                 bannerUserEmail.textContent = user.email;
                 console.log('Auth banner shown for:', user.email);
+                mpTrack("banner_show", { email: user.email });
             } else {
                 authBanner.style.display = "none";
+                mpTrack("banner_hide");
             }
         }
     } catch (error) {
@@ -614,6 +699,12 @@ function updateAuthUI(authenticated, user = null) {
     if (typeof window.notifyIframeAuthChange === 'function') {
         window.notifyIframeAuthChange(authenticated, user);
     }
+    try {
+        if (authenticated && user) {
+            mpIdentify(user);
+        }
+    } catch (e) {}
+    mpTrack("auth_state_updated", { authenticated, email: user?.email || null });
 }
 
 // Custom protocol handler for kahana:// URLs
@@ -662,6 +753,7 @@ function checkForAuthCallback() {
             // Only process if it's recent (within last 30 seconds)
             if (parsed.timestamp && (Date.now() - parsed.timestamp) < 30000) {
                 console.log('Found recent auth callback data:', parsed);
+                mpTrack("oauth_callback_found");
                 handleAuthSuccess(parsed);
                 // Clear the data after processing
                 localStorage.removeItem('oasis_auth_callback');
@@ -676,6 +768,7 @@ function checkForAuthCallback() {
             // Silently ignore
         } else {
             console.error('Error checking auth callback:', e);
+            mpTrack("oauth_callback_check_error", { message: e?.message || String(e) });
         }
     }
 }
@@ -688,6 +781,7 @@ if (window.supabaseAuth) {
     console.log("Subscribing to Supabase auth state changes...");
     window.supabaseAuth.onAuthStateChange((authState) => {
         console.log("UI received auth state change:", authState.isAuthenticated);
+        mpTrack("auth_state_change", { authenticated: !!authState.isAuthenticated });
         
         if (authState.isAuthenticated && authState.session) {
             console.log("Auth state is authenticated, saving session...");
@@ -756,22 +850,26 @@ window.addEventListener('message', async (event) => {
     
     if (event.data && event.data.type === 'oauth-success') {
         console.log('Received OAuth success message:', event.data.data);
+        try { mpTrack("oauth_message_received"); } catch (e) {}
         
         // Use the new OAuth callback handler
         if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
             const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
             if (result.success) {
                 showAuthSuccess('Authentication successful! You are now signed in.');
+                try { mpTrack("oauth_success"); } catch (e) {}
                 // Refresh the auth state
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
             } else {
                 showAuthError(`Authentication failed: ${result.error}`);
+                try { mpTrack("oauth_failure", { error: result.error }); } catch (e) {}
             }
         } else {
             // Fallback to old method
             handleAuthSuccess(event.data.data);
+            try { mpTrack("oauth_success"); } catch (e) {}
         }
     }
 });
@@ -981,6 +1079,7 @@ minimizeBtn.addEventListener("click", (e) => {
   console.log("Minimize button clicked, parent:", window.parent !== window);
   try {
     window.parent.postMessage({ type: "oasisOverlayMinimize" }, "*");
+    mpTrack("overlay_minimize");
     console.log("Minimize message sent successfully");
     
     // Set debounce timeout
@@ -1040,12 +1139,14 @@ expandBtn.addEventListener("click", (e) => {
     if (isMaximized) {
       // Restore to normal size
       window.parent.postMessage({ type: "oasisOverlayExitFullscreen" }, "*");
+      mpTrack("overlay_restore");
       expandBtn.title = "Maximize";
       isMaximized = false;
       console.log("Restore message sent successfully");
     } else {
       // Maximize
       window.parent.postMessage({ type: "oasisOverlayExpand" }, "*");
+      mpTrack("overlay_expand");
       expandBtn.title = "Restore";
       isMaximized = true;
       console.log("Maximize message sent successfully");
@@ -1105,6 +1206,7 @@ closeBtn.addEventListener("click", (e) => {
   console.log("Close button clicked, parent:", window.parent !== window);
   try {
     window.parent.postMessage({ type: "oasisOverlayClose" }, "*");
+    mpTrack("overlay_close");
     console.log("Close message sent successfully");
     
     // Set debounce timeout
@@ -1167,6 +1269,8 @@ let accumulatedDeltaX = 0;
 let accumulatedDeltaY = 0;
 let rafId = null;
 
+const DRAG_DAMPING = 0.88; // Light damping for smooth, responsive feel
+
 function sendDragUpdate() {
   if (!isDragging) {
     rafId = null;
@@ -1190,11 +1294,14 @@ function sendDragUpdate() {
 authHeader.addEventListener("mousedown", (e) => {
   // Don't start drag when clicking buttons or menu
   if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
+    console.log("Skipping drag - clicked on button/menu");
     return;
   }
+  console.log("Starting drag");
   isDragging = true;
-  lastMouseX = e.screenX;
-  lastMouseY = e.screenY;
+  mpTrack("overlay_drag_start");
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
   accumulatedDeltaX = 0;
   accumulatedDeltaY = 0;
   authHeader.style.cursor = "grabbing";
@@ -1209,19 +1316,21 @@ authHeader.addEventListener("mousedown", (e) => {
 document.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   
-  const deltaX = e.screenX - lastMouseX;
-  const deltaY = e.screenY - lastMouseY;
+  const deltaX = (e.clientX - lastMouseX) * DRAG_DAMPING;
+  const deltaY = (e.clientY - lastMouseY) * DRAG_DAMPING;
   
   accumulatedDeltaX += deltaX;
   accumulatedDeltaY += deltaY;
   
-  lastMouseX = e.screenX;
-  lastMouseY = e.screenY;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
 });
 
 document.addEventListener("mouseup", () => {
   if (isDragging) {
+    console.log("Ending drag");
     isDragging = false;
+    mpTrack("overlay_drag_end", { deltaX: accumulatedDeltaX, deltaY: accumulatedDeltaY });
     authHeader.style.cursor = "grab";
     if (rafId) {
       cancelAnimationFrame(rafId);
@@ -1299,6 +1408,7 @@ bannerCloseBtn.addEventListener("click", () => {
   authBanner.style.display = "none";
   // Store preference to not show banner again in this session
   sessionStorage.setItem("hideBanner", "true");
+  mpTrack("banner_close");
 });
 authBanner.appendChild(bannerCloseBtn);
 
@@ -1372,9 +1482,9 @@ function updateDropdownMenu() {
             }}
         ];
         
-        authenticatedItems.forEach((item, index) => {
-            const menuItem = document.createElement("a");
-            menuItem.textContent = item.label;
+authenticatedItems.forEach((item, index) => {
+    const menuItem = document.createElement("a");
+    menuItem.textContent = item.label;
             menuItem.style.cssText = `
                 display: block;
                 padding: 10px 16px;
@@ -1391,9 +1501,12 @@ function updateDropdownMenu() {
             menuItem.addEventListener("mouseleave", () => {
                 menuItem.style.backgroundColor = "transparent";
             });
-            menuItem.addEventListener("click", item.action);
-            dropdownMenu.appendChild(menuItem);
-        });
+    menuItem.addEventListener("click", () => {
+        mpTrack("menu_click_" + item.label.toLowerCase().replace(/\s+/g, "_"));
+        item.action();
+    });
+    dropdownMenu.appendChild(menuItem);
+});
     } else {
         // Not authenticated menu items
         const unauthenticatedItems = [
@@ -1427,7 +1540,10 @@ function updateDropdownMenu() {
             menuItem.addEventListener("mouseleave", () => {
                 menuItem.style.backgroundColor = "transparent";
             });
-            menuItem.addEventListener("click", item.action);
+            menuItem.addEventListener("click", () => {
+                mpTrack("menu_click_" + item.label.toLowerCase().replace(/\s+/g, "_"));
+                item.action();
+            });
             dropdownMenu.appendChild(menuItem);
         });
     }
@@ -1441,12 +1557,14 @@ menuButton.addEventListener("click", (e) => {
     if (!isDisplayed) {
         updateDropdownMenu();
     }
+    mpTrack(isDisplayed ? "menu_close" : "menu_open");
 });
 
 // Hide dropdown if clicked outside
 document.addEventListener("click", (event) => {
     if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
         dropdownMenu.style.display = "none";
+        try { mpTrack("menu_close_outside"); } catch (e) {}
     }
 });
 
@@ -1470,8 +1588,6 @@ function append(text) {
 
 // Add user message bubble
 function addUserMessage(text) {
-  hideEmptyState(); // Hide empty state when adding first message
-  
   const messageContainer = document.createElement("div");
   messageContainer.className = "message-bubble message-user";
   
@@ -1486,8 +1602,6 @@ function addUserMessage(text) {
 
 // Add AI response bubble
 function addAIMessage(text) {
-  hideEmptyState(); // Hide empty state when adding first message
-  
   const messageContainer = document.createElement("div");
   messageContainer.className = "message-bubble message-ai";
   
@@ -1795,8 +1909,10 @@ function showLoginForm() {
         } else {
           append(`\n❌ Google sign in failed: ${errorMessage}\n`);
         }
+        mpTrack("login_google_failed", { error: errorMessage });
       } else {
         append(`\n🔄 Redirecting to Google for authentication...\n`);
+        mpTrack("login_google_redirect");
       }
     });
   });
@@ -1814,6 +1930,7 @@ function showLoginForm() {
     window.supabaseAuth.signInWithEmail(email, password).then(({ user, error }) => {
       if (error) {
         append(`\n❌ Sign in failed: ${window.supabaseAuth.handleAuthError(error)}\n`);
+        mpTrack("login_failed", { error: window.supabaseAuth.handleAuthError(error) });
       } else if (user) {
         isAuthenticated = true;
         currentUser = user;
@@ -1827,6 +1944,8 @@ function showLoginForm() {
 
         updateAuthUI(true, user);
         append(`\n🔓 Signed in as ${user.email}\n`);
+        mpIdentify(user);
+        mpTrack("login_success", { email: user.email });
       }
     });
   });
@@ -2018,8 +2137,10 @@ function showSignupForm() {
         } else {
           append(`\n❌ Google sign in failed: ${errorMessage}\n`);
         }
+        mpTrack("signup_google_failed", { error: errorMessage });
       } else {
         append(`\n🔄 Redirecting to Google for authentication...\n`);
+        mpTrack("signup_google_redirect");
       }
     });
   });
@@ -2039,14 +2160,18 @@ function showSignupForm() {
       if (error) {
         append(`\n❌ Sign up failed: ${window.supabaseAuth.handleAuthError(error)}\n`);
         append(`\nDebug info: ${JSON.stringify(error, null, 2)}\n`);
+        mpTrack("signup_failed", { error: window.supabaseAuth.handleAuthError(error) });
       } else if (user) {
         append(`\n✅ Account created! Please check your email to confirm your account.\n`);
         append(`\nUser ID: ${user.id}\n`);
+        mpTrack("signup_success", { email: user.email });
       } else {
         append(`\n⚠️ Sign up completed but no user returned. Check your email for confirmation.\n`);
+        mpTrack("signup_no_user");
       }
     }).catch((err) => {
       append(`\n❌ Sign up error: ${err.message}\n`);
+      mpTrack("signup_error", { message: err.message });
     });
   });
   
@@ -2060,11 +2185,13 @@ async function logout() {
   
   if (error) {
     append(`\n❌ Logout failed: ${error.message}\n`);
+    mpTrack("logout_failed", { message: error.message });
   } else {
     isAuthenticated = false;
     currentUser = null;
     updateAuthUI();
     append(`\n🔒 Logged out\n`);
+    mpTrack("logout_success");
   }
 }
 
@@ -2083,6 +2210,9 @@ async function send() {
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
+  mpTrack("assistant_request_start", { length: prompt.length });
+  const requestStartTs = Date.now();
+  let chunkCount = 0;
   
   // Add user message bubble
   addUserMessage(prompt);
@@ -2104,6 +2234,7 @@ async function send() {
     await runAssistantStream(prompt, (chunk) => {
       if (!stopped) {
         fullResponse += chunk;
+        chunkCount++;
         updateAIMessage(currentAIMessageElement, fullResponse);
         
         // Forward the chunk to iframe if it exists
@@ -2118,6 +2249,7 @@ async function send() {
       if (typeof window.notifyIframeCommandResult === 'function') {
         window.notifyIframeCommandResult("\n");
       }
+      mpTrack("assistant_request_complete", { length: fullResponse.length, chunk_count: chunkCount, duration_ms: Date.now() - requestStartTs });
     }
   } catch (e) {
     const errorMessage = e?.message?.includes('Authentication required') 
@@ -2130,6 +2262,7 @@ async function send() {
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
       window.notifyIframeCommandResult(null, errorMessage);
     }
+    mpTrack("assistant_request_error", { message: errorMessage, duration_ms: Date.now() - requestStartTs, chunk_count: chunkCount });
   } finally {
     setBusy(false);
     currentAIMessageElement = null;
@@ -2142,6 +2275,7 @@ go.addEventListener("click", () => {
     stopped = true;
     setBusy(false);
     append("\n(stopped)\n");
+    mpTrack("assistant_request_stopped");
   } else {
     // Send message
     send();
