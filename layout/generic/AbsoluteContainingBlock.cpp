@@ -110,6 +110,27 @@ nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
   return std::move(mPushedAbsoluteFrames);
 }
 
+void AbsoluteContainingBlock::DrainPushedChildList(
+    const nsIFrame* aDelegatingFrame) {
+  MOZ_ASSERT(aDelegatingFrame->GetAbsoluteContainingBlock() == this,
+             "aDelegatingFrame's absCB should be us!");
+
+  // Our pushed absolute child list might be non-empty if our next-in-flow
+  // hasn't reflowed yet. Move any child in that list that is a first-in-flow,
+  // or whose prev-in-flow is not in our absolute child list, into our absolute
+  // child list.
+  for (auto iter = mPushedAbsoluteFrames.begin();
+       iter != mPushedAbsoluteFrames.end();) {
+    // Advance the iterator first, so it's safe to move |child|.
+    nsIFrame* const child = *iter++;
+    if (!child->GetPrevInFlow() ||
+        child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
+      mPushedAbsoluteFrames.RemoveFrame(child);
+      mAbsoluteFrames.AppendFrame(nullptr, child);
+    }
+  }
+}
+
 bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     nsContainerFrame* aDelegatingFrame) {
   if (!aDelegatingFrame->PresContext()
@@ -133,23 +154,28 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     }
   }
 
-  // Our pushed absolute child list might be non-empty if our next-in-flow
-  // hasn't reflowed yet. Move any child in that list that is a first-in-flow,
-  // or whose prev-in-flow is not in our absolute child list, into our absolute
-  // child list.
-  nsIFrame* child = mPushedAbsoluteFrames.FirstChild();
-  while (child) {
-    nsIFrame* next = child->GetNextInFlow();
-    if (!child->GetPrevInFlow() ||
-        child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
-      mPushedAbsoluteFrames.RemoveFrame(child);
-      mAbsoluteFrames.AppendFrame(nullptr, child);
-    }
-    child = next;
-  }
+  DrainPushedChildList(aDelegatingFrame);
 
-  // TODO (Bug 1994346 or Bug 1997696): Consider stealing absolute frames from
-  // our next-in-flow's absolute child list.
+  // Steal absolute frame's first-in-flow from our next-in-flow's child lists.
+  for (const nsIFrame* nextInFlow = aDelegatingFrame->GetNextInFlow();
+       nextInFlow; nextInFlow = nextInFlow->GetNextInFlow()) {
+    AbsoluteContainingBlock* nextAbsCB =
+        nextInFlow->GetAbsoluteContainingBlock();
+    MOZ_ASSERT(nextAbsCB,
+               "If this delegating frame has an absCB, its next-in-flow must "
+               "have one, too!");
+
+    nextAbsCB->DrainPushedChildList(nextInFlow);
+
+    for (auto iter = nextAbsCB->GetChildList().begin();
+         iter != nextAbsCB->GetChildList().end();) {
+      nsIFrame* const child = *iter++;
+      if (!child->GetPrevInFlow()) {
+        nextAbsCB->StealFrame(child);
+        mAbsoluteFrames.AppendFrame(aDelegatingFrame, child);
+      }
+    }
+  }
 
   return HasAbsoluteFrames();
 }
@@ -348,7 +374,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                      aDelegatingFrame->GetNextInFlow()) {
             nextFrame->GetParent()->GetAbsoluteContainingBlock()->StealFrame(
                 nextFrame);
-            mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+            mPushedAbsoluteFrames.AppendFrame(aDelegatingFrame, nextFrame);
           }
           reflowStatus.MergeCompletionStatusFrom(kidStatus);
         } else if (nextFrame) {
@@ -1753,6 +1779,29 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       position -=
           aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift;
     }
+
+    if (isOverflowingCB &&
+        !aKidFrame->StylePosition()->mPositionArea.IsNone()) {
+      // The anchored element overflows the IMCB of its position-area. Would it
+      // have fit within the original CB? If so, shift it to stay within that.
+      nsSize size = aKidFrame->GetSize();
+      if (size.width <= aOriginalContainingBlockRect.width &&
+          size.height <= aOriginalContainingBlockRect.height) {
+        if (position.x < aOriginalContainingBlockRect.x) {
+          position.x = aOriginalContainingBlockRect.x;
+        } else if (position.x + size.width >
+                   aOriginalContainingBlockRect.XMost()) {
+          position.x = aOriginalContainingBlockRect.XMost() - size.width;
+        }
+        if (position.y < aOriginalContainingBlockRect.y) {
+          position.y = aOriginalContainingBlockRect.y;
+        } else if (position.y + size.height >
+                   aOriginalContainingBlockRect.YMost()) {
+          position.y = aOriginalContainingBlockRect.YMost() - size.height;
+        }
+      }
+    }
+
     const auto oldPosition = aKidFrame->GetPosition();
     if (position == oldPosition) {
       return;
