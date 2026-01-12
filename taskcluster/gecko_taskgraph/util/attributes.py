@@ -57,12 +57,10 @@ RELEASE_PROMOTION_PROJECTS = {
     "try-comm-central",
 } | RELEASE_PROJECTS
 
-TEMPORARY_PROJECTS = set(
-    {
-        # When using a "Disposable Project Branch" you can specify your branch here. e.g.:
-        "oak",
-    }
-)
+TEMPORARY_PROJECTS = set({
+    # When using a "Disposable Project Branch" you can specify your branch here. e.g.:
+    "oak",
+})
 
 TRY_PROJECTS = {
     "staging-firefox",  # https://github.com/mozilla-releng/staging-firefox
@@ -167,7 +165,7 @@ def release_level(params):
             return "production"
 
         m = re.match(r"refs/heads/(\S+)$", params["head_ref"])
-        if m.group(1) in branches:
+        if m is not None and m.group(1) in branches:
             return "production"
 
     return "staging"

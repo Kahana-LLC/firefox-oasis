@@ -286,8 +286,13 @@
         e.currentTarget.tagName === "browser"
           ? e.currentTarget
           : e.currentTarget.querySelector("browser");
+      let elToFocus = null;
       switch (e.type) {
         case "click":
+          if (e.target.tagName !== "browser") {
+            elToFocus = e.target;
+          }
+        // falls through
         case "focus": {
           const tab = gBrowser.getTabForBrowser(browser);
           const tabstrip = this.tabbox.tabs;
@@ -298,9 +303,11 @@
           gBrowser.appendStatusPanel(browser);
           break;
         case "mouseout":
+          StatusPanel.panel.setAttribute("inactive", true);
           gBrowser.appendStatusPanel();
           break;
       }
+      elToFocus?.focus();
     }
 
     get tabbox() {

@@ -7,11 +7,11 @@ do_get_profile();
 const {
   NewTabStarterGenerator,
   trimConversation,
-  addInsightsToPrompt,
+  addMemoriesToPrompt,
   cleanInferenceOutput,
   generateConversationStartersSidebar,
   generateFollowupPrompts,
-  InsightsGetterForSuggestionPrompts,
+  MemoriesGetterForSuggestionPrompts,
 } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs"
 );
@@ -19,11 +19,11 @@ const {
 const { openAIEngine } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
 );
-const { InsightsManager } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/InsightsManager.sys.mjs"
+const { MemoriesManager } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/memories/MemoriesManager.sys.mjs"
 );
 const { MESSAGE_ROLE } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/ui/modules/ChatStore.sys.mjs"
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatConstants.sys.mjs"
 );
 const { sinon } = ChromeUtils.importESModule(
   "resource://testing-common/Sinon.sys.mjs"
@@ -41,6 +41,18 @@ const PREF_PRIVATE_BROWSING = "browser.privatebrowsing.autostart";
 const API_KEY = "test-api-key";
 const ENDPOINT = "https://api.test-endpoint.com/v1";
 const MODEL = "test-model";
+
+async function loadRemoteSettingsSnapshot() {
+  const file = do_get_file("ai-window-prompts-remote-settings-snapshot.json");
+  const data = await IOUtils.readUTF8(file.path);
+  return JSON.parse(data);
+}
+
+let REAL_REMOTE_SETTINGS_SNAPSHOT;
+
+add_setup(async function () {
+  REAL_REMOTE_SETTINGS_SNAPSHOT = await loadRemoteSettingsSnapshot();
+});
 
 /**
  * Cleans up preferences after testing
@@ -166,25 +178,30 @@ add_task(async function test_trimConversation() {
 });
 
 /**
- * Test for addInsightsToPrompt function when there are insights
+ * Test for addMemoriesToPrompt function when there are memories
  */
-add_task(async function test_addInsightsToPrompt_have_insights() {
+add_task(async function test_addMemoriesToPrompt_have_memories() {
   const sb = sinon.createSandbox();
   try {
     const basePrompt = "Base prompt content.";
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
-    const promptWithInsights = await addInsightsToPrompt(basePrompt);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
+    const conversationMemoriesPrompt = "Memories block:\n{memories}";
+    const promptWithMemories = await addMemoriesToPrompt(
+      basePrompt,
+      conversationMemoriesPrompt
+    );
+
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called"
     );
     Assert.ok(
-      promptWithInsights.includes("- Insight summary 1") &&
-        promptWithInsights.includes("- Insight summary 2"),
-      "Prompt should include insights"
+      promptWithMemories.includes("- Memory summary 1") &&
+        promptWithMemories.includes("- Memory summary 2"),
+      "Prompt should include memories"
     );
   } finally {
     sb.restore();
@@ -192,25 +209,30 @@ add_task(async function test_addInsightsToPrompt_have_insights() {
 });
 
 /**
- * Test for addInsightsToPrompt function when there are no insights
+ * Test for addMemoriesToPrompt function when there are no memories
  */
-add_task(async function test_addInsightsToPrompt_dont_have_insights() {
+add_task(async function test_addMemoriesToPrompt_dont_have_memories() {
   const sb = sinon.createSandbox();
   try {
     const basePrompt = "Base prompt content.";
-    const fakeInsights = [];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
-    const promptWithInsights = await addInsightsToPrompt(basePrompt);
+    const fakeMemories = [];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
+    const conversationMemoriesPrompt = "Memories block:\n{memories}";
+    const promptWithMemories = await addMemoriesToPrompt(
+      basePrompt,
+      conversationMemoriesPrompt
+    );
+
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called"
     );
     Assert.equal(
-      promptWithInsights,
+      promptWithMemories,
       basePrompt,
-      "Prompt should be unchanged when no insights"
+      "Prompt should be unchanged when no memories"
     );
   } finally {
     sb.restore();
@@ -447,7 +469,7 @@ add_task(async function test_generateConversationStartersSidebar_happy_path() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2\nLabel: Suggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -455,10 +477,10 @@ add_task(async function test_generateConversationStartersSidebar_happy_path() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 3;
     const contextTabs = [
@@ -473,8 +495,8 @@ add_task(async function test_generateConversationStartersSidebar_happy_path() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called once"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called once"
     );
 
     // Verify the prompt content
@@ -498,9 +520,9 @@ add_task(async function test_generateConversationStartersSidebar_happy_path() {
     );
     Assert.ok(
       callArgs.messages[1].content.includes(
-        "\n- Insight summary 1\n- Insight summary 2"
+        "\n- Memory summary 1\n- Memory summary 2"
       ),
-      "Prompt should include insight summaries"
+      "Prompt should include memory summaries"
     );
 
     Assert.deepEqual(
@@ -518,17 +540,17 @@ add_task(async function test_generateConversationStartersSidebar_happy_path() {
 });
 
 /**
- * Tests for generateConversationStartersSidebar without including insights
+ * Tests for generateConversationStartersSidebar without including memories
  */
 add_task(
-  async function test_generateConversationStartersSidebar_without_insights() {
+  async function test_generateConversationStartersSidebar_without_memories() {
     Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
     Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
     Services.prefs.setStringPref(PREF_MODEL, MODEL);
 
     const sb = sinon.createSandbox();
     try {
-      // Mock the openAIEngine and insights response
+      // Mock the openAIEngine and memories response
       const fakeEngine = {
         run: sb.stub().resolves({
           finalOutput: `1. Suggestion 1\n\n- Suggestion 2\nLabel: Suggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -536,13 +558,10 @@ add_task(
       };
       sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-      const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-      const insightsStub = sb
-        .stub(
-          InsightsGetterForSuggestionPrompts,
-          "getInsightSummariesForPrompt"
-        )
-        .resolves(fakeInsights);
+      const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+      const memoriesStub = sb
+        .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+        .resolves(fakeMemories);
 
       const n = 3;
       const contextTabs = [
@@ -557,8 +576,8 @@ add_task(
       );
       Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
       Assert.ok(
-        !insightsStub.calledOnce,
-        "getInsightSummariesForPrompt shouldn't be called"
+        !memoriesStub.calledOnce,
+        "getMemorySummariesForPrompt shouldn't be called"
       );
 
       // Verify the prompt content
@@ -582,9 +601,9 @@ add_task(
       );
       Assert.ok(
         !callArgs.messages[1].content.includes(
-          "\n- Insight summary 1\n- Insight summary 2"
+          "\n- Memory summary 1\n- Memory summary 2"
         ),
-        "Prompt should not include insight summaries"
+        "Prompt should not include memory summaries"
       );
 
       Assert.deepEqual(
@@ -603,17 +622,17 @@ add_task(
 );
 
 /**
- * Tests for generateConversationStartersSidebar when no insights are returned
+ * Tests for generateConversationStartersSidebar when no memories are returned
  */
 add_task(
-  async function test_generateConversationStartersSidebar_no_insights_returned() {
+  async function test_generateConversationStartersSidebar_no_memories_returned() {
     Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
     Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
     Services.prefs.setStringPref(PREF_MODEL, MODEL);
 
     const sb = sinon.createSandbox();
     try {
-      // Mock the openAIEngine and insights response
+      // Mock the openAIEngine and memories response
       const fakeEngine = {
         run: sb.stub().resolves({
           finalOutput: `1. Suggestion 1\n\n- Suggestion 2\nLabel: Suggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -621,13 +640,10 @@ add_task(
       };
       sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-      const fakeInsights = [];
-      const insightsStub = sb
-        .stub(
-          InsightsGetterForSuggestionPrompts,
-          "getInsightSummariesForPrompt"
-        )
-        .resolves(fakeInsights);
+      const fakeMemories = [];
+      const memoriesStub = sb
+        .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+        .resolves(fakeMemories);
 
       const n = 3;
       const contextTabs = [
@@ -642,8 +658,8 @@ add_task(
       );
       Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
       Assert.ok(
-        insightsStub.calledOnce,
-        "getInsightSummariesForPrompt should be called once"
+        memoriesStub.calledOnce,
+        "getMemorySummariesForPrompt should be called once"
       );
 
       // Verify the prompt content
@@ -666,8 +682,8 @@ add_task(
         "Prompt should include other tab info"
       );
       Assert.ok(
-        !callArgs.messages[1].content.includes("\nUser Insights:\n"),
-        "Prompt shouldn't include user insights block"
+        !callArgs.messages[1].content.includes("\nUser Memories:\n"),
+        "Prompt shouldn't include user memories block"
       );
 
       Assert.deepEqual(
@@ -695,7 +711,7 @@ add_task(async function test_generateConversationStartersSidebar_no_tabs() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2\nLabel: Suggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -703,10 +719,10 @@ add_task(async function test_generateConversationStartersSidebar_no_tabs() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 3;
     const contextTabs = [];
@@ -718,8 +734,8 @@ add_task(async function test_generateConversationStartersSidebar_no_tabs() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called once"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called once"
     );
 
     // Verify the prompt content
@@ -739,9 +755,9 @@ add_task(async function test_generateConversationStartersSidebar_no_tabs() {
     );
     Assert.ok(
       callArgs.messages[1].content.includes(
-        "\n- Insight summary 1\n- Insight summary 2"
+        "\n- Memory summary 1\n- Memory summary 2"
       ),
-      "Prompt should include insight summaries"
+      "Prompt should include memory summaries"
     );
 
     Assert.deepEqual(
@@ -768,7 +784,7 @@ add_task(async function test_generateConversationStartersSidebar_one_tab() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2\nLabel: Suggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -776,10 +792,10 @@ add_task(async function test_generateConversationStartersSidebar_one_tab() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 3;
     const contextTabs = [
@@ -793,8 +809,8 @@ add_task(async function test_generateConversationStartersSidebar_one_tab() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called once"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called once"
     );
 
     // Verify the prompt content
@@ -816,9 +832,9 @@ add_task(async function test_generateConversationStartersSidebar_one_tab() {
     );
     Assert.ok(
       callArgs.messages[1].content.includes(
-        "\n- Insight summary 1\n- Insight summary 2"
+        "\n- Memory summary 1\n- Memory summary 2"
       ),
-      "Prompt should include insight summaries"
+      "Prompt should include memory summaries"
     );
 
     Assert.deepEqual(
@@ -846,17 +862,17 @@ add_task(
 
     const sb = sinon.createSandbox();
     try {
-      // Mock the openAIEngine and insights response
+      // Mock the openAIEngine and memories response
       const fakeEngine = {
         run: sb.stub().rejects(new Error("Engine failure")),
       };
       sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-      const fakeInsights = ["Insight summary 1", "Insight summary 2"];
+      const fakeMemories = ["Memory summary 1", "Memory summary 2"];
       sb.stub(
-        InsightsGetterForSuggestionPrompts,
-        "getInsightSummariesForPrompt"
-      ).resolves(fakeInsights);
+        MemoriesGetterForSuggestionPrompts,
+        "getMemorySummariesForPrompt"
+      ).resolves(fakeMemories);
 
       const n = 3;
       const contextTabs = [
@@ -876,6 +892,55 @@ add_task(
 );
 
 /**
+ * Tests that assistant limitations are included in conversation starter prompts
+ */
+add_task(
+  async function test_generateConversationStartersSidebar_includes_assistant_limitations() {
+    Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
+    Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
+    Services.prefs.setStringPref(PREF_MODEL, MODEL);
+
+    const sb = sinon.createSandbox();
+    try {
+      const fakeEngine = {
+        run: sb.stub().resolves({
+          finalOutput: `Suggestion 1\nSuggestion 2\nSuggestion 3`,
+        }),
+      };
+      sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
+
+      sb.stub(openAIEngine, "getRemoteClient").returns({
+        get: sb.stub().resolves(REAL_REMOTE_SETTINGS_SNAPSHOT),
+      });
+
+      sb.stub(
+        MemoriesGetterForSuggestionPrompts,
+        "getMemorySummariesForPrompt"
+      ).resolves([]);
+
+      const n = 3;
+      const contextTabs = [
+        { title: "Test Tab", url: "https://test.example.com" },
+      ];
+
+      await generateConversationStartersSidebar(contextTabs, n, false);
+
+      Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
+
+      const callArgs = fakeEngine.run.firstCall.args[0];
+      Assert.ok(
+        callArgs.messages[1].content.includes(
+          "You can do this and cannot do that."
+        ),
+        "Prompt should include assistant limitations from remote settings"
+      );
+    } finally {
+      sb.restore();
+    }
+  }
+);
+
+/**
  * Tests for generateFollowupPrompts successfully generating suggestions
  */
 add_task(async function test_generateFollowupPrompts_happy_path() {
@@ -885,7 +950,7 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2.\nSuggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -893,10 +958,10 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 2;
     const conversationHistory = [
@@ -908,7 +973,7 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
       url: "https://current.example.com",
     };
 
-    // Using insights
+    // Using memories
     const result = await generateFollowupPrompts(
       conversationHistory,
       currentTab,
@@ -917,8 +982,8 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called once"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called once"
     );
 
     const callArgs = fakeEngine.run.firstCall.args[0];
@@ -941,9 +1006,9 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
     );
     Assert.ok(
       callArgs.messages[1].content.includes(
-        "\n- Insight summary 1\n- Insight summary 2"
+        "\n- Memory summary 1\n- Memory summary 2"
       ),
-      "Prompt should include insight summaries"
+      "Prompt should include memory summaries"
     );
 
     Assert.deepEqual(
@@ -960,16 +1025,16 @@ add_task(async function test_generateFollowupPrompts_happy_path() {
 });
 
 /**
- * Tests for generateFollowupPrompts without including insights
+ * Tests for generateFollowupPrompts without including memories
  */
-add_task(async function test_generateFollowupPrompts_no_insights() {
+add_task(async function test_generateFollowupPrompts_no_memories() {
   Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
   Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
   Services.prefs.setStringPref(PREF_MODEL, MODEL);
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2.\nSuggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -977,10 +1042,10 @@ add_task(async function test_generateFollowupPrompts_no_insights() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = ["Insight summary 1", "Insight summary 2"];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = ["Memory summary 1", "Memory summary 2"];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 2;
     const conversationHistory = [
@@ -1000,8 +1065,8 @@ add_task(async function test_generateFollowupPrompts_no_insights() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      !insightsStub.calledOnce,
-      "getInsightSummariesForPrompt shouldn't be called"
+      !memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt shouldn't be called"
     );
 
     const callArgs = fakeEngine.run.firstCall.args[0];
@@ -1024,9 +1089,9 @@ add_task(async function test_generateFollowupPrompts_no_insights() {
     );
     Assert.ok(
       !callArgs.messages[1].content.includes(
-        "\n- Insight summary 1\n- Insight summary 2"
+        "\n- Memory summary 1\n- Memory summary 2"
       ),
-      "Prompt shouldn't include insight summaries"
+      "Prompt shouldn't include memory summaries"
     );
 
     Assert.deepEqual(
@@ -1043,16 +1108,16 @@ add_task(async function test_generateFollowupPrompts_no_insights() {
 });
 
 /**
- * Tests for generateFollowupPrompts when no insights are returned
+ * Tests for generateFollowupPrompts when no memories are returned
  */
-add_task(async function test_generateFollowupPrompts_no_insights_returned() {
+add_task(async function test_generateFollowupPrompts_no_memories_returned() {
   Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
   Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
   Services.prefs.setStringPref(PREF_MODEL, MODEL);
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2.\nSuggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -1060,10 +1125,10 @@ add_task(async function test_generateFollowupPrompts_no_insights_returned() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = [];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = [];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 2;
     const conversationHistory = [
@@ -1075,7 +1140,7 @@ add_task(async function test_generateFollowupPrompts_no_insights_returned() {
       url: "https://current.example.com",
     };
 
-    // Using insights
+    // Using memories
     const result = await generateFollowupPrompts(
       conversationHistory,
       currentTab,
@@ -1084,8 +1149,8 @@ add_task(async function test_generateFollowupPrompts_no_insights_returned() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      insightsStub.calledOnce,
-      "getInsightSummariesForPrompt should be called once"
+      memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt should be called once"
     );
 
     const callArgs = fakeEngine.run.firstCall.args[0];
@@ -1107,8 +1172,8 @@ add_task(async function test_generateFollowupPrompts_no_insights_returned() {
       "Prompt should include conversation history"
     );
     Assert.ok(
-      !callArgs.messages[1].content.includes("\nUser Insights:\n"),
-      "Prompt shouldn't include user insights block"
+      !callArgs.messages[1].content.includes("\nUser Memories:\n"),
+      "Prompt shouldn't include user memories block"
     );
 
     Assert.deepEqual(
@@ -1134,7 +1199,7 @@ add_task(async function test_generateFollowupPrompts_no_current_tab() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().resolves({
         finalOutput: `1. Suggestion 1\n\n- Suggestion 2.\nSuggestion 3.\nSuggestion 4\nSuggestion 5\nSuggestion 6`,
@@ -1142,10 +1207,10 @@ add_task(async function test_generateFollowupPrompts_no_current_tab() {
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = [];
-    const insightsStub = sb
-      .stub(InsightsGetterForSuggestionPrompts, "getInsightSummariesForPrompt")
-      .resolves(fakeInsights);
+    const fakeMemories = [];
+    const memoriesStub = sb
+      .stub(MemoriesGetterForSuggestionPrompts, "getMemorySummariesForPrompt")
+      .resolves(fakeMemories);
 
     const n = 2;
     const conversationHistory = [
@@ -1162,8 +1227,8 @@ add_task(async function test_generateFollowupPrompts_no_current_tab() {
     );
     Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
     Assert.ok(
-      !insightsStub.calledOnce,
-      "getInsightSummariesForPrompt shouldn't be called"
+      !memoriesStub.calledOnce,
+      "getMemorySummariesForPrompt shouldn't be called"
     );
 
     const callArgs = fakeEngine.run.firstCall.args[0];
@@ -1183,8 +1248,8 @@ add_task(async function test_generateFollowupPrompts_no_current_tab() {
       "Prompt should include conversation history"
     );
     Assert.ok(
-      !callArgs.messages[1].content.includes("\nUser Insights:\n"),
-      "Prompt shouldn't include user insights block"
+      !callArgs.messages[1].content.includes("\nUser Memories:\n"),
+      "Prompt shouldn't include user memories block"
     );
 
     Assert.deepEqual(
@@ -1210,17 +1275,17 @@ add_task(async function test_generateFollowupPrompts_engine_error() {
 
   const sb = sinon.createSandbox();
   try {
-    // Mock the openAIEngine and insights response
+    // Mock the openAIEngine and memories response
     const fakeEngine = {
       run: sb.stub().rejects(new Error("Engine failure")),
     };
     sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
 
-    const fakeInsights = [];
+    const fakeMemories = [];
     sb.stub(
-      InsightsGetterForSuggestionPrompts,
-      "getInsightSummariesForPrompt"
-    ).resolves(fakeInsights);
+      MemoriesGetterForSuggestionPrompts,
+      "getMemorySummariesForPrompt"
+    ).resolves(fakeMemories);
 
     const n = 2;
     const conversationHistory = [
@@ -1242,36 +1307,87 @@ add_task(async function test_generateFollowupPrompts_engine_error() {
 });
 
 /**
- * Tests for getInsightSummariesForPrompt happy path
+ * Tests that assistant limitations are included in followup prompts
  */
-add_task(async function test_getInsightSummariesForPrompt_happy_path() {
+add_task(
+  async function test_generateFollowupPrompts_includes_assistant_limitations() {
+    Services.prefs.setStringPref(PREF_API_KEY, API_KEY);
+    Services.prefs.setStringPref(PREF_ENDPOINT, ENDPOINT);
+    Services.prefs.setStringPref(PREF_MODEL, MODEL);
+
+    const sb = sinon.createSandbox();
+    try {
+      const fakeEngine = {
+        run: sb.stub().resolves({
+          finalOutput: `Suggestion 1\nSuggestion 2`,
+        }),
+      };
+      sb.stub(openAIEngine, "_createEngine").resolves(fakeEngine);
+
+      sb.stub(openAIEngine, "getRemoteClient").returns({
+        get: sb.stub().resolves(REAL_REMOTE_SETTINGS_SNAPSHOT),
+      });
+
+      sb.stub(
+        MemoriesGetterForSuggestionPrompts,
+        "getMemorySummariesForPrompt"
+      ).resolves([]);
+
+      const n = 2;
+      const conversationHistory = [
+        { role: MESSAGE_ROLE.USER, content: "Hello" },
+        { role: MESSAGE_ROLE.ASSISTANT, content: "Hi there!" },
+      ];
+      const currentTab = { title: "Test", url: "https://test.example.com" };
+
+      await generateFollowupPrompts(conversationHistory, currentTab, n, false);
+
+      Assert.ok(fakeEngine.run.calledOnce, "Engine run should be called once");
+
+      const callArgs = fakeEngine.run.firstCall.args[0];
+      Assert.ok(
+        callArgs.messages[1].content.includes(
+          "You can do this and cannot do that."
+        ),
+        "Prompt should include assistant limitations from remote settings"
+      );
+    } finally {
+      sb.restore();
+    }
+  }
+);
+
+/**
+ * Tests for getMemorySummariesForPrompt happy path
+ */
+add_task(async function test_getMemorySummariesForPrompt_happy_path() {
   const sb = sinon.createSandbox();
   try {
-    // Mock the InsightStore to return fixed insights
-    const fakeInsights = [
+    // Mock the MemoryStore to return fixed memories
+    const fakeMemories = [
       {
-        insight_summary: "Insight summary 1",
+        memory_summary: "Memory summary 1",
       },
       {
-        insight_summary: "Insight summary 2",
+        memory_summary: "Memory summary 2",
       },
       {
-        insight_summary: "Insight summary 3",
+        memory_summary: "Memory summary 3",
       },
     ];
 
-    sb.stub(InsightsManager, "getAllInsights").resolves(fakeInsights);
+    sb.stub(MemoriesManager, "getAllMemories").resolves(fakeMemories);
 
-    const maxInsights = 2;
+    const maxMemories = 2;
     const summaries =
-      await InsightsGetterForSuggestionPrompts.getInsightSummariesForPrompt(
-        maxInsights
+      await MemoriesGetterForSuggestionPrompts.getMemorySummariesForPrompt(
+        maxMemories
       );
 
     Assert.deepEqual(
       summaries,
-      ["Insight summary 1", "Insight summary 2"],
-      "Insight summaries should match expected values"
+      ["Memory summary 1", "Memory summary 2"],
+      "Memory summaries should match expected values"
     );
   } finally {
     sb.restore();
@@ -1279,26 +1395,26 @@ add_task(async function test_getInsightSummariesForPrompt_happy_path() {
 });
 
 /**
- * Tests for getInsightSummariesForPrompt when no insights are returned
+ * Tests for getMemorySummariesForPrompt when no memories are returned
  */
-add_task(async function test_getInsightSummariesForPrompt_no_insights() {
+add_task(async function test_getMemorySummariesForPrompt_no_memories() {
   const sb = sinon.createSandbox();
   try {
-    // Mock the InsightStore to return fixed insights
-    const fakeInsights = [];
+    // Mock the MemoryStore to return fixed memories
+    const fakeMemories = [];
 
-    sb.stub(InsightsManager, "getAllInsights").resolves(fakeInsights);
+    sb.stub(MemoriesManager, "getAllMemories").resolves(fakeMemories);
 
-    const maxInsights = 2;
+    const maxMemories = 2;
     const summaries =
-      await InsightsGetterForSuggestionPrompts.getInsightSummariesForPrompt(
-        maxInsights
+      await MemoriesGetterForSuggestionPrompts.getMemorySummariesForPrompt(
+        maxMemories
       );
 
     Assert.equal(
       summaries.length,
       0,
-      `getInsightSummariesForPrompt(${maxInsights}) should return 0 summaries`
+      `getMemorySummariesForPrompt(${maxMemories}) should return 0 summaries`
     );
   } finally {
     sb.restore();
@@ -1306,30 +1422,30 @@ add_task(async function test_getInsightSummariesForPrompt_no_insights() {
 });
 
 /**
- * Tests for getInsightSummariesForPrompt with fewer insights than maxInsights
+ * Tests for getMemorySummariesForPrompt with fewer memories than maxMemories
  */
-add_task(async function test_getInsightSummariesForPrompt_too_few_insights() {
+add_task(async function test_getMemorySummariesForPrompt_too_few_memories() {
   const sb = sinon.createSandbox();
   try {
-    // Mock the InsightStore to return fixed insights
-    const fakeInsights = [
+    // Mock the MemoryStore to return fixed memories
+    const fakeMemories = [
       {
-        insight_summary: "Insight summary 1",
+        memory_summary: "Memory summary 1",
       },
     ];
 
-    sb.stub(InsightsManager, "getAllInsights").resolves(fakeInsights);
+    sb.stub(MemoriesManager, "getAllMemories").resolves(fakeMemories);
 
-    const maxInsights = 2;
+    const maxMemories = 2;
     const summaries =
-      await InsightsGetterForSuggestionPrompts.getInsightSummariesForPrompt(
-        maxInsights
+      await MemoriesGetterForSuggestionPrompts.getMemorySummariesForPrompt(
+        maxMemories
       );
 
     Assert.deepEqual(
       summaries,
-      ["Insight summary 1"],
-      "Insight summaries should match expected values"
+      ["Memory summary 1"],
+      "Memory summaries should match expected values"
     );
   } finally {
     sb.restore();
@@ -1337,36 +1453,36 @@ add_task(async function test_getInsightSummariesForPrompt_too_few_insights() {
 });
 
 /**
- * Tests for getInsightSummariesForPrompt handling duplicate summaries
+ * Tests for getMemorySummariesForPrompt handling duplicate summaries
  */
-add_task(async function test_getInsightSummariesForPrompt_duplicates() {
+add_task(async function test_getMemorySummariesForPrompt_duplicates() {
   const sb = sinon.createSandbox();
   try {
-    // Mock the InsightStore to return fixed insights
-    const fakeInsights = [
+    // Mock the MemoryStore to return fixed memories
+    const fakeMemories = [
       {
-        insight_summary: "Duplicate summary",
+        memory_summary: "Duplicate summary",
       },
       {
-        insight_summary: "duplicate summary",
+        memory_summary: "duplicate summary",
       },
       {
-        insight_summary: "Unique summary",
+        memory_summary: "Unique summary",
       },
     ];
 
-    sb.stub(InsightsManager, "getAllInsights").resolves(fakeInsights);
+    sb.stub(MemoriesManager, "getAllMemories").resolves(fakeMemories);
 
-    const maxInsights = 2;
+    const maxMemories = 2;
     const summaries =
-      await InsightsGetterForSuggestionPrompts.getInsightSummariesForPrompt(
-        maxInsights
+      await MemoriesGetterForSuggestionPrompts.getMemorySummariesForPrompt(
+        maxMemories
       );
 
     Assert.deepEqual(
       summaries,
       ["Duplicate summary", "Unique summary"],
-      "Insight summaries should match expected values"
+      "Memory summaries should match expected values"
     );
   } finally {
     sb.restore();
@@ -1374,37 +1490,37 @@ add_task(async function test_getInsightSummariesForPrompt_duplicates() {
 });
 
 /**
- * Tests for getInsightSummariesForPrompt handling empty and whitespace-only summaries
+ * Tests for getMemorySummariesForPrompt handling empty and whitespace-only summaries
  */
 add_task(
-  async function test_getInsightSummariesForPrompt_empty_and_whitespace() {
+  async function test_getMemorySummariesForPrompt_empty_and_whitespace() {
     const sb = sinon.createSandbox();
     try {
-      // Mock the InsightStore to return fixed insights
-      const fakeInsights = [
+      // Mock the MemoryStore to return fixed memories
+      const fakeMemories = [
         {
-          insight_summary: "   \n",
+          memory_summary: "   \n",
         },
         {
-          insight_summary: "",
+          memory_summary: "",
         },
         {
-          insight_summary: "Valid summary",
+          memory_summary: "Valid summary",
         },
       ];
 
-      sb.stub(InsightsManager, "getAllInsights").resolves(fakeInsights);
+      sb.stub(MemoriesManager, "getAllMemories").resolves(fakeMemories);
 
-      const maxInsights = 2;
+      const maxMemories = 2;
       const summaries =
-        await InsightsGetterForSuggestionPrompts.getInsightSummariesForPrompt(
-          maxInsights
+        await MemoriesGetterForSuggestionPrompts.getMemorySummariesForPrompt(
+          maxMemories
         );
 
       Assert.deepEqual(
         summaries,
         ["Valid summary"],
-        "Insight summaries should match expected values"
+        "Memory summaries should match expected values"
       );
     } finally {
       sb.restore();

@@ -195,6 +195,7 @@ export class FormAutofillPreferences {
     addressesGroup.getSetting = win.Preferences.getSetting.bind(
       win.Preferences
     );
+    Services.obs.notifyObservers(win, "formautofill-preferences-initialized");
   }
 
   async initializePaymentsStorage() {
@@ -568,5 +569,15 @@ export class FormAutofillPreferences {
       noValidate: true,
       l10nStrings: lazy.ManageAddresses.getAddressL10nStrings(),
     });
+  }
+
+  static openPaymentPreference() {
+    const win = Services.wm.getMostRecentBrowserWindow();
+    win.openPreferences("privacy-payment-methods-autofill");
+  }
+
+  static openAddressPreference() {
+    const win = Services.wm.getMostRecentBrowserWindow();
+    win.openPreferences("privacy-address-autofill");
   }
 }

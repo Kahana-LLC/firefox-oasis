@@ -6,7 +6,7 @@
 import { assistantPrompt } from "moz-src:///browser/components/aiwindow/models/prompts/AssistantPrompts.sys.mjs";
 
 import {
-  constructRelevantInsightsContextMessage,
+  constructRelevantMemoriesContextMessage,
   constructRealTimeInfoInjectionMessage,
 } from "moz-src:///browser/components/aiwindow/models/ChatUtils.sys.mjs";
 
@@ -234,6 +234,8 @@ export class ChatConversation {
    */
   async generatePrompt(prompt, pageUrl) {
     if (!this.#messages.length) {
+      // TODO: Bug 2008865
+      // switch to use remote settings prompt accessed via engine.loadPrompt(feature)
       this.addSystemMessage(SYSTEM_PROMPT_TYPE.TEXT, assistantPrompt);
     }
 
@@ -244,7 +246,7 @@ export class ChatConversation {
       this.addSystemMessage(SYSTEM_PROMPT_TYPE.REAL_TIME, realTime.content);
     }
 
-    const insightsContext = await constructRelevantInsightsContextMessage();
+    const insightsContext = await constructRelevantMemoriesContextMessage();
     if (insightsContext?.content) {
       this.addSystemMessage(
         SYSTEM_PROMPT_TYPE.INSIGHTS,

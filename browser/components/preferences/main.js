@@ -20,6 +20,7 @@ ChromeUtils.defineESModuleGetters(this, {
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   FormAutofillPreferences:
     "resource://autofill/FormAutofillPreferences.sys.mjs",
+  getMozRemoteImageURL: "moz-src:///browser/modules/FaviconUtils.sys.mjs",
 });
 
 // Constants & Enumeration Values
@@ -1443,12 +1444,27 @@ Preferences.addSetting({
 Preferences.addSetting({
   id: "add-payment-button",
   deps: ["saveAndFillPayments"],
+  setup: (emitChange, _, setting) => {
+    function updateDepsAndChange() {
+      setting._deps = null;
+      emitChange();
+    }
+    Services.obs.addObserver(
+      updateDepsAndChange,
+      "formautofill-preferences-initialized"
+    );
+    return () =>
+      Services.obs.removeObserver(
+        updateDepsAndChange,
+        "formautofill-preferences-initialized"
+      );
+  },
   onUserClick: ({ target }) => {
     target.ownerGlobal.gSubDialog.open(
       "chrome://formautofill/content/editCreditCard.xhtml"
     );
   },
-  disabled: ({ saveAndFillPayments }) => !saveAndFillPayments.value,
+  disabled: ({ saveAndFillPayments }) => !saveAndFillPayments?.value,
 });
 
 Preferences.addSetting({
@@ -1942,10 +1958,25 @@ Preferences.addSetting({
 Preferences.addSetting({
   id: "add-address-button",
   deps: ["saveAndFillAddresses"],
+  setup: (emitChange, _, setting) => {
+    function updateDepsAndChange() {
+      setting._deps = null;
+      emitChange();
+    }
+    Services.obs.addObserver(
+      updateDepsAndChange,
+      "formautofill-preferences-initialized"
+    );
+    return () =>
+      Services.obs.removeObserver(
+        updateDepsAndChange,
+        "formautofill-preferences-initialized"
+      );
+  },
   onUserClick: () => {
     FormAutofillPreferences.prototype.openEditAddressDialog(undefined, window);
   },
-  disabled: ({ saveAndFillAddresses }) => !saveAndFillAddresses.value,
+  disabled: ({ saveAndFillAddresses }) => !saveAndFillAddresses?.value,
 });
 
 Preferences.addSetting({
@@ -2819,7 +2850,6 @@ SettingGroupManager.registerGroups({
         items: [
           {
             id: "ipProtectionExceptionAllListButton",
-            l10nId: "ip-protection-site-exceptions-all-sites-button",
             control: "moz-box-button",
           },
         ],
@@ -6973,12 +7003,7 @@ var gMainPane = {
     ) {
       // As the favicon originates from web content and is displayed in the parent process,
       // use the moz-remote-image: protocol to safely re-encode it.
-      let params = new URLSearchParams({
-        url: uri.prePath + "/favicon.ico",
-        width: 16,
-        height: 16,
-      });
-      return "moz-remote-image://?" + params;
+      return getMozRemoteImageURL(uri.prePath + "/favicon.ico", 16);
     }
 
     return "";

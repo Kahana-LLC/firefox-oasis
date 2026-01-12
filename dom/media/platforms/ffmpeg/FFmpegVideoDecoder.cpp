@@ -602,7 +602,7 @@ bool FFmpegVideoDecoder<LIBAV_VER>::UploadSWDecodeToDMABuf() const {
 #endif
 
 FFmpegVideoDecoder<LIBAV_VER>::FFmpegVideoDecoder(
-    FFmpegLibWrapper* aLib, const VideoInfo& aConfig,
+    const FFmpegLibWrapper* aLib, const VideoInfo& aConfig,
     KnowsCompositor* aAllocator, ImageContainer* aImageContainer,
     bool aLowLatency, bool aDisableHardwareDecoding, bool a8BitOutput,
     Maybe<TrackingId> aTrackingId, PRemoteCDMActor* aCDM)
@@ -665,7 +665,9 @@ void FFmpegVideoDecoder<LIBAV_VER>::InitHWDecoderIfAllowed() {
 #  endif  // MOZ_ENABLE_D3D11VA
 
 #  ifdef MOZ_WIDGET_ANDROID
-  if (XRE_IsRDDProcess() && NS_SUCCEEDED(InitMediaCodecDecoder())) {
+  if ((XRE_IsRDDProcess() ||
+       (XRE_IsParentProcess() && PR_GetEnv("MOZ_RUN_GTEST"))) &&
+      NS_SUCCEEDED(InitMediaCodecDecoder())) {
     return;
   }
 #  endif
@@ -2331,9 +2333,15 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageD3D11(
   MOZ_DIAGNOSTIC_ASSERT(mFrame);
   MOZ_DIAGNOSTIC_ASSERT(mDXVA2Manager);
 
+  gfx::TransferFunction transferFunction =
+      mInfo.mTransferFunction.refOr(gfx::TransferFunction::BT709);
+  bool isHDR = transferFunction == gfx::TransferFunction::PQ ||
+               transferFunction == gfx::TransferFunction::HLG;
   HRESULT hr = mDXVA2Manager->ConfigureForSize(
       GetSurfaceFormat(), GetFrameColorSpace(), GetFrameColorRange(),
-      mInfo.mColorDepth, mFrame->width, mFrame->height);
+      mInfo.mColorDepth,
+      mInfo.mTransferFunction.refOr(gfx::TransferFunction::BT709),
+      mFrame->width, mFrame->height);
   if (FAILED(hr)) {
     nsPrintfCString msg("Failed to configure DXVA2Manager, hr=%lx", hr);
     FFMPEG_LOG("%s", msg.get());
@@ -2366,6 +2374,9 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageD3D11(
     if (desc.Format == DXGI_FORMAT_P016) {
       return gfx::SurfaceFormat::P016;
     }
+    if (isHDR) {
+      return gfx::SurfaceFormat::P010;
+    }
     MOZ_ASSERT(desc.Format == DXGI_FORMAT_NV12);
     return gfx::SurfaceFormat::NV12;
   }();
@@ -2375,10 +2386,13 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageD3D11(
       mInfo.ScaledImageRect(mFrame->width, mFrame->height);
   UINT index = (uintptr_t)mFrame->data[1];
 
-  if (CanUseZeroCopyVideoFrame()) {
+  // TODO(https://bugzilla.mozilla.org/show_bug.cgi?id=2008886)
+  // Currently the zero-copy path supports NV12 but not P010 so it can't do HDR
+  // yet, this can be implemented in future.
+  if (format == gfx::SurfaceFormat::NV12 && CanUseZeroCopyVideoFrame()) {
     mNumOfHWTexturesInUse++;
-    FFMPEGV_LOG("CreateImageD3D11, zero copy, index=%u (texInUse=%u)", index,
-                mNumOfHWTexturesInUse.load());
+    FFMPEGV_LOG("CreateImageD3D11, zero copy, index=%u (texInUse=%u), isHDR=%u",
+                index, mNumOfHWTexturesInUse.load(), (unsigned int)isHDR);
     hr = mDXVA2Manager->WrapTextureWithImage(
         new D3D11TextureWrapper(
             mFrame, mLib, texture, format, index,
@@ -2388,7 +2402,8 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageD3D11(
             }),
         pictureRegion, getter_AddRefs(image));
   } else {
-    FFMPEGV_LOG("CreateImageD3D11, copy output to a shared texture");
+    FFMPEGV_LOG("CreateImageD3D11, copy output to a shared texture, isHDR=%u",
+                (unsigned int)isHDR);
     hr = mDXVA2Manager->CopyToImage(texture, index, pictureRegion,
                                     getter_AddRefs(image));
   }
@@ -2427,14 +2442,8 @@ bool FFmpegVideoDecoder<LIBAV_VER>::CanUseZeroCopyVideoFrame() const {
 
 #ifdef MOZ_WIDGET_ANDROID
 MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitMediaCodecDecoder() {
-  MOZ_DIAGNOSTIC_ASSERT(XRE_IsRDDProcess());
   FFMPEG_LOG("Initialising MediaCodec FFmpeg decoder");
   StaticMutexAutoLock mon(sMutex);
-
-  if (!mImageAllocator /* todo check compositor */) {
-    FFMPEG_LOG("  no KnowsCompositor or it doesn't support MediaCodec");
-    return NS_ERROR_DOM_MEDIA_FATAL_ERR;
-  }
 
   if (mInfo.mColorDepth > gfx::ColorDepth::COLOR_10) {
     return MediaResult(NS_ERROR_DOM_MEDIA_FATAL_ERR,
@@ -2604,7 +2613,8 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageMediaCodec(
 
 #if MOZ_USE_HWDECODE
 /* static */ AVCodec* FFmpegVideoDecoder<LIBAV_VER>::FindVideoHardwareAVCodec(
-    FFmpegLibWrapper* aLib, AVCodecID aCodec, AVHWDeviceType aDeviceType) {
+    const FFmpegLibWrapper* aLib, AVCodecID aCodec,
+    AVHWDeviceType aDeviceType) {
 #  ifdef MOZ_WIDGET_GTK
   if (aDeviceType == AV_HWDEVICE_TYPE_NONE) {
     switch (aCodec) {

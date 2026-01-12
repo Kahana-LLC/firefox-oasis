@@ -130,10 +130,12 @@ class GitRepository(Repository):
                 yield name
 
     def get_mozilla_remote_args(self) -> list[str]:
-        """Return a list of arguments to limit commits to official remotes."""
-        return [remote for remote in self.get_mozilla_upstream_remotes()] or [
-            "--remotes"
+        """Return a list of `--remotes` arguments to limit commits to official remotes."""
+        official_remotes = [
+            f"--remotes={remote}" for remote in self.get_mozilla_upstream_remotes()
         ]
+
+        return official_remotes if official_remotes else ["--remotes"]
 
     @property
     def base_ref(self):
@@ -413,24 +415,22 @@ class GitRepository(Repository):
         # adding or modifying the files from `changed_files`.
         # fast-import will output the sha1 for that temporary commit on stdout
         # (via `get-mark`).
-        fast_import = "\n".join(
-            [
-                f"commit refs/machtry/{branch}",
-                "mark :1",
-                f"author {author}",
-                f"committer {committer}",
-                data(commit_message),
-                f"from {current_head}",
-                "\n".join(
-                    f"M 100644 inline {path}\n{data(content)}"
-                    for path, content in (changed_files or {}).items()
-                ),
-                f"reset refs/machtry/{branch}",
-                "from 0000000000000000000000000000000000000000",
-                "get-mark :1",
-                "",
-            ]
-        )
+        fast_import = "\n".join([
+            f"commit refs/machtry/{branch}",
+            "mark :1",
+            f"author {author}",
+            f"committer {committer}",
+            data(commit_message),
+            f"from {current_head}",
+            "\n".join(
+                f"M 100644 inline {path}\n{data(content)}"
+                for path, content in (changed_files or {}).items()
+            ),
+            f"reset refs/machtry/{branch}",
+            "from 0000000000000000000000000000000000000000",
+            "get-mark :1",
+            "",
+        ])
 
         cmd = (str(self._tool), "fast-import", "--quiet")
         stdout = subprocess.check_output(

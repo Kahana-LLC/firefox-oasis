@@ -1888,29 +1888,25 @@ void Document::GetFailedCertSecurityInfo(FailedCertSecurityInfo& aInfo,
   }
 
   rv = cert->GetValidity(getter_AddRefs(validity));
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    aRv.Throw(rv);
-    return;
-  }
-  if (NS_WARN_IF(!validity)) {
-    aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
-    return;
-  }
+  if (NS_WARN_IF(NS_FAILED(rv)) || NS_WARN_IF(!validity)) {
+    aInfo.mValidNotBefore = 0;
+    aInfo.mValidNotAfter = 0;
+  } else {
+    PRTime validityResult;
+    rv = validity->GetNotBefore(&validityResult);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      aInfo.mValidNotBefore = 0;
+    } else {
+      aInfo.mValidNotBefore = DOMTimeStamp(validityResult / PR_USEC_PER_MSEC);
+    }
 
-  PRTime validityResult;
-  rv = validity->GetNotBefore(&validityResult);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    aRv.Throw(rv);
-    return;
+    rv = validity->GetNotAfter(&validityResult);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      aInfo.mValidNotAfter = 0;
+    } else {
+      aInfo.mValidNotAfter = DOMTimeStamp(validityResult / PR_USEC_PER_MSEC);
+    }
   }
-  aInfo.mValidNotBefore = DOMTimeStamp(validityResult / PR_USEC_PER_MSEC);
-
-  rv = validity->GetNotAfter(&validityResult);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    aRv.Throw(rv);
-    return;
-  }
-  aInfo.mValidNotAfter = DOMTimeStamp(validityResult / PR_USEC_PER_MSEC);
 
   nsAutoString issuerCommonName;
   nsAutoString certChainPEMString;
@@ -1938,25 +1934,18 @@ void Document::GetFailedCertSecurityInfo(FailedCertSecurityInfo& aInfo,
     }
 
     rv = certificate->GetValidity(getter_AddRefs(validity));
-    if (NS_WARN_IF(NS_FAILED(rv))) {
-      aRv.Throw(rv);
-      return;
-    }
-    if (NS_WARN_IF(!validity)) {
-      aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
-      return;
-    }
-
-    rv = validity->GetNotBefore(&notBefore);
-    if (NS_WARN_IF(NS_FAILED(rv))) {
-      aRv.Throw(rv);
-      return;
-    }
-
-    rv = validity->GetNotAfter(&notAfter);
-    if (NS_WARN_IF(NS_FAILED(rv))) {
-      aRv.Throw(rv);
-      return;
+    if (NS_WARN_IF(NS_FAILED(rv)) || NS_WARN_IF(!validity)) {
+      notBefore = 0;
+      notAfter = 0;
+    } else {
+      rv = validity->GetNotBefore(&notBefore);
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        notBefore = 0;
+      }
+      rv = validity->GetNotAfter(&notAfter);
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        notAfter = 0;
+      }
     }
 
     notBefore = std::max(minValidity, notBefore);
@@ -3674,6 +3663,12 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
   // If this is an error page, don't inherit sandbox flags
   nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
+
+  if (!IsTopLevelContentDocument()) {
+    SetAncestorOriginsList(
+        ProduceAncestorOriginsList(loadInfo->AncestorPrincipals()));
+  }
+
   if (docShell && !loadInfo->GetLoadErrorPage()) {
     mSandboxFlags = loadInfo->GetSandboxFlags();
     WarnIfSandboxIneffective(docShell, mSandboxFlags, GetChannel());
@@ -7640,10 +7635,8 @@ bool Document::ShouldThrottleFrameRequests() const {
   // document that previously wasn't visible scrolls into view. This is
   // acceptable / unlikely to be human-perceivable, though we could improve on
   // it if needed by adding an intersection margin or something of that sort.
-  auto margin = DOMIntersectionObserver::LazyLoadingRootMargin();
-  const IntersectionInput input = DOMIntersectionObserver::ComputeInput(
-      *el->OwnerDoc(), /* aRoot = */ nullptr, &margin,
-      /* aScrollMargin = */ nullptr);
+  const IntersectionInput input =
+      DOMIntersectionObserver::ComputeInputForIframeThrottling(*el->OwnerDoc());
   const IntersectionOutput output = DOMIntersectionObserver::Intersect(
       input, *el, DOMIntersectionObserver::BoxToUse::Content);
   return !output.Intersects();
@@ -17696,13 +17689,13 @@ void Document::RecordCanvasUsage(CanvasUsage& aUsage) {
   uint64_t now = PR_Now();
 
   nsCString originNoSuffix;
-  nsCString uri;
   if (NS_FAILED(NodePrincipal()->GetOriginNoSuffix(originNoSuffix))) {
     MOZ_LOG(gFingerprinterDetection, LogLevel::Error,
             ("Document:: %p Could not get originsuffix", this));
     return;
   }
-  if (NS_FAILED(NodePrincipal()->GetSpec(uri))) {
+  nsCOMPtr<nsIURI> uri = NodePrincipal()->GetURI();
+  if (!uri) {
     MOZ_LOG(gFingerprinterDetection, LogLevel::Error,
             ("Document:: %p Could not get uri", this));
     return;
@@ -17723,11 +17716,14 @@ void Document::RecordCanvasUsage(CanvasUsage& aUsage) {
       }
     }
 
+    nsAutoCString uriString;
+    (void)uri->GetSpec(uriString);
+
     MOZ_LOG(gFingerprinterDetection, LogLevel::Debug,
             ("Document:: %p %s recording canvas usage of type %s on %s in %s",
              this, originNoSuffix.get(),
-             CanvasUsageSourceToString(aUsage.mUsageSource).get(), uri.get(),
-             filename.get()));
+             CanvasUsageSourceToString(aUsage.mUsageSource).get(),
+             uriString.get(), filename.get()));
   }
 
   // Check if we need to clear the usage data for this source.
@@ -17805,12 +17801,12 @@ void Document::RecordCanvasUsage(CanvasUsage& aUsage) {
 }
 
 void Document::RecordFontFingerprinting() {
-  nsCString uri;
   nsCString originNoSuffix;
   if (NS_FAILED(NodePrincipal()->GetOriginNoSuffix(originNoSuffix))) {
     return;
   }
-  if (NS_FAILED(NodePrincipal()->GetSpec(uri))) {
+  nsCOMPtr<nsIURI> uri = NodePrincipal()->GetURI();
+  if (!uri) {
     return;
   }
 
@@ -17938,9 +17934,8 @@ static void UpdateEffectsOnBrowsingContext(BrowsingContext* aBc,
 }
 
 void Document::UpdateRemoteFrameEffects(bool aIncludeInactive) {
-  auto margin = DOMIntersectionObserver::LazyLoadingRootMargin();
-  const IntersectionInput input = DOMIntersectionObserver::ComputeInput(
-      *this, /* aRoot = */ nullptr, &margin, /* aScrollMargin = */ nullptr);
+  const IntersectionInput input =
+      DOMIntersectionObserver::ComputeInputForIframeThrottling(*this);
   if (auto* wc = GetWindowContext()) {
     for (const RefPtr<BrowsingContext>& child : wc->Children()) {
       UpdateEffectsOnBrowsingContext(child, input, aIncludeInactive);
@@ -18060,6 +18055,23 @@ void Document::UpdateLastRememberedSizes() {
       element->SetLastRememberedISize(iSize);
     }
   }
+}
+
+void Document::SetAncestorOriginsList(
+    nsTArray<nsString>&& aAncestorOriginsList) {
+  mAncestorOriginsList = std::move(aAncestorOriginsList);
+}
+
+Span<const nsString> Document::GetAncestorOriginsList() const {
+  return mAncestorOriginsList;
+}
+
+already_AddRefed<DOMStringList> Document::AncestorOrigins() const {
+  RefPtr<DOMStringList> list = new DOMStringList();
+  for (const auto& origin : mAncestorOriginsList) {
+    list->Add(origin);
+  }
+  return list.forget();
 }
 
 void Document::NotifyLayerManagerRecreated() {
@@ -18382,7 +18394,10 @@ static void PropagateUserGestureActivationBetweenPiP(
     // this means activation in a cross-origin subframe in the opener will
     // cause the PIP window to get activation.
     nsPIDOMWindowOuter* outer = currentBC->Top()->GetDOMWindow();
-    NS_ENSURE_TRUE_VOID(outer);
+    if (!outer) {
+      // We don't warn on failure due to the frequency. See bug 2008394.
+      return;
+    }
     nsPIDOMWindowInner* inner = outer->GetCurrentInnerWindow();
     NS_ENSURE_TRUE_VOID(inner);
     DocumentPictureInPicture* dpip = inner->GetExtantDocumentPictureInPicture();

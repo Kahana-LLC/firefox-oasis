@@ -555,7 +555,8 @@ add_task(async function tabContentChangeTests() {
 });
 
 /**
- * Test that if a note is set on a tab, the note appears in the preview panel
+ * Test that tab notes and their UI elements appear correctly in the tab
+ * hover preview panel.
  */
 add_task(async function tabNotesTests() {
   if (!Services.prefs.getBoolPref("browser.tabs.notes.enabled", false)) {
@@ -571,18 +572,58 @@ add_task(async function tabNotesTests() {
 
   const tab = await addTabTo(gBrowser, "https://example.com/");
 
+  info("validate the presentation of an eligible tab with no note");
   await openTabPreview(tab);
   Assert.equal(
     previewPanel.querySelector(".tab-note-text-container").innerText,
     "",
     "Preview panel contains no tab note"
   );
+  let addNoteButton = previewPanel.querySelector(".tab-preview-add-note");
+  Assert.ok(
+    !addNoteButton.hasAttribute("hidden"),
+    "add note button should be visible on an eligible tab without a tab note"
+  );
+
+  info("choose to add a note from the tab hover preview panel");
+  let tabNotePanel = document.getElementById("tabNotePanel");
+  let panelShown = BrowserTestUtils.waitForPopupEvent(tabNotePanel, "shown");
+  const previewHidden = BrowserTestUtils.waitForPopupEvent(
+    previewPanel,
+    "hidden"
+  );
+  addNoteButton.click();
+  await Promise.all([panelShown, previewHidden]);
+
+  info("save a new tab note");
+  Assert.equal(
+    document.activeElement,
+    tabNotePanel.querySelector("textarea"),
+    "tab note textarea should be focused"
+  );
+  const input = BrowserTestUtils.waitForEvent(document.activeElement, "input");
+  EventUtils.sendString(noteText, window);
+  await input;
+  let menuHidden = BrowserTestUtils.waitForPopupEvent(tabNotePanel, "hidden");
+  let tabNoteCreated = BrowserTestUtils.waitForEvent(tab, "TabNote:Created");
+  tabNotePanel.querySelector("#tab-note-editor-button-save").click();
+  await Promise.all([menuHidden, tabNoteCreated]);
+
+  await BrowserTestUtils.waitForCondition(
+    () => Glean.tabNotes.added.testGetValue()?.length,
+    "wait for event to be recorded"
+  );
+
+  const [addedEvent] = Glean.tabNotes.added.testGetValue();
+  Assert.deepEqual(
+    addedEvent.extra,
+    { source: "hover_menu" },
+    "added event extra data should say the tab note was added from the tab hover preview menu"
+  );
+
   await closeTabPreviews();
 
-  const tabNoteCreated = BrowserTestUtils.waitForEvent(tab, "TabNote:Created");
-  TabNotes.set(tab, noteText);
-  await tabNoteCreated;
-
+  info("validate the presentation of an eligible tab with a tab note");
   await openTabPreview(tab);
 
   Assert.equal(
@@ -590,22 +631,39 @@ add_task(async function tabNotesTests() {
     noteText,
     "New tab note is visible in preview panel"
   );
+  addNoteButton = previewPanel.querySelector(".tab-preview-add-note");
+  Assert.ok(
+    addNoteButton.hasAttribute("hidden"),
+    "add note button should be hidden on an eligible tab with a tab note"
+  );
   await closeTabPreviews();
 
+  info(
+    "delete the tab note to return the tab hover preview to the state with no tab note"
+  );
   const tabNoteRemoved = BrowserTestUtils.waitForEvent(tab, "TabNote:Removed");
   TabNotes.delete(tab);
   await tabNoteRemoved;
 
+  info(
+    "validate the presentation of an eligible tab after its note has been deleted"
+  );
   await openTabPreview(tab);
   Assert.equal(
     previewPanel.querySelector(".tab-note-text-container").innerText,
     "",
     "Preview panel contains no tab note after delete"
   );
+  addNoteButton = previewPanel.querySelector(".tab-preview-add-note");
+  Assert.ok(
+    !addNoteButton.hasAttribute("hidden"),
+    "add note button should be visible on an eligible tab without a tab note after delete"
+  );
   await closeTabPreviews();
 
   BrowserTestUtils.removeTab(tab);
   await resetState();
+  await TabNotes.reset();
 });
 
 /*
@@ -1232,6 +1290,81 @@ add_task(async function testDragToCancelPreview() {
   BrowserTestUtils.removeTab(tab);
   sinon.restore();
   await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function tabPreviewHidesWhenDraggingOverPanel() {
+  const tab = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "about:robots"
+  );
+  const previewElement = document.getElementById(TAB_PREVIEW_PANEL_ID);
+
+  await openTabPreview(tab);
+
+  const previewHidden = BrowserTestUtils.waitForPopupEvent(
+    previewElement,
+    "hidden"
+  );
+  const dragend = BrowserTestUtils.waitForEvent(tab, "dragend");
+
+  EventUtils.synthesizePlainDragAndDrop({
+    srcElement: tab,
+    destElement: null,
+    stepX: 10,
+    stepY: 0,
+  });
+
+  await previewHidden;
+  Assert.equal(
+    previewElement.state,
+    "closed",
+    "Preview closes when dragging downward over the panel"
+  );
+
+  await dragend;
+
+  BrowserTestUtils.removeTab(tab);
+  await resetState();
+
+  const groupTab = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "about:robots"
+  );
+  const group = gBrowser.addTabGroup([groupTab]);
+  group.collapsed = true;
+
+  await openGroupPreview(group);
+
+  const groupPreviewElement = document.getElementById(
+    TAB_GROUP_PREVIEW_PANEL_ID
+  );
+  const groupPreviewHidden = BrowserTestUtils.waitForPopupEvent(
+    groupPreviewElement,
+    "hidden"
+  );
+  const groupDragend = BrowserTestUtils.waitForEvent(
+    group.labelElement,
+    "dragend"
+  );
+
+  EventUtils.synthesizePlainDragAndDrop({
+    srcElement: group.labelElement,
+    destElement: null,
+    stepX: 10,
+    stepY: 0,
+  });
+
+  await groupPreviewHidden;
+  Assert.equal(
+    groupPreviewElement.state,
+    "closed",
+    "Group preview closes when dragging downward over the panel"
+  );
+
+  await groupDragend;
+
+  BrowserTestUtils.removeTab(groupTab);
+  await resetState();
 });
 
 /**

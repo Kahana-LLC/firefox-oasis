@@ -897,7 +897,7 @@
 #trustpanel-siteinfo-icon {
   list-style-image: url(chrome://global/skin/icons/security-broken.svg);
 
-  #trustpanel-popup[connection^="secure"] & {
+  #trustpanel-popup:is([connection^="secure"], [connection="extension"], [connection="chrome"], [connection="file"]) & {
     list-style-image: url(chrome://global/skin/icons/security.svg);
   }
 }
@@ -960,6 +960,7 @@
     background-repeat: no-repeat;
     background-size: var(--icon-size);
     padding-inline-start: calc(var(--icon-size) + var(--space-small));
+    -moz-context-properties: fill;
 
     &:-moz-locale-dir(rtl) {
       background-position-x: right;

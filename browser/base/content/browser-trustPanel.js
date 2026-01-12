@@ -5,6 +5,7 @@
 /* import-globals-from browser-siteProtections.js */
 
 ChromeUtils.defineESModuleGetters(this, {
+  BrowserUtils: "resource://gre/modules/BrowserUtils.sys.mjs",
   ContentBlockingAllowList:
     "resource://gre/modules/ContentBlockingAllowList.sys.mjs",
   E10SUtils: "resource://gre/modules/E10SUtils.sys.mjs",
@@ -320,15 +321,19 @@ class TrustPanel {
       icon.classList.add("inactive");
     }
 
+    icon.setAttribute("tooltiptext", this.#tooltipText());
     icon.classList.toggle("chickletShown", this.#isSecureInternalUI);
   }
 
   async #updatePopup() {
-    this.#host = window.gIdentityHandler.getHostForDisplay();
-    this.#popup.setAttribute(
-      "connection",
-      this.#isSecurePage() ? "secure" : "not-secure"
-    );
+    if (this.#uri) {
+      this.#host = BrowserUtils.formatURIForDisplay(this.#uri, {
+        onlyBaseDomain: true,
+      });
+    } else {
+      this.#host = "";
+    }
+    this.#popup.setAttribute("connection", this.#connectionState());
     this.#popup.setAttribute(
       "tracking-protection",
       this.#trackingProtectionStatus()
@@ -860,7 +865,7 @@ class TrustPanel {
     if (this.#isEV) {
       let iData = this.#getIdentityData();
       owner = iData.subjectOrg;
-      verifier = this._identityIconLabel.tooltipText;
+      verifier = this.#tooltipText();
 
       // Build an appropriate supplemental block out of whatever location data we have
       if (iData.city) {
