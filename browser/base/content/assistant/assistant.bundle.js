@@ -779,8 +779,8 @@ var init_errors = __esm({
 function _isToolCall(toolCall) {
   return !!(toolCall && typeof toolCall === "object" && "type" in toolCall && toolCall.type === "tool_call");
 }
-function _configHasToolCallId(config2) {
-  return !!(config2 && typeof config2 === "object" && "toolCall" in config2 && config2.toolCall != null && typeof config2.toolCall === "object" && "id" in config2.toolCall && typeof config2.toolCall.id === "string");
+function _configHasToolCallId(config4) {
+  return !!(config4 && typeof config4 === "object" && "toolCall" in config4 && config4.toolCall != null && typeof config4.toolCall === "object" && "id" in config4.toolCall && typeof config4.toolCall.id === "string");
 }
 var ToolInputParsingException;
 var init_utils = __esm({
@@ -2789,14 +2789,14 @@ var init_otel = __esm({
       getActiveSpan() {
         return void 0;
       }
-      setSpan(context, _span) {
-        return context;
+      setSpan(context3, _span) {
+        return context3;
       }
-      getSpan(_context) {
+      getSpan(_context2) {
         return void 0;
       }
-      setSpanContext(context, _spanContext) {
-        return context;
+      setSpanContext(context3, _spanContext) {
+        return context3;
       }
       getTracerProvider() {
         return void 0;
@@ -2809,7 +2809,7 @@ var init_otel = __esm({
       active() {
         return {};
       }
-      with(_context, fn) {
+      with(_context2, fn) {
         return fn();
       }
     };
@@ -3369,8 +3369,8 @@ var require_retry = __commonJS({
       return timeouts;
     };
     exports.createTimeout = function(attempt, opts) {
-      var random = opts.randomize ? Math.random() + 1 : 1;
-      var timeout = Math.round(random * Math.max(opts.minTimeout, 1) * Math.pow(opts.factor, attempt));
+      var random3 = opts.randomize ? Math.random() + 1 : 1;
+      var timeout = Math.round(random3 * Math.max(opts.minTimeout, 1) * Math.pow(opts.factor, attempt));
       timeout = Math.min(timeout, opts.maxTimeout);
       return timeout;
     };
@@ -3511,16 +3511,16 @@ var require_eventemitter3 = __commonJS({
       Events.prototype = /* @__PURE__ */ Object.create(null);
       if (!new Events().__proto__) prefix = false;
     }
-    function EE(fn, context, once) {
+    function EE(fn, context3, once) {
       this.fn = fn;
-      this.context = context;
+      this.context = context3;
       this.once = once || false;
     }
-    function addListener(emitter, event, fn, context, once) {
+    function addListener(emitter, event, fn, context3, once) {
       if (typeof fn !== "function") {
         throw new TypeError("The listener must be a function");
       }
-      var listener = new EE(fn, context || emitter, once), evt = prefix ? prefix + event : event;
+      var listener = new EE(fn, context3 || emitter, once), evt = prefix ? prefix + event : event;
       if (!emitter._events[evt]) emitter._events[evt] = listener, emitter._eventsCount++;
       else if (!emitter._events[evt].fn) emitter._events[evt].push(listener);
       else emitter._events[evt] = [emitter._events[evt], listener];
@@ -3611,13 +3611,13 @@ var require_eventemitter3 = __commonJS({
       }
       return true;
     };
-    EventEmitter.prototype.on = function on(event, fn, context) {
-      return addListener(this, event, fn, context, false);
+    EventEmitter.prototype.on = function on(event, fn, context3) {
+      return addListener(this, event, fn, context3, false);
     };
-    EventEmitter.prototype.once = function once(event, fn, context) {
-      return addListener(this, event, fn, context, true);
+    EventEmitter.prototype.once = function once(event, fn, context3) {
+      return addListener(this, event, fn, context3, true);
     };
-    EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once) {
+    EventEmitter.prototype.removeListener = function removeListener(event, fn, context3, once) {
       var evt = prefix ? prefix + event : event;
       if (!this._events[evt]) return this;
       if (!fn) {
@@ -3626,12 +3626,12 @@ var require_eventemitter3 = __commonJS({
       }
       var listeners = this._events[evt];
       if (listeners.fn) {
-        if (listeners.fn === fn && (!once || listeners.once) && (!context || listeners.context === context)) {
+        if (listeners.fn === fn && (!once || listeners.once) && (!context3 || listeners.context === context3)) {
           clearEvent(this, evt);
         }
       } else {
         for (var i = 0, events = [], length = listeners.length; i < length; i++) {
-          if (listeners[i].fn !== fn || once && !listeners[i].once || context && listeners[i].context !== context) {
+          if (listeners[i].fn !== fn || once && !listeners[i].once || context3 && listeners[i].context !== context3) {
             events.push(listeners[i]);
           }
         }
@@ -6178,7 +6178,7 @@ var init_prompts = __esm({
 });
 
 // node_modules/langsmith/dist/utils/error.js
-async function raiseForStatus(response, context, consume) {
+async function raiseForStatus(response, context3, consume) {
   let errorBody;
   if (response.ok) {
     if (consume) {
@@ -6187,7 +6187,7 @@ async function raiseForStatus(response, context, consume) {
     return;
   }
   errorBody = await response.text();
-  const fullMessage = `Failed to ${context}. Received status [${response.status}]: ${response.statusText}. Server response: ${errorBody}`;
+  const fullMessage = `Failed to ${context3}. Received status [${response.status}]: ${response.statusText}. Server response: ${errorBody}`;
   if (response.status === 409) {
     throw new LangSmithConflictError(fullMessage);
   }
@@ -6548,7 +6548,7 @@ var init_client = __esm({
     SERVER_INFO_REQUEST_TIMEOUT_MS = 1e4;
     DEFAULT_API_URL = "https://api.smith.langchain.com";
     Client = class _Client {
-      constructor(config2 = {}) {
+      constructor(config4 = {}) {
         Object.defineProperty(this, "apiKey", {
           enumerable: true,
           configurable: true,
@@ -6706,40 +6706,40 @@ var init_client = __esm({
           value: getEnvironmentVariable2("LANGSMITH_DEBUG") === "true"
         });
         const defaultConfig = _Client.getDefaultClientConfig();
-        this.tracingSampleRate = getTracingSamplingRate(config2.tracingSamplingRate);
-        this.apiUrl = trimQuotes(config2.apiUrl ?? defaultConfig.apiUrl) ?? "";
+        this.tracingSampleRate = getTracingSamplingRate(config4.tracingSamplingRate);
+        this.apiUrl = trimQuotes(config4.apiUrl ?? defaultConfig.apiUrl) ?? "";
         if (this.apiUrl.endsWith("/")) {
           this.apiUrl = this.apiUrl.slice(0, -1);
         }
-        this.apiKey = trimQuotes(config2.apiKey ?? defaultConfig.apiKey);
-        this.webUrl = trimQuotes(config2.webUrl ?? defaultConfig.webUrl);
+        this.apiKey = trimQuotes(config4.apiKey ?? defaultConfig.apiKey);
+        this.webUrl = trimQuotes(config4.webUrl ?? defaultConfig.webUrl);
         if (this.webUrl?.endsWith("/")) {
           this.webUrl = this.webUrl.slice(0, -1);
         }
-        this.timeout_ms = config2.timeout_ms ?? 9e4;
+        this.timeout_ms = config4.timeout_ms ?? 9e4;
         this.caller = new AsyncCaller({
-          ...config2.callerOptions ?? {},
-          debug: config2.debug ?? this.debug
+          ...config4.callerOptions ?? {},
+          debug: config4.debug ?? this.debug
         });
-        this.traceBatchConcurrency = config2.traceBatchConcurrency ?? this.traceBatchConcurrency;
+        this.traceBatchConcurrency = config4.traceBatchConcurrency ?? this.traceBatchConcurrency;
         if (this.traceBatchConcurrency < 1) {
           throw new Error("Trace batch concurrency must be positive.");
         }
-        this.debug = config2.debug ?? this.debug;
+        this.debug = config4.debug ?? this.debug;
         this.batchIngestCaller = new AsyncCaller({
           maxRetries: 2,
           maxConcurrency: this.traceBatchConcurrency,
-          ...config2.callerOptions ?? {},
+          ...config4.callerOptions ?? {},
           onFailedResponseHook: handle429,
-          debug: config2.debug ?? this.debug
+          debug: config4.debug ?? this.debug
         });
-        this.hideInputs = config2.hideInputs ?? config2.anonymizer ?? defaultConfig.hideInputs;
-        this.hideOutputs = config2.hideOutputs ?? config2.anonymizer ?? defaultConfig.hideOutputs;
-        this.autoBatchTracing = config2.autoBatchTracing ?? this.autoBatchTracing;
-        this.blockOnRootRunFinalization = config2.blockOnRootRunFinalization ?? this.blockOnRootRunFinalization;
-        this.batchSizeBytesLimit = config2.batchSizeBytesLimit;
-        this.fetchOptions = config2.fetchOptions || {};
-        this.manualFlushMode = config2.manualFlushMode ?? this.manualFlushMode;
+        this.hideInputs = config4.hideInputs ?? config4.anonymizer ?? defaultConfig.hideInputs;
+        this.hideOutputs = config4.hideOutputs ?? config4.anonymizer ?? defaultConfig.hideOutputs;
+        this.autoBatchTracing = config4.autoBatchTracing ?? this.autoBatchTracing;
+        this.blockOnRootRunFinalization = config4.blockOnRootRunFinalization ?? this.blockOnRootRunFinalization;
+        this.batchSizeBytesLimit = config4.batchSizeBytesLimit;
+        this.fetchOptions = config4.fetchOptions || {};
+        this.manualFlushMode = config4.manualFlushMode ?? this.manualFlushMode;
         if (getOtelEnabled()) {
           this.langSmithToOTELTranslator = new LangSmithToOTELTranslator();
         }
@@ -7404,7 +7404,7 @@ var init_client = __esm({
         });
         return stream;
       }
-      async _sendMultipartRequest(parts, context, options) {
+      async _sendMultipartRequest(parts, context3, options) {
         const boundary = "----LangSmithFormBoundary" + Math.random().toString(36).slice(2);
         const isNodeFetch = _globalFetchImplementationIsNodeFetch();
         const buildBuffered = () => this._createNodeFetchBody(parts, boundary);
@@ -7441,7 +7441,7 @@ var init_client = __esm({
             res = await send(await buildBuffered());
           }
           if ((!this.multipartStreamingDisabled || streamedAttempt) && res.status === 422 && (options?.apiUrl ?? this.apiUrl) !== DEFAULT_API_URL) {
-            console.warn(`Streaming multipart upload to ${options?.apiUrl ?? this.apiUrl}/runs/multipart failed. This usually means the host does not support chunked uploads. Retrying with a buffered upload for operation "${context}".`);
+            console.warn(`Streaming multipart upload to ${options?.apiUrl ?? this.apiUrl}/runs/multipart failed. This usually means the host does not support chunked uploads. Retrying with a buffered upload for operation "${context3}".`);
             this.multipartStreamingDisabled = true;
             res = await send(await buildBuffered());
           }
@@ -7449,7 +7449,7 @@ var init_client = __esm({
         } catch (e) {
           console.warn(`${e.message.trim()}
 
-Context: ${context}`);
+Context: ${context3}`);
         }
       }
       async updateRun(runId, run, options) {
@@ -10108,14 +10108,14 @@ var init_run_trees = __esm({
           return;
         }
         const defaultConfig = _RunTree.getDefaultConfig();
-        const { metadata, ...config2 } = originalConfig;
-        const client2 = config2.client ?? _RunTree.getSharedClient();
+        const { metadata, ...config4 } = originalConfig;
+        const client2 = config4.client ?? _RunTree.getSharedClient();
         const dedupedMetadata = {
           ...metadata,
-          ...config2?.extra?.metadata
+          ...config4?.extra?.metadata
         };
-        config2.extra = { ...config2.extra, metadata: dedupedMetadata };
-        Object.assign(this, { ...defaultConfig, ...config2, client: client2 });
+        config4.extra = { ...config4.extra, metadata: dedupedMetadata };
+        Object.assign(this, { ...defaultConfig, ...config4, client: client2 });
         if (!this.trace_id) {
           if (this.parent_run) {
             this.trace_id = this.parent_run.trace_id ?? this.id;
@@ -10169,10 +10169,10 @@ var init_run_trees = __esm({
         }
         return _RunTree.sharedClient;
       }
-      createChild(config2) {
+      createChild(config4) {
         const child_execution_order = this.child_execution_order + 1;
         const child = new _RunTree({
-          ...config2,
+          ...config4,
           parent_run: this,
           project_name: this.project_name,
           replicas: this.replicas,
@@ -10185,7 +10185,7 @@ var init_run_trees = __esm({
           child[_LC_CONTEXT_VARIABLES_KEY] = this[_LC_CONTEXT_VARIABLES_KEY];
         }
         const LC_CHILD = Symbol.for("lc:child_config");
-        const presentConfig = config2.extra?.[LC_CHILD] ?? this.extra[LC_CHILD];
+        const presentConfig = config4.extra?.[LC_CHILD] ?? this.extra[LC_CHILD];
         if (isRunnableConfigLike(presentConfig)) {
           const newConfig = { ...presentConfig };
           const callbacks = isCallbackManagerLike(newConfig.callbacks) ? newConfig.callbacks.copy?.() : void 0;
@@ -10456,7 +10456,7 @@ var init_run_trees = __esm({
           return { strTime, time: Date.parse(strTime + "Z"), uuid };
         });
         const traceId = parsedDottedOrder[0].uuid;
-        const config2 = {
+        const config4 = {
           ...inheritArgs,
           name: inheritArgs?.["name"] ?? "parent",
           run_type: inheritArgs?.["run_type"] ?? "chain",
@@ -10467,12 +10467,12 @@ var init_run_trees = __esm({
         };
         if (rawHeaders["baggage"] && typeof rawHeaders["baggage"] === "string") {
           const baggage = Baggage.fromHeader(rawHeaders["baggage"]);
-          config2.metadata = baggage.metadata;
-          config2.tags = baggage.tags;
-          config2.project_name = baggage.project_name;
-          config2.replicas = baggage.replicas;
+          config4.metadata = baggage.metadata;
+          config4.tags = baggage.tags;
+          config4.project_name = baggage.project_name;
+          config4.replicas = baggage.replicas;
         }
-        return new _RunTree(config2);
+        return new _RunTree(config4);
       }
       toHeaders(headers) {
         const result = {
@@ -17009,8 +17009,8 @@ var init_async_local_storage = __esm({
         const storage = this.getInstance();
         return storage.getStore()?.extra?.[LC_CHILD_KEY];
       }
-      runWithConfig(config2, callback, avoidCreatingRootRunTree) {
-        const callbackManager = CallbackManager._configureSync(config2?.callbacks, void 0, config2?.tags, void 0, config2?.metadata);
+      runWithConfig(config4, callback, avoidCreatingRootRunTree) {
+        const callbackManager = CallbackManager._configureSync(config4?.callbacks, void 0, config4?.tags, void 0, config4?.metadata);
         const storage = this.getInstance();
         const previousValue = storage.getStore();
         const parentRunId = callbackManager?.getParentRunId();
@@ -17025,7 +17025,7 @@ var init_async_local_storage = __esm({
           });
         }
         if (runTree) {
-          runTree.extra = { ...runTree.extra, [LC_CHILD_KEY]: config2 };
+          runTree.extra = { ...runTree.extra, [LC_CHILD_KEY]: config4 };
         }
         if (previousValue !== void 0 && previousValue[_CONTEXT_VARIABLES_KEY] !== void 0) {
           if (runTree === void 0) {
@@ -17054,8 +17054,8 @@ var init_singletons = __esm({
 });
 
 // node_modules/@langchain/core/dist/runnables/config.js
-async function getCallbackManagerForConfig(config2) {
-  return CallbackManager._configureSync(config2?.callbacks, void 0, config2?.tags, void 0, config2?.metadata);
+async function getCallbackManagerForConfig(config4) {
+  return CallbackManager._configureSync(config4?.callbacks, void 0, config4?.tags, void 0, config4?.metadata);
 }
 function mergeConfigs(...configs) {
   const copy = {};
@@ -17132,7 +17132,7 @@ function mergeConfigs(...configs) {
   }
   return copy;
 }
-function ensureConfig(config2) {
+function ensureConfig(config4) {
   const implicitConfig = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
   let empty = {
     tags: [],
@@ -17153,8 +17153,8 @@ function ensureConfig(config2) {
       empty
     );
   }
-  if (config2) {
-    empty = Object.entries(config2).reduce(
+  if (config4) {
+    empty = Object.entries(config4).reduce(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (currentConfig, [key, value]) => {
         if (value !== void 0) {
@@ -17191,8 +17191,8 @@ function ensureConfig(config2) {
   }
   return empty;
 }
-function patchConfig(config2 = {}, { callbacks, maxConcurrency, recursionLimit, runName, configurable, runId } = {}) {
-  const newConfig = ensureConfig(config2);
+function patchConfig(config4 = {}, { callbacks, maxConcurrency, recursionLimit, runName, configurable, runId } = {}) {
+  const newConfig = ensureConfig(config4);
   if (callbacks !== void 0) {
     delete newConfig.runName;
     newConfig.callbacks = callbacks;
@@ -17214,16 +17214,16 @@ function patchConfig(config2 = {}, { callbacks, maxConcurrency, recursionLimit, 
   }
   return newConfig;
 }
-function pickRunnableConfigKeys(config2) {
-  return config2 ? {
-    configurable: config2.configurable,
-    recursionLimit: config2.recursionLimit,
-    callbacks: config2.callbacks,
-    tags: config2.tags,
-    metadata: config2.metadata,
-    maxConcurrency: config2.maxConcurrency,
-    timeout: config2.timeout,
-    signal: config2.signal
+function pickRunnableConfigKeys(config4) {
+  return config4 ? {
+    configurable: config4.configurable,
+    recursionLimit: config4.recursionLimit,
+    callbacks: config4.callbacks,
+    tags: config4.tags,
+    metadata: config4.metadata,
+    maxConcurrency: config4.maxConcurrency,
+    timeout: config4.timeout,
+    signal: config4.signal
   } : void 0;
 }
 var DEFAULT_RECURSION_LIMIT, PRIMITIVES;
@@ -18586,7 +18586,7 @@ var init_root_listener = __esm({
   "node_modules/@langchain/core/dist/tracers/root_listener.js"() {
     init_base3();
     RootListenersTracer = class extends BaseTracer {
-      constructor({ config: config2, onStart, onEnd, onError }) {
+      constructor({ config: config4, onStart, onEnd, onError }) {
         super({ _awaitHandler: true });
         Object.defineProperty(this, "name", {
           enumerable: true,
@@ -18624,7 +18624,7 @@ var init_root_listener = __esm({
           writable: true,
           value: void 0
         });
-        this.config = config2;
+        this.config = config4;
         this.argOnStart = onStart;
         this.argOnEnd = onEnd;
         this.argOnError = onError;
@@ -18753,8 +18753,8 @@ function _generateMermaidGraphStyles(nodeColors) {
   }
   return styles2;
 }
-function drawMermaid(nodes, edges, config2) {
-  const { firstNode, lastNode, nodeColors, withStyles = true, curveStyle = "linear", wrapLabelNWords = 9 } = config2 ?? {};
+function drawMermaid(nodes, edges, config4) {
+  const { firstNode, lastNode, nodeColors, withStyles = true, curveStyle = "linear", wrapLabelNWords = 9 } = config4 ?? {};
   let mermaidGraph = withStyles ? `%%{init: {'flowchart': {'curve': '${curveStyle}'}}}%%
 graph TD;
 ` : "graph TD;\n";
@@ -18839,8 +18839,8 @@ graph TD;
   }
   return mermaidGraph;
 }
-async function drawMermaidPng(mermaidSyntax, config2) {
-  let { backgroundColor = "white" } = config2 ?? {};
+async function drawMermaidPng(mermaidSyntax, config4) {
+  let { backgroundColor = "white" } = config4 ?? {};
   const mermaidSyntaxEncoded = btoa(mermaidSyntax);
   if (backgroundColor !== void 0) {
     const hexColorPattern = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
@@ -18870,7 +18870,7 @@ var init_graph_mermaid = __esm({
 // node_modules/zod/v4/core/core.js
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer2, params) {
-  function init(inst, def) {
+  function init4(inst, def) {
     var _a2;
     Object.defineProperty(inst, "_zod", {
       value: inst._zod ?? {},
@@ -18893,14 +18893,14 @@ function $constructor(name, initializer2, params) {
   function _(def) {
     var _a2;
     const inst = params?.Parent ? new Definition() : this;
-    init(inst, def);
+    init4(inst, def);
     (_a2 = inst._zod).deferred ?? (_a2.deferred = []);
     for (const fn of inst._zod.deferred) {
       fn();
     }
     return inst;
   }
-  Object.defineProperty(_, "init", { value: init });
+  Object.defineProperty(_, "init", { value: init4 });
   Object.defineProperty(_, Symbol.hasInstance, {
     value: (inst) => {
       if (params?.Parent && inst instanceof params.Parent)
@@ -19331,10 +19331,10 @@ function prefixIssues(path, issues) {
 function unwrapMessage(message) {
   return typeof message === "string" ? message : message?.message;
 }
-function finalizeIssue(iss, ctx, config2) {
+function finalizeIssue(iss, ctx, config4) {
   const full = { ...iss, path: iss.path ?? [] };
   if (!iss.message) {
-    const message = unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+    const message = unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config4.customError?.(iss)) ?? unwrapMessage(config4.localeError?.(iss)) ?? "Invalid input";
     full.message = message;
   }
   delete full.inst;
@@ -24020,9 +24020,9 @@ function isIterableIterator(thing) {
 function isAsyncIterable(thing) {
   return typeof thing === "object" && thing !== null && typeof thing[Symbol.asyncIterator] === "function";
 }
-function* consumeIteratorInContext(context, iter) {
+function* consumeIteratorInContext(context3, iter) {
   while (true) {
-    const { value, done } = AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(context), iter.next.bind(iter), true);
+    const { value, done } = AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(context3), iter.next.bind(iter), true);
     if (done) {
       break;
     } else {
@@ -24030,10 +24030,10 @@ function* consumeIteratorInContext(context, iter) {
     }
   }
 }
-async function* consumeAsyncIterableInContext(context, iter) {
+async function* consumeAsyncIterableInContext(context3, iter) {
   const iterator = iter[Symbol.asyncIterator]();
   while (true) {
-    const { value, done } = await AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(context), iterator.next.bind(iter), true);
+    const { value, done } = await AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(context3), iterator.next.bind(iter), true);
     if (done) {
       break;
     } else {
@@ -24180,10 +24180,10 @@ var init_base4 = __esm({
        * @param config New configuration parameters to attach to the new runnable.
        * @returns A new RunnableBinding with a config matching what's passed.
        */
-      withConfig(config2) {
+      withConfig(config4) {
         return new RunnableBinding({
           bound: this,
-          config: config2,
+          config: config4,
           kwargs: {}
         });
       }
@@ -24252,10 +24252,10 @@ var init_base4 = __esm({
        * @returns A readable stream that is also an iterable.
        */
       async stream(input, options) {
-        const config2 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this._streamIterator(input, config2),
-          config: config2
+          generator: this._streamIterator(input, config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -24292,13 +24292,13 @@ var init_base4 = __esm({
         return [runnableConfig, callOptions];
       }
       async _callWithConfig(func, input, options) {
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
-        const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config2.runId, config2?.runType, void 0, void 0, config2?.runName ?? this.getName());
-        delete config2.runId;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config4.runId, config4?.runType, void 0, void 0, config4?.runName ?? this.getName());
+        delete config4.runId;
         let output;
         try {
-          const promise = func.call(this, input, config2, runManager);
+          const promise = func.call(this, input, config4, runManager);
           output = await raceWithSignal(promise, options?.signal);
         } catch (e) {
           await runManager?.handleChainError(e);
@@ -24349,8 +24349,8 @@ var init_base4 = __esm({
         let finalInputSupported = true;
         let finalOutput;
         let finalOutputSupported = true;
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
         const outerThis = this;
         async function* wrapInputForTracing() {
           for await (const chunk of inputGenerator) {
@@ -24375,11 +24375,11 @@ var init_base4 = __esm({
         }
         let runManager;
         try {
-          const pipe = await pipeGeneratorWithSetup(transformer.bind(this), wrapInputForTracing(), async () => callbackManager_?.handleChainStart(this.toJSON(), { input: "" }, config2.runId, config2.runType, void 0, void 0, config2.runName ?? this.getName()), options?.signal, config2);
-          delete config2.runId;
-          runManager = pipe.setup;
+          const pipe3 = await pipeGeneratorWithSetup(transformer.bind(this), wrapInputForTracing(), async () => callbackManager_?.handleChainStart(this.toJSON(), { input: "" }, config4.runId, config4.runType, void 0, void 0, config4.runName ?? this.getName()), options?.signal, config4);
+          delete config4.runId;
+          runManager = pipe3.setup;
           const streamEventsHandler = runManager?.handlers.find(isStreamEventsHandler);
-          let iterator = pipe.output;
+          let iterator = pipe3.output;
           if (streamEventsHandler !== void 0 && runManager !== void 0) {
             iterator = streamEventsHandler.tapOutputIterable(runManager.runId, iterator);
           }
@@ -24494,21 +24494,21 @@ var init_base4 = __esm({
           autoClose: false,
           _schemaFormat: "original"
         });
-        const config2 = ensureConfig(options);
-        yield* this._streamLog(input, logStreamCallbackHandler, config2);
+        const config4 = ensureConfig(options);
+        yield* this._streamLog(input, logStreamCallbackHandler, config4);
       }
-      async *_streamLog(input, logStreamCallbackHandler, config2) {
-        const { callbacks } = config2;
+      async *_streamLog(input, logStreamCallbackHandler, config4) {
+        const { callbacks } = config4;
         if (callbacks === void 0) {
-          config2.callbacks = [logStreamCallbackHandler];
+          config4.callbacks = [logStreamCallbackHandler];
         } else if (Array.isArray(callbacks)) {
-          config2.callbacks = callbacks.concat([logStreamCallbackHandler]);
+          config4.callbacks = callbacks.concat([logStreamCallbackHandler]);
         } else {
           const copiedCallbacks = callbacks.copy();
           copiedCallbacks.addHandler(logStreamCallbackHandler, true);
-          config2.callbacks = copiedCallbacks;
+          config4.callbacks = copiedCallbacks;
         }
-        const runnableStreamPromise = this.stream(input, config2);
+        const runnableStreamPromise = this.stream(input, config4);
         async function consumeRunnableStream() {
           try {
             const runnableStream = await runnableStreamPromise;
@@ -24557,18 +24557,18 @@ var init_base4 = __esm({
           ...streamOptions,
           autoClose: false
         });
-        const config2 = ensureConfig(options);
-        const runId = config2.runId ?? v4_default();
-        config2.runId = runId;
-        const callbacks = config2.callbacks;
+        const config4 = ensureConfig(options);
+        const runId = config4.runId ?? v4_default();
+        config4.runId = runId;
+        const callbacks = config4.callbacks;
         if (callbacks === void 0) {
-          config2.callbacks = [eventStreamer];
+          config4.callbacks = [eventStreamer];
         } else if (Array.isArray(callbacks)) {
-          config2.callbacks = callbacks.concat(eventStreamer);
+          config4.callbacks = callbacks.concat(eventStreamer);
         } else {
           const copiedCallbacks = callbacks.copy();
           copiedCallbacks.addHandler(eventStreamer, true);
-          config2.callbacks = copiedCallbacks;
+          config4.callbacks = copiedCallbacks;
         }
         const abortController = new AbortController();
         const outerThis = this;
@@ -24593,7 +24593,7 @@ var init_base4 = __esm({
               signal = abortController.signal;
             }
             const runnableStream = await outerThis.stream(input, {
-              ...config2,
+              ...config4,
               signal
             });
             const tappedStream = eventStreamer.tapOutputIterable(runId, runnableStream);
@@ -24635,10 +24635,10 @@ var init_base4 = __esm({
       async *_streamEventsV1(input, options, streamOptions) {
         let runLog;
         let hasEncounteredStartEvent = false;
-        const config2 = ensureConfig(options);
-        const rootTags = config2.tags ?? [];
-        const rootMetadata = config2.metadata ?? {};
-        const rootName = config2.runName ?? this.getName();
+        const config4 = ensureConfig(options);
+        const rootTags = config4.tags ?? [];
+        const rootMetadata = config4.metadata ?? {};
+        const rootName = config4.runName ?? this.getName();
         const logStreamCallbackHandler = new LogStreamCallbackHandler({
           ...streamOptions,
           autoClose: false,
@@ -24647,7 +24647,7 @@ var init_base4 = __esm({
         const rootEventFilter = new _RootEventFilter({
           ...streamOptions
         });
-        const logStream = this._streamLog(input, logStreamCallbackHandler, config2);
+        const logStream = this._streamLog(input, logStreamCallbackHandler, config4);
         for await (const log of logStream) {
           if (!runLog) {
             runLog = RunLog.fromRunLogPatch(log);
@@ -24772,10 +24772,10 @@ var init_base4 = __esm({
           bound: this,
           config: {},
           configFactories: [
-            (config2) => ({
+            (config4) => ({
               callbacks: [
                 new RootListenersTracer({
-                  config: config2,
+                  config: config4,
                   onStart,
                   onEnd,
                   onError
@@ -24852,8 +24852,8 @@ var init_base4 = __esm({
         return this.bound.getName(suffix);
       }
       async _mergeConfig(...options) {
-        const config2 = mergeConfigs(this.config, ...options);
-        return mergeConfigs(config2, ...this.configFactories ? await Promise.all(this.configFactories.map(async (configFactory) => await configFactory(config2))) : []);
+        const config4 = mergeConfigs(this.config, ...options);
+        return mergeConfigs(config4, ...this.configFactories ? await Promise.all(this.configFactories.map(async (configFactory) => await configFactory(config4))) : []);
       }
       /**
        * Binds the runnable with the specified arguments.
@@ -24869,11 +24869,11 @@ var init_base4 = __esm({
           config: this.config
         });
       }
-      withConfig(config2) {
+      withConfig(config4) {
         return new this.constructor({
           bound: this.bound,
           kwargs: this.kwargs,
-          config: { ...this.config, ...config2 }
+          config: { ...this.config, ...config4 }
         });
       }
       withRetry(fields) {
@@ -24935,10 +24935,10 @@ var init_base4 = __esm({
           kwargs: this.kwargs,
           config: this.config,
           configFactories: [
-            (config2) => ({
+            (config4) => ({
               callbacks: [
                 new RootListenersTracer({
-                  config: config2,
+                  config: config4,
                   onStart,
                   onEnd,
                   onError
@@ -24993,8 +24993,8 @@ var init_base4 = __esm({
        * @param config The configuration to invoke the runnable with.
        * @returns A promise that resolves to the output of the runnable.
        */
-      async invoke(inputs, config2) {
-        return this._callWithConfig(this._invoke.bind(this), inputs, config2);
+      async invoke(inputs, config4) {
+        return this._callWithConfig(this._invoke.bind(this), inputs, config4);
       }
       /**
        * A helper method that is used to invoke the runnable with the specified input and configuration.
@@ -25002,8 +25002,8 @@ var init_base4 = __esm({
        * @param config The configuration to invoke the runnable with.
        * @returns A promise that resolves to the output of the runnable.
        */
-      async _invoke(inputs, config2, runManager) {
-        return this.bound.batch(inputs, patchConfig(config2, { callbacks: runManager?.getChild() }));
+      async _invoke(inputs, config4, runManager) {
+        return this.bound.batch(inputs, patchConfig(config4, { callbacks: runManager?.getChild() }));
       }
       /**
        * Bind lifecycle listeners to a Runnable, returning a new Runnable.
@@ -25050,12 +25050,12 @@ var init_base4 = __esm({
         this.maxAttemptNumber = fields.maxAttemptNumber ?? this.maxAttemptNumber;
         this.onFailedAttempt = fields.onFailedAttempt ?? this.onFailedAttempt;
       }
-      _patchConfigForRetry(attempt, config2, runManager) {
+      _patchConfigForRetry(attempt, config4, runManager) {
         const tag = attempt > 1 ? `retry:attempt:${attempt}` : void 0;
-        return patchConfig(config2, { callbacks: runManager?.getChild(tag) });
+        return patchConfig(config4, { callbacks: runManager?.getChild(tag) });
       }
-      async _invoke(input, config2, runManager) {
-        return (0, import_p_retry3.default)((attemptNumber) => super.invoke(input, this._patchConfigForRetry(attemptNumber, config2, runManager)), {
+      async _invoke(input, config4, runManager) {
+        return (0, import_p_retry3.default)((attemptNumber) => super.invoke(input, this._patchConfigForRetry(attemptNumber, config4, runManager)), {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onFailedAttempt: (error) => this.onFailedAttempt(error, input),
           retries: Math.max(this.maxAttemptNumber - 1, 0),
@@ -25072,8 +25072,8 @@ var init_base4 = __esm({
        * @param config The config for the runnable.
        * @returns A promise that resolves to the output of the runnable.
        */
-      async invoke(input, config2) {
-        return this._callWithConfig(this._invoke.bind(this), input, config2);
+      async invoke(input, config4) {
+        return this._callWithConfig(this._invoke.bind(this), input, config4);
       }
       async _batch(inputs, configs, runManagers, batchOptions) {
         const resultsMap = {};
@@ -25172,17 +25172,17 @@ var init_base4 = __esm({
         return [this.first, ...this.middle, this.last];
       }
       async invoke(input, options) {
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
-        const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config2.runId, void 0, void 0, void 0, config2?.runName);
-        delete config2.runId;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config4.runId, void 0, void 0, void 0, config4?.runName);
+        delete config4.runId;
         let nextStepInput = input;
         let finalOutput;
         try {
           const initialSteps = [this.first, ...this.middle];
           for (let i = 0; i < initialSteps.length; i += 1) {
             const step = initialSteps[i];
-            const promise = step.invoke(nextStepInput, patchConfig(config2, {
+            const promise = step.invoke(nextStepInput, patchConfig(config4, {
               callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${i + 1}`)
             }));
             nextStepInput = await raceWithSignal(promise, options?.signal);
@@ -25190,7 +25190,7 @@ var init_base4 = __esm({
           if (options?.signal?.aborted) {
             throw new Error("Aborted");
           }
-          finalOutput = await this.last.invoke(nextStepInput, patchConfig(config2, {
+          finalOutput = await this.last.invoke(nextStepInput, patchConfig(config4, {
             callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${this.steps.length}`)
           }));
         } catch (e) {
@@ -25271,11 +25271,11 @@ var init_base4 = __esm({
         }
         await runManager?.handleChainEnd(_coerceToDict3(finalOutput, "output"));
       }
-      getGraph(config2) {
+      getGraph(config4) {
         const graph = new Graph();
         let currentLastNode = null;
         this.steps.forEach((step, index2) => {
-          const stepGraph = step.getGraph(config2);
+          const stepGraph = step.getGraph(config4);
           if (index2 !== 0) {
             stepGraph.trimFirstNode();
           }
@@ -25371,16 +25371,16 @@ var init_base4 = __esm({
         return new _RunnableMap({ steps });
       }
       async invoke(input, options) {
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
         const runManager = await callbackManager_?.handleChainStart(this.toJSON(), {
           input
-        }, config2.runId, void 0, void 0, void 0, config2?.runName);
-        delete config2.runId;
+        }, config4.runId, void 0, void 0, void 0, config4?.runName);
+        delete config4.runId;
         const output = {};
         try {
           const promises = Object.entries(this.steps).map(async ([key, runnable]) => {
-            output[key] = await runnable.invoke(input, patchConfig(config2, {
+            output[key] = await runnable.invoke(input, patchConfig(config4, {
               callbacks: runManager?.getChild(`map:key:${key}`)
             }));
           });
@@ -25418,10 +25418,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config2 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config2),
-          config: config2
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -25454,24 +25454,24 @@ var init_base4 = __esm({
         this.func = fields.func;
       }
       async invoke(input, options) {
-        const [config2] = this._getOptionsList(options ?? {}, 1);
-        const callbacks = await getCallbackManagerForConfig(config2);
-        const promise = this.func(patchConfig(config2, { callbacks }), input);
-        return raceWithSignal(promise, config2?.signal);
+        const [config4] = this._getOptionsList(options ?? {}, 1);
+        const callbacks = await getCallbackManagerForConfig(config4);
+        const promise = this.func(patchConfig(config4, { callbacks }), input);
+        return raceWithSignal(promise, config4?.signal);
       }
       async *_streamIterator(input, options) {
-        const [config2] = this._getOptionsList(options ?? {}, 1);
+        const [config4] = this._getOptionsList(options ?? {}, 1);
         const result = await this.invoke(input, options);
         if (isAsyncIterable(result)) {
           for await (const item of result) {
-            config2?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             yield item;
           }
           return;
         }
         if (isIterator(result)) {
           while (true) {
-            config2?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             const state = result.next();
             if (state.done)
               break;
@@ -25514,11 +25514,11 @@ var init_base4 = __esm({
           func
         });
       }
-      async _invoke(input, config2, runManager) {
+      async _invoke(input, config4, runManager) {
         return new Promise((resolve, reject) => {
-          const childConfig = patchConfig(config2, {
+          const childConfig = patchConfig(config4, {
             callbacks: runManager?.getChild(),
-            recursionLimit: (config2?.recursionLimit ?? DEFAULT_RECURSION_LIMIT) - 1
+            recursionLimit: (config4?.recursionLimit ?? DEFAULT_RECURSION_LIMIT) - 1
           });
           void AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
             try {
@@ -25526,7 +25526,7 @@ var init_base4 = __esm({
                 ...childConfig
               });
               if (output && Runnable.isRunnable(output)) {
-                if (config2?.recursionLimit === 0) {
+                if (config4?.recursionLimit === 0) {
                   throw new Error("Recursion limit reached.");
                 }
                 output = await output.invoke(input, {
@@ -25536,7 +25536,7 @@ var init_base4 = __esm({
               } else if (isAsyncIterable(output)) {
                 let finalOutput;
                 for await (const chunk of consumeAsyncIterableInContext(childConfig, output)) {
-                  config2?.signal?.throwIfAborted();
+                  config4?.signal?.throwIfAborted();
                   if (finalOutput === void 0) {
                     finalOutput = chunk;
                   } else {
@@ -25555,7 +25555,7 @@ var init_base4 = __esm({
               } else if (isIterableIterator(output)) {
                 let finalOutput;
                 for (const chunk of consumeIteratorInContext(childConfig, output)) {
-                  config2?.signal?.throwIfAborted();
+                  config4?.signal?.throwIfAborted();
                   if (finalOutput === void 0) {
                     finalOutput = chunk;
                   } else {
@@ -25582,7 +25582,7 @@ var init_base4 = __esm({
       async invoke(input, options) {
         return this._callWithConfig(this._invoke.bind(this), input, options);
       }
-      async *_transform(generator, runManager, config2) {
+      async *_transform(generator, runManager, config4) {
         let finalChunk;
         for await (const chunk of generator) {
           if (finalChunk === void 0) {
@@ -25595,9 +25595,9 @@ var init_base4 = __esm({
             }
           }
         }
-        const childConfig = patchConfig(config2, {
+        const childConfig = patchConfig(config4, {
           callbacks: runManager?.getChild(),
-          recursionLimit: (config2?.recursionLimit ?? DEFAULT_RECURSION_LIMIT) - 1
+          recursionLimit: (config4?.recursionLimit ?? DEFAULT_RECURSION_LIMIT) - 1
         });
         const output = await new Promise((resolve, reject) => {
           void AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
@@ -25613,7 +25613,7 @@ var init_base4 = __esm({
           });
         });
         if (output && Runnable.isRunnable(output)) {
-          if (config2?.recursionLimit === 0) {
+          if (config4?.recursionLimit === 0) {
             throw new Error("Recursion limit reached.");
           }
           const stream = await output.stream(finalChunk, childConfig);
@@ -25622,12 +25622,12 @@ var init_base4 = __esm({
           }
         } else if (isAsyncIterable(output)) {
           for await (const chunk of consumeAsyncIterableInContext(childConfig, output)) {
-            config2?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             yield chunk;
           }
         } else if (isIterableIterator(output)) {
           for (const chunk of consumeIteratorInContext(childConfig, output)) {
-            config2?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             yield chunk;
           }
         } else {
@@ -25641,10 +25641,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config2 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config2),
-          config: config2
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -25692,9 +25692,9 @@ var init_base4 = __esm({
         }
       }
       async invoke(input, options) {
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
-        const { runId, ...otherConfigFields } = config2;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const { runId, ...otherConfigFields } = config4;
         const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), runId, void 0, void 0, void 0, otherConfigFields?.runName);
         const childConfig = patchConfig(otherConfigFields, {
           callbacks: runManager?.getChild()
@@ -25702,7 +25702,7 @@ var init_base4 = __esm({
         const res = await AsyncLocalStorageProviderSingleton2.runWithConfig(childConfig, async () => {
           let firstError;
           for (const runnable of this.runnables()) {
-            config2?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             try {
               const output = await runnable.invoke(input, childConfig);
               await runManager?.handleChainEnd(_coerceToDict3(output, "output"));
@@ -25722,14 +25722,14 @@ var init_base4 = __esm({
         return res;
       }
       async *_streamIterator(input, options) {
-        const config2 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config2);
-        const { runId, ...otherConfigFields } = config2;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const { runId, ...otherConfigFields } = config4;
         const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), runId, void 0, void 0, void 0, otherConfigFields?.runName);
         let firstError;
         let stream;
         for (const runnable of this.runnables()) {
-          config2?.signal?.throwIfAborted();
+          config4?.signal?.throwIfAborted();
           const childConfig = patchConfig(otherConfigFields, {
             callbacks: runManager?.getChild()
           });
@@ -25769,7 +25769,7 @@ var init_base4 = __esm({
           throw new Error("Not implemented.");
         }
         const configList = this._getOptionsList(options ?? {}, inputs.length);
-        const callbackManagers = await Promise.all(configList.map((config2) => getCallbackManagerForConfig(config2)));
+        const callbackManagers = await Promise.all(configList.map((config4) => getCallbackManagerForConfig(config4)));
         const runManagers = await Promise.all(callbackManagers.map(async (callbackManager, i) => {
           const handleStartRes = await callbackManager?.handleChainStart(this.toJSON(), _coerceToDict3(inputs[i], "input"), configList[i].runId, void 0, void 0, void 0, configList[i].runName);
           delete configList[i].runId;
@@ -25859,10 +25859,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config2 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config2),
-          config: config2
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -25923,10 +25923,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config2 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config2),
-          config: config2
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -27028,10 +27028,10 @@ var init_mustache = __esm({
       if (cache2.hasOwnProperty(name)) {
         value = cache2[name];
       } else {
-        var context = this, intermediateValue, names, index2, lookupHit = false;
-        while (context) {
+        var context3 = this, intermediateValue, names, index2, lookupHit = false;
+        while (context3) {
           if (name.indexOf(".") > 0) {
-            intermediateValue = context.view;
+            intermediateValue = context3.view;
             names = name.split(".");
             index2 = 0;
             while (intermediateValue != null && index2 < names.length) {
@@ -27040,14 +27040,14 @@ var init_mustache = __esm({
               intermediateValue = intermediateValue[names[index2++]];
             }
           } else {
-            intermediateValue = context.view[name];
-            lookupHit = hasProperty(context.view, name);
+            intermediateValue = context3.view[name];
+            lookupHit = hasProperty(context3.view, name);
           }
           if (lookupHit) {
             value = intermediateValue;
             break;
           }
-          context = context.parent;
+          context3 = context3.parent;
         }
         cache2[name] = value;
       }
@@ -27071,59 +27071,59 @@ var init_mustache = __esm({
       }
       return tokens;
     };
-    Writer.prototype.render = function render(template, view2, partials, config2) {
-      var tags = this.getConfigTags(config2);
+    Writer.prototype.render = function render(template, view2, partials, config4) {
+      var tags = this.getConfigTags(config4);
       var tokens = this.parse(template, tags);
-      var context = view2 instanceof Context ? view2 : new Context(view2, void 0);
-      return this.renderTokens(tokens, context, partials, template, config2);
+      var context3 = view2 instanceof Context ? view2 : new Context(view2, void 0);
+      return this.renderTokens(tokens, context3, partials, template, config4);
     };
-    Writer.prototype.renderTokens = function renderTokens(tokens, context, partials, originalTemplate, config2) {
+    Writer.prototype.renderTokens = function renderTokens(tokens, context3, partials, originalTemplate, config4) {
       var buffer = "";
       var token, symbol, value;
       for (var i = 0, numTokens = tokens.length; i < numTokens; ++i) {
         value = void 0;
         token = tokens[i];
         symbol = token[0];
-        if (symbol === "#") value = this.renderSection(token, context, partials, originalTemplate, config2);
-        else if (symbol === "^") value = this.renderInverted(token, context, partials, originalTemplate, config2);
-        else if (symbol === ">") value = this.renderPartial(token, context, partials, config2);
-        else if (symbol === "&") value = this.unescapedValue(token, context);
-        else if (symbol === "name") value = this.escapedValue(token, context, config2);
+        if (symbol === "#") value = this.renderSection(token, context3, partials, originalTemplate, config4);
+        else if (symbol === "^") value = this.renderInverted(token, context3, partials, originalTemplate, config4);
+        else if (symbol === ">") value = this.renderPartial(token, context3, partials, config4);
+        else if (symbol === "&") value = this.unescapedValue(token, context3);
+        else if (symbol === "name") value = this.escapedValue(token, context3, config4);
         else if (symbol === "text") value = this.rawValue(token);
         if (value !== void 0)
           buffer += value;
       }
       return buffer;
     };
-    Writer.prototype.renderSection = function renderSection(token, context, partials, originalTemplate, config2) {
+    Writer.prototype.renderSection = function renderSection(token, context3, partials, originalTemplate, config4) {
       var self2 = this;
       var buffer = "";
-      var value = context.lookup(token[1]);
+      var value = context3.lookup(token[1]);
       function subRender(template) {
-        return self2.render(template, context, partials, config2);
+        return self2.render(template, context3, partials, config4);
       }
       if (!value) return;
       if (isArray(value)) {
         for (var j = 0, valueLength = value.length; j < valueLength; ++j) {
-          buffer += this.renderTokens(token[4], context.push(value[j]), partials, originalTemplate, config2);
+          buffer += this.renderTokens(token[4], context3.push(value[j]), partials, originalTemplate, config4);
         }
       } else if (typeof value === "object" || typeof value === "string" || typeof value === "number") {
-        buffer += this.renderTokens(token[4], context.push(value), partials, originalTemplate, config2);
+        buffer += this.renderTokens(token[4], context3.push(value), partials, originalTemplate, config4);
       } else if (isFunction(value)) {
         if (typeof originalTemplate !== "string")
           throw new Error("Cannot use higher-order sections without the original template");
-        value = value.call(context.view, originalTemplate.slice(token[3], token[5]), subRender);
+        value = value.call(context3.view, originalTemplate.slice(token[3], token[5]), subRender);
         if (value != null)
           buffer += value;
       } else {
-        buffer += this.renderTokens(token[4], context, partials, originalTemplate, config2);
+        buffer += this.renderTokens(token[4], context3, partials, originalTemplate, config4);
       }
       return buffer;
     };
-    Writer.prototype.renderInverted = function renderInverted(token, context, partials, originalTemplate, config2) {
-      var value = context.lookup(token[1]);
+    Writer.prototype.renderInverted = function renderInverted(token, context3, partials, originalTemplate, config4) {
+      var value = context3.lookup(token[1]);
       if (!value || isArray(value) && value.length === 0)
-        return this.renderTokens(token[4], context, partials, originalTemplate, config2);
+        return this.renderTokens(token[4], context3, partials, originalTemplate, config4);
     };
     Writer.prototype.indentPartial = function indentPartial(partial2, indentation, lineHasNonSpace) {
       var filteredIndentation = indentation.replace(/[^ \t]/g, "");
@@ -27135,9 +27135,9 @@ var init_mustache = __esm({
       }
       return partialByNl.join("\n");
     };
-    Writer.prototype.renderPartial = function renderPartial(token, context, partials, config2) {
+    Writer.prototype.renderPartial = function renderPartial(token, context3, partials, config4) {
       if (!partials) return;
-      var tags = this.getConfigTags(config2);
+      var tags = this.getConfigTags(config4);
       var value = isFunction(partials) ? partials(token[1]) : partials[token[1]];
       if (value != null) {
         var lineHasNonSpace = token[6];
@@ -27148,35 +27148,35 @@ var init_mustache = __esm({
           indentedValue = this.indentPartial(value, indentation, lineHasNonSpace);
         }
         var tokens = this.parse(indentedValue, tags);
-        return this.renderTokens(tokens, context, partials, indentedValue, config2);
+        return this.renderTokens(tokens, context3, partials, indentedValue, config4);
       }
     };
-    Writer.prototype.unescapedValue = function unescapedValue(token, context) {
-      var value = context.lookup(token[1]);
+    Writer.prototype.unescapedValue = function unescapedValue(token, context3) {
+      var value = context3.lookup(token[1]);
       if (value != null)
         return value;
     };
-    Writer.prototype.escapedValue = function escapedValue(token, context, config2) {
-      var escape = this.getConfigEscape(config2) || mustache.escape;
-      var value = context.lookup(token[1]);
+    Writer.prototype.escapedValue = function escapedValue(token, context3, config4) {
+      var escape = this.getConfigEscape(config4) || mustache.escape;
+      var value = context3.lookup(token[1]);
       if (value != null)
         return typeof value === "number" && escape === mustache.escape ? String(value) : escape(value);
     };
     Writer.prototype.rawValue = function rawValue(token) {
       return token[1];
     };
-    Writer.prototype.getConfigTags = function getConfigTags(config2) {
-      if (isArray(config2)) {
-        return config2;
-      } else if (config2 && typeof config2 === "object") {
-        return config2.tags;
+    Writer.prototype.getConfigTags = function getConfigTags(config4) {
+      if (isArray(config4)) {
+        return config4;
+      } else if (config4 && typeof config4 === "object") {
+        return config4.tags;
       } else {
         return void 0;
       }
     };
-    Writer.prototype.getConfigEscape = function getConfigEscape(config2) {
-      if (config2 && typeof config2 === "object" && !isArray(config2)) {
-        return config2.escape;
+    Writer.prototype.getConfigEscape = function getConfigEscape(config4) {
+      if (config4 && typeof config4 === "object" && !isArray(config4)) {
+        return config4.escape;
       } else {
         return void 0;
       }
@@ -27214,11 +27214,11 @@ var init_mustache = __esm({
     mustache.parse = function parse4(template, tags) {
       return defaultWriter.parse(template, tags);
     };
-    mustache.render = function render2(template, view2, partials, config2) {
+    mustache.render = function render2(template, view2, partials, config4) {
       if (typeof template !== "string") {
         throw new TypeError('Invalid template! Template should be a "string" but "' + typeStr(template) + '" was given as the first argument for mustache#render(template, view, partials)');
       }
-      return defaultWriter.render(template, view2, partials, config2);
+      return defaultWriter.render(template, view2, partials, config4);
     };
     mustache.escape = escapeHtml;
     mustache.Scanner = Scanner;
@@ -28923,14 +28923,14 @@ function __esDecorate(ctor, descriptorIn, decorators, contextIn, initializers, e
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
   var _, done = false;
   for (var i = decorators.length - 1; i >= 0; i--) {
-    var context = {};
-    for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
-    for (var p in contextIn.access) context.access[p] = contextIn.access[p];
-    context.addInitializer = function(f2) {
+    var context3 = {};
+    for (var p in contextIn) context3[p] = p === "access" ? {} : contextIn[p];
+    for (var p in contextIn.access) context3.access[p] = contextIn.access[p];
+    context3.addInitializer = function(f2) {
       if (done) throw new TypeError("Cannot add initializers after decoration has completed");
       extraInitializers.push(accept(f2 || null));
     };
-    var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+    var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context3);
     if (kind === "accessor") {
       if (result === void 0) continue;
       if (result === null || typeof result !== "object") throw new TypeError("Object expected");
@@ -29393,28 +29393,28 @@ var require_types = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FunctionRegion = exports.FunctionsHttpError = exports.FunctionsRelayError = exports.FunctionsFetchError = exports.FunctionsError = void 0;
     var FunctionsError2 = class extends Error {
-      constructor(message, name = "FunctionsError", context) {
+      constructor(message, name = "FunctionsError", context3) {
         super(message);
         this.name = name;
-        this.context = context;
+        this.context = context3;
       }
     };
     exports.FunctionsError = FunctionsError2;
     var FunctionsFetchError2 = class extends FunctionsError2 {
-      constructor(context) {
-        super("Failed to send a request to the Edge Function", "FunctionsFetchError", context);
+      constructor(context3) {
+        super("Failed to send a request to the Edge Function", "FunctionsFetchError", context3);
       }
     };
     exports.FunctionsFetchError = FunctionsFetchError2;
     var FunctionsRelayError2 = class extends FunctionsError2 {
-      constructor(context) {
-        super("Relay Error invoking the Edge Function", "FunctionsRelayError", context);
+      constructor(context3) {
+        super("Relay Error invoking the Edge Function", "FunctionsRelayError", context3);
       }
     };
     exports.FunctionsRelayError = FunctionsRelayError2;
     var FunctionsHttpError2 = class extends FunctionsError2 {
-      constructor(context) {
-        super("Edge Function returned a non-2xx status code", "FunctionsHttpError", context);
+      constructor(context3) {
+        super("Edge Function returned a non-2xx status code", "FunctionsHttpError", context3);
       }
     };
     exports.FunctionsHttpError = FunctionsHttpError2;
@@ -29634,12 +29634,12 @@ var require_PostgrestError = __commonJS({
        * })
        * ```
        */
-      constructor(context) {
-        super(context.message);
+      constructor(context3) {
+        super(context3.message);
         this.name = "PostgrestError";
-        this.details = context.details;
-        this.hint = context.hint;
-        this.code = context.code;
+        this.details = context3.details;
+        this.hint = context3.hint;
+        this.code = context3.code;
       }
     };
     exports.default = PostgrestError2;
@@ -30409,7 +30409,7 @@ var require_PostgrestFilterBuilder = __commonJS({
        * @param options.config - The text search configuration to use
        * @param options.type - Change how the `query` text is interpreted
        */
-      textSearch(column, query, { config: config2, type } = {}) {
+      textSearch(column, query, { config: config4, type } = {}) {
         let typePart = "";
         if (type === "plain") {
           typePart = "pl";
@@ -30418,7 +30418,7 @@ var require_PostgrestFilterBuilder = __commonJS({
         } else if (type === "websearch") {
           typePart = "w";
         }
-        const configPart = config2 === void 0 ? "" : `(${config2})`;
+        const configPart = config4 === void 0 ? "" : `(${config4})`;
         this.url.searchParams.append(column, `${typePart}fts${configPart}.${query}`);
         return this;
       }
@@ -31466,7 +31466,7 @@ var require_transformers = __commonJS({
       return value;
     };
     exports.toJson = toJson;
-    var toArray2 = (value, type) => {
+    var toArray4 = (value, type) => {
       if (typeof value !== "string") {
         return value;
       }
@@ -31485,7 +31485,7 @@ var require_transformers = __commonJS({
       }
       return value;
     };
-    exports.toArray = toArray2;
+    exports.toArray = toArray4;
     var toTimestampString = (value) => {
       if (typeof value === "string") {
         return value.replace(" ", "T");
@@ -31982,7 +31982,7 @@ var require_RealtimeChannel = __commonJS({
           const postgres_changes = (_b = (_a2 = this.bindings.postgres_changes) === null || _a2 === void 0 ? void 0 : _a2.map((r) => r.filter)) !== null && _b !== void 0 ? _b : [];
           const presence_enabled = !!this.bindings[REALTIME_LISTEN_TYPES2.PRESENCE] && this.bindings[REALTIME_LISTEN_TYPES2.PRESENCE].length > 0 || ((_c = this.params.config.presence) === null || _c === void 0 ? void 0 : _c.enabled) === true;
           const accessTokenPayload = {};
-          const config2 = {
+          const config4 = {
             broadcast,
             presence: Object.assign(Object.assign({}, presence), { enabled: presence_enabled }),
             postgres_changes,
@@ -31993,7 +31993,7 @@ var require_RealtimeChannel = __commonJS({
           }
           this._onError((e) => callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES2.CHANNEL_ERROR, e));
           this._onClose(() => callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES2.CLOSED));
-          this.updateJoinPayload(Object.assign({ config: config2 }, accessTokenPayload));
+          this.updateJoinPayload(Object.assign({ config: config4 }, accessTokenPayload));
           this.joinedOnce = true;
           this._rejoin(timeout);
           this.joinPush.receive("ok", async ({ postgres_changes: postgres_changes2 }) => {
@@ -33121,10 +33121,10 @@ Option 2: Install and provide the "ws" package:
        * Safely call setAuth with standardized error handling
        * @internal
        */
-      _setAuthSafely(context = "general") {
+      _setAuthSafely(context3 = "general") {
         if (!this._isManualToken()) {
           this.setAuth().catch((e) => {
-            this.log("error", `Error setting auth in ${context}`, e);
+            this.log("error", `Error setting auth in ${context3}`, e);
           });
         }
       }
@@ -37165,17 +37165,17 @@ var require_fetch3 = __commonJS({
     var fetchWithAuth = (supabaseKey, getAccessToken, customFetch) => {
       const fetch2 = (0, exports.resolveFetch)(customFetch);
       const HeadersConstructor = (0, exports.resolveHeadersConstructor)();
-      return async (input, init) => {
+      return async (input, init4) => {
         var _a2;
         const accessToken = (_a2 = await getAccessToken()) !== null && _a2 !== void 0 ? _a2 : supabaseKey;
-        let headers = new HeadersConstructor(init === null || init === void 0 ? void 0 : init.headers);
+        let headers = new HeadersConstructor(init4 === null || init4 === void 0 ? void 0 : init4.headers);
         if (!headers.has("apikey")) {
           headers.set("apikey", supabaseKey);
         }
         if (!headers.has("Authorization")) {
           headers.set("Authorization", `Bearer ${accessToken}`);
         }
-        return fetch2(input, Object.assign(Object.assign({}, init), { headers }));
+        return fetch2(input, Object.assign(Object.assign({}, init4), { headers }));
       };
     };
     exports.fetchWithAuth = fetchWithAuth;
@@ -37203,10 +37203,10 @@ var require_helpers3 = __commonJS({
     }
     var isBrowser3 = () => typeof window !== "undefined";
     exports.isBrowser = isBrowser3;
-    function applySettingDefaults(options, defaults) {
+    function applySettingDefaults(options, defaults2) {
       var _a2, _b;
       const { db: dbOptions, auth: authOptions, realtime: realtimeOptions, global: globalOptions } = options;
-      const { db: DEFAULT_DB_OPTIONS, auth: DEFAULT_AUTH_OPTIONS, realtime: DEFAULT_REALTIME_OPTIONS, global: DEFAULT_GLOBAL_OPTIONS } = defaults;
+      const { db: DEFAULT_DB_OPTIONS, auth: DEFAULT_AUTH_OPTIONS, realtime: DEFAULT_REALTIME_OPTIONS, global: DEFAULT_GLOBAL_OPTIONS } = defaults2;
       const result = {
         db: Object.assign(Object.assign({}, DEFAULT_DB_OPTIONS), dbOptions),
         auth: Object.assign(Object.assign({}, DEFAULT_AUTH_OPTIONS), authOptions),
@@ -43661,9 +43661,9 @@ var LengthBasedExampleSelector = class _LengthBasedExampleSelector extends BaseE
    * @returns Promise that resolves with a new instance of LengthBasedExampleSelector with the examples added.
    */
   static async fromExamples(examples, args) {
-    const selector = new _LengthBasedExampleSelector(args);
-    await Promise.all(examples.map((eg) => selector.addExample(eg)));
-    return selector;
+    const selector3 = new _LengthBasedExampleSelector(args);
+    await Promise.all(examples.map((eg) => selector3.addExample(eg)));
+    return selector3;
   }
 };
 
@@ -44298,7 +44298,7 @@ var BaseLanguageModel = class extends BaseLangChain {
    * @param callOptions Call options for the model
    * @returns A unique cache key.
    */
-  _getSerializedCacheKeyParametersForCall({ config: config2, ...callOptions }) {
+  _getSerializedCacheKeyParametersForCall({ config: config4, ...callOptions }) {
     const params = {
       ...this._identifyingParams(),
       ...callOptions,
@@ -44375,17 +44375,17 @@ var RunnablePassthrough = class extends Runnable {
     }
   }
   async invoke(input, options) {
-    const config2 = ensureConfig(options);
+    const config4 = ensureConfig(options);
     if (this.func) {
-      await this.func(input, config2);
+      await this.func(input, config4);
     }
-    return this._callWithConfig((input2) => Promise.resolve(input2), input, config2);
+    return this._callWithConfig((input2) => Promise.resolve(input2), input, config4);
   }
   async *transform(generator, options) {
-    const config2 = ensureConfig(options);
+    const config4 = ensureConfig(options);
     let finalOutput;
     let finalOutputSupported = true;
-    for await (const chunk of this._transformStreamWithConfig(generator, (input) => input, config2)) {
+    for await (const chunk of this._transformStreamWithConfig(generator, (input) => input, config4)) {
       yield chunk;
       if (finalOutputSupported) {
         if (finalOutput === void 0) {
@@ -44401,7 +44401,7 @@ var RunnablePassthrough = class extends Runnable {
       }
     }
     if (this.func && finalOutput !== void 0) {
-      await this.func(finalOutput, config2);
+      await this.func(finalOutput, config4);
     }
   }
   /**
@@ -44878,18 +44878,18 @@ var BaseChatModel = class _BaseChatModel extends BaseLanguageModel {
     }
     return result.content;
   }
-  withStructuredOutput(outputSchema, config2) {
+  withStructuredOutput(outputSchema, config4) {
     if (typeof this.bindTools !== "function") {
       throw new Error(`Chat model must implement ".bindTools()" to use withStructuredOutput.`);
     }
-    if (config2?.strict) {
+    if (config4?.strict) {
       throw new Error(`"strict" mode is not supported for this model by default.`);
     }
     const schema = outputSchema;
-    const name = config2?.name;
+    const name = config4?.name;
     const description = getSchemaDescription(schema) ?? "A function available to call.";
-    const method = config2?.method;
-    const includeRaw = config2?.includeRaw;
+    const method = config4?.method;
+    const includeRaw = config4?.includeRaw;
     if (method === "jsonMode") {
       throw new Error(`Base withStructuredOutput implementation only supports "functionCalling" as a method.`);
     }
@@ -44939,7 +44939,7 @@ var BaseChatModel = class _BaseChatModel extends BaseLanguageModel {
     }
     const parserAssign = RunnablePassthrough.assign({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parsed: (input, config3) => outputParser.invoke(input.raw, config3)
+      parsed: (input, config5) => outputParser.invoke(input.raw, config5)
     });
     const parserNone = RunnablePassthrough.assign({
       parsed: () => null
@@ -45552,44 +45552,44 @@ var RunnableBranch = class extends Runnable {
       default: defaultBranch
     });
   }
-  async _invoke(input, config2, runManager) {
+  async _invoke(input, config4, runManager) {
     let result;
     for (let i = 0; i < this.branches.length; i += 1) {
       const [condition, branchRunnable] = this.branches[i];
-      const conditionValue = await condition.invoke(input, patchConfig(config2, {
+      const conditionValue = await condition.invoke(input, patchConfig(config4, {
         callbacks: runManager?.getChild(`condition:${i + 1}`)
       }));
       if (conditionValue) {
-        result = await branchRunnable.invoke(input, patchConfig(config2, {
+        result = await branchRunnable.invoke(input, patchConfig(config4, {
           callbacks: runManager?.getChild(`branch:${i + 1}`)
         }));
         break;
       }
     }
     if (!result) {
-      result = await this.default.invoke(input, patchConfig(config2, {
+      result = await this.default.invoke(input, patchConfig(config4, {
         callbacks: runManager?.getChild("branch:default")
       }));
     }
     return result;
   }
-  async invoke(input, config2 = {}) {
-    return this._callWithConfig(this._invoke, input, config2);
+  async invoke(input, config4 = {}) {
+    return this._callWithConfig(this._invoke, input, config4);
   }
-  async *_streamIterator(input, config2) {
-    const callbackManager_ = await getCallbackManagerForConfig(config2);
-    const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config2?.runId, void 0, void 0, void 0, config2?.runName);
+  async *_streamIterator(input, config4) {
+    const callbackManager_ = await getCallbackManagerForConfig(config4);
+    const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), config4?.runId, void 0, void 0, void 0, config4?.runName);
     let finalOutput;
     let finalOutputSupported = true;
     let stream;
     try {
       for (let i = 0; i < this.branches.length; i += 1) {
         const [condition, branchRunnable] = this.branches[i];
-        const conditionValue = await condition.invoke(input, patchConfig(config2, {
+        const conditionValue = await condition.invoke(input, patchConfig(config4, {
           callbacks: runManager?.getChild(`condition:${i + 1}`)
         }));
         if (conditionValue) {
-          stream = await branchRunnable.stream(input, patchConfig(config2, {
+          stream = await branchRunnable.stream(input, patchConfig(config4, {
             callbacks: runManager?.getChild(`branch:${i + 1}`)
           }));
           for await (const chunk of stream) {
@@ -45611,7 +45611,7 @@ var RunnableBranch = class extends Runnable {
         }
       }
       if (stream === void 0) {
-        stream = await this.default.stream(input, patchConfig(config2, {
+        stream = await this.default.stream(input, patchConfig(config4, {
           callbacks: runManager?.getChild("branch:default")
         }));
         for await (const chunk of stream) {
@@ -45651,12 +45651,12 @@ var RunnableWithMessageHistory = class extends RunnableBinding {
       }).withConfig({ runName: "insertHistory" });
     }
     const bound = historyChain.pipe(fields.runnable.withListeners({
-      onEnd: (run, config3) => this._exitHistory(run, config3 ?? {})
+      onEnd: (run, config5) => this._exitHistory(run, config5 ?? {})
     })).withConfig({ runName: "RunnableWithMessageHistory" });
-    const config2 = fields.config ?? {};
+    const config4 = fields.config ?? {};
     super({
       ...fields,
-      config: config2,
+      config: config4,
       bound
     });
     Object.defineProperty(this, "runnable", {
@@ -45762,8 +45762,8 @@ Got ${JSON.stringify(parsedInputValue, null, 2)}`);
     }
     return messages;
   }
-  async _exitHistory(run, config2) {
-    const history = config2.configurable?.messageHistory;
+  async _exitHistory(run, config4) {
+    const history = config4.configurable?.messageHistory;
     let inputs;
     if (Array.isArray(run.inputs) && Array.isArray(run.inputs[0])) {
       inputs = run.inputs[0];
@@ -45783,8 +45783,8 @@ Got ${JSON.stringify(parsedInputValue, null, 2)}`);
     await history.addMessages([...inputMessages, ...outputMessages]);
   }
   async _mergeConfig(...configs) {
-    const config2 = await super._mergeConfig(...configs);
-    if (!config2.configurable || !config2.configurable.sessionId) {
+    const config4 = await super._mergeConfig(...configs);
+    if (!config4.configurable || !config4.configurable.sessionId) {
       const exampleInput = {
         [this.inputMessagesKey ?? "input"]: "foo"
       };
@@ -45792,9 +45792,9 @@ Got ${JSON.stringify(parsedInputValue, null, 2)}`);
       throw new Error(`sessionId is required. Pass it in as part of the config argument to .invoke() or .stream()
 eg. chain.invoke(${JSON.stringify(exampleInput)}, ${JSON.stringify(exampleConfig)})`);
     }
-    const { sessionId } = config2.configurable;
-    config2.configurable.messageHistory = await this.getMessageHistory(sessionId);
-    return config2;
+    const { sessionId } = config4.configurable;
+    config4.configurable.messageHistory = await this.getMessageHistory(sessionId);
+    return config4;
   }
 };
 
@@ -48380,8 +48380,8 @@ var BaseRetriever = class extends Runnable {
    * @param config Optional configuration object for the retrieval process.
    * @returns A promise that resolves to an array of `Document` objects.
    */
-  async getRelevantDocuments(query, config2) {
-    const parsedConfig = ensureConfig(parseCallbackConfigArg(config2));
+  async getRelevantDocuments(query, config4) {
+    const parsedConfig = ensureConfig(parseCallbackConfigArg(config4));
     const callbackManager_ = await CallbackManager.configure(parsedConfig.callbacks, this.callbacks, parsedConfig.tags, this.tags, parsedConfig.metadata, this.metadata, { verbose: this.verbose });
     const runManager = await callbackManager_?.handleRetrieverStart(this.toJSON(), query, parsedConfig.runId, void 0, void 0, void 0, parsedConfig.runName);
     try {
@@ -48549,9 +48549,9 @@ var StructuredTool = class extends BaseLangChain {
    * @param config Optional configuration for the tool.
    * @returns A Promise that resolves with the tool's output.
    */
-  async invoke(input, config2) {
+  async invoke(input, config4) {
     let toolInput;
-    let enrichedConfig = ensureConfig(mergeConfigs(this.defaultConfig, config2));
+    let enrichedConfig = ensureConfig(mergeConfigs(this.defaultConfig, config4));
     if (_isToolCall(input)) {
       toolInput = input.args;
       enrichedConfig = {
@@ -48600,22 +48600,22 @@ Details: ${result2.errors.map((e) => `${e.keywordLocation}: ${e.error}`).join("\
       }
       parsed = inputForValidation;
     }
-    const config2 = parseCallbackConfigArg(configArg);
-    const callbackManager_ = CallbackManager.configure(config2.callbacks, this.callbacks, config2.tags || tags, this.tags, config2.metadata, this.metadata, { verbose: this.verbose });
+    const config4 = parseCallbackConfigArg(configArg);
+    const callbackManager_ = CallbackManager.configure(config4.callbacks, this.callbacks, config4.tags || tags, this.tags, config4.metadata, this.metadata, { verbose: this.verbose });
     const runManager = await callbackManager_?.handleToolStart(
       this.toJSON(),
       // Log the original raw input arg
       typeof arg === "string" ? arg : JSON.stringify(arg),
-      config2.runId,
+      config4.runId,
       void 0,
       void 0,
       void 0,
-      config2.runName
+      config4.runName
     );
-    delete config2.runId;
+    delete config4.runId;
     let result;
     try {
-      result = await this._call(parsed, runManager, config2);
+      result = await this._call(parsed, runManager, config4);
     } catch (e) {
       await runManager?.handleToolError(e);
       throw e;
@@ -48636,8 +48636,8 @@ Result: ${JSON.stringify(result)}`);
     if (_isToolCall(arg)) {
       toolCallId = arg.id;
     }
-    if (!toolCallId && _configHasToolCallId(config2)) {
-      toolCallId = config2.toolCall.id;
+    if (!toolCallId && _configHasToolCallId(config4)) {
+      toolCallId = config4.toolCall.id;
     }
     const formattedOutput = _formatToolOutput({
       content,
@@ -48708,11 +48708,11 @@ var DynamicTool = class extends Tool {
    * @deprecated Use .invoke() instead. Will be removed in 0.3.0.
    */
   async call(arg, configArg) {
-    const config2 = parseCallbackConfigArg(configArg);
-    if (config2.runName === void 0) {
-      config2.runName = this.name;
+    const config4 = parseCallbackConfigArg(configArg);
+    if (config4.runName === void 0) {
+      config4.runName = this.name;
     }
-    return super.call(arg, config2);
+    return super.call(arg, config4);
   }
   /** @ignore */
   async _call(input, runManager, parentConfig) {
@@ -48760,11 +48760,11 @@ var DynamicStructuredTool = class extends StructuredTool {
    */
   // Match the base class signature
   async call(arg, configArg, tags) {
-    const config2 = parseCallbackConfigArg(configArg);
-    if (config2.runName === void 0) {
-      config2.runName = this.name;
+    const config4 = parseCallbackConfigArg(configArg);
+    if (config4.runName === void 0) {
+      config4.runName = this.name;
     }
-    return super.call(arg, config2, tags);
+    return super.call(arg, config4, tags);
   }
   _call(arg, runManager, parentConfig) {
     return this.func(arg, runManager, parentConfig);
@@ -48782,9 +48782,9 @@ function tool(func, fields) {
     return new DynamicTool({
       ...fields,
       description: fields.description ?? (fields.schema && getSchemaDescription(fields.schema)) ?? `${fields.name} tool`,
-      func: async (input, runManager, config2) => {
+      func: async (input, runManager, config4) => {
         return new Promise((resolve, reject) => {
-          const childConfig = patchConfig(config2, {
+          const childConfig = patchConfig(config4, {
             callbacks: runManager?.getChild()
           });
           void AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
@@ -48804,9 +48804,9 @@ function tool(func, fields) {
     ...fields,
     description,
     schema,
-    func: async (input, runManager, config2) => {
+    func: async (input, runManager, config4) => {
       return new Promise((resolve, reject) => {
-        const childConfig = patchConfig(config2, {
+        const childConfig = patchConfig(config4, {
           callbacks: runManager?.getChild()
         });
         void AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
@@ -50115,7 +50115,7 @@ var FakeListChatModel = class extends BaseChatModel {
       this.i = 0;
     }
   }
-  withStructuredOutput(_params, _config) {
+  withStructuredOutput(_params, _config2) {
     return RunnableLambda.from(async (input) => {
       const message = await this.invoke(input);
       if (message.tool_calls?.[0]?.args) {
@@ -51856,11 +51856,11 @@ function ensureLangGraphConfig(...configs) {
       }
     }
   }
-  for (const config2 of configs) {
-    if (config2 === void 0) {
+  for (const config4 of configs) {
+    if (config4 === void 0) {
       continue;
     }
-    for (const [k, v] of Object.entries(config2)) {
+    for (const [k, v] of Object.entries(config4)) {
       if (v !== void 0 && CONFIG_KEYS.includes(k)) {
         empty[k] = v;
       }
@@ -51934,9 +51934,9 @@ var RunnableCallable = class extends Runnable {
     this.trace = fields.trace ?? this.trace;
     this.recurse = fields.recurse ?? this.recurse;
   }
-  async _tracedInvoke(input, config2, runManager) {
+  async _tracedInvoke(input, config4, runManager) {
     return new Promise((resolve, reject) => {
-      const childConfig = patchConfig(config2, {
+      const childConfig = patchConfig(config4, {
         callbacks: runManager?.getChild()
       });
       void AsyncLocalStorageProviderSingleton2.runWithConfig(childConfig, async () => {
@@ -51951,8 +51951,8 @@ var RunnableCallable = class extends Runnable {
   }
   async invoke(input, options) {
     let returnValue;
-    const config2 = ensureLangGraphConfig(options);
-    const mergedConfig = mergeConfigs(this.config, config2);
+    const config4 = ensureLangGraphConfig(options);
+    const mergedConfig = mergeConfigs(this.config, config4);
     if (this.trace) {
       returnValue = await this._callWithConfig(this._tracedInvoke, input, mergedConfig);
     } else {
@@ -51987,21 +51987,21 @@ function gatherIteratorSync(i) {
   }
   return out;
 }
-function patchConfigurable(config2, patch) {
-  if (!config2) {
+function patchConfigurable(config4, patch) {
+  if (!config4) {
     return {
       configurable: patch
     };
-  } else if (!("configurable" in config2)) {
+  } else if (!("configurable" in config4)) {
     return {
-      ...config2,
+      ...config4,
       configurable: patch
     };
   } else {
     return {
-      ...config2,
+      ...config4,
       configurable: {
-        ...config2.configurable,
+        ...config4.configurable,
         ...patch
       }
     };
@@ -52046,8 +52046,8 @@ var ChannelWrite = class _ChannelWrite extends RunnableCallable {
     }).join(",")}>`;
     super({
       ...{ writes, name, tags },
-      func: async (input, config2) => {
-        return this._write(input, config2 ?? {});
+      func: async (input, config4) => {
+        return this._write(input, config4 ?? {});
       }
     });
     Object.defineProperty(this, "writes", {
@@ -52058,7 +52058,7 @@ var ChannelWrite = class _ChannelWrite extends RunnableCallable {
     });
     this.writes = writes;
   }
-  async _write(input, config2) {
+  async _write(input, config4) {
     const writes = this.writes.map((write) => {
       if (_isChannelWriteTupleEntry(write) && _isPassthrough(write.value)) {
         return {
@@ -52076,11 +52076,11 @@ var ChannelWrite = class _ChannelWrite extends RunnableCallable {
         return write;
       }
     });
-    await _ChannelWrite.doWrite(config2, writes);
+    await _ChannelWrite.doWrite(config4, writes);
     return input;
   }
   // TODO: Support requireAtLeastOneOf
-  static async doWrite(config2, writes) {
+  static async doWrite(config4, writes) {
     for (const w of writes) {
       if (_isChannelWriteEntry(w)) {
         if (w.channel === TASKS2) {
@@ -52101,12 +52101,12 @@ var ChannelWrite = class _ChannelWrite extends RunnableCallable {
       if (_isSend(w)) {
         writeEntries.push([TASKS2, w]);
       } else if (_isChannelWriteTupleEntry(w)) {
-        const mappedResult = await w.mapper.invoke(w.value, config2);
+        const mappedResult = await w.mapper.invoke(w.value, config4);
         if (mappedResult != null && mappedResult.length > 0) {
           writeEntries.push(...mappedResult);
         }
       } else if (_isChannelWriteEntry(w)) {
-        const mappedValue = w.mapper !== void 0 ? await w.mapper.invoke(w.value, config2) : w.value;
+        const mappedValue = w.mapper !== void 0 ? await w.mapper.invoke(w.value, config4) : w.value;
         if (_isSkipWrite(mappedValue)) {
           continue;
         }
@@ -52118,7 +52118,7 @@ var ChannelWrite = class _ChannelWrite extends RunnableCallable {
         throw new Error(`Invalid write entry: ${JSON.stringify(w)}`);
       }
     }
-    const write = config2.configurable?.[CONFIG_KEY_SEND];
+    const write = config4.configurable?.[CONFIG_KEY_SEND];
     write(writeEntries);
   }
   static isWriter(runnable) {
@@ -52143,7 +52143,7 @@ var ChannelRead = class _ChannelRead extends RunnableCallable {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(channel, mapper, fresh = false) {
     super({
-      func: (_, config2) => _ChannelRead.doRead(config2, this.channel, this.fresh, this.mapper)
+      func: (_, config4) => _ChannelRead.doRead(config4, this.channel, this.fresh, this.mapper)
     });
     Object.defineProperty(this, "lc_graph_name", {
       enumerable: true,
@@ -52174,8 +52174,8 @@ var ChannelRead = class _ChannelRead extends RunnableCallable {
     this.channel = channel;
     this.name = Array.isArray(channel) ? `ChannelRead<${channel.join(",")}>` : `ChannelRead<${channel}>`;
   }
-  static doRead(config2, channel, fresh, mapper) {
-    const read = config2.configurable?.[CONFIG_KEY_READ];
+  static doRead(config4, channel, fresh, mapper) {
+    const read = config4.configurable?.[CONFIG_KEY_READ];
     if (!read) {
       throw new Error("Runnable is not configured with a read function. Make sure to call in the context of a Pregel process");
     }
@@ -52921,29 +52921,29 @@ function _coerceToDict4(value, defaultKey) {
   return value && !Array.isArray(value) && // eslint-disable-next-line no-instanceof/no-instanceof
   !(value instanceof Date) && typeof value === "object" ? value : { [defaultKey]: value };
 }
-function patchConfigurable2(config2, patch) {
-  if (config2 === null) {
+function patchConfigurable2(config4, patch) {
+  if (config4 === null) {
     return { configurable: patch };
-  } else if (config2?.configurable === void 0) {
-    return { ...config2, configurable: patch };
+  } else if (config4?.configurable === void 0) {
+    return { ...config4, configurable: patch };
   } else {
     return {
-      ...config2,
-      configurable: { ...config2.configurable, ...patch }
+      ...config4,
+      configurable: { ...config4.configurable, ...patch }
     };
   }
 }
-function patchCheckpointMap(config2, metadata) {
+function patchCheckpointMap(config4, metadata) {
   const parents = metadata?.parents ?? {};
   if (Object.keys(parents).length > 0) {
-    return patchConfigurable2(config2, {
+    return patchConfigurable2(config4, {
       [CONFIG_KEY_CHECKPOINT_MAP]: {
         ...parents,
-        [config2.configurable?.checkpoint_ns ?? ""]: config2.configurable?.checkpoint_id
+        [config4.configurable?.checkpoint_ns ?? ""]: config4.configurable?.checkpoint_id
       }
     });
   } else {
-    return config2;
+    return config4;
   }
 }
 function combineAbortSignals(...x) {
@@ -53010,8 +53010,8 @@ function getRunnableForFunc(name, func) {
 }
 function getRunnableForEntrypoint(name, func) {
   const run = new RunnableCallable({
-    func: (input, config2) => {
-      return func(input, config2);
+    func: (input, config4) => {
+      return func(input, config4);
     },
     name,
     trace: false,
@@ -53191,13 +53191,13 @@ function _applyWrites(checkpoint, channels, tasks, getNextVersion, triggerToNode
     }
   }
 }
-function _prepareNextTasks(checkpoint, pendingWrites, processes, channels, config2, forExecution, extra) {
+function _prepareNextTasks(checkpoint, pendingWrites, processes, channels, config4, forExecution, extra) {
   const tasks = {};
   const tasksChannel = channels[TASKS2];
   if (tasksChannel?.isAvailable()) {
     const len = tasksChannel.get().length;
     for (let i = 0; i < len; i += 1) {
-      const task2 = _prepareSingleTask([PUSH, i], checkpoint, pendingWrites, processes, channels, config2, forExecution, extra);
+      const task2 = _prepareSingleTask([PUSH, i], checkpoint, pendingWrites, processes, channels, config4, forExecution, extra);
       if (task2 !== void 0) {
         tasks[task2.id] = task2;
       }
@@ -53206,16 +53206,16 @@ function _prepareNextTasks(checkpoint, pendingWrites, processes, channels, confi
   for (const name in processes) {
     if (!Object.prototype.hasOwnProperty.call(processes, name))
       continue;
-    const task2 = _prepareSingleTask([PULL, name], checkpoint, pendingWrites, processes, channels, config2, forExecution, extra);
+    const task2 = _prepareSingleTask([PULL, name], checkpoint, pendingWrites, processes, channels, config4, forExecution, extra);
     if (task2 !== void 0) {
       tasks[task2.id] = task2;
     }
   }
   return tasks;
 }
-function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, channels, config2, forExecution, extra) {
+function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, channels, config4, forExecution, extra) {
   const { step, checkpointer, manager } = extra;
-  const configurable = config2.configurable ?? {};
+  const configurable = config4.configurable ?? {};
   const parentNamespace = configurable.checkpoint_ns ?? "";
   if (taskPath[0] === PUSH && isCall(taskPath[taskPath.length - 1])) {
     const call3 = taskPath[taskPath.length - 1];
@@ -53246,9 +53246,9 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
         input: call3.input,
         proc,
         writes,
-        config: patchConfig(mergeConfigs(config2, {
+        config: patchConfig(mergeConfigs(config4, {
           metadata,
-          store: extra.store ?? config2.store
+          store: extra.store ?? config4.store
         }), {
           runName: call3.name,
           callbacks: manager?.getChild(`graph:step:${step}`),
@@ -53271,7 +53271,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
               pendingWrites: pendingWrites ?? [],
               taskId: id,
               currentTaskInput: call3.input,
-              resumeMap: config2.configurable?.[CONFIG_KEY_RESUME_MAP],
+              resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
               namespaceHash: XXH3(taskCheckpointNamespace)
             }),
             [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -53348,10 +53348,10 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
           proc: node,
           subgraphs: proc.subgraphs,
           writes,
-          config: patchConfig(mergeConfigs(config2, {
+          config: patchConfig(mergeConfigs(config4, {
             metadata,
             tags: proc.tags,
-            store: extra.store ?? config2.store
+            store: extra.store ?? config4.store
           }), {
             runName: packet.node,
             callbacks: manager?.getChild(`graph:step:${step}`),
@@ -53374,7 +53374,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                 pendingWrites: pendingWrites ?? [],
                 taskId,
                 currentTaskInput: packet.args,
-                resumeMap: config2.configurable?.[CONFIG_KEY_RESUME_MAP],
+                resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
                 namespaceHash: XXH3(taskCheckpointNamespace)
               }),
               [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -53466,10 +53466,10 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
             proc: node,
             subgraphs: proc.subgraphs,
             writes,
-            config: patchConfig(mergeConfigs(config2, {
+            config: patchConfig(mergeConfigs(config4, {
               metadata,
               tags: proc.tags,
-              store: extra.store ?? config2.store
+              store: extra.store ?? config4.store
             }), {
               runName: name,
               callbacks: manager?.getChild(`graph:step:${step}`),
@@ -53494,7 +53494,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                   pendingWrites: pendingWrites ?? [],
                   taskId,
                   currentTaskInput: val,
-                  resumeMap: config2.configurable?.[CONFIG_KEY_RESUME_MAP],
+                  resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
                   namespaceHash: XXH3(taskCheckpointNamespace)
                 }),
                 [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -53644,8 +53644,8 @@ var COLORS_MAP = {
 };
 var wrap2 = (color2, text) => `${color2.start}${text}${color2.end}`;
 function* mapDebugTasks(tasks) {
-  for (const { id, name, input, config: config2, triggers, writes } of tasks) {
-    if (config2?.tags?.includes(TAG_HIDDEN))
+  for (const { id, name, input, config: config4, triggers, writes } of tasks) {
+    if (config4?.tags?.includes(TAG_HIDDEN))
       continue;
     const interrupts = writes.filter(([writeId, n2]) => {
       return writeId === id && n2 === INTERRUPT2;
@@ -53656,8 +53656,8 @@ function* mapDebugTasks(tasks) {
   }
 }
 function* mapDebugTaskResults(tasks, streamChannels) {
-  for (const [{ id, name, config: config2 }, writes] of tasks) {
-    if (config2?.tags?.includes(TAG_HIDDEN))
+  for (const [{ id, name, config: config4 }, writes] of tasks) {
+    if (config4?.tags?.includes(TAG_HIDDEN))
       continue;
     yield {
       id,
@@ -53669,28 +53669,28 @@ function* mapDebugTaskResults(tasks, streamChannels) {
     };
   }
 }
-function* mapDebugCheckpoint(config2, channels, streamChannels, metadata, tasks, pendingWrites, parentConfig, outputKeys) {
-  function formatConfig(config3) {
+function* mapDebugCheckpoint(config4, channels, streamChannels, metadata, tasks, pendingWrites, parentConfig, outputKeys) {
+  function formatConfig(config5) {
     const pyConfig = {};
-    if (config3.callbacks != null)
-      pyConfig.callbacks = config3.callbacks;
-    if (config3.configurable != null)
-      pyConfig.configurable = config3.configurable;
-    if (config3.maxConcurrency != null)
-      pyConfig.max_concurrency = config3.maxConcurrency;
-    if (config3.metadata != null)
-      pyConfig.metadata = config3.metadata;
-    if (config3.recursionLimit != null)
-      pyConfig.recursion_limit = config3.recursionLimit;
-    if (config3.runId != null)
-      pyConfig.run_id = config3.runId;
-    if (config3.runName != null)
-      pyConfig.run_name = config3.runName;
-    if (config3.tags != null)
-      pyConfig.tags = config3.tags;
+    if (config5.callbacks != null)
+      pyConfig.callbacks = config5.callbacks;
+    if (config5.configurable != null)
+      pyConfig.configurable = config5.configurable;
+    if (config5.maxConcurrency != null)
+      pyConfig.max_concurrency = config5.maxConcurrency;
+    if (config5.metadata != null)
+      pyConfig.metadata = config5.metadata;
+    if (config5.recursionLimit != null)
+      pyConfig.recursion_limit = config5.recursionLimit;
+    if (config5.runId != null)
+      pyConfig.run_id = config5.runId;
+    if (config5.runName != null)
+      pyConfig.run_name = config5.runName;
+    if (config5.tags != null)
+      pyConfig.tags = config5.tags;
     return pyConfig;
   }
-  const parentNs = config2.configurable?.checkpoint_ns;
+  const parentNs = config4.configurable?.checkpoint_ns;
   const taskStates = {};
   for (const task2 of tasks) {
     const candidates = task2.subgraphs?.length ? task2.subgraphs : [task2.proc];
@@ -53701,13 +53701,13 @@ function* mapDebugCheckpoint(config2, channels, streamChannels, metadata, tasks,
       taskNs = `${parentNs}|${taskNs}`;
     taskStates[task2.id] = {
       configurable: {
-        thread_id: config2.configurable?.thread_id,
+        thread_id: config4.configurable?.thread_id,
         checkpoint_ns: taskNs
       }
     };
   }
   yield {
-    config: formatConfig(config2),
+    config: formatConfig(config4),
     values: readChannels(channels, streamChannels),
     metadata,
     next: tasks.map((task2) => task2.name),
@@ -54231,49 +54231,49 @@ var PregelLoop = class _PregelLoop {
     this.triggerToNodes = params.triggerToNodes;
   }
   static async initialize(params) {
-    let { config: config2, stream } = params;
-    if (stream !== void 0 && config2.configurable?.[CONFIG_KEY_STREAM] !== void 0) {
-      stream = createDuplexStream(stream, config2.configurable[CONFIG_KEY_STREAM]);
+    let { config: config4, stream } = params;
+    if (stream !== void 0 && config4.configurable?.[CONFIG_KEY_STREAM] !== void 0) {
+      stream = createDuplexStream(stream, config4.configurable[CONFIG_KEY_STREAM]);
     }
-    const skipDoneTasks = config2.configurable ? !("checkpoint_id" in config2.configurable) : true;
-    const scratchpad = config2.configurable?.[CONFIG_KEY_SCRATCHPAD];
-    if (config2.configurable && scratchpad) {
+    const skipDoneTasks = config4.configurable ? !("checkpoint_id" in config4.configurable) : true;
+    const scratchpad = config4.configurable?.[CONFIG_KEY_SCRATCHPAD];
+    if (config4.configurable && scratchpad) {
       if (scratchpad.subgraphCounter > 0) {
-        config2 = patchConfigurable2(config2, {
+        config4 = patchConfigurable2(config4, {
           [CONFIG_KEY_CHECKPOINT_NS]: [
-            config2.configurable[CONFIG_KEY_CHECKPOINT_NS],
+            config4.configurable[CONFIG_KEY_CHECKPOINT_NS],
             scratchpad.subgraphCounter.toString()
           ].join(CHECKPOINT_NAMESPACE_SEPARATOR)
         });
       }
       scratchpad.subgraphCounter += 1;
     }
-    const isNested = CONFIG_KEY_READ in (config2.configurable ?? {});
-    if (!isNested && config2.configurable?.checkpoint_ns !== void 0 && config2.configurable?.checkpoint_ns !== "") {
-      config2 = patchConfigurable2(config2, {
+    const isNested = CONFIG_KEY_READ in (config4.configurable ?? {});
+    if (!isNested && config4.configurable?.checkpoint_ns !== void 0 && config4.configurable?.checkpoint_ns !== "") {
+      config4 = patchConfigurable2(config4, {
         checkpoint_ns: "",
         checkpoint_id: void 0
       });
     }
-    let checkpointConfig = config2;
-    if (config2.configurable?.[CONFIG_KEY_CHECKPOINT_MAP] !== void 0 && config2.configurable?.[CONFIG_KEY_CHECKPOINT_MAP]?.[config2.configurable?.checkpoint_ns]) {
-      checkpointConfig = patchConfigurable2(config2, {
-        checkpoint_id: config2.configurable[CONFIG_KEY_CHECKPOINT_MAP][config2.configurable?.checkpoint_ns]
+    let checkpointConfig = config4;
+    if (config4.configurable?.[CONFIG_KEY_CHECKPOINT_MAP] !== void 0 && config4.configurable?.[CONFIG_KEY_CHECKPOINT_MAP]?.[config4.configurable?.checkpoint_ns]) {
+      checkpointConfig = patchConfigurable2(config4, {
+        checkpoint_id: config4.configurable[CONFIG_KEY_CHECKPOINT_MAP][config4.configurable?.checkpoint_ns]
       });
     }
-    const checkpointNamespace = config2.configurable?.checkpoint_ns?.split(CHECKPOINT_NAMESPACE_SEPARATOR) ?? [];
+    const checkpointNamespace = config4.configurable?.checkpoint_ns?.split(CHECKPOINT_NAMESPACE_SEPARATOR) ?? [];
     const saved = await params.checkpointer?.getTuple(checkpointConfig) ?? {
-      config: config2,
+      config: config4,
       checkpoint: emptyCheckpoint(),
       metadata: { source: "input", step: -2, parents: {} },
       pendingWrites: []
     };
     checkpointConfig = {
-      ...config2,
+      ...config4,
       ...saved.config,
       configurable: {
         checkpoint_ns: "",
-        ...config2.configurable,
+        ...config4.configurable,
         ...saved.config.configurable
       }
     };
@@ -54283,7 +54283,7 @@ var PregelLoop = class _PregelLoop {
     const checkpointPendingWrites = saved.pendingWrites ?? [];
     const channels = emptyChannels(params.channelSpecs, checkpoint);
     const step = (checkpointMetadata.step ?? 0) + 1;
-    const stop = step + (config2.recursionLimit ?? DEFAULT_LOOP_LIMIT) + 1;
+    const stop = step + (config4.recursionLimit ?? DEFAULT_LOOP_LIMIT) + 1;
     const checkpointPreviousVersions = { ...checkpoint.channel_versions };
     const store = params.store ? new AsyncBatchedStore(params.store) : void 0;
     if (store) {
@@ -54291,7 +54291,7 @@ var PregelLoop = class _PregelLoop {
     }
     return new _PregelLoop({
       input: params.input,
-      config: config2,
+      config: config4,
       checkpointer: params.checkpointer,
       checkpoint,
       checkpointMetadata,
@@ -54341,12 +54341,12 @@ var PregelLoop = class _PregelLoop {
     for (const [c, v] of writesCopy) {
       this.checkpointPendingWrites.push([taskId, c, v]);
     }
-    const config2 = patchConfigurable2(this.checkpointConfig, {
+    const config4 = patchConfigurable2(this.checkpointConfig, {
       [CONFIG_KEY_CHECKPOINT_NS]: this.config.configurable?.checkpoint_ns ?? "",
       [CONFIG_KEY_CHECKPOINT_ID]: this.checkpoint.id
     });
     if (this.durability !== "exit" && this.checkpointer != null) {
-      this.checkpointerPromises.push(this.checkpointer.putWrites(config2, writesCopy, taskId));
+      this.checkpointerPromises.push(this.checkpointer.putWrites(config4, writesCopy, taskId));
     }
     if (this.tasks) {
       this._outputWrites(taskId, writesCopy);
@@ -54713,7 +54713,7 @@ var PregelLoop = class _PregelLoop {
       return;
     if (this.checkpointPendingWrites.length === 0)
       return;
-    const config2 = patchConfigurable2(this.checkpointConfig, {
+    const config4 = patchConfigurable2(this.checkpointConfig, {
       [CONFIG_KEY_CHECKPOINT_NS]: this.config.configurable?.checkpoint_ns ?? "",
       [CONFIG_KEY_CHECKPOINT_ID]: this.checkpoint.id
     });
@@ -54723,7 +54723,7 @@ var PregelLoop = class _PregelLoop {
       byTask[tid].push([key, value]);
     }
     for (const [tid, ws] of Object.entries(byTask)) {
-      this.checkpointerPromises.push(this.checkpointer.putWrites(config2, ws, tid));
+      this.checkpointerPromises.push(this.checkpointer.putWrites(config4, ws, tid));
     }
   }
   _matchWrites(tasks) {
@@ -54968,10 +54968,10 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
   let attempts = 0;
   let error;
   let result;
-  let { config: config2 } = pregelTask;
+  let { config: config4 } = pregelTask;
   if (configurable)
-    config2 = patchConfigurable2(config2, configurable);
-  config2 = { ...config2, signal };
+    config4 = patchConfigurable2(config4, configurable);
+  config4 = { ...config4, signal };
   while (true) {
     if (signal?.aborted) {
       break;
@@ -54979,17 +54979,17 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
     pregelTask.writes.splice(0, pregelTask.writes.length);
     error = void 0;
     try {
-      result = await pregelTask.proc.invoke(pregelTask.input, config2);
+      result = await pregelTask.proc.invoke(pregelTask.input, config4);
       break;
     } catch (e) {
       error = e;
       error.pregelTaskId = pregelTask.id;
       if (isParentCommand(error)) {
-        const ns = config2?.configurable?.checkpoint_ns;
+        const ns = config4?.configurable?.checkpoint_ns;
         const cmd = error.command;
         if (cmd.graph === ns) {
           for (const writer of pregelTask.writers) {
-            await writer.invoke(cmd, config2);
+            await writer.invoke(cmd, config4);
           }
           error = void 0;
           break;
@@ -55023,7 +55023,7 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
       if (resolvedRetryPolicy?.logWarning ?? true) {
         console.log(`Retrying task "${String(pregelTask.name)}" after ${interval.toFixed(2)}ms (attempt ${attempts}) after ${errorName}: ${error}`);
       }
-      config2 = patchConfigurable2(config2, { [CONFIG_KEY_RESUMING]: true });
+      config4 = patchConfigurable2(config4, { [CONFIG_KEY_RESUMING]: true });
     }
   }
   return {
@@ -55558,8 +55558,8 @@ var PartialRunnable = class extends Runnable {
     throw new Error("Not implemented");
   }
   // Overriden by `Pregel`
-  withConfig(_config) {
-    return super.withConfig(_config);
+  withConfig(_config2) {
+    return super.withConfig(_config2);
   }
   // Overriden by `Pregel`
   stream(input, options) {
@@ -55744,8 +55744,8 @@ var Pregel = class extends PartialRunnable {
    * @param config - The configuration to merge with the current configuration
    * @returns A new Pregel instance with the merged configuration
    */
-  withConfig(config2) {
-    const mergedConfig = mergeConfigs(this.config, config2);
+  withConfig(config4) {
+    const mergedConfig = mergeConfigs(this.config, config4);
     return new this.constructor({ ...this, config: mergedConfig });
   }
   /**
@@ -55813,8 +55813,8 @@ var Pregel = class extends PartialRunnable {
    * @param config - Configuration for generating the graph visualization
    * @returns A representation of the graph that can be visualized
    */
-  async getGraphAsync(config2) {
-    return this.getGraph(config2);
+  async getGraphAsync(config4) {
+    return this.getGraph(config4);
   }
   /**
    * Gets all subgraphs within this graph.
@@ -55881,12 +55881,12 @@ var Pregel = class extends PartialRunnable {
    * @returns A snapshot of the graph state
    * @internal
    */
-  async _prepareStateSnapshot({ config: config2, saved, subgraphCheckpointer, applyPendingWrites = false }) {
+  async _prepareStateSnapshot({ config: config4, saved, subgraphCheckpointer, applyPendingWrites = false }) {
     if (saved === void 0) {
       return {
         values: {},
         next: [],
-        config: config2,
+        config: config4,
         tasks: []
       };
     }
@@ -55917,13 +55917,13 @@ var Pregel = class extends PartialRunnable {
         taskNs = `${parentNamespace}${CHECKPOINT_NAMESPACE_SEPARATOR}${taskNs}`;
       }
       if (subgraphCheckpointer === void 0) {
-        const config3 = {
+        const config5 = {
           configurable: {
             thread_id: saved.config.configurable?.thread_id,
             checkpoint_ns: taskNs
           }
         };
-        taskStates[task2.id] = config3;
+        taskStates[task2.id] = config5;
       } else {
         const subgraphConfig = {
           configurable: {
@@ -55981,30 +55981,30 @@ var Pregel = class extends PartialRunnable {
    * @returns A snapshot of the current graph state
    * @throws {GraphValueError} If no checkpointer is configured
    */
-  async getState(config2, options) {
-    const checkpointer = config2.configurable?.[CONFIG_KEY_CHECKPOINTER] ?? this.checkpointer;
+  async getState(config4, options) {
+    const checkpointer = config4.configurable?.[CONFIG_KEY_CHECKPOINTER] ?? this.checkpointer;
     if (!checkpointer) {
       throw new GraphValueError("No checkpointer set");
     }
-    const checkpointNamespace = config2.configurable?.checkpoint_ns ?? "";
-    if (checkpointNamespace !== "" && config2.configurable?.[CONFIG_KEY_CHECKPOINTER] === void 0) {
+    const checkpointNamespace = config4.configurable?.checkpoint_ns ?? "";
+    if (checkpointNamespace !== "" && config4.configurable?.[CONFIG_KEY_CHECKPOINTER] === void 0) {
       const recastNamespace = recastCheckpointNamespace(checkpointNamespace);
       for await (const [name, subgraph] of this.getSubgraphsAsync(recastNamespace, true)) {
         if (name === recastNamespace) {
-          return await subgraph.getState(patchConfigurable(config2, {
+          return await subgraph.getState(patchConfigurable(config4, {
             [CONFIG_KEY_CHECKPOINTER]: checkpointer
           }), { subgraphs: options?.subgraphs });
         }
       }
       throw new Error(`Subgraph with namespace "${recastNamespace}" not found.`);
     }
-    const mergedConfig = mergeConfigs(this.config, config2);
-    const saved = await checkpointer.getTuple(config2);
+    const mergedConfig = mergeConfigs(this.config, config4);
+    const saved = await checkpointer.getTuple(config4);
     const snapshot = await this._prepareStateSnapshot({
       config: mergedConfig,
       saved,
       subgraphCheckpointer: options?.subgraphs ? checkpointer : void 0,
-      applyPendingWrites: !config2.configurable?.checkpoint_id
+      applyPendingWrites: !config4.configurable?.checkpoint_id
     });
     return snapshot;
   }
@@ -56021,17 +56021,17 @@ var Pregel = class extends PartialRunnable {
    * @returns An async iterator of state snapshots
    * @throws {Error} If no checkpointer is configured
    */
-  async *getStateHistory(config2, options) {
-    const checkpointer = config2.configurable?.[CONFIG_KEY_CHECKPOINTER] ?? this.checkpointer;
+  async *getStateHistory(config4, options) {
+    const checkpointer = config4.configurable?.[CONFIG_KEY_CHECKPOINTER] ?? this.checkpointer;
     if (!checkpointer) {
       throw new GraphValueError("No checkpointer set");
     }
-    const checkpointNamespace = config2.configurable?.checkpoint_ns ?? "";
-    if (checkpointNamespace !== "" && config2.configurable?.[CONFIG_KEY_CHECKPOINTER] === void 0) {
+    const checkpointNamespace = config4.configurable?.checkpoint_ns ?? "";
+    if (checkpointNamespace !== "" && config4.configurable?.[CONFIG_KEY_CHECKPOINTER] === void 0) {
       const recastNamespace = recastCheckpointNamespace(checkpointNamespace);
       for await (const [name, pregel] of this.getSubgraphsAsync(recastNamespace, true)) {
         if (name === recastNamespace) {
-          yield* pregel.getStateHistory(patchConfigurable(config2, {
+          yield* pregel.getStateHistory(patchConfigurable(config4, {
             [CONFIG_KEY_CHECKPOINTER]: checkpointer
           }), options);
           return;
@@ -56039,7 +56039,7 @@ var Pregel = class extends PartialRunnable {
       }
       throw new Error(`Subgraph with namespace "${recastNamespace}" not found.`);
     }
-    const mergedConfig = mergeConfigs(this.config, config2, {
+    const mergedConfig = mergeConfigs(this.config, config4, {
       configurable: { checkpoint_ns: checkpointNamespace }
     });
     for await (const checkpointTuple of checkpointer.list(mergedConfig, options)) {
@@ -56087,19 +56087,19 @@ var Pregel = class extends PartialRunnable {
       throw new Error(`Subgraph "${recastNamespace}" not found`);
     }
     const updateSuperStep = async (inputConfig, updates) => {
-      const config2 = this.config ? mergeConfigs(this.config, inputConfig) : inputConfig;
-      const saved = await checkpointer.getTuple(config2);
+      const config4 = this.config ? mergeConfigs(this.config, inputConfig) : inputConfig;
+      const saved = await checkpointer.getTuple(config4);
       const checkpoint = saved !== void 0 ? copyCheckpoint(saved.checkpoint) : emptyCheckpoint();
       const checkpointPreviousVersions = {
         ...saved?.checkpoint.channel_versions
       };
       const step = saved?.metadata?.step ?? -1;
-      let checkpointConfig = patchConfigurable(config2, {
-        checkpoint_ns: config2.configurable?.checkpoint_ns ?? ""
+      let checkpointConfig = patchConfigurable(config4, {
+        checkpoint_ns: config4.configurable?.checkpoint_ns ?? ""
       });
-      let checkpointMetadata = config2.metadata ?? {};
+      let checkpointMetadata = config4.metadata ?? {};
       if (saved?.config.configurable) {
-        checkpointConfig = patchConfigurable(config2, saved.config.configurable);
+        checkpointConfig = patchConfigurable(config4, saved.config.configurable);
         checkpointMetadata = {
           ...saved.metadata,
           ...checkpointMetadata
@@ -56220,7 +56220,7 @@ var Pregel = class extends PartialRunnable {
         await checkpointer.putWrites(nextConfig2, inputWrites, uuid5(INPUT, checkpoint.id));
         return patchCheckpointMap(nextConfig2, saved ? saved.metadata : void 0);
       }
-      if (config2.configurable?.checkpoint_id === void 0 && saved?.pendingWrites !== void 0 && saved.pendingWrites.length > 0) {
+      if (config4.configurable?.checkpoint_id === void 0 && saved?.pendingWrites !== void 0 && saved.pendingWrites.length > 0) {
         const nextTasks = _prepareNextTasks(checkpoint, saved.pendingWrites, this.nodes, channels, saved.config, true, {
           store: this.store,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56308,10 +56308,10 @@ var Pregel = class extends PartialRunnable {
       }
       for (const task2 of tasks) {
         await task2.proc.invoke(task2.input, patchConfig({
-          ...config2,
-          store: config2?.store ?? this.store
+          ...config4,
+          store: config4?.store ?? this.store
         }, {
-          runName: config2.runName ?? `${this.getName()}UpdateState`,
+          runName: config4.runName ?? `${this.getName()}UpdateState`,
           configurable: {
             [CONFIG_KEY_SEND]: (items) => task2.writes.push(...items),
             [CONFIG_KEY_READ]: (select_, fresh_ = false) => _localRead(
@@ -56393,8 +56393,8 @@ var Pregel = class extends PartialRunnable {
    * - whether checkpoint during is enabled
    * @internal
    */
-  _defaults(config2) {
-    const { debug, streamMode, inputKeys, outputKeys, interruptAfter, interruptBefore, ...rest } = config2;
+  _defaults(config4) {
+    const { debug, streamMode, inputKeys, outputKeys, interruptAfter, interruptBefore, ...rest } = config4;
     let streamModeSingle = true;
     const defaultDebug = debug !== void 0 ? debug : this.debug;
     let defaultOutputKeys = outputKeys;
@@ -56416,7 +56416,7 @@ var Pregel = class extends PartialRunnable {
       defaultStreamMode = Array.isArray(streamMode) ? streamMode : [streamMode];
       streamModeSingle = typeof streamMode === "string";
     } else {
-      if (config2.configurable?.[CONFIG_KEY_TASK_ID] !== void 0) {
+      if (config4.configurable?.[CONFIG_KEY_TASK_ID] !== void 0) {
         defaultStreamMode = ["values"];
       } else {
         defaultStreamMode = this.streamMode;
@@ -56426,26 +56426,26 @@ var Pregel = class extends PartialRunnable {
     let defaultCheckpointer;
     if (this.checkpointer === false) {
       defaultCheckpointer = void 0;
-    } else if (config2 !== void 0 && config2.configurable?.[CONFIG_KEY_CHECKPOINTER] !== void 0) {
-      defaultCheckpointer = config2.configurable[CONFIG_KEY_CHECKPOINTER];
+    } else if (config4 !== void 0 && config4.configurable?.[CONFIG_KEY_CHECKPOINTER] !== void 0) {
+      defaultCheckpointer = config4.configurable[CONFIG_KEY_CHECKPOINTER];
     } else if (this.checkpointer === true) {
       throw new Error("checkpointer: true cannot be used for root graphs.");
     } else {
       defaultCheckpointer = this.checkpointer;
     }
-    const defaultStore = config2.store ?? this.store;
-    const defaultCache = config2.cache ?? this.cache;
-    if (config2.durability != null && config2.checkpointDuring != null) {
+    const defaultStore = config4.store ?? this.store;
+    const defaultCache = config4.cache ?? this.cache;
+    if (config4.durability != null && config4.checkpointDuring != null) {
       throw new Error("Cannot use both `durability` and `checkpointDuring` at the same time.");
     }
     const checkpointDuringDurability = (() => {
-      if (config2.checkpointDuring == null)
+      if (config4.checkpointDuring == null)
         return void 0;
-      if (config2.checkpointDuring === false)
+      if (config4.checkpointDuring === false)
         return "exit";
       return "async";
     })();
-    const defaultDurability = config2.durability ?? checkpointDuringDurability ?? config2?.configurable?.[CONFIG_KEY_DURABILITY] ?? "async";
+    const defaultDurability = config4.durability ?? checkpointDuringDurability ?? config4?.configurable?.[CONFIG_KEY_DURABILITY] ?? "async";
     return [
       defaultDebug,
       defaultStreamMode,
@@ -56479,16 +56479,16 @@ var Pregel = class extends PartialRunnable {
    */
   async stream(input, options) {
     const abortController = new AbortController();
-    const config2 = {
+    const config4 = {
       recursionLimit: this.config?.recursionLimit,
       ...options,
       signal: combineAbortSignals(options?.signal, abortController.signal).signal
     };
-    return new IterableReadableStreamWithAbortSignal(await super.stream(input, config2), abortController);
+    return new IterableReadableStreamWithAbortSignal(await super.stream(input, config4), abortController);
   }
   streamEvents(input, options, streamOptions) {
     const abortController = new AbortController();
-    const config2 = {
+    const config4 = {
       recursionLimit: this.config?.recursionLimit,
       ...options,
       // Similar to `stream`, we need to pass the `config.callbacks` here,
@@ -56497,7 +56497,7 @@ var Pregel = class extends PartialRunnable {
       callbacks: combineCallbacks(this.config?.callbacks, options?.callbacks),
       signal: combineAbortSignals(options?.signal, abortController.signal).signal
     };
-    return new IterableReadableStreamWithAbortSignal(super.streamEvents(input, config2, streamOptions), abortController);
+    return new IterableReadableStreamWithAbortSignal(super.streamEvents(input, config4, streamOptions), abortController);
   }
   /**
    * Validates the input for the graph.
@@ -56514,8 +56514,8 @@ var Pregel = class extends PartialRunnable {
    * @returns The validated context options
    * @internal
    */
-  async _validateContext(context) {
-    return context;
+  async _validateContext(context3) {
+    return context3;
   }
   /**
    * Internal iterator used by stream() to generate state updates.
@@ -56537,40 +56537,40 @@ var Pregel = class extends PartialRunnable {
     }
     const validInput = await this._validateInput(input);
     const { runId, ...restConfig } = inputConfig;
-    const [debug, streamMode, , outputKeys, config2, interruptBefore, interruptAfter, checkpointer, store, streamModeSingle, cache2, durability] = this._defaults(restConfig);
-    if (typeof config2.context !== "undefined") {
-      config2.context = await this._validateContext(config2.context);
+    const [debug, streamMode, , outputKeys, config4, interruptBefore, interruptAfter, checkpointer, store, streamModeSingle, cache2, durability] = this._defaults(restConfig);
+    if (typeof config4.context !== "undefined") {
+      config4.context = await this._validateContext(config4.context);
     } else {
-      config2.configurable = await this._validateContext(config2.configurable);
+      config4.configurable = await this._validateContext(config4.configurable);
     }
     const stream = new IterableReadableWritableStream({
       modes: new Set(streamMode)
     });
     if (this.checkpointer === true) {
-      config2.configurable ??= {};
-      const ns = config2.configurable[CONFIG_KEY_CHECKPOINT_NS] ?? "";
-      config2.configurable[CONFIG_KEY_CHECKPOINT_NS] = ns.split(CHECKPOINT_NAMESPACE_SEPARATOR).map((part) => part.split(CHECKPOINT_NAMESPACE_END)[0]).join(CHECKPOINT_NAMESPACE_SEPARATOR);
+      config4.configurable ??= {};
+      const ns = config4.configurable[CONFIG_KEY_CHECKPOINT_NS] ?? "";
+      config4.configurable[CONFIG_KEY_CHECKPOINT_NS] = ns.split(CHECKPOINT_NAMESPACE_SEPARATOR).map((part) => part.split(CHECKPOINT_NAMESPACE_END)[0]).join(CHECKPOINT_NAMESPACE_SEPARATOR);
     }
     if (streamMode.includes("messages")) {
       const messageStreamer = new StreamMessagesHandler((chunk) => stream.push(chunk));
-      const { callbacks } = config2;
+      const { callbacks } = config4;
       if (callbacks === void 0) {
-        config2.callbacks = [messageStreamer];
+        config4.callbacks = [messageStreamer];
       } else if (Array.isArray(callbacks)) {
-        config2.callbacks = callbacks.concat(messageStreamer);
+        config4.callbacks = callbacks.concat(messageStreamer);
       } else {
         const copiedCallbacks = callbacks.copy();
         copiedCallbacks.addHandler(messageStreamer, true);
-        config2.callbacks = copiedCallbacks;
+        config4.callbacks = copiedCallbacks;
       }
     }
     if (streamMode.includes("custom")) {
-      config2.writer = (chunk) => {
+      config4.writer = (chunk) => {
         const ns = getConfig()?.configurable?.[CONFIG_KEY_CHECKPOINT_NS]?.split(CHECKPOINT_NAMESPACE_SEPARATOR).slice(0, -1);
         stream.push([ns ?? [], "custom", chunk]);
       };
     }
-    const callbackManager = await getCallbackManagerForConfig(config2);
+    const callbackManager = await getCallbackManagerForConfig(config4);
     const runManager = await callbackManager?.handleChainStart(
       this.toJSON(),
       // chain
@@ -56584,7 +56584,7 @@ var Pregel = class extends PartialRunnable {
       // tags
       void 0,
       // metadata
-      config2?.runName ?? this.getName()
+      config4?.runName ?? this.getName()
       // run_name
     );
     const channelSpecs = getOnlyChannels(this.channels);
@@ -56594,7 +56594,7 @@ var Pregel = class extends PartialRunnable {
       try {
         loop = await PregelLoop.initialize({
           input: validInput,
-          config: config2,
+          config: config4,
           checkpointer,
           nodes: this.nodes,
           channelSpecs,
@@ -56612,7 +56612,7 @@ var Pregel = class extends PartialRunnable {
         });
         const runner = new PregelRunner({
           loop,
-          nodeFinished: config2.configurable?.[CONFIG_KEY_NODE_FINISHED]
+          nodeFinished: config4.configurable?.[CONFIG_KEY_NODE_FINISHED]
         });
         if (options?.subgraphs) {
           loop.config.configurable = {
@@ -56620,7 +56620,7 @@ var Pregel = class extends PartialRunnable {
             [CONFIG_KEY_STREAM]: loop.stream
           };
         }
-        await this._runLoop({ loop, runner, debug, config: config2 });
+        await this._runLoop({ loop, runner, debug, config: config4 });
         if (durability === "sync") {
           await Promise.all(loop?.checkpointerPromises ?? []);
         }
@@ -56687,13 +56687,13 @@ var Pregel = class extends PartialRunnable {
    */
   async invoke(input, options) {
     const streamMode = options?.streamMode ?? "values";
-    const config2 = {
+    const config4 = {
       ...options,
       outputKeys: options?.outputKeys ?? this.outputChannels,
       streamMode
     };
     const chunks = [];
-    const stream = await this.stream(input, config2);
+    const stream = await this.stream(input, config4);
     const interruptChunks = [];
     let latest;
     for await (const chunk of stream) {
@@ -56721,7 +56721,7 @@ var Pregel = class extends PartialRunnable {
     return chunks;
   }
   async _runLoop(params) {
-    const { loop, runner, debug, config: config2 } = params;
+    const { loop, runner, debug, config: config4 } = params;
     let tickError;
     try {
       while (await loop.tick({ inputKeys: this.inputChannels })) {
@@ -56742,13 +56742,13 @@ var Pregel = class extends PartialRunnable {
               printStepWrites(step, writes, this.streamChannelsList);
             }
           },
-          maxConcurrency: config2.maxConcurrency,
-          signal: config2.signal
+          maxConcurrency: config4.maxConcurrency,
+          signal: config4.signal
         });
       }
       if (loop.status === "out_of_steps") {
         throw new GraphRecursionError([
-          `Recursion limit of ${config2.recursionLimit} reached`,
+          `Recursion limit of ${config4.recursionLimit} reached`,
           "without hitting a stop condition. You can increase the",
           `limit by setting the "recursionLimit" config key.`
         ].join(" "), {
@@ -56861,9 +56861,9 @@ var Branch = class {
     return ChannelWrite.registerWriter(new RunnableCallable({
       name: "<branch_run>",
       trace: false,
-      func: async (input, config2) => {
+      func: async (input, config4) => {
         try {
-          return await this._route(input, config2, writer, reader);
+          return await this._route(input, config4, writer, reader);
         } catch (e) {
           if (e.name === NodeInterrupt.unminifiable_name) {
             console.warn("[WARN]: 'NodeInterrupt' thrown in conditional edge. This is likely a bug in your graph implementation.\nNodeInterrupt should only be thrown inside a node, not in edge conditions.");
@@ -56873,8 +56873,8 @@ var Branch = class {
       }
     }));
   }
-  async _route(input, config2, writer, reader) {
-    let result = await this.path.invoke(reader ? reader(config2) : input, config2);
+  async _route(input, config4, writer, reader) {
+    let result = await this.path.invoke(reader ? reader(config4) : input, config4);
     if (!Array.isArray(result)) {
       result = [result];
     }
@@ -56890,7 +56890,7 @@ var Branch = class {
     if (destinations.filter(_isSend).some((packet) => packet.node === END)) {
       throw new InvalidUpdateError("Cannot send a packet to the END node");
     }
-    const writeResult = await writer(destinations, config2);
+    const writeResult = await writer(destinations, config4);
     return writeResult ?? input;
   }
 };
@@ -57177,8 +57177,8 @@ var CompiledGraph = class extends Pregel {
   /**
    * Returns a drawable representation of the computation graph.
    */
-  async getGraphAsync(config2) {
-    const xray = config2?.xray;
+  async getGraphAsync(config4) {
+    const xray = config4?.xray;
     const graph = new Graph();
     const startNodes = {
       [START]: graph.addNode({
@@ -57219,9 +57219,9 @@ var CompiledGraph = class extends Pregel {
       if (xray) {
         const newXrayValue = typeof xray === "number" ? xray - 1 : xray;
         const drawableSubgraph = subgraphs[key] !== void 0 ? await subgraphs[key].getGraphAsync({
-          ...config2,
+          ...config4,
           xray: newXrayValue
-        }) : node.getGraph(config2);
+        }) : node.getGraph(config4);
         drawableSubgraph.trimFirstNode();
         drawableSubgraph.trimLastNode();
         if (Object.keys(drawableSubgraph.nodes).length > 1) {
@@ -57310,8 +57310,8 @@ var CompiledGraph = class extends Pregel {
    *
    * @deprecated Use getGraphAsync instead. The async method will be the default in the next minor core release.
    */
-  getGraph(config2) {
-    const xray = config2?.xray;
+  getGraph(config4) {
+    const xray = config4?.xray;
     const graph = new Graph();
     const startNodes = {
       [START]: graph.addNode({
@@ -57346,9 +57346,9 @@ var CompiledGraph = class extends Pregel {
       if (xray) {
         const newXrayValue = typeof xray === "number" ? xray - 1 : xray;
         const drawableSubgraph = subgraphs[key] !== void 0 ? subgraphs[key].getGraph({
-          ...config2,
+          ...config4,
           xray: newXrayValue
-        }) : node.getGraph(config2);
+        }) : node.getGraph(config4);
         drawableSubgraph.trimFirstNode();
         drawableSubgraph.trimLastNode();
         if (Object.keys(drawableSubgraph.nodes).length > 1) {
@@ -58221,7 +58221,7 @@ var CompiledStateGraph = class extends CompiledGraph {
     }
   }
   attachBranch(start, _, branch, options = { withReader: true }) {
-    const branchWriter = async (packets, config2) => {
+    const branchWriter = async (packets, config4) => {
       const filteredPackets = packets.filter((p) => p !== END);
       if (!filteredPackets.length)
         return;
@@ -58230,12 +58230,12 @@ var CompiledStateGraph = class extends CompiledGraph {
           return p;
         return { channel: p === END ? p : `branch:to:${p}`, value: start };
       });
-      await ChannelWrite.doWrite({ ...config2, tags: (config2.tags ?? []).concat([TAG_HIDDEN]) }, writes);
+      await ChannelWrite.doWrite({ ...config4, tags: (config4.tags ?? []).concat([TAG_HIDDEN]) }, writes);
     };
     this.nodes[start].writers.push(branch.run(
       branchWriter,
       // reader
-      options.withReader ? (config2) => ChannelRead.doRead(config2, this.streamChannels ?? this.outputChannels, true) : void 0
+      options.withReader ? (config4) => ChannelRead.doRead(config4, this.streamChannels ?? this.outputChannels, true) : void 0
     ));
   }
   async _validateInput(input) {
@@ -58268,11 +58268,11 @@ var CompiledStateGraph = class extends CompiledGraph {
       return interopParse(schema, input);
     return input;
   }
-  async _validateContext(config2) {
+  async _validateContext(config4) {
     const configSchema = this.builder._configRuntimeSchema;
     if (isInteropZodObject(configSchema))
-      interopParse(configSchema, config2);
-    return config2;
+      interopParse(configSchema, config4);
+    return config4;
   }
 };
 function isStateDefinition(obj) {
@@ -58643,6 +58643,23 @@ var SupabaseAuth = class _SupabaseAuth {
       return { user: null, error };
     }
   }
+  async resetPasswordForEmail(email) {
+    try {
+      console.log("Attempting password reset for:", email);
+      const { data, error } = await this.supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://kahana.co/oauth-callback"
+      });
+      if (error) {
+        console.error("Password reset error:", error.message);
+        return { data: null, error };
+      }
+      console.log("Password reset email sent to:", email);
+      return { data, error: null };
+    } catch (error) {
+      console.error("Password reset error:", error);
+      return { data: null, error };
+    }
+  }
   async signOut() {
     try {
       console.log("Attempting sign out");
@@ -58660,6 +58677,24 @@ var SupabaseAuth = class _SupabaseAuth {
     } catch (error) {
       console.error("Sign out error:", error);
       return { error };
+    }
+  }
+  async updatePassword(newPassword) {
+    try {
+      console.log("Updating user password");
+      const { data, error } = await this.supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        console.error("Update password error:", error.message);
+        return { user: null, error };
+      }
+      if (data.user) {
+        await this.updateLastLogin(data.user.id);
+        await this.createSession(data.user.id);
+      }
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error("Update password error:", error);
+      return { user: null, error };
     }
   }
   // Session Management
@@ -58815,7 +58850,11 @@ var SupabaseAuth = class _SupabaseAuth {
         device_info: deviceInfo
       }).select().single();
       if (error) {
-        console.error("Error creating session:", error.message);
+        if (error.message.includes("row-level security policy")) {
+          console.warn("Session tracking skipped due to RLS policy (non-critical):", error.message);
+        } else {
+          console.error("Error creating session:", error.message);
+        }
       } else if (data) {
         this.currentSession = data;
         console.log("Session created:", data.session_id);
@@ -59014,6 +59053,4295 @@ var VoiceInputService = class {
 };
 var voiceInput_default = new VoiceInputService();
 
+// node_modules/gsap/gsap-core.js
+function _assertThisInitialized(self2) {
+  if (self2 === void 0) {
+    throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+  }
+  return self2;
+}
+function _inheritsLoose(subClass, superClass) {
+  subClass.prototype = Object.create(superClass.prototype);
+  subClass.prototype.constructor = subClass;
+  subClass.__proto__ = superClass;
+}
+var _config = {
+  autoSleep: 120,
+  force3D: "auto",
+  nullTargetWarn: 1,
+  units: {
+    lineHeight: ""
+  }
+};
+var _defaults = {
+  duration: 0.5,
+  overwrite: false,
+  delay: 0
+};
+var _suppressOverwrites;
+var _reverting;
+var _context;
+var _bigNum = 1e8;
+var _tinyNum = 1 / _bigNum;
+var _2PI = Math.PI * 2;
+var _HALF_PI = _2PI / 4;
+var _gsID = 0;
+var _sqrt = Math.sqrt;
+var _cos = Math.cos;
+var _sin = Math.sin;
+var _isString = function _isString2(value) {
+  return typeof value === "string";
+};
+var _isFunction = function _isFunction2(value) {
+  return typeof value === "function";
+};
+var _isNumber = function _isNumber2(value) {
+  return typeof value === "number";
+};
+var _isUndefined = function _isUndefined2(value) {
+  return typeof value === "undefined";
+};
+var _isObject = function _isObject2(value) {
+  return typeof value === "object";
+};
+var _isNotFalse = function _isNotFalse2(value) {
+  return value !== false;
+};
+var _windowExists = function _windowExists2() {
+  return typeof window !== "undefined";
+};
+var _isFuncOrString = function _isFuncOrString2(value) {
+  return _isFunction(value) || _isString(value);
+};
+var _isTypedArray = typeof ArrayBuffer === "function" && ArrayBuffer.isView || function() {
+};
+var _isArray = Array.isArray;
+var _randomExp = /random\([^)]+\)/g;
+var _commaDelimExp = /,\s*/g;
+var _strictNumExp = /(?:-?\.?\d|\.)+/gi;
+var _numExp = /[-+=.]*\d+[.e\-+]*\d*[e\-+]*\d*/g;
+var _numWithUnitExp = /[-+=.]*\d+[.e-]*\d*[a-z%]*/g;
+var _complexStringNumExp = /[-+=.]*\d+\.?\d*(?:e-|e\+)?\d*/gi;
+var _relExp = /[+-]=-?[.\d]+/;
+var _delimitedValueExp = /[^,'"\[\]\s]+/gi;
+var _unitExp = /^[+\-=e\s\d]*\d+[.\d]*([a-z]*|%)\s*$/i;
+var _globalTimeline;
+var _win;
+var _coreInitted;
+var _doc;
+var _globals = {};
+var _installScope = {};
+var _coreReady;
+var _install = function _install2(scope) {
+  return (_installScope = _merge(scope, _globals)) && gsap;
+};
+var _missingPlugin = function _missingPlugin2(property, value) {
+  return console.warn("Invalid property", property, "set to", value, "Missing plugin? gsap.registerPlugin()");
+};
+var _warn = function _warn2(message, suppress) {
+  return !suppress && console.warn(message);
+};
+var _addGlobal = function _addGlobal2(name, obj) {
+  return name && (_globals[name] = obj) && _installScope && (_installScope[name] = obj) || _globals;
+};
+var _emptyFunc = function _emptyFunc2() {
+  return 0;
+};
+var _startAtRevertConfig = {
+  suppressEvents: true,
+  isStart: true,
+  kill: false
+};
+var _revertConfigNoKill = {
+  suppressEvents: true,
+  kill: false
+};
+var _revertConfig = {
+  suppressEvents: true
+};
+var _reservedProps = {};
+var _lazyTweens = [];
+var _lazyLookup = {};
+var _lastRenderedFrame;
+var _plugins = {};
+var _effects = {};
+var _nextGCFrame = 30;
+var _harnessPlugins = [];
+var _callbackNames = "";
+var _harness = function _harness2(targets) {
+  var target = targets[0], harnessPlugin, i;
+  _isObject(target) || _isFunction(target) || (targets = [targets]);
+  if (!(harnessPlugin = (target._gsap || {}).harness)) {
+    i = _harnessPlugins.length;
+    while (i-- && !_harnessPlugins[i].targetTest(target)) {
+    }
+    harnessPlugin = _harnessPlugins[i];
+  }
+  i = targets.length;
+  while (i--) {
+    targets[i] && (targets[i]._gsap || (targets[i]._gsap = new GSCache(targets[i], harnessPlugin))) || targets.splice(i, 1);
+  }
+  return targets;
+};
+var _getCache = function _getCache2(target) {
+  return target._gsap || _harness(toArray2(target))[0]._gsap;
+};
+var _getProperty = function _getProperty2(target, property, v) {
+  return (v = target[property]) && _isFunction(v) ? target[property]() : _isUndefined(v) && target.getAttribute && target.getAttribute(property) || v;
+};
+var _forEachName = function _forEachName2(names, func) {
+  return (names = names.split(",")).forEach(func) || names;
+};
+var _round = function _round2(value) {
+  return Math.round(value * 1e5) / 1e5 || 0;
+};
+var _roundPrecise = function _roundPrecise2(value) {
+  return Math.round(value * 1e7) / 1e7 || 0;
+};
+var _parseRelative = function _parseRelative2(start, value) {
+  var operator = value.charAt(0), end = parseFloat(value.substr(2));
+  start = parseFloat(start);
+  return operator === "+" ? start + end : operator === "-" ? start - end : operator === "*" ? start * end : start / end;
+};
+var _arrayContainsAny = function _arrayContainsAny2(toSearch, toFind) {
+  var l = toFind.length, i = 0;
+  for (; toSearch.indexOf(toFind[i]) < 0 && ++i < l; ) {
+  }
+  return i < l;
+};
+var _lazyRender = function _lazyRender2() {
+  var l = _lazyTweens.length, a = _lazyTweens.slice(0), i, tween;
+  _lazyLookup = {};
+  _lazyTweens.length = 0;
+  for (i = 0; i < l; i++) {
+    tween = a[i];
+    tween && tween._lazy && (tween.render(tween._lazy[0], tween._lazy[1], true)._lazy = 0);
+  }
+};
+var _isRevertWorthy = function _isRevertWorthy2(animation) {
+  return !!(animation._initted || animation._startAt || animation.add);
+};
+var _lazySafeRender = function _lazySafeRender2(animation, time2, suppressEvents, force) {
+  _lazyTweens.length && !_reverting && _lazyRender();
+  animation.render(time2, suppressEvents, force || !!(_reverting && time2 < 0 && _isRevertWorthy(animation)));
+  _lazyTweens.length && !_reverting && _lazyRender();
+};
+var _numericIfPossible = function _numericIfPossible2(value) {
+  var n2 = parseFloat(value);
+  return (n2 || n2 === 0) && (value + "").match(_delimitedValueExp).length < 2 ? n2 : _isString(value) ? value.trim() : value;
+};
+var _passThrough = function _passThrough2(p) {
+  return p;
+};
+var _setDefaults = function _setDefaults2(obj, defaults2) {
+  for (var p in defaults2) {
+    p in obj || (obj[p] = defaults2[p]);
+  }
+  return obj;
+};
+var _setKeyframeDefaults = function _setKeyframeDefaults2(excludeDuration) {
+  return function(obj, defaults2) {
+    for (var p in defaults2) {
+      p in obj || p === "duration" && excludeDuration || p === "ease" || (obj[p] = defaults2[p]);
+    }
+  };
+};
+var _merge = function _merge2(base, toMerge) {
+  for (var p in toMerge) {
+    base[p] = toMerge[p];
+  }
+  return base;
+};
+var _mergeDeep = function _mergeDeep2(base, toMerge) {
+  for (var p in toMerge) {
+    p !== "__proto__" && p !== "constructor" && p !== "prototype" && (base[p] = _isObject(toMerge[p]) ? _mergeDeep2(base[p] || (base[p] = {}), toMerge[p]) : toMerge[p]);
+  }
+  return base;
+};
+var _copyExcluding = function _copyExcluding2(obj, excluding) {
+  var copy = {}, p;
+  for (p in obj) {
+    p in excluding || (copy[p] = obj[p]);
+  }
+  return copy;
+};
+var _inheritDefaults = function _inheritDefaults2(vars) {
+  var parent = vars.parent || _globalTimeline, func = vars.keyframes ? _setKeyframeDefaults(_isArray(vars.keyframes)) : _setDefaults;
+  if (_isNotFalse(vars.inherit)) {
+    while (parent) {
+      func(vars, parent.vars.defaults);
+      parent = parent.parent || parent._dp;
+    }
+  }
+  return vars;
+};
+var _arraysMatch = function _arraysMatch2(a1, a2) {
+  var i = a1.length, match = i === a2.length;
+  while (match && i-- && a1[i] === a2[i]) {
+  }
+  return i < 0;
+};
+var _addLinkedListItem = function _addLinkedListItem2(parent, child, firstProp, lastProp, sortBy) {
+  if (firstProp === void 0) {
+    firstProp = "_first";
+  }
+  if (lastProp === void 0) {
+    lastProp = "_last";
+  }
+  var prev = parent[lastProp], t;
+  if (sortBy) {
+    t = child[sortBy];
+    while (prev && prev[sortBy] > t) {
+      prev = prev._prev;
+    }
+  }
+  if (prev) {
+    child._next = prev._next;
+    prev._next = child;
+  } else {
+    child._next = parent[firstProp];
+    parent[firstProp] = child;
+  }
+  if (child._next) {
+    child._next._prev = child;
+  } else {
+    parent[lastProp] = child;
+  }
+  child._prev = prev;
+  child.parent = child._dp = parent;
+  return child;
+};
+var _removeLinkedListItem = function _removeLinkedListItem2(parent, child, firstProp, lastProp) {
+  if (firstProp === void 0) {
+    firstProp = "_first";
+  }
+  if (lastProp === void 0) {
+    lastProp = "_last";
+  }
+  var prev = child._prev, next = child._next;
+  if (prev) {
+    prev._next = next;
+  } else if (parent[firstProp] === child) {
+    parent[firstProp] = next;
+  }
+  if (next) {
+    next._prev = prev;
+  } else if (parent[lastProp] === child) {
+    parent[lastProp] = prev;
+  }
+  child._next = child._prev = child.parent = null;
+};
+var _removeFromParent = function _removeFromParent2(child, onlyIfParentHasAutoRemove) {
+  child.parent && (!onlyIfParentHasAutoRemove || child.parent.autoRemoveChildren) && child.parent.remove && child.parent.remove(child);
+  child._act = 0;
+};
+var _uncache = function _uncache2(animation, child) {
+  if (animation && (!child || child._end > animation._dur || child._start < 0)) {
+    var a = animation;
+    while (a) {
+      a._dirty = 1;
+      a = a.parent;
+    }
+  }
+  return animation;
+};
+var _recacheAncestors = function _recacheAncestors2(animation) {
+  var parent = animation.parent;
+  while (parent && parent.parent) {
+    parent._dirty = 1;
+    parent.totalDuration();
+    parent = parent.parent;
+  }
+  return animation;
+};
+var _rewindStartAt = function _rewindStartAt2(tween, totalTime, suppressEvents, force) {
+  return tween._startAt && (_reverting ? tween._startAt.revert(_revertConfigNoKill) : tween.vars.immediateRender && !tween.vars.autoRevert || tween._startAt.render(totalTime, true, force));
+};
+var _hasNoPausedAncestors = function _hasNoPausedAncestors2(animation) {
+  return !animation || animation._ts && _hasNoPausedAncestors2(animation.parent);
+};
+var _elapsedCycleDuration = function _elapsedCycleDuration2(animation) {
+  return animation._repeat ? _animationCycle(animation._tTime, animation = animation.duration() + animation._rDelay) * animation : 0;
+};
+var _animationCycle = function _animationCycle2(tTime, cycleDuration) {
+  var whole = Math.floor(tTime = _roundPrecise(tTime / cycleDuration));
+  return tTime && whole === tTime ? whole - 1 : whole;
+};
+var _parentToChildTotalTime = function _parentToChildTotalTime2(parentTime, child) {
+  return (parentTime - child._start) * child._ts + (child._ts >= 0 ? 0 : child._dirty ? child.totalDuration() : child._tDur);
+};
+var _setEnd = function _setEnd2(animation) {
+  return animation._end = _roundPrecise(animation._start + (animation._tDur / Math.abs(animation._ts || animation._rts || _tinyNum) || 0));
+};
+var _alignPlayhead = function _alignPlayhead2(animation, totalTime) {
+  var parent = animation._dp;
+  if (parent && parent.smoothChildTiming && animation._ts) {
+    animation._start = _roundPrecise(parent._time - (animation._ts > 0 ? totalTime / animation._ts : ((animation._dirty ? animation.totalDuration() : animation._tDur) - totalTime) / -animation._ts));
+    _setEnd(animation);
+    parent._dirty || _uncache(parent, animation);
+  }
+  return animation;
+};
+var _postAddChecks = function _postAddChecks2(timeline2, child) {
+  var t;
+  if (child._time || !child._dur && child._initted || child._start < timeline2._time && (child._dur || !child.add)) {
+    t = _parentToChildTotalTime(timeline2.rawTime(), child);
+    if (!child._dur || _clamp(0, child.totalDuration(), t) - child._tTime > _tinyNum) {
+      child.render(t, true);
+    }
+  }
+  if (_uncache(timeline2, child)._dp && timeline2._initted && timeline2._time >= timeline2._dur && timeline2._ts) {
+    if (timeline2._dur < timeline2.duration()) {
+      t = timeline2;
+      while (t._dp) {
+        t.rawTime() >= 0 && t.totalTime(t._tTime);
+        t = t._dp;
+      }
+    }
+    timeline2._zTime = -_tinyNum;
+  }
+};
+var _addToTimeline = function _addToTimeline2(timeline2, child, position, skipChecks) {
+  child.parent && _removeFromParent(child);
+  child._start = _roundPrecise((_isNumber(position) ? position : position || timeline2 !== _globalTimeline ? _parsePosition(timeline2, position, child) : timeline2._time) + child._delay);
+  child._end = _roundPrecise(child._start + (child.totalDuration() / Math.abs(child.timeScale()) || 0));
+  _addLinkedListItem(timeline2, child, "_first", "_last", timeline2._sort ? "_start" : 0);
+  _isFromOrFromStart(child) || (timeline2._recent = child);
+  skipChecks || _postAddChecks(timeline2, child);
+  timeline2._ts < 0 && _alignPlayhead(timeline2, timeline2._tTime);
+  return timeline2;
+};
+var _scrollTrigger = function _scrollTrigger2(animation, trigger) {
+  return (_globals.ScrollTrigger || _missingPlugin("scrollTrigger", trigger)) && _globals.ScrollTrigger.create(trigger, animation);
+};
+var _attemptInitTween = function _attemptInitTween2(tween, time2, force, suppressEvents, tTime) {
+  _initTween(tween, time2, tTime);
+  if (!tween._initted) {
+    return 1;
+  }
+  if (!force && tween._pt && !_reverting && (tween._dur && tween.vars.lazy !== false || !tween._dur && tween.vars.lazy) && _lastRenderedFrame !== _ticker.frame) {
+    _lazyTweens.push(tween);
+    tween._lazy = [tTime, suppressEvents];
+    return 1;
+  }
+};
+var _parentPlayheadIsBeforeStart = function _parentPlayheadIsBeforeStart2(_ref) {
+  var parent = _ref.parent;
+  return parent && parent._ts && parent._initted && !parent._lock && (parent.rawTime() < 0 || _parentPlayheadIsBeforeStart2(parent));
+};
+var _isFromOrFromStart = function _isFromOrFromStart2(_ref2) {
+  var data = _ref2.data;
+  return data === "isFromStart" || data === "isStart";
+};
+var _renderZeroDurationTween = function _renderZeroDurationTween2(tween, totalTime, suppressEvents, force) {
+  var prevRatio = tween.ratio, ratio = totalTime < 0 || !totalTime && (!tween._start && _parentPlayheadIsBeforeStart(tween) && !(!tween._initted && _isFromOrFromStart(tween)) || (tween._ts < 0 || tween._dp._ts < 0) && !_isFromOrFromStart(tween)) ? 0 : 1, repeatDelay = tween._rDelay, tTime = 0, pt, iteration, prevIteration;
+  if (repeatDelay && tween._repeat) {
+    tTime = _clamp(0, tween._tDur, totalTime);
+    iteration = _animationCycle(tTime, repeatDelay);
+    tween._yoyo && iteration & 1 && (ratio = 1 - ratio);
+    if (iteration !== _animationCycle(tween._tTime, repeatDelay)) {
+      prevRatio = 1 - ratio;
+      tween.vars.repeatRefresh && tween._initted && tween.invalidate();
+    }
+  }
+  if (ratio !== prevRatio || _reverting || force || tween._zTime === _tinyNum || !totalTime && tween._zTime) {
+    if (!tween._initted && _attemptInitTween(tween, totalTime, force, suppressEvents, tTime)) {
+      return;
+    }
+    prevIteration = tween._zTime;
+    tween._zTime = totalTime || (suppressEvents ? _tinyNum : 0);
+    suppressEvents || (suppressEvents = totalTime && !prevIteration);
+    tween.ratio = ratio;
+    tween._from && (ratio = 1 - ratio);
+    tween._time = 0;
+    tween._tTime = tTime;
+    pt = tween._pt;
+    while (pt) {
+      pt.r(ratio, pt.d);
+      pt = pt._next;
+    }
+    totalTime < 0 && _rewindStartAt(tween, totalTime, suppressEvents, true);
+    tween._onUpdate && !suppressEvents && _callback(tween, "onUpdate");
+    tTime && tween._repeat && !suppressEvents && tween.parent && _callback(tween, "onRepeat");
+    if ((totalTime >= tween._tDur || totalTime < 0) && tween.ratio === ratio) {
+      ratio && _removeFromParent(tween, 1);
+      if (!suppressEvents && !_reverting) {
+        _callback(tween, ratio ? "onComplete" : "onReverseComplete", true);
+        tween._prom && tween._prom();
+      }
+    }
+  } else if (!tween._zTime) {
+    tween._zTime = totalTime;
+  }
+};
+var _findNextPauseTween = function _findNextPauseTween2(animation, prevTime, time2) {
+  var child;
+  if (time2 > prevTime) {
+    child = animation._first;
+    while (child && child._start <= time2) {
+      if (child.data === "isPause" && child._start > prevTime) {
+        return child;
+      }
+      child = child._next;
+    }
+  } else {
+    child = animation._last;
+    while (child && child._start >= time2) {
+      if (child.data === "isPause" && child._start < prevTime) {
+        return child;
+      }
+      child = child._prev;
+    }
+  }
+};
+var _setDuration = function _setDuration2(animation, duration, skipUncache, leavePlayhead) {
+  var repeat = animation._repeat, dur = _roundPrecise(duration) || 0, totalProgress = animation._tTime / animation._tDur;
+  totalProgress && !leavePlayhead && (animation._time *= dur / animation._dur);
+  animation._dur = dur;
+  animation._tDur = !repeat ? dur : repeat < 0 ? 1e10 : _roundPrecise(dur * (repeat + 1) + animation._rDelay * repeat);
+  totalProgress > 0 && !leavePlayhead && _alignPlayhead(animation, animation._tTime = animation._tDur * totalProgress);
+  animation.parent && _setEnd(animation);
+  skipUncache || _uncache(animation.parent, animation);
+  return animation;
+};
+var _onUpdateTotalDuration = function _onUpdateTotalDuration2(animation) {
+  return animation instanceof Timeline ? _uncache(animation) : _setDuration(animation, animation._dur);
+};
+var _zeroPosition = {
+  _start: 0,
+  endTime: _emptyFunc,
+  totalDuration: _emptyFunc
+};
+var _parsePosition = function _parsePosition2(animation, position, percentAnimation) {
+  var labels = animation.labels, recent = animation._recent || _zeroPosition, clippedDuration = animation.duration() >= _bigNum ? recent.endTime(false) : animation._dur, i, offset, isPercent;
+  if (_isString(position) && (isNaN(position) || position in labels)) {
+    offset = position.charAt(0);
+    isPercent = position.substr(-1) === "%";
+    i = position.indexOf("=");
+    if (offset === "<" || offset === ">") {
+      i >= 0 && (position = position.replace(/=/, ""));
+      return (offset === "<" ? recent._start : recent.endTime(recent._repeat >= 0)) + (parseFloat(position.substr(1)) || 0) * (isPercent ? (i < 0 ? recent : percentAnimation).totalDuration() / 100 : 1);
+    }
+    if (i < 0) {
+      position in labels || (labels[position] = clippedDuration);
+      return labels[position];
+    }
+    offset = parseFloat(position.charAt(i - 1) + position.substr(i + 1));
+    if (isPercent && percentAnimation) {
+      offset = offset / 100 * (_isArray(percentAnimation) ? percentAnimation[0] : percentAnimation).totalDuration();
+    }
+    return i > 1 ? _parsePosition2(animation, position.substr(0, i - 1), percentAnimation) + offset : clippedDuration + offset;
+  }
+  return position == null ? clippedDuration : +position;
+};
+var _createTweenType = function _createTweenType2(type, params, timeline2) {
+  var isLegacy = _isNumber(params[1]), varsIndex = (isLegacy ? 2 : 1) + (type < 2 ? 0 : 1), vars = params[varsIndex], irVars, parent;
+  isLegacy && (vars.duration = params[1]);
+  vars.parent = timeline2;
+  if (type) {
+    irVars = vars;
+    parent = timeline2;
+    while (parent && !("immediateRender" in irVars)) {
+      irVars = parent.vars.defaults || {};
+      parent = _isNotFalse(parent.vars.inherit) && parent.parent;
+    }
+    vars.immediateRender = _isNotFalse(irVars.immediateRender);
+    type < 2 ? vars.runBackwards = 1 : vars.startAt = params[varsIndex - 1];
+  }
+  return new Tween(params[0], vars, params[varsIndex + 1]);
+};
+var _conditionalReturn = function _conditionalReturn2(value, func) {
+  return value || value === 0 ? func(value) : func;
+};
+var _clamp = function _clamp2(min, max, value) {
+  return value < min ? min : value > max ? max : value;
+};
+var getUnit = function getUnit2(value, v) {
+  return !_isString(value) || !(v = _unitExp.exec(value)) ? "" : v[1];
+};
+var clamp = function clamp2(min, max, value) {
+  return _conditionalReturn(value, function(v) {
+    return _clamp(min, max, v);
+  });
+};
+var _slice = [].slice;
+var _isArrayLike = function _isArrayLike2(value, nonEmpty) {
+  return value && _isObject(value) && "length" in value && (!nonEmpty && !value.length || value.length - 1 in value && _isObject(value[0])) && !value.nodeType && value !== _win;
+};
+var _flatten = function _flatten2(ar, leaveStrings, accumulator) {
+  if (accumulator === void 0) {
+    accumulator = [];
+  }
+  return ar.forEach(function(value) {
+    var _accumulator;
+    return _isString(value) && !leaveStrings || _isArrayLike(value, 1) ? (_accumulator = accumulator).push.apply(_accumulator, toArray2(value)) : accumulator.push(value);
+  }) || accumulator;
+};
+var toArray2 = function toArray3(value, scope, leaveStrings) {
+  return _context && !scope && _context.selector ? _context.selector(value) : _isString(value) && !leaveStrings && (_coreInitted || !_wake()) ? _slice.call((scope || _doc).querySelectorAll(value), 0) : _isArray(value) ? _flatten(value, leaveStrings) : _isArrayLike(value) ? _slice.call(value, 0) : value ? [value] : [];
+};
+var selector = function selector2(value) {
+  value = toArray2(value)[0] || _warn("Invalid scope") || {};
+  return function(v) {
+    var el = value.current || value.nativeElement || value;
+    return toArray2(v, el.querySelectorAll ? el : el === value ? _warn("Invalid scope") || _doc.createElement("div") : value);
+  };
+};
+var shuffle = function shuffle2(a) {
+  return a.sort(function() {
+    return 0.5 - Math.random();
+  });
+};
+var distribute = function distribute2(v) {
+  if (_isFunction(v)) {
+    return v;
+  }
+  var vars = _isObject(v) ? v : {
+    each: v
+  }, ease = _parseEase(vars.ease), from = vars.from || 0, base = parseFloat(vars.base) || 0, cache2 = {}, isDecimal = from > 0 && from < 1, ratios = isNaN(from) || isDecimal, axis = vars.axis, ratioX = from, ratioY = from;
+  if (_isString(from)) {
+    ratioX = ratioY = {
+      center: 0.5,
+      edges: 0.5,
+      end: 1
+    }[from] || 0;
+  } else if (!isDecimal && ratios) {
+    ratioX = from[0];
+    ratioY = from[1];
+  }
+  return function(i, target, a) {
+    var l = (a || vars).length, distances = cache2[l], originX, originY, x, y, d, j, max, min, wrapAt;
+    if (!distances) {
+      wrapAt = vars.grid === "auto" ? 0 : (vars.grid || [1, _bigNum])[1];
+      if (!wrapAt) {
+        max = -_bigNum;
+        while (max < (max = a[wrapAt++].getBoundingClientRect().left) && wrapAt < l) {
+        }
+        wrapAt < l && wrapAt--;
+      }
+      distances = cache2[l] = [];
+      originX = ratios ? Math.min(wrapAt, l) * ratioX - 0.5 : from % wrapAt;
+      originY = wrapAt === _bigNum ? 0 : ratios ? l * ratioY / wrapAt - 0.5 : from / wrapAt | 0;
+      max = 0;
+      min = _bigNum;
+      for (j = 0; j < l; j++) {
+        x = j % wrapAt - originX;
+        y = originY - (j / wrapAt | 0);
+        distances[j] = d = !axis ? _sqrt(x * x + y * y) : Math.abs(axis === "y" ? y : x);
+        d > max && (max = d);
+        d < min && (min = d);
+      }
+      from === "random" && shuffle(distances);
+      distances.max = max - min;
+      distances.min = min;
+      distances.v = l = (parseFloat(vars.amount) || parseFloat(vars.each) * (wrapAt > l ? l - 1 : !axis ? Math.max(wrapAt, l / wrapAt) : axis === "y" ? l / wrapAt : wrapAt) || 0) * (from === "edges" ? -1 : 1);
+      distances.b = l < 0 ? base - l : base;
+      distances.u = getUnit(vars.amount || vars.each) || 0;
+      ease = ease && l < 0 ? _invertEase(ease) : ease;
+    }
+    l = (distances[i] - distances.min) / distances.max || 0;
+    return _roundPrecise(distances.b + (ease ? ease(l) : l) * distances.v) + distances.u;
+  };
+};
+var _roundModifier = function _roundModifier2(v) {
+  var p = Math.pow(10, ((v + "").split(".")[1] || "").length);
+  return function(raw) {
+    var n2 = _roundPrecise(Math.round(parseFloat(raw) / v) * v * p);
+    return (n2 - n2 % 1) / p + (_isNumber(raw) ? 0 : getUnit(raw));
+  };
+};
+var snap = function snap2(snapTo, value) {
+  var isArray2 = _isArray(snapTo), radius, is2D;
+  if (!isArray2 && _isObject(snapTo)) {
+    radius = isArray2 = snapTo.radius || _bigNum;
+    if (snapTo.values) {
+      snapTo = toArray2(snapTo.values);
+      if (is2D = !_isNumber(snapTo[0])) {
+        radius *= radius;
+      }
+    } else {
+      snapTo = _roundModifier(snapTo.increment);
+    }
+  }
+  return _conditionalReturn(value, !isArray2 ? _roundModifier(snapTo) : _isFunction(snapTo) ? function(raw) {
+    is2D = snapTo(raw);
+    return Math.abs(is2D - raw) <= radius ? is2D : raw;
+  } : function(raw) {
+    var x = parseFloat(is2D ? raw.x : raw), y = parseFloat(is2D ? raw.y : 0), min = _bigNum, closest = 0, i = snapTo.length, dx, dy;
+    while (i--) {
+      if (is2D) {
+        dx = snapTo[i].x - x;
+        dy = snapTo[i].y - y;
+        dx = dx * dx + dy * dy;
+      } else {
+        dx = Math.abs(snapTo[i] - x);
+      }
+      if (dx < min) {
+        min = dx;
+        closest = i;
+      }
+    }
+    closest = !radius || min <= radius ? snapTo[closest] : raw;
+    return is2D || closest === raw || _isNumber(raw) ? closest : closest + getUnit(raw);
+  });
+};
+var random = function random2(min, max, roundingIncrement, returnFunction) {
+  return _conditionalReturn(_isArray(min) ? !max : roundingIncrement === true ? !!(roundingIncrement = 0) : !returnFunction, function() {
+    return _isArray(min) ? min[~~(Math.random() * min.length)] : (roundingIncrement = roundingIncrement || 1e-5) && (returnFunction = roundingIncrement < 1 ? Math.pow(10, (roundingIncrement + "").length - 2) : 1) && Math.floor(Math.round((min - roundingIncrement / 2 + Math.random() * (max - min + roundingIncrement * 0.99)) / roundingIncrement) * roundingIncrement * returnFunction) / returnFunction;
+  });
+};
+var pipe = function pipe2() {
+  for (var _len = arguments.length, functions = new Array(_len), _key = 0; _key < _len; _key++) {
+    functions[_key] = arguments[_key];
+  }
+  return function(value) {
+    return functions.reduce(function(v, f2) {
+      return f2(v);
+    }, value);
+  };
+};
+var unitize = function unitize2(func, unit) {
+  return function(value) {
+    return func(parseFloat(value)) + (unit || getUnit(value));
+  };
+};
+var normalize2 = function normalize3(min, max, value) {
+  return mapRange(min, max, 0, 1, value);
+};
+var _wrapArray = function _wrapArray2(a, wrapper, value) {
+  return _conditionalReturn(value, function(index2) {
+    return a[~~wrapper(index2)];
+  });
+};
+var wrap3 = function wrap4(min, max, value) {
+  var range = max - min;
+  return _isArray(min) ? _wrapArray(min, wrap4(0, min.length), max) : _conditionalReturn(value, function(value2) {
+    return (range + (value2 - min) % range) % range + min;
+  });
+};
+var wrapYoyo = function wrapYoyo2(min, max, value) {
+  var range = max - min, total = range * 2;
+  return _isArray(min) ? _wrapArray(min, wrapYoyo2(0, min.length - 1), max) : _conditionalReturn(value, function(value2) {
+    value2 = (total + (value2 - min) % total) % total || 0;
+    return min + (value2 > range ? total - value2 : value2);
+  });
+};
+var _replaceRandom = function _replaceRandom2(s) {
+  return s.replace(_randomExp, function(match) {
+    var arIndex = match.indexOf("[") + 1, values = match.substring(arIndex || 7, arIndex ? match.indexOf("]") : match.length - 1).split(_commaDelimExp);
+    return random(arIndex ? values : +values[0], arIndex ? 0 : +values[1], +values[2] || 1e-5);
+  });
+};
+var mapRange = function mapRange2(inMin, inMax, outMin, outMax, value) {
+  var inRange = inMax - inMin, outRange = outMax - outMin;
+  return _conditionalReturn(value, function(value2) {
+    return outMin + ((value2 - inMin) / inRange * outRange || 0);
+  });
+};
+var interpolate = function interpolate2(start, end, progress, mutate) {
+  var func = isNaN(start + end) ? 0 : function(p2) {
+    return (1 - p2) * start + p2 * end;
+  };
+  if (!func) {
+    var isString = _isString(start), master = {}, p, i, interpolators, l, il;
+    progress === true && (mutate = 1) && (progress = null);
+    if (isString) {
+      start = {
+        p: start
+      };
+      end = {
+        p: end
+      };
+    } else if (_isArray(start) && !_isArray(end)) {
+      interpolators = [];
+      l = start.length;
+      il = l - 2;
+      for (i = 1; i < l; i++) {
+        interpolators.push(interpolate2(start[i - 1], start[i]));
+      }
+      l--;
+      func = function func2(p2) {
+        p2 *= l;
+        var i2 = Math.min(il, ~~p2);
+        return interpolators[i2](p2 - i2);
+      };
+      progress = end;
+    } else if (!mutate) {
+      start = _merge(_isArray(start) ? [] : {}, start);
+    }
+    if (!interpolators) {
+      for (p in end) {
+        _addPropTween.call(master, start, p, "get", end[p]);
+      }
+      func = function func2(p2) {
+        return _renderPropTweens(p2, master) || (isString ? start.p : start);
+      };
+    }
+  }
+  return _conditionalReturn(progress, func);
+};
+var _getLabelInDirection = function _getLabelInDirection2(timeline2, fromTime, backward) {
+  var labels = timeline2.labels, min = _bigNum, p, distance, label;
+  for (p in labels) {
+    distance = labels[p] - fromTime;
+    if (distance < 0 === !!backward && distance && min > (distance = Math.abs(distance))) {
+      label = p;
+      min = distance;
+    }
+  }
+  return label;
+};
+var _callback = function _callback2(animation, type, executeLazyFirst) {
+  var v = animation.vars, callback = v[type], prevContext = _context, context3 = animation._ctx, params, scope, result;
+  if (!callback) {
+    return;
+  }
+  params = v[type + "Params"];
+  scope = v.callbackScope || animation;
+  executeLazyFirst && _lazyTweens.length && _lazyRender();
+  context3 && (_context = context3);
+  result = params ? callback.apply(scope, params) : callback.call(scope);
+  _context = prevContext;
+  return result;
+};
+var _interrupt = function _interrupt2(animation) {
+  _removeFromParent(animation);
+  animation.scrollTrigger && animation.scrollTrigger.kill(!!_reverting);
+  animation.progress() < 1 && _callback(animation, "onInterrupt");
+  return animation;
+};
+var _quickTween;
+var _registerPluginQueue = [];
+var _createPlugin = function _createPlugin2(config4) {
+  if (!config4) return;
+  config4 = !config4.name && config4["default"] || config4;
+  if (_windowExists() || config4.headless) {
+    var name = config4.name, isFunc = _isFunction(config4), Plugin = name && !isFunc && config4.init ? function() {
+      this._props = [];
+    } : config4, instanceDefaults = {
+      init: _emptyFunc,
+      render: _renderPropTweens,
+      add: _addPropTween,
+      kill: _killPropTweensOf,
+      modifier: _addPluginModifier,
+      rawVars: 0
+    }, statics = {
+      targetTest: 0,
+      get: 0,
+      getSetter: _getSetter,
+      aliases: {},
+      register: 0
+    };
+    _wake();
+    if (config4 !== Plugin) {
+      if (_plugins[name]) {
+        return;
+      }
+      _setDefaults(Plugin, _setDefaults(_copyExcluding(config4, instanceDefaults), statics));
+      _merge(Plugin.prototype, _merge(instanceDefaults, _copyExcluding(config4, statics)));
+      _plugins[Plugin.prop = name] = Plugin;
+      if (config4.targetTest) {
+        _harnessPlugins.push(Plugin);
+        _reservedProps[name] = 1;
+      }
+      name = (name === "css" ? "CSS" : name.charAt(0).toUpperCase() + name.substr(1)) + "Plugin";
+    }
+    _addGlobal(name, Plugin);
+    config4.register && config4.register(gsap, Plugin, PropTween);
+  } else {
+    _registerPluginQueue.push(config4);
+  }
+};
+var _255 = 255;
+var _colorLookup = {
+  aqua: [0, _255, _255],
+  lime: [0, _255, 0],
+  silver: [192, 192, 192],
+  black: [0, 0, 0],
+  maroon: [128, 0, 0],
+  teal: [0, 128, 128],
+  blue: [0, 0, _255],
+  navy: [0, 0, 128],
+  white: [_255, _255, _255],
+  olive: [128, 128, 0],
+  yellow: [_255, _255, 0],
+  orange: [_255, 165, 0],
+  gray: [128, 128, 128],
+  purple: [128, 0, 128],
+  green: [0, 128, 0],
+  red: [_255, 0, 0],
+  pink: [_255, 192, 203],
+  cyan: [0, _255, _255],
+  transparent: [_255, _255, _255, 0]
+};
+var _hue = function _hue2(h, m1, m2) {
+  h += h < 0 ? 1 : h > 1 ? -1 : 0;
+  return (h * 6 < 1 ? m1 + (m2 - m1) * h * 6 : h < 0.5 ? m2 : h * 3 < 2 ? m1 + (m2 - m1) * (2 / 3 - h) * 6 : m1) * _255 + 0.5 | 0;
+};
+var splitColor = function splitColor2(v, toHSL, forceAlpha) {
+  var a = !v ? _colorLookup.black : _isNumber(v) ? [v >> 16, v >> 8 & _255, v & _255] : 0, r, g, b, h, s, l, max, min, d, wasHSL;
+  if (!a) {
+    if (v.substr(-1) === ",") {
+      v = v.substr(0, v.length - 1);
+    }
+    if (_colorLookup[v]) {
+      a = _colorLookup[v];
+    } else if (v.charAt(0) === "#") {
+      if (v.length < 6) {
+        r = v.charAt(1);
+        g = v.charAt(2);
+        b = v.charAt(3);
+        v = "#" + r + r + g + g + b + b + (v.length === 5 ? v.charAt(4) + v.charAt(4) : "");
+      }
+      if (v.length === 9) {
+        a = parseInt(v.substr(1, 6), 16);
+        return [a >> 16, a >> 8 & _255, a & _255, parseInt(v.substr(7), 16) / 255];
+      }
+      v = parseInt(v.substr(1), 16);
+      a = [v >> 16, v >> 8 & _255, v & _255];
+    } else if (v.substr(0, 3) === "hsl") {
+      a = wasHSL = v.match(_strictNumExp);
+      if (!toHSL) {
+        h = +a[0] % 360 / 360;
+        s = +a[1] / 100;
+        l = +a[2] / 100;
+        g = l <= 0.5 ? l * (s + 1) : l + s - l * s;
+        r = l * 2 - g;
+        a.length > 3 && (a[3] *= 1);
+        a[0] = _hue(h + 1 / 3, r, g);
+        a[1] = _hue(h, r, g);
+        a[2] = _hue(h - 1 / 3, r, g);
+      } else if (~v.indexOf("=")) {
+        a = v.match(_numExp);
+        forceAlpha && a.length < 4 && (a[3] = 1);
+        return a;
+      }
+    } else {
+      a = v.match(_strictNumExp) || _colorLookup.transparent;
+    }
+    a = a.map(Number);
+  }
+  if (toHSL && !wasHSL) {
+    r = a[0] / _255;
+    g = a[1] / _255;
+    b = a[2] / _255;
+    max = Math.max(r, g, b);
+    min = Math.min(r, g, b);
+    l = (max + min) / 2;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    a[0] = ~~(h + 0.5);
+    a[1] = ~~(s * 100 + 0.5);
+    a[2] = ~~(l * 100 + 0.5);
+  }
+  forceAlpha && a.length < 4 && (a[3] = 1);
+  return a;
+};
+var _colorOrderData = function _colorOrderData2(v) {
+  var values = [], c = [], i = -1;
+  v.split(_colorExp).forEach(function(v2) {
+    var a = v2.match(_numWithUnitExp) || [];
+    values.push.apply(values, a);
+    c.push(i += a.length + 1);
+  });
+  values.c = c;
+  return values;
+};
+var _formatColors = function _formatColors2(s, toHSL, orderMatchData) {
+  var result = "", colors = (s + result).match(_colorExp), type = toHSL ? "hsla(" : "rgba(", i = 0, c, shell, d, l;
+  if (!colors) {
+    return s;
+  }
+  colors = colors.map(function(color2) {
+    return (color2 = splitColor(color2, toHSL, 1)) && type + (toHSL ? color2[0] + "," + color2[1] + "%," + color2[2] + "%," + color2[3] : color2.join(",")) + ")";
+  });
+  if (orderMatchData) {
+    d = _colorOrderData(s);
+    c = orderMatchData.c;
+    if (c.join(result) !== d.c.join(result)) {
+      shell = s.replace(_colorExp, "1").split(_numWithUnitExp);
+      l = shell.length - 1;
+      for (; i < l; i++) {
+        result += shell[i] + (~c.indexOf(i) ? colors.shift() || type + "0,0,0,0)" : (d.length ? d : colors.length ? colors : orderMatchData).shift());
+      }
+    }
+  }
+  if (!shell) {
+    shell = s.split(_colorExp);
+    l = shell.length - 1;
+    for (; i < l; i++) {
+      result += shell[i] + colors[i];
+    }
+  }
+  return result + shell[l];
+};
+var _colorExp = (function() {
+  var s = "(?:\\b(?:(?:rgb|rgba|hsl|hsla)\\(.+?\\))|\\B#(?:[0-9a-f]{3,4}){1,2}\\b", p;
+  for (p in _colorLookup) {
+    s += "|" + p + "\\b";
+  }
+  return new RegExp(s + ")", "gi");
+})();
+var _hslExp = /hsl[a]?\(/;
+var _colorStringFilter = function _colorStringFilter2(a) {
+  var combined = a.join(" "), toHSL;
+  _colorExp.lastIndex = 0;
+  if (_colorExp.test(combined)) {
+    toHSL = _hslExp.test(combined);
+    a[1] = _formatColors(a[1], toHSL);
+    a[0] = _formatColors(a[0], toHSL, _colorOrderData(a[1]));
+    return true;
+  }
+};
+var _tickerActive;
+var _ticker = (function() {
+  var _getTime = Date.now, _lagThreshold = 500, _adjustedLag = 33, _startTime = _getTime(), _lastUpdate = _startTime, _gap = 1e3 / 240, _nextTime = _gap, _listeners2 = [], _id, _req, _raf, _self, _delta, _i, _tick = function _tick2(v) {
+    var elapsed2 = _getTime() - _lastUpdate, manual = v === true, overlap, dispatch, time2, frame;
+    (elapsed2 > _lagThreshold || elapsed2 < 0) && (_startTime += elapsed2 - _adjustedLag);
+    _lastUpdate += elapsed2;
+    time2 = _lastUpdate - _startTime;
+    overlap = time2 - _nextTime;
+    if (overlap > 0 || manual) {
+      frame = ++_self.frame;
+      _delta = time2 - _self.time * 1e3;
+      _self.time = time2 = time2 / 1e3;
+      _nextTime += overlap + (overlap >= _gap ? 4 : _gap - overlap);
+      dispatch = 1;
+    }
+    manual || (_id = _req(_tick2));
+    if (dispatch) {
+      for (_i = 0; _i < _listeners2.length; _i++) {
+        _listeners2[_i](time2, _delta, frame, v);
+      }
+    }
+  };
+  _self = {
+    time: 0,
+    frame: 0,
+    tick: function tick() {
+      _tick(true);
+    },
+    deltaRatio: function deltaRatio(fps) {
+      return _delta / (1e3 / (fps || 60));
+    },
+    wake: function wake() {
+      if (_coreReady) {
+        if (!_coreInitted && _windowExists()) {
+          _win = _coreInitted = window;
+          _doc = _win.document || {};
+          _globals.gsap = gsap;
+          (_win.gsapVersions || (_win.gsapVersions = [])).push(gsap.version);
+          _install(_installScope || _win.GreenSockGlobals || !_win.gsap && _win || {});
+          _registerPluginQueue.forEach(_createPlugin);
+        }
+        _raf = typeof requestAnimationFrame !== "undefined" && requestAnimationFrame;
+        _id && _self.sleep();
+        _req = _raf || function(f2) {
+          return setTimeout(f2, _nextTime - _self.time * 1e3 + 1 | 0);
+        };
+        _tickerActive = 1;
+        _tick(2);
+      }
+    },
+    sleep: function sleep() {
+      (_raf ? cancelAnimationFrame : clearTimeout)(_id);
+      _tickerActive = 0;
+      _req = _emptyFunc;
+    },
+    lagSmoothing: function lagSmoothing(threshold, adjustedLag) {
+      _lagThreshold = threshold || Infinity;
+      _adjustedLag = Math.min(adjustedLag || 33, _lagThreshold);
+    },
+    fps: function fps(_fps) {
+      _gap = 1e3 / (_fps || 240);
+      _nextTime = _self.time * 1e3 + _gap;
+    },
+    add: function add(callback, once, prioritize) {
+      var func = once ? function(t, d, f2, v) {
+        callback(t, d, f2, v);
+        _self.remove(func);
+      } : callback;
+      _self.remove(callback);
+      _listeners2[prioritize ? "unshift" : "push"](func);
+      _wake();
+      return func;
+    },
+    remove: function remove2(callback, i) {
+      ~(i = _listeners2.indexOf(callback)) && _listeners2.splice(i, 1) && _i >= i && _i--;
+    },
+    _listeners: _listeners2
+  };
+  return _self;
+})();
+var _wake = function _wake2() {
+  return !_tickerActive && _ticker.wake();
+};
+var _easeMap = {};
+var _customEaseExp = /^[\d.\-M][\d.\-,\s]/;
+var _quotesExp = /["']/g;
+var _parseObjectInString = function _parseObjectInString2(value) {
+  var obj = {}, split = value.substr(1, value.length - 3).split(":"), key = split[0], i = 1, l = split.length, index2, val, parsedVal;
+  for (; i < l; i++) {
+    val = split[i];
+    index2 = i !== l - 1 ? val.lastIndexOf(",") : val.length;
+    parsedVal = val.substr(0, index2);
+    obj[key] = isNaN(parsedVal) ? parsedVal.replace(_quotesExp, "").trim() : +parsedVal;
+    key = val.substr(index2 + 1).trim();
+  }
+  return obj;
+};
+var _valueInParentheses = function _valueInParentheses2(value) {
+  var open = value.indexOf("(") + 1, close = value.indexOf(")"), nested = value.indexOf("(", open);
+  return value.substring(open, ~nested && nested < close ? value.indexOf(")", close + 1) : close);
+};
+var _configEaseFromString = function _configEaseFromString2(name) {
+  var split = (name + "").split("("), ease = _easeMap[split[0]];
+  return ease && split.length > 1 && ease.config ? ease.config.apply(null, ~name.indexOf("{") ? [_parseObjectInString(split[1])] : _valueInParentheses(name).split(",").map(_numericIfPossible)) : _easeMap._CE && _customEaseExp.test(name) ? _easeMap._CE("", name) : ease;
+};
+var _invertEase = function _invertEase2(ease) {
+  return function(p) {
+    return 1 - ease(1 - p);
+  };
+};
+var _propagateYoyoEase = function _propagateYoyoEase2(timeline2, isYoyo) {
+  var child = timeline2._first, ease;
+  while (child) {
+    if (child instanceof Timeline) {
+      _propagateYoyoEase2(child, isYoyo);
+    } else if (child.vars.yoyoEase && (!child._yoyo || !child._repeat) && child._yoyo !== isYoyo) {
+      if (child.timeline) {
+        _propagateYoyoEase2(child.timeline, isYoyo);
+      } else {
+        ease = child._ease;
+        child._ease = child._yEase;
+        child._yEase = ease;
+        child._yoyo = isYoyo;
+      }
+    }
+    child = child._next;
+  }
+};
+var _parseEase = function _parseEase2(ease, defaultEase) {
+  return !ease ? defaultEase : (_isFunction(ease) ? ease : _easeMap[ease] || _configEaseFromString(ease)) || defaultEase;
+};
+var _insertEase = function _insertEase2(names, easeIn, easeOut, easeInOut) {
+  if (easeOut === void 0) {
+    easeOut = function easeOut2(p) {
+      return 1 - easeIn(1 - p);
+    };
+  }
+  if (easeInOut === void 0) {
+    easeInOut = function easeInOut2(p) {
+      return p < 0.5 ? easeIn(p * 2) / 2 : 1 - easeIn((1 - p) * 2) / 2;
+    };
+  }
+  var ease = {
+    easeIn,
+    easeOut,
+    easeInOut
+  }, lowercaseName;
+  _forEachName(names, function(name) {
+    _easeMap[name] = _globals[name] = ease;
+    _easeMap[lowercaseName = name.toLowerCase()] = easeOut;
+    for (var p in ease) {
+      _easeMap[lowercaseName + (p === "easeIn" ? ".in" : p === "easeOut" ? ".out" : ".inOut")] = _easeMap[name + "." + p] = ease[p];
+    }
+  });
+  return ease;
+};
+var _easeInOutFromOut = function _easeInOutFromOut2(easeOut) {
+  return function(p) {
+    return p < 0.5 ? (1 - easeOut(1 - p * 2)) / 2 : 0.5 + easeOut((p - 0.5) * 2) / 2;
+  };
+};
+var _configElastic = function _configElastic2(type, amplitude, period) {
+  var p1 = amplitude >= 1 ? amplitude : 1, p2 = (period || (type ? 0.3 : 0.45)) / (amplitude < 1 ? amplitude : 1), p3 = p2 / _2PI * (Math.asin(1 / p1) || 0), easeOut = function easeOut2(p) {
+    return p === 1 ? 1 : p1 * Math.pow(2, -10 * p) * _sin((p - p3) * p2) + 1;
+  }, ease = type === "out" ? easeOut : type === "in" ? function(p) {
+    return 1 - easeOut(1 - p);
+  } : _easeInOutFromOut(easeOut);
+  p2 = _2PI / p2;
+  ease.config = function(amplitude2, period2) {
+    return _configElastic2(type, amplitude2, period2);
+  };
+  return ease;
+};
+var _configBack = function _configBack2(type, overshoot) {
+  if (overshoot === void 0) {
+    overshoot = 1.70158;
+  }
+  var easeOut = function easeOut2(p) {
+    return p ? --p * p * ((overshoot + 1) * p + overshoot) + 1 : 0;
+  }, ease = type === "out" ? easeOut : type === "in" ? function(p) {
+    return 1 - easeOut(1 - p);
+  } : _easeInOutFromOut(easeOut);
+  ease.config = function(overshoot2) {
+    return _configBack2(type, overshoot2);
+  };
+  return ease;
+};
+_forEachName("Linear,Quad,Cubic,Quart,Quint,Strong", function(name, i) {
+  var power = i < 5 ? i + 1 : i;
+  _insertEase(name + ",Power" + (power - 1), i ? function(p) {
+    return Math.pow(p, power);
+  } : function(p) {
+    return p;
+  }, function(p) {
+    return 1 - Math.pow(1 - p, power);
+  }, function(p) {
+    return p < 0.5 ? Math.pow(p * 2, power) / 2 : 1 - Math.pow((1 - p) * 2, power) / 2;
+  });
+});
+_easeMap.Linear.easeNone = _easeMap.none = _easeMap.Linear.easeIn;
+_insertEase("Elastic", _configElastic("in"), _configElastic("out"), _configElastic());
+(function(n2, c) {
+  var n1 = 1 / c, n22 = 2 * n1, n3 = 2.5 * n1, easeOut = function easeOut2(p) {
+    return p < n1 ? n2 * p * p : p < n22 ? n2 * Math.pow(p - 1.5 / c, 2) + 0.75 : p < n3 ? n2 * (p -= 2.25 / c) * p + 0.9375 : n2 * Math.pow(p - 2.625 / c, 2) + 0.984375;
+  };
+  _insertEase("Bounce", function(p) {
+    return 1 - easeOut(1 - p);
+  }, easeOut);
+})(7.5625, 2.75);
+_insertEase("Expo", function(p) {
+  return Math.pow(2, 10 * (p - 1)) * p + p * p * p * p * p * p * (1 - p);
+});
+_insertEase("Circ", function(p) {
+  return -(_sqrt(1 - p * p) - 1);
+});
+_insertEase("Sine", function(p) {
+  return p === 1 ? 1 : -_cos(p * _HALF_PI) + 1;
+});
+_insertEase("Back", _configBack("in"), _configBack("out"), _configBack());
+_easeMap.SteppedEase = _easeMap.steps = _globals.SteppedEase = {
+  config: function config2(steps, immediateStart) {
+    if (steps === void 0) {
+      steps = 1;
+    }
+    var p1 = 1 / steps, p2 = steps + (immediateStart ? 0 : 1), p3 = immediateStart ? 1 : 0, max = 1 - _tinyNum;
+    return function(p) {
+      return ((p2 * _clamp(0, max, p) | 0) + p3) * p1;
+    };
+  }
+};
+_defaults.ease = _easeMap["quad.out"];
+_forEachName("onComplete,onUpdate,onStart,onRepeat,onReverseComplete,onInterrupt", function(name) {
+  return _callbackNames += name + "," + name + "Params,";
+});
+var GSCache = function GSCache2(target, harness) {
+  this.id = _gsID++;
+  target._gsap = this;
+  this.target = target;
+  this.harness = harness;
+  this.get = harness ? harness.get : _getProperty;
+  this.set = harness ? harness.getSetter : _getSetter;
+};
+var Animation = /* @__PURE__ */ (function() {
+  function Animation2(vars) {
+    this.vars = vars;
+    this._delay = +vars.delay || 0;
+    if (this._repeat = vars.repeat === Infinity ? -2 : vars.repeat || 0) {
+      this._rDelay = vars.repeatDelay || 0;
+      this._yoyo = !!vars.yoyo || !!vars.yoyoEase;
+    }
+    this._ts = 1;
+    _setDuration(this, +vars.duration, 1, 1);
+    this.data = vars.data;
+    if (_context) {
+      this._ctx = _context;
+      _context.data.push(this);
+    }
+    _tickerActive || _ticker.wake();
+  }
+  var _proto = Animation2.prototype;
+  _proto.delay = function delay(value) {
+    if (value || value === 0) {
+      this.parent && this.parent.smoothChildTiming && this.startTime(this._start + value - this._delay);
+      this._delay = value;
+      return this;
+    }
+    return this._delay;
+  };
+  _proto.duration = function duration(value) {
+    return arguments.length ? this.totalDuration(this._repeat > 0 ? value + (value + this._rDelay) * this._repeat : value) : this.totalDuration() && this._dur;
+  };
+  _proto.totalDuration = function totalDuration(value) {
+    if (!arguments.length) {
+      return this._tDur;
+    }
+    this._dirty = 0;
+    return _setDuration(this, this._repeat < 0 ? value : (value - this._repeat * this._rDelay) / (this._repeat + 1));
+  };
+  _proto.totalTime = function totalTime(_totalTime, suppressEvents) {
+    _wake();
+    if (!arguments.length) {
+      return this._tTime;
+    }
+    var parent = this._dp;
+    if (parent && parent.smoothChildTiming && this._ts) {
+      _alignPlayhead(this, _totalTime);
+      !parent._dp || parent.parent || _postAddChecks(parent, this);
+      while (parent && parent.parent) {
+        if (parent.parent._time !== parent._start + (parent._ts >= 0 ? parent._tTime / parent._ts : (parent.totalDuration() - parent._tTime) / -parent._ts)) {
+          parent.totalTime(parent._tTime, true);
+        }
+        parent = parent.parent;
+      }
+      if (!this.parent && this._dp.autoRemoveChildren && (this._ts > 0 && _totalTime < this._tDur || this._ts < 0 && _totalTime > 0 || !this._tDur && !_totalTime)) {
+        _addToTimeline(this._dp, this, this._start - this._delay);
+      }
+    }
+    if (this._tTime !== _totalTime || !this._dur && !suppressEvents || this._initted && Math.abs(this._zTime) === _tinyNum || !this._initted && this._dur && _totalTime || !_totalTime && !this._initted && (this.add || this._ptLookup)) {
+      this._ts || (this._pTime = _totalTime);
+      _lazySafeRender(this, _totalTime, suppressEvents);
+    }
+    return this;
+  };
+  _proto.time = function time2(value, suppressEvents) {
+    return arguments.length ? this.totalTime(Math.min(this.totalDuration(), value + _elapsedCycleDuration(this)) % (this._dur + this._rDelay) || (value ? this._dur : 0), suppressEvents) : this._time;
+  };
+  _proto.totalProgress = function totalProgress(value, suppressEvents) {
+    return arguments.length ? this.totalTime(this.totalDuration() * value, suppressEvents) : this.totalDuration() ? Math.min(1, this._tTime / this._tDur) : this.rawTime() >= 0 && this._initted ? 1 : 0;
+  };
+  _proto.progress = function progress(value, suppressEvents) {
+    return arguments.length ? this.totalTime(this.duration() * (this._yoyo && !(this.iteration() & 1) ? 1 - value : value) + _elapsedCycleDuration(this), suppressEvents) : this.duration() ? Math.min(1, this._time / this._dur) : this.rawTime() > 0 ? 1 : 0;
+  };
+  _proto.iteration = function iteration(value, suppressEvents) {
+    var cycleDuration = this.duration() + this._rDelay;
+    return arguments.length ? this.totalTime(this._time + (value - 1) * cycleDuration, suppressEvents) : this._repeat ? _animationCycle(this._tTime, cycleDuration) + 1 : 1;
+  };
+  _proto.timeScale = function timeScale(value, suppressEvents) {
+    if (!arguments.length) {
+      return this._rts === -_tinyNum ? 0 : this._rts;
+    }
+    if (this._rts === value) {
+      return this;
+    }
+    var tTime = this.parent && this._ts ? _parentToChildTotalTime(this.parent._time, this) : this._tTime;
+    this._rts = +value || 0;
+    this._ts = this._ps || value === -_tinyNum ? 0 : this._rts;
+    this.totalTime(_clamp(-Math.abs(this._delay), this.totalDuration(), tTime), suppressEvents !== false);
+    _setEnd(this);
+    return _recacheAncestors(this);
+  };
+  _proto.paused = function paused(value) {
+    if (!arguments.length) {
+      return this._ps;
+    }
+    if (this._ps !== value) {
+      this._ps = value;
+      if (value) {
+        this._pTime = this._tTime || Math.max(-this._delay, this.rawTime());
+        this._ts = this._act = 0;
+      } else {
+        _wake();
+        this._ts = this._rts;
+        this.totalTime(this.parent && !this.parent.smoothChildTiming ? this.rawTime() : this._tTime || this._pTime, this.progress() === 1 && Math.abs(this._zTime) !== _tinyNum && (this._tTime -= _tinyNum));
+      }
+    }
+    return this;
+  };
+  _proto.startTime = function startTime(value) {
+    if (arguments.length) {
+      this._start = _roundPrecise(value);
+      var parent = this.parent || this._dp;
+      parent && (parent._sort || !this.parent) && _addToTimeline(parent, this, this._start - this._delay);
+      return this;
+    }
+    return this._start;
+  };
+  _proto.endTime = function endTime(includeRepeats) {
+    return this._start + (_isNotFalse(includeRepeats) ? this.totalDuration() : this.duration()) / Math.abs(this._ts || 1);
+  };
+  _proto.rawTime = function rawTime(wrapRepeats) {
+    var parent = this.parent || this._dp;
+    return !parent ? this._tTime : wrapRepeats && (!this._ts || this._repeat && this._time && this.totalProgress() < 1) ? this._tTime % (this._dur + this._rDelay) : !this._ts ? this._tTime : _parentToChildTotalTime(parent.rawTime(wrapRepeats), this);
+  };
+  _proto.revert = function revert(config4) {
+    if (config4 === void 0) {
+      config4 = _revertConfig;
+    }
+    var prevIsReverting = _reverting;
+    _reverting = config4;
+    if (_isRevertWorthy(this)) {
+      this.timeline && this.timeline.revert(config4);
+      this.totalTime(-0.01, config4.suppressEvents);
+    }
+    this.data !== "nested" && config4.kill !== false && this.kill();
+    _reverting = prevIsReverting;
+    return this;
+  };
+  _proto.globalTime = function globalTime(rawTime) {
+    var animation = this, time2 = arguments.length ? rawTime : animation.rawTime();
+    while (animation) {
+      time2 = animation._start + time2 / (Math.abs(animation._ts) || 1);
+      animation = animation._dp;
+    }
+    return !this.parent && this._sat ? this._sat.globalTime(rawTime) : time2;
+  };
+  _proto.repeat = function repeat(value) {
+    if (arguments.length) {
+      this._repeat = value === Infinity ? -2 : value;
+      return _onUpdateTotalDuration(this);
+    }
+    return this._repeat === -2 ? Infinity : this._repeat;
+  };
+  _proto.repeatDelay = function repeatDelay(value) {
+    if (arguments.length) {
+      var time2 = this._time;
+      this._rDelay = value;
+      _onUpdateTotalDuration(this);
+      return time2 ? this.time(time2) : this;
+    }
+    return this._rDelay;
+  };
+  _proto.yoyo = function yoyo(value) {
+    if (arguments.length) {
+      this._yoyo = value;
+      return this;
+    }
+    return this._yoyo;
+  };
+  _proto.seek = function seek(position, suppressEvents) {
+    return this.totalTime(_parsePosition(this, position), _isNotFalse(suppressEvents));
+  };
+  _proto.restart = function restart(includeDelay, suppressEvents) {
+    this.play().totalTime(includeDelay ? -this._delay : 0, _isNotFalse(suppressEvents));
+    this._dur || (this._zTime = -_tinyNum);
+    return this;
+  };
+  _proto.play = function play(from, suppressEvents) {
+    from != null && this.seek(from, suppressEvents);
+    return this.reversed(false).paused(false);
+  };
+  _proto.reverse = function reverse(from, suppressEvents) {
+    from != null && this.seek(from || this.totalDuration(), suppressEvents);
+    return this.reversed(true).paused(false);
+  };
+  _proto.pause = function pause(atTime, suppressEvents) {
+    atTime != null && this.seek(atTime, suppressEvents);
+    return this.paused(true);
+  };
+  _proto.resume = function resume() {
+    return this.paused(false);
+  };
+  _proto.reversed = function reversed(value) {
+    if (arguments.length) {
+      !!value !== this.reversed() && this.timeScale(-this._rts || (value ? -_tinyNum : 0));
+      return this;
+    }
+    return this._rts < 0;
+  };
+  _proto.invalidate = function invalidate() {
+    this._initted = this._act = 0;
+    this._zTime = -_tinyNum;
+    return this;
+  };
+  _proto.isActive = function isActive() {
+    var parent = this.parent || this._dp, start = this._start, rawTime;
+    return !!(!parent || this._ts && this._initted && parent.isActive() && (rawTime = parent.rawTime(true)) >= start && rawTime < this.endTime(true) - _tinyNum);
+  };
+  _proto.eventCallback = function eventCallback(type, callback, params) {
+    var vars = this.vars;
+    if (arguments.length > 1) {
+      if (!callback) {
+        delete vars[type];
+      } else {
+        vars[type] = callback;
+        params && (vars[type + "Params"] = params);
+        type === "onUpdate" && (this._onUpdate = callback);
+      }
+      return this;
+    }
+    return vars[type];
+  };
+  _proto.then = function then(onFulfilled) {
+    var self2 = this, prevProm = self2._prom;
+    return new Promise(function(resolve) {
+      var f2 = _isFunction(onFulfilled) ? onFulfilled : _passThrough, _resolve = function _resolve2() {
+        var _then = self2.then;
+        self2.then = null;
+        prevProm && prevProm();
+        _isFunction(f2) && (f2 = f2(self2)) && (f2.then || f2 === self2) && (self2.then = _then);
+        resolve(f2);
+        self2.then = _then;
+      };
+      if (self2._initted && self2.totalProgress() === 1 && self2._ts >= 0 || !self2._tTime && self2._ts < 0) {
+        _resolve();
+      } else {
+        self2._prom = _resolve;
+      }
+    });
+  };
+  _proto.kill = function kill() {
+    _interrupt(this);
+  };
+  return Animation2;
+})();
+_setDefaults(Animation.prototype, {
+  _time: 0,
+  _start: 0,
+  _end: 0,
+  _tTime: 0,
+  _tDur: 0,
+  _dirty: 0,
+  _repeat: 0,
+  _yoyo: false,
+  parent: null,
+  _initted: false,
+  _rDelay: 0,
+  _ts: 1,
+  _dp: 0,
+  ratio: 0,
+  _zTime: -_tinyNum,
+  _prom: 0,
+  _ps: false,
+  _rts: 1
+});
+var Timeline = /* @__PURE__ */ (function(_Animation) {
+  _inheritsLoose(Timeline2, _Animation);
+  function Timeline2(vars, position) {
+    var _this;
+    if (vars === void 0) {
+      vars = {};
+    }
+    _this = _Animation.call(this, vars) || this;
+    _this.labels = {};
+    _this.smoothChildTiming = !!vars.smoothChildTiming;
+    _this.autoRemoveChildren = !!vars.autoRemoveChildren;
+    _this._sort = _isNotFalse(vars.sortChildren);
+    _globalTimeline && _addToTimeline(vars.parent || _globalTimeline, _assertThisInitialized(_this), position);
+    vars.reversed && _this.reverse();
+    vars.paused && _this.paused(true);
+    vars.scrollTrigger && _scrollTrigger(_assertThisInitialized(_this), vars.scrollTrigger);
+    return _this;
+  }
+  var _proto2 = Timeline2.prototype;
+  _proto2.to = function to(targets, vars, position) {
+    _createTweenType(0, arguments, this);
+    return this;
+  };
+  _proto2.from = function from(targets, vars, position) {
+    _createTweenType(1, arguments, this);
+    return this;
+  };
+  _proto2.fromTo = function fromTo(targets, fromVars, toVars, position) {
+    _createTweenType(2, arguments, this);
+    return this;
+  };
+  _proto2.set = function set(targets, vars, position) {
+    vars.duration = 0;
+    vars.parent = this;
+    _inheritDefaults(vars).repeatDelay || (vars.repeat = 0);
+    vars.immediateRender = !!vars.immediateRender;
+    new Tween(targets, vars, _parsePosition(this, position), 1);
+    return this;
+  };
+  _proto2.call = function call3(callback, params, position) {
+    return _addToTimeline(this, Tween.delayedCall(0, callback, params), position);
+  };
+  _proto2.staggerTo = function staggerTo(targets, duration, vars, stagger, position, onCompleteAll, onCompleteAllParams) {
+    vars.duration = duration;
+    vars.stagger = vars.stagger || stagger;
+    vars.onComplete = onCompleteAll;
+    vars.onCompleteParams = onCompleteAllParams;
+    vars.parent = this;
+    new Tween(targets, vars, _parsePosition(this, position));
+    return this;
+  };
+  _proto2.staggerFrom = function staggerFrom(targets, duration, vars, stagger, position, onCompleteAll, onCompleteAllParams) {
+    vars.runBackwards = 1;
+    _inheritDefaults(vars).immediateRender = _isNotFalse(vars.immediateRender);
+    return this.staggerTo(targets, duration, vars, stagger, position, onCompleteAll, onCompleteAllParams);
+  };
+  _proto2.staggerFromTo = function staggerFromTo(targets, duration, fromVars, toVars, stagger, position, onCompleteAll, onCompleteAllParams) {
+    toVars.startAt = fromVars;
+    _inheritDefaults(toVars).immediateRender = _isNotFalse(toVars.immediateRender);
+    return this.staggerTo(targets, duration, toVars, stagger, position, onCompleteAll, onCompleteAllParams);
+  };
+  _proto2.render = function render5(totalTime, suppressEvents, force) {
+    var prevTime = this._time, tDur = this._dirty ? this.totalDuration() : this._tDur, dur = this._dur, tTime = totalTime <= 0 ? 0 : _roundPrecise(totalTime), crossingStart = this._zTime < 0 !== totalTime < 0 && (this._initted || !dur), time2, child, next, iteration, cycleDuration, prevPaused, pauseTween, timeScale, prevStart, prevIteration, yoyo, isYoyo;
+    this !== _globalTimeline && tTime > tDur && totalTime >= 0 && (tTime = tDur);
+    if (tTime !== this._tTime || force || crossingStart) {
+      if (prevTime !== this._time && dur) {
+        tTime += this._time - prevTime;
+        totalTime += this._time - prevTime;
+      }
+      time2 = tTime;
+      prevStart = this._start;
+      timeScale = this._ts;
+      prevPaused = !timeScale;
+      if (crossingStart) {
+        dur || (prevTime = this._zTime);
+        (totalTime || !suppressEvents) && (this._zTime = totalTime);
+      }
+      if (this._repeat) {
+        yoyo = this._yoyo;
+        cycleDuration = dur + this._rDelay;
+        if (this._repeat < -1 && totalTime < 0) {
+          return this.totalTime(cycleDuration * 100 + totalTime, suppressEvents, force);
+        }
+        time2 = _roundPrecise(tTime % cycleDuration);
+        if (tTime === tDur) {
+          iteration = this._repeat;
+          time2 = dur;
+        } else {
+          prevIteration = _roundPrecise(tTime / cycleDuration);
+          iteration = ~~prevIteration;
+          if (iteration && iteration === prevIteration) {
+            time2 = dur;
+            iteration--;
+          }
+          time2 > dur && (time2 = dur);
+        }
+        prevIteration = _animationCycle(this._tTime, cycleDuration);
+        !prevTime && this._tTime && prevIteration !== iteration && this._tTime - prevIteration * cycleDuration - this._dur <= 0 && (prevIteration = iteration);
+        if (yoyo && iteration & 1) {
+          time2 = dur - time2;
+          isYoyo = 1;
+        }
+        if (iteration !== prevIteration && !this._lock) {
+          var rewinding = yoyo && prevIteration & 1, doesWrap = rewinding === (yoyo && iteration & 1);
+          iteration < prevIteration && (rewinding = !rewinding);
+          prevTime = rewinding ? 0 : tTime % dur ? dur : tTime;
+          this._lock = 1;
+          this.render(prevTime || (isYoyo ? 0 : _roundPrecise(iteration * cycleDuration)), suppressEvents, !dur)._lock = 0;
+          this._tTime = tTime;
+          !suppressEvents && this.parent && _callback(this, "onRepeat");
+          if (this.vars.repeatRefresh && !isYoyo) {
+            this.invalidate()._lock = 1;
+            prevIteration = iteration;
+          }
+          if (prevTime && prevTime !== this._time || prevPaused !== !this._ts || this.vars.onRepeat && !this.parent && !this._act) {
+            return this;
+          }
+          dur = this._dur;
+          tDur = this._tDur;
+          if (doesWrap) {
+            this._lock = 2;
+            prevTime = rewinding ? dur : -1e-4;
+            this.render(prevTime, true);
+            this.vars.repeatRefresh && !isYoyo && this.invalidate();
+          }
+          this._lock = 0;
+          if (!this._ts && !prevPaused) {
+            return this;
+          }
+          _propagateYoyoEase(this, isYoyo);
+        }
+      }
+      if (this._hasPause && !this._forcing && this._lock < 2) {
+        pauseTween = _findNextPauseTween(this, _roundPrecise(prevTime), _roundPrecise(time2));
+        if (pauseTween) {
+          tTime -= time2 - (time2 = pauseTween._start);
+        }
+      }
+      this._tTime = tTime;
+      this._time = time2;
+      this._act = !timeScale;
+      if (!this._initted) {
+        this._onUpdate = this.vars.onUpdate;
+        this._initted = 1;
+        this._zTime = totalTime;
+        prevTime = 0;
+      }
+      if (!prevTime && tTime && dur && !suppressEvents && !prevIteration) {
+        _callback(this, "onStart");
+        if (this._tTime !== tTime) {
+          return this;
+        }
+      }
+      if (time2 >= prevTime && totalTime >= 0) {
+        child = this._first;
+        while (child) {
+          next = child._next;
+          if ((child._act || time2 >= child._start) && child._ts && pauseTween !== child) {
+            if (child.parent !== this) {
+              return this.render(totalTime, suppressEvents, force);
+            }
+            child.render(child._ts > 0 ? (time2 - child._start) * child._ts : (child._dirty ? child.totalDuration() : child._tDur) + (time2 - child._start) * child._ts, suppressEvents, force);
+            if (time2 !== this._time || !this._ts && !prevPaused) {
+              pauseTween = 0;
+              next && (tTime += this._zTime = -_tinyNum);
+              break;
+            }
+          }
+          child = next;
+        }
+      } else {
+        child = this._last;
+        var adjustedTime = totalTime < 0 ? totalTime : time2;
+        while (child) {
+          next = child._prev;
+          if ((child._act || adjustedTime <= child._end) && child._ts && pauseTween !== child) {
+            if (child.parent !== this) {
+              return this.render(totalTime, suppressEvents, force);
+            }
+            child.render(child._ts > 0 ? (adjustedTime - child._start) * child._ts : (child._dirty ? child.totalDuration() : child._tDur) + (adjustedTime - child._start) * child._ts, suppressEvents, force || _reverting && _isRevertWorthy(child));
+            if (time2 !== this._time || !this._ts && !prevPaused) {
+              pauseTween = 0;
+              next && (tTime += this._zTime = adjustedTime ? -_tinyNum : _tinyNum);
+              break;
+            }
+          }
+          child = next;
+        }
+      }
+      if (pauseTween && !suppressEvents) {
+        this.pause();
+        pauseTween.render(time2 >= prevTime ? 0 : -_tinyNum)._zTime = time2 >= prevTime ? 1 : -1;
+        if (this._ts) {
+          this._start = prevStart;
+          _setEnd(this);
+          return this.render(totalTime, suppressEvents, force);
+        }
+      }
+      this._onUpdate && !suppressEvents && _callback(this, "onUpdate", true);
+      if (tTime === tDur && this._tTime >= this.totalDuration() || !tTime && prevTime) {
+        if (prevStart === this._start || Math.abs(timeScale) !== Math.abs(this._ts)) {
+          if (!this._lock) {
+            (totalTime || !dur) && (tTime === tDur && this._ts > 0 || !tTime && this._ts < 0) && _removeFromParent(this, 1);
+            if (!suppressEvents && !(totalTime < 0 && !prevTime) && (tTime || prevTime || !tDur)) {
+              _callback(this, tTime === tDur && totalTime >= 0 ? "onComplete" : "onReverseComplete", true);
+              this._prom && !(tTime < tDur && this.timeScale() > 0) && this._prom();
+            }
+          }
+        }
+      }
+    }
+    return this;
+  };
+  _proto2.add = function add(child, position) {
+    var _this2 = this;
+    _isNumber(position) || (position = _parsePosition(this, position, child));
+    if (!(child instanceof Animation)) {
+      if (_isArray(child)) {
+        child.forEach(function(obj) {
+          return _this2.add(obj, position);
+        });
+        return this;
+      }
+      if (_isString(child)) {
+        return this.addLabel(child, position);
+      }
+      if (_isFunction(child)) {
+        child = Tween.delayedCall(0, child);
+      } else {
+        return this;
+      }
+    }
+    return this !== child ? _addToTimeline(this, child, position) : this;
+  };
+  _proto2.getChildren = function getChildren(nested, tweens, timelines, ignoreBeforeTime) {
+    if (nested === void 0) {
+      nested = true;
+    }
+    if (tweens === void 0) {
+      tweens = true;
+    }
+    if (timelines === void 0) {
+      timelines = true;
+    }
+    if (ignoreBeforeTime === void 0) {
+      ignoreBeforeTime = -_bigNum;
+    }
+    var a = [], child = this._first;
+    while (child) {
+      if (child._start >= ignoreBeforeTime) {
+        if (child instanceof Tween) {
+          tweens && a.push(child);
+        } else {
+          timelines && a.push(child);
+          nested && a.push.apply(a, child.getChildren(true, tweens, timelines));
+        }
+      }
+      child = child._next;
+    }
+    return a;
+  };
+  _proto2.getById = function getById2(id) {
+    var animations = this.getChildren(1, 1, 1), i = animations.length;
+    while (i--) {
+      if (animations[i].vars.id === id) {
+        return animations[i];
+      }
+    }
+  };
+  _proto2.remove = function remove2(child) {
+    if (_isString(child)) {
+      return this.removeLabel(child);
+    }
+    if (_isFunction(child)) {
+      return this.killTweensOf(child);
+    }
+    child.parent === this && _removeLinkedListItem(this, child);
+    if (child === this._recent) {
+      this._recent = this._last;
+    }
+    return _uncache(this);
+  };
+  _proto2.totalTime = function totalTime(_totalTime2, suppressEvents) {
+    if (!arguments.length) {
+      return this._tTime;
+    }
+    this._forcing = 1;
+    if (!this._dp && this._ts) {
+      this._start = _roundPrecise(_ticker.time - (this._ts > 0 ? _totalTime2 / this._ts : (this.totalDuration() - _totalTime2) / -this._ts));
+    }
+    _Animation.prototype.totalTime.call(this, _totalTime2, suppressEvents);
+    this._forcing = 0;
+    return this;
+  };
+  _proto2.addLabel = function addLabel(label, position) {
+    this.labels[label] = _parsePosition(this, position);
+    return this;
+  };
+  _proto2.removeLabel = function removeLabel(label) {
+    delete this.labels[label];
+    return this;
+  };
+  _proto2.addPause = function addPause(position, callback, params) {
+    var t = Tween.delayedCall(0, callback || _emptyFunc, params);
+    t.data = "isPause";
+    this._hasPause = 1;
+    return _addToTimeline(this, t, _parsePosition(this, position));
+  };
+  _proto2.removePause = function removePause(position) {
+    var child = this._first;
+    position = _parsePosition(this, position);
+    while (child) {
+      if (child._start === position && child.data === "isPause") {
+        _removeFromParent(child);
+      }
+      child = child._next;
+    }
+  };
+  _proto2.killTweensOf = function killTweensOf(targets, props, onlyActive) {
+    var tweens = this.getTweensOf(targets, onlyActive), i = tweens.length;
+    while (i--) {
+      _overwritingTween !== tweens[i] && tweens[i].kill(targets, props);
+    }
+    return this;
+  };
+  _proto2.getTweensOf = function getTweensOf2(targets, onlyActive) {
+    var a = [], parsedTargets = toArray2(targets), child = this._first, isGlobalTime = _isNumber(onlyActive), children;
+    while (child) {
+      if (child instanceof Tween) {
+        if (_arrayContainsAny(child._targets, parsedTargets) && (isGlobalTime ? (!_overwritingTween || child._initted && child._ts) && child.globalTime(0) <= onlyActive && child.globalTime(child.totalDuration()) > onlyActive : !onlyActive || child.isActive())) {
+          a.push(child);
+        }
+      } else if ((children = child.getTweensOf(parsedTargets, onlyActive)).length) {
+        a.push.apply(a, children);
+      }
+      child = child._next;
+    }
+    return a;
+  };
+  _proto2.tweenTo = function tweenTo(position, vars) {
+    vars = vars || {};
+    var tl = this, endTime = _parsePosition(tl, position), _vars = vars, startAt = _vars.startAt, _onStart = _vars.onStart, onStartParams = _vars.onStartParams, immediateRender = _vars.immediateRender, initted, tween = Tween.to(tl, _setDefaults({
+      ease: vars.ease || "none",
+      lazy: false,
+      immediateRender: false,
+      time: endTime,
+      overwrite: "auto",
+      duration: vars.duration || Math.abs((endTime - (startAt && "time" in startAt ? startAt.time : tl._time)) / tl.timeScale()) || _tinyNum,
+      onStart: function onStart() {
+        tl.pause();
+        if (!initted) {
+          var duration = vars.duration || Math.abs((endTime - (startAt && "time" in startAt ? startAt.time : tl._time)) / tl.timeScale());
+          tween._dur !== duration && _setDuration(tween, duration, 0, 1).render(tween._time, true, true);
+          initted = 1;
+        }
+        _onStart && _onStart.apply(tween, onStartParams || []);
+      }
+    }, vars));
+    return immediateRender ? tween.render(0) : tween;
+  };
+  _proto2.tweenFromTo = function tweenFromTo(fromPosition, toPosition, vars) {
+    return this.tweenTo(toPosition, _setDefaults({
+      startAt: {
+        time: _parsePosition(this, fromPosition)
+      }
+    }, vars));
+  };
+  _proto2.recent = function recent() {
+    return this._recent;
+  };
+  _proto2.nextLabel = function nextLabel(afterTime) {
+    if (afterTime === void 0) {
+      afterTime = this._time;
+    }
+    return _getLabelInDirection(this, _parsePosition(this, afterTime));
+  };
+  _proto2.previousLabel = function previousLabel(beforeTime) {
+    if (beforeTime === void 0) {
+      beforeTime = this._time;
+    }
+    return _getLabelInDirection(this, _parsePosition(this, beforeTime), 1);
+  };
+  _proto2.currentLabel = function currentLabel(value) {
+    return arguments.length ? this.seek(value, true) : this.previousLabel(this._time + _tinyNum);
+  };
+  _proto2.shiftChildren = function shiftChildren(amount, adjustLabels, ignoreBeforeTime) {
+    if (ignoreBeforeTime === void 0) {
+      ignoreBeforeTime = 0;
+    }
+    var child = this._first, labels = this.labels, p;
+    amount = _roundPrecise(amount);
+    while (child) {
+      if (child._start >= ignoreBeforeTime) {
+        child._start += amount;
+        child._end += amount;
+      }
+      child = child._next;
+    }
+    if (adjustLabels) {
+      for (p in labels) {
+        if (labels[p] >= ignoreBeforeTime) {
+          labels[p] += amount;
+        }
+      }
+    }
+    return _uncache(this);
+  };
+  _proto2.invalidate = function invalidate(soft) {
+    var child = this._first;
+    this._lock = 0;
+    while (child) {
+      child.invalidate(soft);
+      child = child._next;
+    }
+    return _Animation.prototype.invalidate.call(this, soft);
+  };
+  _proto2.clear = function clear(includeLabels) {
+    if (includeLabels === void 0) {
+      includeLabels = true;
+    }
+    var child = this._first, next;
+    while (child) {
+      next = child._next;
+      this.remove(child);
+      child = next;
+    }
+    this._dp && (this._time = this._tTime = this._pTime = 0);
+    includeLabels && (this.labels = {});
+    return _uncache(this);
+  };
+  _proto2.totalDuration = function totalDuration(value) {
+    var max = 0, self2 = this, child = self2._last, prevStart = _bigNum, prev, start, parent;
+    if (arguments.length) {
+      return self2.timeScale((self2._repeat < 0 ? self2.duration() : self2.totalDuration()) / (self2.reversed() ? -value : value));
+    }
+    if (self2._dirty) {
+      parent = self2.parent;
+      while (child) {
+        prev = child._prev;
+        child._dirty && child.totalDuration();
+        start = child._start;
+        if (start > prevStart && self2._sort && child._ts && !self2._lock) {
+          self2._lock = 1;
+          _addToTimeline(self2, child, start - child._delay, 1)._lock = 0;
+        } else {
+          prevStart = start;
+        }
+        if (start < 0 && child._ts) {
+          max -= start;
+          if (!parent && !self2._dp || parent && parent.smoothChildTiming) {
+            self2._start += _roundPrecise(start / self2._ts);
+            self2._time -= start;
+            self2._tTime -= start;
+          }
+          self2.shiftChildren(-start, false, -Infinity);
+          prevStart = 0;
+        }
+        child._end > max && child._ts && (max = child._end);
+        child = prev;
+      }
+      _setDuration(self2, self2 === _globalTimeline && self2._time > max ? self2._time : max, 1, 1);
+      self2._dirty = 0;
+    }
+    return self2._tDur;
+  };
+  Timeline2.updateRoot = function updateRoot(time2) {
+    if (_globalTimeline._ts) {
+      _lazySafeRender(_globalTimeline, _parentToChildTotalTime(time2, _globalTimeline));
+      _lastRenderedFrame = _ticker.frame;
+    }
+    if (_ticker.frame >= _nextGCFrame) {
+      _nextGCFrame += _config.autoSleep || 120;
+      var child = _globalTimeline._first;
+      if (!child || !child._ts) {
+        if (_config.autoSleep && _ticker._listeners.length < 2) {
+          while (child && !child._ts) {
+            child = child._next;
+          }
+          child || _ticker.sleep();
+        }
+      }
+    }
+  };
+  return Timeline2;
+})(Animation);
+_setDefaults(Timeline.prototype, {
+  _lock: 0,
+  _hasPause: 0,
+  _forcing: 0
+});
+var _addComplexStringPropTween = function _addComplexStringPropTween2(target, prop, start, end, setter, stringFilter, funcParam) {
+  var pt = new PropTween(this._pt, target, prop, 0, 1, _renderComplexString, null, setter), index2 = 0, matchIndex = 0, result, startNums, color2, endNum, chunk, startNum, hasRandom, a;
+  pt.b = start;
+  pt.e = end;
+  start += "";
+  end += "";
+  if (hasRandom = ~end.indexOf("random(")) {
+    end = _replaceRandom(end);
+  }
+  if (stringFilter) {
+    a = [start, end];
+    stringFilter(a, target, prop);
+    start = a[0];
+    end = a[1];
+  }
+  startNums = start.match(_complexStringNumExp) || [];
+  while (result = _complexStringNumExp.exec(end)) {
+    endNum = result[0];
+    chunk = end.substring(index2, result.index);
+    if (color2) {
+      color2 = (color2 + 1) % 5;
+    } else if (chunk.substr(-5) === "rgba(") {
+      color2 = 1;
+    }
+    if (endNum !== startNums[matchIndex++]) {
+      startNum = parseFloat(startNums[matchIndex - 1]) || 0;
+      pt._pt = {
+        _next: pt._pt,
+        p: chunk || matchIndex === 1 ? chunk : ",",
+        //note: SVG spec allows omission of comma/space when a negative sign is wedged between two numbers, like 2.5-5.3 instead of 2.5,-5.3 but when tweening, the negative value may switch to positive, so we insert the comma just in case.
+        s: startNum,
+        c: endNum.charAt(1) === "=" ? _parseRelative(startNum, endNum) - startNum : parseFloat(endNum) - startNum,
+        m: color2 && color2 < 4 ? Math.round : 0
+      };
+      index2 = _complexStringNumExp.lastIndex;
+    }
+  }
+  pt.c = index2 < end.length ? end.substring(index2, end.length) : "";
+  pt.fp = funcParam;
+  if (_relExp.test(end) || hasRandom) {
+    pt.e = 0;
+  }
+  this._pt = pt;
+  return pt;
+};
+var _addPropTween = function _addPropTween2(target, prop, start, end, index2, targets, modifier, stringFilter, funcParam, optional) {
+  _isFunction(end) && (end = end(index2 || 0, target, targets));
+  var currentValue = target[prop], parsedStart = start !== "get" ? start : !_isFunction(currentValue) ? currentValue : funcParam ? target[prop.indexOf("set") || !_isFunction(target["get" + prop.substr(3)]) ? prop : "get" + prop.substr(3)](funcParam) : target[prop](), setter = !_isFunction(currentValue) ? _setterPlain : funcParam ? _setterFuncWithParam : _setterFunc, pt;
+  if (_isString(end)) {
+    if (~end.indexOf("random(")) {
+      end = _replaceRandom(end);
+    }
+    if (end.charAt(1) === "=") {
+      pt = _parseRelative(parsedStart, end) + (getUnit(parsedStart) || 0);
+      if (pt || pt === 0) {
+        end = pt;
+      }
+    }
+  }
+  if (!optional || parsedStart !== end || _forceAllPropTweens) {
+    if (!isNaN(parsedStart * end) && end !== "") {
+      pt = new PropTween(this._pt, target, prop, +parsedStart || 0, end - (parsedStart || 0), typeof currentValue === "boolean" ? _renderBoolean : _renderPlain, 0, setter);
+      funcParam && (pt.fp = funcParam);
+      modifier && pt.modifier(modifier, this, target);
+      return this._pt = pt;
+    }
+    !currentValue && !(prop in target) && _missingPlugin(prop, end);
+    return _addComplexStringPropTween.call(this, target, prop, parsedStart, end, setter, stringFilter || _config.stringFilter, funcParam);
+  }
+};
+var _processVars = function _processVars2(vars, index2, target, targets, tween) {
+  _isFunction(vars) && (vars = _parseFuncOrString(vars, tween, index2, target, targets));
+  if (!_isObject(vars) || vars.style && vars.nodeType || _isArray(vars) || _isTypedArray(vars)) {
+    return _isString(vars) ? _parseFuncOrString(vars, tween, index2, target, targets) : vars;
+  }
+  var copy = {}, p;
+  for (p in vars) {
+    copy[p] = _parseFuncOrString(vars[p], tween, index2, target, targets);
+  }
+  return copy;
+};
+var _checkPlugin = function _checkPlugin2(property, vars, tween, index2, target, targets) {
+  var plugin, pt, ptLookup, i;
+  if (_plugins[property] && (plugin = new _plugins[property]()).init(target, plugin.rawVars ? vars[property] : _processVars(vars[property], index2, target, targets, tween), tween, index2, targets) !== false) {
+    tween._pt = pt = new PropTween(tween._pt, target, property, 0, 1, plugin.render, plugin, 0, plugin.priority);
+    if (tween !== _quickTween) {
+      ptLookup = tween._ptLookup[tween._targets.indexOf(target)];
+      i = plugin._props.length;
+      while (i--) {
+        ptLookup[plugin._props[i]] = pt;
+      }
+    }
+  }
+  return plugin;
+};
+var _overwritingTween;
+var _forceAllPropTweens;
+var _initTween = function _initTween2(tween, time2, tTime) {
+  var vars = tween.vars, ease = vars.ease, startAt = vars.startAt, immediateRender = vars.immediateRender, lazy = vars.lazy, onUpdate = vars.onUpdate, runBackwards = vars.runBackwards, yoyoEase = vars.yoyoEase, keyframes = vars.keyframes, autoRevert = vars.autoRevert, dur = tween._dur, prevStartAt = tween._startAt, targets = tween._targets, parent = tween.parent, fullTargets = parent && parent.data === "nested" ? parent.vars.targets : targets, autoOverwrite = tween._overwrite === "auto" && !_suppressOverwrites, tl = tween.timeline, cleanVars, i, p, pt, target, hasPriority, gsData, harness, plugin, ptLookup, index2, harnessVars, overwritten;
+  tl && (!keyframes || !ease) && (ease = "none");
+  tween._ease = _parseEase(ease, _defaults.ease);
+  tween._yEase = yoyoEase ? _invertEase(_parseEase(yoyoEase === true ? ease : yoyoEase, _defaults.ease)) : 0;
+  if (yoyoEase && tween._yoyo && !tween._repeat) {
+    yoyoEase = tween._yEase;
+    tween._yEase = tween._ease;
+    tween._ease = yoyoEase;
+  }
+  tween._from = !tl && !!vars.runBackwards;
+  if (!tl || keyframes && !vars.stagger) {
+    harness = targets[0] ? _getCache(targets[0]).harness : 0;
+    harnessVars = harness && vars[harness.prop];
+    cleanVars = _copyExcluding(vars, _reservedProps);
+    if (prevStartAt) {
+      prevStartAt._zTime < 0 && prevStartAt.progress(1);
+      time2 < 0 && runBackwards && immediateRender && !autoRevert ? prevStartAt.render(-1, true) : prevStartAt.revert(runBackwards && dur ? _revertConfigNoKill : _startAtRevertConfig);
+      prevStartAt._lazy = 0;
+    }
+    if (startAt) {
+      _removeFromParent(tween._startAt = Tween.set(targets, _setDefaults({
+        data: "isStart",
+        overwrite: false,
+        parent,
+        immediateRender: true,
+        lazy: !prevStartAt && _isNotFalse(lazy),
+        startAt: null,
+        delay: 0,
+        onUpdate: onUpdate && function() {
+          return _callback(tween, "onUpdate");
+        },
+        stagger: 0
+      }, startAt)));
+      tween._startAt._dp = 0;
+      tween._startAt._sat = tween;
+      time2 < 0 && (_reverting || !immediateRender && !autoRevert) && tween._startAt.revert(_revertConfigNoKill);
+      if (immediateRender) {
+        if (dur && time2 <= 0 && tTime <= 0) {
+          time2 && (tween._zTime = time2);
+          return;
+        }
+      }
+    } else if (runBackwards && dur) {
+      if (!prevStartAt) {
+        time2 && (immediateRender = false);
+        p = _setDefaults({
+          overwrite: false,
+          data: "isFromStart",
+          //we tag the tween with as "isFromStart" so that if [inside a plugin] we need to only do something at the very END of a tween, we have a way of identifying this tween as merely the one that's setting the beginning values for a "from()" tween. For example, clearProps in CSSPlugin should only get applied at the very END of a tween and without this tag, from(...{height:100, clearProps:"height", delay:1}) would wipe the height at the beginning of the tween and after 1 second, it'd kick back in.
+          lazy: immediateRender && !prevStartAt && _isNotFalse(lazy),
+          immediateRender,
+          //zero-duration tweens render immediately by default, but if we're not specifically instructed to render this tween immediately, we should skip this and merely _init() to record the starting values (rendering them immediately would push them to completion which is wasteful in that case - we'd have to render(-1) immediately after)
+          stagger: 0,
+          parent
+          //ensures that nested tweens that had a stagger are handled properly, like gsap.from(".class", {y: gsap.utils.wrap([-100,100]), stagger: 0.5})
+        }, cleanVars);
+        harnessVars && (p[harness.prop] = harnessVars);
+        _removeFromParent(tween._startAt = Tween.set(targets, p));
+        tween._startAt._dp = 0;
+        tween._startAt._sat = tween;
+        time2 < 0 && (_reverting ? tween._startAt.revert(_revertConfigNoKill) : tween._startAt.render(-1, true));
+        tween._zTime = time2;
+        if (!immediateRender) {
+          _initTween2(tween._startAt, _tinyNum, _tinyNum);
+        } else if (!time2) {
+          return;
+        }
+      }
+    }
+    tween._pt = tween._ptCache = 0;
+    lazy = dur && _isNotFalse(lazy) || lazy && !dur;
+    for (i = 0; i < targets.length; i++) {
+      target = targets[i];
+      gsData = target._gsap || _harness(targets)[i]._gsap;
+      tween._ptLookup[i] = ptLookup = {};
+      _lazyLookup[gsData.id] && _lazyTweens.length && _lazyRender();
+      index2 = fullTargets === targets ? i : fullTargets.indexOf(target);
+      if (harness && (plugin = new harness()).init(target, harnessVars || cleanVars, tween, index2, fullTargets) !== false) {
+        tween._pt = pt = new PropTween(tween._pt, target, plugin.name, 0, 1, plugin.render, plugin, 0, plugin.priority);
+        plugin._props.forEach(function(name) {
+          ptLookup[name] = pt;
+        });
+        plugin.priority && (hasPriority = 1);
+      }
+      if (!harness || harnessVars) {
+        for (p in cleanVars) {
+          if (_plugins[p] && (plugin = _checkPlugin(p, cleanVars, tween, index2, target, fullTargets))) {
+            plugin.priority && (hasPriority = 1);
+          } else {
+            ptLookup[p] = pt = _addPropTween.call(tween, target, p, "get", cleanVars[p], index2, fullTargets, 0, vars.stringFilter);
+          }
+        }
+      }
+      tween._op && tween._op[i] && tween.kill(target, tween._op[i]);
+      if (autoOverwrite && tween._pt) {
+        _overwritingTween = tween;
+        _globalTimeline.killTweensOf(target, ptLookup, tween.globalTime(time2));
+        overwritten = !tween.parent;
+        _overwritingTween = 0;
+      }
+      tween._pt && lazy && (_lazyLookup[gsData.id] = 1);
+    }
+    hasPriority && _sortPropTweensByPriority(tween);
+    tween._onInit && tween._onInit(tween);
+  }
+  tween._onUpdate = onUpdate;
+  tween._initted = (!tween._op || tween._pt) && !overwritten;
+  keyframes && time2 <= 0 && tl.render(_bigNum, true, true);
+};
+var _updatePropTweens = function _updatePropTweens2(tween, property, value, start, startIsRelative, ratio, time2, skipRecursion) {
+  var ptCache = (tween._pt && tween._ptCache || (tween._ptCache = {}))[property], pt, rootPT, lookup3, i;
+  if (!ptCache) {
+    ptCache = tween._ptCache[property] = [];
+    lookup3 = tween._ptLookup;
+    i = tween._targets.length;
+    while (i--) {
+      pt = lookup3[i][property];
+      if (pt && pt.d && pt.d._pt) {
+        pt = pt.d._pt;
+        while (pt && pt.p !== property && pt.fp !== property) {
+          pt = pt._next;
+        }
+      }
+      if (!pt) {
+        _forceAllPropTweens = 1;
+        tween.vars[property] = "+=0";
+        _initTween(tween, time2);
+        _forceAllPropTweens = 0;
+        return skipRecursion ? _warn(property + " not eligible for reset") : 1;
+      }
+      ptCache.push(pt);
+    }
+  }
+  i = ptCache.length;
+  while (i--) {
+    rootPT = ptCache[i];
+    pt = rootPT._pt || rootPT;
+    pt.s = (start || start === 0) && !startIsRelative ? start : pt.s + (start || 0) + ratio * pt.c;
+    pt.c = value - pt.s;
+    rootPT.e && (rootPT.e = _round(value) + getUnit(rootPT.e));
+    rootPT.b && (rootPT.b = pt.s + getUnit(rootPT.b));
+  }
+};
+var _addAliasesToVars = function _addAliasesToVars2(targets, vars) {
+  var harness = targets[0] ? _getCache(targets[0]).harness : 0, propertyAliases = harness && harness.aliases, copy, p, i, aliases;
+  if (!propertyAliases) {
+    return vars;
+  }
+  copy = _merge({}, vars);
+  for (p in propertyAliases) {
+    if (p in copy) {
+      aliases = propertyAliases[p].split(",");
+      i = aliases.length;
+      while (i--) {
+        copy[aliases[i]] = copy[p];
+      }
+    }
+  }
+  return copy;
+};
+var _parseKeyframe = function _parseKeyframe2(prop, obj, allProps, easeEach) {
+  var ease = obj.ease || easeEach || "power1.inOut", p, a;
+  if (_isArray(obj)) {
+    a = allProps[prop] || (allProps[prop] = []);
+    obj.forEach(function(value, i) {
+      return a.push({
+        t: i / (obj.length - 1) * 100,
+        v: value,
+        e: ease
+      });
+    });
+  } else {
+    for (p in obj) {
+      a = allProps[p] || (allProps[p] = []);
+      p === "ease" || a.push({
+        t: parseFloat(prop),
+        v: obj[p],
+        e: ease
+      });
+    }
+  }
+};
+var _parseFuncOrString = function _parseFuncOrString2(value, tween, i, target, targets) {
+  return _isFunction(value) ? value.call(tween, i, target, targets) : _isString(value) && ~value.indexOf("random(") ? _replaceRandom(value) : value;
+};
+var _staggerTweenProps = _callbackNames + "repeat,repeatDelay,yoyo,repeatRefresh,yoyoEase,autoRevert";
+var _staggerPropsToSkip = {};
+_forEachName(_staggerTweenProps + ",id,stagger,delay,duration,paused,scrollTrigger", function(name) {
+  return _staggerPropsToSkip[name] = 1;
+});
+var Tween = /* @__PURE__ */ (function(_Animation2) {
+  _inheritsLoose(Tween2, _Animation2);
+  function Tween2(targets, vars, position, skipInherit) {
+    var _this3;
+    if (typeof vars === "number") {
+      position.duration = vars;
+      vars = position;
+      position = null;
+    }
+    _this3 = _Animation2.call(this, skipInherit ? vars : _inheritDefaults(vars)) || this;
+    var _this3$vars = _this3.vars, duration = _this3$vars.duration, delay = _this3$vars.delay, immediateRender = _this3$vars.immediateRender, stagger = _this3$vars.stagger, overwrite = _this3$vars.overwrite, keyframes = _this3$vars.keyframes, defaults2 = _this3$vars.defaults, scrollTrigger = _this3$vars.scrollTrigger, yoyoEase = _this3$vars.yoyoEase, parent = vars.parent || _globalTimeline, parsedTargets = (_isArray(targets) || _isTypedArray(targets) ? _isNumber(targets[0]) : "length" in vars) ? [targets] : toArray2(targets), tl, i, copy, l, p, curTarget, staggerFunc, staggerVarsToMerge;
+    _this3._targets = parsedTargets.length ? _harness(parsedTargets) : _warn("GSAP target " + targets + " not found. https://gsap.com", !_config.nullTargetWarn) || [];
+    _this3._ptLookup = [];
+    _this3._overwrite = overwrite;
+    if (keyframes || stagger || _isFuncOrString(duration) || _isFuncOrString(delay)) {
+      vars = _this3.vars;
+      tl = _this3.timeline = new Timeline({
+        data: "nested",
+        defaults: defaults2 || {},
+        targets: parent && parent.data === "nested" ? parent.vars.targets : parsedTargets
+      });
+      tl.kill();
+      tl.parent = tl._dp = _assertThisInitialized(_this3);
+      tl._start = 0;
+      if (stagger || _isFuncOrString(duration) || _isFuncOrString(delay)) {
+        l = parsedTargets.length;
+        staggerFunc = stagger && distribute(stagger);
+        if (_isObject(stagger)) {
+          for (p in stagger) {
+            if (~_staggerTweenProps.indexOf(p)) {
+              staggerVarsToMerge || (staggerVarsToMerge = {});
+              staggerVarsToMerge[p] = stagger[p];
+            }
+          }
+        }
+        for (i = 0; i < l; i++) {
+          copy = _copyExcluding(vars, _staggerPropsToSkip);
+          copy.stagger = 0;
+          yoyoEase && (copy.yoyoEase = yoyoEase);
+          staggerVarsToMerge && _merge(copy, staggerVarsToMerge);
+          curTarget = parsedTargets[i];
+          copy.duration = +_parseFuncOrString(duration, _assertThisInitialized(_this3), i, curTarget, parsedTargets);
+          copy.delay = (+_parseFuncOrString(delay, _assertThisInitialized(_this3), i, curTarget, parsedTargets) || 0) - _this3._delay;
+          if (!stagger && l === 1 && copy.delay) {
+            _this3._delay = delay = copy.delay;
+            _this3._start += delay;
+            copy.delay = 0;
+          }
+          tl.to(curTarget, copy, staggerFunc ? staggerFunc(i, curTarget, parsedTargets) : 0);
+          tl._ease = _easeMap.none;
+        }
+        tl.duration() ? duration = delay = 0 : _this3.timeline = 0;
+      } else if (keyframes) {
+        _inheritDefaults(_setDefaults(tl.vars.defaults, {
+          ease: "none"
+        }));
+        tl._ease = _parseEase(keyframes.ease || vars.ease || "none");
+        var time2 = 0, a, kf, v;
+        if (_isArray(keyframes)) {
+          keyframes.forEach(function(frame) {
+            return tl.to(parsedTargets, frame, ">");
+          });
+          tl.duration();
+        } else {
+          copy = {};
+          for (p in keyframes) {
+            p === "ease" || p === "easeEach" || _parseKeyframe(p, keyframes[p], copy, keyframes.easeEach);
+          }
+          for (p in copy) {
+            a = copy[p].sort(function(a2, b) {
+              return a2.t - b.t;
+            });
+            time2 = 0;
+            for (i = 0; i < a.length; i++) {
+              kf = a[i];
+              v = {
+                ease: kf.e,
+                duration: (kf.t - (i ? a[i - 1].t : 0)) / 100 * duration
+              };
+              v[p] = kf.v;
+              tl.to(parsedTargets, v, time2);
+              time2 += v.duration;
+            }
+          }
+          tl.duration() < duration && tl.to({}, {
+            duration: duration - tl.duration()
+          });
+        }
+      }
+      duration || _this3.duration(duration = tl.duration());
+    } else {
+      _this3.timeline = 0;
+    }
+    if (overwrite === true && !_suppressOverwrites) {
+      _overwritingTween = _assertThisInitialized(_this3);
+      _globalTimeline.killTweensOf(parsedTargets);
+      _overwritingTween = 0;
+    }
+    _addToTimeline(parent, _assertThisInitialized(_this3), position);
+    vars.reversed && _this3.reverse();
+    vars.paused && _this3.paused(true);
+    if (immediateRender || !duration && !keyframes && _this3._start === _roundPrecise(parent._time) && _isNotFalse(immediateRender) && _hasNoPausedAncestors(_assertThisInitialized(_this3)) && parent.data !== "nested") {
+      _this3._tTime = -_tinyNum;
+      _this3.render(Math.max(0, -delay) || 0);
+    }
+    scrollTrigger && _scrollTrigger(_assertThisInitialized(_this3), scrollTrigger);
+    return _this3;
+  }
+  var _proto3 = Tween2.prototype;
+  _proto3.render = function render5(totalTime, suppressEvents, force) {
+    var prevTime = this._time, tDur = this._tDur, dur = this._dur, isNegative = totalTime < 0, tTime = totalTime > tDur - _tinyNum && !isNegative ? tDur : totalTime < _tinyNum ? 0 : totalTime, time2, pt, iteration, cycleDuration, prevIteration, isYoyo, ratio, timeline2, yoyoEase;
+    if (!dur) {
+      _renderZeroDurationTween(this, totalTime, suppressEvents, force);
+    } else if (tTime !== this._tTime || !totalTime || force || !this._initted && this._tTime || this._startAt && this._zTime < 0 !== isNegative || this._lazy) {
+      time2 = tTime;
+      timeline2 = this.timeline;
+      if (this._repeat) {
+        cycleDuration = dur + this._rDelay;
+        if (this._repeat < -1 && isNegative) {
+          return this.totalTime(cycleDuration * 100 + totalTime, suppressEvents, force);
+        }
+        time2 = _roundPrecise(tTime % cycleDuration);
+        if (tTime === tDur) {
+          iteration = this._repeat;
+          time2 = dur;
+        } else {
+          prevIteration = _roundPrecise(tTime / cycleDuration);
+          iteration = ~~prevIteration;
+          if (iteration && iteration === prevIteration) {
+            time2 = dur;
+            iteration--;
+          } else if (time2 > dur) {
+            time2 = dur;
+          }
+        }
+        isYoyo = this._yoyo && iteration & 1;
+        if (isYoyo) {
+          yoyoEase = this._yEase;
+          time2 = dur - time2;
+        }
+        prevIteration = _animationCycle(this._tTime, cycleDuration);
+        if (time2 === prevTime && !force && this._initted && iteration === prevIteration) {
+          this._tTime = tTime;
+          return this;
+        }
+        if (iteration !== prevIteration) {
+          timeline2 && this._yEase && _propagateYoyoEase(timeline2, isYoyo);
+          if (this.vars.repeatRefresh && !isYoyo && !this._lock && time2 !== cycleDuration && this._initted) {
+            this._lock = force = 1;
+            this.render(_roundPrecise(cycleDuration * iteration), true).invalidate()._lock = 0;
+          }
+        }
+      }
+      if (!this._initted) {
+        if (_attemptInitTween(this, isNegative ? totalTime : time2, force, suppressEvents, tTime)) {
+          this._tTime = 0;
+          return this;
+        }
+        if (prevTime !== this._time && !(force && this.vars.repeatRefresh && iteration !== prevIteration)) {
+          return this;
+        }
+        if (dur !== this._dur) {
+          return this.render(totalTime, suppressEvents, force);
+        }
+      }
+      this._tTime = tTime;
+      this._time = time2;
+      if (!this._act && this._ts) {
+        this._act = 1;
+        this._lazy = 0;
+      }
+      this.ratio = ratio = (yoyoEase || this._ease)(time2 / dur);
+      if (this._from) {
+        this.ratio = ratio = 1 - ratio;
+      }
+      if (!prevTime && tTime && !suppressEvents && !prevIteration) {
+        _callback(this, "onStart");
+        if (this._tTime !== tTime) {
+          return this;
+        }
+      }
+      pt = this._pt;
+      while (pt) {
+        pt.r(ratio, pt.d);
+        pt = pt._next;
+      }
+      timeline2 && timeline2.render(totalTime < 0 ? totalTime : timeline2._dur * timeline2._ease(time2 / this._dur), suppressEvents, force) || this._startAt && (this._zTime = totalTime);
+      if (this._onUpdate && !suppressEvents) {
+        isNegative && _rewindStartAt(this, totalTime, suppressEvents, force);
+        _callback(this, "onUpdate");
+      }
+      this._repeat && iteration !== prevIteration && this.vars.onRepeat && !suppressEvents && this.parent && _callback(this, "onRepeat");
+      if ((tTime === this._tDur || !tTime) && this._tTime === tTime) {
+        isNegative && !this._onUpdate && _rewindStartAt(this, totalTime, true, true);
+        (totalTime || !dur) && (tTime === this._tDur && this._ts > 0 || !tTime && this._ts < 0) && _removeFromParent(this, 1);
+        if (!suppressEvents && !(isNegative && !prevTime) && (tTime || prevTime || isYoyo)) {
+          _callback(this, tTime === tDur ? "onComplete" : "onReverseComplete", true);
+          this._prom && !(tTime < tDur && this.timeScale() > 0) && this._prom();
+        }
+      }
+    }
+    return this;
+  };
+  _proto3.targets = function targets() {
+    return this._targets;
+  };
+  _proto3.invalidate = function invalidate(soft) {
+    (!soft || !this.vars.runBackwards) && (this._startAt = 0);
+    this._pt = this._op = this._onUpdate = this._lazy = this.ratio = 0;
+    this._ptLookup = [];
+    this.timeline && this.timeline.invalidate(soft);
+    return _Animation2.prototype.invalidate.call(this, soft);
+  };
+  _proto3.resetTo = function resetTo(property, value, start, startIsRelative, skipRecursion) {
+    _tickerActive || _ticker.wake();
+    this._ts || this.play();
+    var time2 = Math.min(this._dur, (this._dp._time - this._start) * this._ts), ratio;
+    this._initted || _initTween(this, time2);
+    ratio = this._ease(time2 / this._dur);
+    if (_updatePropTweens(this, property, value, start, startIsRelative, ratio, time2, skipRecursion)) {
+      return this.resetTo(property, value, start, startIsRelative, 1);
+    }
+    _alignPlayhead(this, 0);
+    this.parent || _addLinkedListItem(this._dp, this, "_first", "_last", this._dp._sort ? "_start" : 0);
+    return this.render(0);
+  };
+  _proto3.kill = function kill(targets, vars) {
+    if (vars === void 0) {
+      vars = "all";
+    }
+    if (!targets && (!vars || vars === "all")) {
+      this._lazy = this._pt = 0;
+      this.parent ? _interrupt(this) : this.scrollTrigger && this.scrollTrigger.kill(!!_reverting);
+      return this;
+    }
+    if (this.timeline) {
+      var tDur = this.timeline.totalDuration();
+      this.timeline.killTweensOf(targets, vars, _overwritingTween && _overwritingTween.vars.overwrite !== true)._first || _interrupt(this);
+      this.parent && tDur !== this.timeline.totalDuration() && _setDuration(this, this._dur * this.timeline._tDur / tDur, 0, 1);
+      return this;
+    }
+    var parsedTargets = this._targets, killingTargets = targets ? toArray2(targets) : parsedTargets, propTweenLookup = this._ptLookup, firstPT = this._pt, overwrittenProps, curLookup, curOverwriteProps, props, p, pt, i;
+    if ((!vars || vars === "all") && _arraysMatch(parsedTargets, killingTargets)) {
+      vars === "all" && (this._pt = 0);
+      return _interrupt(this);
+    }
+    overwrittenProps = this._op = this._op || [];
+    if (vars !== "all") {
+      if (_isString(vars)) {
+        p = {};
+        _forEachName(vars, function(name) {
+          return p[name] = 1;
+        });
+        vars = p;
+      }
+      vars = _addAliasesToVars(parsedTargets, vars);
+    }
+    i = parsedTargets.length;
+    while (i--) {
+      if (~killingTargets.indexOf(parsedTargets[i])) {
+        curLookup = propTweenLookup[i];
+        if (vars === "all") {
+          overwrittenProps[i] = vars;
+          props = curLookup;
+          curOverwriteProps = {};
+        } else {
+          curOverwriteProps = overwrittenProps[i] = overwrittenProps[i] || {};
+          props = vars;
+        }
+        for (p in props) {
+          pt = curLookup && curLookup[p];
+          if (pt) {
+            if (!("kill" in pt.d) || pt.d.kill(p) === true) {
+              _removeLinkedListItem(this, pt, "_pt");
+            }
+            delete curLookup[p];
+          }
+          if (curOverwriteProps !== "all") {
+            curOverwriteProps[p] = 1;
+          }
+        }
+      }
+    }
+    this._initted && !this._pt && firstPT && _interrupt(this);
+    return this;
+  };
+  Tween2.to = function to(targets, vars) {
+    return new Tween2(targets, vars, arguments[2]);
+  };
+  Tween2.from = function from(targets, vars) {
+    return _createTweenType(1, arguments);
+  };
+  Tween2.delayedCall = function delayedCall(delay, callback, params, scope) {
+    return new Tween2(callback, 0, {
+      immediateRender: false,
+      lazy: false,
+      overwrite: false,
+      delay,
+      onComplete: callback,
+      onReverseComplete: callback,
+      onCompleteParams: params,
+      onReverseCompleteParams: params,
+      callbackScope: scope
+    });
+  };
+  Tween2.fromTo = function fromTo(targets, fromVars, toVars) {
+    return _createTweenType(2, arguments);
+  };
+  Tween2.set = function set(targets, vars) {
+    vars.duration = 0;
+    vars.repeatDelay || (vars.repeat = 0);
+    return new Tween2(targets, vars);
+  };
+  Tween2.killTweensOf = function killTweensOf(targets, props, onlyActive) {
+    return _globalTimeline.killTweensOf(targets, props, onlyActive);
+  };
+  return Tween2;
+})(Animation);
+_setDefaults(Tween.prototype, {
+  _targets: [],
+  _lazy: 0,
+  _startAt: 0,
+  _op: 0,
+  _onInit: 0
+});
+_forEachName("staggerTo,staggerFrom,staggerFromTo", function(name) {
+  Tween[name] = function() {
+    var tl = new Timeline(), params = _slice.call(arguments, 0);
+    params.splice(name === "staggerFromTo" ? 5 : 4, 0, 0);
+    return tl[name].apply(tl, params);
+  };
+});
+var _setterPlain = function _setterPlain2(target, property, value) {
+  return target[property] = value;
+};
+var _setterFunc = function _setterFunc2(target, property, value) {
+  return target[property](value);
+};
+var _setterFuncWithParam = function _setterFuncWithParam2(target, property, value, data) {
+  return target[property](data.fp, value);
+};
+var _setterAttribute = function _setterAttribute2(target, property, value) {
+  return target.setAttribute(property, value);
+};
+var _getSetter = function _getSetter2(target, property) {
+  return _isFunction(target[property]) ? _setterFunc : _isUndefined(target[property]) && target.setAttribute ? _setterAttribute : _setterPlain;
+};
+var _renderPlain = function _renderPlain2(ratio, data) {
+  return data.set(data.t, data.p, Math.round((data.s + data.c * ratio) * 1e6) / 1e6, data);
+};
+var _renderBoolean = function _renderBoolean2(ratio, data) {
+  return data.set(data.t, data.p, !!(data.s + data.c * ratio), data);
+};
+var _renderComplexString = function _renderComplexString2(ratio, data) {
+  var pt = data._pt, s = "";
+  if (!ratio && data.b) {
+    s = data.b;
+  } else if (ratio === 1 && data.e) {
+    s = data.e;
+  } else {
+    while (pt) {
+      s = pt.p + (pt.m ? pt.m(pt.s + pt.c * ratio) : Math.round((pt.s + pt.c * ratio) * 1e4) / 1e4) + s;
+      pt = pt._next;
+    }
+    s += data.c;
+  }
+  data.set(data.t, data.p, s, data);
+};
+var _renderPropTweens = function _renderPropTweens2(ratio, data) {
+  var pt = data._pt;
+  while (pt) {
+    pt.r(ratio, pt.d);
+    pt = pt._next;
+  }
+};
+var _addPluginModifier = function _addPluginModifier2(modifier, tween, target, property) {
+  var pt = this._pt, next;
+  while (pt) {
+    next = pt._next;
+    pt.p === property && pt.modifier(modifier, tween, target);
+    pt = next;
+  }
+};
+var _killPropTweensOf = function _killPropTweensOf2(property) {
+  var pt = this._pt, hasNonDependentRemaining, next;
+  while (pt) {
+    next = pt._next;
+    if (pt.p === property && !pt.op || pt.op === property) {
+      _removeLinkedListItem(this, pt, "_pt");
+    } else if (!pt.dep) {
+      hasNonDependentRemaining = 1;
+    }
+    pt = next;
+  }
+  return !hasNonDependentRemaining;
+};
+var _setterWithModifier = function _setterWithModifier2(target, property, value, data) {
+  data.mSet(target, property, data.m.call(data.tween, value, data.mt), data);
+};
+var _sortPropTweensByPriority = function _sortPropTweensByPriority2(parent) {
+  var pt = parent._pt, next, pt2, first, last2;
+  while (pt) {
+    next = pt._next;
+    pt2 = first;
+    while (pt2 && pt2.pr > pt.pr) {
+      pt2 = pt2._next;
+    }
+    if (pt._prev = pt2 ? pt2._prev : last2) {
+      pt._prev._next = pt;
+    } else {
+      first = pt;
+    }
+    if (pt._next = pt2) {
+      pt2._prev = pt;
+    } else {
+      last2 = pt;
+    }
+    pt = next;
+  }
+  parent._pt = first;
+};
+var PropTween = /* @__PURE__ */ (function() {
+  function PropTween2(next, target, prop, start, change, renderer, data, setter, priority) {
+    this.t = target;
+    this.s = start;
+    this.c = change;
+    this.p = prop;
+    this.r = renderer || _renderPlain;
+    this.d = data || this;
+    this.set = setter || _setterPlain;
+    this.pr = priority || 0;
+    this._next = next;
+    if (next) {
+      next._prev = this;
+    }
+  }
+  var _proto4 = PropTween2.prototype;
+  _proto4.modifier = function modifier(func, tween, target) {
+    this.mSet = this.mSet || this.set;
+    this.set = _setterWithModifier;
+    this.m = func;
+    this.mt = target;
+    this.tween = tween;
+  };
+  return PropTween2;
+})();
+_forEachName(_callbackNames + "parent,duration,ease,delay,overwrite,runBackwards,startAt,yoyo,immediateRender,repeat,repeatDelay,data,paused,reversed,lazy,callbackScope,stringFilter,id,yoyoEase,stagger,inherit,repeatRefresh,keyframes,autoRevert,scrollTrigger", function(name) {
+  return _reservedProps[name] = 1;
+});
+_globals.TweenMax = _globals.TweenLite = Tween;
+_globals.TimelineLite = _globals.TimelineMax = Timeline;
+_globalTimeline = new Timeline({
+  sortChildren: false,
+  defaults: _defaults,
+  autoRemoveChildren: true,
+  id: "root",
+  smoothChildTiming: true
+});
+_config.stringFilter = _colorStringFilter;
+var _media = [];
+var _listeners = {};
+var _emptyArray = [];
+var _lastMediaTime = 0;
+var _contextID = 0;
+var _dispatch = function _dispatch2(type) {
+  return (_listeners[type] || _emptyArray).map(function(f2) {
+    return f2();
+  });
+};
+var _onMediaChange = function _onMediaChange2() {
+  var time2 = Date.now(), matches = [];
+  if (time2 - _lastMediaTime > 2) {
+    _dispatch("matchMediaInit");
+    _media.forEach(function(c) {
+      var queries = c.queries, conditions = c.conditions, match, p, anyMatch, toggled;
+      for (p in queries) {
+        match = _win.matchMedia(queries[p]).matches;
+        match && (anyMatch = 1);
+        if (match !== conditions[p]) {
+          conditions[p] = match;
+          toggled = 1;
+        }
+      }
+      if (toggled) {
+        c.revert();
+        anyMatch && matches.push(c);
+      }
+    });
+    _dispatch("matchMediaRevert");
+    matches.forEach(function(c) {
+      return c.onMatch(c, function(func) {
+        return c.add(null, func);
+      });
+    });
+    _lastMediaTime = time2;
+    _dispatch("matchMedia");
+  }
+};
+var Context2 = /* @__PURE__ */ (function() {
+  function Context3(func, scope) {
+    this.selector = scope && selector(scope);
+    this.data = [];
+    this._r = [];
+    this.isReverted = false;
+    this.id = _contextID++;
+    func && this.add(func);
+  }
+  var _proto5 = Context3.prototype;
+  _proto5.add = function add(name, func, scope) {
+    if (_isFunction(name)) {
+      scope = func;
+      func = name;
+      name = _isFunction;
+    }
+    var self2 = this, f2 = function f3() {
+      var prev = _context, prevSelector = self2.selector, result;
+      prev && prev !== self2 && prev.data.push(self2);
+      scope && (self2.selector = selector(scope));
+      _context = self2;
+      result = func.apply(self2, arguments);
+      _isFunction(result) && self2._r.push(result);
+      _context = prev;
+      self2.selector = prevSelector;
+      self2.isReverted = false;
+      return result;
+    };
+    self2.last = f2;
+    return name === _isFunction ? f2(self2, function(func2) {
+      return self2.add(null, func2);
+    }) : name ? self2[name] = f2 : f2;
+  };
+  _proto5.ignore = function ignore(func) {
+    var prev = _context;
+    _context = null;
+    func(this);
+    _context = prev;
+  };
+  _proto5.getTweens = function getTweens() {
+    var a = [];
+    this.data.forEach(function(e) {
+      return e instanceof Context3 ? a.push.apply(a, e.getTweens()) : e instanceof Tween && !(e.parent && e.parent.data === "nested") && a.push(e);
+    });
+    return a;
+  };
+  _proto5.clear = function clear() {
+    this._r.length = this.data.length = 0;
+  };
+  _proto5.kill = function kill(revert, matchMedia2) {
+    var _this4 = this;
+    if (revert) {
+      (function() {
+        var tweens = _this4.getTweens(), i2 = _this4.data.length, t;
+        while (i2--) {
+          t = _this4.data[i2];
+          if (t.data === "isFlip") {
+            t.revert();
+            t.getChildren(true, true, false).forEach(function(tween) {
+              return tweens.splice(tweens.indexOf(tween), 1);
+            });
+          }
+        }
+        tweens.map(function(t2) {
+          return {
+            g: t2._dur || t2._delay || t2._sat && !t2._sat.vars.immediateRender ? t2.globalTime(0) : -Infinity,
+            t: t2
+          };
+        }).sort(function(a, b) {
+          return b.g - a.g || -Infinity;
+        }).forEach(function(o) {
+          return o.t.revert(revert);
+        });
+        i2 = _this4.data.length;
+        while (i2--) {
+          t = _this4.data[i2];
+          if (t instanceof Timeline) {
+            if (t.data !== "nested") {
+              t.scrollTrigger && t.scrollTrigger.revert();
+              t.kill();
+            }
+          } else {
+            !(t instanceof Tween) && t.revert && t.revert(revert);
+          }
+        }
+        _this4._r.forEach(function(f2) {
+          return f2(revert, _this4);
+        });
+        _this4.isReverted = true;
+      })();
+    } else {
+      this.data.forEach(function(e) {
+        return e.kill && e.kill();
+      });
+    }
+    this.clear();
+    if (matchMedia2) {
+      var i = _media.length;
+      while (i--) {
+        _media[i].id === this.id && _media.splice(i, 1);
+      }
+    }
+  };
+  _proto5.revert = function revert(config4) {
+    this.kill(config4 || {});
+  };
+  return Context3;
+})();
+var MatchMedia = /* @__PURE__ */ (function() {
+  function MatchMedia2(scope) {
+    this.contexts = [];
+    this.scope = scope;
+    _context && _context.data.push(this);
+  }
+  var _proto6 = MatchMedia2.prototype;
+  _proto6.add = function add(conditions, func, scope) {
+    _isObject(conditions) || (conditions = {
+      matches: conditions
+    });
+    var context3 = new Context2(0, scope || this.scope), cond = context3.conditions = {}, mq, p, active;
+    _context && !context3.selector && (context3.selector = _context.selector);
+    this.contexts.push(context3);
+    func = context3.add("onMatch", func);
+    context3.queries = conditions;
+    for (p in conditions) {
+      if (p === "all") {
+        active = 1;
+      } else {
+        mq = _win.matchMedia(conditions[p]);
+        if (mq) {
+          _media.indexOf(context3) < 0 && _media.push(context3);
+          (cond[p] = mq.matches) && (active = 1);
+          mq.addListener ? mq.addListener(_onMediaChange) : mq.addEventListener("change", _onMediaChange);
+        }
+      }
+    }
+    active && func(context3, function(f2) {
+      return context3.add(null, f2);
+    });
+    return this;
+  };
+  _proto6.revert = function revert(config4) {
+    this.kill(config4 || {});
+  };
+  _proto6.kill = function kill(revert) {
+    this.contexts.forEach(function(c) {
+      return c.kill(revert, true);
+    });
+  };
+  return MatchMedia2;
+})();
+var _gsap = {
+  registerPlugin: function registerPlugin() {
+    for (var _len2 = arguments.length, args = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+      args[_key2] = arguments[_key2];
+    }
+    args.forEach(function(config4) {
+      return _createPlugin(config4);
+    });
+  },
+  timeline: function timeline(vars) {
+    return new Timeline(vars);
+  },
+  getTweensOf: function getTweensOf(targets, onlyActive) {
+    return _globalTimeline.getTweensOf(targets, onlyActive);
+  },
+  getProperty: function getProperty(target, property, unit, uncache) {
+    _isString(target) && (target = toArray2(target)[0]);
+    var getter = _getCache(target || {}).get, format2 = unit ? _passThrough : _numericIfPossible;
+    unit === "native" && (unit = "");
+    return !target ? target : !property ? function(property2, unit2, uncache2) {
+      return format2((_plugins[property2] && _plugins[property2].get || getter)(target, property2, unit2, uncache2));
+    } : format2((_plugins[property] && _plugins[property].get || getter)(target, property, unit, uncache));
+  },
+  quickSetter: function quickSetter(target, property, unit) {
+    target = toArray2(target);
+    if (target.length > 1) {
+      var setters = target.map(function(t) {
+        return gsap.quickSetter(t, property, unit);
+      }), l = setters.length;
+      return function(value) {
+        var i = l;
+        while (i--) {
+          setters[i](value);
+        }
+      };
+    }
+    target = target[0] || {};
+    var Plugin = _plugins[property], cache2 = _getCache(target), p = cache2.harness && (cache2.harness.aliases || {})[property] || property, setter = Plugin ? function(value) {
+      var p2 = new Plugin();
+      _quickTween._pt = 0;
+      p2.init(target, unit ? value + unit : value, _quickTween, 0, [target]);
+      p2.render(1, p2);
+      _quickTween._pt && _renderPropTweens(1, _quickTween);
+    } : cache2.set(target, p);
+    return Plugin ? setter : function(value) {
+      return setter(target, p, unit ? value + unit : value, cache2, 1);
+    };
+  },
+  quickTo: function quickTo(target, property, vars) {
+    var _setDefaults22;
+    var tween = gsap.to(target, _setDefaults((_setDefaults22 = {}, _setDefaults22[property] = "+=0.1", _setDefaults22.paused = true, _setDefaults22.stagger = 0, _setDefaults22), vars || {})), func = function func2(value, start, startIsRelative) {
+      return tween.resetTo(property, value, start, startIsRelative);
+    };
+    func.tween = tween;
+    return func;
+  },
+  isTweening: function isTweening(targets) {
+    return _globalTimeline.getTweensOf(targets, true).length > 0;
+  },
+  defaults: function defaults(value) {
+    value && value.ease && (value.ease = _parseEase(value.ease, _defaults.ease));
+    return _mergeDeep(_defaults, value || {});
+  },
+  config: function config3(value) {
+    return _mergeDeep(_config, value || {});
+  },
+  registerEffect: function registerEffect(_ref3) {
+    var name = _ref3.name, effect = _ref3.effect, plugins = _ref3.plugins, defaults2 = _ref3.defaults, extendTimeline = _ref3.extendTimeline;
+    (plugins || "").split(",").forEach(function(pluginName) {
+      return pluginName && !_plugins[pluginName] && !_globals[pluginName] && _warn(name + " effect requires " + pluginName + " plugin.");
+    });
+    _effects[name] = function(targets, vars, tl) {
+      return effect(toArray2(targets), _setDefaults(vars || {}, defaults2), tl);
+    };
+    if (extendTimeline) {
+      Timeline.prototype[name] = function(targets, vars, position) {
+        return this.add(_effects[name](targets, _isObject(vars) ? vars : (position = vars) && {}, this), position);
+      };
+    }
+  },
+  registerEase: function registerEase(name, ease) {
+    _easeMap[name] = _parseEase(ease);
+  },
+  parseEase: function parseEase(ease, defaultEase) {
+    return arguments.length ? _parseEase(ease, defaultEase) : _easeMap;
+  },
+  getById: function getById(id) {
+    return _globalTimeline.getById(id);
+  },
+  exportRoot: function exportRoot(vars, includeDelayedCalls) {
+    if (vars === void 0) {
+      vars = {};
+    }
+    var tl = new Timeline(vars), child, next;
+    tl.smoothChildTiming = _isNotFalse(vars.smoothChildTiming);
+    _globalTimeline.remove(tl);
+    tl._dp = 0;
+    tl._time = tl._tTime = _globalTimeline._time;
+    child = _globalTimeline._first;
+    while (child) {
+      next = child._next;
+      if (includeDelayedCalls || !(!child._dur && child instanceof Tween && child.vars.onComplete === child._targets[0])) {
+        _addToTimeline(tl, child, child._start - child._delay);
+      }
+      child = next;
+    }
+    _addToTimeline(_globalTimeline, tl, 0);
+    return tl;
+  },
+  context: function context(func, scope) {
+    return func ? new Context2(func, scope) : _context;
+  },
+  matchMedia: function matchMedia(scope) {
+    return new MatchMedia(scope);
+  },
+  matchMediaRefresh: function matchMediaRefresh() {
+    return _media.forEach(function(c) {
+      var cond = c.conditions, found, p;
+      for (p in cond) {
+        if (cond[p]) {
+          cond[p] = false;
+          found = 1;
+        }
+      }
+      found && c.revert();
+    }) || _onMediaChange();
+  },
+  addEventListener: function addEventListener(type, callback) {
+    var a = _listeners[type] || (_listeners[type] = []);
+    ~a.indexOf(callback) || a.push(callback);
+  },
+  removeEventListener: function removeEventListener(type, callback) {
+    var a = _listeners[type], i = a && a.indexOf(callback);
+    i >= 0 && a.splice(i, 1);
+  },
+  utils: {
+    wrap: wrap3,
+    wrapYoyo,
+    distribute,
+    random,
+    snap,
+    normalize: normalize2,
+    getUnit,
+    clamp,
+    splitColor,
+    toArray: toArray2,
+    selector,
+    mapRange,
+    pipe,
+    unitize,
+    interpolate,
+    shuffle
+  },
+  install: _install,
+  effects: _effects,
+  ticker: _ticker,
+  updateRoot: Timeline.updateRoot,
+  plugins: _plugins,
+  globalTimeline: _globalTimeline,
+  core: {
+    PropTween,
+    globals: _addGlobal,
+    Tween,
+    Timeline,
+    Animation,
+    getCache: _getCache,
+    _removeLinkedListItem,
+    reverting: function reverting() {
+      return _reverting;
+    },
+    context: function context2(toAdd) {
+      if (toAdd && _context) {
+        _context.data.push(toAdd);
+        toAdd._ctx = _context;
+      }
+      return _context;
+    },
+    suppressOverwrites: function suppressOverwrites(value) {
+      return _suppressOverwrites = value;
+    }
+  }
+};
+_forEachName("to,from,fromTo,delayedCall,set,killTweensOf", function(name) {
+  return _gsap[name] = Tween[name];
+});
+_ticker.add(Timeline.updateRoot);
+_quickTween = _gsap.to({}, {
+  duration: 0
+});
+var _getPluginPropTween = function _getPluginPropTween2(plugin, prop) {
+  var pt = plugin._pt;
+  while (pt && pt.p !== prop && pt.op !== prop && pt.fp !== prop) {
+    pt = pt._next;
+  }
+  return pt;
+};
+var _addModifiers = function _addModifiers2(tween, modifiers) {
+  var targets = tween._targets, p, i, pt;
+  for (p in modifiers) {
+    i = targets.length;
+    while (i--) {
+      pt = tween._ptLookup[i][p];
+      if (pt && (pt = pt.d)) {
+        if (pt._pt) {
+          pt = _getPluginPropTween(pt, p);
+        }
+        pt && pt.modifier && pt.modifier(modifiers[p], tween, targets[i], p);
+      }
+    }
+  }
+};
+var _buildModifierPlugin = function _buildModifierPlugin2(name, modifier) {
+  return {
+    name,
+    headless: 1,
+    rawVars: 1,
+    //don't pre-process function-based values or "random()" strings.
+    init: function init4(target, vars, tween) {
+      tween._onInit = function(tween2) {
+        var temp, p;
+        if (_isString(vars)) {
+          temp = {};
+          _forEachName(vars, function(name2) {
+            return temp[name2] = 1;
+          });
+          vars = temp;
+        }
+        if (modifier) {
+          temp = {};
+          for (p in vars) {
+            temp[p] = modifier(vars[p]);
+          }
+          vars = temp;
+        }
+        _addModifiers(tween2, vars);
+      };
+    }
+  };
+};
+var gsap = _gsap.registerPlugin({
+  name: "attr",
+  init: function init(target, vars, tween, index2, targets) {
+    var p, pt, v;
+    this.tween = tween;
+    for (p in vars) {
+      v = target.getAttribute(p) || "";
+      pt = this.add(target, "setAttribute", (v || 0) + "", vars[p], index2, targets, 0, 0, p);
+      pt.op = p;
+      pt.b = v;
+      this._props.push(p);
+    }
+  },
+  render: function render3(ratio, data) {
+    var pt = data._pt;
+    while (pt) {
+      _reverting ? pt.set(pt.t, pt.p, pt.b, pt) : pt.r(ratio, pt.d);
+      pt = pt._next;
+    }
+  }
+}, {
+  name: "endArray",
+  headless: 1,
+  init: function init2(target, value) {
+    var i = value.length;
+    while (i--) {
+      this.add(target, i, target[i] || 0, value[i], 0, 0, 0, 0, 0, 1);
+    }
+  }
+}, _buildModifierPlugin("roundProps", _roundModifier), _buildModifierPlugin("modifiers"), _buildModifierPlugin("snap", snap)) || _gsap;
+Tween.version = Timeline.version = gsap.version = "3.14.2";
+_coreReady = 1;
+_windowExists() && _wake();
+var Power0 = _easeMap.Power0;
+var Power1 = _easeMap.Power1;
+var Power2 = _easeMap.Power2;
+var Power3 = _easeMap.Power3;
+var Power4 = _easeMap.Power4;
+var Linear = _easeMap.Linear;
+var Quad = _easeMap.Quad;
+var Cubic = _easeMap.Cubic;
+var Quart = _easeMap.Quart;
+var Quint = _easeMap.Quint;
+var Strong = _easeMap.Strong;
+var Elastic = _easeMap.Elastic;
+var Back = _easeMap.Back;
+var SteppedEase = _easeMap.SteppedEase;
+var Bounce = _easeMap.Bounce;
+var Sine = _easeMap.Sine;
+var Expo = _easeMap.Expo;
+var Circ = _easeMap.Circ;
+
+// node_modules/gsap/CSSPlugin.js
+var _win2;
+var _doc2;
+var _docElement;
+var _pluginInitted;
+var _tempDiv;
+var _tempDivStyler;
+var _recentSetterPlugin;
+var _reverting2;
+var _windowExists3 = function _windowExists4() {
+  return typeof window !== "undefined";
+};
+var _transformProps = {};
+var _RAD2DEG = 180 / Math.PI;
+var _DEG2RAD = Math.PI / 180;
+var _atan2 = Math.atan2;
+var _bigNum2 = 1e8;
+var _capsExp = /([A-Z])/g;
+var _horizontalExp = /(left|right|width|margin|padding|x)/i;
+var _complexExp = /[\s,\(]\S/;
+var _propertyAliases = {
+  autoAlpha: "opacity,visibility",
+  scale: "scaleX,scaleY",
+  alpha: "opacity"
+};
+var _renderCSSProp = function _renderCSSProp2(ratio, data) {
+  return data.set(data.t, data.p, Math.round((data.s + data.c * ratio) * 1e4) / 1e4 + data.u, data);
+};
+var _renderPropWithEnd = function _renderPropWithEnd2(ratio, data) {
+  return data.set(data.t, data.p, ratio === 1 ? data.e : Math.round((data.s + data.c * ratio) * 1e4) / 1e4 + data.u, data);
+};
+var _renderCSSPropWithBeginning = function _renderCSSPropWithBeginning2(ratio, data) {
+  return data.set(data.t, data.p, ratio ? Math.round((data.s + data.c * ratio) * 1e4) / 1e4 + data.u : data.b, data);
+};
+var _renderCSSPropWithBeginningAndEnd = function _renderCSSPropWithBeginningAndEnd2(ratio, data) {
+  return data.set(data.t, data.p, ratio === 1 ? data.e : ratio ? Math.round((data.s + data.c * ratio) * 1e4) / 1e4 + data.u : data.b, data);
+};
+var _renderRoundedCSSProp = function _renderRoundedCSSProp2(ratio, data) {
+  var value = data.s + data.c * ratio;
+  data.set(data.t, data.p, ~~(value + (value < 0 ? -0.5 : 0.5)) + data.u, data);
+};
+var _renderNonTweeningValue = function _renderNonTweeningValue2(ratio, data) {
+  return data.set(data.t, data.p, ratio ? data.e : data.b, data);
+};
+var _renderNonTweeningValueOnlyAtEnd = function _renderNonTweeningValueOnlyAtEnd2(ratio, data) {
+  return data.set(data.t, data.p, ratio !== 1 ? data.b : data.e, data);
+};
+var _setterCSSStyle = function _setterCSSStyle2(target, property, value) {
+  return target.style[property] = value;
+};
+var _setterCSSProp = function _setterCSSProp2(target, property, value) {
+  return target.style.setProperty(property, value);
+};
+var _setterTransform = function _setterTransform2(target, property, value) {
+  return target._gsap[property] = value;
+};
+var _setterScale = function _setterScale2(target, property, value) {
+  return target._gsap.scaleX = target._gsap.scaleY = value;
+};
+var _setterScaleWithRender = function _setterScaleWithRender2(target, property, value, data, ratio) {
+  var cache2 = target._gsap;
+  cache2.scaleX = cache2.scaleY = value;
+  cache2.renderTransform(ratio, cache2);
+};
+var _setterTransformWithRender = function _setterTransformWithRender2(target, property, value, data, ratio) {
+  var cache2 = target._gsap;
+  cache2[property] = value;
+  cache2.renderTransform(ratio, cache2);
+};
+var _transformProp = "transform";
+var _transformOriginProp = _transformProp + "Origin";
+var _saveStyle = function _saveStyle2(property, isNotCSS) {
+  var _this = this;
+  var target = this.target, style = target.style, cache2 = target._gsap;
+  if (property in _transformProps && style) {
+    this.tfm = this.tfm || {};
+    if (property !== "transform") {
+      property = _propertyAliases[property] || property;
+      ~property.indexOf(",") ? property.split(",").forEach(function(a) {
+        return _this.tfm[a] = _get(target, a);
+      }) : this.tfm[property] = cache2.x ? cache2[property] : _get(target, property);
+      property === _transformOriginProp && (this.tfm.zOrigin = cache2.zOrigin);
+    } else {
+      return _propertyAliases.transform.split(",").forEach(function(p) {
+        return _saveStyle2.call(_this, p, isNotCSS);
+      });
+    }
+    if (this.props.indexOf(_transformProp) >= 0) {
+      return;
+    }
+    if (cache2.svg) {
+      this.svgo = target.getAttribute("data-svg-origin");
+      this.props.push(_transformOriginProp, isNotCSS, "");
+    }
+    property = _transformProp;
+  }
+  (style || isNotCSS) && this.props.push(property, isNotCSS, style[property]);
+};
+var _removeIndependentTransforms = function _removeIndependentTransforms2(style) {
+  if (style.translate) {
+    style.removeProperty("translate");
+    style.removeProperty("scale");
+    style.removeProperty("rotate");
+  }
+};
+var _revertStyle = function _revertStyle2() {
+  var props = this.props, target = this.target, style = target.style, cache2 = target._gsap, i, p;
+  for (i = 0; i < props.length; i += 3) {
+    if (!props[i + 1]) {
+      props[i + 2] ? style[props[i]] = props[i + 2] : style.removeProperty(props[i].substr(0, 2) === "--" ? props[i] : props[i].replace(_capsExp, "-$1").toLowerCase());
+    } else if (props[i + 1] === 2) {
+      target[props[i]](props[i + 2]);
+    } else {
+      target[props[i]] = props[i + 2];
+    }
+  }
+  if (this.tfm) {
+    for (p in this.tfm) {
+      cache2[p] = this.tfm[p];
+    }
+    if (cache2.svg) {
+      cache2.renderTransform();
+      target.setAttribute("data-svg-origin", this.svgo || "");
+    }
+    i = _reverting2();
+    if ((!i || !i.isStart) && !style[_transformProp]) {
+      _removeIndependentTransforms(style);
+      if (cache2.zOrigin && style[_transformOriginProp]) {
+        style[_transformOriginProp] += " " + cache2.zOrigin + "px";
+        cache2.zOrigin = 0;
+        cache2.renderTransform();
+      }
+      cache2.uncache = 1;
+    }
+  }
+};
+var _getStyleSaver = function _getStyleSaver2(target, properties) {
+  var saver = {
+    target,
+    props: [],
+    revert: _revertStyle,
+    save: _saveStyle
+  };
+  target._gsap || gsap.core.getCache(target);
+  properties && target.style && target.nodeType && properties.split(",").forEach(function(p) {
+    return saver.save(p);
+  });
+  return saver;
+};
+var _supports3D;
+var _createElement = function _createElement2(type, ns) {
+  var e = _doc2.createElementNS ? _doc2.createElementNS((ns || "http://www.w3.org/1999/xhtml").replace(/^https/, "http"), type) : _doc2.createElement(type);
+  return e && e.style ? e : _doc2.createElement(type);
+};
+var _getComputedProperty = function _getComputedProperty2(target, property, skipPrefixFallback) {
+  var cs = getComputedStyle(target);
+  return cs[property] || cs.getPropertyValue(property.replace(_capsExp, "-$1").toLowerCase()) || cs.getPropertyValue(property) || !skipPrefixFallback && _getComputedProperty2(target, _checkPropPrefix(property) || property, 1) || "";
+};
+var _prefixes = "O,Moz,ms,Ms,Webkit".split(",");
+var _checkPropPrefix = function _checkPropPrefix2(property, element, preferPrefix) {
+  var e = element || _tempDiv, s = e.style, i = 5;
+  if (property in s && !preferPrefix) {
+    return property;
+  }
+  property = property.charAt(0).toUpperCase() + property.substr(1);
+  while (i-- && !(_prefixes[i] + property in s)) {
+  }
+  return i < 0 ? null : (i === 3 ? "ms" : i >= 0 ? _prefixes[i] : "") + property;
+};
+var _initCore = function _initCore2() {
+  if (_windowExists3() && window.document) {
+    _win2 = window;
+    _doc2 = _win2.document;
+    _docElement = _doc2.documentElement;
+    _tempDiv = _createElement("div") || {
+      style: {}
+    };
+    _tempDivStyler = _createElement("div");
+    _transformProp = _checkPropPrefix(_transformProp);
+    _transformOriginProp = _transformProp + "Origin";
+    _tempDiv.style.cssText = "border-width:0;line-height:0;position:absolute;padding:0";
+    _supports3D = !!_checkPropPrefix("perspective");
+    _reverting2 = gsap.core.reverting;
+    _pluginInitted = 1;
+  }
+};
+var _getReparentedCloneBBox = function _getReparentedCloneBBox2(target) {
+  var owner = target.ownerSVGElement, svg = _createElement("svg", owner && owner.getAttribute("xmlns") || "http://www.w3.org/2000/svg"), clone2 = target.cloneNode(true), bbox;
+  clone2.style.display = "block";
+  svg.appendChild(clone2);
+  _docElement.appendChild(svg);
+  try {
+    bbox = clone2.getBBox();
+  } catch (e) {
+  }
+  svg.removeChild(clone2);
+  _docElement.removeChild(svg);
+  return bbox;
+};
+var _getAttributeFallbacks = function _getAttributeFallbacks2(target, attributesArray) {
+  var i = attributesArray.length;
+  while (i--) {
+    if (target.hasAttribute(attributesArray[i])) {
+      return target.getAttribute(attributesArray[i]);
+    }
+  }
+};
+var _getBBox = function _getBBox2(target) {
+  var bounds, cloned;
+  try {
+    bounds = target.getBBox();
+  } catch (error) {
+    bounds = _getReparentedCloneBBox(target);
+    cloned = 1;
+  }
+  bounds && (bounds.width || bounds.height) || cloned || (bounds = _getReparentedCloneBBox(target));
+  return bounds && !bounds.width && !bounds.x && !bounds.y ? {
+    x: +_getAttributeFallbacks(target, ["x", "cx", "x1"]) || 0,
+    y: +_getAttributeFallbacks(target, ["y", "cy", "y1"]) || 0,
+    width: 0,
+    height: 0
+  } : bounds;
+};
+var _isSVG = function _isSVG2(e) {
+  return !!(e.getCTM && (!e.parentNode || e.ownerSVGElement) && _getBBox(e));
+};
+var _removeProperty = function _removeProperty2(target, property) {
+  if (property) {
+    var style = target.style, first2Chars;
+    if (property in _transformProps && property !== _transformOriginProp) {
+      property = _transformProp;
+    }
+    if (style.removeProperty) {
+      first2Chars = property.substr(0, 2);
+      if (first2Chars === "ms" || property.substr(0, 6) === "webkit") {
+        property = "-" + property;
+      }
+      style.removeProperty(first2Chars === "--" ? property : property.replace(_capsExp, "-$1").toLowerCase());
+    } else {
+      style.removeAttribute(property);
+    }
+  }
+};
+var _addNonTweeningPT = function _addNonTweeningPT2(plugin, target, property, beginning, end, onlySetAtEnd) {
+  var pt = new PropTween(plugin._pt, target, property, 0, 1, onlySetAtEnd ? _renderNonTweeningValueOnlyAtEnd : _renderNonTweeningValue);
+  plugin._pt = pt;
+  pt.b = beginning;
+  pt.e = end;
+  plugin._props.push(property);
+  return pt;
+};
+var _nonConvertibleUnits = {
+  deg: 1,
+  rad: 1,
+  turn: 1
+};
+var _nonStandardLayouts = {
+  grid: 1,
+  flex: 1
+};
+var _convertToUnit = function _convertToUnit2(target, property, value, unit) {
+  var curValue = parseFloat(value) || 0, curUnit = (value + "").trim().substr((curValue + "").length) || "px", style = _tempDiv.style, horizontal = _horizontalExp.test(property), isRootSVG = target.tagName.toLowerCase() === "svg", measureProperty = (isRootSVG ? "client" : "offset") + (horizontal ? "Width" : "Height"), amount = 100, toPixels = unit === "px", toPercent = unit === "%", px, parent, cache2, isSVG;
+  if (unit === curUnit || !curValue || _nonConvertibleUnits[unit] || _nonConvertibleUnits[curUnit]) {
+    return curValue;
+  }
+  curUnit !== "px" && !toPixels && (curValue = _convertToUnit2(target, property, value, "px"));
+  isSVG = target.getCTM && _isSVG(target);
+  if ((toPercent || curUnit === "%") && (_transformProps[property] || ~property.indexOf("adius"))) {
+    px = isSVG ? target.getBBox()[horizontal ? "width" : "height"] : target[measureProperty];
+    return _round(toPercent ? curValue / px * amount : curValue / 100 * px);
+  }
+  style[horizontal ? "width" : "height"] = amount + (toPixels ? curUnit : unit);
+  parent = unit !== "rem" && ~property.indexOf("adius") || unit === "em" && target.appendChild && !isRootSVG ? target : target.parentNode;
+  if (isSVG) {
+    parent = (target.ownerSVGElement || {}).parentNode;
+  }
+  if (!parent || parent === _doc2 || !parent.appendChild) {
+    parent = _doc2.body;
+  }
+  cache2 = parent._gsap;
+  if (cache2 && toPercent && cache2.width && horizontal && cache2.time === _ticker.time && !cache2.uncache) {
+    return _round(curValue / cache2.width * amount);
+  } else {
+    if (toPercent && (property === "height" || property === "width")) {
+      var v = target.style[property];
+      target.style[property] = amount + unit;
+      px = target[measureProperty];
+      v ? target.style[property] = v : _removeProperty(target, property);
+    } else {
+      (toPercent || curUnit === "%") && !_nonStandardLayouts[_getComputedProperty(parent, "display")] && (style.position = _getComputedProperty(target, "position"));
+      parent === target && (style.position = "static");
+      parent.appendChild(_tempDiv);
+      px = _tempDiv[measureProperty];
+      parent.removeChild(_tempDiv);
+      style.position = "absolute";
+    }
+    if (horizontal && toPercent) {
+      cache2 = _getCache(parent);
+      cache2.time = _ticker.time;
+      cache2.width = parent[measureProperty];
+    }
+  }
+  return _round(toPixels ? px * curValue / amount : px && curValue ? amount / px * curValue : 0);
+};
+var _get = function _get2(target, property, unit, uncache) {
+  var value;
+  _pluginInitted || _initCore();
+  if (property in _propertyAliases && property !== "transform") {
+    property = _propertyAliases[property];
+    if (~property.indexOf(",")) {
+      property = property.split(",")[0];
+    }
+  }
+  if (_transformProps[property] && property !== "transform") {
+    value = _parseTransform(target, uncache);
+    value = property !== "transformOrigin" ? value[property] : value.svg ? value.origin : _firstTwoOnly(_getComputedProperty(target, _transformOriginProp)) + " " + value.zOrigin + "px";
+  } else {
+    value = target.style[property];
+    if (!value || value === "auto" || uncache || ~(value + "").indexOf("calc(")) {
+      value = _specialProps[property] && _specialProps[property](target, property, unit) || _getComputedProperty(target, property) || _getProperty(target, property) || (property === "opacity" ? 1 : 0);
+    }
+  }
+  return unit && !~(value + "").trim().indexOf(" ") ? _convertToUnit(target, property, value, unit) + unit : value;
+};
+var _tweenComplexCSSString = function _tweenComplexCSSString2(target, prop, start, end) {
+  if (!start || start === "none") {
+    var p = _checkPropPrefix(prop, target, 1), s = p && _getComputedProperty(target, p, 1);
+    if (s && s !== start) {
+      prop = p;
+      start = s;
+    } else if (prop === "borderColor") {
+      start = _getComputedProperty(target, "borderTopColor");
+    }
+  }
+  var pt = new PropTween(this._pt, target.style, prop, 0, 1, _renderComplexString), index2 = 0, matchIndex = 0, a, result, startValues, startNum, color2, startValue, endValue, endNum, chunk, endUnit, startUnit, endValues;
+  pt.b = start;
+  pt.e = end;
+  start += "";
+  end += "";
+  if (end.substring(0, 6) === "var(--") {
+    end = _getComputedProperty(target, end.substring(4, end.indexOf(")")));
+  }
+  if (end === "auto") {
+    startValue = target.style[prop];
+    target.style[prop] = end;
+    end = _getComputedProperty(target, prop) || end;
+    startValue ? target.style[prop] = startValue : _removeProperty(target, prop);
+  }
+  a = [start, end];
+  _colorStringFilter(a);
+  start = a[0];
+  end = a[1];
+  startValues = start.match(_numWithUnitExp) || [];
+  endValues = end.match(_numWithUnitExp) || [];
+  if (endValues.length) {
+    while (result = _numWithUnitExp.exec(end)) {
+      endValue = result[0];
+      chunk = end.substring(index2, result.index);
+      if (color2) {
+        color2 = (color2 + 1) % 5;
+      } else if (chunk.substr(-5) === "rgba(" || chunk.substr(-5) === "hsla(") {
+        color2 = 1;
+      }
+      if (endValue !== (startValue = startValues[matchIndex++] || "")) {
+        startNum = parseFloat(startValue) || 0;
+        startUnit = startValue.substr((startNum + "").length);
+        endValue.charAt(1) === "=" && (endValue = _parseRelative(startNum, endValue) + startUnit);
+        endNum = parseFloat(endValue);
+        endUnit = endValue.substr((endNum + "").length);
+        index2 = _numWithUnitExp.lastIndex - endUnit.length;
+        if (!endUnit) {
+          endUnit = endUnit || _config.units[prop] || startUnit;
+          if (index2 === end.length) {
+            end += endUnit;
+            pt.e += endUnit;
+          }
+        }
+        if (startUnit !== endUnit) {
+          startNum = _convertToUnit(target, prop, startValue, endUnit) || 0;
+        }
+        pt._pt = {
+          _next: pt._pt,
+          p: chunk || matchIndex === 1 ? chunk : ",",
+          //note: SVG spec allows omission of comma/space when a negative sign is wedged between two numbers, like 2.5-5.3 instead of 2.5,-5.3 but when tweening, the negative value may switch to positive, so we insert the comma just in case.
+          s: startNum,
+          c: endNum - startNum,
+          m: color2 && color2 < 4 || prop === "zIndex" ? Math.round : 0
+        };
+      }
+    }
+    pt.c = index2 < end.length ? end.substring(index2, end.length) : "";
+  } else {
+    pt.r = prop === "display" && end === "none" ? _renderNonTweeningValueOnlyAtEnd : _renderNonTweeningValue;
+  }
+  _relExp.test(end) && (pt.e = 0);
+  this._pt = pt;
+  return pt;
+};
+var _keywordToPercent = {
+  top: "0%",
+  bottom: "100%",
+  left: "0%",
+  right: "100%",
+  center: "50%"
+};
+var _convertKeywordsToPercentages = function _convertKeywordsToPercentages2(value) {
+  var split = value.split(" "), x = split[0], y = split[1] || "50%";
+  if (x === "top" || x === "bottom" || y === "left" || y === "right") {
+    value = x;
+    x = y;
+    y = value;
+  }
+  split[0] = _keywordToPercent[x] || x;
+  split[1] = _keywordToPercent[y] || y;
+  return split.join(" ");
+};
+var _renderClearProps = function _renderClearProps2(ratio, data) {
+  if (data.tween && data.tween._time === data.tween._dur) {
+    var target = data.t, style = target.style, props = data.u, cache2 = target._gsap, prop, clearTransforms, i;
+    if (props === "all" || props === true) {
+      style.cssText = "";
+      clearTransforms = 1;
+    } else {
+      props = props.split(",");
+      i = props.length;
+      while (--i > -1) {
+        prop = props[i];
+        if (_transformProps[prop]) {
+          clearTransforms = 1;
+          prop = prop === "transformOrigin" ? _transformOriginProp : _transformProp;
+        }
+        _removeProperty(target, prop);
+      }
+    }
+    if (clearTransforms) {
+      _removeProperty(target, _transformProp);
+      if (cache2) {
+        cache2.svg && target.removeAttribute("transform");
+        style.scale = style.rotate = style.translate = "none";
+        _parseTransform(target, 1);
+        cache2.uncache = 1;
+        _removeIndependentTransforms(style);
+      }
+    }
+  }
+};
+var _specialProps = {
+  clearProps: function clearProps(plugin, target, property, endValue, tween) {
+    if (tween.data !== "isFromStart") {
+      var pt = plugin._pt = new PropTween(plugin._pt, target, property, 0, 0, _renderClearProps);
+      pt.u = endValue;
+      pt.pr = -10;
+      pt.tween = tween;
+      plugin._props.push(property);
+      return 1;
+    }
+  }
+  /* className feature (about 0.4kb gzipped).
+  , className(plugin, target, property, endValue, tween) {
+  	let _renderClassName = (ratio, data) => {
+  			data.css.render(ratio, data.css);
+  			if (!ratio || ratio === 1) {
+  				let inline = data.rmv,
+  					target = data.t,
+  					p;
+  				target.setAttribute("class", ratio ? data.e : data.b);
+  				for (p in inline) {
+  					_removeProperty(target, p);
+  				}
+  			}
+  		},
+  		_getAllStyles = (target) => {
+  			let styles = {},
+  				computed = getComputedStyle(target),
+  				p;
+  			for (p in computed) {
+  				if (isNaN(p) && p !== "cssText" && p !== "length") {
+  					styles[p] = computed[p];
+  				}
+  			}
+  			_setDefaults(styles, _parseTransform(target, 1));
+  			return styles;
+  		},
+  		startClassList = target.getAttribute("class"),
+  		style = target.style,
+  		cssText = style.cssText,
+  		cache = target._gsap,
+  		classPT = cache.classPT,
+  		inlineToRemoveAtEnd = {},
+  		data = {t:target, plugin:plugin, rmv:inlineToRemoveAtEnd, b:startClassList, e:(endValue.charAt(1) !== "=") ? endValue : startClassList.replace(new RegExp("(?:\\s|^)" + endValue.substr(2) + "(?![\\w-])"), "") + ((endValue.charAt(0) === "+") ? " " + endValue.substr(2) : "")},
+  		changingVars = {},
+  		startVars = _getAllStyles(target),
+  		transformRelated = /(transform|perspective)/i,
+  		endVars, p;
+  	if (classPT) {
+  		classPT.r(1, classPT.d);
+  		_removeLinkedListItem(classPT.d.plugin, classPT, "_pt");
+  	}
+  	target.setAttribute("class", data.e);
+  	endVars = _getAllStyles(target, true);
+  	target.setAttribute("class", startClassList);
+  	for (p in endVars) {
+  		if (endVars[p] !== startVars[p] && !transformRelated.test(p)) {
+  			changingVars[p] = endVars[p];
+  			if (!style[p] && style[p] !== "0") {
+  				inlineToRemoveAtEnd[p] = 1;
+  			}
+  		}
+  	}
+  	cache.classPT = plugin._pt = new PropTween(plugin._pt, target, "className", 0, 0, _renderClassName, data, 0, -11);
+  	if (style.cssText !== cssText) { //only apply if things change. Otherwise, in cases like a background-image that's pulled dynamically, it could cause a refresh. See https://gsap.com/forums/topic/20368-possible-gsap-bug-switching-classnames-in-chrome/.
+  		style.cssText = cssText; //we recorded cssText before we swapped classes and ran _getAllStyles() because in cases when a className tween is overwritten, we remove all the related tweening properties from that class change (otherwise class-specific stuff can't override properties we've directly set on the target's style object due to specificity).
+  	}
+  	_parseTransform(target, true); //to clear the caching of transforms
+  	data.css = new gsap.plugins.css();
+  	data.css.init(target, changingVars, tween);
+  	plugin._props.push(...data.css._props);
+  	return 1;
+  }
+  */
+};
+var _identity2DMatrix = [1, 0, 0, 1, 0, 0];
+var _rotationalProperties = {};
+var _isNullTransform = function _isNullTransform2(value) {
+  return value === "matrix(1, 0, 0, 1, 0, 0)" || value === "none" || !value;
+};
+var _getComputedTransformMatrixAsArray = function _getComputedTransformMatrixAsArray2(target) {
+  var matrixString = _getComputedProperty(target, _transformProp);
+  return _isNullTransform(matrixString) ? _identity2DMatrix : matrixString.substr(7).match(_numExp).map(_round);
+};
+var _getMatrix = function _getMatrix2(target, force2D) {
+  var cache2 = target._gsap || _getCache(target), style = target.style, matrix = _getComputedTransformMatrixAsArray(target), parent, nextSibling, temp, addedToDOM;
+  if (cache2.svg && target.getAttribute("transform")) {
+    temp = target.transform.baseVal.consolidate().matrix;
+    matrix = [temp.a, temp.b, temp.c, temp.d, temp.e, temp.f];
+    return matrix.join(",") === "1,0,0,1,0,0" ? _identity2DMatrix : matrix;
+  } else if (matrix === _identity2DMatrix && !target.offsetParent && target !== _docElement && !cache2.svg) {
+    temp = style.display;
+    style.display = "block";
+    parent = target.parentNode;
+    if (!parent || !target.offsetParent && !target.getBoundingClientRect().width) {
+      addedToDOM = 1;
+      nextSibling = target.nextElementSibling;
+      _docElement.appendChild(target);
+    }
+    matrix = _getComputedTransformMatrixAsArray(target);
+    temp ? style.display = temp : _removeProperty(target, "display");
+    if (addedToDOM) {
+      nextSibling ? parent.insertBefore(target, nextSibling) : parent ? parent.appendChild(target) : _docElement.removeChild(target);
+    }
+  }
+  return force2D && matrix.length > 6 ? [matrix[0], matrix[1], matrix[4], matrix[5], matrix[12], matrix[13]] : matrix;
+};
+var _applySVGOrigin = function _applySVGOrigin2(target, origin, originIsAbsolute, smooth, matrixArray, pluginToAddPropTweensTo) {
+  var cache2 = target._gsap, matrix = matrixArray || _getMatrix(target, true), xOriginOld = cache2.xOrigin || 0, yOriginOld = cache2.yOrigin || 0, xOffsetOld = cache2.xOffset || 0, yOffsetOld = cache2.yOffset || 0, a = matrix[0], b = matrix[1], c = matrix[2], d = matrix[3], tx = matrix[4], ty = matrix[5], originSplit = origin.split(" "), xOrigin = parseFloat(originSplit[0]) || 0, yOrigin = parseFloat(originSplit[1]) || 0, bounds, determinant, x, y;
+  if (!originIsAbsolute) {
+    bounds = _getBBox(target);
+    xOrigin = bounds.x + (~originSplit[0].indexOf("%") ? xOrigin / 100 * bounds.width : xOrigin);
+    yOrigin = bounds.y + (~(originSplit[1] || originSplit[0]).indexOf("%") ? yOrigin / 100 * bounds.height : yOrigin);
+  } else if (matrix !== _identity2DMatrix && (determinant = a * d - b * c)) {
+    x = xOrigin * (d / determinant) + yOrigin * (-c / determinant) + (c * ty - d * tx) / determinant;
+    y = xOrigin * (-b / determinant) + yOrigin * (a / determinant) - (a * ty - b * tx) / determinant;
+    xOrigin = x;
+    yOrigin = y;
+  }
+  if (smooth || smooth !== false && cache2.smooth) {
+    tx = xOrigin - xOriginOld;
+    ty = yOrigin - yOriginOld;
+    cache2.xOffset = xOffsetOld + (tx * a + ty * c) - tx;
+    cache2.yOffset = yOffsetOld + (tx * b + ty * d) - ty;
+  } else {
+    cache2.xOffset = cache2.yOffset = 0;
+  }
+  cache2.xOrigin = xOrigin;
+  cache2.yOrigin = yOrigin;
+  cache2.smooth = !!smooth;
+  cache2.origin = origin;
+  cache2.originIsAbsolute = !!originIsAbsolute;
+  target.style[_transformOriginProp] = "0px 0px";
+  if (pluginToAddPropTweensTo) {
+    _addNonTweeningPT(pluginToAddPropTweensTo, cache2, "xOrigin", xOriginOld, xOrigin);
+    _addNonTweeningPT(pluginToAddPropTweensTo, cache2, "yOrigin", yOriginOld, yOrigin);
+    _addNonTweeningPT(pluginToAddPropTweensTo, cache2, "xOffset", xOffsetOld, cache2.xOffset);
+    _addNonTweeningPT(pluginToAddPropTweensTo, cache2, "yOffset", yOffsetOld, cache2.yOffset);
+  }
+  target.setAttribute("data-svg-origin", xOrigin + " " + yOrigin);
+};
+var _parseTransform = function _parseTransform2(target, uncache) {
+  var cache2 = target._gsap || new GSCache(target);
+  if ("x" in cache2 && !uncache && !cache2.uncache) {
+    return cache2;
+  }
+  var style = target.style, invertedScaleX = cache2.scaleX < 0, px = "px", deg = "deg", cs = getComputedStyle(target), origin = _getComputedProperty(target, _transformOriginProp) || "0", x, y, z, scaleX, scaleY, rotation, rotationX, rotationY, skewX, skewY, perspective, xOrigin, yOrigin, matrix, angle, cos, sin, a, b, c, d, a12, a22, t1, t2, t3, a13, a23, a33, a42, a43, a32;
+  x = y = z = rotation = rotationX = rotationY = skewX = skewY = perspective = 0;
+  scaleX = scaleY = 1;
+  cache2.svg = !!(target.getCTM && _isSVG(target));
+  if (cs.translate) {
+    if (cs.translate !== "none" || cs.scale !== "none" || cs.rotate !== "none") {
+      style[_transformProp] = (cs.translate !== "none" ? "translate3d(" + (cs.translate + " 0 0").split(" ").slice(0, 3).join(", ") + ") " : "") + (cs.rotate !== "none" ? "rotate(" + cs.rotate + ") " : "") + (cs.scale !== "none" ? "scale(" + cs.scale.split(" ").join(",") + ") " : "") + (cs[_transformProp] !== "none" ? cs[_transformProp] : "");
+    }
+    style.scale = style.rotate = style.translate = "none";
+  }
+  matrix = _getMatrix(target, cache2.svg);
+  if (cache2.svg) {
+    if (cache2.uncache) {
+      t2 = target.getBBox();
+      origin = cache2.xOrigin - t2.x + "px " + (cache2.yOrigin - t2.y) + "px";
+      t1 = "";
+    } else {
+      t1 = !uncache && target.getAttribute("data-svg-origin");
+    }
+    _applySVGOrigin(target, t1 || origin, !!t1 || cache2.originIsAbsolute, cache2.smooth !== false, matrix);
+  }
+  xOrigin = cache2.xOrigin || 0;
+  yOrigin = cache2.yOrigin || 0;
+  if (matrix !== _identity2DMatrix) {
+    a = matrix[0];
+    b = matrix[1];
+    c = matrix[2];
+    d = matrix[3];
+    x = a12 = matrix[4];
+    y = a22 = matrix[5];
+    if (matrix.length === 6) {
+      scaleX = Math.sqrt(a * a + b * b);
+      scaleY = Math.sqrt(d * d + c * c);
+      rotation = a || b ? _atan2(b, a) * _RAD2DEG : 0;
+      skewX = c || d ? _atan2(c, d) * _RAD2DEG + rotation : 0;
+      skewX && (scaleY *= Math.abs(Math.cos(skewX * _DEG2RAD)));
+      if (cache2.svg) {
+        x -= xOrigin - (xOrigin * a + yOrigin * c);
+        y -= yOrigin - (xOrigin * b + yOrigin * d);
+      }
+    } else {
+      a32 = matrix[6];
+      a42 = matrix[7];
+      a13 = matrix[8];
+      a23 = matrix[9];
+      a33 = matrix[10];
+      a43 = matrix[11];
+      x = matrix[12];
+      y = matrix[13];
+      z = matrix[14];
+      angle = _atan2(a32, a33);
+      rotationX = angle * _RAD2DEG;
+      if (angle) {
+        cos = Math.cos(-angle);
+        sin = Math.sin(-angle);
+        t1 = a12 * cos + a13 * sin;
+        t2 = a22 * cos + a23 * sin;
+        t3 = a32 * cos + a33 * sin;
+        a13 = a12 * -sin + a13 * cos;
+        a23 = a22 * -sin + a23 * cos;
+        a33 = a32 * -sin + a33 * cos;
+        a43 = a42 * -sin + a43 * cos;
+        a12 = t1;
+        a22 = t2;
+        a32 = t3;
+      }
+      angle = _atan2(-c, a33);
+      rotationY = angle * _RAD2DEG;
+      if (angle) {
+        cos = Math.cos(-angle);
+        sin = Math.sin(-angle);
+        t1 = a * cos - a13 * sin;
+        t2 = b * cos - a23 * sin;
+        t3 = c * cos - a33 * sin;
+        a43 = d * sin + a43 * cos;
+        a = t1;
+        b = t2;
+        c = t3;
+      }
+      angle = _atan2(b, a);
+      rotation = angle * _RAD2DEG;
+      if (angle) {
+        cos = Math.cos(angle);
+        sin = Math.sin(angle);
+        t1 = a * cos + b * sin;
+        t2 = a12 * cos + a22 * sin;
+        b = b * cos - a * sin;
+        a22 = a22 * cos - a12 * sin;
+        a = t1;
+        a12 = t2;
+      }
+      if (rotationX && Math.abs(rotationX) + Math.abs(rotation) > 359.9) {
+        rotationX = rotation = 0;
+        rotationY = 180 - rotationY;
+      }
+      scaleX = _round(Math.sqrt(a * a + b * b + c * c));
+      scaleY = _round(Math.sqrt(a22 * a22 + a32 * a32));
+      angle = _atan2(a12, a22);
+      skewX = Math.abs(angle) > 2e-4 ? angle * _RAD2DEG : 0;
+      perspective = a43 ? 1 / (a43 < 0 ? -a43 : a43) : 0;
+    }
+    if (cache2.svg) {
+      t1 = target.getAttribute("transform");
+      cache2.forceCSS = target.setAttribute("transform", "") || !_isNullTransform(_getComputedProperty(target, _transformProp));
+      t1 && target.setAttribute("transform", t1);
+    }
+  }
+  if (Math.abs(skewX) > 90 && Math.abs(skewX) < 270) {
+    if (invertedScaleX) {
+      scaleX *= -1;
+      skewX += rotation <= 0 ? 180 : -180;
+      rotation += rotation <= 0 ? 180 : -180;
+    } else {
+      scaleY *= -1;
+      skewX += skewX <= 0 ? 180 : -180;
+    }
+  }
+  uncache = uncache || cache2.uncache;
+  cache2.x = x - ((cache2.xPercent = x && (!uncache && cache2.xPercent || (Math.round(target.offsetWidth / 2) === Math.round(-x) ? -50 : 0))) ? target.offsetWidth * cache2.xPercent / 100 : 0) + px;
+  cache2.y = y - ((cache2.yPercent = y && (!uncache && cache2.yPercent || (Math.round(target.offsetHeight / 2) === Math.round(-y) ? -50 : 0))) ? target.offsetHeight * cache2.yPercent / 100 : 0) + px;
+  cache2.z = z + px;
+  cache2.scaleX = _round(scaleX);
+  cache2.scaleY = _round(scaleY);
+  cache2.rotation = _round(rotation) + deg;
+  cache2.rotationX = _round(rotationX) + deg;
+  cache2.rotationY = _round(rotationY) + deg;
+  cache2.skewX = skewX + deg;
+  cache2.skewY = skewY + deg;
+  cache2.transformPerspective = perspective + px;
+  if (cache2.zOrigin = parseFloat(origin.split(" ")[2]) || !uncache && cache2.zOrigin || 0) {
+    style[_transformOriginProp] = _firstTwoOnly(origin);
+  }
+  cache2.xOffset = cache2.yOffset = 0;
+  cache2.force3D = _config.force3D;
+  cache2.renderTransform = cache2.svg ? _renderSVGTransforms : _supports3D ? _renderCSSTransforms : _renderNon3DTransforms;
+  cache2.uncache = 0;
+  return cache2;
+};
+var _firstTwoOnly = function _firstTwoOnly2(value) {
+  return (value = value.split(" "))[0] + " " + value[1];
+};
+var _addPxTranslate = function _addPxTranslate2(target, start, value) {
+  var unit = getUnit(start);
+  return _round(parseFloat(start) + parseFloat(_convertToUnit(target, "x", value + "px", unit))) + unit;
+};
+var _renderNon3DTransforms = function _renderNon3DTransforms2(ratio, cache2) {
+  cache2.z = "0px";
+  cache2.rotationY = cache2.rotationX = "0deg";
+  cache2.force3D = 0;
+  _renderCSSTransforms(ratio, cache2);
+};
+var _zeroDeg = "0deg";
+var _zeroPx = "0px";
+var _endParenthesis = ") ";
+var _renderCSSTransforms = function _renderCSSTransforms2(ratio, cache2) {
+  var _ref = cache2 || this, xPercent = _ref.xPercent, yPercent = _ref.yPercent, x = _ref.x, y = _ref.y, z = _ref.z, rotation = _ref.rotation, rotationY = _ref.rotationY, rotationX = _ref.rotationX, skewX = _ref.skewX, skewY = _ref.skewY, scaleX = _ref.scaleX, scaleY = _ref.scaleY, transformPerspective = _ref.transformPerspective, force3D = _ref.force3D, target = _ref.target, zOrigin = _ref.zOrigin, transforms = "", use3D = force3D === "auto" && ratio && ratio !== 1 || force3D === true;
+  if (zOrigin && (rotationX !== _zeroDeg || rotationY !== _zeroDeg)) {
+    var angle = parseFloat(rotationY) * _DEG2RAD, a13 = Math.sin(angle), a33 = Math.cos(angle), cos;
+    angle = parseFloat(rotationX) * _DEG2RAD;
+    cos = Math.cos(angle);
+    x = _addPxTranslate(target, x, a13 * cos * -zOrigin);
+    y = _addPxTranslate(target, y, -Math.sin(angle) * -zOrigin);
+    z = _addPxTranslate(target, z, a33 * cos * -zOrigin + zOrigin);
+  }
+  if (transformPerspective !== _zeroPx) {
+    transforms += "perspective(" + transformPerspective + _endParenthesis;
+  }
+  if (xPercent || yPercent) {
+    transforms += "translate(" + xPercent + "%, " + yPercent + "%) ";
+  }
+  if (use3D || x !== _zeroPx || y !== _zeroPx || z !== _zeroPx) {
+    transforms += z !== _zeroPx || use3D ? "translate3d(" + x + ", " + y + ", " + z + ") " : "translate(" + x + ", " + y + _endParenthesis;
+  }
+  if (rotation !== _zeroDeg) {
+    transforms += "rotate(" + rotation + _endParenthesis;
+  }
+  if (rotationY !== _zeroDeg) {
+    transforms += "rotateY(" + rotationY + _endParenthesis;
+  }
+  if (rotationX !== _zeroDeg) {
+    transforms += "rotateX(" + rotationX + _endParenthesis;
+  }
+  if (skewX !== _zeroDeg || skewY !== _zeroDeg) {
+    transforms += "skew(" + skewX + ", " + skewY + _endParenthesis;
+  }
+  if (scaleX !== 1 || scaleY !== 1) {
+    transforms += "scale(" + scaleX + ", " + scaleY + _endParenthesis;
+  }
+  target.style[_transformProp] = transforms || "translate(0, 0)";
+};
+var _renderSVGTransforms = function _renderSVGTransforms2(ratio, cache2) {
+  var _ref2 = cache2 || this, xPercent = _ref2.xPercent, yPercent = _ref2.yPercent, x = _ref2.x, y = _ref2.y, rotation = _ref2.rotation, skewX = _ref2.skewX, skewY = _ref2.skewY, scaleX = _ref2.scaleX, scaleY = _ref2.scaleY, target = _ref2.target, xOrigin = _ref2.xOrigin, yOrigin = _ref2.yOrigin, xOffset = _ref2.xOffset, yOffset = _ref2.yOffset, forceCSS = _ref2.forceCSS, tx = parseFloat(x), ty = parseFloat(y), a11, a21, a12, a22, temp;
+  rotation = parseFloat(rotation);
+  skewX = parseFloat(skewX);
+  skewY = parseFloat(skewY);
+  if (skewY) {
+    skewY = parseFloat(skewY);
+    skewX += skewY;
+    rotation += skewY;
+  }
+  if (rotation || skewX) {
+    rotation *= _DEG2RAD;
+    skewX *= _DEG2RAD;
+    a11 = Math.cos(rotation) * scaleX;
+    a21 = Math.sin(rotation) * scaleX;
+    a12 = Math.sin(rotation - skewX) * -scaleY;
+    a22 = Math.cos(rotation - skewX) * scaleY;
+    if (skewX) {
+      skewY *= _DEG2RAD;
+      temp = Math.tan(skewX - skewY);
+      temp = Math.sqrt(1 + temp * temp);
+      a12 *= temp;
+      a22 *= temp;
+      if (skewY) {
+        temp = Math.tan(skewY);
+        temp = Math.sqrt(1 + temp * temp);
+        a11 *= temp;
+        a21 *= temp;
+      }
+    }
+    a11 = _round(a11);
+    a21 = _round(a21);
+    a12 = _round(a12);
+    a22 = _round(a22);
+  } else {
+    a11 = scaleX;
+    a22 = scaleY;
+    a21 = a12 = 0;
+  }
+  if (tx && !~(x + "").indexOf("px") || ty && !~(y + "").indexOf("px")) {
+    tx = _convertToUnit(target, "x", x, "px");
+    ty = _convertToUnit(target, "y", y, "px");
+  }
+  if (xOrigin || yOrigin || xOffset || yOffset) {
+    tx = _round(tx + xOrigin - (xOrigin * a11 + yOrigin * a12) + xOffset);
+    ty = _round(ty + yOrigin - (xOrigin * a21 + yOrigin * a22) + yOffset);
+  }
+  if (xPercent || yPercent) {
+    temp = target.getBBox();
+    tx = _round(tx + xPercent / 100 * temp.width);
+    ty = _round(ty + yPercent / 100 * temp.height);
+  }
+  temp = "matrix(" + a11 + "," + a21 + "," + a12 + "," + a22 + "," + tx + "," + ty + ")";
+  target.setAttribute("transform", temp);
+  forceCSS && (target.style[_transformProp] = temp);
+};
+var _addRotationalPropTween = function _addRotationalPropTween2(plugin, target, property, startNum, endValue) {
+  var cap = 360, isString = _isString(endValue), endNum = parseFloat(endValue) * (isString && ~endValue.indexOf("rad") ? _RAD2DEG : 1), change = endNum - startNum, finalValue = startNum + change + "deg", direction, pt;
+  if (isString) {
+    direction = endValue.split("_")[1];
+    if (direction === "short") {
+      change %= cap;
+      if (change !== change % (cap / 2)) {
+        change += change < 0 ? cap : -cap;
+      }
+    }
+    if (direction === "cw" && change < 0) {
+      change = (change + cap * _bigNum2) % cap - ~~(change / cap) * cap;
+    } else if (direction === "ccw" && change > 0) {
+      change = (change - cap * _bigNum2) % cap - ~~(change / cap) * cap;
+    }
+  }
+  plugin._pt = pt = new PropTween(plugin._pt, target, property, startNum, change, _renderPropWithEnd);
+  pt.e = finalValue;
+  pt.u = "deg";
+  plugin._props.push(property);
+  return pt;
+};
+var _assign = function _assign2(target, source) {
+  for (var p in source) {
+    target[p] = source[p];
+  }
+  return target;
+};
+var _addRawTransformPTs = function _addRawTransformPTs2(plugin, transforms, target) {
+  var startCache = _assign({}, target._gsap), exclude = "perspective,force3D,transformOrigin,svgOrigin", style = target.style, endCache, p, startValue, endValue, startNum, endNum, startUnit, endUnit;
+  if (startCache.svg) {
+    startValue = target.getAttribute("transform");
+    target.setAttribute("transform", "");
+    style[_transformProp] = transforms;
+    endCache = _parseTransform(target, 1);
+    _removeProperty(target, _transformProp);
+    target.setAttribute("transform", startValue);
+  } else {
+    startValue = getComputedStyle(target)[_transformProp];
+    style[_transformProp] = transforms;
+    endCache = _parseTransform(target, 1);
+    style[_transformProp] = startValue;
+  }
+  for (p in _transformProps) {
+    startValue = startCache[p];
+    endValue = endCache[p];
+    if (startValue !== endValue && exclude.indexOf(p) < 0) {
+      startUnit = getUnit(startValue);
+      endUnit = getUnit(endValue);
+      startNum = startUnit !== endUnit ? _convertToUnit(target, p, startValue, endUnit) : parseFloat(startValue);
+      endNum = parseFloat(endValue);
+      plugin._pt = new PropTween(plugin._pt, endCache, p, startNum, endNum - startNum, _renderCSSProp);
+      plugin._pt.u = endUnit || 0;
+      plugin._props.push(p);
+    }
+  }
+  _assign(endCache, startCache);
+};
+_forEachName("padding,margin,Width,Radius", function(name, index2) {
+  var t = "Top", r = "Right", b = "Bottom", l = "Left", props = (index2 < 3 ? [t, r, b, l] : [t + l, t + r, b + r, b + l]).map(function(side) {
+    return index2 < 2 ? name + side : "border" + side + name;
+  });
+  _specialProps[index2 > 1 ? "border" + name : name] = function(plugin, target, property, endValue, tween) {
+    var a, vars;
+    if (arguments.length < 4) {
+      a = props.map(function(prop) {
+        return _get(plugin, prop, property);
+      });
+      vars = a.join(" ");
+      return vars.split(a[0]).length === 5 ? a[0] : vars;
+    }
+    a = (endValue + "").split(" ");
+    vars = {};
+    props.forEach(function(prop, i) {
+      return vars[prop] = a[i] = a[i] || a[(i - 1) / 2 | 0];
+    });
+    plugin.init(target, vars, tween);
+  };
+});
+var CSSPlugin = {
+  name: "css",
+  register: _initCore,
+  targetTest: function targetTest(target) {
+    return target.style && target.nodeType;
+  },
+  init: function init3(target, vars, tween, index2, targets) {
+    var props = this._props, style = target.style, startAt = tween.vars.startAt, startValue, endValue, endNum, startNum, type, specialProp, p, startUnit, endUnit, relative, isTransformRelated, transformPropTween, cache2, smooth, hasPriority, inlineProps, finalTransformValue;
+    _pluginInitted || _initCore();
+    this.styles = this.styles || _getStyleSaver(target);
+    inlineProps = this.styles.props;
+    this.tween = tween;
+    for (p in vars) {
+      if (p === "autoRound") {
+        continue;
+      }
+      endValue = vars[p];
+      if (_plugins[p] && _checkPlugin(p, vars, tween, index2, target, targets)) {
+        continue;
+      }
+      type = typeof endValue;
+      specialProp = _specialProps[p];
+      if (type === "function") {
+        endValue = endValue.call(tween, index2, target, targets);
+        type = typeof endValue;
+      }
+      if (type === "string" && ~endValue.indexOf("random(")) {
+        endValue = _replaceRandom(endValue);
+      }
+      if (specialProp) {
+        specialProp(this, target, p, endValue, tween) && (hasPriority = 1);
+      } else if (p.substr(0, 2) === "--") {
+        startValue = (getComputedStyle(target).getPropertyValue(p) + "").trim();
+        endValue += "";
+        _colorExp.lastIndex = 0;
+        if (!_colorExp.test(startValue)) {
+          startUnit = getUnit(startValue);
+          endUnit = getUnit(endValue);
+          endUnit ? startUnit !== endUnit && (startValue = _convertToUnit(target, p, startValue, endUnit) + endUnit) : startUnit && (endValue += startUnit);
+        }
+        this.add(style, "setProperty", startValue, endValue, index2, targets, 0, 0, p);
+        props.push(p);
+        inlineProps.push(p, 0, style[p]);
+      } else if (type !== "undefined") {
+        if (startAt && p in startAt) {
+          startValue = typeof startAt[p] === "function" ? startAt[p].call(tween, index2, target, targets) : startAt[p];
+          _isString(startValue) && ~startValue.indexOf("random(") && (startValue = _replaceRandom(startValue));
+          getUnit(startValue + "") || startValue === "auto" || (startValue += _config.units[p] || getUnit(_get(target, p)) || "");
+          (startValue + "").charAt(1) === "=" && (startValue = _get(target, p));
+        } else {
+          startValue = _get(target, p);
+        }
+        startNum = parseFloat(startValue);
+        relative = type === "string" && endValue.charAt(1) === "=" && endValue.substr(0, 2);
+        relative && (endValue = endValue.substr(2));
+        endNum = parseFloat(endValue);
+        if (p in _propertyAliases) {
+          if (p === "autoAlpha") {
+            if (startNum === 1 && _get(target, "visibility") === "hidden" && endNum) {
+              startNum = 0;
+            }
+            inlineProps.push("visibility", 0, style.visibility);
+            _addNonTweeningPT(this, style, "visibility", startNum ? "inherit" : "hidden", endNum ? "inherit" : "hidden", !endNum);
+          }
+          if (p !== "scale" && p !== "transform") {
+            p = _propertyAliases[p];
+            ~p.indexOf(",") && (p = p.split(",")[0]);
+          }
+        }
+        isTransformRelated = p in _transformProps;
+        if (isTransformRelated) {
+          this.styles.save(p);
+          finalTransformValue = endValue;
+          if (type === "string" && endValue.substring(0, 6) === "var(--") {
+            endValue = _getComputedProperty(target, endValue.substring(4, endValue.indexOf(")")));
+            if (endValue.substring(0, 5) === "calc(") {
+              var origPerspective = target.style.perspective;
+              target.style.perspective = endValue;
+              endValue = _getComputedProperty(target, "perspective");
+              origPerspective ? target.style.perspective = origPerspective : _removeProperty(target, "perspective");
+            }
+            endNum = parseFloat(endValue);
+          }
+          if (!transformPropTween) {
+            cache2 = target._gsap;
+            cache2.renderTransform && !vars.parseTransform || _parseTransform(target, vars.parseTransform);
+            smooth = vars.smoothOrigin !== false && cache2.smooth;
+            transformPropTween = this._pt = new PropTween(this._pt, style, _transformProp, 0, 1, cache2.renderTransform, cache2, 0, -1);
+            transformPropTween.dep = 1;
+          }
+          if (p === "scale") {
+            this._pt = new PropTween(this._pt, cache2, "scaleY", cache2.scaleY, (relative ? _parseRelative(cache2.scaleY, relative + endNum) : endNum) - cache2.scaleY || 0, _renderCSSProp);
+            this._pt.u = 0;
+            props.push("scaleY", p);
+            p += "X";
+          } else if (p === "transformOrigin") {
+            inlineProps.push(_transformOriginProp, 0, style[_transformOriginProp]);
+            endValue = _convertKeywordsToPercentages(endValue);
+            if (cache2.svg) {
+              _applySVGOrigin(target, endValue, 0, smooth, 0, this);
+            } else {
+              endUnit = parseFloat(endValue.split(" ")[2]) || 0;
+              endUnit !== cache2.zOrigin && _addNonTweeningPT(this, cache2, "zOrigin", cache2.zOrigin, endUnit);
+              _addNonTweeningPT(this, style, p, _firstTwoOnly(startValue), _firstTwoOnly(endValue));
+            }
+            continue;
+          } else if (p === "svgOrigin") {
+            _applySVGOrigin(target, endValue, 1, smooth, 0, this);
+            continue;
+          } else if (p in _rotationalProperties) {
+            _addRotationalPropTween(this, cache2, p, startNum, relative ? _parseRelative(startNum, relative + endValue) : endValue);
+            continue;
+          } else if (p === "smoothOrigin") {
+            _addNonTweeningPT(this, cache2, "smooth", cache2.smooth, endValue);
+            continue;
+          } else if (p === "force3D") {
+            cache2[p] = endValue;
+            continue;
+          } else if (p === "transform") {
+            _addRawTransformPTs(this, endValue, target);
+            continue;
+          }
+        } else if (!(p in style)) {
+          p = _checkPropPrefix(p) || p;
+        }
+        if (isTransformRelated || (endNum || endNum === 0) && (startNum || startNum === 0) && !_complexExp.test(endValue) && p in style) {
+          startUnit = (startValue + "").substr((startNum + "").length);
+          endNum || (endNum = 0);
+          endUnit = getUnit(endValue) || (p in _config.units ? _config.units[p] : startUnit);
+          startUnit !== endUnit && (startNum = _convertToUnit(target, p, startValue, endUnit));
+          this._pt = new PropTween(this._pt, isTransformRelated ? cache2 : style, p, startNum, (relative ? _parseRelative(startNum, relative + endNum) : endNum) - startNum, !isTransformRelated && (endUnit === "px" || p === "zIndex") && vars.autoRound !== false ? _renderRoundedCSSProp : _renderCSSProp);
+          this._pt.u = endUnit || 0;
+          if (isTransformRelated && finalTransformValue !== endValue) {
+            this._pt.b = startValue;
+            this._pt.e = finalTransformValue;
+            this._pt.r = _renderCSSPropWithBeginningAndEnd;
+          } else if (startUnit !== endUnit && endUnit !== "%") {
+            this._pt.b = startValue;
+            this._pt.r = _renderCSSPropWithBeginning;
+          }
+        } else if (!(p in style)) {
+          if (p in target) {
+            this.add(target, p, startValue || target[p], relative ? relative + endValue : endValue, index2, targets);
+          } else if (p !== "parseTransform") {
+            _missingPlugin(p, endValue);
+            continue;
+          }
+        } else {
+          _tweenComplexCSSString.call(this, target, p, startValue, relative ? relative + endValue : endValue);
+        }
+        isTransformRelated || (p in style ? inlineProps.push(p, 0, style[p]) : typeof target[p] === "function" ? inlineProps.push(p, 2, target[p]()) : inlineProps.push(p, 1, startValue || target[p]));
+        props.push(p);
+      }
+    }
+    hasPriority && _sortPropTweensByPriority(this);
+  },
+  render: function render4(ratio, data) {
+    if (data.tween._time || !_reverting2()) {
+      var pt = data._pt;
+      while (pt) {
+        pt.r(ratio, pt.d);
+        pt = pt._next;
+      }
+    } else {
+      data.styles.revert();
+    }
+  },
+  get: _get,
+  aliases: _propertyAliases,
+  getSetter: function getSetter(target, property, plugin) {
+    var p = _propertyAliases[property];
+    p && p.indexOf(",") < 0 && (property = p);
+    return property in _transformProps && property !== _transformOriginProp && (target._gsap.x || _get(target, "x")) ? plugin && _recentSetterPlugin === plugin ? property === "scale" ? _setterScale : _setterTransform : (_recentSetterPlugin = plugin || {}) && (property === "scale" ? _setterScaleWithRender : _setterTransformWithRender) : target.style && !_isUndefined(target.style[property]) ? _setterCSSStyle : ~property.indexOf("-") ? _setterCSSProp : _getSetter(target, property);
+  },
+  core: {
+    _removeProperty,
+    _getMatrix
+  }
+};
+gsap.utils.checkPrefix = _checkPropPrefix;
+gsap.core.getStyleSaver = _getStyleSaver;
+(function(positionAndScale, rotation, others, aliases) {
+  var all = _forEachName(positionAndScale + "," + rotation + "," + others, function(name) {
+    _transformProps[name] = 1;
+  });
+  _forEachName(rotation, function(name) {
+    _config.units[name] = "deg";
+    _rotationalProperties[name] = 1;
+  });
+  _propertyAliases[all[13]] = positionAndScale + "," + rotation;
+  _forEachName(aliases, function(name) {
+    var split = name.split(":");
+    _propertyAliases[split[1]] = all[split[0]];
+  });
+})("x,y,z,scale,scaleX,scaleY,xPercent,yPercent", "rotation,rotationX,rotationY,skewX,skewY", "transform,transformOrigin,svgOrigin,force3D,smoothOrigin,transformPerspective", "0:translateX,1:translateY,2:translateZ,8:rotate,8:rotationZ,8:rotateZ,9:rotateX,10:rotateY");
+_forEachName("x,y,z,top,right,bottom,left,width,height,fontSize,padding,margin,perspective", function(name) {
+  _config.units[name] = "px";
+});
+gsap.registerPlugin(CSSPlugin);
+
+// node_modules/gsap/index.js
+var gsapWithCSS = gsap.registerPlugin(CSSPlugin) || gsap;
+var TweenMaxWithCSS = gsapWithCSS.core.Tween;
+
 // node_modules/idb/build/index.js
 var instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
 var idbProxyableTypes;
@@ -59044,7 +63372,7 @@ function promisifyRequest(request) {
       request.removeEventListener("error", error);
     };
     const success = () => {
-      resolve(wrap3(request.result));
+      resolve(wrap5(request.result));
       unlisten();
     };
     const error = () => {
@@ -59089,7 +63417,7 @@ var idbProxyTraps = {
         return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
       }
     }
-    return wrap3(target[prop]);
+    return wrap5(target[prop]);
   },
   set(target, prop, value) {
     target[prop] = value;
@@ -59109,11 +63437,11 @@ function wrapFunction(func) {
   if (getCursorAdvanceMethods().includes(func)) {
     return function(...args) {
       func.apply(unwrap(this), args);
-      return wrap3(this.request);
+      return wrap5(this.request);
     };
   }
   return function(...args) {
-    return wrap3(func.apply(unwrap(this), args));
+    return wrap5(func.apply(unwrap(this), args));
   };
 }
 function transformCachableValue(value) {
@@ -59125,7 +63453,7 @@ function transformCachableValue(value) {
     return new Proxy(value, idbProxyTraps);
   return value;
 }
-function wrap3(value) {
+function wrap5(value) {
   if (value instanceof IDBRequest)
     return promisifyRequest(value);
   if (transformCache.has(value))
@@ -59140,10 +63468,10 @@ function wrap3(value) {
 var unwrap = (value) => reverseTransformCache.get(value);
 function openDB(name, version2, { blocked, upgrade, blocking, terminated } = {}) {
   const request = indexedDB.open(name, version2);
-  const openPromise = wrap3(request);
+  const openPromise = wrap5(request);
   if (upgrade) {
     request.addEventListener("upgradeneeded", (event) => {
-      upgrade(wrap3(request.result), event.oldVersion, event.newVersion, wrap3(request.transaction), event);
+      upgrade(wrap5(request.result), event.oldVersion, event.newVersion, wrap5(request.transaction), event);
     });
   }
   if (blocked) {
@@ -61184,7 +65512,8 @@ function getChrome() {
   const gBrowser = topWin?.gBrowser;
   const PlacesUtils = topWin?.PlacesUtils;
   const PlacesTransactions = topWin?.PlacesTransactions;
-  return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
+  const browser = topWin?.browser;
+  return { topWin, gBrowser, PlacesUtils, PlacesTransactions, browser };
 }
 var ROOT_FOLDER_NAME = "Oasis Hubs";
 async function getRootFolder() {
@@ -61439,19 +65768,46 @@ var HubManager = class {
       name = (name || "").trim();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils, topWin } = getChrome();
+      const { PlacesUtils, topWin, gBrowser, browser } = getChrome();
       const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
       if (!folder) return { ok: false };
       const bookmarks = await getBookmarkChildren(folder.guid);
       const items = bookmarks.filter((b) => b.uri);
-      if (!topWin?.openTrustedLinkIn) return { ok: false };
+      const urls = items.map((it) => it.uri);
+      if (urls.length === 0) return { ok: true };
+      let targetBrowser = gBrowser;
       if (where === "window") {
         const w = topWin.OpenBrowserWindow();
-        setTimeout(() => {
-          for (const it of items) w.openTrustedLinkIn(it.uri, "tab");
-        }, 250);
-      } else {
-        for (const it of items) topWin.openTrustedLinkIn(it.uri, "tab");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        targetBrowser = w.gBrowser;
+      }
+      if (!targetBrowser) return { ok: false };
+      const openedTabs = [];
+      for (const url of urls) {
+        const tab = await targetBrowser.addTab(url, { triggerPrimaryAction: false });
+        openedTabs.push(tab);
+      }
+      if (openedTabs.length > 0) {
+        targetBrowser.selectedTab = openedTabs[0];
+      }
+      if (browser?.tabs && openedTabs.length > 0) {
+        setTimeout(async () => {
+          try {
+            const allTabs = await browser.tabs.query({});
+            const tabIdsToGroup = [];
+            for (const openedTab of openedTabs) {
+              const url = openedTab.linkedBrowser.currentURI.spec;
+              const foundTab = allTabs.find((t) => t.url === url && !t.discarded);
+              if (foundTab) tabIdsToGroup.push(foundTab.id);
+            }
+            if (tabIdsToGroup.length > 0) {
+              const groupId = await browser.tabs.group({ tabIds: tabIdsToGroup });
+              await browser.tabGroups.update(groupId, { title: name });
+            }
+          } catch (e) {
+            console.error("Failed to group tabs", e);
+          }
+        }, 500);
       }
       return { ok: true };
     } catch (e) {
@@ -61559,6 +65915,62 @@ var ListTabsCommand = class {
     );
     const out = titles.length ? titles.slice(0, 50).map((t, i) => `${i + 1}. ${t}`).join("\n") : "No tabs.";
     return { message: out };
+  }
+};
+var NewWindowCommand = class {
+  commandName = "new_window";
+  description = "Open a new browser window.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    topWin.OpenBrowserWindow();
+    return { message: "Opened a new window." };
+  }
+};
+var OrganizeWindowsCommand = class {
+  commandName = "organize_windows";
+  description = "Arrange two or more windows side-by-side.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const { ChromeUtils } = topWin;
+    if (!ChromeUtils) return { message: "ChromeUtils not available." };
+    const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+    const windowManager = Services.wm;
+    const windows = windowManager.getEnumerator("navigator:browser");
+    const browserWindows = [];
+    while (windows.hasMoreElements()) {
+      browserWindows.push(windows.getNext());
+    }
+    if (browserWindows.length < 2) {
+      return { message: "You need at least two windows to organize." };
+    }
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numWindows = browserWindows.length;
+    const windowWidth = Math.floor(availWidth / numWindows);
+    for (let i = 0; i < numWindows; i++) {
+      const win = browserWindows[i];
+      const xPos = availLeft + windowWidth * i;
+      win.resizeTo(windowWidth, availHeight);
+      win.moveTo(xPos, availTop);
+    }
+    return { message: `Organized ${numWindows} windows.` };
+  }
+};
+var ShowURLCommand = class {
+  commandName = "show_url";
+  description = "Open a URL in a new tab.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened ${url}` };
   }
 };
 var OpenTabCommand = class {
@@ -61866,6 +66278,9 @@ You have the following workers available:
 - **rename_hub**: { from: string, to: string }
 - **add_tab_to_hub**: { name: string }
 - **open_hub**: { name: string, where?: "tabs"|"window" }
+- **new_window**: No arguments needed
+- **organize_windows**: No arguments needed
+- **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
 
 **Rules**
@@ -61989,6 +66404,9 @@ async function runAssistantStream(prompt, onChunk) {
     new RenameHubCommand(),
     new AddTabToHubCommand(),
     new OpenHubCommand(),
+    new NewWindowCommand(),
+    new OrganizeWindowsCommand(),
+    new ShowURLCommand(),
     new SearchMemoryCommand()
   ];
   const graph = await buildGraph(commands);
@@ -62038,8 +66456,11 @@ async function runAssistantStream(prompt, onChunk) {
 }
 export {
   getAssistantHistory,
+  gsapWithCSS as gsap,
   resetAssistantSession,
-  runAssistantStream
+  runAssistantStream,
+  supabaseAuth4 as supabaseAuth,
+  voiceInput_default as voiceInputService
 };
 /*! Bundled license information:
 
@@ -62085,4 +66506,24 @@ mustache/mustache.mjs:
 
 @langchain/core/dist/utils/sax-js/sax.js:
   (*! http://mths.be/fromcodepoint v0.1.0 by @mathias *)
+
+gsap/gsap-core.js:
+  (*!
+   * GSAP 3.14.2
+   * https://gsap.com
+   *
+   * @license Copyright 2008-2025, GreenSock. All rights reserved.
+   * Subject to the terms at https://gsap.com/standard-license
+   * @author: Jack Doyle, jack@greensock.com
+  *)
+
+gsap/CSSPlugin.js:
+  (*!
+   * CSSPlugin 3.14.2
+   * https://gsap.com
+   *
+   * Copyright 2008-2025, GreenSock. All rights reserved.
+   * Subject to the terms at https://gsap.com/standard-license
+   * @author: Jack Doyle, jack@greensock.com
+  *)
 */

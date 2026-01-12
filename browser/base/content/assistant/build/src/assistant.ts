@@ -3,6 +3,10 @@ import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote, chatRemote } from "./proxyClient";
 import SupabaseAuth from "./services/supabase";
 import voiceInputService from "./services/voiceInput";
+import gsap from "gsap";
+
+// Export gsap for UI animations
+export { gsap };
 
 // Local command implementations (tabs / groups)
 import {
@@ -32,6 +36,8 @@ const supabaseAuth = SupabaseAuth.getInstance();
 
 // Expose voice input service for UI
 (window as any).voiceInputService = voiceInputService;
+
+export { supabaseAuth, voiceInputService };
 
 /* ========= Ephemeral chat history per session ========= */
 // Automatically managed - one session per sidebar instance

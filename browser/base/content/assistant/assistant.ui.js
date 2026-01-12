@@ -1,9 +1,17 @@
-import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
+import { runAssistantStream, resetAssistantSession, gsap, voiceInputService, supabaseAuth } from "./assistant.bundle.js";
 // Try to get Services from global scope or import it
 const Services = window.Services || ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
 const MIXPANEL_TOKEN = "4a23d4890cf107ac290b2d5e878e2561";
 let __oasisAnonId = null;
+// 🔐 FORCE password recovery UI if this is a reset-password redirect
+function isRecoveryUrl() {
+  return (
+    window.location.hash.includes('type=recovery') ||
+    window.location.search.includes('type=recovery')
+  );
+}
+
 function getDistinctId() {
   try {
     const key = "oasis_anon_distinct_id";
@@ -61,22 +69,17 @@ function mpIdentify(user) {
 }
 mpTrack("assistant_ui_loaded");
 
-// Import voice input service - it will be bundled
-let voiceInputService = null;
-try {
-  // The voice input service will be available in the bundle
-  voiceInputService = window.voiceInputService;
-} catch (e) {
-  console.warn("Voice input service not available:", e);
-}
+// Ensure global access for legacy/external calls if needed
+if (!window.voiceInputService) window.voiceInputService = voiceInputService;
+if (!window.supabaseAuth) window.supabaseAuth = supabaseAuth;
 
-// SupabaseAuth should be available from the bundle
-// The bundle now exposes window.supabaseAuth directly
-console.log('SupabaseAuth available:', !!window.supabaseAuth);
+console.log('SupabaseAuth available:', !!supabaseAuth);
+console.log('VoiceInputService available:', !!voiceInputService);
 
 // Check current authentication status on page load
 async function checkCurrentAuthStatus() {
     console.log('Checking current auth status...');
+    
     // First try to load from secure storage
     const restoredSession = await securelyLoadSession();
     if (restoredSession) {
@@ -84,6 +87,12 @@ async function checkCurrentAuthStatus() {
 
         mpTrack("auth_check_restored", { email: restoredSession.user?.email || null });
         updateAuthUI(true, restoredSession.user);
+        
+        // If we are in a recovery flow, show the password reset form immediately
+        if (isRecoveryUrl()) {
+            console.log('Recovery flow detected during session restore');
+            showSetNewPasswordForm(restoredSession.user?.email);
+        }
         
         // Verify with Supabase (background check)
         if (window.supabaseAuth && window.supabaseAuth.supabase) {
@@ -266,12 +275,18 @@ go.style.cssText = `
   justify-content: center;
 `;
 go.addEventListener("mouseenter", () => {
-  go.style.transform = "translateY(-1px)";
-  go.style.opacity = "0.9";
+  if (gsap) {
+    gsap.to(go, { scale: 1.1, duration: 0.4, ease: "elastic.out(1, 0.5)" });
+  } else {
+    go.style.transform = "scale(1.1)";
+  }
 });
 go.addEventListener("mouseleave", () => {
-  go.style.transform = "translateY(0)";
-  go.style.opacity = "1";
+  if (gsap) {
+    gsap.to(go, { scale: 1, duration: 0.3, ease: "power2.out" });
+  } else {
+    go.style.transform = "scale(1)";
+  }
 });
 
 // Voice button with microphone icon
@@ -312,12 +327,18 @@ voiceBtn.style.cssText = `
   justify-content: center;
 `;
 voiceBtn.addEventListener("mouseenter", () => {
-  voiceBtn.style.transform = "translateY(-1px)";
-  voiceBtn.style.opacity = "0.9";
+  if (gsap) {
+    gsap.to(voiceBtn, { scale: 1.1, duration: 0.4, ease: "elastic.out(1, 0.5)" });
+  } else {
+    voiceBtn.style.transform = "scale(1.1)";
+  }
 });
 voiceBtn.addEventListener("mouseleave", () => {
-  voiceBtn.style.transform = "translateY(0)";
-  voiceBtn.style.opacity = "1";
+  if (gsap) {
+    gsap.to(voiceBtn, { scale: 1, duration: 0.3, ease: "power2.out" });
+  } else {
+    voiceBtn.style.transform = "scale(1)";
+  }
 });
 
 // Feedback button with text - positioned below input
@@ -360,8 +381,37 @@ feedbackBtn.addEventListener("click", () => {
   }
 });
 
-// Add all buttons to buttons row: feedback, voice, send
+// Create voice visualizer (hidden by default)
+const visualizer = document.createElement("div");
+visualizer.id = "voice-visualizer";
+visualizer.style.cssText = `
+  display: none;
+  width: 36px;
+  height: 36px;
+  background: #1a1a1a;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-right: 8px;
+`;
+
+// Create bars for waveform
+for (let i = 0; i < 7; i++) {
+  const bar = document.createElement("div");
+  bar.className = "wave-bar";
+  bar.style.cssText = `
+    width: 2px;
+    height: 4px;
+    background: #4ade80;
+    border-radius: 1px;
+  `;
+  visualizer.appendChild(bar);
+}
+
+// Add all buttons to buttons row: feedback, visualizer, voice, send
 buttonsRow.appendChild(feedbackBtn);
+buttonsRow.appendChild(visualizer);
 buttonsRow.appendChild(voiceBtn);
 if (go.parentElement === bar) {
   buttonsRow.appendChild(go);
@@ -375,18 +425,14 @@ function setBusy(v) {
   busy = v;
   q.disabled = v;
   
-  // Toggle send button to pause icon when busy
+  // Keep the send button as arrow, just change opacity/cursor
   if (v) {
-    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
-      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
-    </svg>`;
-    go.title = "Click to stop";
+    go.style.opacity = "0.5";
+    go.style.cursor = "wait";
+    go.title = "Thinking...";
   } else {
-    go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="36" height="36" rx="18" fill="#7A9200"/>
-      <path d="M18 26V10M18 10L24 16M18 10L12 16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
+    go.style.opacity = "1";
+    go.style.cursor = "pointer";
     go.title = "Send message";
   }
 }
@@ -399,6 +445,10 @@ let isRecording = false;
 let micStartTs = 0;
 
 micButton.addEventListener("click", async () => {
+  if (gsap) {
+    gsap.fromTo(micButton, { scale: 0.8 }, { scale: 1, duration: 0.5, ease: "elastic.out(1, 0.3)" });
+  }
+
   if (!isAuthenticated) {
     append("\n❌ Please sign in to use voice input.\n");
     return;
@@ -411,6 +461,10 @@ micButton.addEventListener("click", async () => {
 
   if (isRecording) {
     // Stop recording - show stop icon while processing
+    if (document.getElementById('voice-visualizer')) {
+      document.getElementById('voice-visualizer').style.display = 'none';
+    }
+    
     micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="36" height="36" rx="18" fill="#f8faf2"/>
       <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
@@ -437,8 +491,11 @@ micButton.addEventListener("click", async () => {
       
       if (transcribedText && transcribedText.trim()) {
         q.value = transcribedText;
-        append(`\n🎤 Transcribed: ${transcribedText}\n`);
+        // append(`\n🎤 Transcribed: ${transcribedText}\n`); // Optional: Commented out to avoid clutter since we auto-send
         mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
+        
+        // Automatically send after transcription
+        send();
       } else {
         append("\n⚠️ No speech detected.\n");
         mpTrack("mic_transcribe_empty");
@@ -477,6 +534,29 @@ micButton.addEventListener("click", async () => {
       mpTrack("mic_start");
       micStartTs = Date.now();
       isRecording = true;
+      
+      // Show visualizer
+      const visualizer = document.getElementById('voice-visualizer');
+      if (visualizer) {
+        visualizer.style.display = 'flex';
+        // Animate bars
+        if (gsap) {
+          gsap.to(".wave-bar", {
+            height: "random(4, 24)",
+            duration: 0.2,
+            repeat: -1,
+            yoyo: true,
+            ease: "power1.inOut",
+            stagger: {
+              each: 0.05,
+              from: "center",
+              repeat: -1,
+              yoyo: true
+            }
+          });
+        }
+      }
+
       micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="36" height="36" rx="18" fill="#f8faf2"/>
         <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
@@ -715,15 +795,28 @@ function handleKahanaProtocol(url) {
         // Parse the URL to extract auth parameters
         const urlObj = new URL(url);
         const params = new URLSearchParams(urlObj.search);
+        const hashParams = new URLSearchParams(urlObj.hash.substring(1));
         
         // Check for error
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
+        const error = params.get('error') || hashParams.get('error');
+        const errorDescription = params.get('error_description') || hashParams.get('error_description');
         
         // Check for success
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        const code = params.get('code');
+        const accessToken = params.get('access_token') || hashParams.get('access_token');
+        const refreshToken = params.get('refresh_token') || hashParams.get('refresh_token');
+        const code = params.get('code') || hashParams.get('code');
+        
+        // Check for recovery type
+        const type = params.get('type') || hashParams.get('type');
+        const isRecovery = type === 'recovery' || url.includes('type=recovery');
+
+        if (isRecovery) {
+            console.log('Recovery flow detected from protocol handler');
+            mpTrack("password_recovery_detected");
+            const presetEmail = currentUser ? currentUser.email : "";
+            showSetNewPasswordForm(presetEmail);
+            return;
+        }
         
         if (error) {
             console.error('OAuth error:', error, errorDescription);
@@ -744,8 +837,13 @@ function handleKahanaProtocol(url) {
 // The user will complete OAuth in a new tab, then we'll check their auth status
 
 // Check for auth callback data in localStorage
-// Check for auth callback data in localStorage
 function checkForAuthCallback() {
+    if (isRecoveryUrl()) {
+        console.log('Recovery flow detected in checkForAuthCallback - skipping');
+        // Clear any pending auth callback to prevent interference
+        localStorage.removeItem('oasis_auth_callback');
+        return;
+    }
     try {
         const authData = localStorage.getItem('oasis_auth_callback');
         if (authData) {
@@ -776,12 +874,24 @@ function checkForAuthCallback() {
 // Check for auth callback data when the page loads
 checkForAuthCallback();
 
-// Subscribe to Supabase auth state changes
+        // Subscribe to Supabase auth state changes
 if (window.supabaseAuth) {
     console.log("Subscribing to Supabase auth state changes...");
     window.supabaseAuth.onAuthStateChange((authState) => {
-        console.log("UI received auth state change:", authState.isAuthenticated);
-        mpTrack("auth_state_change", { authenticated: !!authState.isAuthenticated });
+      if (isRecoveryUrl()) {
+        console.log("Recovery flow detected – skipping auto-login UI");
+        return;
+      }
+      
+      // Additional check: If this is a PASSWORD_RECOVERY event, do not auto-login
+      if (authState.event === 'PASSWORD_RECOVERY') {
+         console.log("PASSWORD_RECOVERY event detected - skipping auto-login");
+         showSetNewPasswordForm(authState.user?.email);
+         return;
+      }
+
+        // console.log("UI received auth state change:", authState.isAuthenticated);
+        // mpTrack("auth_state_change", { authenticated: !!authState.isAuthenticated });
         
         if (authState.isAuthenticated && authState.session) {
             console.log("Auth state is authenticated, saving session...");
@@ -817,13 +927,22 @@ function checkOAuthCallbackData() {
             if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
                 window.supabaseAuth.handleOAuthCallbackData(authData).then(result => {
                     if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        // Clear the localStorage data
-                        localStorage.removeItem('oasis_auth_callback');
-                        // Refresh the auth state
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                        const isRecovery = (authData.type === 'recovery' || String(authData.url || '').includes('type=recovery'));
+                        
+                        if (isRecovery) {
+                            console.log('Recovery flow detected from localStorage callback data');
+                            mpTrack("password_recovery_detected");
+                            const presetEmail = currentUser ? currentUser.email : "";
+                            showSetNewPasswordForm(presetEmail);
+                        } else {
+                            showAuthSuccess('Authentication successful! You are now signed in.');
+                            // Clear the localStorage data
+                            localStorage.removeItem('oasis_auth_callback');
+                            // Refresh the auth state
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        }
                     } else {
                         showAuthError(`Authentication failed: ${result.error}`);
                     }
@@ -848,20 +967,38 @@ window.addEventListener('message', async (event) => {
         return;
     }
     
-    if (event.data && event.data.type === 'oauth-success') {
-        console.log('Received OAuth success message:', event.data.data);
-        try { mpTrack("oauth_message_received"); } catch (e) {}
+    if (event.data && (event.data.type === 'oauth-success' || event.data.type === 'oauth-recovery')) {
+        console.log('Received OAuth message:', event.data.type, event.data.data);
         
+        // Check if this is explicitly a recovery message OR success message with recovery type
+        const isRecovery = event.data.type === 'oauth-recovery' || (event.data.data && (
+            event.data.data.type === 'recovery' || 
+            String(event.data.data.url || '').toLowerCase().includes('type=recovery')
+        ));
+
+        if (isRecovery) {
+            console.log('Recovery flow detected from OAuth callback message');
+            mpTrack("password_recovery_detected");
+            // DO NOT sign in automatically. Show reset password form.
+            const presetEmail = currentUser ? currentUser.email : "";
+            showSetNewPasswordForm(presetEmail);
+            return; 
+        }
+
         // Use the new OAuth callback handler
         if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
             const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
             if (result.success) {
-                showAuthSuccess('Authentication successful! You are now signed in.');
-                try { mpTrack("oauth_success"); } catch (e) {}
-                // Refresh the auth state
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                const isRecovery = (event.data.data && (event.data.data.type === 'recovery' || String(event.data.data.url || '').includes('type=recovery')));
+                if (isRecovery) {
+                    mpTrack("password_recovery_detected");
+                    const presetEmail = currentUser ? currentUser.email : "";
+                    showSetNewPasswordForm(presetEmail);
+                } else {
+                    showAuthSuccess('Authentication successful! You are now signed in.');
+                    try { mpTrack("oauth_success"); } catch (e) {}
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                }
             } else {
                 showAuthError(`Authentication failed: ${result.error}`);
                 try { mpTrack("oauth_failure", { error: result.error }); } catch (e) {}
@@ -1475,6 +1612,10 @@ function updateDropdownMenu() {
         const authenticatedItems = [
             { label: "Account", action: () => { alert("Account settings coming soon"); dropdownMenu.style.display = "none"; }},
             { label: "Settings", action: () => { alert("Settings coming soon"); dropdownMenu.style.display = "none"; }},
+            { label: "Reset Password", action: () => {
+                showForgotPasswordForm(currentUser ? currentUser.email : "");
+                dropdownMenu.style.display = "none";
+            }},
             { label: "Sign Out", action: () => {
                 logout();
                 securelyClearSession();
@@ -1882,8 +2023,36 @@ function showLoginForm() {
   buttonContainer.appendChild(submitButton);
   buttonContainer.appendChild(cancelButton);
   
+  const forgotPasswordBtn = document.createElement("button");
+  forgotPasswordBtn.type = "button";
+  forgotPasswordBtn.textContent = "Forgot Password?";
+  forgotPasswordBtn.style.cssText = `
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: right;
+    padding: 0;
+    margin-bottom: 4px;
+    align-self: flex-end;
+  `;
+  forgotPasswordBtn.addEventListener("click", () => {
+    const currentEmail = emailInput.value;
+    document.body.removeChild(modal);
+    showForgotPasswordForm(currentEmail);
+  });
+  
+  forgotPasswordBtn.addEventListener("mouseenter", () => {
+    forgotPasswordBtn.style.textDecoration = "underline";
+  });
+  forgotPasswordBtn.addEventListener("mouseleave", () => {
+    forgotPasswordBtn.style.textDecoration = "none";
+  });
+  
   form.appendChild(emailInput);
   form.appendChild(passwordInput);
+  form.appendChild(forgotPasswordBtn);
   form.appendChild(divider);
   form.appendChild(googleButton);
   form.appendChild(buttonContainer);
@@ -2179,6 +2348,229 @@ function showSignupForm() {
   setTimeout(() => nameInput.focus(), 100);
 }
 
+function showForgotPasswordForm(initialEmail = "") {
+  const form = document.createElement("form");
+  form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+  
+  const emailInput = document.createElement("input");
+  emailInput.type = "email";
+  emailInput.placeholder = "Enter your email";
+  emailInput.value = initialEmail;
+  emailInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  `;
+  emailInput.addEventListener("focus", () => {
+    emailInput.style.borderColor = "#667eea";
+  });
+  emailInput.addEventListener("blur", () => {
+    emailInput.style.borderColor = "#e5e7eb";
+  });
+  
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
+  
+  const submitButton = document.createElement("button");
+  submitButton.type = "submit";
+  submitButton.textContent = "Send Reset Link";
+  submitButton.style.cssText = `
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+  `;
+  submitButton.addEventListener("mouseenter", () => {
+    submitButton.style.transform = "translateY(-1px)";
+  });
+  submitButton.addEventListener("mouseleave", () => {
+    submitButton.style.transform = "translateY(0)";
+  });
+  
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.cssText = `
+    flex: 1;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  `;
+  cancelButton.addEventListener("mouseenter", () => {
+    cancelButton.style.background = "#e5e7eb";
+  });
+  cancelButton.addEventListener("mouseleave", () => {
+    cancelButton.style.background = "#f3f4f6";
+  });
+  
+  buttonContainer.appendChild(submitButton);
+  buttonContainer.appendChild(cancelButton);
+  
+  form.appendChild(emailInput);
+  form.appendChild(buttonContainer);
+  
+  const { modal } = createModal("Reset Password", form);
+  
+  cancelButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+  });
+  
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = emailInput.value.trim();
+    
+    if (!email) return;
+    
+    document.body.removeChild(modal);
+    
+    // Use Supabase auth from window
+    if (window.supabaseAuth && window.supabaseAuth.resetPasswordForEmail) {
+        window.supabaseAuth.resetPasswordForEmail(email).then(({ data, error }) => {
+          if (error) {
+            append(`\n❌ Password reset failed: ${error.message}\n`);
+            mpTrack("password_reset_failed", { error: error.message });
+          } else {
+            append(`\n✅ Password reset email sent to ${email}. Please check your inbox.\n`);
+            mpTrack("password_reset_sent", { email });
+          }
+        });
+    } else {
+        append(`\n❌ Password reset functionality not available.\n`);
+    }
+  });
+  
+  // Focus input
+  setTimeout(() => emailInput.focus(), 100);
+}
+
+function showSetNewPasswordForm(initialEmail = "") {
+  const form = document.createElement("form");
+  form.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+  
+  const info = document.createElement("p");
+  info.textContent = "Enter a new password for your account.";
+  info.style.cssText = "margin: 0; color: #6b7280; font-size: 14px;";
+  
+  const emailInfo = document.createElement("input");
+  emailInfo.type = "email";
+  emailInfo.placeholder = "Email";
+  emailInfo.value = initialEmail || "";
+  emailInfo.disabled = true;
+  emailInfo.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #f9fafb;
+    color: #6b7280;
+  `;
+  
+  const newPasswordInput = document.createElement("input");
+  newPasswordInput.type = "password";
+  newPasswordInput.placeholder = "New password";
+  newPasswordInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+  `;
+  
+  const confirmPasswordInput = document.createElement("input");
+  confirmPasswordInput.type = "password";
+  confirmPasswordInput.placeholder = "Confirm new password";
+  confirmPasswordInput.style.cssText = `
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+  `;
+  
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = "display: flex; gap: 12px; margin-top: 8px;";
+  
+  const submitButton = document.createElement("button");
+  submitButton.type = "submit";
+  submitButton.textContent = "Update Password";
+  submitButton.style.cssText = `
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  `;
+  
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.cssText = `
+    flex: 1;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  `;
+  
+  buttonContainer.appendChild(submitButton);
+  buttonContainer.appendChild(cancelButton);
+  
+  form.appendChild(info);
+  form.appendChild(emailInfo);
+  form.appendChild(newPasswordInput);
+  form.appendChild(confirmPasswordInput);
+  form.appendChild(buttonContainer);
+  
+  const { modal } = createModal("Set New Password", form);
+  
+  cancelButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+  });
+  
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pwd = newPasswordInput.value;
+    const confirm = confirmPasswordInput.value;
+    if (!pwd || pwd.length < 6 || pwd !== confirm) {
+      showAuthError(pwd !== confirm ? "Passwords do not match." : "Password must be at least 6 characters.");
+      return;
+    }
+    try {
+      const { user, error } = await window.supabaseAuth.updatePassword(pwd);
+      if (error) {
+        showAuthError(error.message);
+        mpTrack("password_update_error", { message: error.message });
+      } else if (user) {
+        document.body.removeChild(modal);
+        showAuthSuccess("Password updated successfully.");
+        mpTrack("password_update_success", { email: user.email });
+        setTimeout(() => { window.location.reload(); }, 1000);
+      }
+    } catch (err) {
+      showAuthError(err.message || String(err));
+    }
+  });
+  
+  setTimeout(() => newPasswordInput.focus(), 100);
+}
 async function logout() {
   // Use Supabase auth from window
   const { error } = await window.supabaseAuth.signOut();
@@ -2270,6 +2662,10 @@ async function send() {
 }
 
 go.addEventListener("click", () => {
+  if (gsap) {
+    gsap.fromTo(go, { scale: 0.8 }, { scale: 1, duration: 0.5, ease: "elastic.out(1, 0.3)" });
+  }
+
   if (busy) {
     // Stop the current operation
     stopped = true;
@@ -2288,22 +2684,10 @@ signupButton.addEventListener("click", showSignupForm);
 // Initialize UI - start with unauthenticated state
 updateAuthUI(false, null);
 
-// Check for existing authentication on load
-async function checkExistingAuth() {
-  try {
-    const user = await window.supabaseAuth.getCurrentUser();
-    if (user) {
-      isAuthenticated = true;
-      currentUser = user;
-      updateAuthUI(true, user);
-      append(`\n🔓 Already logged in as ${user.email}\n`);
-    }
-  } catch (error) {
-    console.error('Error checking existing auth:', error);
-  }
+if (isRecoveryUrl()) {
+  console.log("Recovery URL detected on load — showing Set New Password UI");
+  showSetNewPasswordForm("");
 }
-
-checkExistingAuth();
 
 // Setup cross-frame authentication synchronization
 setupCrossFrameAuthSync();
@@ -2337,3 +2721,46 @@ window.forceUpdateUI = function() {
     console.log('Current state:', { isAuthenticated, currentUser: currentUser?.email });
     updateAuthUI(isAuthenticated, currentUser);
 };
+
+// --- Major Entrance Animation ---
+// Animate elements in when the assistant loads
+if (gsap) {
+  // Wait a brief moment for the DOM to be fully settled (especially dynamically added parts)
+  setTimeout(() => {
+    const tl = gsap.timeline();
+    
+    // 1. Auth Header slides down
+    if (typeof authHeader !== 'undefined' && authHeader) {
+      tl.from(authHeader, { 
+        y: -50, 
+        opacity: 0, 
+        duration: 0.8, 
+        ease: "power3.out" 
+      });
+    }
+
+    // 2. Empty State (if visible) pops up
+    const emptyState = document.getElementById('empty-state');
+    if (emptyState) {
+      tl.from(emptyState, { 
+        scale: 0.8, 
+        opacity: 0, 
+        y: 20, 
+        duration: 0.8, 
+        ease: "elastic.out(1, 0.6)" 
+      }, "-=0.6");
+    }
+
+    // 3. Input Bar slides up from bottom
+    const bar = document.getElementById('bar');
+    if (bar) {
+      tl.from(bar, { 
+        y: 100, 
+        opacity: 0, 
+        duration: 0.8, 
+        ease: "power3.out" 
+      }, "-=0.6");
+    }
+  }, 100);
+}
+
