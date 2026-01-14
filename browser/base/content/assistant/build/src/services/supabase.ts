@@ -44,11 +44,11 @@ export default class SupabaseAuth {
                        provider: 'google',
                        options: {
                            skipBrowserRedirect: true,
-                           // Use Kahana's official domain for OAuth callback
-                           redirectTo: 'https://kahana.co/oauth-callback',
+                           // Use secure Firefox protocol handler for OAuth callback
+                           redirectTo: 'kahana://auth-callback',
                            // Request consent prompt and offline access for refresh token
-                           queryParams: { 
-                               prompt: 'select_account', 
+                           queryParams: {
+                               prompt: 'select_account',
                                access_type: 'offline',
                                include_granted_scopes: 'true',
                                response_type: 'code'

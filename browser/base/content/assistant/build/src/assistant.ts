@@ -3,6 +3,8 @@ import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote, chatRemote } from "./proxyClient";
 import SupabaseAuth from "./services/supabase";
 import voiceInputService from "./services/voiceInput";
+import { UsageTracker } from "./services/usageTracker";
+import { UsageLogger } from "./services/usageLogger";
 
 // Local command implementations (tabs / groups)
 import {
@@ -33,6 +35,12 @@ const supabaseAuth = SupabaseAuth.getInstance();
 // Expose voice input service for UI
 (window as any).voiceInputService = voiceInputService;
 
+// Expose usage tracker for UI
+(window as any).usageTracker = UsageTracker.getInstance();
+
+// Expose usage logger for UI
+(window as any).usageLogger = UsageLogger.getInstance();
+
 /* ========= Ephemeral chat history per session ========= */
 // Automatically managed - one session per sidebar instance
 let CURRENT_SESSION: BaseMessage[] = [];
@@ -45,6 +53,7 @@ function getCurrentSessionMessages(): BaseMessage[] {
 function pushCurrentTurn(user: string, assistant: string) {
   CURRENT_SESSION.push(new HumanMessage(user));
   CURRENT_SESSION.push(new AIMessage(assistant));
+
   const cap = MAX_TURNS * 2;
   if (CURRENT_SESSION.length > cap) {
     CURRENT_SESSION.splice(0, CURRENT_SESSION.length - cap);
@@ -88,7 +97,10 @@ function msgText(m: any): string {
   if (!m) return "";
   const c = m.content;
   if (typeof c === "string") return c;
-  if (Array.isArray(c)) return c.map(v => (typeof v === "string" ? v : v?.text || "")).join("");
+  if (Array.isArray(c))
+    return c
+      .map(v => (typeof v === "string" ? v : v?.text || ""))
+      .join("");
   return String(c ?? "");
 }
 
@@ -108,11 +120,14 @@ async function buildGraph(commands: Command[]) {
   for (const command of commands) {
     // Node: run the command and emit a message that clearly identifies the tool's output.
     const node = async (state: typeof GraphState.State) => {
+      console.log(`🏷️ Executing ${command.commandName} with args:`, state.args);
+
       const result: CmdResult = await command.execute(state.args);
       const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
+
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
-        // Clear state to prevent re-running the same tool
+        // Strong state clearing to prevent re-running
         lastWorker: "",
         repeatCount: 0,
         args: {},
@@ -151,113 +166,99 @@ You have the following workers available:
 - **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
 
 **Rules**
-1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
-2.  **Extract Arguments:** When the user mentions tab numbers (e.g., "tab 2", "the first tab", "second one"), convert to { index: N } where N is 1-based.
-3.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
-4.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
-5.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
-6.  **Handle Failures:** If a tool returns "No matches found" or an error, DO NOT retry the same action. Choose "chat" to inform the user.
-7.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
+1. **Analyze History:** Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
+2. **Extract Arguments:** Convert tab numbers to 1-based indexes.
+3. **Check for Completion:** If the user's request is already satisfied by the latest tool output, choose "FINISH".
+4. **Handle Multi-Step:** If the user says "do X then Y", route step-by-step based on tool outputs.
+5. **Chat:** If conversational (hello/thanks/etc), choose "chat".
+6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry—choose "chat".
+7. **Default Action:** Otherwise choose the best worker for the most recent request.
 
 **Output Format**
-You MUST respond with a JSON object that follows this schema:
+You MUST respond with a JSON object:
 \`\`\`json
-{
-  "next": "<name of the chosen worker>",
-  "args": {
-    "<argument_name>": "<argument_value>"
-  }
-}
+{ "next": "<worker>", "args": { ... } }
 \`\`\`
-
-**Examples**
-User: "Open a new tab to google.com"
-→ { "next": "open_tab", "args": { "url": "google.com" } }
-
-User: "Close tab 3"
-→ { "next": "close_tab", "args": { "index": 3 } }
-
-User: "Close the second tab"
-→ { "next": "close_tab", "args": { "index": 2 } }
-
-User: "Split tab 1 and 2"
-→ { "next": "split_tabs", "args": { "indices": [1, 2] } }
-
-User: "Split tabs 1, 2, and 3"
-→ { "next": "split_tabs", "args": { "indices": [1, 2, 3] } }
-
-User: "List all tabs" then "close the first one"
-→ First: { "next": "list_tabs", "args": {} }
-→ Then: { "next": "close_tab", "args": { "index": 1 } }
 
 The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
-    const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
+    const CHAT_PROMPT = `You are a helpful Firefox browser assistant.
 
-**Important:** You have access to the complete conversation history, including:
-- All previous user requests
-- Commands that were executed (marked as [Tool Output for ...])
-- Results from those commands
+**Context you receive**
+- You receive the messages passed into this graph run (which may be minimal).
+- Messages that start with "[Tool Output for ...]" indicate executed commands and their results.
 
-**When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
-2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
+**How to respond**
+- If the user is asking a normal question, answer helpfully.
+- If the user is asking what happened in this run, summarize using the tool outputs provided.
+- Keep responses concise and action-oriented.`;
 
-**Example:**
-If the history shows:
-  - User: "list tabs"
-  - Tool Output: "1. Google, 2. CNN"
-  - User: "close the first tab"
-  - Tool Output: "Closed: Google"
-  
-And user asks "what have we done?", you should respond:
-"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
-
-Remember: You ARE stateful within this conversation. The history is right there in your context!`;
-    
     // Debug: Log what messages the chat node receives
-    console.log(`💬 Chat node received ${state.messages.length} messages:`, 
-      state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
-    
+    console.log(
+      `💬 Chat node received ${state.messages.length} messages:`,
+      state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`)
+    );
+
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
     return { messages: [new AIMessage(res.content)] };
   };
 
+  // Track recently executed commands to prevent duplicates (within a single graph execution)
+  const recentlyExecutedCommands = new Set<string>();
+
   const supervisorNode = async (s: typeof GraphState.State) => {
-    const options = [END, ...memberNames, "chat"];
+    // IMPORTANT: include FINISH in allowed options (your router prompt uses it)
+    const options = [END, ...memberNames, "chat", "FINISH"];
+
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
 
-    // Use only the messages from the current graph execution for routing decisions.
     const messages = s.messages;
     const out = await routeRemote(systemPrompt, toWire(messages), options);
+
     const nextTool = out?.next;
     const nextArgs = out?.args || {};
 
-    // The supervisor can return "FINISH" to end the conversation.
     if (nextTool === "FINISH") {
       return { next: END };
     }
 
-    // If the supervisor selected a valid tool, use it.
     if (nextTool && memberNames.includes(nextTool)) {
+      const commandSignature = `${nextTool}:${JSON.stringify(nextArgs)}`;
+
+      if (recentlyExecutedCommands.has(commandSignature)) {
+        console.warn(`🚫 Supervisor blocked duplicate routing to: ${commandSignature}`);
+        // Don't hard-end. Fall back to chat so UI gets a useful response.
+        return { next: "chat", args: {} };
+      }
+
+      recentlyExecutedCommands.add(commandSignature);
+
+      // Keep last 10 signatures
+      if (recentlyExecutedCommands.size > 10) {
+        const entries = Array.from(recentlyExecutedCommands);
+        recentlyExecutedCommands.clear();
+        entries.slice(-10).forEach(cmd => recentlyExecutedCommands.add(cmd));
+      }
+
       return { next: nextTool, args: nextArgs };
     }
 
-    // Otherwise, fall back to chat. This handles conversational replies.
     return { next: "chat", args: {} };
   };
 
   const workflow = new StateGraph(GraphState);
+
   for (const name of memberNames) {
     workflow.addNode(name, toolAgents[name]);
     workflow.addEdge(name as any, "supervisor" as any);
   }
+
   workflow.addNode("chat", chatNode);
   workflow.addEdge("chat" as any, END as any);
+
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor" as any, (x: typeof GraphState.State) => x.next);
   workflow.addEdge(START, "supervisor" as any);
@@ -272,7 +273,7 @@ export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void
 ): Promise<string> {
-  const isAuthenticated = await supabaseAuth. isAuthenticated();
+  const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
     const msg = "Please sign in to use the assistant.";
     onChunk(msg);
@@ -299,60 +300,74 @@ export async function runAssistantStream(
     new ShowURLCommand(),
     new SearchMemoryCommand(),
   ];
+
   const graph = await buildGraph(commands);
-  
-  // Get conversation history for context - automatically managed
-  const sessionHistory = getCurrentSessionMessages();
-  
-  // Debug: Log how many messages are in context
-  console.log(`📚 Session context: ${sessionHistory.length} messages in history`);
-  
+
+  // Minimal context to prevent command re-execution:
+  // only pass the current user input to the graph.
+  const currentInput = new HumanMessage({ content: prompt });
+  console.log(`📝 Processing fresh input: "${prompt.substring(0, 50)}..."`);
+
   const stream = await graph.stream(
-    { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
+    { messages: [currentInput] },
     { recursionLimit: 16 }
   );
 
   let lastFull = "";
   let stepCount = 0;
+
   for await (const state of stream as any) {
     stepCount++;
     console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
-    
+
     if ("__end__" in state) {
-      // Save conversation turn automatically
       console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
-      if (lastFull) {
-        console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-        pushCurrentTurn(prompt, lastFull);
-      } else {
-        console.log(`⚠️ NOT saving turn - lastFull is empty!`);
-      }
       break;
     }
-    const step = Object.entries(state).find(([k]) => k !== "__end");
+
+    const step = Object.entries(state).find(([k]) => k !== "__end__");
     if (step?.[1] && "messages" in (step[1] as any)) {
-      const lastMsg = (step[1] as any).messages.at(-1);
-      let text = "";
-      if (typeof lastMsg?.content === "string") text = lastMsg.content;
-      else if (Array.isArray(lastMsg?.content))
-        text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
-      else if (lastMsg?.content != null) text = String(lastMsg.content);
+      const stepData = step[1] as any;
+      const lastMsg = stepData.messages.at(-1);
+
+      if (stepData.next) {
+        console.log(`🎯 Supervisor chose: ${stepData.next} with args:`, stepData.args);
+      }
+
+      if (lastMsg?.name && msgText(lastMsg).includes("[Tool Output for")) {
+        console.log(
+          `🔧 Tool executed: ${lastMsg.name} - ${msgText(lastMsg).substring(0, 100)}...`
+        );
+      }
+
+      const text = msgText(lastMsg);
 
       if (text && text !== lastFull) {
         const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
+
+        // Prevent "tool-output spam" duplication in streaming deltas (lightweight guard)
+        if (delta.includes("[Tool Output for") && lastFull.includes("[Tool Output for")) {
+          console.warn(`🚨 Potential duplicate tool output detected in delta: ${delta}`);
+        }
+
         onChunk(delta);
         lastFull = text;
         console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
       }
     }
   }
+
   console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
 
-  // SAFETY: Always save the turn even if we didn't hit __end__
+  // Save exactly once (no double-save)
   if (lastFull) {
-    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+    console.log(
+      `✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`
+    );
     pushCurrentTurn(prompt, lastFull);
+  } else {
+    console.log(`⚠️ NOT saving turn - lastFull is empty!`);
   }
-  
+
   return lastFull || "(no output)";
 }

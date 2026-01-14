@@ -23,19 +23,25 @@ export async function chatRemote(system: string, messages: WireMsg[]) {
   return postSigned("chat", { system, messages });
 }
 
-export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
+export async function transcribeAudio(audioBlob: Blob): Promise<{
+  transcript: string;
+  provider?: 'deepgram' | 'gemini';
+  cost?: number;
+  duration?: number;
+  error?: string;
+}> {
   await checkAuthentication();
-  
+
   // Convert blob to base64
   const arrayBuffer = await audioBlob.arrayBuffer();
   const base64Audio = btoa(
     new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
   );
-  
+
   // Call lambda with op: "transcribe"
   const result = await postSigned("transcribe", { audio: base64Audio, mimeType: audioBlob.type });
-  
-  // Backend returns { transcript: "..." }
+
+  // Backend returns { transcript: "...", provider?: "...", cost?: ..., duration?: ..., error?: "..." }
   return result;
 }
 

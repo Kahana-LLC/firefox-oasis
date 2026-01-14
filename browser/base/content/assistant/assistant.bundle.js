@@ -58569,8 +58569,8 @@ var SupabaseAuth = class _SupabaseAuth {
         provider: "google",
         options: {
           skipBrowserRedirect: true,
-          // Use Kahana's official domain for OAuth callback
-          redirectTo: "https://kahana.co/oauth-callback",
+          // Use secure Firefox protocol handler for OAuth callback
+          redirectTo: "kahana://auth-callback",
           // Request consent prompt and offline access for refresh token
           queryParams: {
             prompt: "select_account",
@@ -58815,7 +58815,11 @@ var SupabaseAuth = class _SupabaseAuth {
         device_info: deviceInfo
       }).select().single();
       if (error) {
-        console.error("Error creating session:", error.message);
+        if (error.message.includes("row-level security policy")) {
+          console.warn("Session tracking skipped due to RLS policy (non-critical):", error.message);
+        } else {
+          console.error("Error creating session:", error.message);
+        }
       } else if (data) {
         this.currentSession = data;
         console.log("Session created:", data.session_id);
@@ -58934,17 +58938,427 @@ async function transcribeAudio(audioBlob) {
   return result;
 }
 
+// src/services/usageTracker.ts
+var UsageTracker = class _UsageTracker {
+  static instance;
+  STORAGE_KEY = "oasis_transcription_usage";
+  STATS_KEY = "oasis_usage_stats";
+  _localStorageAvailable = null;
+  isLocalStorageAvailable() {
+    if (this._localStorageAvailable !== null) {
+      return this._localStorageAvailable;
+    }
+    try {
+      const testKey = "__oasis_storage_test__";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+      this._localStorageAvailable = true;
+    } catch {
+      this._localStorageAvailable = false;
+    }
+    return this._localStorageAvailable;
+  }
+  // Cost rates (per provider)
+  COST_RATES = {
+    deepgram: {
+      perMinute: 43e-4,
+      // $0.0043 per minute
+      perCharacter: 0
+      // Deepgram charges per minute, not per character
+    },
+    gemini: {
+      perMinute: 0,
+      // Gemini doesn't charge per minute
+      perCharacter: 25e-5
+      // $0.00025 per 1000 characters
+    }
+  };
+  // Usage limits - Updated for $20/month plan with 80% margins ($3 budget)
+  LIMITS = {
+    dailyTranscriptions: 2e3,
+    // 60,000/month ÷ 30 days
+    monthlyTranscriptions: 6e4,
+    // Based on $3 budget at $0.00005/text command
+    dailyCost: 1,
+    // $1.00 per day (conservative)
+    monthlyCost: 3
+    // $3.00 per month (80% margin on $20 plan)
+  };
+  // Burst rate limiting to prevent abuse
+  BURST_LIMITS = {
+    maxPerMinute: 10,
+    // Max 10 commands per minute
+    maxPerHour: 100,
+    // Max 100 commands per hour
+    minCooldownMs: 2e3
+    // 2 second minimum cooldown between commands
+  };
+  // Progressive delays for consecutive usage (discourage spam)
+  PROGRESSIVE_DELAYS = [0, 1e3, 3e3, 5e3, 1e4, 3e4];
+  // ms
+  // Burst tracking
+  burstTimestamps = [];
+  consecutiveCount = 0;
+  lastCommandTime = 0;
+  constructor() {
+  }
+  static getInstance() {
+    if (!_UsageTracker.instance) {
+      _UsageTracker.instance = new _UsageTracker();
+    }
+    return _UsageTracker.instance;
+  }
+  // Record a transcription usage
+  recordTranscription(usage) {
+    const fullUsage = {
+      ...usage,
+      timestamp: Date.now(),
+      cost: this.calculateCost(usage)
+    };
+    const usages = this.getStoredUsages();
+    usages.push(fullUsage);
+    if (usages.length > 1e3) {
+      usages.splice(0, usages.length - 1e3);
+    }
+    if (this.isLocalStorageAvailable()) {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(usages));
+    }
+    this.updateStats(fullUsage);
+    console.log(`[UsageTracker] Recorded transcription: ${usage.provider}, cost: $${fullUsage.cost?.toFixed(4)}`);
+  }
+  // Record a transcription error
+  recordTranscriptionError(provider, error) {
+    this.recordTranscription({
+      provider,
+      error,
+      cost: 0
+    });
+  }
+  // Get current usage stats
+  getStats() {
+    const stored = this.isLocalStorageAvailable() ? localStorage.getItem(this.STATS_KEY) : null;
+    if (!stored) {
+      return this.createDefaultStats();
+    }
+    const stats = JSON.parse(stored);
+    const now = Date.now();
+    const daysSinceReset = Math.floor((now - stats.lastReset) / (1e3 * 60 * 60 * 24));
+    const monthsSinceReset = Math.floor((now - stats.lastMonthlyReset) / (1e3 * 60 * 60 * 24 * 30));
+    if (daysSinceReset > 0) {
+      stats.dailyCount = 0;
+      stats.dailyCost = 0;
+      stats.lastReset = now;
+    }
+    if (monthsSinceReset > 0) {
+      stats.monthlyCount = 0;
+      stats.monthlyCost = 0;
+      stats.lastMonthlyReset = now;
+    }
+    if (this.isLocalStorageAvailable()) {
+      localStorage.setItem(this.STATS_KEY, JSON.stringify(stats));
+    }
+    return stats;
+  }
+  // Check if user is approaching or has exceeded limits
+  checkLimits() {
+    const stats = this.getStats();
+    const warnings = [];
+    if (stats.dailyCount >= this.LIMITS.dailyTranscriptions * 0.8) {
+      warnings.push(`Approaching daily transcription limit: ${stats.dailyCount}/${this.LIMITS.dailyTranscriptions}`);
+    }
+    if (stats.dailyCost >= this.LIMITS.dailyCost * 0.8) {
+      warnings.push(`Approaching daily cost limit: $${stats.dailyCost.toFixed(2)}/$${this.LIMITS.dailyCost}`);
+    }
+    if (stats.monthlyCount >= this.LIMITS.monthlyTranscriptions * 0.8) {
+      warnings.push(`Approaching monthly transcription limit: ${stats.monthlyCount}/${this.LIMITS.monthlyTranscriptions}`);
+    }
+    if (stats.monthlyCost >= this.LIMITS.monthlyCost * 0.8) {
+      warnings.push(`Approaching monthly cost limit: $${stats.monthlyCost.toFixed(2)}/$${this.LIMITS.monthlyCost}`);
+    }
+    const canTranscribe = stats.dailyCount < this.LIMITS.dailyTranscriptions && stats.monthlyCount < this.LIMITS.monthlyTranscriptions && stats.dailyCost < this.LIMITS.dailyCost && stats.monthlyCost < this.LIMITS.monthlyCost;
+    return {
+      canTranscribe,
+      warnings,
+      limits: {
+        dailyCount: Math.max(0, this.LIMITS.dailyTranscriptions - stats.dailyCount),
+        monthlyCount: Math.max(0, this.LIMITS.monthlyTranscriptions - stats.monthlyCount),
+        dailyCost: Math.max(0, this.LIMITS.dailyCost - stats.dailyCost),
+        monthlyCost: Math.max(0, this.LIMITS.monthlyCost - stats.monthlyCost)
+      }
+    };
+  }
+  // Check burst rate limits to prevent abuse
+  checkBurstLimits() {
+    const now = Date.now();
+    this.burstTimestamps = this.burstTimestamps.filter(
+      (ts) => now - ts < 60 * 60 * 1e3
+    );
+    if (now - this.lastCommandTime < this.BURST_LIMITS.minCooldownMs) {
+      const waitTime = this.BURST_LIMITS.minCooldownMs - (now - this.lastCommandTime);
+      return {
+        allowed: false,
+        waitTimeMs: waitTime,
+        reason: `Minimum cooldown: ${Math.ceil(waitTime / 1e3)}s between commands`
+      };
+    }
+    const recentMinute = this.burstTimestamps.filter((ts) => now - ts < 60 * 1e3);
+    if (recentMinute.length >= this.BURST_LIMITS.maxPerMinute) {
+      const oldestInMinute = Math.min(...recentMinute);
+      const waitTime = 60 * 1e3 - (now - oldestInMinute);
+      return {
+        allowed: false,
+        waitTimeMs: waitTime,
+        reason: `Rate limited: ${this.BURST_LIMITS.maxPerMinute} commands per minute`
+      };
+    }
+    if (this.burstTimestamps.length >= this.BURST_LIMITS.maxPerHour) {
+      const oldestInHour = Math.min(...this.burstTimestamps);
+      const waitTime = 60 * 60 * 1e3 - (now - oldestInHour);
+      return {
+        allowed: false,
+        waitTimeMs: waitTime,
+        reason: `Rate limited: ${this.BURST_LIMITS.maxPerHour} commands per hour`
+      };
+    }
+    return { allowed: true };
+  }
+  // Get progressive delay for consecutive usage (discourages spam)
+  getProgressiveDelay() {
+    const now = Date.now();
+    const timeSinceLast = now - this.lastCommandTime;
+    if (timeSinceLast > 3e4) {
+      this.consecutiveCount = 0;
+    } else {
+      this.consecutiveCount = Math.min(this.consecutiveCount + 1, this.PROGRESSIVE_DELAYS.length - 1);
+    }
+    return this.PROGRESSIVE_DELAYS[this.consecutiveCount] || 3e4;
+  }
+  // Record a command usage (updates burst tracking)
+  recordCommand() {
+    const now = Date.now();
+    this.burstTimestamps.push(now);
+    this.lastCommandTime = now;
+    this.burstTimestamps = this.burstTimestamps.filter(
+      (ts) => now - ts < 60 * 60 * 1e3
+    );
+    if (this.burstTimestamps.length > this.BURST_LIMITS.maxPerHour * 2) {
+      this.burstTimestamps = this.burstTimestamps.slice(-this.BURST_LIMITS.maxPerHour);
+    }
+  }
+  // Get recent usage history
+  getRecentUsage(hours = 24) {
+    const usages = this.getStoredUsages();
+    const cutoff = Date.now() - hours * 60 * 60 * 1e3;
+    return usages.filter((usage) => usage.timestamp > cutoff);
+  }
+  // Clear all usage data (for testing or user request)
+  clearUsage() {
+    if (this.isLocalStorageAvailable()) {
+      localStorage.removeItem(this.STORAGE_KEY);
+      localStorage.removeItem(this.STATS_KEY);
+    }
+  }
+  calculateCost(usage) {
+    const rates = this.COST_RATES[usage.provider];
+    if (usage.provider === "deepgram") {
+      const duration = usage.duration || 0;
+      return duration / 60 * rates.perMinute;
+    } else if (usage.provider === "gemini") {
+      const chars = usage.transcriptLength || 0;
+      return chars / 1e3 * rates.perCharacter;
+    }
+    return 0;
+  }
+  getStoredUsages() {
+    const stored = this.isLocalStorageAvailable() ? localStorage.getItem(this.STORAGE_KEY) : null;
+    return stored ? JSON.parse(stored) : [];
+  }
+  updateStats(usage) {
+    const stats = this.getStats();
+    stats.dailyCount++;
+    stats.monthlyCount++;
+    stats.dailyCost += usage.cost || 0;
+    stats.monthlyCost += usage.cost || 0;
+    if (this.isLocalStorageAvailable()) {
+      localStorage.setItem(this.STATS_KEY, JSON.stringify(stats));
+    }
+  }
+  createDefaultStats() {
+    const now = Date.now();
+    return {
+      dailyCount: 0,
+      monthlyCount: 0,
+      dailyCost: 0,
+      monthlyCost: 0,
+      lastReset: now,
+      lastMonthlyReset: now
+    };
+  }
+};
+var usageTracker_default = UsageTracker.getInstance();
+
+// src/services/usageLogger.ts
+var UsageLogger = class _UsageLogger {
+  static instance;
+  supabaseAuth = SupabaseAuth.getInstance();
+  static getInstance() {
+    if (!_UsageLogger.instance) {
+      _UsageLogger.instance = new _UsageLogger();
+    }
+    return _UsageLogger.instance;
+  }
+  // Log a transcription usage to Supabase
+  async logTranscription(logData) {
+    try {
+      const isAuthenticated = await this.supabaseAuth.isAuthenticated();
+      if (!isAuthenticated) {
+        console.warn("[UsageLogger] User not authenticated, skipping usage log");
+        return;
+      }
+      const session = await this.supabaseAuth.getSession();
+      if (!session?.user?.id) {
+        console.warn("[UsageLogger] No user ID available, skipping usage log");
+        return;
+      }
+      const supabase = this.supabaseAuth.getSupabaseClient();
+      if (!supabase) {
+        console.warn("[UsageLogger] Supabase client not available, skipping usage log");
+        return;
+      }
+      const { error } = await supabase.from("transcription_usage").insert({
+        user_id: session.user.id,
+        provider: logData.provider,
+        duration_seconds: logData.duration_seconds,
+        transcript_length: logData.transcript_length,
+        cost_usd: logData.cost_usd,
+        error_message: logData.error_message
+      });
+      if (error) {
+        console.error("[UsageLogger] Failed to log transcription usage:", error);
+      } else {
+        console.log("[UsageLogger] Successfully logged transcription usage");
+      }
+    } catch (error) {
+      console.error("[UsageLogger] Error logging transcription usage:", error);
+    }
+  }
+  // Get usage statistics for the current user
+  async getUsageStats() {
+    try {
+      const isAuthenticated = await this.supabaseAuth.isAuthenticated();
+      if (!isAuthenticated) {
+        return null;
+      }
+      const supabase = this.supabaseAuth.getSupabaseClient();
+      if (!supabase) {
+        return null;
+      }
+      const { data, error } = await supabase.rpc("get_user_transcription_usage");
+      if (error) {
+        console.error("[UsageLogger] Failed to get usage stats:", error);
+        return null;
+      }
+      return data?.[0] || {
+        total_transcriptions: 0,
+        total_cost_usd: 0,
+        transcriptions_today: 0,
+        cost_today: 0,
+        transcriptions_this_month: 0,
+        cost_this_month: 0,
+        last_transcription_at: null
+      };
+    } catch (error) {
+      console.error("[UsageLogger] Error getting usage stats:", error);
+      return null;
+    }
+  }
+  // Check if user is approaching limits based on Supabase data
+  async checkLimits() {
+    const LIMITS = {
+      dailyTranscriptions: 50,
+      monthlyTranscriptions: 1e3,
+      dailyCost: 1,
+      // $1.00 per day
+      monthlyCost: 20
+      // $20.00 per month
+    };
+    const stats = await this.getUsageStats();
+    if (!stats) {
+      return {
+        canTranscribe: true,
+        warnings: ["Unable to verify usage limits - proceeding with caution"],
+        limits: {
+          dailyCount: LIMITS.dailyTranscriptions,
+          monthlyCount: LIMITS.monthlyTranscriptions,
+          dailyCost: LIMITS.dailyCost,
+          monthlyCost: LIMITS.monthlyCost
+        }
+      };
+    }
+    const warnings = [];
+    if (stats.transcriptions_today >= LIMITS.dailyTranscriptions * 0.8) {
+      warnings.push(`Approaching daily transcription limit: ${stats.transcriptions_today}/${LIMITS.dailyTranscriptions}`);
+    }
+    if (stats.cost_today >= LIMITS.dailyCost * 0.8) {
+      warnings.push(`Approaching daily cost limit: $${stats.cost_today.toFixed(2)}/$${LIMITS.dailyCost}`);
+    }
+    if (stats.transcriptions_this_month >= LIMITS.monthlyTranscriptions * 0.8) {
+      warnings.push(`Approaching monthly transcription limit: ${stats.transcriptions_this_month}/${LIMITS.monthlyTranscriptions}`);
+    }
+    if (stats.cost_this_month >= LIMITS.monthlyCost * 0.8) {
+      warnings.push(`Approaching monthly cost limit: $${stats.cost_this_month.toFixed(2)}/$${LIMITS.monthlyCost}`);
+    }
+    const canTranscribe = stats.transcriptions_today < LIMITS.dailyTranscriptions && stats.transcriptions_this_month < LIMITS.monthlyTranscriptions && stats.cost_today < LIMITS.dailyCost && stats.cost_this_month < LIMITS.monthlyCost;
+    return {
+      canTranscribe,
+      warnings,
+      limits: {
+        dailyCount: Math.max(0, LIMITS.dailyTranscriptions - stats.transcriptions_today),
+        monthlyCount: Math.max(0, LIMITS.monthlyTranscriptions - stats.transcriptions_this_month),
+        dailyCost: Math.max(0, LIMITS.dailyCost - stats.cost_today),
+        monthlyCost: Math.max(0, LIMITS.monthlyCost - stats.cost_this_month)
+      }
+    };
+  }
+};
+var usageLogger_default = UsageLogger.getInstance();
+
 // src/services/voiceInput.ts
 var VoiceInputService = class {
   mediaRecorder = null;
   audioChunks = [];
   stream = null;
+  recordingStartTime = 0;
+  usageTracker = UsageTracker.getInstance();
+  usageLogger = UsageLogger.getInstance();
+  // Event emitter for usage warnings
+  onUsageWarning;
   async startRecording() {
     try {
+      const burstCheck = this.usageTracker.checkBurstLimits();
+      if (!burstCheck.allowed) {
+        const waitSeconds = Math.ceil((burstCheck.waitTimeMs || 0) / 1e3);
+        throw new Error(`Rate limited: ${burstCheck.reason}. Try again in ${waitSeconds}s.`);
+      }
+      const localLimits = this.usageTracker.checkLimits();
+      if (!localLimits.canTranscribe) {
+        throw new Error("Monthly usage limit exceeded. Please try again next month.");
+      }
+      const serverLimits = await this.usageLogger.checkLimits();
+      if (!serverLimits.canTranscribe) {
+        throw new Error("Server usage limit exceeded. Please try again later.");
+      }
+      const allWarnings = [...localLimits.warnings, ...serverLimits.warnings];
+      if (allWarnings.length > 0) {
+        console.warn("[VoiceInput] Usage warnings:", allWarnings);
+        this.emitUsageWarnings(allWarnings);
+      }
+      this.usageTracker.recordCommand();
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = this.getSupportedMimeType();
       this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
       this.audioChunks = [];
+      this.recordingStartTime = Date.now();
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
@@ -58962,6 +59376,7 @@ var VoiceInputService = class {
         reject(new Error("No active recording"));
         return;
       }
+      const duration = (Date.now() - this.recordingStartTime) / 1e3;
       this.mediaRecorder.onstop = async () => {
         try {
           if (this.stream) {
@@ -58970,14 +59385,33 @@ var VoiceInputService = class {
           const mimeType = this.mediaRecorder?.mimeType || "audio/webm";
           const audioBlob = new Blob(this.audioChunks, { type: mimeType });
           const result = await transcribeAudio(audioBlob);
-          resolve(result.transcript || "");
+          const transcript = result.transcript || "";
+          const provider = result.provider || "deepgram";
+          this.usageTracker.recordTranscription({
+            provider,
+            duration,
+            transcriptLength: transcript.length
+          });
+          this.usageLogger.logTranscription({
+            provider,
+            duration_seconds: duration,
+            transcript_length: transcript.length,
+            cost_usd: result.cost
+          });
+          resolve(transcript);
         } catch (error) {
           console.error("Error transcribing audio:", error);
+          this.usageTracker.recordTranscriptionError("deepgram", error.message);
+          this.usageLogger.logTranscription({
+            provider: "deepgram",
+            error_message: error.message
+          });
           reject(error);
         } finally {
           this.mediaRecorder = null;
           this.audioChunks = [];
           this.stream = null;
+          this.recordingStartTime = 0;
         }
       };
       this.mediaRecorder.stop();
@@ -58996,6 +59430,20 @@ var VoiceInputService = class {
     this.mediaRecorder = null;
     this.audioChunks = [];
     this.stream = null;
+  }
+  // Set callback for usage warnings
+  setUsageWarningCallback(callback) {
+    this.onUsageWarning = callback;
+  }
+  emitUsageWarnings(warnings) {
+    if (this.onUsageWarning) {
+      this.onUsageWarning(warnings);
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("voice-usage-warnings", {
+        detail: { warnings }
+      }));
+    }
   }
   getSupportedMimeType() {
     const types = [
@@ -61184,7 +61632,8 @@ function getChrome() {
   const gBrowser = topWin?.gBrowser;
   const PlacesUtils = topWin?.PlacesUtils;
   const PlacesTransactions = topWin?.PlacesTransactions;
-  return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
+  const browser = topWin?.browser;
+  return { topWin, gBrowser, PlacesUtils, PlacesTransactions, browser };
 }
 var ROOT_FOLDER_NAME = "Oasis Hubs";
 async function getRootFolder() {
@@ -61439,19 +61888,46 @@ var HubManager = class {
       name = (name || "").trim();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils, topWin } = getChrome();
+      const { PlacesUtils, topWin, gBrowser, browser } = getChrome();
       const folder = children.find((c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title === name);
       if (!folder) return { ok: false };
       const bookmarks = await getBookmarkChildren(folder.guid);
       const items = bookmarks.filter((b) => b.uri);
-      if (!topWin?.openTrustedLinkIn) return { ok: false };
+      const urls = items.map((it) => it.uri);
+      if (urls.length === 0) return { ok: true };
+      let targetBrowser = gBrowser;
       if (where === "window") {
         const w = topWin.OpenBrowserWindow();
-        setTimeout(() => {
-          for (const it of items) w.openTrustedLinkIn(it.uri, "tab");
-        }, 250);
-      } else {
-        for (const it of items) topWin.openTrustedLinkIn(it.uri, "tab");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        targetBrowser = w.gBrowser;
+      }
+      if (!targetBrowser) return { ok: false };
+      const openedTabs = [];
+      for (const url of urls) {
+        const tab = await targetBrowser.addTab(url, { triggerPrimaryAction: false });
+        openedTabs.push(tab);
+      }
+      if (openedTabs.length > 0) {
+        targetBrowser.selectedTab = openedTabs[0];
+      }
+      if (browser?.tabs && openedTabs.length > 0) {
+        setTimeout(async () => {
+          try {
+            const allTabs = await browser.tabs.query({});
+            const tabIdsToGroup = [];
+            for (const openedTab of openedTabs) {
+              const url = openedTab.linkedBrowser.currentURI.spec;
+              const foundTab = allTabs.find((t) => t.url === url && !t.discarded);
+              if (foundTab) tabIdsToGroup.push(foundTab.id);
+            }
+            if (tabIdsToGroup.length > 0) {
+              const groupId = await browser.tabs.group({ tabIds: tabIdsToGroup });
+              await browser.tabGroups.update(groupId, { title: name });
+            }
+          } catch (e) {
+            console.error("Failed to group tabs", e);
+          }
+        }, 500);
       }
       return { ok: true };
     } catch (e) {
@@ -61559,6 +62035,62 @@ var ListTabsCommand = class {
     );
     const out = titles.length ? titles.slice(0, 50).map((t, i) => `${i + 1}. ${t}`).join("\n") : "No tabs.";
     return { message: out };
+  }
+};
+var NewWindowCommand = class {
+  commandName = "new_window";
+  description = "Open a new browser window.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    topWin.OpenBrowserWindow();
+    return { message: "Opened a new window." };
+  }
+};
+var OrganizeWindowsCommand = class {
+  commandName = "organize_windows";
+  description = "Arrange two or more windows side-by-side.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const { ChromeUtils } = topWin;
+    if (!ChromeUtils) return { message: "ChromeUtils not available." };
+    const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+    const windowManager = Services.wm;
+    const windows = windowManager.getEnumerator("navigator:browser");
+    const browserWindows = [];
+    while (windows.hasMoreElements()) {
+      browserWindows.push(windows.getNext());
+    }
+    if (browserWindows.length < 2) {
+      return { message: "You need at least two windows to organize." };
+    }
+    const screen = topWin.screen;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    const availLeft = screen.availLeft || 0;
+    const availTop = screen.availTop || 0;
+    const numWindows = browserWindows.length;
+    const windowWidth = Math.floor(availWidth / numWindows);
+    for (let i = 0; i < numWindows; i++) {
+      const win = browserWindows[i];
+      const xPos = availLeft + windowWidth * i;
+      win.resizeTo(windowWidth, availHeight);
+      win.moveTo(xPos, availTop);
+    }
+    return { message: `Organized ${numWindows} windows.` };
+  }
+};
+var ShowURLCommand = class {
+  commandName = "show_url";
+  description = "Open a URL in a new tab.";
+  async execute(args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    const url = args?.url;
+    if (!url) return { message: "Missing 'url' argument." };
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened ${url}` };
   }
 };
 var OpenTabCommand = class {
@@ -61773,11 +62305,10 @@ ${out}` };
 var supabaseAuth4 = SupabaseAuth.getInstance();
 window.supabaseAuth = supabaseAuth4;
 window.voiceInputService = voiceInput_default;
+window.usageTracker = UsageTracker.getInstance();
+window.usageLogger = UsageLogger.getInstance();
 var CURRENT_SESSION = [];
 var MAX_TURNS = 12;
-function getCurrentSessionMessages() {
-  return CURRENT_SESSION;
-}
 function pushCurrentTurn(user, assistant) {
   CURRENT_SESSION.push(new HumanMessage(user));
   CURRENT_SESSION.push(new AIMessage(assistant));
@@ -61818,7 +62349,8 @@ function msgText(m) {
   if (!m) return "";
   const c = m.content;
   if (typeof c === "string") return c;
-  if (Array.isArray(c)) return c.map((v) => typeof v === "string" ? v : v?.text || "").join("");
+  if (Array.isArray(c))
+    return c.map((v) => typeof v === "string" ? v : v?.text || "").join("");
   return String(c ?? "");
 }
 function toWire(messages) {
@@ -61832,11 +62364,12 @@ async function buildGraph(commands) {
   const memberNames = [];
   for (const command of commands) {
     const node = async (state) => {
+      console.log(`\u{1F3F7}\uFE0F Executing ${command.commandName} with args:`, state.args);
       const result = await command.execute(state.args);
       const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
-        // Clear state to prevent re-running the same tool
+        // Strong state clearing to prevent re-running
         lastWorker: "",
         repeatCount: 0,
         args: {}
@@ -61866,73 +62399,38 @@ You have the following workers available:
 - **rename_hub**: { from: string, to: string }
 - **add_tab_to_hub**: { name: string }
 - **open_hub**: { name: string, where?: "tabs"|"window" }
+- **new_window**: No arguments needed
+- **organize_windows**: No arguments needed
+- **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
 
 **Rules**
-1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
-2.  **Extract Arguments:** When the user mentions tab numbers (e.g., "tab 2", "the first tab", "second one"), convert to { index: N } where N is 1-based.
-3.  **Check for Completion:** If the last message is a \`[Tool Output for ...]\` and it seems to fulfill the user's last request, choose the "FINISH" worker.
-4.  **Handle Multi-Step:** If the user's request requires another step (e.g., "open X *and then* do Y"), and you see the \`[Tool Output for ...]\` from the first step, choose the worker for the second step.
-5.  **Chat:** If the user is making casual conversation (e.g., "hello", "thank you"), choose the "chat" worker.
-6.  **Handle Failures:** If a tool returns "No matches found" or an error, DO NOT retry the same action. Choose "chat" to inform the user.
-7.  **Default Action:** Otherwise, choose the worker that best addresses the user's most recent unfulfilled request.
+1. **Analyze History:** Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
+2. **Extract Arguments:** Convert tab numbers to 1-based indexes.
+3. **Check for Completion:** If the user's request is already satisfied by the latest tool output, choose "FINISH".
+4. **Handle Multi-Step:** If the user says "do X then Y", route step-by-step based on tool outputs.
+5. **Chat:** If conversational (hello/thanks/etc), choose "chat".
+6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry\u2014choose "chat".
+7. **Default Action:** Otherwise choose the best worker for the most recent request.
 
 **Output Format**
-You MUST respond with a JSON object that follows this schema:
+You MUST respond with a JSON object:
 \`\`\`json
-{
-  "next": "<name of the chosen worker>",
-  "args": {
-    "<argument_name>": "<argument_value>"
-  }
-}
+{ "next": "<worker>", "args": { ... } }
 \`\`\`
-
-**Examples**
-User: "Open a new tab to google.com"
-\u2192 { "next": "open_tab", "args": { "url": "google.com" } }
-
-User: "Close tab 3"
-\u2192 { "next": "close_tab", "args": { "index": 3 } }
-
-User: "Close the second tab"
-\u2192 { "next": "close_tab", "args": { "index": 2 } }
-
-User: "Split tab 1 and 2"
-\u2192 { "next": "split_tabs", "args": { "indices": [1, 2] } }
-
-User: "Split tabs 1, 2, and 3"
-\u2192 { "next": "split_tabs", "args": { "indices": [1, 2, 3] } }
-
-User: "List all tabs" then "close the first one"
-\u2192 First: { "next": "list_tabs", "args": {} }
-\u2192 Then: { "next": "close_tab", "args": { "index": 1 } }
 
 The available workers are: {options}`.trim();
   const chatNode = async (state) => {
-    const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
+    const CHAT_PROMPT = `You are a helpful Firefox browser assistant.
 
-**Important:** You have access to the complete conversation history, including:
-- All previous user requests
-- Commands that were executed (marked as [Tool Output for ...])
-- Results from those commands
+**Context you receive**
+- You receive the messages passed into this graph run (which may be minimal).
+- Messages that start with "[Tool Output for ...]" indicate executed commands and their results.
 
-**When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
-2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
-
-**Example:**
-If the history shows:
-  - User: "list tabs"
-  - Tool Output: "1. Google, 2. CNN"
-  - User: "close the first tab"
-  - Tool Output: "Closed: Google"
-  
-And user asks "what have we done?", you should respond:
-"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
-
-Remember: You ARE stateful within this conversation. The history is right there in your context!`;
+**How to respond**
+- If the user is asking a normal question, answer helpfully.
+- If the user is asking what happened in this run, summarize using the tool outputs provided.
+- Keep responses concise and action-oriented.`;
     console.log(
       `\u{1F4AC} Chat node received ${state.messages.length} messages:`,
       state.messages.map((m) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`)
@@ -61940,8 +62438,9 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
     return { messages: [new AIMessage(res.content)] };
   };
+  const recentlyExecutedCommands = /* @__PURE__ */ new Set();
   const supervisorNode = async (s) => {
-    const options = [END, ...memberNames, "chat"];
+    const options = [END, ...memberNames, "chat", "FINISH"];
     const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", ")).replace("{options}", options.join(", "));
     const messages = s.messages;
     const out = await routeRemote(systemPrompt, toWire(messages), options);
@@ -61951,6 +62450,17 @@ Remember: You ARE stateful within this conversation. The history is right there 
       return { next: END };
     }
     if (nextTool && memberNames.includes(nextTool)) {
+      const commandSignature = `${nextTool}:${JSON.stringify(nextArgs)}`;
+      if (recentlyExecutedCommands.has(commandSignature)) {
+        console.warn(`\u{1F6AB} Supervisor blocked duplicate routing to: ${commandSignature}`);
+        return { next: "chat", args: {} };
+      }
+      recentlyExecutedCommands.add(commandSignature);
+      if (recentlyExecutedCommands.size > 10) {
+        const entries = Array.from(recentlyExecutedCommands);
+        recentlyExecutedCommands.clear();
+        entries.slice(-10).forEach((cmd) => recentlyExecutedCommands.add(cmd));
+      }
       return { next: nextTool, args: nextArgs };
     }
     return { next: "chat", args: {} };
@@ -61989,13 +62499,16 @@ async function runAssistantStream(prompt, onChunk) {
     new RenameHubCommand(),
     new AddTabToHubCommand(),
     new OpenHubCommand(),
+    new NewWindowCommand(),
+    new OrganizeWindowsCommand(),
+    new ShowURLCommand(),
     new SearchMemoryCommand()
   ];
   const graph = await buildGraph(commands);
-  const sessionHistory = getCurrentSessionMessages();
-  console.log(`\u{1F4DA} Session context: ${sessionHistory.length} messages in history`);
+  const currentInput = new HumanMessage({ content: prompt });
+  console.log(`\u{1F4DD} Processing fresh input: "${prompt.substring(0, 50)}..."`);
   const stream = await graph.stream(
-    { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
+    { messages: [currentInput] },
     { recursionLimit: 16 }
   );
   let lastFull = "";
@@ -62005,24 +62518,26 @@ async function runAssistantStream(prompt, onChunk) {
     console.log(`\u{1F504} Stream step ${stepCount}, keys:`, Object.keys(state));
     if ("__end__" in state) {
       console.log(`\u{1F51A} Stream ended. lastFull length: ${lastFull.length}`);
-      if (lastFull) {
-        console.log(`\u2705 Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-        pushCurrentTurn(prompt, lastFull);
-      } else {
-        console.log(`\u26A0\uFE0F NOT saving turn - lastFull is empty!`);
-      }
       break;
     }
-    const step = Object.entries(state).find(([k]) => k !== "__end");
+    const step = Object.entries(state).find(([k]) => k !== "__end__");
     if (step?.[1] && "messages" in step[1]) {
-      const lastMsg = step[1].messages.at(-1);
-      let text = "";
-      if (typeof lastMsg?.content === "string") text = lastMsg.content;
-      else if (Array.isArray(lastMsg?.content))
-        text = lastMsg.content.map((c) => typeof c === "string" ? c : c?.text || "").join("");
-      else if (lastMsg?.content != null) text = String(lastMsg.content);
+      const stepData = step[1];
+      const lastMsg = stepData.messages.at(-1);
+      if (stepData.next) {
+        console.log(`\u{1F3AF} Supervisor chose: ${stepData.next} with args:`, stepData.args);
+      }
+      if (lastMsg?.name && msgText(lastMsg).includes("[Tool Output for")) {
+        console.log(
+          `\u{1F527} Tool executed: ${lastMsg.name} - ${msgText(lastMsg).substring(0, 100)}...`
+        );
+      }
+      const text = msgText(lastMsg);
       if (text && text !== lastFull) {
         const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
+        if (delta.includes("[Tool Output for") && lastFull.includes("[Tool Output for")) {
+          console.warn(`\u{1F6A8} Potential duplicate tool output detected in delta: ${delta}`);
+        }
         onChunk(delta);
         lastFull = text;
         console.log(`\u{1F4DD} Updated lastFull, length now: ${lastFull.length}`);
@@ -62031,8 +62546,12 @@ async function runAssistantStream(prompt, onChunk) {
   }
   console.log(`\u{1F3C1} Stream finished. Final lastFull length: ${lastFull.length}`);
   if (lastFull) {
-    console.log(`\u2705 Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+    console.log(
+      `\u2705 Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`
+    );
     pushCurrentTurn(prompt, lastFull);
+  } else {
+    console.log(`\u26A0\uFE0F NOT saving turn - lastFull is empty!`);
   }
   return lastFull || "(no output)";
 }

@@ -4,9 +4,11 @@ const Services = window.Services || ChromeUtils.import("resource://gre/modules/S
 
 // Import voice input service - it will be bundled
 let voiceInputService = null;
+let usageTracker = null;
 try {
   // The voice input service will be available in the bundle
   voiceInputService = window.voiceInputService;
+  usageTracker = window.usageTracker;
 } catch (e) {
   console.warn("Voice input service not available:", e);
 }
@@ -322,6 +324,120 @@ micButton.title = "Click to start voice input";
 
 let isRecording = false;
 
+// Function to display usage statistics
+async function showUsageStats() {
+  if (!usageTracker) {
+    append("\n❌ Usage tracking not available.\n");
+    return;
+  }
+
+  append("\n📊 **Loading usage statistics...**\n");
+
+  try {
+    // Get local stats (fast)
+    const localStats = usageTracker.getStats();
+    const localLimits = usageTracker.checkLimits();
+
+    // Get server stats (accurate but slower)
+    let serverStats = null;
+    let serverLimits = null;
+    if (typeof usageLogger !== 'undefined' && usageLogger) {
+      try {
+        serverStats = await usageLogger.getUsageStats();
+        serverLimits = await usageLogger.checkLimits();
+      } catch (error) {
+        console.warn("Could not fetch server usage stats:", error);
+      }
+    }
+
+    // Use server stats if available, otherwise fall back to local
+    const stats = serverStats || localStats;
+    const limits = serverLimits || localLimits;
+
+    const dataSource = serverStats ? "server" : "local";
+
+    append(`\n📊 **Voice Input Usage Stats (${dataSource}):**
+• Today: ${stats.transcriptions_today || stats.dailyCount || 0} transcriptions ($${(stats.cost_today || stats.dailyCost || 0).toFixed(3)} spent)
+• This month: ${stats.transcriptions_this_month || stats.monthlyCount || 0} transcriptions ($${(stats.cost_this_month || stats.monthlyCost || 0).toFixed(3)} spent)
+• Total: ${stats.total_transcriptions || 0} transcriptions ($${(stats.total_cost_usd || 0).toFixed(3)} total)
+
+**Limits Remaining Today:**
+• ${limits.limits.dailyCount} transcriptions
+• $${limits.limits.dailyCost.toFixed(3)} budget
+
+**Limits Remaining This Month:**
+• ${limits.limits.monthlyCount} transcriptions
+• $${limits.limits.monthlyCost.toFixed(3)} budget\n`);
+
+    if (limits.warnings.length > 0) {
+      append("⚠️ **Active Warnings:**\n");
+      limits.warnings.forEach(warning => {
+        append(`• ${warning}\n`);
+      });
+    }
+
+    // Show recent usage if available
+    if (usageTracker.getRecentUsage) {
+      const recentUsage = usageTracker.getRecentUsage(24); // Last 24 hours
+      if (recentUsage.length > 0) {
+        append("\n🕐 **Recent Activity (24h):**\n");
+        recentUsage.slice(-5).forEach(usage => { // Show last 5
+          const time = new Date(usage.timestamp).toLocaleTimeString();
+          const cost = usage.cost ? `$${(usage.cost * 100).toFixed(1)}¢` : 'pending';
+          const duration = usage.duration ? `${usage.duration.toFixed(1)}s` : '';
+          append(`• ${time}: ${usage.provider} ${duration} (${cost})\n`);
+        });
+      }
+    }
+
+    append(`\n💡 **Cost Estimates:**
+• Deepgram: ~$0.0043/minute
+• Gemini: ~$0.00025 per 1K characters
+• Free tier: 50/day, $1/day, 1000/month, $20/month\n`);
+
+  } catch (error) {
+    console.error("Error displaying usage stats:", error);
+    append(`\n❌ Error loading usage statistics: ${error.message}\n`);
+  }
+}
+
+// Add usage stats button next to voice button
+if (usageTracker) {
+  const usageBtn = document.createElement('button');
+  usageBtn.id = 'usage-btn';
+  usageBtn.innerHTML = '📊';
+  usageBtn.title = 'Show voice input usage stats';
+  usageBtn.style.cssText = `
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    border: none;
+    background: #f8faf2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    font-size: 16px;
+  `;
+  usageBtn.addEventListener('click', showUsageStats);
+
+  // Insert before the mic button
+  micButton.parentNode.insertBefore(usageBtn, micButton);
+
+  // Listen for usage warnings
+  window.addEventListener('voice-usage-warnings', (event) => {
+    const { warnings } = event.detail;
+    if (warnings && warnings.length > 0) {
+      // Show warnings in the chat
+      warnings.forEach(warning => {
+        append(`\n⚠️ ${warning}\n`);
+      });
+    }
+  });
+}
+
 micButton.addEventListener("click", async () => {
   if (!isAuthenticated) {
     append("\n❌ Please sign in to use voice input.\n");
@@ -331,6 +447,39 @@ micButton.addEventListener("click", async () => {
   if (!voiceInputService) {
     append("\n❌ Voice input service not available.\n");
     return;
+  }
+
+  // Check burst rate limits first (fastest)
+  if (usageTracker) {
+    const burstCheck = usageTracker.checkBurstLimits();
+    if (!burstCheck.allowed) {
+      const waitSeconds = Math.ceil((burstCheck.waitTimeMs || 0) / 1000);
+      append(`\n⏱️ ${burstCheck.reason || 'Rate limited'}. Please wait ${waitSeconds} seconds.\n`);
+      return;
+    }
+
+    // Add progressive delay for consecutive usage
+    const progressiveDelay = usageTracker.getProgressiveDelay();
+    if (progressiveDelay > 0) {
+      append(`\n⏳ Cooling down... (${Math.ceil(progressiveDelay/1000)}s)\n`);
+      await new Promise(resolve => setTimeout(resolve, progressiveDelay));
+    }
+  }
+
+  // Check usage limits if tracker is available
+  if (usageTracker) {
+    const limits = usageTracker.checkLimits();
+    if (!limits.canTranscribe) {
+      append("\n❌ Monthly usage limit exceeded. Please try again next month or upgrade your plan.\n");
+      return;
+    }
+
+    // Show usage warnings
+    if (limits.warnings.length > 0) {
+      limits.warnings.forEach(warning => {
+        append(`\n⚠️ ${warning}\n`);
+      });
+    }
   }
 
   if (isRecording) {
@@ -357,10 +506,13 @@ micButton.addEventListener("click", async () => {
     
     try {
       const transcribedText = await voiceInputService.stopRecording();
-      
+
       if (transcribedText && transcribedText.trim()) {
         q.value = transcribedText;
         append(`\n🎤 Transcribed: ${transcribedText}\n`);
+
+        // Add cooldown period after successful transcription
+        enforceVoiceButtonCooldown();
       } else {
         append("\n⚠️ No speech detected.\n");
       }
@@ -608,72 +760,105 @@ function updateAuthUI(authenticated, user = null) {
     }
 }
 
-// Custom protocol handler for kahana:// URLs
-function handleKahanaProtocol(url) {
+// Custom protocol handler for kahana:// URLs - SECURE OAuth callback handling
+async function handleKahanaProtocol(url) {
     console.log('Received kahana:// protocol URL:', url);
-    
+
     if (url.startsWith('kahana://auth-callback')) {
-        // Parse the URL to extract auth parameters
-        const urlObj = new URL(url);
-        const params = new URLSearchParams(urlObj.search);
-        
-        // Check for error
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
-        
-        // Check for success
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        const code = params.get('code');
-        
-        if (error) {
-            console.error('OAuth error:', error, errorDescription);
-            showAuthError(`Authentication failed: ${error}`);
-        } else if (accessToken || code) {
-            console.log('OAuth success, tokens received');
-            // The Supabase client should automatically handle the session
-            // We'll let the auth state change listener handle the rest
-            showAuthSuccess('Authentication successful!');
-        } else {
-            console.log('No auth parameters found in callback');
+        try {
+            // Parse the URL to extract auth parameters
+            const urlObj = new URL(url);
+            const params = new URLSearchParams(urlObj.search);
+
+            // Check for error
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+
+            if (error) {
+                console.error('OAuth error:', error, errorDescription);
+                showAuthError(`Authentication failed: ${error}`);
+                return;
+            }
+
+            // Extract authorization code (preferred method - no tokens in URL)
+            const code = params.get('code');
+            if (code) {
+                console.log('OAuth success, authorization code received - securely exchanging for tokens');
+
+                // Securely exchange the code for tokens using Supabase (in privileged context)
+                if (window.supabaseAuth && window.supabaseAuth.supabase) {
+                    try {
+                        const { data, error: exchangeError } = await window.supabaseAuth.supabase.auth.exchangeCodeForSession(code);
+
+                        if (exchangeError) {
+                            console.error('Failed to exchange code for session:', exchangeError);
+                            showAuthError(`Authentication failed: ${exchangeError.message}`);
+                        } else {
+                            console.log('Successfully exchanged code for session');
+
+                            // Save session securely
+                            if (data.session) {
+                                securelySaveSession(data.session);
+                            }
+
+                            showAuthSuccess('Authentication successful!');
+                        }
+                    } catch (e) {
+                        console.error('Error exchanging code for session:', e);
+                        showAuthError('Authentication failed during token exchange');
+                    }
+                } else {
+                    console.error('Supabase auth not available');
+                    showAuthError('Authentication service unavailable');
+                }
+                return;
+            }
+
+            // Fallback: check for direct tokens (less secure, but handle gracefully)
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+
+            if (accessToken && refreshToken) {
+                console.warn('OAuth tokens received directly in URL - this is insecure but will be handled');
+
+                // Use the existing OAuth callback handler
+                if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
+                    const result = await window.supabaseAuth.handleOAuthCallbackData({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                        code: null // No code in this fallback case
+                    });
+
+                    if (result.success) {
+                        showAuthSuccess('Authentication successful!');
+                    } else {
+                        showAuthError(`Authentication failed: ${result.error}`);
+                    }
+                } else {
+                    showAuthError('Authentication service unavailable');
+                }
+                return;
+            }
+
+            // No valid auth parameters found
+            console.error('No valid authentication data found in callback URL');
             showAuthError('No authentication data received');
+
+        } catch (e) {
+            console.error('Error processing OAuth callback:', e);
+            showAuthError('Authentication failed due to processing error');
         }
+    } else {
+        console.warn('Unknown kahana:// URL:', url);
     }
 }
 
 // Simple OAuth flow - no complex message handling needed
 // The user will complete OAuth in a new tab, then we'll check their auth status
 
-// Check for auth callback data in localStorage
-// Check for auth callback data in localStorage
-function checkForAuthCallback() {
-    try {
-        const authData = localStorage.getItem('oasis_auth_callback');
-        if (authData) {
-            const parsed = JSON.parse(authData);
-            // Only process if it's recent (within last 30 seconds)
-            if (parsed.timestamp && (Date.now() - parsed.timestamp) < 30000) {
-                console.log('Found recent auth callback data:', parsed);
-                handleAuthSuccess(parsed);
-                // Clear the data after processing
-                localStorage.removeItem('oasis_auth_callback');
-            }
-        }
-    } catch (e) {
-        // Don't spam the console with localStorage errors (common in some contexts)
-        // Check for NS_ERROR_NOT_AVAILABLE (0x80040111)
-        if (e.name === 'NS_ERROR_NOT_AVAILABLE' || 
-            e.message?.includes('NS_ERROR_NOT_AVAILABLE') || 
-            e.result === 2147746065) {
-            // Silently ignore
-        } else {
-            console.error('Error checking auth callback:', e);
-        }
-    }
-}
+// OAuth callback handling moved to secure kahana:// protocol handler
 
-// Check for auth callback data when the page loads
-checkForAuthCallback();
+// OAuth callback handling is now done securely through the kahana:// protocol handler
 
 // Subscribe to Supabase auth state changes
 if (window.supabaseAuth) {
@@ -703,102 +888,13 @@ if (window.supabaseAuth) {
 // Also check periodically in case the message was missed (disabled due to localStorage issues)
 // setInterval(checkForAuthCallback, 2000);
 
-// Check for OAuth callback data in localStorage (fallback for postMessage issues)
-function checkOAuthCallbackData() {
-    try {
-        const callbackData = localStorage.getItem('oasis_auth_callback');
-        if (callbackData) {
-            const authData = JSON.parse(callbackData);
-            console.log('Found OAuth callback data in localStorage:', authData);
-            
-            // Process the auth data
-            if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-                window.supabaseAuth.handleOAuthCallbackData(authData).then(result => {
-                    if (result.success) {
-                        showAuthSuccess('Authentication successful! You are now signed in.');
-                        // Clear the localStorage data
-                        localStorage.removeItem('oasis_auth_callback');
-                        // Refresh the auth state
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showAuthError(`Authentication failed: ${result.error}`);
-                    }
-                });
-            }
-        }
-    } catch (e) {
-        // Don't spam the console with localStorage errors
-        if (!e.message.includes('NS_ERROR_NOT_AVAILABLE')) {
-            console.error('Error checking OAuth callback data:', e);
-        }
-    }
-}
-
-// Check for OAuth callback data periodically (disabled due to localStorage issues)
-// setInterval(checkOAuthCallbackData, 1000);
-
-// Listen for OAuth callback messages from the redirect page
-window.addEventListener('message', async (event) => {
-    // Only accept messages from our OAuth callback page
-    if (event.origin !== 'https://kahana.co') {
-        return;
-    }
-    
-    if (event.data && event.data.type === 'oauth-success') {
-        console.log('Received OAuth success message:', event.data.data);
-        
-        // Use the new OAuth callback handler
-        if (window.supabaseAuth && window.supabaseAuth.handleOAuthCallbackData) {
-            const result = await window.supabaseAuth.handleOAuthCallbackData(event.data.data);
-            if (result.success) {
-                showAuthSuccess('Authentication successful! You are now signed in.');
-                // Refresh the auth state
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            } else {
-                showAuthError(`Authentication failed: ${result.error}`);
-            }
-        } else {
-            // Fallback to old method
-            handleAuthSuccess(event.data.data);
-        }
-    }
-});
+// OAuth callback handling is now done securely through the kahana:// protocol handler
+// Removed insecure localStorage and postMessage token passing
 
 // Check Authentication button and feature removed
 
 // Handle successful authentication
-function handleAuthSuccess(authData) {
-    console.log('Handling auth success:', authData);
-    
-    // Show success message
-    showAuthSuccess('Authentication successful! Signing you in...');
-    
-    // The Supabase client should automatically detect the session change
-    // We'll let the auth state change listener handle the rest
-    // But we can also try to refresh the auth state manually
-    if (window.supabaseAuth) {
-        window.supabaseAuth.getCurrentUser().then(user => {
-            if (user) {
-                console.log('User authenticated:', user.email);
-                // Update the UI to show authenticated state
-                updateAuthUI(true, user);
-                
-                // Save session if available
-                window.supabaseAuth.supabase.auth.getSession().then(({ data }) => {
-                    if (data.session) {
-                        securelySaveSession(data.session);
-                    }
-                });
-            }
-        }).catch(error => {
-            console.error('Error getting current user:', error);
-        });
-    }
-}
+// OAuth success handling moved to secure kahana:// protocol handler
 
 // Helper functions for auth feedback
 function showAuthSuccess(message) {
@@ -873,6 +969,34 @@ authHeader.style.cssText = `
   margin: 16px;
 `;
 document.body.appendChild(authHeader);
+
+// Voice button cooldown function to prevent rapid usage
+function enforceVoiceButtonCooldown() {
+  if (!micButton) return;
+
+  // Disable button and show cooldown
+  micButton.disabled = true;
+  micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="36" height="36" rx="18" fill="#f8faf2"/>
+    <circle cx="18" cy="18" r="12" stroke="#94A833" stroke-width="2" fill="none">
+      <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 18 18" to="360 18 18" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="18" y="22" text-anchor="middle" font-size="10" fill="#94A833" font-weight="bold">⏳</text>
+  </svg>`;
+  micButton.title = "Cooling down...";
+
+  // Re-enable after 10 seconds
+  setTimeout(() => {
+    if (micButton) {
+      micButton.disabled = false;
+      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
+      </svg>`;
+      micButton.title = "Click to start voice input";
+    }
+  }, 10000); // 10 second cooldown
+}
 
 // Add padding to main content to account for fixed header
 const mainElement = log.parentElement;
