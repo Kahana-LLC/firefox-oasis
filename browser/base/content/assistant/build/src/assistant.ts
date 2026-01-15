@@ -334,7 +334,7 @@ export async function runAssistantStream(
   
   const stream = await graph.stream(
     { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
-    { recursionLimit: 16 }
+    { recursionLimit: 32 }
   );
 
   let combinedSessionString = "";
@@ -365,13 +365,21 @@ export async function runAssistantStream(
       else if (lastMsg?.content != null) text = String(lastMsg.content);
 
       if (text) {
-          // Since our nodes return complete messages (not streaming tokens), 
-          // we can just append and emit.
-          // Note: If we had token streaming, we'd need per-message buffering.
-          // For now, assume atomic messages.
-          const newContent = text + "\n";
-          onChunk(newContent);
-          combinedSessionString += newContent;
+          // Filter out tool output messages from UI display (but keep in session for supervisor)
+          const isToolOutput = text.includes("[Tool Output for");
+          
+          if (!isToolOutput) {
+              // Since our nodes return complete messages (not streaming tokens), 
+              // we can just append and emit.
+              // Note: If we had token streaming, we'd need per-message buffering.
+              // For now, assume atomic messages.
+              const newContent = text + "\n";
+              onChunk(newContent);
+              combinedSessionString += newContent;
+          } else {
+              // Still add to session string for supervisor context, but don't display to user
+              combinedSessionString += text + "\n";
+          }
       }
     }
   }
