@@ -1617,9 +1617,13 @@ function addAIMessage(text) {
 }
 
 // Update existing AI message (for streaming)
-function updateAIMessage(element, text) {
+function updateAIMessage(element, text, isHTML = false) {
   if (element && element.classList.contains('message-content')) {
-    element.textContent = text;
+    if (isHTML) {
+      element.innerHTML = text;
+    } else {
+      element.textContent = text;
+    }
     log.scrollTop = log.scrollHeight;
   }
 }
@@ -2252,15 +2256,57 @@ async function send() {
       mpTrack("assistant_request_complete", { length: fullResponse.length, chunk_count: chunkCount, duration_ms: Date.now() - requestStartTs });
     }
   } catch (e) {
-    const errorMessage = e?.message?.includes('Authentication required') 
-      ? `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`
-      : `Error: ${e?.message || e}`;
+    let errorMessage = '';
+    let isHTML = false;
+    const feedbackUrl = 'https://tally.so/r/3jkNN6';
     
-    updateAIMessage(currentAIMessageElement, errorMessage);
+    // Check for authentication errors
+    if (e?.message?.includes('Authentication required')) {
+      errorMessage = `🔒 ${e.message}\nPlease sign in to continue using the AI assistant.`;
+    }
+    // Check for recursion limit errors (user-friendly message with feedback link)
+    else if (e?.message?.includes('Recursion limit') || e?.name === 'GraphRecursionError') {
+      errorMessage = `Oops! Looks like something went wrong. Please <a href="${feedbackUrl}" target="_blank" style="color: #7A9200; text-decoration: underline;">log a ticket</a> to help us fix it.`;
+      isHTML = true;
+      mpTrack("assistant_recursion_error", { duration_ms: Date.now() - requestStartTs });
+    }
+    // Default error message
+    else {
+      errorMessage = `Error: ${e?.message || e}`;
+    }
     
-    // Forward error to iframe if we're in main window
+    updateAIMessage(currentAIMessageElement, errorMessage, isHTML);
+    
+    // Add click handler for feedback link if it's HTML
+    if (isHTML && currentAIMessageElement) {
+      const link = currentAIMessageElement.querySelector('a');
+      if (link) {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const url = link.href;
+          try {
+            if (typeof openWebLinkIn === 'function') {
+              openWebLinkIn(url, "tab", {});
+            } else if (window.top && window.top.openWebLinkIn) {
+              window.top.openWebLinkIn(url, "tab", {});
+            } else {
+              window.open(url, "_blank");
+            }
+            mpTrack("feedback_link_clicked", { source: "recursion_error" });
+          } catch (error) {
+            console.log("Could not open feedback URL:", error);
+            window.open(url, "_blank");
+          }
+        });
+      }
+    }
+    
+    // Forward error to iframe if we're in main window (plain text version)
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
-      window.notifyIframeCommandResult(null, errorMessage);
+      const plainTextError = isHTML 
+        ? errorMessage.replace(/<[^>]*>/g, '').replace('log a ticket', 'log a ticket at ' + feedbackUrl)
+        : errorMessage;
+      window.notifyIframeCommandResult(null, plainTextError);
     }
     mpTrack("assistant_request_error", { message: errorMessage, duration_ms: Date.now() - requestStartTs, chunk_count: chunkCount });
   } finally {
