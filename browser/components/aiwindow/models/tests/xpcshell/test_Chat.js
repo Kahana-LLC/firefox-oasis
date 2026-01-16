@@ -1,10 +1,18 @@
 /* Any copyright is dedicated to the Public Domain.
  * http://creativecommons.org/publicdomain/zero/1.0/ */
 
+do_get_profile();
+
+const { ChatConversation } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs"
+);
+const { SYSTEM_PROMPT_TYPE, MESSAGE_ROLE } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatConstants.sys.mjs"
+);
 const { Chat } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Chat.sys.mjs"
 );
-const { openAIEngine } = ChromeUtils.importESModule(
+const { MODEL_FEATURES, openAIEngine } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
 );
 
@@ -26,47 +34,71 @@ registerCleanupFunction(() => {
   }
 });
 
-add_task(async function test_openAIEngine_build_uses_prefs() {
-  Services.prefs.setStringPref(PREF_API_KEY, "test-key-123");
-  Services.prefs.setStringPref(PREF_ENDPOINT, "https://example.test/v1");
-  Services.prefs.setStringPref(PREF_MODEL, "gpt-fake");
-
-  const sb = sinon.createSandbox();
-  try {
-    const fakeEngineInstance = {
-      runWithGenerator() {
-        throw new Error("not used");
-      },
-    };
-    const stub = sb
-      .stub(openAIEngine, "_createEngine")
-      .resolves(fakeEngineInstance);
-
-    const engine = await openAIEngine.build();
-
-    Assert.ok(
-      engine instanceof openAIEngine,
-      "Should return openAIEngine instance"
-    );
-    Assert.strictEqual(
-      engine.engineInstance,
-      fakeEngineInstance,
-      "Should store engine instance"
-    );
-    Assert.ok(stub.calledOnce, "_createEngine should be called once");
-
-    const opts = stub.firstCall.args[0];
-    Assert.equal(opts.apiKey, "test-key-123", "apiKey should come from pref");
-    Assert.equal(
-      opts.baseURL,
-      "https://example.test/v1",
-      "baseURL should come from pref"
-    );
-    Assert.equal(opts.modelId, "gpt-fake", "modelId should come from pref");
-  } finally {
-    sb.restore();
-  }
+add_task(async function test_Chat_real_tools_are_registered() {
+  Assert.strictEqual(
+    typeof Chat.toolMap.get_open_tabs,
+    "function",
+    "get_open_tabs should be registered in toolMap"
+  );
+  Assert.strictEqual(
+    typeof Chat.toolMap.search_browsing_history,
+    "function",
+    "search_browsing_history should be registered in toolMap"
+  );
+  Assert.strictEqual(
+    typeof Chat.toolMap.get_page_content,
+    "function",
+    "get_page_content should be registered in toolMap"
+  );
 });
+
+add_task(
+  async function test_openAIEngine_build_with_chat_feature_and_nonexistent_model() {
+    Services.prefs.setStringPref(PREF_API_KEY, "test-key-123");
+    Services.prefs.setStringPref(PREF_ENDPOINT, "https://example.test/v1");
+    Services.prefs.setStringPref(PREF_MODEL, "nonexistent-model");
+
+    const sb = sinon.createSandbox();
+    try {
+      const fakeEngineInstance = {
+        runWithGenerator() {
+          throw new Error("not used");
+        },
+      };
+      const stub = sb
+        .stub(openAIEngine, "_createEngine")
+        .resolves(fakeEngineInstance);
+
+      const engine = await openAIEngine.build(MODEL_FEATURES.CHAT);
+
+      Assert.ok(
+        engine instanceof openAIEngine,
+        "Should return openAIEngine instance"
+      );
+      Assert.strictEqual(
+        engine.engineInstance,
+        fakeEngineInstance,
+        "Should store engine instance"
+      );
+      Assert.ok(stub.calledOnce, "_createEngine should be called once");
+
+      const opts = stub.firstCall.args[0];
+      Assert.equal(opts.apiKey, "test-key-123", "apiKey should come from pref");
+      Assert.equal(
+        opts.baseURL,
+        "https://example.test/v1",
+        "baseURL should come from pref"
+      );
+      Assert.equal(
+        opts.modelId,
+        "qwen3-235b-a22b-instruct-2507-maas",
+        "modelId should fallback to default"
+      );
+    } finally {
+      sb.restore();
+    }
+  }
+);
 
 add_task(async function test_Chat_fetchWithHistory_streams_and_forwards_args() {
   const sb = sinon.createSandbox();
@@ -88,19 +120,30 @@ add_task(async function test_Chat_fetchWithHistory_streams_and_forwards_args() {
         }
         return gen();
       },
+      getConfig() {
+        return {};
+      },
     };
 
     sb.stub(openAIEngine, "build").resolves(fakeEngine);
     // sb.stub(Chat, "_getFxAccountToken").resolves("mock_token");
 
-    const messages = [
-      { role: "system", content: "You are helpful" },
-      { role: "user", content: "Hi there" },
-    ];
+    const conversation = new ChatConversation({
+      title: "chat title",
+      description: "chat desc",
+      pageUrl: new URL("https://www.firefox.com"),
+      pageMeta: {},
+    });
+    conversation.addSystemMessage(
+      SYSTEM_PROMPT_TYPE.TEXT,
+      "You are helpful",
+      0
+    );
+    conversation.addUserMessage("Hi there", "https://www.firefox.com", 0);
 
     // Collect streamed output
     let acc = "";
-    for await (const chunk of Chat.fetchWithHistory(messages)) {
+    for await (const chunk of Chat.fetchWithHistory(conversation)) {
       if (typeof chunk === "string") {
         acc += chunk;
       }
@@ -112,8 +155,8 @@ add_task(async function test_Chat_fetchWithHistory_streams_and_forwards_args() {
       "Should concatenate streamed chunks"
     );
     Assert.deepEqual(
-      capturedArgs,
-      messages,
+      [capturedArgs[0].body, capturedArgs[1].body],
+      [conversation.messages[0].body, conversation.messages[1].body],
       "Should forward messages as args to runWithGenerator()"
     );
     Assert.deepEqual(
@@ -155,6 +198,9 @@ add_task(async function test_Chat_fetchWithHistory_handles_tool_calls() {
         }
         return gen();
       },
+      getConfig() {
+        return {};
+      },
     };
 
     // Mock tool function
@@ -163,26 +209,41 @@ add_task(async function test_Chat_fetchWithHistory_handles_tool_calls() {
     sb.stub(openAIEngine, "build").resolves(fakeEngine);
     // sb.stub(Chat, "_getFxAccountToken").resolves("mock_token");
 
-    const messages = [{ role: "user", content: "Use the test tool" }];
+    const conversation = new ChatConversation({
+      title: "chat title",
+      description: "chat desc",
+      pageUrl: new URL("https://www.firefox.com"),
+      pageMeta: {},
+    });
+    conversation.addUserMessage(
+      "Use the test tool",
+      "https://www.firefox.com",
+      0
+    );
 
     let textOutput = "";
-    let toolCallLogs = [];
-    for await (const chunk of Chat.fetchWithHistory(messages)) {
+    for await (const chunk of Chat.fetchWithHistory(conversation)) {
       if (typeof chunk === "string") {
         textOutput += chunk;
-      } else if (chunk?.type === "tool_call_log") {
-        toolCallLogs.push(chunk);
       }
     }
+
+    const toolCalls = conversation.messages.filter(
+      message =>
+        message.role === MESSAGE_ROLE.ASSISTANT &&
+        message?.content?.type === "function"
+    );
 
     Assert.equal(
       textOutput,
       "I'll help you with that. Tool executed successfully!",
       "Should yield text from both model calls"
     );
-    Assert.equal(toolCallLogs.length, 1, "Should have one tool call log");
+    Assert.equal(toolCalls.length, 1, "Should have one tool call");
     Assert.ok(
-      toolCallLogs[0].content.includes("test_tool"),
+      toolCalls[0].content.body.tool_calls[0].function.name.includes(
+        "test_tool"
+      ),
       "Tool call log should mention tool name"
     );
     Assert.ok(Chat.toolMap.test_tool.calledOnce, "Tool should be called once");
@@ -210,10 +271,16 @@ add_task(
       sb.stub(openAIEngine, "build").rejects(err);
       // sb.stub(Chat, "_getFxAccountToken").resolves("mock_token");
 
-      const messages = [{ role: "user", content: "Hi" }];
+      const conversation = new ChatConversation({
+        title: "chat title",
+        description: "chat desc",
+        pageUrl: new URL("https://www.firefox.com"),
+        pageMeta: {},
+      });
+      conversation.addUserMessage("Hi", "https://www.firefox.com", 0);
 
       const consume = async () => {
-        for await (const _chunk of Chat.fetchWithHistory(messages)) {
+        for await (const _chunk of Chat.fetchWithHistory(conversation)) {
           void _chunk;
         }
       };
@@ -259,6 +326,9 @@ add_task(
           }
           return gen();
         },
+        getConfig() {
+          return {};
+        },
       };
 
       Chat.toolMap.test_tool = sb.stub().resolves("should not be called");
@@ -266,10 +336,20 @@ add_task(
       sb.stub(openAIEngine, "build").resolves(fakeEngine);
       // sb.stub(Chat, "_getFxAccountToken").resolves("mock_token");
 
-      const messages = [{ role: "user", content: "Test bad JSON" }];
+      const conversation = new ChatConversation({
+        title: "chat title",
+        description: "chat desc",
+        pageUrl: new URL("https://www.firefox.com"),
+        pageMeta: {},
+      });
+      conversation.addUserMessage(
+        "Test bad JSON",
+        "https://www.firefox.com",
+        0
+      );
 
       let textOutput = "";
-      for await (const chunk of Chat.fetchWithHistory(messages)) {
+      for await (const chunk of Chat.fetchWithHistory(conversation)) {
         if (typeof chunk === "string") {
           textOutput += chunk;
         }

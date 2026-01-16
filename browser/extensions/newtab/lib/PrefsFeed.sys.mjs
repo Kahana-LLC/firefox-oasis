@@ -321,16 +321,6 @@ export class PrefsFeed {
       "browser.topsites.useRemoteSetting"
     );
 
-    // Read the pref for search hand-off from firefox.js and store it
-    // in our internal list of prefs to watch
-    let handoffToAwesomebarPrefValue = Services.prefs.getBoolPref(
-      "browser.newtabpage.activity-stream.improvesearch.handoffToAwesomebar"
-    );
-    values["improvesearch.handoffToAwesomebar"] = handoffToAwesomebarPrefValue;
-    this._prefMap.set("improvesearch.handoffToAwesomebar", {
-      value: handoffToAwesomebarPrefValue,
-    });
-
     // Add experiment values and default values
     values.featureConfig = lazy.NimbusFeatures.newtab.getAllVariables() || {};
     values.pocketConfig =
@@ -358,6 +348,8 @@ export class PrefsFeed {
     this._setStringPref(values, "discoverystream.spocs-endpoint", "");
     this._setStringPref(values, "discoverystream.spocs-endpoint-query", "");
     this._setStringPref(values, "newNewtabExperience.colors", "");
+    this._setBoolPref(values, "search.useHandoffComponent", false);
+    this._setBoolPref(values, "externalComponents.enabled", false);
 
     // Set the initial state of all prefs in redux
     this.store.dispatch(

@@ -1012,13 +1012,15 @@ describe("ASRouter", () => {
         ASRouterTriggerListeners.get("openURL").init,
         Router._triggerHandler,
         ["www.mozilla.org", "www.mozilla.com"],
-        undefined
+        undefined, // patterns
+        undefined // regexPatterns
       );
       assert.calledWithExactly(
         ASRouterTriggerListeners.get("openURL").init,
         Router._triggerHandler,
         ["www.example.com"],
-        undefined
+        undefined, // patterns
+        undefined // regexPatterns
       );
     });
     it("should parse the message's messagesLoaded trigger and immediately fire trigger", async () => {
@@ -1799,15 +1801,14 @@ describe("ASRouter", () => {
         id: "firstRun",
       });
 
+      const [{ trigger }] =
+        ASRouterTargeting.findMatchingMessage.firstCall.args;
+
       assert.calledOnce(ASRouterTargeting.findMatchingMessage);
-      assert.deepEqual(
-        ASRouterTargeting.findMatchingMessage.firstCall.args[0].trigger,
-        {
-          id: "firstRun",
-          param: undefined,
-          context: { browserIsSelected: true },
-        }
-      );
+      assert.strictEqual(trigger.id, "firstRun");
+      assert.strictEqual(trigger.param, undefined);
+      assert.isObject(trigger.context);
+      assert.strictEqual(trigger.context.browserIsSelected, true);
     });
     it("should record telemetry information", async () => {
       const fakeTimerId = 42;

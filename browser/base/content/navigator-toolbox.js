@@ -187,6 +187,7 @@ document.addEventListener(
         #picture-in-picture-button,
         #urlbar-zoom-button,
         #star-button-box,
+        #oasis-chat-button,
         #personal-toolbar-empty-description,
         #home-button,
         #PlacesToolbar,
@@ -239,6 +240,13 @@ document.addEventListener(
             event,
             element
           );
+          break;
+
+        case "oasis-assistant-button":
+        case "oasis-chat-button":
+          if (isLeftClick) {
+            SidebarController.toggle("viewOasisAssistantSidebar");
+          }
           break;
 
         case "personal-toolbar-empty-description":
@@ -307,6 +315,8 @@ document.addEventListener(
         #picture-in-picture-button,
         #urlbar-zoom-button,
         #star-button-box,
+        #oasis-chat-button,
+        #oasis-assistant-button,
         #personal-toolbar-empty-description,
         #home-button,
         #tracking-protection-icon-container,
@@ -351,6 +361,13 @@ document.addEventListener(
             event,
             element
           );
+          break;
+
+        case "oasis-assistant-button":
+        case "oasis-chat-button":
+          if (isLikeLeftClick) {
+            SidebarController.toggle("viewOasisAssistantSidebar");
+          }
           break;
 
         case "personal-toolbar-empty-description":

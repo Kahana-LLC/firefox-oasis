@@ -2,36 +2,61 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { html } from "chrome://global/content/vendor/lit.all.mjs";
+import { html, nothing } from "chrome://global/content/vendor/lit.all.mjs";
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
+// eslint-disable-next-line import/no-unassigned-import
+import "chrome://browser/content/aiwindow/components/assistant-message-footer.mjs";
 
 /**
  * A custom element for managing AI Chat Content
  */
 export class AIChatContent extends MozLitElement {
   static properties = {
-    messages: { type: Array },
+    conversationState: { type: Array },
   };
 
   constructor() {
     super();
-    this.messages = [];
+    this.conversationState = [];
   }
 
   connectedCallback() {
     super.connectedCallback();
-
-    // Listen for ai-response events as fallback
-    this.addEventListener("ai-response", this.handleAIResponseEvent.bind(this));
+    this.#initEventListeners();
   }
 
   /**
-   * Add an AI response to the chat
-   *
-   * @param {string} response - The AI response text
+   * Initialize event listeners for AI chat content events
    */
-  addAIResponse(response) {
-    this.messages = [...this.messages, { type: "ai", content: response }];
+
+  #initEventListeners() {
+    this.addEventListener(
+      "aiChatContentActor:message",
+      this.messageEvent.bind(this)
+    );
+  }
+
+  messageEvent(event) {
+    const message = event.detail;
+    if (message.role === "assistant") {
+      this.handleAIResponseEvent(event);
+      return;
+    }
+    this.handleUserPromptEvent(event);
+  }
+
+  /**
+   *  Handle user prompt events
+   *
+   * @param {CustomEvent} event - The custom event containing the user prompt
+   */
+
+  handleUserPromptEvent(event) {
+    const { content } = event.detail;
+    this.conversationState.push({
+      role: "user",
+      body: content.body,
+    });
     this.requestUpdate();
   }
 
@@ -40,28 +65,47 @@ export class AIChatContent extends MozLitElement {
    *
    * @param {CustomEvent} event - The custom event containing the response
    */
+
   handleAIResponseEvent(event) {
-    console.warn("Received AI response event:", event);
-    // TODO - Use Markdown to render rich text responses
-    this.addAIResponse(event.detail);
+    // TODO (bug 2009434): update reference to insights
+    const { ordinal, id: messageId, content, insightsApplied } = event.detail;
+
+    this.conversationState[ordinal] = {
+      role: "assistant",
+      messageId,
+      body: content.body,
+      appliedMemories: insightsApplied ?? [],
+    };
+
+    this.requestUpdate();
   }
 
   render() {
     return html`
-      <div>
-        <div>
-          ${this.messages.map(
-            (message, index) => html`
-              <div key=${index}>
-                <strong>${message.type === "ai" ? "AI" : "User"}:</strong>
-                ${message.content}
-              </div>
-            `
-          )}
-          ${this.messages.length === 0
-            ? html`<div>Chat will appear here...</div>`
-            : ""}
-        </div>
+      <link
+        rel="stylesheet"
+        href="chrome://browser/content/aiwindow/components/ai-chat-content.css"
+      />
+      <div class="chat-content-wrapper">
+        ${this.conversationState.map(msg => {
+          return html`
+            <div class=${`chat-bubble chat-bubble-${msg.role}`}>
+              <ai-chat-message
+                .message=${msg.body}
+                .role=${msg.role}
+              ></ai-chat-message>
+
+              ${msg.role === "assistant"
+                ? html`
+                    <assistant-message-footer
+                      .messageId=${msg.messageId}
+                      .appliedMemories=${msg.appliedMemories}
+                    ></assistant-message-footer>
+                  `
+                : nothing}
+            </div>
+          `;
+        })}
       </div>
     `;
   }

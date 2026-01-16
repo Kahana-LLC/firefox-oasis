@@ -426,9 +426,8 @@ uint64_t LocalAccessible::NativeLinkState() const { return 0; }
 bool LocalAccessible::NativelyUnavailable() const {
   if (mContent->IsHTMLElement()) return mContent->AsElement()->IsDisabled();
 
-  return mContent->IsElement() && mContent->AsElement()->AttrValueIs(
-                                      kNameSpaceID_None, nsGkAtoms::disabled,
-                                      nsGkAtoms::_true, eCaseMatters);
+  return mContent->IsElement() &&
+         mContent->AsElement()->GetBoolAttr(nsGkAtoms::disabled);
 }
 
 Accessible* LocalAccessible::ChildAtPoint(int32_t aX, int32_t aY,
@@ -1121,7 +1120,7 @@ already_AddRefed<AccAttributes> LocalAccessible::Attributes() {
     attribIter.ExposeAttr(attributes);
   }
 
-  if (nsAccUtils::HasARIAAttr(Elm(), nsGkAtoms::aria_actions)) {
+  if (HasCustomActions()) {
     attributes->SetAttribute(nsGkAtoms::hasActions, true);
   }
 
@@ -4091,7 +4090,7 @@ already_AddRefed<AccAttributes> LocalAccessible::BundleFieldsForCache(
       fields->SetAttribute(CacheKey::ARIAAttributes, DeleteEntry());
     }
 
-    if (nsAccUtils::HasARIAAttr(Elm(), nsGkAtoms::aria_actions)) {
+    if (HasCustomActions()) {
       fields->SetAttribute(CacheKey::HasActions, true);
     } else if (IsUpdatePush(CacheDomain::ARIA)) {
       fields->SetAttribute(CacheKey::HasActions, DeleteEntry());
@@ -4565,4 +4564,9 @@ bool LocalAccessible::ARIAAttrValueIs(nsAtom* aAttrName,
 bool LocalAccessible::HasARIAAttr(nsAtom* aAttrName) const {
   return mContent ? nsAccUtils::HasDefinedARIAToken(mContent, aAttrName)
                   : false;
+}
+
+bool LocalAccessible::HasCustomActions() const {
+  dom::Element* el = Elm();
+  return el && nsAccUtils::HasARIAAttr(el, nsGkAtoms::aria_actions);
 }

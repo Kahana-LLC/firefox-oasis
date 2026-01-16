@@ -43,6 +43,7 @@
   }
 }
 
+toolbar[inactive="true"] .urlbar,
 #urlbar[actiontype="switchtab"][action-override] > .urlbar-input-container > #urlbar-label-box,
 #urlbar:not([actiontype="switchtab"], [actiontype="extension"]) > .urlbar-input-container > #urlbar-label-box,
 #urlbar:not([actiontype="switchtab"]) > .urlbar-input-container > #urlbar-label-box > #urlbar-label-switchtab,
@@ -50,8 +51,9 @@
 .urlbar-input-container[pageproxystate="invalid"] > #page-action-buttons > .urlbar-page-action,
 #identity-box.chromeUI ~ #page-action-buttons > .urlbar-page-action:not(#star-button-box, #split-view-button),
 #urlbar[usertyping] > .urlbar-input-container > #page-action-buttons > #urlbar-zoom-button,
-.urlbar:is(:not([usertyping]), :not([focused])) > .urlbar-input-container > .urlbar-go-button,
-.urlbar-revert-button-container {
+.urlbar:not([usertyping]) > .urlbar-input-container > .urlbar-go-button,
+.urlbar:not(#searchbar-new, [focused]) > .urlbar-input-container > .urlbar-go-button,
+#urlbar-revert-button-container {
   display: none;
 }
 
@@ -847,7 +849,7 @@
 
 /* Persisted Search revert button */
 
-.urlbar-revert-button {
+#urlbar-revert-button {
   list-style-image: url(chrome://global/skin/icons/defaultFavicon.svg);
   fill: var(--toolbarbutton-icon-fill-attention);
 
@@ -856,8 +858,8 @@
   }
 }
 
-.urlbar[persistsearchterms] > .urlbar-input-container {
-  > .urlbar-revert-button-container {
+#urlbar[persistsearchterms] > .urlbar-input-container {
+  > #urlbar-revert-button-container {
     display: inherit;
   }
 
@@ -888,6 +890,60 @@
 
 #picture-in-picture-button:-moz-locale-dir(rtl) > .urlbar-icon {
   transform: scaleX(-1);
+}
+
+/* Oasis Chat button - pill-shaped button with icon and text */
+
+.oasis-chat-button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 64px;
+  background-color: #f2f4e5;
+  cursor: pointer;
+  margin-inline: 4px;
+}
+
+.oasis-chat-button:hover {
+  background-color: #e8ebdb;
+}
+
+:root[oasis-assistant-overlay="true"] .oasis-chat-button {
+  background-color: #e0e4cc;
+}
+
+.oasis-chat-icon {
+  width: 12px;
+  height: 12px;
+  list-style-image: url(chrome://browser/skin/oasis-chat-sparkle.svg);
+  -moz-context-properties: fill;
+  fill: #7a9200;
+}
+
+#oasis-chat-button-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #7a9200;
+  line-height: 20px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Legacy Oasis Assistant button (fallback) */
+
+#oasis-assistant-button-icon {
+  list-style-image: url(chrome://browser/skin/oasis-assistant.svg);
+}
+
+#oasis-assistant-button:hover > #oasis-assistant-button-icon {
+  fill: var(--toolbarbutton-icon-fill-attention);
+  fill-opacity: 1;
+}
+
+:root[oasis-assistant-overlay="true"] #oasis-assistant-button-icon {
+  fill: var(--toolbarbutton-icon-fill-attention);
+  fill-opacity: 1;
 }
 
 /* Taskbar Tabs icon */
@@ -1188,7 +1244,7 @@
 
 .searchmode-switcher-chicklet {
   background-color: var(--urlbar-box-bgcolor);
-  border-start-end-radius: var(--toolbarbutton-border-radius);
+  border-start-end-radius: var(--urlbar-inner-border-radius);
   border-end-end-radius: var(--urlbar-inner-border-radius);
   align-items: center;
   height: 100%;

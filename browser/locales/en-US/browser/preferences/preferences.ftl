@@ -421,6 +421,94 @@ translate-exceptions =
     .label = Exceptions…
     .accesskey = x
 
+settings-translations-header =
+    .label = Translations
+    .aria-label = Translations
+    .description = Translate pages or selected text. To protect your privacy, translations stay on your device.
+
+settings-translations-offer-to-translate-label =
+    .label = Offer full page translation
+
+settings-translations-more-settings-button =
+    .label = More translation settings
+    .description = Set preferences for languages, websites, and offline translation.
+
+settings-translations-subpage-header =
+    .heading = More translation settings
+
+settings-translations-subpage-speed-up-translation-header =
+    .label = Speed up translation
+    .description = Download complete languages for faster translations and to translate offline.
+
+settings-translations-subpage-automatic-translation-header =
+    .label = Automatic translation
+
+settings-translations-subpage-always-translate-header =
+    .label = Always translate these languages
+
+settings-translations-subpage-never-translate-header =
+    .label = Never translate these languages
+
+settings-translations-subpage-never-translate-sites-header =
+    .label = Never translate these sites
+
+# The icon placeholders show the translations button and the settings gear in the urlbar panel.
+settings-translations-subpage-never-translate-sites-description =
+    To add a site, open the <img data-l10n-name="translations-icon"/> translation panel, select <img data-l10n-name="settings-icon"/> translation settings, then choose “Never translate this site”
+
+settings-translations-subpage-language-select-option =
+    .label = Add language
+
+settings-translations-subpage-language-add-button =
+    .aria-label = Add language
+    .title = Add language
+
+settings-translations-subpage-download-languages-header =
+    .label = Download languages
+
+settings-translations-subpage-download-languages-select-option =
+    .label = Select language
+
+settings-translations-subpage-download-languages-button =
+    .aria-label = Download language
+    .title = Download language
+
+# Variables:
+#   $language (string) - Localized name of the language to download.
+#   $size (string) - Download size in megabytes, formatted for the locale.
+settings-translations-subpage-download-language-option = { $language } ({ $size }MB)
+    .label = { $language } ({ $size }MB)
+
+settings-translations-subpage-no-languages-downloaded =
+    .label = No languages downloaded
+
+settings-translations-subpage-no-languages-added =
+    .label = No languages added
+
+settings-translations-subpage-download-progress = Download in progress…
+
+# Variables:
+#   $language (string) - The localized display name of the language.
+#   $size (string) - The download size of the language in megabytes.
+settings-translations-subpage-download-error = Couldn’t download { $language } ({ $size }MB)
+
+settings-translations-subpage-download-retry-button =
+    .label = Try again
+
+# Variables:
+#   $language (string) - The localized display name of the language.
+#   $size (string) - The download size of the language in megabytes.
+settings-translations-subpage-download-delete-confirm = Delete { $language } ({ $size }MB)?
+
+settings-translations-subpage-download-delete-button =
+    .label = Delete
+
+settings-translations-subpage-download-cancel-button =
+    .label = Cancel
+
+settings-translations-subpage-no-sites-added =
+    .label = No sites added
+
 # Variables:
 #    $localeName (string) - Localized name of the locale to be used.
 use-system-locale =
@@ -722,13 +810,18 @@ home-new-windows-tabs-description2 = Choose what you see when you open your home
 
 ## Home Section - Home Page Customization
 
-home-homepage-header = Homepage
+home-homepage-title =
+    .label = Homepage
 
 home-homepage-mode-label = Homepage and new windows
 
-home-homepage-mode-label2 = New windows
+home-homepage-new-windows =
+    .label = New windows
 
 home-newtabs-mode-label = New tabs
+
+home-homepage-new-tabs =
+    .label = New tabs
 
 home-restore-defaults =
     .label = Restore Defaults
@@ -751,7 +844,8 @@ home-homepage-manage-extension-button =
     .label = Manage extension
 
 # This option leads to the "Custom Homepage" subpage
-home-homepage-custom-homepage-url = Choose a specific site
+home-homepage-custom-homepage-button =
+    .label = Choose a specific site
 
 ## Custom Homepage subpage
 
@@ -930,6 +1024,72 @@ search-show-suggestions-private-windows-2 =
 search-suggestions-cant-show-2 =
     .message = Search suggestions will not be shown in location bar results because you have configured { -brand-short-name } to never remember history.
 
+
+addressbar-header-1 =
+    .label = Address Bar
+    .description = Choose which suggestions display in your address bar
+
+# When Firefox Suggest is enabled, this replaces `addressbar-header-1`.
+addressbar-header-firefox-suggest-2 =
+    .label = { -firefox-suggest-brand-name }
+    .description = Suggestions from { -brand-short-name } and our partners in your address bar.
+
+addressbar-locbar-history-option =
+    .label = Browsing history
+    .accesskey = h
+addressbar-locbar-bookmarks-option =
+    .label = Bookmarks
+    .accesskey = k
+addressbar-locbar-clipboard-option =
+    .label = Clipboard
+    .accesskey = C
+addressbar-locbar-openpage-option =
+    .label = Open tabs
+    .accesskey = O
+# Shortcuts refers to the shortcut tiles on the new tab page, previously known as top sites. Translation should be consistent.
+addressbar-locbar-shortcuts-option =
+    .label = Shortcuts
+    .accesskey = S
+addressbar-locbar-topsites-option =
+    .label = Top sites
+    .accesskey = T
+addressbar-locbar-showrecentsearches-option-2 =
+    .label = Recent searches
+    .accesskey = r
+addressbar-locbar-engines-option-1 =
+    .label = Suggest search engines to use
+    .accesskey = a
+addressbar-locbar-quickactions-option =
+    .label = Quick actions
+    .accesskey = Q
+addressbar-locbar-showtrendingsuggestions-option-2 =
+    .label = Trending search suggestions
+    .accesskey = t
+
+# Toggles whether suggestions are obtained from Firefox Suggest or not (local or online).
+addressbar-locbar-suggest-all-option-2 =
+    .label = Suggestions from { -brand-short-name }
+    .description = Get suggestions from the web related to your search.
+
+addressbar-locbar-suggest-sponsored-option-2 =
+    .label = Suggestions from sponsors
+    .description = Support { -brand-short-name } with occasional sponsored suggestions.
+
+# This string is used for a checkbox in the settings UI that opts the
+# user into "online" Firefox Suggest, allowing them to receive suggestions from
+# Mozilla's Merino server.
+# "Mozilla" is intentionally hardcoded to prevent forks from replacing it
+# with their own vendor name, since the online suggest is created and maintained
+# by Mozilla.
+addressbar-firefox-suggest-online =
+    .label = Retrieve suggestions from Mozilla as you type
+
+addressbar-dismissed-suggestions-label-2 =
+    .label = Dismissed suggestions
+    .description = Restore dismissed suggestions from sponsors and { -brand-short-name }.
+addressbar-restore-dismissed-suggestions-button-2 =
+    .label = Restore suggestions
+
 search-one-click-header2 = Search Shortcuts
 
 search-one-click-desc = Choose the alternative search engines that appear below the address bar and search bar when you start to enter a keyword.
@@ -997,6 +1157,13 @@ containers-remove-button =
 sync-group-label =
     .label = Sync
 
+account-group-label =
+    .label = { -vendor-short-name } account
+
+account-placeholder =
+    .label = You’re not signed in
+    .description = Sign in to keep your data private, encrypted, and synced across devices.
+
 ## Firefox account - Signed out. Note that "Sync" and "Firefox account" are now
 ## more discrete ("signed in" no longer means "and sync is connected").
 
@@ -1009,6 +1176,10 @@ sync-signedout-account-signin3 =
 
 sync-signedout-account-signin-4 =
     .label = Sign in to your account to start syncing
+    .accesskey = i
+
+sync-signedout-account-short =
+    .label = Sign in
     .accesskey = i
 
 # This message contains two links and two icon images.
@@ -1037,14 +1208,39 @@ sync-sign-out =
     .label = Sign Out…
     .accesskey = g
 
+sync-sign-out2 =
+    .label = Sign out
+    .accesskey = g
+
 sync-manage-account = Manage account
+    .accesskey = o
+
+sync-manage-account2 =
+    .label = Manage account
     .accesskey = o
 
 ## Variables
 ## $email (string) - Email used for Firefox account
+## $name (string) - Name used for Firefox account
+
+sync-account-signed-in =
+    .label = { $email }
+
+sync-account-signed-in-display-name =
+    .label = { $name }
+    .description = { $email }
 
 sync-signedin-unverified = { $email } is not verified.
+
+sync-signedin-unverified2 =
+    .label = { $email } isn’t confirmed yet
+    .description = Check your inbox to confirm your account and make it official.
+
 sync-signedin-login-failure = Please sign in to reconnect { $email }
+
+sync-signedin-login-failure2 =
+    .label = You’re signed out of { $email }
+    .description = Sign back in to reconnect and start syncing your data.
 
 ##
 
@@ -1071,7 +1267,7 @@ prefs-syncing-off = Syncing: OFF
 
 prefs-syncing-off-2 =
     .label = Syncing is OFF
-    .description = Turn on sync to get your your bookmarks, passwords, history, and more on any device.
+    .description = Turn on sync to get your bookmarks, passwords, history, and more on any device.
 
 prefs-sync-turn-on-syncing =
     .label = Turn on syncing…
@@ -1265,6 +1461,10 @@ forms-additional-protections-header =
 forms-primary-pw-use =
     .label = Use a primary password
     .accesskey = U
+forms-primary-pw-use-2 =
+    .label = Use a primary password
+    .description = Adds an extra layer of security to protect your saved passwords.
+    .accesskey = U
 forms-primary-pw-set =
     .label = Set primary password
 forms-primary-pw-on =
@@ -1277,6 +1477,8 @@ forms-primary-pw-turn-off =
 # This operation requires the user to authenticate with the operating system (device sign-in)
 forms-os-reauth =
     .label = Require device sign in to fill and manage passwords
+forms-os-reauth-2 =
+    .label = Require device sign in to manage passwords
 forms-primary-pw-learn-more-link = Learn more
 # This string uses the former name of the Primary Password feature
 # ("Master Password" in English) so that the preferences can be found
@@ -1345,10 +1547,14 @@ payments-delete-payment-prompt-title = Delete this payment method?
 payments-delete-payment-prompt-confirm-button = Delete
 payments-delete-payment-prompt-cancel-button = Cancel
 
+# This message is displayed when no payment methods such as credit card are stored in Firefox
+payments-no-payments-stored-message =
+    .label = No payment methods added
+
 # These values are displayed for each credit card record listed on the Manage Payment methods
 # settings page.
 # Variables:
-#   $cardNumber (string) - The obscured credit card number (for example: 2423 *********)
+#   $cardNumber (string) - The obscured credit card number (for example: ********* 2423)
 #   $expDate (string) - The obscured expiry date of the credit card (for example: XX/2027)
 payment-moz-box-item =
   .label = { $cardNumber }
@@ -1375,6 +1581,10 @@ addresses-delete-address-prompt-cancel-button = Cancel
 autofill-addresses-add-button = Add new address
 autofill-addresses-manage-addresses-title =
     .heading = Manage addresses and more
+
+# This message is displayed when no addresses are stored in Firefox
+addresses-no-addresses-stored-message =
+    .label = No addresses added
 
 # These values are displayed for each address record listed on the "Manage addresses and more" subpage.
 # Variables:
@@ -1502,79 +1712,6 @@ cookie-banner-blocker-description = When a site asks if they can use cookies in 
 cookie-banner-learn-more = Learn more
 cookie-banner-blocker-checkbox-label =
     .label = Automatically refuse cookie banners
-
-## Privacy Section - Address Bar
-
-addressbar-header = Address Bar
-
-addressbar-suggest-1 = Choose which suggestions display in your address bar
-
-# When Firefox Suggest is enabled, this replaces `addressbar-header`.
-addressbar-header-firefox-suggest-1 = { -firefox-suggest-brand-name }
-
-# When Firefox Suggest is enabled, this replaces `addressbar-suggest`.
-addressbar-suggest-firefox-suggest-1 = Suggestions from { -brand-short-name } and our partners in your address bar.
-
-# When Firefox Suggest is enabled, a "Learn more" link appears at the end of
-# `addressbar-suggest-firefox-suggest`.
-addressbar-locbar-firefox-suggest-learn-more = Learn more
-
-addressbar-locbar-history-option =
-    .label = Browsing history
-    .accesskey = h
-addressbar-locbar-bookmarks-option =
-    .label = Bookmarks
-    .accesskey = k
-addressbar-locbar-clipboard-option =
-    .label = Clipboard
-    .accesskey = C
-addressbar-locbar-openpage-option =
-    .label = Open tabs
-    .accesskey = O
-# Shortcuts refers to the shortcut tiles on the new tab page, previously known as top sites. Translation should be consistent.
-addressbar-locbar-shortcuts-option =
-    .label = Shortcuts
-    .accesskey = S
-addressbar-locbar-topsites-option =
-    .label = Top sites
-    .accesskey = T
-addressbar-locbar-engines-option-1 =
-    .label = Suggest search engines to use
-    .accesskey = a
-addressbar-locbar-quickactions-option =
-    .label = Quick actions
-    .accesskey = Q
-addressbar-locbar-showrecentsearches-option-2 =
-    .label = Recent searches
-    .accesskey = r
-addressbar-locbar-showtrendingsuggestions-option-2 =
-    .label = Trending search suggestions
-    .accesskey = t
-
-# Toggles whether suggestions are obtained from Firefox Suggest or not (local or online).
-addressbar-locbar-suggest-all-option =
-  .label = Suggestions from { -brand-short-name }
-addressbar-locbar-suggest-all-option-desc = Get suggestions from the web related to your search.
-
-addressbar-locbar-suggest-sponsored-option =
-  .label = Suggestions from sponsors
-addressbar-locbar-suggest-sponsored-desc = Support { -brand-short-name } with occasional sponsored suggestions.
-
-# This string is used for a checkbox in the settings UI that opts the
-# user into "online" Firefox Suggest, allowing them to receive suggestions from
-# Mozilla's Merino server.
-# "Mozilla" is intentionally hardcoded to prevent forks from replacing it
-# with their own vendor name, since the online suggest is created and maintained
-# by Mozilla.
-addressbar-firefox-suggest-online =
-  .label = Retrieve suggestions from Mozilla as you type
-
-addressbar-quickactions-learn-more = Learn more
-
-addressbar-dismissed-suggestions-label = Dismissed suggestions
-addressbar-restore-dismissed-suggestions-description = Restore dismissed suggestions from sponsors and { -brand-short-name }.
-addressbar-restore-dismissed-suggestions-button =
-  .label = Restore
 
 ## Privacy Section - Content Blocking
 

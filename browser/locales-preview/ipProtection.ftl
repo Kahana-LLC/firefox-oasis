@@ -53,11 +53,7 @@ ipprotection-connection-status-on =
 ipprotection-connection-status-off =
   .label = VPN is off
 
-# The panel status card has a header, as well as VPN server location name and connection time displayed under it when the VPN is on.
-# Variables:
-#   $time (String) - The amount of time connected to the proxy as HH:MM:SS (hours, minutes, seconds).
-ipprotection-connection-time = { $time }
-
+# The panel status card has a header, as well as VPN server location name displayed under it when the VPN is on.
 # Location refers to the VPN server geographical position.
 ipprotection-location-title =
   .title = Location selected based on fastest server
@@ -84,11 +80,20 @@ ipprotection-toggle-active =
 ipprotection-toggle-inactive =
   .aria-label = Turn VPN on
 
+# Button to turn off the VPN
+ipprotection-button-turn-vpn-off = Turn off VPN
+# Button to turn on the VPN
+ipprotection-button-turn-vpn-on = Turn on VPN
+
 ## Messages and errors
 
 ipprotection-message-generic-error =
   .heading = Couldn’t connect to VPN
   .message = Try again in a few minutes.
+
+ipprotection-message-bandwidth-warning =
+  .heading = You’re almost at your bandwidth limit
+  .message = You have 1 GB of the allocated 150 GB left this month.
 
 ipprotection-message-continuous-onboarding-intro = Turn on VPN to hide your location and add extra encryption to your browsing.
 ipprotection-message-continuous-onboarding-autostart = <a data-l10n-name="setting-link">Set VPN to turn on</a> every time you open { -brand-short-name } for an extra layer of protection.
@@ -103,9 +108,16 @@ ip-protection-learn-more = Learn more
 
 ip-protection-site-exceptions =
   .label = Site specific settings
+
+# Variables:
+#   $count (number) - The number of sites saved as VPN exclusions.
 ip-protection-site-exceptions-all-sites-button =
   .label = Manage website settings
-  .description = No websites added yet
+  .description =
+    { $count ->
+        [one] { $count } website
+       *[other] { $count } websites
+    }
 
 ip-protection-autostart =
   .label = Turn on VPN automatically

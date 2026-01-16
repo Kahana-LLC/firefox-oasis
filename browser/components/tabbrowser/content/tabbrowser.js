@@ -119,7 +119,7 @@
         TaskbarTabs: "resource:///modules/taskbartabs/TaskbarTabs.sys.mjs",
         UrlbarProviderOpenTabs:
           "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
-        SVG_DATA_URI_PREFIX: "moz-src:///browser/modules/FaviconUtils.sys.mjs",
+        FaviconUtils: "moz-src:///browser/modules/FaviconUtils.sys.mjs",
       });
       ChromeUtils.defineLazyGetter(this, "tabLocalization", () => {
         return new Localization(
@@ -625,6 +625,19 @@
           URILoadingWrapper,
           browser
         );
+
+      if (AIWindow.isAIWindowActive(window)) {
+        let uriToLoad = gBrowserInit.uriToLoadPromise;
+        let firstURI = Array.isArray(uriToLoad) ? uriToLoad[0] : uriToLoad;
+
+        if (!this._allowTransparentBrowser) {
+          browser.toggleAttribute(
+            "transparent",
+            !firstURI ||
+              AIWindow.isAIWindowContentPage(Services.io.newURI(firstURI))
+          );
+        }
+      }
 
       let uniqueId = this._generateUniquePanelID();
       let panel = this.getPanel(browser);
@@ -1140,16 +1153,11 @@
           let url = aIconURL;
           if (
             this._remoteSVGIconDecoding &&
-            url.startsWith(this.SVG_DATA_URI_PREFIX)
+            url.startsWith(this.FaviconUtils.SVG_DATA_URI_PREFIX)
           ) {
             // 16px is hardcoded for .tab-icon-image in tabs.css
             let size = Math.floor(16 * window.devicePixelRatio);
-            let params = new URLSearchParams({
-              url,
-              width: size,
-              height: size,
-            });
-            url = "moz-remote-image://?" + params;
+            url = this.FaviconUtils.getMozRemoteImageURL(url, size);
           }
           aTab.setAttribute("image", url);
         } else {
@@ -2437,7 +2445,7 @@
         b.setAttribute("name", name);
       }
 
-      if (this._allowTransparentBrowser) {
+      if (AIWindow.isAIWindowActive(window) || this._allowTransparentBrowser) {
         b.setAttribute("transparent", "true");
       }
 
@@ -3105,7 +3113,7 @@
           // If we were called by frontend and don't have openWindowInfo,
           // but we were opened from another browser, set the cross group
           // opener ID:
-          if (openerBrowser && !openWindowInfo) {
+          if (openerBrowser?.browsingContext && !openWindowInfo) {
             b.browsingContext.crossGroupOpener = openerBrowser.browsingContext;
           }
         }
@@ -3206,6 +3214,9 @@
       let element = this.tabContainer.dragAndDropElements[elementIndex];
       if (this.isTabGroupLabel(element)) {
         element = element.group.tabs[0];
+      }
+      if (this.isSplitViewWrapper(element)) {
+        element = element.tabs[0];
       }
       return element._tPos;
     }
@@ -3345,7 +3356,7 @@
       if (panelEl) {
         const footer = document.createXULElement("split-view-footer");
         footer.setTab(tab);
-        panelEl.appendChild(footer);
+        panelEl.querySelector(".browserStack").appendChild(footer);
       }
     }
 
@@ -3605,6 +3616,8 @@
 
       let oldSelectedTab = selectTab && group.ownerGlobal.gBrowser.selectedTab;
       let newTabs = [];
+      let adoptedTab;
+      let splitview;
 
       // bug1969925 adopting a tab group will cause the window to close if it
       // is the only thing on the tab strip
@@ -3613,24 +3626,38 @@
         t => t.group == group
       );
 
-      for (let tab of group.tabs) {
-        if (noOtherTabsInWindow) {
+      // We dispatch this event in a separate for loop because the tab extension API
+      // expects event.detail to be a tab.
+      if (noOtherTabsInWindow) {
+        for (let element of group.tabs) {
           group.dispatchEvent(
             new CustomEvent("TabUngrouped", {
               bubbles: true,
-              detail: tab,
+              detail: element,
             })
           );
         }
-        let adoptedTab = this.adoptTab(tab, {
-          elementIndex,
-          tabIndex,
-          selectTab: tab === oldSelectedTab,
-        });
-        newTabs.push(adoptedTab);
-        // Put next tab after current one.
-        elementIndex = undefined;
-        tabIndex = adoptedTab._tPos + 1;
+      }
+
+      for (let element of group.tabsAndSplitViews) {
+        if (element.tagName == "tab-split-view-wrapper") {
+          splitview = this.adoptSplitView(element, {
+            elementIndex,
+            tabIndex,
+          });
+          newTabs.push(splitview);
+          tabIndex = splitview.tabs[0]._tPos + splitview.tabs.length;
+        } else {
+          adoptedTab = this.adoptTab(element, {
+            elementIndex,
+            tabIndex,
+            selectTab: element === oldSelectedTab,
+          });
+          newTabs.push(adoptedTab);
+          // Put next tab after current one.
+          elementIndex = undefined;
+          tabIndex = adoptedTab._tPos + 1;
+        }
       }
 
       return this.addTabGroup(newTabs, {
@@ -3639,6 +3666,39 @@
         color: group.color,
         insertBefore: newTabs[0],
         isAdoptingGroup: true,
+      });
+    }
+
+    /**
+     * @param {MozSplitViewWrapper} container
+     * @param {object} [options]
+     * @param {number} [options.elementIndex]
+     * @param {number} [options.tabIndex]
+     * @param {boolean} [options.selectTab]
+     * @returns {MozSplitViewWrapper}
+     */
+    adoptSplitView(container, { elementIndex, tabIndex } = {}) {
+      if (container.ownerDocument == document) {
+        return container;
+      }
+
+      let newTabs = [];
+
+      if (!tabIndex) {
+        tabIndex = this.#elementIndexToTabIndex(elementIndex);
+      }
+
+      for (let tab of container.tabs) {
+        let adoptedTab = this.adoptTab(tab, {
+          tabIndex,
+        });
+        newTabs.push(adoptedTab);
+        tabIndex = adoptedTab._tPos + 1;
+      }
+
+      return this.addTabSplitView(newTabs, {
+        id: container.splitViewId,
+        insertBefore: newTabs[0],
       });
     }
 
@@ -5759,7 +5819,7 @@
       // We should be using the disabled property here instead of the attribute,
       // but some elements that this function is used with don't support it (e.g.
       // menuitem).
-      if (node.getAttribute("disabled") == "true") {
+      if (node.hasAttribute("disabled")) {
         return;
       } // Do nothing
 
@@ -5973,6 +6033,10 @@
         });
         aOtherTab.dispatchEvent(event);
       }
+
+      // Copy tab note-related properties of the tab.
+      aOurTab.hasTabNote = aOtherTab.hasTabNote;
+      aOurTab.canonicalUrl = aOtherTab.canonicalUrl;
 
       if (otherBrowser.isDistinctProductPageVisit) {
         ourBrowser.isDistinctProductPageVisit = true;
@@ -6817,6 +6881,9 @@
       if (tab.group) {
         state.tabGroupId = tab.group.id;
       }
+      if (tab.splitview) {
+        state.splitViewId = tab.splitview.splitViewId;
+      }
       return state;
     }
 
@@ -6862,9 +6929,7 @@
       let tabs;
       if (this.isTab(element)) {
         tabs = [element];
-      } else if (this.isTabGroup(element)) {
-        tabs = element.tabs;
-      } else if (this.isSplitViewWrapper(element)) {
+      } else if (this.isTabGroup(element) || this.isSplitViewWrapper(element)) {
         tabs = element.tabs;
       } else {
         throw new Error(
@@ -9005,6 +9070,14 @@
           ) {
             this.mBrowser.originalURI = aRequest.originalURI;
           }
+
+          if (!this._allowTransparentBrowser) {
+            this.mBrowser.toggleAttribute(
+              "transparent",
+              AIWindow.isAIWindowActive(window) &&
+                AIWindow.isAIWindowContentPage(aLocation)
+            );
+          }
         }
 
         let userContextId = this.mBrowser.getAttribute("usercontextid") || 0;
@@ -9616,7 +9689,7 @@ var TabContextMenu = {
     let closedCount = SessionStore.getLastClosedTabCount(window);
     document
       .getElementById("History:UndoCloseTab")
-      .setAttribute("disabled", closedCount == 0);
+      .toggleAttribute("disabled", closedCount == 0);
     document.l10n.setArgs(document.getElementById("context_undoCloseTab"), {
       tabCount: closedCount,
     });
@@ -9774,17 +9847,27 @@ var TabContextMenu = {
     }
 
     let contextAddNote = document.getElementById("context_addNote");
-    let contextEditNote = document.getElementById("context_editNote");
+    let contextUpdateNote = document.getElementById("context_updateNote");
     if (gBrowser._tabNotesEnabled) {
-      contextAddNote.disabled = !this.TabNotes.isEligible(this.contextTab);
+      // Tab notes behaviour is disabled if a user has a selection of tabs that
+      // contains more than one canonical URL.
+      let multiselectingDiverseUrls =
+        this.multiselected &&
+        !this.contextTabs.every(
+          t => t.canonicalUrl === this.contextTabs[0].canonicalUrl
+        );
+
+      contextAddNote.disabled =
+        multiselectingDiverseUrls || !this.TabNotes.isEligible(this.contextTab);
+      contextUpdateNote.disabled = multiselectingDiverseUrls;
 
       this.TabNotes.has(this.contextTab).then(hasNote => {
         contextAddNote.hidden = hasNote;
-        contextEditNote.hidden = !hasNote;
+        contextUpdateNote.hidden = !hasNote;
       });
     } else {
       contextAddNote.hidden = true;
-      contextEditNote.hidden = true;
+      contextUpdateNote.hidden = true;
     }
 
     // Split View
@@ -10332,6 +10415,14 @@ var TabContextMenu = {
         gBrowser.tabLocalization.formatValueSync("tab-context-badge-new")
       );
     });
+  },
+
+  deleteTabNotes() {
+    for (let tab of this.contextTabs) {
+      this.TabNotes.delete(tab, {
+        telemetrySource: this.TabNotes.TELEMETRY_SOURCE.TAB_CONTEXT_MENU,
+      });
+    }
   },
 };
 

@@ -99,7 +99,6 @@ export class UrlbarInput extends HTMLElement {
           <menupopup class="searchmode-switcher-popup toolbar-menupopup"
                      consumeoutsideclicks="false">
             <label class="searchmode-switcher-popup-description"
-                   data-l10n-id="urlbar-searchmode-popup-description"
                    role="heading" />
             <menuseparator/>
             <menuseparator class="searchmode-switcher-popup-footer-separator"/>
@@ -302,11 +301,25 @@ export class UrlbarInput extends HTMLElement {
     this.inputField = /** @type {HTMLInputElement} */ (
       this.querySelector(".urlbar-input")
     );
+    if (this.#sapName == "searchbar") {
+      // This adds a native clear button.
+      this.inputField.setAttribute("type", "search");
+    }
     this._inputContainer = this.querySelector(".urlbar-input-container");
 
     this.controller = new lazy.UrlbarController({ input: this });
     this.view = new lazy.UrlbarView(this);
     this.searchModeSwitcher = new lazy.SearchModeSwitcher(this);
+
+    let searchModeSwitcherDescription = this.querySelector(
+      ".searchmode-switcher-popup-description"
+    );
+    searchModeSwitcherDescription.setAttribute(
+      "data-l10n-id",
+      this.#isAddressbar
+        ? "urlbar-searchmode-popup-description"
+        : "urlbar-searchmode-popup-sticky-description"
+    );
 
     // The event bufferer can be used to defer events that may affect users
     // muscle memory; for example quickly pressing DOWN+ENTER should end up
@@ -339,13 +352,6 @@ export class UrlbarInput extends HTMLElement {
     // The engine name is not known yet, but update placeholder anyway to
     // reflect value of keyword.enabled or set the searchbar placeholder.
     this._setPlaceholder(null);
-
-    if (this.#isAddressbar) {
-      let searchContainersPref = lazy.UrlbarPrefs.get(
-        "switchTabs.searchAllContainers"
-      );
-      Glean.urlbar.prefSwitchTabsSearchAllContainers.set(searchContainersPref);
-    }
   }
 
   connectedCallback() {
@@ -460,6 +466,11 @@ export class UrlbarInput extends HTMLElement {
   #uninit() {
     if (this.sapName == "searchbar") {
       this.parentNode.removeAttribute("overflows");
+
+      // Exit search mode to make sure it doesn't become stale while the
+      // searchbar is invisible. Otherwise, the engine might get deleted
+      // but we don't notice because the search service observer is inactive.
+      this.searchMode = null;
     }
 
     if (this._copyCutController) {
@@ -717,6 +728,14 @@ export class UrlbarInput extends HTMLElement {
         "Cannot set URI for UrlbarInput that is not an address bar"
       );
     }
+    if (
+      this.window.browsingContext.isDocumentPiP &&
+      uri.spec.startsWith("about:blank")
+    ) {
+      // If this is a Document PiP, its url will be about:blank while
+      // the opener will be a secure context, i.e. no about:blank
+      throw new Error("Document PiP should show its opener URL");
+    }
     // We only need to update the searchModeUI on tab switch conditionally
     // as we only persist searchMode with ScotchBonnet enabled.
     if (
@@ -785,7 +804,7 @@ export class UrlbarInput extends HTMLElement {
       // identity yet. See Bug 1746383.
       valid =
         !dueToSessionRestore &&
-        (!this.window.isBlankPageURL(uri.spec) ||
+        (!this.#canHandleAsBlankPage(uri.spec) ||
           lazy.ExtensionUtils.isExtensionUrl(uri) ||
           isInitialPageControlledByWebContent);
     } else if (
@@ -932,7 +951,7 @@ export class UrlbarInput extends HTMLElement {
 
     if (
       browser != this.window.gBrowser.selectedBrowser &&
-      !this.window.isBlankPageURL(locationURI.spec)
+      !this.#canHandleAsBlankPage(locationURI.spec)
     ) {
       // If the page is loaded on background tab, make Unified Search Button
       // unavailable when back to the tab.
@@ -2988,7 +3007,7 @@ export class UrlbarInput extends HTMLElement {
    * @param {object} [options] Options for setting.
    * @param {boolean} [options.allowTrim] Whether the value can be trimmed.
    * @param {string} [options.untrimmedValue] Override for this._untrimmedValue.
-   * @param {boolean} [options.valueIsTyped] Override for this.valueIsTypede.
+   * @param {boolean} [options.valueIsTyped] Override for this.valueIsTyped.
    * @param {string} [options.actionType] Value for the `actiontype` attribute.
    *
    * @returns {string} The set value.
@@ -3904,7 +3923,11 @@ export class UrlbarInput extends HTMLElement {
     } else {
       where = lazy.BrowserUtils.whereToOpenLink(event, false, false);
     }
-    if (lazy.UrlbarPrefs.get("openintab")) {
+    let openInTabPref =
+      this.#sapName == "searchbar"
+        ? lazy.UrlbarPrefs.get("browser.search.openintab")
+        : lazy.UrlbarPrefs.get("openintab");
+    if (openInTabPref) {
       if (where == "current") {
         where = "tab";
       } else if (where == "tab") {
@@ -4225,7 +4248,11 @@ export class UrlbarInput extends HTMLElement {
    */
   _searchModeForResult(result, entry = null) {
     // Search mode is determined by the result's keyword or engine.
-    if (!result.payload.keyword && !result.payload.engine) {
+    if (
+      !result.payload.keyword &&
+      !result.payload.engine &&
+      !this.view.selectedElement.dataset?.engine
+    ) {
       return null;
     }
 
@@ -4239,6 +4266,8 @@ export class UrlbarInput extends HTMLElement {
         result.payload.engine == result.payload.originalEngine)
     ) {
       searchMode = { engineName: result.payload.engine };
+    } else if (this.view.selectedElement?.dataset.engine) {
+      searchMode = { engineName: this.view.selectedElement.dataset.engine };
     }
 
     if (searchMode) {
@@ -5489,28 +5518,43 @@ export class UrlbarInput extends HTMLElement {
    * @param {DragEvent} event
    */
   _on_drop(event) {
-    let droppedItem = getDroppableData(event);
-    let droppedURL = URL.isInstance(droppedItem)
-      ? droppedItem.href
-      : droppedItem;
-    if (droppedURL && droppedURL !== this.window.gBrowser.currentURI.spec) {
-      let principal = Services.droppedLinkHandler.getTriggeringPrincipal(event);
-      this.value = droppedURL;
+    let droppedData = getDroppableData(event);
+    let droppedString = URL.isInstance(droppedData)
+      ? droppedData.href
+      : droppedData;
+    if (
+      droppedString &&
+      droppedString !== this.window.gBrowser.currentURI.spec
+    ) {
+      this.value = droppedString;
       this.setPageProxyState("invalid");
       this.focus();
-      // To simplify tracking of events, register an initial event for event
-      // telemetry, to replace the missing input event.
-      let queryContext = this.#makeQueryContext({ searchString: droppedURL });
-      this.controller.setLastQueryContextCache(queryContext);
-      this.controller.engagementEvent.start(event, queryContext);
-      this.handleNavigation({ triggeringPrincipal: principal });
       if (this.#isAddressbar) {
+        // If we're an address bar, we automatically open the dropped address or
+        // submit the dropped string to the search engine.
+        let principal =
+          Services.droppedLinkHandler.getTriggeringPrincipal(event);
+        // To simplify tracking of events, register an initial event for event
+        // telemetry, to replace the missing input event.
+        let queryContext = this.#makeQueryContext({
+          searchString: droppedString,
+        });
+        this.controller.setLastQueryContextCache(queryContext);
+        this.controller.engagementEvent.start(event, queryContext);
+        this.handleNavigation({ triggeringPrincipal: principal });
         // For safety reasons, in the drop case we don't want to immediately show
         // the dropped value, instead we want to keep showing the current page
         // url until an onLocationChange happens.
         // See the handling in `setURI` for further details.
         this.userTypedValue = null;
         this.setURI({ dueToTabSwitch: true });
+      } else {
+        // If we're a search bar, allow for getting search suggestions, changing
+        // the search engine, or modifying the search term before submitting.
+        this.startQuery({
+          searchString: droppedString,
+          event,
+        });
       }
     }
   }
@@ -5634,6 +5678,10 @@ export class UrlbarInput extends HTMLElement {
         event.keyCode == KeyEvent.DOM_VK_META &&
         this._isKeyDownWithMetaAndLeft)
     );
+  }
+
+  #canHandleAsBlankPage(spec) {
+    return this.window.isBlankPageURL(spec) || spec == "about:privatebrowsing";
   }
 }
 

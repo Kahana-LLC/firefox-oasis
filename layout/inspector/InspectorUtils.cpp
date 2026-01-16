@@ -245,6 +245,9 @@ void InspectorUtils::GetChildrenForNode(nsINode& aNode,
     }
   }
   nsIContent* parent = aNode.AsContent();
+  if (auto* node = nsLayoutUtils::GetBackdropPseudo(parent)) {
+    aResult.AppendElement(node);
+  }
   if (auto* node = nsLayoutUtils::GetMarkerPseudo(parent)) {
     aResult.AppendElement(node);
   }
@@ -568,6 +571,7 @@ static uint32_t CollectAtRules(ServoCSSRuleList& aRuleList,
     // so the DevTools team gets notified and can decide if it should be
     // displayed.
     switch (rule->Type()) {
+      case StyleCssRuleType::CustomMedia:
       case StyleCssRuleType::Media:
       case StyleCssRuleType::Supports:
       case StyleCssRuleType::LayerBlock:
@@ -577,7 +581,6 @@ static uint32_t CollectAtRules(ServoCSSRuleList& aRuleList,
         (void)aResult.AppendElement(OwningNonNull(*rule), fallible);
         break;
       }
-      case StyleCssRuleType::CustomMedia:
       case StyleCssRuleType::Style:
       case StyleCssRuleType::Import:
       case StyleCssRuleType::Document:
@@ -1067,12 +1070,6 @@ bool InspectorUtils::IsBlockContainer(GlobalObject&, Element& aElement) {
   if (!frame) {
     return false;
   }
-
-  // For fieldset elements, we need to check the inner frame.
-  if (nsFieldSetFrame* fieldsetFrame = do_QueryFrame(frame)) {
-    frame = fieldsetFrame->GetInner();
-  }
-
   if (frame->IsBlockFrameOrSubclass()) {
     return true;
   }
@@ -1089,7 +1086,6 @@ bool InspectorUtils::IsBlockContainer(GlobalObject&, Element& aElement) {
       return true;
     }
   }
-
   return false;
 }
 

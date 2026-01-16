@@ -733,11 +733,40 @@ class PlacesViewBase {
         gNavigatorBundle.getString("menuOpenAllInTabs.label")
       );
       aPopup._endOptOpenAllInTabs.addEventListener("command", event => {
+        let node = event.currentTarget.parentNode._placesNode;
+        // Check if this is a Hub (child of "Oasis Hubs")
+        let isHub = node.parent && node.parent.title === "Oasis Hubs";
+        let win = event.target.ownerGlobal;
+        let startTabCount = win.gBrowser ? win.gBrowser.tabs.length : 0;
+
         PlacesUIUtils.openMultipleLinksInTabs(
-          event.currentTarget.parentNode._placesNode,
+          node,
           event,
           PlacesUIUtils.getViewForNode(event.currentTarget)
         );
+
+        // If it was a hub and tabs were added to this window, group them
+        if (isHub && win.gBrowser) {
+           // We assume openMultipleLinksInTabs is synchronous in adding tabs (it calls loadTabs)
+           let endTabCount = win.gBrowser.tabs.length;
+           if (endTabCount > startTabCount) {
+               let newTabs = Array.from(win.gBrowser.tabs).slice(startTabCount);
+               // Filter out pinned tabs just in case
+               newTabs = newTabs.filter(t => !t.pinned);
+               
+               if (newTabs.length > 0) {
+                   let hubName = node.title;
+                   let groups = win.gBrowser.tabGroups || [];
+                   let group = Array.from(groups).find(g => (g.label || "").toLowerCase() === hubName.toLowerCase());
+                   
+                   if (group) {
+                       group.addTabs(newTabs);
+                   } else {
+                       win.gBrowser.addTabGroup(newTabs, { label: hubName });
+                   }
+               }
+           }
+        }
       });
       aPopup.appendChild(aPopup._endOptOpenAllInTabs);
     }

@@ -329,8 +329,7 @@ var FullZoom = {
    *   whether or not the ZoomManager.zoom level is at 1.0. This is specifically
    *   for when using scaling zoom via the pinch gesture which doesn't cause
    *   the ZoomManager.zoom level to change.
-   * @returns Promise
-   * @resolves undefined
+   * @returns {Promise<void>}
    */
   updateCommands: async function FullZoom_updateCommands(
     forceResetEnabled = false
@@ -359,11 +358,7 @@ var FullZoom = {
     }
 
     let fullZoomCmd = document.getElementById("cmd_fullZoomToggle");
-    if (!ZoomManager.useFullZoom) {
-      fullZoomCmd.setAttribute("checked", "true");
-    } else {
-      fullZoomCmd.setAttribute("checked", "false");
-    }
+    fullZoomCmd.toggleAttribute("checked", !ZoomManager.useFullZoom);
   },
 
   // Setting & Pref Manipulation

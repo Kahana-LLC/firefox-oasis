@@ -224,6 +224,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         if (showSearch) {
             showToolbarWithIconButton(
                 title = toolbarTitle,
+                contentDescription = getString(R.string.settings_search_button_content_description),
                 iconResId = R.drawable.ic_search,
                 onClick = {
                     SettingsSearch.opened.record()
@@ -487,6 +488,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 SettingsFragmentDirections.actionSettingsFragmentToOpenDownloadsSettingsFragment()
             }
 
+            resources.getString(R.string.pref_key_firefox_labs) -> {
+                SettingsFragmentDirections.actionSettingsFragmentToFirefoxLabsFragment()
+            }
+
             resources.getString(R.string.pref_key_sync_debug) -> {
                 SettingsFragmentDirections.actionSettingsFragmentToSyncDebugFragment()
             }
@@ -576,6 +581,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
             findPreference<Preference>(
                 getPreferenceKey(R.string.pref_key_sync_debug),
             )?.isVisible = showSecretDebugMenuThisSession
+            findPreference<Preference>(
+                getPreferenceKey(R.string.pref_key_firefox_labs),
+            )?.isVisible = enableFirefoxLabs
             preferenceStartProfiler?.isVisible = showSecretDebugMenuThisSession &&
                 (components.core.engine.profiler?.isProfilerActive() != null)
         }

@@ -173,6 +173,8 @@ XPCOMUtils.defineLazyServiceGetters(lazy, {
 });
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   DevToolsShim: "chrome://devtools-startup/content/DevToolsShim.sys.mjs",
@@ -1902,6 +1904,9 @@ var SessionStoreInternal = {
     switch (aEvent.type) {
       case "TabOpen":
         this.onTabAdd(win);
+        if (aEvent.detail.adoptedTab) {
+          this.moveCustomTabValue(aEvent.detail.adoptedTab, target);
+        }
         break;
       case "TabBrowserInserted":
         this.onTabBrowserInserted(win, target);
@@ -1910,6 +1915,7 @@ var SessionStoreInternal = {
         // `adoptedBy` will be set if the tab was closed because it is being
         // moved to a new window.
         if (aEvent.detail.adoptedBy) {
+          this.moveCustomTabValue(target, aEvent.detail.adoptedBy);
           this.onMoveToNewWindow(
             target.linkedBrowser,
             aEvent.detail.adoptedBy.linkedBrowser
@@ -2042,6 +2048,10 @@ var SessionStoreInternal = {
 
     if (aWindow.document.documentElement.hasAttribute("taskbartab")) {
       this._windows[aWindow.__SSi].isTaskbarTab = true;
+    }
+
+    if (lazy.AIWindow.isAIWindowActiveAndEnabled(aWindow)) {
+      this._windows[aWindow.__SSi].isAIWindow = true;
     }
 
     let tabbrowser = aWindow.gBrowser;
@@ -2260,6 +2270,12 @@ var SessionStoreInternal = {
    *        Window reference
    */
   onBeforeBrowserWindowShown(aWindow) {
+    // Do not track Document Picture-in-Picture windows since these are
+    // ephemeral and tied to a specific tab's browser document.
+    if (aWindow.browsingContext.isDocumentPiP) {
+      return;
+    }
+
     // Register the window.
     this.onLoad(aWindow);
 
@@ -4950,6 +4966,17 @@ var SessionStoreInternal = {
     }
   },
 
+  moveCustomTabValue(aFromTab, aToTab) {
+    let state = TAB_CUSTOM_VALUES.get(aFromTab);
+    if (state) {
+      TAB_CUSTOM_VALUES.set(aToTab, state);
+      TAB_CUSTOM_VALUES.delete(aFromTab);
+      // No saveStateDelayed calls for either window here, because the callers
+      // of moveCustomTabValue already call saveStateDelayed for both windows
+      // as needed, from onTabAdd and onTabRemove.
+    }
+  },
+
   /**
    * Retrieves data specific to lazy-browser tabs.  If tab is not lazy,
    * will return undefined.
@@ -5483,6 +5510,8 @@ var SessionStoreInternal = {
     if (workspaceID) {
       winData.workspaceID = workspaceID;
     }
+
+    winData.isAIWindow = lazy.AIWindow.isAIWindowActiveAndEnabled(aWindow);
   },
 
   /**
@@ -6971,11 +7000,8 @@ var SessionStoreInternal = {
    *        Object containing session data
    */
   _openWindowWithState: function ssi_openWindowWithState(aState) {
-    var argString = Cc["@mozilla.org/supports-string;1"].createInstance(
-      Ci.nsISupportsString
-    );
-    argString.data = "";
-
+    // Build arguments string
+    let argString;
     // Build feature string
     let features;
     let winState = aState.windows[0];
@@ -7018,8 +7044,23 @@ var SessionStoreInternal = {
       }
     });
 
+    // A window CANNOT be both a Private Window and an AI Window
     if (winState.isPrivate) {
       features.push("private");
+    } else if (winState.isAIWindow) {
+      argString = lazy.AIWindow.handleAIWindowOptions({
+        openerWindow: null,
+        args: argString,
+        aiWindow: winState.isAIWindow,
+        restoreSession: true,
+      });
+    }
+
+    if (!argString) {
+      argString = Cc["@mozilla.org/supports-string;1"].createInstance(
+        Ci.nsISupportsString
+      );
+      argString.data = "";
     }
 
     this._log.debug(

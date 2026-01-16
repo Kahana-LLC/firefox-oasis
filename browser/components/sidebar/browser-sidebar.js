@@ -100,6 +100,10 @@ var SidebarController = {
     this.promiseInitialized.then(() => updateMenus(sidebar.visible));
   },
 
+  isAIWindow() {
+    return this.AIWindow.isAIWindowActive(window);
+  },
+
   get sidebars() {
     if (this._sidebars) {
       return this._sidebars;
@@ -185,23 +189,25 @@ var SidebarController = {
       }
     );
 
-    this.registerPrefSidebar(
-      "browser.ml.chat.enabled",
-      "viewGenaiChatSidebar",
-      {
-        name: "aichat",
-        elementId: "sidebar-switcher-genai-chat",
-        url: "chrome://browser/content/genai/chat.html",
-        keyId: "viewGenaiChatSidebarKb",
-        menuId: "menu_genaiChatSidebar",
-        menuL10nId: "menu-view-genai-chat",
-        // Bug 1900915 to expose as conditional tool
-        revampL10nId: "sidebar-menu-genai-chat-label",
-        iconUrl: "chrome://global/skin/icons/highlights.svg",
-        gleanClickEvent: Glean.sidebar.chatbotIconClick,
-        toolContextMenuId: "aichat",
-      }
-    );
+    if (!this.isAIWindow()) {
+      this.registerPrefSidebar(
+        "browser.ml.chat.enabled",
+        "viewGenaiChatSidebar",
+        {
+          name: "aichat",
+          elementId: "sidebar-switcher-genai-chat",
+          url: "chrome://browser/content/genai/chat.html",
+          keyId: "viewGenaiChatSidebarKb",
+          menuId: "menu_genaiChatSidebar",
+          menuL10nId: "menu-view-genai-chat",
+          // Bug 1900915 to expose as conditional tool
+          revampL10nId: "sidebar-menu-genai-chat-label",
+          iconUrl: "chrome://global/skin/icons/highlights.svg",
+          gleanClickEvent: Glean.sidebar.chatbotIconClick,
+          toolContextMenuId: "aichat",
+        }
+      );
+    }
 
     this.registerPrefSidebar(
       "browser.ml.pageAssist.enabled",
@@ -1077,6 +1083,24 @@ var SidebarController = {
       }
     }
 
+    // Special-case Oasis Assistant overlay: if the overlay is active, treat the toggle as a hide action
+    const sidebarInfo = this.sidebars.get(commandID);
+    const isOasisAssistantToggle =
+      commandID === "viewOasisAssistantSidebar" ||
+      (sidebarInfo && sidebarInfo.name === "oasis-assistant");
+    if (
+      isOasisAssistantToggle &&
+      document.documentElement.hasAttribute("oasis-assistant-overlay") &&
+      this._state?.command === commandID &&
+      this._state?.panelOpen
+    ) {
+      // Overlay is visible: hide it instead of showing. Use dismissPanel:false so we don't unload the iframe
+      // and lose conversation state when the user simply toggles the button.
+      this.hide({ triggerNode, dismissPanel: false });
+      this.updateToolbarButton();
+      return Promise.resolve();
+    }
+
     if (this.isOpen && commandID == this.currentID) {
       // Revamp sidebar: this case is a dismissal of the current sidebar panel. The launcher should stay open
       // For legacy sidebar, this is a "sidebar" toggle and the current panel should be remembered
@@ -1774,6 +1798,8 @@ var SidebarController = {
     sidebar.label = label;
 
     const updateAttributes = el => {
+      // TODO Bug 1996762 - Add support for dark-theme sidebar icons
+      // --webextension-menuitem-image-dark is used in dark themes
       el.style.setProperty("--webextension-menuitem-image", sidebar.icon);
       el.setAttribute("label", sidebar.label);
     };
@@ -1982,11 +2008,65 @@ var SidebarController = {
         overlayBrowser.setAttribute("transparent", "true");
         overlayBrowser.setAttribute("src", url);
 
-        // Set initial position and size for the shell
-        overlayShell.style.left = "24px";
-        overlayShell.style.top = "96px";
-        overlayShell.style.width = "min(95vw, 900px)";
-        overlayShell.style.height = "min(85vh, 680px)";
+        // Get content area for bounds checking
+        const contentArea = document.getElementById("tabbrowser-tabbox");
+        const contentBounds = contentArea?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+
+        // Set initial size
+        const defaultWidth = 420;
+        const defaultHeight = 520;
+        overlayShell.style.width = `${defaultWidth}px`;
+        overlayShell.style.height = `${defaultHeight}px`;
+        
+        // Position at bottom-right of content area with padding
+        const padding = 16;
+        overlayShell.style.left = `${contentBounds.right - defaultWidth - padding}px`;
+        overlayShell.style.top = `${contentBounds.bottom - defaultHeight - padding}px`;
+        overlayShell.style.willChange = "left, top";
+
+        // Drag state managed at chrome level for smooth tracking
+        let dragState = null;
+        
+        const handleDragMove = (e) => {
+          if (!dragState) return;
+          
+          const deltaX = e.screenX - dragState.lastX;
+          const deltaY = e.screenY - dragState.lastY;
+          
+          dragState.lastX = e.screenX;
+          dragState.lastY = e.screenY;
+          dragState.totalDeltaX += deltaX;
+          dragState.totalDeltaY += deltaY;
+          
+          const rect = overlayShell.getBoundingClientRect();
+          const contentBounds = contentArea?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+          
+          let newLeft = rect.left + deltaX;
+          let newTop = rect.top + deltaY;
+          
+          newLeft = Math.max(contentBounds.left, Math.min(newLeft, contentBounds.right - rect.width));
+          newTop = Math.max(contentBounds.top, Math.min(newTop, contentBounds.bottom - rect.height));
+          
+          overlayShell.style.left = `${newLeft}px`;
+          overlayShell.style.top = `${newTop}px`;
+        };
+        
+        const handleDragEnd = () => {
+          if (!dragState) return;
+          
+          const totalDeltaX = dragState.totalDeltaX;
+          const totalDeltaY = dragState.totalDeltaY;
+          dragState = null;
+          
+          document.removeEventListener("mousemove", handleDragMove, true);
+          document.removeEventListener("mouseup", handleDragEnd, true);
+          
+          overlayBrowser.contentWindow?.postMessage({
+            type: "oasisOverlayDragEnd",
+            totalDeltaX,
+            totalDeltaY
+          }, "*");
+        };
 
         // Listen for position/size changes requested by assistant inner UI
         let lastButtonAction = { type: "", time: 0 };
@@ -2005,14 +2085,19 @@ var SidebarController = {
             lastButtonAction = { type: data.type, time: now };
           }
           
-          if (data.type !== "oasisOverlayMoveRelative") {
-            console.log("[Sidebar] Received message:", data.type);
-          }
-          if (data.type === "oasisOverlayMove") {
+          if (data.type === "oasisOverlayDragStart") {
+            dragState = {
+              lastX: data.screenX,
+              lastY: data.screenY,
+              totalDeltaX: 0,
+              totalDeltaY: 0
+            };
+            document.addEventListener("mousemove", handleDragMove, true);
+            document.addEventListener("mouseup", handleDragEnd, true);
+          } else if (data.type === "oasisOverlayMove") {
             if (Number.isFinite(data.left)) overlayShell.style.left = `${data.left}px`;
             if (Number.isFinite(data.top)) overlayShell.style.top = `${data.top}px`;
           } else if (data.type === "oasisOverlayMoveRelative") {
-            // Handle relative movement for dragging with bounds checking
             const currentLeft = parseFloat(overlayShell.style.left) || 0;
             const currentTop = parseFloat(overlayShell.style.top) || 0;
             const rect = overlayShell.getBoundingClientRect();
@@ -2022,13 +2107,11 @@ var SidebarController = {
             
             if (Number.isFinite(data.deltaX)) {
               newLeft = currentLeft + data.deltaX;
-              // Clamp to screen bounds
               newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - rect.width));
             }
             
             if (Number.isFinite(data.deltaY)) {
               newTop = currentTop + data.deltaY;
-              // Clamp to screen bounds
               newTop = Math.max(0, Math.min(newTop, window.innerHeight - rect.height));
             }
             
@@ -2060,17 +2143,10 @@ var SidebarController = {
             overlayShell.style.width = "min(95vw, 900px)";
             overlayShell.style.height = "min(85vh, 680px)";
           } else if (data.type === "oasisOverlayClose") {
-            console.log("[Sidebar] Closing assistant overlay");
-            console.log("[Sidebar] this:", this);
-            console.log("[Sidebar] this.hide:", typeof this.hide);
-            console.log("[Sidebar] this.isOpen:", this.isOpen);
-            // Close the assistant overlay
             try {
-              const result = this.hide();
-              console.log("[Sidebar] Hide called successfully, result:", result);
+              this.hide();
             } catch (err) {
-              console.error("[Sidebar] Error calling hide:", err);
-              console.error("[Sidebar] Error stack:", err.stack);
+              console.error("[Sidebar] Error closing overlay:", err);
             }
           }
         };
@@ -2102,7 +2178,6 @@ var SidebarController = {
         const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
         let resizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
         const onResizeStart = e => {
-          console.log("[Sidebar] Resize started");
           resizing = true;
           const rect = overlayShell.getBoundingClientRect();
           startW = rect.width; startH = rect.height; startX = e.clientX; startY = e.clientY;
@@ -2121,7 +2196,6 @@ var SidebarController = {
           overlayShell.style.height = `${newH}px`;
         };
         const onResizeEnd = () => {
-          console.log("[Sidebar] Resize ended");
           resizing = false;
           window.removeEventListener("mousemove", onResizeMove);
           window.removeEventListener("mouseup", onResizeEnd);
@@ -2250,16 +2324,30 @@ var SidebarController = {
         this._state.command = "";
         this.lastOpenedId = null;
       }
-      // Clear overlay browser and hide container
-      overlayBrowser.setAttribute("src", "about:blank");
-      overlayBrowser.docShell?.createAboutBlankDocumentViewer(null, null);
-      overlay.hidden = true;
-      document.documentElement.removeAttribute("oasis-assistant-overlay");
-      // Remove listeners
-      if (this._oasisOverlayMessageHandler) {
-        window.removeEventListener("message", this._oasisOverlayMessageHandler);
-        delete this._oasisOverlayMessageHandler;
+
+      // If this is an explicit dismiss (dismissPanel=true), unload the iframe and cleanup listeners.
+      // If this is a temporary hide (e.g., toggling the button), keep the iframe src and message handler so
+      // conversation state is preserved and will be restored when the overlay is shown again.
+      if (dismissPanel) {
+        // Clear overlay browser and hide container
+        overlayBrowser.setAttribute("src", "about:blank");
+        overlayBrowser.docShell?.createAboutBlankDocumentViewer(null, null);
+
+        overlay.hidden = true;
+        document.documentElement.removeAttribute("oasis-assistant-overlay");
+
+        // Remove listeners
+        if (this._oasisOverlayMessageHandler) {
+          window.removeEventListener("message", this._oasisOverlayMessageHandler);
+          delete this._oasisOverlayMessageHandler;
+        }
+      } else {
+        // Temporary hide: keep iframe loaded to preserve chat state.
+        overlay.hidden = true;
+        // Keep the oasis-assistant attribute removed to indicate overlay is not visible
+        document.documentElement.removeAttribute("oasis-assistant-overlay");
       }
+
       this.updateToolbarButton();
       return;
     }
@@ -2531,18 +2619,12 @@ var SidebarController = {
     switch (e.type) {
       case "popupshown":
         /* Temporarily remove MousePosTracker listener when a context menu is open */
-        if (
-          e.composedTarget.id !== "tab-preview-panel" &&
-          e.composedTarget.tagName !== "tooltip"
-        ) {
+        if (e.composedTarget.tagName !== "tooltip") {
           this._addHoverStateBlocker();
         }
         break;
       case "popuphidden":
-        if (
-          e.composedTarget.id !== "tab-preview-panel" &&
-          e.composedTarget.tagName !== "tooltip"
-        ) {
+        if (e.composedTarget.tagName !== "tooltip") {
           await this._removeHoverStateBlocker();
         }
         break;
@@ -2639,6 +2721,8 @@ var SidebarController = {
 };
 
 ChromeUtils.defineESModuleGetters(SidebarController, {
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   SidebarManager:
     "moz-src:///browser/components/sidebar/SidebarManager.sys.mjs",
   SidebarState: "moz-src:///browser/components/sidebar/SidebarState.sys.mjs",

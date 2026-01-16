@@ -928,12 +928,41 @@ export var PlacesUIUtils = {
       }
 
       const isJavaScriptURL = aNode.uri.startsWith("javascript:");
+      // Check if this is a Hub bookmark (Grandparent is "Oasis Hubs")
+      let isHub = false;
+      let hubName = "";
+      try {
+        if (aNode.parent && aNode.parent.parent && aNode.parent.parent.title === "Oasis Hubs") {
+          isHub = true;
+          hubName = aNode.parent.title;
+          // Force new tab for Hub bookmarks
+          aWhere = "tab";
+        }
+      } catch (e) {}
+
       aWindow.openTrustedLinkIn(aNode.uri, aWhere, {
         allowPopups: isJavaScriptURL,
         inBackground: this.loadBookmarksInBackground,
         allowInheritPrincipal: isJavaScriptURL,
         private: aPrivate,
         userContextId,
+        resolveOnNewTabCreated: isHub ? (browser) => {
+             try {
+                 let win = browser.ownerGlobal;
+                 let tab = win.gBrowser.getTabForBrowser(browser);
+                 if (tab) {
+                     let groups = win.gBrowser.tabGroups || [];
+                     let group = Array.from(groups).find(g => (g.label || "").toLowerCase() === hubName.toLowerCase());
+                     if (group) {
+                         group.addTabs([tab]);
+                     } else {
+                         win.gBrowser.addTabGroup([tab], { label: hubName });
+                     }
+                 }
+             } catch (e) {
+                 console.error("Failed to group hub tab:", e);
+             }
+        } : null
       });
       if (aWindow.updateTelemetry) {
         aWindow.updateTelemetry([aNode]);

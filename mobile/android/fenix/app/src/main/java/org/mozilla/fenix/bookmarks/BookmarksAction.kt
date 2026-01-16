@@ -118,6 +118,8 @@ internal sealed class SelectFolderAction : BookmarksAction {
     data object ViewAppeared : SelectFolderAction()
     data class FoldersLoaded(val folders: List<SelectFolderItem>) : SelectFolderAction()
     data class FilteredFoldersLoaded(val folders: List<SelectFolderItem>) : SelectFolderAction()
+    data class ExpandedFolderLoaded(val folder: SelectFolderItem) : SelectFolderAction()
+    data class ChevronClicked(val folder: SelectFolderItem) : SelectFolderAction()
     data class ItemClicked(val folder: SelectFolderItem) : SelectFolderAction()
     data object SearchClicked : SelectFolderAction()
     data object SearchDismissed : SelectFolderAction()
@@ -153,4 +155,5 @@ internal sealed class DeletionDialogAction : BookmarksAction {
 internal sealed class SnackbarAction : BookmarksAction {
     data object Undo : SnackbarAction()
     data object Dismissed : SnackbarAction()
+    data object SelectFolderFailed : SnackbarAction()
 }

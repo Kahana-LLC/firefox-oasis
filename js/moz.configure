@@ -1022,29 +1022,21 @@ set_define("ENABLE_WASM_MEMORY_CONTROL", wasm_memory_control)
 # ===========================
 
 
-@depends(milestone.is_nightly)
-def default_wasm_branch_hinting(is_nightly):
-    if is_nightly:
-        return True
-
-
 option(
-    "--enable-wasm-branch-hinting",
-    default=default_wasm_branch_hinting,
-    help="{Enable|Disable} WebAssembly Branch hints",
+    "--disable-wasm-branch-hinting",
+    default=True,
+    help="{Enable|Disable} WebAssembly branch hinting",
 )
 
+set_config(
+    "ENABLE_WASM_BRANCH_HINTING",
+    depends_if("--enable-wasm-branch-hinting")(lambda x: True),
+)
+set_define(
+    "ENABLE_WASM_BRANCH_HINTING",
+    depends_if("--enable-wasm-branch-hinting")(lambda x: True),
+)
 
-@depends("--enable-wasm-branch-hinting", "--wasm-no-experimental")
-def wasm_branch_hinting(value, no_experimental):
-    if no_experimental or not value:
-        return
-
-    return True
-
-
-set_config("ENABLE_WASM_BRANCH_HINTING", wasm_branch_hinting)
-set_define("ENABLE_WASM_BRANCH_HINTING", wasm_branch_hinting)
 
 # Support for WebAssembly Custom Page Sizes
 # =====================================================
@@ -1089,24 +1081,6 @@ def wasm_custom_page_sizes(value, simulator, target, no_experimental):
 
 set_config("ENABLE_WASM_CUSTOM_PAGE_SIZES", wasm_custom_page_sizes)
 set_define("ENABLE_WASM_CUSTOM_PAGE_SIZES", wasm_custom_page_sizes)
-
-
-# Enable static checking using sixgill
-# ====================================
-
-option("--with-sixgill", nargs=1, help="Enable static checking of code using sixgill")
-
-
-@depends_if("--with-sixgill")
-@imports("os")
-def sixgill(value):
-    for f in ("bin/xdbfind", "gcc/xgill.so", "scripts/wrap_gcc/g++"):
-        if not os.path.exists(os.path.join(value[0], f)):
-            die("The sixgill plugin and binaries are not at the specified path")
-    return value[0]
-
-
-set_config("SIXGILL_PATH", sixgill)
 
 
 # Support for readline
@@ -1357,7 +1331,7 @@ with only_when(compile_environment):
     configured_moz_optimize_flags,
     when="--enable-compile-environment",
 )
-@imports(_from="mozbuild.shellutil", _import="split")
+@imports(_from="mozshellutil", _import="split")
 def moz_js_optimize_flags(target, compiler, configured_moz_optimize_flags):
     if configured_moz_optimize_flags:
         return configured_moz_optimize_flags
@@ -1442,7 +1416,6 @@ with only_when(compile_environment & depends(target.os)(lambda os: os != "WINNT"
     set_define("HAVE_GETC_UNLOCKED", check_symbol("getc_unlocked"))
     set_define("HAVE_PTHREAD_GETNAME_NP", check_symbol("pthread_getname_np"))
     set_define("HAVE_PTHREAD_GET_NAME_NP", check_symbol("pthread_get_name_np"))
-    set_define("HAVE_STRERROR", check_symbol("strerror"))
 
     set_config(
         "HAVE_LANGINFO_CODESET",

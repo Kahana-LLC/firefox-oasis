@@ -114,7 +114,8 @@ class nsIContent : public nsINode {
    * @note This method is safe to call on nodes that are not bound to a tree.
    */
   virtual void UnbindFromTree(UnbindContext&) = 0;
-  void UnbindFromTree(nsINode* aNewParent = nullptr);
+  void UnbindFromTree(nsINode* aNewParent = nullptr,
+                      const BatchRemovalState* aBatchState = nullptr);
 
   enum {
     /**
@@ -298,13 +299,6 @@ class nsIContent : public nsINode {
    *         native events, but they may be needed by the plug-in.
    */
   virtual IMEState GetDesiredIMEState();
-
-  /**
-   * Gets the ShadowRoot binding for this element.
-   *
-   * @return The ShadowRoot currently bound to this element.
-   */
-  inline mozilla::dom::ShadowRoot* GetShadowRoot() const;
 
   /**
    * Gets the root of the node tree for this content if it is in a shadow tree.

@@ -19,6 +19,8 @@
     "@langchain/core": "^0.3.72",
     "@langchain/langgraph": "^0.4.6",
     "@supabase/supabase-js": "^2.45.4",
+    "idb": "^8.0.3",
+    "minisearch": "^7.2.0",
     "zod": "^3.25.76"
   }
 }
