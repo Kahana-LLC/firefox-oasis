@@ -84,7 +84,7 @@ async function checkCurrentAuthStatus() {
 
         mpTrack("auth_check_restored", { email: restoredSession.user?.email || null });
         updateAuthUI(true, restoredSession.user);
-        
+
         // Verify with Supabase (background check)
         if (window.supabaseAuth && window.supabaseAuth.supabase) {
             window.supabaseAuth.supabase.auth.getUser().then(({ data: { user }, error }) => {
@@ -111,7 +111,7 @@ async function checkCurrentAuthStatus() {
                 console.log('User is already authenticated (Supabase):', user.email);
                 updateAuthUI(true, user);
                 mpTrack("auth_check_authenticated", { email: user.email });
-                
+
                 // Ensure session is saved
                 const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
                 if (session) {
@@ -1261,81 +1261,32 @@ rightSection.appendChild(menuButton);
 
 authHeader.appendChild(rightSection);
 
-// Make header draggable - RAF smoothing with light damping
-let isDragging = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
-let accumulatedDeltaX = 0;
-let accumulatedDeltaY = 0;
-let rafId = null;
-
-const DRAG_DAMPING = 0.88; // Light damping for smooth, responsive feel
-
-function sendDragUpdate() {
-  if (!isDragging) {
-    rafId = null;
-    return;
-  }
-  
-  if (Math.abs(accumulatedDeltaX) > 0.1 || Math.abs(accumulatedDeltaY) > 0.1) {
-    window.parent.postMessage({
-      type: "oasisOverlayMoveRelative",
-      deltaX: accumulatedDeltaX,
-      deltaY: accumulatedDeltaY
-    }, "*");
-    
-    accumulatedDeltaX = 0;
-    accumulatedDeltaY = 0;
-  }
-  
-  rafId = requestAnimationFrame(sendDragUpdate);
-}
-
-authHeader.addEventListener("mousedown", (e) => {
-  // Don't start drag when clicking buttons or menu
+// Make header draggable - notify parent to handle drag at chrome level
+authHeader.addEventListener("pointerdown", (e) => {
   if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
     console.log("Skipping drag - clicked on button/menu");
     return;
   }
-  console.log("Starting drag");
-  isDragging = true;
-  mpTrack("overlay_drag_start");
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-  accumulatedDeltaX = 0;
-  accumulatedDeltaY = 0;
+  if (e.button !== 0) return;
+  
   authHeader.style.cursor = "grabbing";
+  document.body.style.userSelect = "none";
   e.preventDefault();
   e.stopPropagation();
   
-  if (!rafId) {
-    rafId = requestAnimationFrame(sendDragUpdate);
-  }
+  window.parent.postMessage({
+    type: "oasisOverlayDragStart",
+    screenX: e.screenX,
+    screenY: e.screenY
+  }, "*");
+  mpTrack("overlay_drag_start");
 });
 
-document.addEventListener("mousemove", (e) => {
-  if (!isDragging) return;
-  
-  const deltaX = (e.clientX - lastMouseX) * DRAG_DAMPING;
-  const deltaY = (e.clientY - lastMouseY) * DRAG_DAMPING;
-  
-  accumulatedDeltaX += deltaX;
-  accumulatedDeltaY += deltaY;
-  
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-});
-
-document.addEventListener("mouseup", () => {
-  if (isDragging) {
-    console.log("Ending drag");
-    isDragging = false;
-    mpTrack("overlay_drag_end", { deltaX: accumulatedDeltaX, deltaY: accumulatedDeltaY });
+window.addEventListener("message", (e) => {
+  if (e.data?.type === "oasisOverlayDragEnd") {
     authHeader.style.cursor = "grab";
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
+    document.body.style.userSelect = "";
+    mpTrack("overlay_drag_end", { deltaX: e.data.totalDeltaX || 0, deltaY: e.data.totalDeltaY || 0 });
   }
 });
 

@@ -87,43 +87,80 @@
       display: flex;
       flex-direction: column;
       max-width: 100%;
-      animation: fadeIn 0.2s ease-in;
+      animation: fadeIn 0.22s ease-in;
+      margin: 6px 0;
+      gap: 6px;
     }
-    
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    
+
     .message-user {
       align-items: flex-end;
     }
-    
+
     .message-ai {
       align-items: flex-start;
     }
-    
+
     .message-content {
-      padding: 10px 16px;
-      border-radius: 8px;
+      position: relative;
+      padding: 12px 16px;
+      border-radius: 18px;
       font-size: 14px;
       line-height: 20px;
       word-wrap: break-word;
       white-space: pre-wrap;
+      box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+      max-width: 70%;
+      transition: background 120ms ease, transform 120ms ease;
     }
-    
+
+    /* User bubble (right) */
     .message-user .message-content {
-      background: #f2f4e5;
-      color: #4d4d4d;
-      max-width: 325px;
+      background: linear-gradient(180deg, #F8FAF2, #F2F4E5);
+      color: #2f3a20;
       text-align: left;
+      border-radius: 18px 18px 4px 18px;
     }
-    
+
+    /* AI bubble (left) */
     .message-ai .message-content {
-      background: white;
-      color: #666;
-      max-width: 100%;
-      padding: 10px 0;
+      background: linear-gradient(180deg, #ffffff, #fafafa);
+      color: #333;
+      text-align: left;
+      border-radius: 18px 18px 18px 4px;
+    }
+
+    /* Soft tails for more natural chat look */
+    .message-user .message-content::after,
+    .message-ai .message-content::after {
+      content: "";
+      position: absolute;
+      bottom: 8px;
+      width: 12px;
+      height: 12px;
+      transform: rotate(45deg);
+      box-shadow: 0 6px 18px rgba(16,24,40,0.03);
+      z-index: 0;
+    }
+    .message-user .message-content::after {
+      right: -6px;
+      background: linear-gradient(180deg, #F8FAF2, #F2F4E5);
+      border-bottom-left-radius: 2px;
+    }
+    .message-ai .message-content::after {
+      left: -6px;
+      background: linear-gradient(180deg, #ffffff, #fafafa);
+      border-bottom-right-radius: 2px;
+    }
+
+    /* Ensure AI messages can be wider on desktop but not too wide */
+    @media (min-width: 800px) {
+      .message-ai .message-content { max-width: 56ch; }
+      .message-user .message-content { max-width: 48ch; }
     }
     #bar { 
       position: fixed;
