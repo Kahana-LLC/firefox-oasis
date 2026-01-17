@@ -61761,20 +61761,57 @@ var SubscriptionService = class _SubscriptionService {
   getSubscriptionUrl() {
     return "https://kahana.co/pricing";
   }
+  /**
+   * Force refresh of usage data (useful after payment/plan changes)
+   */
+  async forceRefresh() {
+    const user = await supabaseAuth.getCurrentUser();
+    if (!user) {
+      console.warn("forceRefresh: No user found.");
+      return;
+    }
+    console.log("forceRefresh: Forcing cache refresh...");
+    this.lastFetchTime = 0;
+    await this.refreshUsageData(user.id);
+  }
   async refreshUsageData(userId) {
     const supabase = supabaseAuth.supabase;
     console.log("refreshUsageData: syncing usage...");
     let limit = DEFAULT_LIMIT;
-    const { data: planData } = await supabase.from("user_plans").select(`
+    const { data: planData, error: planError } = await supabase.from("user_plans").select(`
                 plan_id,
+                stripe_subscription_id,
                 plans ( name, llm_call_limit )
             `).eq("user_id", userId).eq("is_active", true).single();
-    if (planData && planData.plans) {
-      const dbLimit = planData.plans.llm_call_limit;
-      const planName = (planData.plans.name || "").toLowerCase();
-      if (dbLimit) limit = dbLimit;
-      else if (PLAN_LIMITS[planName]) limit = PLAN_LIMITS[planName];
+    if (planError) {
+      console.error("refreshUsageData: Failed to fetch user plan:", planError);
+      console.error("  Error details:", JSON.stringify(planError, null, 2));
     }
+    if (planData) {
+      console.log("refreshUsageData: planData found:", {
+        plan_id: planData.plan_id,
+        has_plans_join: !!planData.plans,
+        stripe_subscription_id: planData.stripe_subscription_id ? "present" : "missing"
+      });
+      if (planData.plans) {
+        const dbLimit = planData.plans.llm_call_limit;
+        const planName = (planData.plans.name || "").toLowerCase();
+        if (dbLimit) {
+          limit = dbLimit;
+          console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
+        } else if (planName && PLAN_LIMITS[planName]) {
+          limit = PLAN_LIMITS[planName];
+          console.log(`refreshUsageData: Using plan limit from name "${planName}": ${limit}`);
+        }
+      }
+      if (!planData.plans && planData.stripe_subscription_id) {
+        console.log("refreshUsageData: Active Stripe subscription found. Granting basic plan (1500 units).");
+        limit = PLAN_LIMITS["basic"];
+      }
+    } else {
+      console.warn("refreshUsageData: No active plan found for user. Using free plan limit.");
+    }
+    console.log(`refreshUsageData: Final limit set to: ${limit}`);
     this.cachedLimit = limit;
     let dbTotal = 0;
     const startOfMonth = /* @__PURE__ */ new Date();
@@ -62265,7 +62302,7 @@ You have the following workers available:
 2.  **Break Down the Plan:** Read the USER's latest message. Break it down into a chronological list of necessary steps/commands.
 3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
 4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
-5.  **Check for Completion:** After completing tool operations, ALWAYS choose "chat" to provide a final conversational response to the user. Only choose "FINISH" if *ALL* steps are done AND you've already provided a response via "chat". 
+5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
 6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
 7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
 
@@ -62308,23 +62345,20 @@ The available workers are: {options}`.trim();
 - Commands that were executed (marked as [Tool Output for ...])
 - Results from those commands
 
-**When providing responses:**
-1. **After tool execution:** If tools were just executed, provide a brief, friendly confirmation of what was done. For example:
-   - After opening a tab: "I've opened [URL] for you."
-   - After creating a hub: "I've created the hub '[name]' for you."
-   - After searching: "I've searched for '[query]' on Google."
-   - Keep it concise and conversational (1-2 sentences max).
-
-2. **When answering questions:** Review the conversation history and answer helpfully based on what you know.
-
-3. **General responses:** Be helpful, concise, and conversational.
+**When answering questions:**
+1. If asked to summarize or recall: Review the conversation history and list what happened
+2. If asked general questions: Answer helpfully based on what you know
+3. You can see everything that happened in this conversation - use that context!
 
 **Example:**
 If the history shows:
-  - User: "search dom dolla on google"
-  - Tool Output: "[Tool Output for open_tab]: Opened https://www.google.com/search?q=dom+dolla"
+  - User: "list tabs"
+  - Tool Output: "1. Google, 2. CNN"
+  - User: "close the first tab"
+  - Tool Output: "Closed: Google"
   
-You should respond: "I've searched for 'dom dolla' on Google."
+And user asks "what have we done?", you should respond:
+"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
 
 Remember: You ARE stateful within this conversation. The history is right there in your context!`;
     console.log(
@@ -62343,18 +62377,11 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const lastMsg = s.messages[s.messages.length - 1];
     const isToolOutput = msgText(lastMsg).includes("[Tool Output for");
     console.log(`\u{1F575}\uFE0F Supervisor Check: lastWorker=${s.lastWorker}, nextTool=${nextTool}, isToolOutput=${isToolOutput}`);
-    if (isToolOutput && s.lastWorker) {
-      console.log(`\u2705 Tool ${s.lastWorker} completed, routing to chat for final response.`);
-      return { next: "chat", args: {} };
-    }
     if (isToolOutput && nextTool === s.lastWorker) {
       console.log(`\u{1F6D1} Stopping recursion: ${nextTool} repeated immediately after output.`);
       return { next: "chat", args: {} };
     }
-    if (nextTool === "FINISH") {
-      return { next: "chat", args: {} };
-    }
-    if (nextTool === END) {
+    if (nextTool === "FINISH" || nextTool === END) {
       return { next: END, args: {} };
     }
     if (nextTool && memberNames.includes(nextTool)) {
@@ -62441,9 +62468,14 @@ async function runAssistantStream(prompt, onChunk, inputType = "text") {
         text = lastMsg.content.map((c) => typeof c === "string" ? c : c?.text || "").join("");
       else if (lastMsg?.content != null) text = String(lastMsg.content);
       if (text) {
-        const newContent = text + "\n";
-        onChunk(newContent);
-        combinedSessionString += newContent;
+        const isToolOutput = text.includes("[Tool Output for");
+        if (!isToolOutput) {
+          const newContent = text + "\n";
+          onChunk(newContent);
+          combinedSessionString += newContent;
+        } else {
+          combinedSessionString += text + "\n";
+        }
       }
     }
   }

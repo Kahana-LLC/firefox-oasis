@@ -113,6 +113,20 @@ export class SubscriptionService {
         return "https://kahana.co/pricing";
     }
 
+    /**
+     * Force refresh of usage data (useful after payment/plan changes)
+     */
+    public async forceRefresh(): Promise<void> {
+        const user = await supabaseAuth.getCurrentUser();
+        if (!user) {
+            console.warn("forceRefresh: No user found.");
+            return;
+        }
+        console.log("forceRefresh: Forcing cache refresh...");
+        this.lastFetchTime = 0; // Reset cache timestamp to force refresh
+        await this.refreshUsageData(user.id);
+    }
+
     private async refreshUsageData(userId: string): Promise<void> {
         const supabase = (supabaseAuth as any).supabase;
         console.log("refreshUsageData: syncing usage...");
@@ -120,23 +134,52 @@ export class SubscriptionService {
         // 1. Get User Plan Limit
         let limit = DEFAULT_LIMIT;
 
-        const { data: planData } = await supabase
+        const { data: planData, error: planError } = await supabase
             .from('user_plans')
             .select(`
                 plan_id,
+                stripe_subscription_id,
                 plans ( name, llm_call_limit )
             `)
             .eq('user_id', userId)
             .eq('is_active', true)
             .single();
 
-        if (planData && planData.plans) {
-             const dbLimit = planData.plans.llm_call_limit;
-             const planName = (planData.plans.name || "").toLowerCase();
-             if (dbLimit) limit = dbLimit;
-             else if (PLAN_LIMITS[planName]) limit = PLAN_LIMITS[planName];
+        if (planError) {
+            console.error("refreshUsageData: Failed to fetch user plan:", planError);
+            console.error("  Error details:", JSON.stringify(planError, null, 2));
         }
 
+        if (planData) {
+            console.log("refreshUsageData: planData found:", {
+                plan_id: planData.plan_id,
+                has_plans_join: !!planData.plans,
+                stripe_subscription_id: planData.stripe_subscription_id ? "present" : "missing"
+            });
+
+            if (planData.plans) {
+                const dbLimit = planData.plans.llm_call_limit;
+                const planName = (planData.plans.name || "").toLowerCase();
+                if (dbLimit) {
+                    limit = dbLimit;
+                    console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
+                } else if (planName && PLAN_LIMITS[planName]) {
+                    limit = PLAN_LIMITS[planName];
+                    console.log(`refreshUsageData: Using plan limit from name "${planName}": ${limit}`);
+                }
+            }
+            
+            // If plan_id is null but user has an active Stripe subscription, grant basic plan (1500 units)
+            // Query already filters for is_active = true, so we just need to check stripe_subscription_id
+            if (!planData.plans && planData.stripe_subscription_id) {
+                console.log("refreshUsageData: Active Stripe subscription found. Granting basic plan (1500 units).");
+                limit = PLAN_LIMITS["basic"];
+            }
+        } else {
+            console.warn("refreshUsageData: No active plan found for user. Using free plan limit.");
+        }
+
+        console.log(`refreshUsageData: Final limit set to: ${limit}`);
         this.cachedLimit = limit;
 
         // 2. Get Current Month Usage from DB
