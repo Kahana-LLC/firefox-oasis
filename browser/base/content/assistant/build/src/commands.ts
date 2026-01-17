@@ -128,7 +128,14 @@ export class OpenTabCommand implements Command {
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
 
-    // If it doesn't look like a URL (no dots, or has spaces), treat it as a "Smart Open" (I'm Feeling Lucky)
+    // Check if it's already a full URL (starts with http:// or https://)
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+        // Already a full URL, use it directly
+        topWin.openTrustedLinkIn(url, "tab");
+        return { message: `Opened ${url}` };
+    }
+
+    // If it doesn't look like a URL (no dots, or has spaces), treat it as a search query
     // This allows "Open youtube music" to redirect to "music.youtube.com"
     const isUrlLike = url.includes(".") && !url.includes(" ");
     

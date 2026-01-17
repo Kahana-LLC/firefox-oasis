@@ -2190,7 +2190,33 @@ async function send() {
       if (!stopped) {
         fullResponse += chunk;
         chunkCount++;
-        updateAIMessage(currentAIMessageElement, fullResponse);
+        // Check if message contains HTML tags (like links)
+        const isHTML = /<[a-z][\s\S]*>/i.test(fullResponse);
+        updateAIMessage(currentAIMessageElement, fullResponse, isHTML);
+        
+        // Add click handlers for links if HTML is detected
+        if (isHTML && currentAIMessageElement) {
+          const links = currentAIMessageElement.querySelectorAll('a');
+          links.forEach(link => {
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              const url = link.href;
+              try {
+                if (typeof openWebLinkIn === 'function') {
+                  openWebLinkIn(url, "tab", {});
+                } else if (window.top && window.top.openWebLinkIn) {
+                  window.top.openWebLinkIn(url, "tab", {});
+                } else {
+                  window.open(url, "_blank");
+                }
+                mpTrack("pricing_link_clicked", { url });
+              } catch (err) {
+                console.error("Failed to open link:", err);
+                window.open(url, "_blank");
+              }
+            });
+          });
+        }
         
         // Forward the chunk to iframe if it exists
         if (typeof window.notifyIframeCommandResult === 'function') {

@@ -61744,13 +61744,19 @@ var SubscriptionService = class _SubscriptionService {
   async checkAvailability() {
     const user = await supabaseAuth.getCurrentUser();
     if (!user) {
+      console.warn("checkAvailability: No user found");
       return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
     }
-    if (Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+    console.log(`checkAvailability: Checking for user ${user.id}, cachedLimit=${this.cachedLimit}, lastFetch=${this.lastFetchTime}`);
+    if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+      console.log("checkAvailability: Cache is stale or never fetched, refreshing...");
       await this.refreshUsageData(user.id);
+    } else {
+      console.log("checkAvailability: Using cached data");
     }
     const limit = this.cachedLimit ?? DEFAULT_LIMIT;
     const remaining = Math.max(0, limit - this.cachedUsage);
+    console.log(`checkAvailability: Returning stats - totalUnits=${this.cachedUsage}, limit=${limit}, remaining=${remaining}, isLimitReached=${this.cachedUsage >= limit}`);
     return {
       totalUnits: this.cachedUsage,
       limit,
@@ -61759,7 +61765,7 @@ var SubscriptionService = class _SubscriptionService {
     };
   }
   getSubscriptionUrl() {
-    return "https://kahana.co/pricing";
+    return "https://kahana.co/oasis-pricing";
   }
   /**
    * Force refresh of usage data (useful after payment/plan changes)
@@ -61776,26 +61782,57 @@ var SubscriptionService = class _SubscriptionService {
   }
   async refreshUsageData(userId) {
     const supabase = supabaseAuth.supabase;
-    console.log("refreshUsageData: syncing usage...");
+    console.log(`refreshUsageData: syncing usage for userId=${userId}...`);
     let limit = DEFAULT_LIMIT;
     const { data: planData, error: planError } = await supabase.from("user_plans").select(`
                 plan_id,
                 stripe_subscription_id,
                 plans ( name, llm_call_limit )
-            `).eq("user_id", userId).eq("is_active", true).single();
-    if (planError) {
+            `).eq("user_id", userId).eq("is_active", true).maybeSingle();
+    let finalPlanData = planData;
+    if (planError && planError.code !== "PGRST116") {
       console.error("refreshUsageData: Failed to fetch user plan:", planError);
+      console.error("  Error code:", planError.code);
+      console.error("  Error message:", planError.message);
       console.error("  Error details:", JSON.stringify(planError, null, 2));
+    } else if (planError && planError.code === "PGRST116" || !planData && !planError) {
+      console.log("refreshUsageData: Query returned 0 rows. This could mean:");
+      console.log("  1. User has no active subscription");
+      console.log("  2. RLS policy is blocking access");
+      console.log("  3. User ID mismatch");
+      console.log("refreshUsageData: Trying alternative query without plans join...");
+      const { data: simplePlanData, error: simpleError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
+      if (simplePlanData) {
+        console.log("refreshUsageData: Alternative query succeeded! RLS might be blocking the plans join.");
+        console.log("refreshUsageData: Found plan data:", {
+          plan_id: simplePlanData.plan_id,
+          stripe_subscription_id: simplePlanData.stripe_subscription_id,
+          is_active: simplePlanData.is_active
+        });
+        if (simplePlanData.stripe_subscription_id && simplePlanData.is_active) {
+          console.log("refreshUsageData: Active Stripe subscription found via alternative query. Granting basic plan (1500 units).");
+          limit = PLAN_LIMITS["basic"];
+          finalPlanData = simplePlanData;
+        }
+      } else if (simpleError) {
+        console.error("refreshUsageData: Alternative query also failed:", simpleError);
+      } else {
+        console.log("refreshUsageData: Alternative query also returned 0 rows.");
+      }
     }
-    if (planData) {
+    if (finalPlanData) {
       console.log("refreshUsageData: planData found:", {
-        plan_id: planData.plan_id,
-        has_plans_join: !!planData.plans,
-        stripe_subscription_id: planData.stripe_subscription_id ? "present" : "missing"
+        plan_id: finalPlanData.plan_id,
+        plan_id_type: typeof finalPlanData.plan_id,
+        plan_id_null: finalPlanData.plan_id === null,
+        has_plans_join: !!finalPlanData.plans,
+        plans_value: finalPlanData.plans,
+        stripe_subscription_id: finalPlanData.stripe_subscription_id,
+        stripe_subscription_id_present: !!finalPlanData.stripe_subscription_id
       });
-      if (planData.plans) {
-        const dbLimit = planData.plans.llm_call_limit;
-        const planName = (planData.plans.name || "").toLowerCase();
+      if (finalPlanData.plans) {
+        const dbLimit = finalPlanData.plans.llm_call_limit;
+        const planName = (finalPlanData.plans.name || "").toLowerCase();
         if (dbLimit) {
           limit = dbLimit;
           console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
@@ -61804,12 +61841,18 @@ var SubscriptionService = class _SubscriptionService {
           console.log(`refreshUsageData: Using plan limit from name "${planName}": ${limit}`);
         }
       }
-      if (!planData.plans && planData.stripe_subscription_id) {
+      if (!finalPlanData.plans && finalPlanData.stripe_subscription_id) {
         console.log("refreshUsageData: Active Stripe subscription found. Granting basic plan (1500 units).");
         limit = PLAN_LIMITS["basic"];
+      } else if (!finalPlanData.plans && !finalPlanData.stripe_subscription_id) {
+        console.warn("refreshUsageData: No plans join AND no stripe_subscription_id. This shouldn't happen for paid users.");
       }
     } else {
-      console.warn("refreshUsageData: No active plan found for user. Using free plan limit.");
+      console.warn(`refreshUsageData: No active plan found for user ${userId}. Using free plan limit.`);
+      console.warn("  This could mean:");
+      console.warn("  1. User has no active subscription in user_plans table");
+      console.warn("  2. Query failed silently (check error above)");
+      console.warn("  3. User ID mismatch");
     }
     console.log(`refreshUsageData: Final limit set to: ${limit}`);
     this.cachedLimit = limit;
@@ -61922,6 +61965,10 @@ var OpenTabCommand = class {
     let url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      topWin.openTrustedLinkIn(url, "tab");
+      return { message: `Opened ${url}` };
+    }
     const isUrlLike = url.includes(".") && !url.includes(" ");
     if (!isUrlLike) {
       url = "https://duckduckgo.com/?q=\\" + encodeURIComponent(url);
@@ -62303,8 +62350,9 @@ You have the following workers available:
 3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
 4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
 5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
-6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
-7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
+6.  **Search Queries:** If the user says "search X" or "search X on google", ALWAYS route to "open_tab" with url: "https://www.google.com/search?q=X" (URL-encode the query). DO NOT route to "chat" for search queries.
+7.  **Chat:** If the user is just chatting or asking a question (NOT requesting an action), choose "chat".
+8.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -62336,19 +62384,29 @@ User: "List all tabs" then "close the first one"
 \u2192 First: { "next": "list_tabs", "args": {} }
 \u2192 Then: { "next": "close_tab", "args": { "index": 1 } }
 
+User: "search nba" or "search nba on google"
+\u2192 { "next": "open_tab", "args": { "url": "https://www.google.com/search?q=nba" } }
+
+User: "search for python tutorials"
+\u2192 { "next": "open_tab", "args": { "url": "https://www.google.com/search?q=python tutorials" } }
+
+**CRITICAL**: When the user says "search X" or "search X on google", you MUST route to "open_tab" with a Google search URL, NOT to "chat". The chat worker is only for answering questions, not executing actions.
+
 The available workers are: {options}`.trim();
   const chatNode = async (state) => {
     const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
 
-**Important:** You have access to the complete conversation history, including:
-- All previous user requests
-- Commands that were executed (marked as [Tool Output for ...])
-- Results from those commands
+**CRITICAL RULES:**
+1. **DO NOT generate tool code or command syntax** - you are NOT a code generator
+2. **DO NOT show tool_code blocks** - those are internal implementation details
+3. **ONLY provide natural language responses** - explain what happened or answer questions
+4. You are called AFTER commands have been executed to provide user-friendly explanations
 
 **When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
+1. If asked to summarize or recall: Review the conversation history and list what happened in natural language
 2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
+3. After a command executes: Provide a brief, friendly confirmation of what was done
+4. You can see everything that happened in this conversation - use that context!
 
 **Example:**
 If the history shows:
@@ -62360,7 +62418,13 @@ If the history shows:
 And user asks "what have we done?", you should respond:
 "We listed the tabs (found Google and CNN), then closed the first tab (Google)."
 
-Remember: You ARE stateful within this conversation. The history is right there in your context!`;
+**After a command executes, provide a brief confirmation:**
+- If a tab was opened: "I've opened that tab for you."
+- If a tab was closed: "I've closed that tab."
+- If tabs were listed: "Here are your current tabs: [list]"
+
+Remember: You ARE stateful within this conversation. The history is right there in your context!
+**DO NOT output code, tool_code blocks, or command syntax - only natural language responses!**`;
     console.log(
       `\u{1F4AC} Chat node received ${state.messages.length} messages:`,
       state.messages.map((m) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`)
@@ -62379,6 +62443,10 @@ Remember: You ARE stateful within this conversation. The history is right there 
     console.log(`\u{1F575}\uFE0F Supervisor Check: lastWorker=${s.lastWorker}, nextTool=${nextTool}, isToolOutput=${isToolOutput}`);
     if (isToolOutput && nextTool === s.lastWorker) {
       console.log(`\u{1F6D1} Stopping recursion: ${nextTool} repeated immediately after output.`);
+      return { next: "chat", args: {} };
+    }
+    if (isToolOutput && (nextTool === "FINISH" || nextTool === END)) {
+      console.log(`\u{1F4AC} Tool just executed, forcing chat response instead of FINISH`);
       return { next: "chat", args: {} };
     }
     if (nextTool === "FINISH" || nextTool === END) {
@@ -62410,7 +62478,8 @@ async function runAssistantStream(prompt, onChunk, inputType = "text") {
   }
   const stats = await subscriptionService.checkAvailability();
   if (stats.isLimitReached) {
-    const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
+    const pricingUrl = subscriptionService.getSubscriptionUrl();
+    const msg = `You've reached your free monthly plan limit (${stats.totalUnits}/${stats.limit} units used this month). To continue using Oasis, please <a href="${pricingUrl}" target="_blank" style="color: #7A9200; text-decoration: underline;">upgrade your plan</a>.`;
     onChunk(msg);
     return msg;
   }

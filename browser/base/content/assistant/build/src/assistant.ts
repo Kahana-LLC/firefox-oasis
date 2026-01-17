@@ -162,8 +162,9 @@ You have the following workers available:
 3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
 4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
 5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
-6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
-7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
+6.  **Search Queries:** If the user says "search X" or "search X on google", ALWAYS route to "open_tab" with url: "https://www.google.com/search?q=X" (URL-encode the query). DO NOT route to "chat" for search queries.
+7.  **Chat:** If the user is just chatting or asking a question (NOT requesting an action), choose "chat".
+8.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -195,20 +196,30 @@ User: "List all tabs" then "close the first one"
 → First: { "next": "list_tabs", "args": {} }
 → Then: { "next": "close_tab", "args": { "index": 1 } }
 
+User: "search nba" or "search nba on google"
+→ { "next": "open_tab", "args": { "url": "https://www.google.com/search?q=nba" } }
+
+User: "search for python tutorials"
+→ { "next": "open_tab", "args": { "url": "https://www.google.com/search?q=python tutorials" } }
+
+**CRITICAL**: When the user says "search X" or "search X on google", you MUST route to "open_tab" with a Google search URL, NOT to "chat". The chat worker is only for answering questions, not executing actions.
+
 The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
     const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
 
-**Important:** You have access to the complete conversation history, including:
-- All previous user requests
-- Commands that were executed (marked as [Tool Output for ...])
-- Results from those commands
+**CRITICAL RULES:**
+1. **DO NOT generate tool code or command syntax** - you are NOT a code generator
+2. **DO NOT show tool_code blocks** - those are internal implementation details
+3. **ONLY provide natural language responses** - explain what happened or answer questions
+4. You are called AFTER commands have been executed to provide user-friendly explanations
 
 **When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
+1. If asked to summarize or recall: Review the conversation history and list what happened in natural language
 2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
+3. After a command executes: Provide a brief, friendly confirmation of what was done
+4. You can see everything that happened in this conversation - use that context!
 
 **Example:**
 If the history shows:
@@ -220,7 +231,13 @@ If the history shows:
 And user asks "what have we done?", you should respond:
 "We listed the tabs (found Google and CNN), then closed the first tab (Google)."
 
-Remember: You ARE stateful within this conversation. The history is right there in your context!`;
+**After a command executes, provide a brief confirmation:**
+- If a tab was opened: "I've opened that tab for you."
+- If a tab was closed: "I've closed that tab."
+- If tabs were listed: "Here are your current tabs: [list]"
+
+Remember: You ARE stateful within this conversation. The history is right there in your context!
+**DO NOT output code, tool_code blocks, or command syntax - only natural language responses!**`;
     
     // Debug: Log what messages the chat node receives
     console.log(`💬 Chat node received ${state.messages.length} messages:`, 
@@ -251,7 +268,14 @@ Remember: You ARE stateful within this conversation. The history is right there 
       return { next: "chat", args: {} };
     }
   
-    // Handle explicit completion
+    // IMPORTANT: After a tool executes, always route to chat to generate a user-friendly response
+    // Don't go straight to FINISH - the user needs to see what happened
+    if (isToolOutput && (nextTool === "FINISH" || nextTool === END)) {
+      console.log(`💬 Tool just executed, forcing chat response instead of FINISH`);
+      return { next: "chat", args: {} };
+    }
+  
+    // Handle explicit completion (only if no tool just executed)
     if (nextTool === "FINISH" || nextTool === END) {
       return { next: END, args: {} };
     }
@@ -295,10 +319,9 @@ export async function runAssistantStream(
   // Check Subscription Limits
   const stats = await subscriptionService.checkAvailability();
   if (stats.isLimitReached) {
-      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
+      const pricingUrl = subscriptionService.getSubscriptionUrl();
+      const msg = `You've reached your free monthly plan limit (${stats.totalUnits}/${stats.limit} units used this month). To continue using Oasis, please <a href="${pricingUrl}" target="_blank" style="color: #7A9200; text-decoration: underline;">upgrade your plan</a>.`;
       onChunk(msg);
-      // Open the subscription page automatically? Optional.
-      // subscriptionService.getSubscriptionUrl();
       return msg;
   }
 

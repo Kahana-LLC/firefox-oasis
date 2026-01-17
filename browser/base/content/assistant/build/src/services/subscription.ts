@@ -88,17 +88,25 @@ export class SubscriptionService {
         // If not logged in, they can't use it anyway (handled by auth check), 
         // but safe fallback:
         if (!user) {
+            console.warn("checkAvailability: No user found");
             return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
         }
 
-        // Refresh cache if stale
-        if (Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+        console.log(`checkAvailability: Checking for user ${user.id}, cachedLimit=${this.cachedLimit}, lastFetch=${this.lastFetchTime}`);
+
+        // Refresh cache if stale or never fetched
+        if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+            console.log("checkAvailability: Cache is stale or never fetched, refreshing...");
             await this.refreshUsageData(user.id);
+        } else {
+            console.log("checkAvailability: Using cached data");
         }
 
         const limit = this.cachedLimit ?? DEFAULT_LIMIT;
         // Ensure non-negative
         const remaining = Math.max(0, limit - this.cachedUsage);
+
+        console.log(`checkAvailability: Returning stats - totalUnits=${this.cachedUsage}, limit=${limit}, remaining=${remaining}, isLimitReached=${this.cachedUsage >= limit}`);
 
         return {
             totalUnits: this.cachedUsage,
@@ -109,8 +117,7 @@ export class SubscriptionService {
     }
 
     public getSubscriptionUrl(): string {
-        // Placeholder for now, eventually a specific path in the dashboard
-        return "https://kahana.co/pricing";
+        return "https://kahana.co/oasis-pricing";
     }
 
     /**
@@ -129,7 +136,7 @@ export class SubscriptionService {
 
     private async refreshUsageData(userId: string): Promise<void> {
         const supabase = (supabaseAuth as any).supabase;
-        console.log("refreshUsageData: syncing usage...");
+        console.log(`refreshUsageData: syncing usage for userId=${userId}...`);
 
         // 1. Get User Plan Limit
         let limit = DEFAULT_LIMIT;
@@ -143,23 +150,67 @@ export class SubscriptionService {
             `)
             .eq('user_id', userId)
             .eq('is_active', true)
-            .single();
+            .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
 
-        if (planError) {
+        // PGRST116 means "0 rows found" - this is expected if user has no plan, not a real error
+        let finalPlanData = planData;
+        
+        if (planError && planError.code !== 'PGRST116') {
             console.error("refreshUsageData: Failed to fetch user plan:", planError);
+            console.error("  Error code:", planError.code);
+            console.error("  Error message:", planError.message);
             console.error("  Error details:", JSON.stringify(planError, null, 2));
+        } else if ((planError && planError.code === 'PGRST116') || (!planData && !planError)) {
+            // maybeSingle() returns null data with no error when 0 rows found
+            console.log("refreshUsageData: Query returned 0 rows. This could mean:");
+            console.log("  1. User has no active subscription");
+            console.log("  2. RLS policy is blocking access");
+            console.log("  3. User ID mismatch");
+            
+            // Try an alternative query without the join to see if RLS is the issue
+            console.log("refreshUsageData: Trying alternative query without plans join...");
+            const { data: simplePlanData, error: simpleError } = await supabase
+                .from('user_plans')
+                .select('plan_id, stripe_subscription_id, is_active')
+                .eq('user_id', userId)
+                .eq('is_active', true)
+                .maybeSingle();
+            
+            if (simplePlanData) {
+                console.log("refreshUsageData: Alternative query succeeded! RLS might be blocking the plans join.");
+                console.log("refreshUsageData: Found plan data:", {
+                    plan_id: simplePlanData.plan_id,
+                    stripe_subscription_id: simplePlanData.stripe_subscription_id,
+                    is_active: simplePlanData.is_active
+                });
+                
+                // Use the simple data if we have stripe_subscription_id
+                if (simplePlanData.stripe_subscription_id && simplePlanData.is_active) {
+                    console.log("refreshUsageData: Active Stripe subscription found via alternative query. Granting basic plan (1500 units).");
+                    limit = PLAN_LIMITS["basic"];
+                    finalPlanData = simplePlanData as any;
+                }
+            } else if (simpleError) {
+                console.error("refreshUsageData: Alternative query also failed:", simpleError);
+            } else {
+                console.log("refreshUsageData: Alternative query also returned 0 rows.");
+            }
         }
 
-        if (planData) {
+        if (finalPlanData) {
             console.log("refreshUsageData: planData found:", {
-                plan_id: planData.plan_id,
-                has_plans_join: !!planData.plans,
-                stripe_subscription_id: planData.stripe_subscription_id ? "present" : "missing"
+                plan_id: finalPlanData.plan_id,
+                plan_id_type: typeof finalPlanData.plan_id,
+                plan_id_null: finalPlanData.plan_id === null,
+                has_plans_join: !!(finalPlanData as any).plans,
+                plans_value: (finalPlanData as any).plans,
+                stripe_subscription_id: finalPlanData.stripe_subscription_id,
+                stripe_subscription_id_present: !!finalPlanData.stripe_subscription_id
             });
 
-            if (planData.plans) {
-                const dbLimit = planData.plans.llm_call_limit;
-                const planName = (planData.plans.name || "").toLowerCase();
+            if ((finalPlanData as any).plans) {
+                const dbLimit = (finalPlanData as any).plans.llm_call_limit;
+                const planName = ((finalPlanData as any).plans.name || "").toLowerCase();
                 if (dbLimit) {
                     limit = dbLimit;
                     console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
@@ -171,12 +222,18 @@ export class SubscriptionService {
             
             // If plan_id is null but user has an active Stripe subscription, grant basic plan (1500 units)
             // Query already filters for is_active = true, so we just need to check stripe_subscription_id
-            if (!planData.plans && planData.stripe_subscription_id) {
+            if (!(finalPlanData as any).plans && finalPlanData.stripe_subscription_id) {
                 console.log("refreshUsageData: Active Stripe subscription found. Granting basic plan (1500 units).");
                 limit = PLAN_LIMITS["basic"];
+            } else if (!(finalPlanData as any).plans && !finalPlanData.stripe_subscription_id) {
+                console.warn("refreshUsageData: No plans join AND no stripe_subscription_id. This shouldn't happen for paid users.");
             }
         } else {
-            console.warn("refreshUsageData: No active plan found for user. Using free plan limit.");
+            console.warn(`refreshUsageData: No active plan found for user ${userId}. Using free plan limit.`);
+            console.warn("  This could mean:");
+            console.warn("  1. User has no active subscription in user_plans table");
+            console.warn("  2. Query failed silently (check error above)");
+            console.warn("  3. User ID mismatch");
         }
 
         console.log(`refreshUsageData: Final limit set to: ${limit}`);
