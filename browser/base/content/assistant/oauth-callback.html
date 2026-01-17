@@ -64,6 +64,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         
+        const SUPABASE_URL = 'https://wvclepquxxczgrukfqyr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY';
+        
         // Check for error
         const error = urlParams.get('error') || hashParams.get('error');
         const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
@@ -72,11 +75,106 @@
         const accessToken = urlParams.get('access_token') || hashParams.get('access_token');
         const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token');
         const code = urlParams.get('code') || hashParams.get('code');
+        const type = urlParams.get('type') || hashParams.get('type');
         
         const statusDiv = document.getElementById('status');
         const detailsDiv = document.getElementById('details');
         
-        if (error) {
+        // Define handleRecoveryFlow before it's used
+        async function handleRecoveryFlow() {
+            statusDiv.innerHTML = `<div class="success">Reset Your Password</div>`;
+            const container = document.querySelector('.container');
+            
+            // Remove existing form if any
+            const existingForm = document.getElementById('recoveryForm');
+            if (existingForm) existingForm.remove();
+            
+            const form = document.createElement('div');
+            form.id = 'recoveryForm';
+            form.style.marginTop = '1rem';
+            form.innerHTML = `
+                <input id="newPwd" type="password" placeholder="New password" style="width:100%;padding:0.6rem;border-radius:8px;border:0;outline:none;margin-bottom:0.6rem;color:#333;box-sizing:border-box" />
+                <input id="confirmPwd" type="password" placeholder="Confirm new password" style="width:100%;padding:0.6rem;border-radius:8px;border:0;outline:none;margin-bottom:0.6rem;color:#333;box-sizing:border-box" />
+                <button id="updateBtn" style="width:100%;padding:0.7rem;border-radius:8px;border:0;background:#51cf66;color:#fff;font-weight:600;cursor:pointer">Update Password</button>
+            `;
+            container.appendChild(form);
+            document.querySelector('.spinner').style.display = 'none';
+            
+            const btn = form.querySelector('#updateBtn');
+            btn.addEventListener('click', async () => {
+                const p1 = form.querySelector('#newPwd').value;
+                const p2 = form.querySelector('#confirmPwd').value;
+                if (!p1 || p1.length < 6) {
+                    detailsDiv.innerHTML = 'Password must be at least 6 characters.';
+                    return;
+                }
+                if (p1 !== p2) {
+                    detailsDiv.innerHTML = 'Passwords do not match.';
+                    return;
+                }
+                
+                btn.disabled = true;
+                btn.textContent = 'Updating...';
+                detailsDiv.innerHTML = '';
+                
+                try {
+                    // Use dynamic import to avoid blocking load if not available, or use fetch
+                    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.47.10');
+                    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    
+                    if (code) {
+                        const { error: exchErr } = await supabase.auth.exchangeCodeForSession(code);
+                        if (exchErr) {
+                            throw new Error(exchErr.message);
+                        }
+                    } else if (accessToken && refreshToken) {
+                        const { error: setErr } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+                        if (setErr) {
+                            throw new Error(setErr.message);
+                        }
+                    } else if (accessToken) {
+                        // Just access token might be enough for updateUser if valid
+                        // But supabase-js usually needs a session.
+                        // We can try to set it.
+                    }
+                    
+                    const { data, error: updErr } = await supabase.auth.updateUser({ password: p1 });
+                    
+                    if (updErr) {
+                        throw new Error(updErr.message);
+                    }
+                    
+                    statusDiv.innerHTML = `<div class="success">Password updated successfully!</div>`;
+                    detailsDiv.innerHTML = 'You can now return to Oasis and sign in.';
+                    form.remove();
+                    
+                    // Try to close window
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                    
+                } catch (e) {
+                    console.error(e);
+                    statusDiv.innerHTML = `<div class="error">Update Failed</div>`;
+                    detailsDiv.innerHTML = e?.message || String(e);
+                    btn.disabled = false;
+                    btn.textContent = 'Update Password';
+                }
+            });
+        }
+        
+        // 1. PRIORITY CHECK: Recovery Flow
+        // We check strictly for 'recovery' in the type param or URL
+        const isRecovery = (type && type.toLowerCase() === 'recovery') || 
+                           window.location.href.toLowerCase().includes('type=recovery') ||
+                           window.location.hash.toLowerCase().includes('type=recovery') || 
+                           window.location.search.toLowerCase().includes('type=recovery');
+
+        // Check for recovery (password reset)
+        if (isRecovery) {
+            console.log('Recovery flow detected');
+            handleRecoveryFlow();
+        } else if (error) {
             // Handle error
             statusDiv.innerHTML = `<div class="error">Authentication Failed</div>`;
             detailsDiv.innerHTML = `Error: ${error}<br>${errorDescription || ''}`;
@@ -110,6 +208,8 @@
                 access_token: accessToken,
                 refresh_token: refreshToken,
                 code: code,
+                type: urlParams.get('type') || hashParams.get('type') || null,
+                url: window.location.href,
                 timestamp: new Date().toISOString()
             };
             
@@ -117,10 +217,17 @@
             try {
                 // Send success to parent window if available
                 if (window.opener) {
+                    // window.opener.postMessage({
+                    //     type: 'oauth-success',
+                    //     data: authData
+                    // }, '*');
+
                     window.opener.postMessage({
-                        type: 'oauth-success',
+                        type: isRecovery ? 'oauth-recovery' : 'oauth-success',
                         data: authData
                     }, '*');
+
+
                 }
                 
                 // Also try to close the window

@@ -227,7 +227,7 @@ Remember: You ARE stateful within this conversation. The history is right there 
     console.log(`💬 Chat node received ${state.messages.length} messages:`, 
       state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
     
-    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
+    const res = (await chatRemote(CHAT_PROMPT, toWire(state.messages))) as any;
     return { messages: [new AIMessage(res.content)] };
   };
 
@@ -239,7 +239,7 @@ Remember: You ARE stateful within this conversation. The history is right there 
 
     // Use only the messages from the current graph execution for routing decisions.
     const messages = s.messages;
-    const out = await routeRemote(systemPrompt, toWire(messages), options);
+    const out = (await routeRemote(systemPrompt, toWire(messages), options)) as any;
     const nextTool = out?.next;
     const nextArgs = out?.args || {};
 
@@ -313,52 +313,64 @@ export async function runAssistantStream(
   // Debug: Log how many messages are in context
   console.log(`📚 Session context: ${sessionHistory.length} messages in history`);
   
-  const stream = await graph.stream(
-    { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
-    { recursionLimit: 16 }
-  );
+  try {
+    const stream = await graph.stream(
+      { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
+      { recursionLimit: 50 }
+    );
 
-  let lastFull = "";
-  let stepCount = 0;
-  for await (const state of stream as any) {
-    stepCount++;
-    console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
+    let lastFull = "";
+    let stepCount = 0;
+    for await (const state of stream as any) {
+      stepCount++;
+      console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
+      
+      if ("__end__" in state) {
+        // Save conversation turn automatically
+        console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
+        if (lastFull) {
+          console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+          pushCurrentTurn(prompt, lastFull);
+        } else {
+          console.log(`⚠️ NOT saving turn - lastFull is empty!`);
+        }
+        break;
+      }
+      const step = Object.entries(state).find(([k]) => k !== "__end");
+      if (step?.[1] && "messages" in (step[1] as any)) {
+        const lastMsg = (step[1] as any).messages.at(-1);
+        let text = "";
+        if (typeof lastMsg?.content === "string") text = lastMsg.content;
+        else if (Array.isArray(lastMsg?.content))
+          text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
+        else if (lastMsg?.content != null) text = String(lastMsg.content);
+
+        if (text && text !== lastFull) {
+          const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
+          onChunk(delta);
+          lastFull = text;
+          console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
+        }
+      }
+    }
+    console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
+
+    // SAFETY: Always save the turn even if we didn't hit __end__
+    if (lastFull) {
+      console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
+      pushCurrentTurn(prompt, lastFull);
+    }
     
-    if ("__end__" in state) {
-      // Save conversation turn automatically
-      console.log(`🔚 Stream ended. lastFull length: ${lastFull.length}`);
-      if (lastFull) {
-        console.log(`✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-        pushCurrentTurn(prompt, lastFull);
-      } else {
-        console.log(`⚠️ NOT saving turn - lastFull is empty!`);
-      }
-      break;
+    return lastFull || "(no output)";
+  } catch (error: any) {
+    console.error("❌ Error in assistant stream:", error);
+    if (error.message && error.message.includes("Recursion limit")) {
+      const msg = "\n\n(I had to stop because I was thinking for too long. I may have gotten stuck in a loop.)";
+      onChunk(msg);
+      return msg;
     }
-    const step = Object.entries(state).find(([k]) => k !== "__end");
-    if (step?.[1] && "messages" in (step[1] as any)) {
-      const lastMsg = (step[1] as any).messages.at(-1);
-      let text = "";
-      if (typeof lastMsg?.content === "string") text = lastMsg.content;
-      else if (Array.isArray(lastMsg?.content))
-        text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
-      else if (lastMsg?.content != null) text = String(lastMsg.content);
-
-      if (text && text !== lastFull) {
-        const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
-        onChunk(delta);
-        lastFull = text;
-        console.log(`📝 Updated lastFull, length now: ${lastFull.length}`);
-      }
-    }
+    const msg = `\n\nError: ${error.message || "Unknown error"}`;
+    onChunk(msg);
+    return msg;
   }
-  console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
-
-  // SAFETY: Always save the turn even if we didn't hit __end__
-  if (lastFull) {
-    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${lastFull.substring(0, 50)}..."`);
-    pushCurrentTurn(prompt, lastFull);
-  }
-  
-  return lastFull || "(no output)";
 }

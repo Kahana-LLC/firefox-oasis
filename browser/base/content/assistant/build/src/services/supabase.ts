@@ -136,6 +136,27 @@ export default class SupabaseAuth {
         }
     }
 
+    public async resetPasswordForEmail(email: string): Promise<{ data: any; error: AuthError | null }> {
+        try {
+            console.log('Attempting password reset for:', email);
+            
+            const { data, error } = await this.supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: 'https://kahana.co/oauth-callback',
+            });
+
+            if (error) {
+                console.error('Password reset error:', error.message);
+                return { data: null, error };
+            }
+
+            console.log('Password reset email sent to:', email);
+            return { data, error: null };
+        } catch (error) {
+            console.error('Password reset error:', error);
+            return { data: null, error: error as AuthError };
+        }
+    }
+
     public async signOut(): Promise<{ error: AuthError | null }> {
         try {
             console.log('Attempting sign out');
@@ -158,6 +179,25 @@ export default class SupabaseAuth {
         } catch (error) {
             console.error('Sign out error:', error);
             return { error: error as AuthError };
+        }
+    }
+
+    public async updatePassword(newPassword: string): Promise<{ user: User | null; error: AuthError | null }> {
+        try {
+            console.log('Updating user password');
+            const { data, error } = await this.supabase.auth.updateUser({ password: newPassword });
+            if (error) {
+                console.error('Update password error:', error.message);
+                return { user: null, error };
+            }
+            if (data.user) {
+                await this.updateLastLogin(data.user.id);
+                await this.createSession(data.user.id);
+            }
+            return { user: data.user, error: null };
+        } catch (error) {
+            console.error('Update password error:', error);
+            return { user: null, error: error as AuthError };
         }
     }
 

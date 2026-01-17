@@ -104,7 +104,141 @@
         const params = getUrlParams();
         console.log('OAuth callback received parameters:', params);
 
-        if (params.error) {
+        // 1. PRIORITY CHECK: Recovery Flow
+        const isRecovery = params.type === 'recovery' || 
+                           window.location.hash.includes('type=recovery') || 
+                           window.location.search.includes('type=recovery');
+
+        // Check for recovery (password reset)
+        if (isRecovery) {
+            statusTitle.textContent = 'Reset Your Password';
+            statusMessage.textContent = 'Please enter a new password for your account.';
+            
+            // Create password reset form
+            const form = document.createElement('form');
+            form.style.cssText = 'margin-top: 20px; display: flex; flex-direction: column; gap: 15px; align-items: center;';
+            
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'password';
+            passwordInput.placeholder = 'New Password (min 6 chars)';
+            passwordInput.required = true;
+            passwordInput.minLength = 6;
+            passwordInput.style.cssText = 'padding: 10px; width: 100%; max-width: 300px; border-radius: 5px; border: 1px solid #ccc; background: rgba(255,255,255,0.9); color: #333;';
+            
+            const confirmInput = document.createElement('input');
+            confirmInput.type = 'password';
+            confirmInput.placeholder = 'Confirm New Password';
+            confirmInput.required = true;
+            confirmInput.minLength = 6;
+            confirmInput.style.cssText = 'padding: 10px; width: 100%; max-width: 300px; border-radius: 5px; border: 1px solid #ccc; background: rgba(255,255,255,0.9); color: #333;';
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'submit';
+            submitBtn.textContent = 'Update Password';
+            submitBtn.style.cssText = 'padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; max-width: 320px;';
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.style.cssText = 'margin-top: 10px; font-size: 0.9em;';
+            
+            form.appendChild(passwordInput);
+            form.appendChild(confirmInput);
+            form.appendChild(submitBtn);
+            form.appendChild(messageDiv);
+            
+            // Clear spinner and existing content
+            document.querySelector('.spinner').style.display = 'none';
+            detailsDiv.innerHTML = '';
+            detailsDiv.appendChild(form);
+            
+            // Initialize Supabase client
+            // We need the Supabase client here. Since we can't easily import it in this standalone file,
+            // we'll use a direct fetch to the Supabase API if possible, or try to load the library from CDN.
+            // However, loading from CDN might be blocked by CSP.
+            // A better approach for this standalone file is to use the access_token to update the user.
+            
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (passwordInput.value !== confirmInput.value) {
+                    messageDiv.textContent = 'Passwords do not match';
+                    messageDiv.style.color = '#ff6b6b';
+                    return;
+                }
+                
+                if (passwordInput.value.length < 6) {
+                    messageDiv.textContent = 'Password must be at least 6 characters';
+                    messageDiv.style.color = '#ff6b6b';
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Updating...';
+                messageDiv.textContent = '';
+                
+                try {
+                    // We have the access_token from the URL params
+                    const accessToken = params.access_token;
+                    
+                    if (!accessToken) {
+                        throw new Error('No access token found. Link may have expired.');
+                    }
+                    
+                    // Direct API call to Supabase to update user
+                    // We need the Supabase URL and Key. 
+                    // Since we can't access ENV here, we'll try to find them or ask the user to provide them? 
+                    // No, that's bad UX.
+                    // We can try to use the same URL as the callback came from? No.
+                    
+                    // Fallback: We will redirect to a custom protocol that the assistant handles,
+                    // passing the new password? No, that's insecure.
+                    
+                    // BEST APPROACH: We already have the access token. 
+                    // We can use the Supabase URL hardcoded here if we know it, 
+                    // or try to infer it.
+                    // Based on previous files, URL is 'https://wvclepquxxczgrukfqyr.supabase.co'
+                    // and Key is in the code.
+                    
+                    const supabaseUrl = 'https://wvclepquxxczgrukfqyr.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY';
+                    
+                    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`,
+                            'apikey': supabaseKey
+                        },
+                        body: JSON.stringify({
+                            password: passwordInput.value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.msg || data.error_description || 'Failed to update password');
+                    }
+                    
+                    // Success!
+                    statusTitle.textContent = 'Password Updated!';
+                    statusMessage.innerHTML = `<div class="success">Your password has been reset successfully.</div>`;
+                    detailsDiv.innerHTML = '<p>You can now return to Oasis Browser and sign in.</p>';
+                    
+                    // Try to close window
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                    
+                } catch (error) {
+                    console.error('Update error:', error);
+                    messageDiv.textContent = `Error: ${error.message}`;
+                    messageDiv.style.color = '#ff6b6b';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Update Password';
+                }
+            });
+            
+        } else if (params.error) {
             // Handle error
             statusTitle.textContent = 'Authentication Failed!';
             statusMessage.innerHTML = `<div class="error">Error: ${params.error_description || params.error}</div>`;
