@@ -214,11 +214,12 @@ The available workers are: {options}`.trim();
 2. **DO NOT show tool_code blocks** - those are internal implementation details
 3. **ONLY provide natural language responses** - explain what happened or answer questions
 4. You are called AFTER commands have been executed to provide user-friendly explanations
+5. **ALWAYS provide complete, full-sentence responses** - never respond with just fragments or single words
 
 **When answering questions:**
 1. If asked to summarize or recall: Review the conversation history and list what happened in natural language
 2. If asked general questions: Answer helpfully based on what you know
-3. After a command executes: Provide a brief, friendly confirmation of what was done
+3. After a command executes: Provide a clear, friendly, complete confirmation of what was done
 4. You can see everything that happened in this conversation - use that context!
 
 **Example:**
@@ -231,20 +232,98 @@ If the history shows:
 And user asks "what have we done?", you should respond:
 "We listed the tabs (found Google and CNN), then closed the first tab (Google)."
 
-**After a command executes, provide a brief confirmation:**
-- If a tab was opened: "I've opened that tab for you."
-- If a tab was closed: "I've closed that tab."
+**After a command executes, provide a complete confirmation (ALWAYS use full sentences):**
+- If a tab was opened: "I've opened that tab for you." or "I've opened the search in a new tab for you."
+- If a tab was closed: "I've closed that tab for you."
 - If tabs were listed: "Here are your current tabs: [list]"
+- If a hub was created: "I've created the hub '[name]' for you."
+- If a tab was added to a hub: "I've added that tab to your '[hub name]' hub."
+
+**IMPORTANT:** Your responses must be:
+- Complete sentences (never fragments like " in a new tab.")
+- At least 10-15 words when confirming actions
+- Friendly and conversational
+- Clear about what action was taken
 
 Remember: You ARE stateful within this conversation. The history is right there in your context!
 **DO NOT output code, tool_code blocks, or command syntax - only natural language responses!**`;
     
     // Debug: Log what messages the chat node receives
+    const wireMessages = toWire(state.messages);
     console.log(`💬 Chat node received ${state.messages.length} messages:`, 
       state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
+    console.log(`💬 Sending to chat API: prompt length=${CHAT_PROMPT.length}, messages=${wireMessages.length}`);
     
-    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
-    return { messages: [new AIMessage(res.content)] };
+    const res = await chatRemote(CHAT_PROMPT, wireMessages);
+    console.log(`💬 Chat node response received: length=${res.content?.length || 0}, content="${res.content?.substring(0, 100) || 'null'}..."`);
+    
+    let finalContent = res.content || "";
+    const trimmedContent = finalContent.trim();
+    
+    // Check if response is too short, empty, or looks like a fragment
+    const isTooShort = !trimmedContent || trimmedContent.length < 10;
+    const looksLikeFragment = trimmedContent.length < 30 && (
+      trimmedContent.startsWith("in ") ||
+      trimmedContent.startsWith("in a ") ||
+      trimmedContent === "in a new tab." ||
+      trimmedContent.match(/^in\s+/) || // Starts with "in "
+      (!trimmedContent.match(/^[A-Z]/) && trimmedContent.length < 25) || // Doesn't start with capital and is short
+      (trimmedContent.length < 20 && trimmedContent.endsWith(".") && !trimmedContent.match(/^I've/)) // Short sentence that doesn't start with "I've"
+    );
+    
+    // Fallback: If response is too short or looks like a fragment, generate a proper response
+    if (isTooShort || looksLikeFragment) {
+      console.warn(`⚠️ Chat response is too short or looks like fragment: "${finalContent}". Generating fallback response.`);
+      
+      const lastMessage = state.messages[state.messages.length - 1];
+      const lastMessageText = msgText(lastMessage);
+      
+      // Extract tool name and result from tool output
+      if (lastMessageText.includes("[Tool Output for")) {
+        const toolMatch = lastMessageText.match(/\[Tool Output for (\w+)\]:\s*(.+)/);
+        if (toolMatch) {
+          const toolName = toolMatch[1];
+          const toolResult = toolMatch[2];
+          
+          // Generate appropriate response based on tool
+          if (toolName === "open_tab") {
+            // Try to extract search query or URL from user's message
+            const userMessage = state.messages.find((m: any) => m._getType() === "human");
+            const userText = userMessage ? msgText(userMessage) : "";
+            
+            // Check if it's a search query
+            const searchMatch = userText.match(/search\s+(.+?)(?:\s+on\s+google)?$/i);
+            if (searchMatch) {
+              const query = searchMatch[1].trim();
+              finalContent = `I've opened a search for "${query}" in a new tab for you.`;
+            } else {
+              finalContent = "I've opened that tab for you.";
+            }
+          } else if (toolName === "add_tab_to_hub") {
+            const hubMatch = toolResult.match(/Added \d+ tab\(s\) to hub "([^"]+)"/);
+            if (hubMatch) {
+              finalContent = `I've added that tab to your "${hubMatch[1]}" hub.`;
+            } else {
+              finalContent = "I've added that tab to the hub for you.";
+            }
+          } else if (toolName === "close_tab") {
+            finalContent = "I've closed that tab for you.";
+          } else if (toolName === "list_tabs") {
+            finalContent = "Here are your current tabs.";
+          } else {
+            finalContent = "I've completed that action for you.";
+          }
+          
+          console.log(`✅ Generated fallback response: "${finalContent}"`);
+        } else {
+          finalContent = "I've completed that action for you.";
+        }
+      } else {
+        finalContent = "I've completed that action for you.";
+      }
+    }
+    
+    return { messages: [new AIMessage(finalContent)] };
   };
 
   const supervisorNode = async (s: typeof GraphState.State) => {
@@ -380,12 +459,15 @@ export async function runAssistantStream(
     }
     const step = Object.entries(state).find(([k]) => k !== "__end");
     if (step?.[1] && "messages" in (step[1] as any)) {
-      const lastMsg = (step[1] as any).messages.at(-1);
+      const stepMessages = (step[1] as any).messages;
+      const lastMsg = stepMessages.at(-1);
       let text = "";
       if (typeof lastMsg?.content === "string") text = lastMsg.content;
       else if (Array.isArray(lastMsg?.content))
         text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
       else if (lastMsg?.content != null) text = String(lastMsg.content);
+
+      console.log(`📝 Step ${stepCount} (${step[0]}): extracted text length=${text.length}, preview="${text.substring(0, 50)}..."`);
 
       if (text) {
           // Filter out tool output messages from UI display (but keep in session for supervisor)
@@ -397,13 +479,19 @@ export async function runAssistantStream(
               // Note: If we had token streaming, we'd need per-message buffering.
               // For now, assume atomic messages.
               const newContent = text + "\n";
+              console.log(`✅ Emitting chunk to UI: length=${newContent.length}`);
               onChunk(newContent);
               combinedSessionString += newContent;
           } else {
               // Still add to session string for supervisor context, but don't display to user
+              console.log(`🚫 Filtering out tool output from UI`);
               combinedSessionString += text + "\n";
           }
+      } else {
+          console.log(`⚠️ No text extracted from message:`, lastMsg);
       }
+    } else {
+      console.log(`⚠️ Step ${stepCount} (${step?.[0]}): no messages found in state`);
     }
   }
   console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}`);
