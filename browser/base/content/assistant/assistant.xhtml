@@ -276,6 +276,88 @@
     #empty-state-text p:first-child {
       margin-bottom: 0;
     }
+    
+    /* Recording inline animation */
+    #recording-inline {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 0 4px;
+      flex: 1;
+    }
+    
+    #recording-inline.active {
+      display: flex;
+    }
+    
+    #input-row.recording #q {
+      display: none;
+    }
+    
+    #input-row.recording #recording-inline {
+      display: flex;
+    }
+    
+    /* Increase height when recording */
+    #input-row.recording {
+      min-height: 70px;
+    }
+    
+    .waveform-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1px;
+      height: 60px;
+      flex: 1;
+      padding: 0 8px;
+      max-width: 100%;
+    }
+    
+    .waveform-bar {
+      flex: 1;
+      min-width: 2px;
+      max-width: 4px;
+      height: 4px;
+      background: linear-gradient(180deg, #7A9200, #94A833);
+      border-radius: 1.5px;
+      transform-origin: center;
+      transition: height 0.08s ease-out, opacity 0.08s ease-out;
+    }
+    
+    .recording-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .recording-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    
+    .recording-btn:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+    
+    .cancel-recording {
+      background: #3a3a3a;
+      color: #fff;
+    }
+    
+    .accept-recording {
+      background: #7A9200;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
