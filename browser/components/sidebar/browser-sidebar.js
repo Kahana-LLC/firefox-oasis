@@ -2152,6 +2152,36 @@ var SidebarController = {
         };
         window.addEventListener("message", this._oasisOverlayMessageHandler);
 
+        // Resize handling
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+        let resizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
+        
+        const onResizeMove = e => {
+          if (!resizing) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const newW = clamp(startW + dx, 300, window.innerWidth);
+          const newH = clamp(startH + dy, 200, window.innerHeight);
+          overlayShell.style.width = `${newW}px`;
+          overlayShell.style.height = `${newH}px`;
+        };
+        
+        const onResizeEnd = () => {
+          resizing = false;
+          window.removeEventListener("mousemove", onResizeMove);
+          window.removeEventListener("mouseup", onResizeEnd);
+        };
+
+        const onResizeStart = e => {
+          resizing = true;
+          const rect = overlayShell.getBoundingClientRect();
+          startW = rect.width; startH = rect.height; startX = e.clientX; startY = e.clientY;
+          e.preventDefault();
+          e.stopPropagation();
+          window.addEventListener("mousemove", onResizeMove);
+          window.addEventListener("mouseup", onResizeEnd);
+        };
+
         // Don't create external chrome header - it's now handled inside assistant.ui.js
         // But still create resizer for bottom-right corner
         let resizer = document.getElementById("oasis-assistant-resizer");
@@ -2161,6 +2191,10 @@ var SidebarController = {
           resizer.id = "oasis-assistant-resizer";
           resizer.style.cssText = "position:absolute; width:18px; height:18px; right:8px; bottom:8px; border:none; background:transparent; cursor:nwse-resize; z-index:2147483647; pointer-events:auto;";
           overlayShell.appendChild(resizer);
+          
+          console.log("[Sidebar] Adding resize event listener");
+          resizer.addEventListener("mousedown", onResizeStart);
+          
           console.log("[Sidebar] Resizer created:", !!resizer);
         } else {
           console.log("[Sidebar] Resizer already exists");
@@ -2173,39 +2207,6 @@ var SidebarController = {
         const closeBtn = null;
 
         // External drag handling removed - now handled by internal header via messages
-
-        // Resize handling
-        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-        let resizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
-        const onResizeStart = e => {
-          resizing = true;
-          const rect = overlayShell.getBoundingClientRect();
-          startW = rect.width; startH = rect.height; startX = e.clientX; startY = e.clientY;
-          e.preventDefault();
-          e.stopPropagation();
-          window.addEventListener("mousemove", onResizeMove);
-          window.addEventListener("mouseup", onResizeEnd);
-        };
-        const onResizeMove = e => {
-          if (!resizing) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          const newW = clamp(startW + dx, 300, window.innerWidth);
-          const newH = clamp(startH + dy, 200, window.innerHeight);
-          overlayShell.style.width = `${newW}px`;
-          overlayShell.style.height = `${newH}px`;
-        };
-        const onResizeEnd = () => {
-          resizing = false;
-          window.removeEventListener("mousemove", onResizeMove);
-          window.removeEventListener("mouseup", onResizeEnd);
-        };
-        if (resizer) {
-          console.log("[Sidebar] Adding resize event listener");
-          resizer.addEventListener("mousedown", onResizeStart);
-        } else {
-          console.warn("[Sidebar] Resizer not found, cannot add event listener");
-        }
 
         // Button click handlers removed - now handled by internal header via messages
 
