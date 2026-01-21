@@ -61746,7 +61746,7 @@ var SubscriptionService = class _SubscriptionService {
     if (!user) {
       return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
     }
-    if (Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+    if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
       await this.refreshUsageData(user.id);
     }
     const limit = this.cachedLimit ?? DEFAULT_LIMIT;
@@ -61759,22 +61759,89 @@ var SubscriptionService = class _SubscriptionService {
     };
   }
   getSubscriptionUrl() {
-    return "https://kahana.co/pricing";
+    return "https://kahana.co/oasis-pricing";
+  }
+  async forceRefresh() {
+    const user = await supabaseAuth.getCurrentUser();
+    if (user) {
+      this.lastFetchTime = 0;
+      await this.refreshUsageData(user.id);
+    }
   }
   async refreshUsageData(userId) {
     const supabase = supabaseAuth.supabase;
     console.log("refreshUsageData: syncing usage...");
     let limit = DEFAULT_LIMIT;
-    const { data: planData } = await supabase.from("user_plans").select(`
+    const { data: planData, error: planError } = await supabase.from("user_plans").select(`
                 plan_id,
+                stripe_subscription_id,
+                is_active,
                 plans ( name, llm_call_limit )
-            `).eq("user_id", userId).eq("is_active", true).single();
+            `).eq("user_id", userId).eq("is_active", true).maybeSingle();
+    console.log(`refreshUsageData: Primary query result:`, {
+      planData,
+      planError,
+      hasPlansJoin: planData && planData.plans ? true : false,
+      userId
+    });
     if (planData && planData.plans) {
       const dbLimit = planData.plans.llm_call_limit;
       const planName = (planData.plans.name || "").toLowerCase();
-      if (dbLimit) limit = dbLimit;
-      else if (PLAN_LIMITS[planName]) limit = PLAN_LIMITS[planName];
+      if (dbLimit) {
+        limit = dbLimit;
+        console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
+      } else if (PLAN_LIMITS[planName]) {
+        limit = PLAN_LIMITS[planName];
+        console.log(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
+      }
+    } else if (planData && planData.is_active) {
+      const stripeSubId = planData.stripe_subscription_id;
+      const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+      console.log(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
+        stripeSubId,
+        hasStripeSubscription,
+        is_active: planData.is_active
+      });
+      if (hasStripeSubscription) {
+        limit = PLAN_LIMITS["basic"];
+        console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+      } else {
+        console.warn("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
+      }
     }
+    if (limit === DEFAULT_LIMIT) {
+      console.warn("refreshUsageData: Limit still at default, trying fallback query without join");
+      const { data: fallbackData, error: fallbackError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
+      console.log(`refreshUsageData: Fallback query result:`, {
+        fallbackData,
+        fallbackError,
+        userId
+      });
+      if (fallbackError) {
+        console.error("refreshUsageData: Fallback query error:", fallbackError);
+      }
+      if (fallbackData && fallbackData.is_active) {
+        const stripeSubId = fallbackData.stripe_subscription_id;
+        const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+        console.log(`refreshUsageData: Checking stripe_subscription_id:`, {
+          stripeSubId,
+          hasStripeSubscription,
+          type: typeof stripeSubId
+        });
+        if (hasStripeSubscription) {
+          limit = PLAN_LIMITS["basic"];
+          console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+        } else {
+          console.warn("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
+        }
+      } else {
+        console.warn("refreshUsageData: No active plan found for user, using free plan limit", {
+          fallbackData,
+          userId
+        });
+      }
+    }
+    console.log(`refreshUsageData: Final limit set to: ${limit}`);
     this.cachedLimit = limit;
     let dbTotal = 0;
     const startOfMonth = /* @__PURE__ */ new Date();
@@ -62265,7 +62332,7 @@ You have the following workers available:
 2.  **Break Down the Plan:** Read the USER's latest message. Break it down into a chronological list of necessary steps/commands.
 3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
 4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
-5.  **Check for Completion:** After completing tool operations, ALWAYS choose "chat" to provide a final conversational response to the user. Only choose "FINISH" if *ALL* steps are done AND you've already provided a response via "chat". 
+5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
 6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
 7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
 
@@ -62308,23 +62375,20 @@ The available workers are: {options}`.trim();
 - Commands that were executed (marked as [Tool Output for ...])
 - Results from those commands
 
-**When providing responses:**
-1. **After tool execution:** If tools were just executed, provide a brief, friendly confirmation of what was done. For example:
-   - After opening a tab: "I've opened [URL] for you."
-   - After creating a hub: "I've created the hub '[name]' for you."
-   - After searching: "I've searched for '[query]' on Google."
-   - Keep it concise and conversational (1-2 sentences max).
-
-2. **When answering questions:** Review the conversation history and answer helpfully based on what you know.
-
-3. **General responses:** Be helpful, concise, and conversational.
+**When answering questions:**
+1. If asked to summarize or recall: Review the conversation history and list what happened
+2. If asked general questions: Answer helpfully based on what you know
+3. You can see everything that happened in this conversation - use that context!
 
 **Example:**
 If the history shows:
-  - User: "search dom dolla on google"
-  - Tool Output: "[Tool Output for open_tab]: Opened https://www.google.com/search?q=dom+dolla"
+  - User: "list tabs"
+  - Tool Output: "1. Google, 2. CNN"
+  - User: "close the first tab"
+  - Tool Output: "Closed: Google"
   
-You should respond: "I've searched for 'dom dolla' on Google."
+And user asks "what have we done?", you should respond:
+"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
 
 Remember: You ARE stateful within this conversation. The history is right there in your context!`;
     console.log(
@@ -62343,18 +62407,11 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const lastMsg = s.messages[s.messages.length - 1];
     const isToolOutput = msgText(lastMsg).includes("[Tool Output for");
     console.log(`\u{1F575}\uFE0F Supervisor Check: lastWorker=${s.lastWorker}, nextTool=${nextTool}, isToolOutput=${isToolOutput}`);
-    if (isToolOutput && s.lastWorker) {
-      console.log(`\u2705 Tool ${s.lastWorker} completed, routing to chat for final response.`);
-      return { next: "chat", args: {} };
-    }
     if (isToolOutput && nextTool === s.lastWorker) {
       console.log(`\u{1F6D1} Stopping recursion: ${nextTool} repeated immediately after output.`);
       return { next: "chat", args: {} };
     }
-    if (nextTool === "FINISH") {
-      return { next: "chat", args: {} };
-    }
-    if (nextTool === END) {
+    if (nextTool === "FINISH" || nextTool === END) {
       return { next: END, args: {} };
     }
     if (nextTool && memberNames.includes(nextTool)) {
@@ -62419,6 +62476,7 @@ async function runAssistantStream(prompt, onChunk, inputType = "text") {
   let combinedSessionString = "";
   let isSaved = false;
   let stepCount = 0;
+  let hasEmittedUserMessage = false;
   for await (const state of stream) {
     stepCount++;
     console.log(`\u{1F504} Stream step ${stepCount}, keys:`, Object.keys(state));
@@ -62433,21 +62491,63 @@ async function runAssistantStream(prompt, onChunk, inputType = "text") {
       break;
     }
     const step = Object.entries(state).find(([k]) => k !== "__end");
+    console.log(`\u{1F50D} Step details:`, {
+      stepKey: step?.[0],
+      stepValue: step?.[1],
+      hasMessages: step?.[1] && "messages" in step[1],
+      stepKeys: step?.[1] ? Object.keys(step[1]) : []
+    });
     if (step?.[1] && "messages" in step[1]) {
-      const lastMsg = step[1].messages.at(-1);
-      let text = "";
-      if (typeof lastMsg?.content === "string") text = lastMsg.content;
-      else if (Array.isArray(lastMsg?.content))
-        text = lastMsg.content.map((c) => typeof c === "string" ? c : c?.text || "").join("");
-      else if (lastMsg?.content != null) text = String(lastMsg.content);
-      if (text) {
-        const newContent = text + "\n";
-        onChunk(newContent);
-        combinedSessionString += newContent;
+      const messages = step[1].messages;
+      console.log(`\u{1F4E8} Processing ${messages.length} messages from step:`, step[0]);
+      for (const msg of messages) {
+        let text = "";
+        if (typeof msg?.content === "string") {
+          text = msg.content;
+        } else if (Array.isArray(msg?.content)) {
+          text = msg.content.map((c) => {
+            if (typeof c === "string") return c;
+            if (c?.text) return c.text;
+            if (c?.type === "text" && c.text) return c.text;
+            return String(c || "");
+          }).join("");
+        } else if (msg?.content != null) {
+          text = String(msg.content);
+        }
+        const msgType = msg?.getType?.() || msg?.constructor?.name || "unknown";
+        console.log(`\u{1F4DD} Extracted text from message (${msgType}):`, {
+          textLength: text.length,
+          textPreview: text.substring(0, 100),
+          contentType: typeof msg?.content,
+          isArray: Array.isArray(msg?.content)
+        });
+        if (text) {
+          const isToolOutput = text.includes("[Tool Output for");
+          if (!isToolOutput) {
+            const newContent = text + "\n";
+            console.log(`\u{1F4E4} Emitting chunk to UI:`, { length: newContent.length, preview: newContent.substring(0, 50) });
+            onChunk(newContent);
+            combinedSessionString += newContent;
+            hasEmittedUserMessage = true;
+          } else {
+            console.log(`\u{1F527} Tool output (hidden from UI):`, text.substring(0, 50));
+            combinedSessionString += text + "\n";
+          }
+        }
       }
     }
   }
-  console.log(`\u{1F3C1} Stream finished. Final combined length: ${combinedSessionString.length}`);
+  console.log(`\u{1F3C1} Stream finished. Final combined length: ${combinedSessionString.length}, hasEmittedUserMessage: ${hasEmittedUserMessage}`);
+  if (!hasEmittedUserMessage && combinedSessionString && combinedSessionString.includes("[Tool Output for")) {
+    const toolOutputMatch = combinedSessionString.match(/\[Tool Output for [^\]]+\]:\s*(.+)/s);
+    if (toolOutputMatch && toolOutputMatch[1]) {
+      const toolMessage = toolOutputMatch[1].trim();
+      console.log(`\u{1F4CB} Extracting user-friendly message from tool output:`, toolMessage.substring(0, 100));
+      const friendlyMessage = toolMessage.charAt(0).toUpperCase() + toolMessage.slice(1) + "\n";
+      onChunk(friendlyMessage);
+      combinedSessionString = friendlyMessage;
+    }
+  }
   if (combinedSessionString && !isSaved) {
     console.log(`\u2705 Saving turn to session (post-stream): "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
     pushCurrentTurn(prompt, combinedSessionString);
