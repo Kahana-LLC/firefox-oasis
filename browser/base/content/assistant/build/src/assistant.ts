@@ -340,6 +340,7 @@ export async function runAssistantStream(
   let combinedSessionString = "";
   let isSaved = false;
   let stepCount = 0;
+  let hasEmittedUserMessage = false;
 
   for await (const state of stream as any) {
     stepCount++;
@@ -356,34 +357,80 @@ export async function runAssistantStream(
       break;
     }
     const step = Object.entries(state).find(([k]) => k !== "__end");
+    console.log(`🔍 Step details:`, { 
+      stepKey: step?.[0], 
+      stepValue: step?.[1],
+      hasMessages: step?.[1] && "messages" in (step[1] as any),
+      stepKeys: step?.[1] ? Object.keys(step[1] as any) : []
+    });
+    
     if (step?.[1] && "messages" in (step[1] as any)) {
-      const lastMsg = (step[1] as any).messages.at(-1);
-      let text = "";
-      if (typeof lastMsg?.content === "string") text = lastMsg.content;
-      else if (Array.isArray(lastMsg?.content))
-        text = lastMsg.content.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
-      else if (lastMsg?.content != null) text = String(lastMsg.content);
+      const messages = (step[1] as any).messages;
+      console.log(`📨 Processing ${messages.length} messages from step:`, step[0]);
+      
+      // Process all messages, not just the last one
+      for (const msg of messages) {
+        let text = "";
+        
+        // Improved text extraction with better logging
+        if (typeof msg?.content === "string") {
+          text = msg.content;
+        } else if (Array.isArray(msg?.content)) {
+          text = msg.content.map((c: any) => {
+            if (typeof c === "string") return c;
+            if (c?.text) return c.text;
+            if (c?.type === "text" && c.text) return c.text;
+            return String(c || "");
+          }).join("");
+        } else if (msg?.content != null) {
+          text = String(msg.content);
+        }
 
-      if (text) {
-          // Filter out tool output messages from UI display (but keep in session for supervisor)
-          const isToolOutput = text.includes("[Tool Output for");
-          
-          if (!isToolOutput) {
-              // Since our nodes return complete messages (not streaming tokens), 
-              // we can just append and emit.
-              // Note: If we had token streaming, we'd need per-message buffering.
-              // For now, assume atomic messages.
-              const newContent = text + "\n";
-              onChunk(newContent);
-              combinedSessionString += newContent;
-          } else {
-              // Still add to session string for supervisor context, but don't display to user
-              combinedSessionString += text + "\n";
-          }
+        const msgType = msg?.getType?.() || msg?.constructor?.name || "unknown";
+        console.log(`📝 Extracted text from message (${msgType}):`, {
+          textLength: text.length,
+          textPreview: text.substring(0, 100),
+          contentType: typeof msg?.content,
+          isArray: Array.isArray(msg?.content)
+        });
+
+        if (text) {
+            // Filter out tool output messages from UI display (but keep in session for supervisor)
+            const isToolOutput = text.includes("[Tool Output for");
+            
+            if (!isToolOutput) {
+                // Since our nodes return complete messages (not streaming tokens), 
+                // we can just append and emit.
+                // Note: If we had token streaming, we'd need per-message buffering.
+                // For now, assume atomic messages.
+                const newContent = text + "\n";
+                console.log(`📤 Emitting chunk to UI:`, { length: newContent.length, preview: newContent.substring(0, 50) });
+                onChunk(newContent);
+                combinedSessionString += newContent;
+                hasEmittedUserMessage = true;
+            } else {
+                // Still add to session string for supervisor context, but don't display to user
+                console.log(`🔧 Tool output (hidden from UI):`, text.substring(0, 50));
+                combinedSessionString += text + "\n";
+            }
+        }
       }
     }
   }
-  console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}`);
+  console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}, hasEmittedUserMessage: ${hasEmittedUserMessage}`);
+
+  // If we only have tool output and no user-facing message was emitted, extract and format it
+  if (!hasEmittedUserMessage && combinedSessionString && combinedSessionString.includes("[Tool Output for")) {
+    const toolOutputMatch = combinedSessionString.match(/\[Tool Output for [^\]]+\]:\s*(.+)/s);
+    if (toolOutputMatch && toolOutputMatch[1]) {
+      const toolMessage = toolOutputMatch[1].trim();
+      console.log(`📋 Extracting user-friendly message from tool output:`, toolMessage.substring(0, 100));
+      // Format it as if the AI said it - capitalize first letter
+      const friendlyMessage = toolMessage.charAt(0).toUpperCase() + toolMessage.slice(1) + "\n";
+      onChunk(friendlyMessage);
+      combinedSessionString = friendlyMessage;
+    }
+  }
 
   // SAFETY: Always save the turn even if we didn't hit __end__
   if (combinedSessionString && !isSaved) {
