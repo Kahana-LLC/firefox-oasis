@@ -84,7 +84,7 @@ async function checkCurrentAuthStatus() {
 
         mpTrack("auth_check_restored", { email: restoredSession.user?.email || null });
         updateAuthUI(true, restoredSession.user);
-        
+
         // Verify with Supabase (background check)
         if (window.supabaseAuth && window.supabaseAuth.supabase) {
             window.supabaseAuth.supabase.auth.getUser().then(({ data: { user }, error }) => {
@@ -111,7 +111,7 @@ async function checkCurrentAuthStatus() {
                 console.log('User is already authenticated (Supabase):', user.email);
                 updateAuthUI(true, user);
                 mpTrack("auth_check_authenticated", { email: user.email });
-                
+
                 // Ensure session is saved
                 const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
                 if (session) {
@@ -285,6 +285,52 @@ inputRow.id = "input-row";
 if (q.parentElement === bar) {
   inputRow.appendChild(q);
 }
+
+// Create inline recording animation
+const recordingInline = document.createElement("div");
+recordingInline.id = "recording-inline";
+
+// Create waveform container
+const waveformContainer = document.createElement("div");
+waveformContainer.className = "waveform-container";
+
+// Add waveform bars (more bars for wider coverage and higher resolution)
+const waveformBars = [];
+for (let i = 0; i < 80; i++) {
+  const bar = document.createElement("div");
+  bar.className = "waveform-bar";
+  waveformContainer.appendChild(bar);
+  waveformBars.push(bar);
+}
+
+recordingInline.appendChild(waveformContainer);
+
+// Create recording controls
+const recordingControls = document.createElement("div");
+recordingControls.className = "recording-controls";
+
+const cancelRecordingBtn = document.createElement("button");
+cancelRecordingBtn.className = "recording-btn cancel-recording";
+cancelRecordingBtn.id = "cancel-recording";
+cancelRecordingBtn.title = "Cancel recording";
+cancelRecordingBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+const acceptRecordingBtn = document.createElement("button");
+acceptRecordingBtn.className = "recording-btn accept-recording";
+acceptRecordingBtn.id = "accept-recording";
+acceptRecordingBtn.title = "Finish recording";
+acceptRecordingBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+recordingControls.appendChild(cancelRecordingBtn);
+recordingControls.appendChild(acceptRecordingBtn);
+
+recordingInline.appendChild(recordingControls);
+inputRow.appendChild(recordingInline);
+
 bar.appendChild(inputRow);
 
 // Create buttons row for feedback, voice, and send
@@ -397,6 +443,213 @@ micButton.title = "Click to start voice input";
 
 let isRecording = false;
 let micStartTs = 0;
+let audioContext = null;
+let analyser = null;
+let animationFrameId = null;
+let mediaStream = null;
+
+// Function to show recording inline
+function showRecordingInline() {
+  inputRow.classList.add('recording');
+  recordingInline.classList.add('active');
+}
+
+// Function to hide recording inline
+function hideRecordingInline() {
+  inputRow.classList.remove('recording');
+  recordingInline.classList.remove('active');
+  
+  // Stop audio visualization
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  
+  // Close audio context
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close();
+    audioContext = null;
+  }
+  
+  // Reset bars
+  waveformBars.forEach(bar => {
+    bar.style.height = '4px';
+  });
+}
+
+// Function to visualize audio input
+async function startAudioVisualization() {
+  try {
+    // Get microphone access
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // Create audio context and analyser
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    
+    analyser.fftSize = 128; // Smaller FFT size for better performance
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    source.connect(analyser);
+    
+    // Store bar heights for smooth scrolling
+    const barHeights = new Array(waveformBars.length).fill(4);
+    let frameCount = 0;
+    const frameSkip = 2; // Update every 3rd frame for slower animation
+    
+    // Animation loop
+    function updateWaveform() {
+      if (!isRecording) return;
+      
+      animationFrameId = requestAnimationFrame(updateWaveform);
+      
+      // Get frequency data
+      analyser.getByteFrequencyData(dataArray);
+      
+      // Calculate average amplitude for the new bar
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      
+      // Convert to height (4px min, 56px max for better visibility)
+      const newHeight = Math.max(4, Math.min(56, (average / 255) * 56));
+      
+      // Only shift every Nth frame for slower animation
+      frameCount++;
+      if (frameCount > frameSkip) {
+        frameCount = 0;
+        
+        // Shift all heights to the left
+        barHeights.shift();
+        barHeights.push(newHeight);
+      }
+      
+      // Update each bar with the shifted heights
+      waveformBars.forEach((bar, index) => {
+        bar.style.height = `${barHeights[index]}px`;
+        
+        // Adjust opacity based on height
+        const opacity = Math.max(0.4, Math.min(1, barHeights[index] / 56));
+        bar.style.opacity = opacity;
+      });
+    }
+    
+    updateWaveform();
+  } catch (error) {
+    console.error('Error starting audio visualization:', error);
+    // Fallback to simple animation if audio access fails
+    fallbackAnimation();
+  }
+}
+
+// Fallback animation when audio access is not available
+function fallbackAnimation() {
+  let frame = 0;
+  let frameCount = 0;
+  const frameSkip = 2; // Update every 3rd frame for slower animation
+  const barHeights = new Array(waveformBars.length).fill(4);
+  
+  function animate() {
+    if (!isRecording) return;
+    
+    animationFrameId = requestAnimationFrame(animate);
+    frame++;
+    
+    // Generate new height with sine wave (increased range for better visibility)
+    const newHeight = 20 + Math.sin(frame * 0.15) * 30;
+    
+    // Only shift every Nth frame for slower animation
+    frameCount++;
+    if (frameCount > frameSkip) {
+      frameCount = 0;
+      
+      // Shift all heights to the left and add new height on right
+      barHeights.shift();
+      barHeights.push(newHeight);
+    }
+    
+    // Update bars with shifted heights
+    waveformBars.forEach((bar, index) => {
+      bar.style.height = `${barHeights[index]}px`;
+      const opacity = Math.max(0.4, Math.min(1, barHeights[index] / 56));
+      bar.style.opacity = opacity;
+    });
+  }
+  animate();
+}
+
+// Cancel recording button
+cancelRecordingBtn.addEventListener('click', async () => {
+  if (isRecording && voiceInputService) {
+    mpTrack("mic_cancel", { duration_ms: Date.now() - micStartTs });
+    try {
+      // Stop recording without processing
+      await voiceInputService.stopRecording();
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+    }
+    
+    // Stop media stream
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
+    
+    isRecording = false;
+    hideRecordingInline();
+    append("\n❌ Recording cancelled\n");
+  }
+});
+
+// Accept recording button
+acceptRecordingBtn.addEventListener('click', async () => {
+  if (isRecording && voiceInputService) {
+    acceptRecordingBtn.disabled = true;
+    acceptRecordingBtn.style.opacity = '0.5';
+    
+    try {
+      const transcribedText = await voiceInputService.stopRecording();
+      mpTrack("mic_accept", { duration_ms: Date.now() - micStartTs });
+      
+      // Stop media stream
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      
+      hideRecordingInline();
+      
+      if (transcribedText && transcribedText.trim()) {
+        q.value = transcribedText;
+        append(`\n🎤 Transcribed: ${transcribedText}\n`);
+        mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
+      } else {
+        append("\n⚠️ No speech detected.\n");
+        mpTrack("mic_transcribe_empty");
+      }
+    } catch (error) {
+      console.error("Transcription error:", error);
+      
+      // Stop media stream on error too
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      
+      hideRecordingInline();
+      append(`\n❌ Transcription failed: ${error.message}\n`);
+      mpTrack("mic_transcribe_error", { message: error.message });
+    } finally {
+      isRecording = false;
+      acceptRecordingBtn.disabled = false;
+      acceptRecordingBtn.style.opacity = '1';
+    }
+  }
+});
 
 micButton.addEventListener("click", async () => {
   if (!isAuthenticated) {
@@ -409,108 +662,21 @@ micButton.addEventListener("click", async () => {
     return;
   }
 
-  if (isRecording) {
-    // Stop recording - show stop icon while processing
-    micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="36" height="36" rx="18" fill="#f8faf2"/>
-      <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
-    </svg>`;
-    micButton.disabled = true;
-    micButton.style.cssText = `
-      padding: 0;
-      width: 36px;
-      height: 36px;
-      border-radius: 18px;
-      border: none;
-      background: transparent;
-      cursor: not-allowed;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0.6;
-    `;
-    
-    try {
-      const transcribedText = await voiceInputService.stopRecording();
-      mpTrack("mic_stop", { duration_ms: Date.now() - micStartTs });
-      
-      if (transcribedText && transcribedText.trim()) {
-        q.value = transcribedText;
-        append(`\n🎤 Transcribed: ${transcribedText}\n`);
-        mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
-      } else {
-        append("\n⚠️ No speech detected.\n");
-        mpTrack("mic_transcribe_empty");
-      }
-    } catch (error) {
-      console.error("Transcription error:", error);
-      append(`\n❌ Transcription failed: ${error.message}\n`);
-      mpTrack("mic_transcribe_error", { message: error.message });
-    } finally {
-      isRecording = false;
-      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
-        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9576 12.8511C14.9576 12.0442 15.2782 11.2703 15.8487 10.6997C16.4193 10.1291 17.1932 9.80859 18.0001 9.80859C18.8071 9.80859 19.5809 10.1291 20.1515 10.6997C20.7221 11.2703 21.0427 12.0442 21.0427 12.8511V18.4681C21.0427 19.2751 20.7221 20.0489 20.1515 20.6195C19.5809 21.1901 18.8071 21.5107 18.0001 21.5107C17.1932 21.5107 16.4193 21.1901 15.8487 20.6195C15.2782 20.0489 14.9576 19.2751 14.9576 18.4681V12.8511ZM18.0001 11.2128C17.5656 11.2128 17.1489 11.3854 16.8417 11.6927C16.5345 11.9999 16.3618 12.4166 16.3618 12.8511V18.4681C16.3618 18.9026 16.5345 19.3193 16.8417 19.6266C17.1489 19.9338 17.5656 20.1064 18.0001 20.1064C18.4346 20.1064 18.8513 19.9338 19.1586 19.6266C19.4658 19.3193 19.6384 18.9026 19.6384 18.4681V12.8511C19.6384 12.4166 19.4658 11.9999 19.1586 11.6927C18.8513 11.3854 18.4346 11.2128 18.0001 11.2128ZM13.3193 17.766C13.5055 17.766 13.6841 17.84 13.8158 17.9716C13.9475 18.1033 14.0214 18.2819 14.0214 18.4681C14.0214 19.5233 14.4406 20.5353 15.1868 21.2815C15.9329 22.0276 16.9449 22.4468 18.0001 22.4468C19.0554 22.4468 20.0674 22.0276 20.8135 21.2815C21.5597 20.5353 21.9788 19.5233 21.9788 18.4681C21.9788 18.2819 22.0528 18.1033 22.1845 17.9716C22.3162 17.84 22.4947 17.766 22.681 17.766C22.8672 17.766 23.0458 17.84 23.1774 17.9716C23.3091 18.1033 23.3831 18.2819 23.3831 18.4681C23.3831 19.7742 22.9083 21.0357 22.0471 22.0176C21.186 22.9995 19.9972 23.6348 18.7023 23.8052V24.7872H20.8086C20.9948 24.7872 21.1734 24.8612 21.3051 24.9929C21.4368 25.1246 21.5108 25.3031 21.5108 25.4894C21.5108 25.6756 21.4368 25.8542 21.3051 25.9858C21.1734 26.1175 20.9948 26.1915 20.8086 26.1915H15.1916C15.0054 26.1915 14.8268 26.1175 14.6952 25.9858C14.5635 25.8542 14.4895 25.6756 14.4895 25.4894C14.4895 25.3031 14.5635 25.1246 14.6952 24.9929C14.8268 24.8612 15.0054 24.7872 15.1916 24.7872H17.298V23.8052C16.0031 23.6348 14.8143 22.9995 13.9531 22.0176C13.092 21.0357 12.6172 19.7742 12.6172 18.4681C12.6172 18.2819 12.6912 18.1033 12.8228 17.9716C12.9545 17.84 13.1331 17.766 13.3193 17.766Z" fill="#94A833"/>
-      </svg>`;
-      micButton.disabled = false;
-      micButton.style.cssText = `
-        padding: 0;
-        width: 36px;
-        height: 36px;
-        border-radius: 18px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 8px;
-      `;
-      micButton.title = "Click to start voice input";
-    }
-  } else {
-    // Start recording - change to stop icon from Figma design
+  if (!isRecording) {
+    // Start recording
     try {
       await voiceInputService.startRecording();
       mpTrack("mic_start");
       micStartTs = Date.now();
       isRecording = true;
-      micButton.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="36" height="36" rx="18" fill="#f8faf2"/>
-        <rect x="11" y="11" width="14" height="14" rx="2" fill="#7A9200"/>
-      </svg>`;
-      micButton.style.cssText = `
-        padding: 0;
-        width: 36px;
-        height: 36px;
-        border-radius: 18px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 8px;
-        animation: pulse 1.5s ease-in-out infinite;
-      `;
-      micButton.title = "Click to stop recording";
-      append("\n🎤 Recording... Click again to stop.\n");
       
-      // Add pulse animation for recording state
-      if (!document.getElementById('recording-pulse-style')) {
-        const style = document.createElement('style');
-        style.id = 'recording-pulse-style';
-        style.textContent = `
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-          }
-        `;
-        document.head.appendChild(style);
-      }
+      // Show the recording animation inline
+      showRecordingInline();
+      
+      // Start audio visualization
+      startAudioVisualization();
+      
+      append("\n🎤 Recording...\n");
     } catch (error) {
       console.error("Recording error:", error);
       append(`\n❌ Failed to start recording: ${error.message}\n`);
@@ -1261,81 +1427,31 @@ rightSection.appendChild(menuButton);
 
 authHeader.appendChild(rightSection);
 
-// Make header draggable - RAF smoothing with light damping
-let isDragging = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
-let accumulatedDeltaX = 0;
-let accumulatedDeltaY = 0;
-let rafId = null;
-
-const DRAG_DAMPING = 0.88; // Light damping for smooth, responsive feel
-
-function sendDragUpdate() {
-  if (!isDragging) {
-    rafId = null;
-    return;
-  }
-  
-  if (Math.abs(accumulatedDeltaX) > 0.1 || Math.abs(accumulatedDeltaY) > 0.1) {
-    window.parent.postMessage({
-      type: "oasisOverlayMoveRelative",
-      deltaX: accumulatedDeltaX,
-      deltaY: accumulatedDeltaY
-    }, "*");
-    
-    accumulatedDeltaX = 0;
-    accumulatedDeltaY = 0;
-  }
-  
-  rafId = requestAnimationFrame(sendDragUpdate);
-}
-
-authHeader.addEventListener("mousedown", (e) => {
-  // Don't start drag when clicking buttons or menu
+// Make header draggable - notify parent to handle drag at chrome level
+authHeader.addEventListener("pointerdown", (e) => {
   if (e.target.closest('button') || e.target.closest('.dropdown-menu')) {
-    console.log("Skipping drag - clicked on button/menu");
     return;
   }
-  console.log("Starting drag");
-  isDragging = true;
-  mpTrack("overlay_drag_start");
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-  accumulatedDeltaX = 0;
-  accumulatedDeltaY = 0;
+  if (e.button !== 0) return;
+  
   authHeader.style.cursor = "grabbing";
+  document.body.style.userSelect = "none";
   e.preventDefault();
   e.stopPropagation();
   
-  if (!rafId) {
-    rafId = requestAnimationFrame(sendDragUpdate);
-  }
+  window.parent.postMessage({
+    type: "oasisOverlayDragStart",
+    screenX: e.screenX,
+    screenY: e.screenY
+  }, "*");
+  mpTrack("overlay_drag_start");
 });
 
-document.addEventListener("mousemove", (e) => {
-  if (!isDragging) return;
-  
-  const deltaX = (e.clientX - lastMouseX) * DRAG_DAMPING;
-  const deltaY = (e.clientY - lastMouseY) * DRAG_DAMPING;
-  
-  accumulatedDeltaX += deltaX;
-  accumulatedDeltaY += deltaY;
-  
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-});
-
-document.addEventListener("mouseup", () => {
-  if (isDragging) {
-    console.log("Ending drag");
-    isDragging = false;
-    mpTrack("overlay_drag_end", { deltaX: accumulatedDeltaX, deltaY: accumulatedDeltaY });
+window.addEventListener("message", (e) => {
+  if (e.data?.type === "oasisOverlayDragEnd") {
     authHeader.style.cursor = "grab";
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
+    document.body.style.userSelect = "";
+    mpTrack("overlay_drag_end", { deltaX: e.data.totalDeltaX || 0, deltaY: e.data.totalDeltaY || 0 });
   }
 });
 
