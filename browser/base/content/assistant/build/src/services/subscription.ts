@@ -91,8 +91,8 @@ export class SubscriptionService {
             return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
         }
 
-        // Refresh cache if stale
-        if (Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+        // Refresh cache if stale or never fetched
+        if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
             await this.refreshUsageData(user.id);
         }
 
@@ -109,8 +109,15 @@ export class SubscriptionService {
     }
 
     public getSubscriptionUrl(): string {
-        // Placeholder for now, eventually a specific path in the dashboard
-        return "https://kahana.co/pricing";
+        return "https://kahana.co/oasis-pricing";
+    }
+
+    public async forceRefresh(): Promise<void> {
+        const user = await supabaseAuth.getCurrentUser();
+        if (user) {
+            this.lastFetchTime = 0;
+            await this.refreshUsageData(user.id);
+        }
     }
 
     private async refreshUsageData(userId: string): Promise<void> {
@@ -120,23 +127,101 @@ export class SubscriptionService {
         // 1. Get User Plan Limit
         let limit = DEFAULT_LIMIT;
 
-        const { data: planData } = await supabase
+        const { data: planData, error: planError } = await supabase
             .from('user_plans')
             .select(`
                 plan_id,
+                stripe_subscription_id,
+                is_active,
                 plans ( name, llm_call_limit )
             `)
             .eq('user_id', userId)
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+        console.log(`refreshUsageData: Primary query result:`, {
+            planData,
+            planError,
+            hasPlansJoin: planData && planData.plans ? true : false,
+            userId
+        });
 
         if (planData && planData.plans) {
-             const dbLimit = planData.plans.llm_call_limit;
-             const planName = (planData.plans.name || "").toLowerCase();
-             if (dbLimit) limit = dbLimit;
-             else if (PLAN_LIMITS[planName]) limit = PLAN_LIMITS[planName];
+            const dbLimit = planData.plans.llm_call_limit;
+            const planName = (planData.plans.name || "").toLowerCase();
+            if (dbLimit) {
+                limit = dbLimit;
+                console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
+            } else if (PLAN_LIMITS[planName]) {
+                limit = PLAN_LIMITS[planName];
+                console.log(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
+            }
+        } else if (planData && planData.is_active) {
+            const stripeSubId = planData.stripe_subscription_id;
+            const hasStripeSubscription = stripeSubId && 
+                                         typeof stripeSubId === 'string' &&
+                                         stripeSubId.trim() !== '';
+            
+            console.log(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
+                stripeSubId,
+                hasStripeSubscription,
+                is_active: planData.is_active
+            });
+            
+            if (hasStripeSubscription) {
+                limit = PLAN_LIMITS["basic"];
+                console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+            } else {
+                console.warn("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
+            }
+        }
+        
+        if (limit === DEFAULT_LIMIT) {
+            console.warn("refreshUsageData: Limit still at default, trying fallback query without join");
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('user_plans')
+                .select('plan_id, stripe_subscription_id, is_active')
+                .eq('user_id', userId)
+                .eq('is_active', true)
+                .maybeSingle();
+            
+            console.log(`refreshUsageData: Fallback query result:`, { 
+                fallbackData, 
+                fallbackError,
+                userId 
+            });
+            
+            if (fallbackError) {
+                console.error("refreshUsageData: Fallback query error:", fallbackError);
+            }
+            
+            if (fallbackData && fallbackData.is_active) {
+                const stripeSubId = fallbackData.stripe_subscription_id;
+                const hasStripeSubscription = stripeSubId && 
+                                             typeof stripeSubId === 'string' &&
+                                             stripeSubId.trim() !== '';
+                
+                console.log(`refreshUsageData: Checking stripe_subscription_id:`, {
+                    stripeSubId,
+                    hasStripeSubscription,
+                    type: typeof stripeSubId
+                });
+                
+                if (hasStripeSubscription) {
+                    limit = PLAN_LIMITS["basic"];
+                    console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+                } else {
+                    console.warn("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
+                }
+            } else {
+                console.warn("refreshUsageData: No active plan found for user, using free plan limit", {
+                    fallbackData,
+                    userId
+                });
+            }
         }
 
+        console.log(`refreshUsageData: Final limit set to: ${limit}`);
         this.cachedLimit = limit;
 
         // 2. Get Current Month Usage from DB

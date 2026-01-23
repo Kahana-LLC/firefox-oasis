@@ -25,6 +25,7 @@
       background: var(--surface-default); 
       color: var(--text-body);
       -webkit-font-smoothing: antialiased;
+      overflow: hidden;
     }
     main { 
       height: 100vh; 
@@ -34,6 +35,7 @@
       padding: 16px;
       gap: 16px;
       resize: none;
+      box-sizing: border-box;
     }
     
     /* Hide all resize handles and grippers */
@@ -75,6 +77,11 @@
       line-height: 1.6;
       display: flex;
       flex-direction: column;
+      scrollbar-width: none;
+    }
+    
+    #log::-webkit-scrollbar {
+      display: none;
     }
     
     /* When log has messages, add gap between them */
@@ -87,43 +94,84 @@
       display: flex;
       flex-direction: column;
       max-width: 100%;
-      animation: fadeIn 0.2s ease-in;
+      animation: fadeIn 0.22s ease-in;
+      margin: 6px 0;
+      gap: 6px;
     }
-    
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    
+
     .message-user {
       align-items: flex-end;
     }
-    
+
     .message-ai {
       align-items: flex-start;
     }
-    
+
     .message-content {
-      padding: 10px 16px;
-      border-radius: 8px;
+      position: relative;
+      padding: 12px 16px;
+      border-radius: 18px;
       font-size: 14px;
       line-height: 20px;
       word-wrap: break-word;
       white-space: pre-wrap;
+      box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+      max-width: 70%;
+      transition: background 120ms ease, transform 120ms ease;
     }
-    
+
+    .message-content::selection {
+      background-color: #cccccc;
+    }
+
+    /* User bubble (right) */
     .message-user .message-content {
-      background: #f2f4e5;
-      color: #4d4d4d;
-      max-width: 325px;
+      background: linear-gradient(180deg, #F8FAF2, #F2F4E5);
+      color: #2f3a20;
       text-align: left;
+      border-radius: 18px 18px 4px 18px;
     }
-    
+
+    /* AI bubble (left) */
     .message-ai .message-content {
-      background: white;
-      color: #666;
-      max-width: 100%;
-      padding: 10px 0;
+      background: linear-gradient(180deg, #ffffff, #fafafa);
+      color: #333;
+      text-align: left;
+      border-radius: 18px 18px 18px 4px;
+    }
+
+    /* Soft tails for more natural chat look */
+    .message-user .message-content::after,
+    .message-ai .message-content::after {
+      content: "";
+      position: absolute;
+      bottom: 8px;
+      width: 12px;
+      height: 12px;
+      transform: rotate(45deg);
+      box-shadow: 0 6px 18px rgba(16,24,40,0.03);
+      z-index: 0;
+    }
+    .message-user .message-content::after {
+      right: -6px;
+      background: linear-gradient(180deg, #F8FAF2, #F2F4E5);
+      border-bottom-left-radius: 2px;
+    }
+    .message-ai .message-content::after {
+      left: -6px;
+      background: linear-gradient(180deg, #ffffff, #fafafa);
+      border-bottom-right-radius: 2px;
+    }
+
+    /* Ensure AI messages can be wider on desktop but not too wide */
+    @media (min-width: 800px) {
+      .message-ai .message-content { max-width: 56ch; }
+      .message-user .message-content { max-width: 48ch; }
     }
     #bar { 
       position: fixed;
@@ -231,6 +279,88 @@
     
     #empty-state-text p:first-child {
       margin-bottom: 0;
+    }
+    
+    /* Recording inline animation */
+    #recording-inline {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 0 4px;
+      flex: 1;
+    }
+    
+    #recording-inline.active {
+      display: flex;
+    }
+    
+    #input-row.recording #q {
+      display: none;
+    }
+    
+    #input-row.recording #recording-inline {
+      display: flex;
+    }
+    
+    /* Increase height when recording */
+    #input-row.recording {
+      min-height: 70px;
+    }
+    
+    .waveform-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1px;
+      height: 60px;
+      flex: 1;
+      padding: 0 8px;
+      max-width: 100%;
+    }
+    
+    .waveform-bar {
+      flex: 1;
+      min-width: 2px;
+      max-width: 4px;
+      height: 4px;
+      background: linear-gradient(180deg, #7A9200, #94A833);
+      border-radius: 1.5px;
+      transform-origin: center;
+      transition: height 0.08s ease-out, opacity 0.08s ease-out;
+    }
+    
+    .recording-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .recording-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    
+    .recording-btn:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+    
+    .cancel-recording {
+      background: #3a3a3a;
+      color: #fff;
+    }
+    
+    .accept-recording {
+      background: #7A9200;
+      color: #fff;
     }
   </style>
 </head>
