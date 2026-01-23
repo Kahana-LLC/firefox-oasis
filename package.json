@@ -42,6 +42,8 @@
   "notes(private)": "We don't want to publish to npm, so this is marked as private",
   "private": true,
   "dependencies": {
+    "dompurify": "^3.3.1",
+    "marked": "^17.0.1",
     "minisearch": "^7.2.0"
   }
 }

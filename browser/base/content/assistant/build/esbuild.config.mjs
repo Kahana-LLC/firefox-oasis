@@ -11,7 +11,7 @@ await esbuild.build({
   entryPoints: ["./src/assistant.ts"],
   bundle: true,
   platform: "browser",
-  format: "esm",
+  format: "iife",
   target: "es2022",
   outfile: "../assistant.bundle.js",
   sourcemap: false,

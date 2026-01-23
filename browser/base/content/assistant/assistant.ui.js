@@ -1,4 +1,4 @@
-import { runAssistantStream, resetAssistantSession } from "./assistant.bundle.js";
+
 // Try to get Services from global scope or import it
 const Services = window.Services || ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
@@ -1719,7 +1719,7 @@ function addUserMessage(text) {
 // Add AI response bubble
 function addAIMessage(text) {
   const messageContainer = document.createElement("div");
-  messageContainer.className = "message-bubble message-ai";
+  messageContainer.className = "message-bubble message-ai ai-message";
   
   const messageContent = document.createElement("div");
   messageContent.className = "message-content";
@@ -1738,7 +1738,18 @@ function updateAIMessage(element, text, isHTML = false) {
     if (isHTML) {
       element.innerHTML = text;
     } else {
-      element.textContent = text;
+      try {
+        if (window.marked && window.DOMPurify) {
+          const html = window.DOMPurify.sanitize(window.marked.parse(text));
+          element.innerHTML = html;
+        } else {
+          // Fallback to plain text if libraries unavailable
+          element.textContent = text;
+        }
+      } catch (error) {
+        console.warn("Markdown parsing failed, falling back to plain text:", error);
+        element.textContent = text;
+      }
     }
     log.scrollTop = log.scrollHeight;
   }

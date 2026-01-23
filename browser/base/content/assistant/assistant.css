@@ -1,0 +1,8 @@
+
+/* Basic Markdown styles */
+.ai-message strong { font-weight: bold; }
+.ai-message em { font-style: italic; }
+.ai-message code { background: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+.ai-message pre { background: #f4f4f4; padding: 8px; border-radius: 5px; overflow-x: auto; }
+.ai-message ul, .ai-message ol { margin-left: 20px; }
+.ai-message a { color: #007acc; text-decoration: underline; }
