@@ -78,15 +78,11 @@
       display: flex;
       flex-direction: column;
       scrollbar-width: none;
+      gap: 16px; /* Reduced gap for tighter chat */
     }
     
     #log::-webkit-scrollbar {
       display: none;
-    }
-    
-    /* When log has messages, add gap between them */
-    #log:has(.message-bubble) {
-      gap: 24px;
     }
     
     /* Chat message bubbles */
@@ -95,8 +91,7 @@
       flex-direction: column;
       max-width: 100%;
       animation: fadeIn 0.22s ease-in;
-      margin: 6px 0;
-      gap: 6px;
+      /* Margin handled by parent gap */
     }
 
     @keyframes fadeIn {
@@ -117,12 +112,69 @@
       padding: 12px 16px;
       border-radius: 18px;
       font-size: 14px;
-      line-height: 20px;
+      line-height: 1.5;
+      /* Text wrapping fixes */
+      overflow-wrap: break-word;
       word-wrap: break-word;
-      white-space: pre-wrap;
-      box-shadow: 0 6px 18px rgba(16,24,40,0.06);
-      max-width: 70%;
+      word-break: break-word;
+      max-width: 85%; /* Slightly wider default */
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04); /* Softer shadow */
       transition: background 120ms ease, transform 120ms ease;
+    }
+
+    /* Markdown Styling */
+    .message-content p {
+      margin: 0 0 8px 0;
+    }
+    .message-content p:last-child {
+      margin-bottom: 0;
+    }
+    .message-content ul, .message-content ol {
+      margin: 4px 0 8px 0;
+      padding-left: 20px;
+    }
+    .message-content li {
+      margin-bottom: 4px;
+    }
+    /* Code blocks - scroll horizontally */
+    .message-content pre {
+      background: rgba(0,0,0,0.06);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: monospace;
+      font-size: 13px;
+      margin: 8px 0;
+      white-space: pre;
+    }
+    /* Inline code */
+    .message-content code {
+      font-family: monospace;
+      background: rgba(0,0,0,0.06);
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .message-content pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      color: inherit;
+    }
+    .message-content blockquote {
+      border-left: 3px solid var(--primary-green);
+      margin: 8px 0;
+      padding-left: 12px;
+      opacity: 0.8;
+    }
+    /* Headers */
+    .message-content h1, .message-content h2, .message-content h3 {
+      font-size: 1.1em;
+      font-weight: 600;
+      margin: 12px 0 6px 0;
+    }
+    .message-content h1:first-child, .message-content h2:first-child, .message-content h3:first-child {
+      margin-top: 0;
     }
 
     .message-content::selection {
@@ -135,43 +187,23 @@
       color: #2f3a20;
       text-align: left;
       border-radius: 18px 18px 4px 18px;
+      margin-left: auto; /* Push to right */
     }
 
     /* AI bubble (left) */
     .message-ai .message-content {
-      background: linear-gradient(180deg, #ffffff, #fafafa);
+      background: #ffffff;
       color: #333;
       text-align: left;
       border-radius: 18px 18px 18px 4px;
-    }
-
-    /* Soft tails for more natural chat look */
-    .message-user .message-content::after,
-    .message-ai .message-content::after {
-      content: "";
-      position: absolute;
-      bottom: 8px;
-      width: 12px;
-      height: 12px;
-      transform: rotate(45deg);
-      box-shadow: 0 6px 18px rgba(16,24,40,0.03);
-      z-index: 0;
-    }
-    .message-user .message-content::after {
-      right: -6px;
-      background: linear-gradient(180deg, #F8FAF2, #F2F4E5);
-      border-bottom-left-radius: 2px;
-    }
-    .message-ai .message-content::after {
-      left: -6px;
-      background: linear-gradient(180deg, #ffffff, #fafafa);
-      border-bottom-right-radius: 2px;
+      border: 1px solid rgba(0,0,0,0.05); /* Slightly stronger border */
+      margin-right: auto; /* Push to left */
     }
 
     /* Ensure AI messages can be wider on desktop but not too wide */
     @media (min-width: 800px) {
-      .message-ai .message-content { max-width: 56ch; }
-      .message-user .message-content { max-width: 48ch; }
+      .message-ai .message-content { max-width: 65ch; }
+      .message-user .message-content { max-width: 50ch; }
     }
     #bar { 
       position: fixed;
@@ -186,7 +218,7 @@
       border: 1px solid white;
       background: var(--surface-page);
       border-radius: var(--border-radius-xlg);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); /* Stronger shadow for input bar */
       z-index: 100;
     }
     
@@ -209,8 +241,10 @@
     }
     #q { 
       flex:1; 
-      min-width: 400px;
-      height: 50px;
+      min-width: 200px;
+      width: 100%;
+      min-height: 20px;
+      max-height: 120px;
       padding:12px 16px; 
       border: none;
       border-radius: var(--border-radius-lg);
@@ -219,6 +253,12 @@
       background: transparent;
       color: var(--text-body);
       font-family: inherit;
+      resize: none;
+      overflow-y: auto;
+      line-height: 1.4;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
     }
     #q::placeholder {
       color: var(--neutral-500);
@@ -378,14 +418,14 @@
       </div>
     </div>
     <div id="bar">
-      <input id="q" placeholder="Ask me anything…"/>
+      <textarea id="q" placeholder="Ask me anything…" rows="1"></textarea>
       <button id="go">Send</button>
     </div>
   </main>
 
   <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
   <script src="chrome://browser/content/assistant/auth-guard.js"></script>
-  <script type="module" src="chrome://browser/content/assistant/assistant.ui.js"></script>
+  <script src="chrome://browser/content/assistant/assistant.ui.js"></script>
 
 </body>
 </html>

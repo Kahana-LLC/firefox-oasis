@@ -1,3 +1,5 @@
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote, chatRemote } from "./proxyClient";
@@ -36,6 +38,10 @@ const supabaseAuth = SupabaseAuth.getInstance();
 // Expose voice input service for UI
 (window as any).voiceInputService = voiceInputService;
 
+// Expose libraries for UI access
+(window as any).marked = marked;
+(window as any).DOMPurify = DOMPurify;
+
 /* ========= Ephemeral chat history per session ========= */
 // Automatically managed - one session per sidebar instance
 let CURRENT_SESSION: BaseMessage[] = [];
@@ -57,6 +63,7 @@ function pushCurrentTurn(user: string, assistant: string) {
 export function resetAssistantSession() {
   CURRENT_SESSION = [];
 }
+(window as any).resetAssistantSession = resetAssistantSession;
 
 export function getAssistantHistory(): BaseMessage[] {
   return [...CURRENT_SESSION];
@@ -205,20 +212,28 @@ The available workers are: {options}`.trim();
 - Commands that were executed (marked as [Tool Output for ...])
 - Results from those commands
 
+**Response Guidelines:**
+1. **Use Markdown:** Format your answers beautifully using Markdown.
+   - Use **bold** for key terms or emphasis.
+   - Use bullet points or numbered lists for summarizing multiple items (like open tabs).
+   - Use \`code blocks\` for URLs, technical terms, or specific values.
+2. **Interpret Data:** If a tool returns raw data (like JSON arrays or objects), you **MUST** format it into a human-readable list or sentence. NEVER output raw JSON to the user.
+3. **Context Aware:** You can see everything that happened in this conversation - use that context!
+4. **Natural Tone:** Do NOT mention the internal workings, "tool outputs", or that you are using data from a previous step. Just provide the answer naturally.
+
 **When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
-2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
+1. If asked to summarize or recall: Review the conversation history and list what happened clearly.
+2. If asked general questions: Answer helpfully based on what you know.
 
 **Example:**
 If the history shows:
   - User: "list tabs"
-  - Tool Output: "1. Google, 2. CNN"
-  - User: "close the first tab"
-  - Tool Output: "Closed: Google"
+  - Tool Output: "[\"Google\", \"CNN\"]"
   
-And user asks "what have we done?", you should respond:
-"We listed the tabs (found Google and CNN), then closed the first tab (Google)."
+You should respond:
+"Here are your open tabs:
+- **Google**
+- **CNN**"
 
 Remember: You ARE stateful within this conversation. The history is right there in your context!`;
     
@@ -226,8 +241,18 @@ Remember: You ARE stateful within this conversation. The history is right there 
     console.log(`💬 Chat node received ${state.messages.length} messages:`, 
       state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
     
-    const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
-    return { messages: [new AIMessage(res.content)] };
+    // FORCE the LLM to reply by appending a hidden instruction
+    // otherwise it sees "Model: [Tool Output]" and thinks it's done.
+    const messagesWithPrompt = [
+      ...state.messages,
+      new HumanMessage("The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.")
+    ];
+
+    const res = await chatRemote(CHAT_PROMPT, toWire(messagesWithPrompt));
+    return { 
+      messages: [new AIMessage(res.content)],
+      lastWorker: "chat"
+    };
   };
 
   const supervisorNode = async (s: typeof GraphState.State) => {
@@ -241,18 +266,24 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const nextArgs = out?.args || {};
   
     // CHECK: If the tool just finished and the LLM tries to call it again, force to chat
-    const lastMsg = s.messages[s.messages.length - 1];
-    const isToolOutput = msgText(lastMsg).includes("[Tool Output for");
-    
-    console.log(`🕵️ Supervisor Check: lastWorker=${s.lastWorker}, nextTool=${nextTool}, isToolOutput=${isToolOutput}`);
+    // We use s.lastWorker to know if the IMMEDIATE previous step was a specific tool.
+    const justRanTool = memberNames.includes(s.lastWorker);
 
-    if (isToolOutput && nextTool === s.lastWorker) {
+    console.log(`🕵️ Supervisor Check: lastWorker=${s.lastWorker}, justRanTool=${justRanTool}, nextTool=${nextTool}`);
+
+    if (justRanTool && nextTool === s.lastWorker) {
       console.log(`🛑 Stopping recursion: ${nextTool} repeated immediately after output.`);
       return { next: "chat", args: {} };
     }
   
     // Handle explicit completion
     if (nextTool === "FINISH" || nextTool === END) {
+      // If the last action was a tool output, we MUST summarize it for the user via 'chat'
+      // instead of just ending silently (which leads to raw JSON fallback).
+      if (justRanTool) {
+        console.log("📝 Redirecting to 'chat' node to format tool output.");
+        return { next: "chat", args: {} };
+      }
       return { next: END, args: {} };
     }
   
@@ -441,3 +472,4 @@ export async function runAssistantStream(
   
   return combinedSessionString || "(no output)";
 }
+(window as any).runAssistantStream = runAssistantStream;

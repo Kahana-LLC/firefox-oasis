@@ -30,9 +30,8 @@ export class ListTabsCommand implements Command {
     const titles = Array.from(gBrowser.tabs).map((t: any) =>
       t.label || t.linkedBrowser?.contentTitle || t.linkedBrowser?.currentURI?.spec || "(untitled)"
     );
-    const out = titles.length
-      ? titles.slice(0, 50).map((t, i) => `${i + 1}. ${t}`).join("\n")
-      : "No tabs.";
+    // Return structured JSON for the AI to format
+    const out = JSON.stringify(titles.slice(0, 50));
     return { message: out };
   }
 }
@@ -45,7 +44,7 @@ export class NewWindowCommand implements Command {
     if (!topWin) return { message: "Browser UI not available." };
 
     topWin.OpenBrowserWindow();
-    return { message: "Opened a new window." };
+    return { message: "Successfully opened a new window." };
   }
 }
 
@@ -115,7 +114,7 @@ export class ShowURLCommand implements Command {
     if (!url) return { message: "Missing 'url' argument." };
 
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened ${url}` };
+    return { message: `Successfully opened URL: ${url}` };
   }
 }
 
@@ -154,7 +153,7 @@ export class OpenTabCommand implements Command {
 
     topWin.openTrustedLinkIn(url, "tab");
     const display = !isUrlLike ? args?.url : url;
-    return { message: `Opened ${display}` };
+    return { message: `Successfully opened tab to: ${display}` };
   }
 }
 
@@ -173,7 +172,7 @@ export class CloseTabCommand implements Command {
     }
     const title = tab?.label || "(untitled)";
     gBrowser.removeTab(tab);
-    return { message: `Closed: ${title}` };
+    return { message: `Closed tab: ${title}` };
   }
 }
 
@@ -195,7 +194,7 @@ export class MoveTabToNewWindowCommand implements Command {
     const newWin = topWin.OpenBrowserWindow();
     await new Promise(r => setTimeout(r, 250)); // give it a tick
     (newWin as any).gBrowser.adoptTab(tab, 0);
-    return { message: `Moved: ${title}` };
+    return { message: `Moved tab to new window: ${title}` };
   }
 }
 
@@ -252,7 +251,7 @@ export class ListHubsCommand implements Command {
   async execute(_args: any): Promise<CmdResult> {
     const items = await hubs.list();
     if (!items.length) return { message: "No bookmark folder hubs yet." };
-    return { message: items.map(h => `- ${h.name} (${h.count})`).join("\n") };
+    return { message: JSON.stringify(items.map(h => `${h.name} (${h.count})`)) };
   }
 }
 
@@ -434,15 +433,15 @@ export class SearchMemoryCommand implements Command {
       return { message: `No matches found for "${query}"${hub ? ` in hub "${hub}"` : ""}.` };
     }
     
-    const out = results.map((r, i) => {
-      const title = r.metadata?.title || "(no title)";
-      const url = r.metadata?.url || "";
-      // Show a snippet of the text
-      const snippet = r.text.length > 100 ? r.text.substring(0, 100) + "..." : r.text;
-      return `${i + 1}. ${title} (${url})\n   "${snippet}"`;
-    }).join("\n\n");
+    // Return structured data for the AI to format
+    const structured = results.map((r, i) => ({
+      index: i + 1,
+      title: r.metadata?.title || "(no title)",
+      url: r.metadata?.url || "",
+      snippet: r.text.length > 100 ? r.text.substring(0, 100) + "..." : r.text
+    }));
     
-    return { message: `Found ${results.length} matches:\n${out}` };
+    return { message: JSON.stringify(structured) };
   }
 }
 
