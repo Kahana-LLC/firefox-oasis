@@ -14,6 +14,17 @@ import {
   MoveTabToNewWindowCommand,
   CopyTabUrlsCommand,
   SplitTabsCommand,
+  ReloadTabCommand,
+  MuteTabCommand,
+  PinTabCommand,
+  DuplicateTabCommand,
+  ReopenClosedTabCommand,
+  GroupTabsCommand,
+  UngroupTabsCommand,
+  ListTabGroupsCommand,
+  RenameTabGroupCommand,
+  CollapseTabGroupCommand,
+  DeleteTabGroupCommand,
   CreateHubCommand,
   DeleteHubCommand,
   ListHubsCommand,
@@ -27,6 +38,44 @@ import {
   Command,
   CmdResult,
 } from "./commands";
+
+/* ========= Human-in-the-Loop Configuration ========= */
+const SENSITIVE_COMMANDS = new Set([
+  "close_tab",
+  "delete_hub",
+  "delete_tab_group",
+  "split_tabs",
+  "move_tab_to_new_window",
+]);
+
+export interface ApprovalRequest {
+  command: string;
+  args: Record<string, any>;
+  description: string;
+}
+
+function getApprovalMessage(command: string, args: Record<string, any>): string {
+  switch (command) {
+    case "close_tab":
+      return args.index
+        ? `Close tab #${args.index}?`
+        : "Close the current tab?";
+    case "delete_hub":
+      return `Delete hub "${args.name}"${args.closeTabs ? " and close its tabs" : ""}?`;
+    case "delete_tab_group":
+      return args.name
+        ? `Delete tab group "${args.name}"? (Tabs will be ungrouped, not closed)`
+        : `Delete tab group #${args.index}? (Tabs will be ungrouped, not closed)`;
+    case "split_tabs":
+      return `Split tabs ${args.indices?.join(", ")} into separate windows?`;
+    case "move_tab_to_new_window":
+      return args.index
+        ? `Move tab #${args.index} to a new window?`
+        : "Move current tab to a new window?";
+    default:
+      return `Execute ${command}?`;
+  }
+}
 
 // Expose Supabase auth for UI
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -90,6 +139,14 @@ const GraphState = Annotation.Root({
     reducer: (x, y) => (y ? { ...(x || {}), ...y } : x),
     default: () => ({}),
   }),
+  pendingCommand: Annotation<string>({
+    reducer: (x, y) => y ?? x ?? "",
+    default: () => "",
+  }),
+  approvalStatus: Annotation<"pending" | "approved" | "rejected" | null>({
+    reducer: (x, y) => y ?? x ?? null,
+    default: () => null,
+  }),
 });
 
 /* ========= Helpers ========= */
@@ -113,12 +170,14 @@ function toWire(messages: BaseMessage[]): WireMsg[] {
 }
 
 /* ========= Build the tool graph ========= */
-async function buildGraph(commands: Command[]) {
+async function buildGraph(
+  commands: Command[],
+  approvalCallback?: ApprovalCallback
+) {
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    // Node: run the command and emit a message that clearly identifies the tool's output.
     const node = async (state: typeof GraphState.State) => {
       console.log(`🏷️ Executing ${command.commandName} with args:`, state.args);
 
@@ -127,10 +186,11 @@ async function buildGraph(commands: Command[]) {
 
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
-        // Strong state clearing to prevent re-running
         lastWorker: "",
         repeatCount: 0,
         args: {},
+        pendingCommand: "",
+        approvalStatus: null,
       };
     };
 
@@ -138,7 +198,6 @@ async function buildGraph(commands: Command[]) {
     memberNames.push(command.commandName);
   }
 
-  // ---------- Supervisor with routing rules + few-shots ----------
   const systemTemplate = `You are a supervisor agent that manages a team of workers.
 Your job is to intelligently route the user's request to the appropriate worker.
 You will be given the user's request and the conversation history.
@@ -148,31 +207,53 @@ You have the following workers available:
 {members}
 
 **Worker Arguments**
+
+Tab Operations:
 - **list_tabs**: No arguments needed
 - **open_tab**: { url: string } - the website URL to open
 - **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
 - **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows (e.g., "split tab 1 and 2" = { indices: [1, 2] })
-- **create_hub**: { name: string, include?: "none"|"current"|"all" }
-- **delete_hub**: { name: string, closeTabs?: boolean }
-- **list_hubs**: No arguments needed
-- **rename_hub**: { from: string, to: string }
-- **add_tab_to_hub**: { name: string }
-- **open_hub**: { name: string, where?: "tabs"|"window" }
+- **reload_tab**: { index?: number } - reload a tab (current tab if no index)
+- **mute_tab**: { index?: number, mute?: boolean } - mute/unmute a tab (toggles if mute not specified)
+- **pin_tab**: { index?: number, pin?: boolean } - pin/unpin a tab (toggles if pin not specified)
+- **duplicate_tab**: { index?: number } - duplicate a tab
+- **reopen_closed_tab**: No arguments - reopens the most recently closed tab
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
+
+Tab Group Operations (visual browser tab groups):
+- **group_tabs**: { indices: [number, ...], groupName?: string } - add tabs to a new group (e.g., "group tabs 2 and 3" = { indices: [2, 3] })
+- **ungroup_tabs**: { indices: [number, ...] } - remove tabs from their group
+- **list_tab_groups**: No arguments - list all tab groups
+- **rename_tab_group**: { from: string, to: string } or { index: number, to: string } - rename a tab group
+- **collapse_tab_group**: { name?: string, index?: number, collapse?: boolean } - collapse/expand a tab group
+- **delete_tab_group**: { name?: string, index?: number } - delete a tab group (ungroups tabs, doesn't close them)
+
+Bookmark Folder (Hub) Operations - NOTE: Hubs are BOOKMARK FOLDERS for saving URLs, NOT tab groups:
+- **create_hub**: { name: string, include?: "none"|"current"|"all" } - creates a BOOKMARK FOLDER to save URLs
+- **delete_hub**: { name: string, closeTabs?: boolean } - deletes a bookmark folder
+- **list_hubs**: No arguments needed - lists bookmark folders
+- **rename_hub**: { from: string, to: string }
+- **add_tab_to_hub**: { name: string } - bookmarks the current tab into a folder
+- **open_hub**: { name: string, where?: "tabs"|"window" } - opens bookmarks from a folder
+
+Search:
+- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs
+
+**IMPORTANT**: When user says "group tabs", use **group_tabs** for visual tab groups. Only use **create_hub** when user explicitly wants to save/bookmark URLs.
 
 **Rules**
 1. **Analyze History:** Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
 2. **Extract Arguments:** Convert tab numbers to 1-based indexes.
 3. **Check for Completion:** If the user's request is already satisfied by the latest tool output, choose "FINISH".
 4. **Handle Multi-Step:** If the user says "do X then Y", route step-by-step based on tool outputs.
-5. **Chat:** If conversational (hello/thanks/etc), choose "chat".
-6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry—choose "chat".
+5. **Chat:** If the user is asking a question, requesting an explanation, asking for information, or being conversational (hello/thanks/what is X/explain Y/tell me about Z/etc), choose "chat". The AI can answer general knowledge questions directly.
+6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry—choose "chat" to respond to the user.
 7. **Default Action:** Otherwise choose the best worker for the most recent request.
+8. **Never FINISH without response:** Do NOT choose "FINISH" unless a tool successfully completed the user's request. If the user asked a question, always route to "chat" to answer it.
 
 **Output Format**
 You MUST respond with a JSON object:
@@ -183,6 +264,17 @@ You MUST respond with a JSON object:
 The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
+    if (state.approvalStatus === "rejected") {
+      const cancelledCmd = state.pendingCommand || "that action";
+      return {
+        messages: [new AIMessage({
+          content: `Okay, I won't ${cancelledCmd}. Is there anything else I can help with?`
+        })],
+        pendingCommand: "",
+        approvalStatus: null,
+      };
+    }
+
     const CHAT_PROMPT = `You are a helpful Firefox browser assistant.
 
 **Context you receive**
@@ -194,7 +286,6 @@ The available workers are: {options}`.trim();
 - If the user is asking what happened in this run, summarize using the tool outputs provided.
 - Keep responses concise and action-oriented.`;
 
-    // Debug: Log what messages the chat node receives
     console.log(
       `💬 Chat node received ${state.messages.length} messages:`,
       state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`)
@@ -204,11 +295,41 @@ The available workers are: {options}`.trim();
     return { messages: [new AIMessage(res.content)] };
   };
 
-  // Track recently executed commands to prevent duplicates (within a single graph execution)
+  const humanApprovalNode = async (state: typeof GraphState.State) => {
+    const command = state.pendingCommand;
+    const args = state.args || {};
+
+    if (!SENSITIVE_COMMANDS.has(command)) {
+      return { approvalStatus: "approved" as const };
+    }
+
+    const description = getApprovalMessage(command, args);
+    console.log(`🛑 Human approval required for ${command}:`, description);
+
+    if (approvalCallback) {
+      const approved = await approvalCallback({ command, args, description });
+      if (approved) {
+        console.log(`✅ User approved ${command}`);
+        return { approvalStatus: "approved" as const };
+      } else {
+        console.log(`❌ User rejected ${command}`);
+        return {
+          approvalStatus: "rejected" as const,
+          next: "chat",
+        };
+      }
+    }
+
+    console.warn("No approval callback provided, auto-rejecting sensitive command");
+    return {
+      approvalStatus: "rejected" as const,
+      next: "chat",
+    };
+  };
+
   const recentlyExecutedCommands = new Set<string>();
 
   const supervisorNode = async (s: typeof GraphState.State) => {
-    // IMPORTANT: include FINISH in allowed options (your router prompt uses it)
     const options = [END, ...memberNames, "chat", "FINISH"];
 
     const systemPrompt = systemTemplate
@@ -230,17 +351,23 @@ The available workers are: {options}`.trim();
 
       if (recentlyExecutedCommands.has(commandSignature)) {
         console.warn(`🚫 Supervisor blocked duplicate routing to: ${commandSignature}`);
-        // Don't hard-end. Fall back to chat so UI gets a useful response.
         return { next: "chat", args: {} };
       }
 
       recentlyExecutedCommands.add(commandSignature);
 
-      // Keep last 10 signatures
       if (recentlyExecutedCommands.size > 10) {
         const entries = Array.from(recentlyExecutedCommands);
         recentlyExecutedCommands.clear();
         entries.slice(-10).forEach(cmd => recentlyExecutedCommands.add(cmd));
+      }
+
+      if (SENSITIVE_COMMANDS.has(nextTool)) {
+        return {
+          next: "human_approval",
+          pendingCommand: nextTool,
+          args: nextArgs,
+        };
       }
 
       return { next: nextTool, args: nextArgs };
@@ -259,6 +386,14 @@ The available workers are: {options}`.trim();
   workflow.addNode("chat", chatNode);
   workflow.addEdge("chat" as any, END as any);
 
+  workflow.addNode("human_approval", humanApprovalNode);
+  workflow.addConditionalEdges("human_approval" as any, (state: typeof GraphState.State) => {
+    if (state.approvalStatus === "approved") {
+      return state.pendingCommand;
+    }
+    return "chat";
+  });
+
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor" as any, (x: typeof GraphState.State) => x.next);
   workflow.addEdge(START, "supervisor" as any);
@@ -268,10 +403,12 @@ The available workers are: {options}`.trim();
 
 // ---------- Public APIs ----------
 
-// Streaming variant used by the UI for live updates
+export type ApprovalCallback = (request: ApprovalRequest) => Promise<boolean>;
+
 export async function runAssistantStream(
   prompt: string,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  onApprovalRequest?: ApprovalCallback
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
@@ -281,14 +418,23 @@ export async function runAssistantStream(
   }
 
   const commands: Command[] = [
-    // Tabs
     new ListTabsCommand(),
     new OpenTabCommand(),
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
-    // Hubs
+    new ReloadTabCommand(),
+    new MuteTabCommand(),
+    new PinTabCommand(),
+    new DuplicateTabCommand(),
+    new ReopenClosedTabCommand(),
+    new GroupTabsCommand(),
+    new UngroupTabsCommand(),
+    new ListTabGroupsCommand(),
+    new RenameTabGroupCommand(),
+    new CollapseTabGroupCommand(),
+    new DeleteTabGroupCommand(),
     new CreateHubCommand(),
     new DeleteHubCommand(),
     new ListHubsCommand(),
@@ -301,10 +447,8 @@ export async function runAssistantStream(
     new SearchMemoryCommand(),
   ];
 
-  const graph = await buildGraph(commands);
+  const graph = await buildGraph(commands, onApprovalRequest);
 
-  // Minimal context to prevent command re-execution:
-  // only pass the current user input to the graph.
   const currentInput = new HumanMessage({ content: prompt });
   console.log(`📝 Processing fresh input: "${prompt.substring(0, 50)}..."`);
 
@@ -343,11 +487,12 @@ export async function runAssistantStream(
       const text = msgText(lastMsg);
 
       if (text && text !== lastFull) {
-        const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
+        let delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
 
-        // Prevent "tool-output spam" duplication in streaming deltas (lightweight guard)
+        // Add newline separator between tool outputs for readability
         if (delta.includes("[Tool Output for") && lastFull.includes("[Tool Output for")) {
-          console.warn(`🚨 Potential duplicate tool output detected in delta: ${delta}`);
+          delta = "\n\n" + delta;
+          console.log(`📝 Adding newline separator between tool outputs`);
         }
 
         onChunk(delta);
@@ -359,7 +504,6 @@ export async function runAssistantStream(
 
   console.log(`🏁 Stream finished. Final lastFull length: ${lastFull.length}`);
 
-  // Save exactly once (no double-save)
   if (lastFull) {
     console.log(
       `✅ Saving turn to session: "${prompt}" -> "${lastFull.substring(0, 50)}..."`
@@ -371,3 +515,5 @@ export async function runAssistantStream(
 
   return lastFull || "(no output)";
 }
+
+export { SENSITIVE_COMMANDS };

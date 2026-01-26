@@ -62093,16 +62093,57 @@ var ShowURLCommand = class {
     return { message: `Opened ${url}` };
   }
 };
+function normalizeUrl(input) {
+  const trimmed = input.trim().toLowerCase();
+  const shortcuts = {
+    "youtube": "https://www.youtube.com",
+    "google": "https://www.google.com",
+    "gmail": "https://mail.google.com",
+    "twitter": "https://twitter.com",
+    "x": "https://x.com",
+    "facebook": "https://www.facebook.com",
+    "instagram": "https://www.instagram.com",
+    "reddit": "https://www.reddit.com",
+    "github": "https://github.com",
+    "linkedin": "https://www.linkedin.com",
+    "amazon": "https://www.amazon.com",
+    "netflix": "https://www.netflix.com",
+    "spotify": "https://open.spotify.com",
+    "twitch": "https://www.twitch.tv",
+    "discord": "https://discord.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "tiktok": "https://www.tiktok.com",
+    "pinterest": "https://www.pinterest.com",
+    "bing": "https://www.bing.com",
+    "yahoo": "https://www.yahoo.com",
+    "wikipedia": "https://www.wikipedia.org",
+    "youtube music": "https://music.youtube.com",
+    "google maps": "https://maps.google.com",
+    "google drive": "https://drive.google.com",
+    "google docs": "https://docs.google.com"
+  };
+  if (shortcuts[trimmed]) {
+    return shortcuts[trimmed];
+  }
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return input;
+  }
+  if (input.includes(".")) {
+    return `https://${input}`;
+  }
+  return `https://www.${trimmed}.com`;
+}
 var OpenTabCommand = class {
   commandName = "open_tab";
-  description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
+  description = "Open a new tab with a given URL or site name. Accepts arguments: { url: string }. Supports shortcuts like 'youtube', 'google', etc.";
   async execute(args) {
     const { topWin } = getChrome2();
     const url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
-    topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened ${url}` };
+    const normalizedUrl = normalizeUrl(url);
+    topWin.openTrustedLinkIn(normalizedUrl, "tab");
+    return { message: `Opened ${normalizedUrl}` };
   }
 };
 var CloseTabCommand = class {
@@ -62157,6 +62198,331 @@ var CopyTabUrlsCommand = class {
     } catch {
       return { message: `Copied fallback. URLs:
 ${text}` };
+    }
+  }
+};
+var ReloadTabCommand = class {
+  commandName = "reload_tab";
+  description = "Reload the active tab (or a tab by index). Accepts arguments: { index?: number } (1-based).";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const browser = tab?.linkedBrowser;
+    if (browser) {
+      browser.reload();
+      return { message: `Reloaded: ${title}` };
+    }
+    return { message: "Could not reload tab." };
+  }
+};
+var MuteTabCommand = class {
+  commandName = "mute_tab";
+  description = "Mute or unmute a tab. Accepts arguments: { index?: number, mute?: boolean }. If mute is not specified, toggles the current state.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const shouldMute = args?.mute ?? !tab.linkedBrowser?.audioMuted;
+    if (shouldMute) {
+      tab.linkedBrowser.mute();
+      return { message: `Muted: ${title}` };
+    } else {
+      tab.linkedBrowser.unmute();
+      return { message: `Unmuted: ${title}` };
+    }
+  }
+};
+var PinTabCommand = class {
+  commandName = "pin_tab";
+  description = "Pin or unpin a tab. Accepts arguments: { index?: number, pin?: boolean }. If pin is not specified, toggles the current state.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const shouldPin = args?.pin ?? !tab.pinned;
+    if (shouldPin) {
+      gBrowser.pinTab(tab);
+      return { message: `Pinned: ${title}` };
+    } else {
+      gBrowser.unpinTab(tab);
+      return { message: `Unpinned: ${title}` };
+    }
+  }
+};
+var DuplicateTabCommand = class {
+  commandName = "duplicate_tab";
+  description = "Duplicate the active tab (or a tab by index). Accepts arguments: { index?: number } (1-based).";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    gBrowser.duplicateTab(tab);
+    return { message: `Duplicated: ${title}` };
+  }
+};
+var ReopenClosedTabCommand = class {
+  commandName = "reopen_closed_tab";
+  description = "Reopen the most recently closed tab. Accepts no arguments.";
+  async execute(_args) {
+    const { topWin } = getChrome2();
+    if (!topWin) return { message: "Browser UI not available." };
+    try {
+      const { SessionStore } = topWin.ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs");
+      const closedTabs = SessionStore.getClosedTabDataForWindow(topWin);
+      if (!closedTabs || closedTabs.length === 0) {
+        return { message: "No recently closed tabs to reopen." };
+      }
+      SessionStore.undoCloseTab(topWin, 0);
+      return { message: "Reopened the last closed tab." };
+    } catch (e) {
+      return { message: `Could not reopen tab: ${e}` };
+    }
+  }
+};
+var GroupTabsCommand = class {
+  commandName = "group_tabs";
+  description = "Add tabs to a new or existing tab group. Accepts arguments: { indices: number[], groupName?: string }. Indices are 1-based.";
+  async execute(args) {
+    const { topWin, gBrowser } = getChrome2();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+    const indices = args?.indices;
+    const groupName = args?.groupName || "New Group";
+    if (!indices || !Array.isArray(indices) || indices.length === 0) {
+      return { message: "Please provide tab indices to group (e.g., { indices: [1, 2, 3] })." };
+    }
+    const tabs = [];
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) {
+        return { message: `No tab ${i}.` };
+      }
+      tabs.push(gBrowser.tabs[i - 1]);
+    }
+    try {
+      const group = gBrowser.addTabGroup(tabs, { label: groupName });
+      if (group) {
+        return { message: `Created tab group "${groupName}" with ${tabs.length} tabs.` };
+      }
+      return { message: "Tab groups may not be supported in this Firefox version." };
+    } catch (e) {
+      return { message: `Could not create tab group: ${e}` };
+    }
+  }
+};
+var UngroupTabsCommand = class {
+  commandName = "ungroup_tabs";
+  description = "Remove tabs from their group. Accepts arguments: { indices: number[] }. Indices are 1-based.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const indices = args?.indices;
+    if (!indices || !Array.isArray(indices) || indices.length === 0) {
+      return { message: "Please provide tab indices to ungroup." };
+    }
+    let ungroupedCount = 0;
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i <= gBrowser.tabs.length) {
+        const tab = gBrowser.tabs[i - 1];
+        if (tab.group) {
+          gBrowser.tabGroups?.ungroupTab(tab);
+          ungroupedCount++;
+        }
+      }
+    }
+    return { message: `Ungrouped ${ungroupedCount} tab(s).` };
+  }
+};
+function getTabGroups(gBrowser) {
+  if (gBrowser.getAllTabGroups) {
+    return gBrowser.getAllTabGroups();
+  }
+  if (gBrowser.tabGroups?.groups) {
+    return gBrowser.tabGroups.groups;
+  }
+  const groupSet = /* @__PURE__ */ new Set();
+  for (const tab of gBrowser.tabs) {
+    if (tab.group) {
+      groupSet.add(tab.group);
+    }
+  }
+  return Array.from(groupSet);
+}
+var ListTabGroupsCommand = class {
+  commandName = "list_tab_groups";
+  description = "List all tab groups in the current window. Accepts no arguments.";
+  async execute(_args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups." };
+      }
+      const out = groups.map((g, i) => {
+        const tabs = g.tabs || [];
+        const label = g.label || g.name || "(unnamed)";
+        const tabTitles = tabs.slice(0, 3).map((t) => t.label || "(untitled)").join(", ");
+        const more = tabs.length > 3 ? ` +${tabs.length - 3} more` : "";
+        return `${i + 1}. ${label} (${tabs.length} tabs): ${tabTitles}${more}`;
+      }).join("\n");
+      return { message: out };
+    } catch (e) {
+      return { message: `Tab groups error: ${e}` };
+    }
+  }
+};
+var RenameTabGroupCommand = class {
+  commandName = "rename_tab_group";
+  description = "Rename a tab group. Accepts arguments: { from: string, to: string } or { index: number, to: string }.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const from = args?.from;
+    const to = args?.to;
+    const index2 = args?.index;
+    if (!to) return { message: "Please provide the new group name." };
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups to rename." };
+      }
+      let group = null;
+      if (index2 != null) {
+        const i = Math.max(1, Math.floor(index2));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (from) {
+        group = groups.find((g) => {
+          const label = g.label || g.name || "";
+          return label.toLowerCase() === from.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${from}".` };
+        }
+      } else {
+        return { message: "Please provide either 'from' (current name) or 'index' of the group to rename." };
+      }
+      group.label = to;
+      return { message: `Renamed tab group to "${to}".` };
+    } catch (e) {
+      return { message: `Could not rename tab group: ${e}` };
+    }
+  }
+};
+var CollapseTabGroupCommand = class {
+  commandName = "collapse_tab_group";
+  description = "Collapse or expand a tab group. Accepts arguments: { name?: string, index?: number, collapse?: boolean }.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const name = args?.name;
+    const index2 = args?.index;
+    const collapse = args?.collapse;
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups found." };
+      }
+      let group = null;
+      if (index2 != null) {
+        const i = Math.max(1, Math.floor(index2));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (name) {
+        group = groups.find((g) => {
+          const label2 = g.label || g.name || "";
+          return label2.toLowerCase() === name.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${name}". Available groups: ${groups.map((g) => g.label || g.name || "(unnamed)").join(", ")}` };
+        }
+      } else {
+        group = groups[0];
+      }
+      const label = group.label || group.name || "(unnamed)";
+      const shouldCollapse = collapse ?? !group.collapsed;
+      group.collapsed = shouldCollapse;
+      return { message: `${shouldCollapse ? "Collapsed" : "Expanded"} tab group "${label}".` };
+    } catch (e) {
+      return { message: `Could not toggle tab group: ${e}` };
+    }
+  }
+};
+var DeleteTabGroupCommand = class {
+  commandName = "delete_tab_group";
+  description = "Delete/remove a tab group (ungroups the tabs but doesn't close them). Accepts arguments: { name?: string, index?: number }.";
+  async execute(args) {
+    const { gBrowser } = getChrome2();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const name = args?.name;
+    const index2 = args?.index;
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups to delete." };
+      }
+      let group = null;
+      if (index2 != null) {
+        const i = Math.max(1, Math.floor(index2));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (name) {
+        group = groups.find((g) => {
+          const label2 = g.label || g.name || "";
+          return label2.toLowerCase() === name.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${name}". Available groups: ${groups.map((g) => g.label || g.name || "(unnamed)").join(", ")}` };
+        }
+      } else {
+        return { message: "Please specify which tab group to delete (by name or index)." };
+      }
+      const label = group.label || group.name || "(unnamed)";
+      if (group.ungroup) {
+        group.ungroup();
+      } else if (gBrowser.removeTabGroup) {
+        gBrowser.removeTabGroup(group);
+      } else {
+        const tabs = group.tabs || [];
+        for (const tab of tabs) {
+          if (tab.group) {
+            tab.group = null;
+          }
+        }
+      }
+      return { message: `Deleted tab group "${label}". Tabs have been ungrouped.` };
+    } catch (e) {
+      return { message: `Could not delete tab group: ${e}` };
     }
   }
 };
@@ -62302,6 +62668,29 @@ ${out}` };
 };
 
 // src/assistant.ts
+var SENSITIVE_COMMANDS = /* @__PURE__ */ new Set([
+  "close_tab",
+  "delete_hub",
+  "delete_tab_group",
+  "split_tabs",
+  "move_tab_to_new_window"
+]);
+function getApprovalMessage(command, args) {
+  switch (command) {
+    case "close_tab":
+      return args.index ? `Close tab #${args.index}?` : "Close the current tab?";
+    case "delete_hub":
+      return `Delete hub "${args.name}"${args.closeTabs ? " and close its tabs" : ""}?`;
+    case "delete_tab_group":
+      return args.name ? `Delete tab group "${args.name}"? (Tabs will be ungrouped, not closed)` : `Delete tab group #${args.index}? (Tabs will be ungrouped, not closed)`;
+    case "split_tabs":
+      return `Split tabs ${args.indices?.join(", ")} into separate windows?`;
+    case "move_tab_to_new_window":
+      return args.index ? `Move tab #${args.index} to a new window?` : "Move current tab to a new window?";
+    default:
+      return `Execute ${command}?`;
+  }
+}
 var supabaseAuth4 = SupabaseAuth.getInstance();
 window.supabaseAuth = supabaseAuth4;
 window.voiceInputService = voiceInput_default;
@@ -62343,6 +62732,14 @@ var GraphState = Annotation.Root({
   args: Annotation({
     reducer: (x, y) => y ? { ...x || {}, ...y } : x,
     default: () => ({})
+  }),
+  pendingCommand: Annotation({
+    reducer: (x, y) => y ?? x ?? "",
+    default: () => ""
+  }),
+  approvalStatus: Annotation({
+    reducer: (x, y) => y ?? x ?? null,
+    default: () => null
   })
 });
 function msgText(m) {
@@ -62359,7 +62756,7 @@ function toWire(messages) {
     return { role, content: msgText(m) };
   });
 }
-async function buildGraph(commands) {
+async function buildGraph(commands, approvalCallback) {
   const toolAgents = {};
   const memberNames = [];
   for (const command of commands) {
@@ -62369,10 +62766,11 @@ async function buildGraph(commands) {
       const content = `[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
-        // Strong state clearing to prevent re-running
         lastWorker: "",
         repeatCount: 0,
-        args: {}
+        args: {},
+        pendingCommand: "",
+        approvalStatus: null
       };
     };
     toolAgents[command.commandName] = node;
@@ -62387,31 +62785,53 @@ You have the following workers available:
 {members}
 
 **Worker Arguments**
+
+Tab Operations:
 - **list_tabs**: No arguments needed
 - **open_tab**: { url: string } - the website URL to open
 - **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
 - **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows (e.g., "split tab 1 and 2" = { indices: [1, 2] })
-- **create_hub**: { name: string, include?: "none"|"current"|"all" }
-- **delete_hub**: { name: string, closeTabs?: boolean }
-- **list_hubs**: No arguments needed
-- **rename_hub**: { from: string, to: string }
-- **add_tab_to_hub**: { name: string }
-- **open_hub**: { name: string, where?: "tabs"|"window" }
+- **reload_tab**: { index?: number } - reload a tab (current tab if no index)
+- **mute_tab**: { index?: number, mute?: boolean } - mute/unmute a tab (toggles if mute not specified)
+- **pin_tab**: { index?: number, pin?: boolean } - pin/unpin a tab (toggles if pin not specified)
+- **duplicate_tab**: { index?: number } - duplicate a tab
+- **reopen_closed_tab**: No arguments - reopens the most recently closed tab
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
+
+Tab Group Operations (visual browser tab groups):
+- **group_tabs**: { indices: [number, ...], groupName?: string } - add tabs to a new group (e.g., "group tabs 2 and 3" = { indices: [2, 3] })
+- **ungroup_tabs**: { indices: [number, ...] } - remove tabs from their group
+- **list_tab_groups**: No arguments - list all tab groups
+- **rename_tab_group**: { from: string, to: string } or { index: number, to: string } - rename a tab group
+- **collapse_tab_group**: { name?: string, index?: number, collapse?: boolean } - collapse/expand a tab group
+- **delete_tab_group**: { name?: string, index?: number } - delete a tab group (ungroups tabs, doesn't close them)
+
+Bookmark Folder (Hub) Operations - NOTE: Hubs are BOOKMARK FOLDERS for saving URLs, NOT tab groups:
+- **create_hub**: { name: string, include?: "none"|"current"|"all" } - creates a BOOKMARK FOLDER to save URLs
+- **delete_hub**: { name: string, closeTabs?: boolean } - deletes a bookmark folder
+- **list_hubs**: No arguments needed - lists bookmark folders
+- **rename_hub**: { from: string, to: string }
+- **add_tab_to_hub**: { name: string } - bookmarks the current tab into a folder
+- **open_hub**: { name: string, where?: "tabs"|"window" } - opens bookmarks from a folder
+
+Search:
+- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs
+
+**IMPORTANT**: When user says "group tabs", use **group_tabs** for visual tab groups. Only use **create_hub** when user explicitly wants to save/bookmark URLs.
 
 **Rules**
 1. **Analyze History:** Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
 2. **Extract Arguments:** Convert tab numbers to 1-based indexes.
 3. **Check for Completion:** If the user's request is already satisfied by the latest tool output, choose "FINISH".
 4. **Handle Multi-Step:** If the user says "do X then Y", route step-by-step based on tool outputs.
-5. **Chat:** If conversational (hello/thanks/etc), choose "chat".
-6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry\u2014choose "chat".
+5. **Chat:** If the user is asking a question, requesting an explanation, asking for information, or being conversational (hello/thanks/what is X/explain Y/tell me about Z/etc), choose "chat". The AI can answer general knowledge questions directly.
+6. **Handle Failures:** If a tool returns an error or "No matches found", do NOT retry\u2014choose "chat" to respond to the user.
 7. **Default Action:** Otherwise choose the best worker for the most recent request.
+8. **Never FINISH without response:** Do NOT choose "FINISH" unless a tool successfully completed the user's request. If the user asked a question, always route to "chat" to answer it.
 
 **Output Format**
 You MUST respond with a JSON object:
@@ -62421,6 +62841,16 @@ You MUST respond with a JSON object:
 
 The available workers are: {options}`.trim();
   const chatNode = async (state) => {
+    if (state.approvalStatus === "rejected") {
+      const cancelledCmd = state.pendingCommand || "that action";
+      return {
+        messages: [new AIMessage({
+          content: `Okay, I won't ${cancelledCmd}. Is there anything else I can help with?`
+        })],
+        pendingCommand: "",
+        approvalStatus: null
+      };
+    }
     const CHAT_PROMPT = `You are a helpful Firefox browser assistant.
 
 **Context you receive**
@@ -62437,6 +62867,33 @@ The available workers are: {options}`.trim();
     );
     const res = await chatRemote(CHAT_PROMPT, toWire(state.messages));
     return { messages: [new AIMessage(res.content)] };
+  };
+  const humanApprovalNode = async (state) => {
+    const command = state.pendingCommand;
+    const args = state.args || {};
+    if (!SENSITIVE_COMMANDS.has(command)) {
+      return { approvalStatus: "approved" };
+    }
+    const description = getApprovalMessage(command, args);
+    console.log(`\u{1F6D1} Human approval required for ${command}:`, description);
+    if (approvalCallback) {
+      const approved = await approvalCallback({ command, args, description });
+      if (approved) {
+        console.log(`\u2705 User approved ${command}`);
+        return { approvalStatus: "approved" };
+      } else {
+        console.log(`\u274C User rejected ${command}`);
+        return {
+          approvalStatus: "rejected",
+          next: "chat"
+        };
+      }
+    }
+    console.warn("No approval callback provided, auto-rejecting sensitive command");
+    return {
+      approvalStatus: "rejected",
+      next: "chat"
+    };
   };
   const recentlyExecutedCommands = /* @__PURE__ */ new Set();
   const supervisorNode = async (s) => {
@@ -62461,6 +62918,13 @@ The available workers are: {options}`.trim();
         recentlyExecutedCommands.clear();
         entries.slice(-10).forEach((cmd) => recentlyExecutedCommands.add(cmd));
       }
+      if (SENSITIVE_COMMANDS.has(nextTool)) {
+        return {
+          next: "human_approval",
+          pendingCommand: nextTool,
+          args: nextArgs
+        };
+      }
       return { next: nextTool, args: nextArgs };
     }
     return { next: "chat", args: {} };
@@ -62472,12 +62936,19 @@ The available workers are: {options}`.trim();
   }
   workflow.addNode("chat", chatNode);
   workflow.addEdge("chat", END);
+  workflow.addNode("human_approval", humanApprovalNode);
+  workflow.addConditionalEdges("human_approval", (state) => {
+    if (state.approvalStatus === "approved") {
+      return state.pendingCommand;
+    }
+    return "chat";
+  });
   workflow.addNode("supervisor", supervisorNode);
   workflow.addConditionalEdges("supervisor", (x) => x.next);
   workflow.addEdge(START, "supervisor");
   return workflow.compile();
 }
-async function runAssistantStream(prompt, onChunk) {
+async function runAssistantStream(prompt, onChunk, onApprovalRequest) {
   const isAuthenticated = await supabaseAuth4.isAuthenticated();
   if (!isAuthenticated) {
     const msg = "Please sign in to use the assistant.";
@@ -62485,14 +62956,23 @@ async function runAssistantStream(prompt, onChunk) {
     return msg;
   }
   const commands = [
-    // Tabs
     new ListTabsCommand(),
     new OpenTabCommand(),
     new CloseTabCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
-    // Hubs
+    new ReloadTabCommand(),
+    new MuteTabCommand(),
+    new PinTabCommand(),
+    new DuplicateTabCommand(),
+    new ReopenClosedTabCommand(),
+    new GroupTabsCommand(),
+    new UngroupTabsCommand(),
+    new ListTabGroupsCommand(),
+    new RenameTabGroupCommand(),
+    new CollapseTabGroupCommand(),
+    new DeleteTabGroupCommand(),
     new CreateHubCommand(),
     new DeleteHubCommand(),
     new ListHubsCommand(),
@@ -62504,7 +62984,7 @@ async function runAssistantStream(prompt, onChunk) {
     new ShowURLCommand(),
     new SearchMemoryCommand()
   ];
-  const graph = await buildGraph(commands);
+  const graph = await buildGraph(commands, onApprovalRequest);
   const currentInput = new HumanMessage({ content: prompt });
   console.log(`\u{1F4DD} Processing fresh input: "${prompt.substring(0, 50)}..."`);
   const stream = await graph.stream(
@@ -62534,9 +63014,10 @@ async function runAssistantStream(prompt, onChunk) {
       }
       const text = msgText(lastMsg);
       if (text && text !== lastFull) {
-        const delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
+        let delta = text.startsWith(lastFull) ? text.slice(lastFull.length) : text;
         if (delta.includes("[Tool Output for") && lastFull.includes("[Tool Output for")) {
-          console.warn(`\u{1F6A8} Potential duplicate tool output detected in delta: ${delta}`);
+          delta = "\n\n" + delta;
+          console.log(`\u{1F4DD} Adding newline separator between tool outputs`);
         }
         onChunk(delta);
         lastFull = text;
@@ -62556,6 +63037,7 @@ async function runAssistantStream(prompt, onChunk) {
   return lastFull || "(no output)";
 }
 export {
+  SENSITIVE_COMMANDS,
   getAssistantHistory,
   resetAssistantSession,
   runAssistantStream

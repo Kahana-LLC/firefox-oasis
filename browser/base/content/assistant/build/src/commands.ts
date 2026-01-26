@@ -106,16 +106,68 @@ export class ShowURLCommand implements Command {
   }
 }
 
+function normalizeUrl(input: string): string {
+  const trimmed = input.trim().toLowerCase();
+  
+  // Common site shortcuts
+  const shortcuts: Record<string, string> = {
+    "youtube": "https://www.youtube.com",
+    "google": "https://www.google.com",
+    "gmail": "https://mail.google.com",
+    "twitter": "https://twitter.com",
+    "x": "https://x.com",
+    "facebook": "https://www.facebook.com",
+    "instagram": "https://www.instagram.com",
+    "reddit": "https://www.reddit.com",
+    "github": "https://github.com",
+    "linkedin": "https://www.linkedin.com",
+    "amazon": "https://www.amazon.com",
+    "netflix": "https://www.netflix.com",
+    "spotify": "https://open.spotify.com",
+    "twitch": "https://www.twitch.tv",
+    "discord": "https://discord.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "tiktok": "https://www.tiktok.com",
+    "pinterest": "https://www.pinterest.com",
+    "bing": "https://www.bing.com",
+    "yahoo": "https://www.yahoo.com",
+    "wikipedia": "https://www.wikipedia.org",
+    "youtube music": "https://music.youtube.com",
+    "google maps": "https://maps.google.com",
+    "google drive": "https://drive.google.com",
+    "google docs": "https://docs.google.com",
+  };
+
+  if (shortcuts[trimmed]) {
+    return shortcuts[trimmed];
+  }
+
+  // Already has protocol
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return input;
+  }
+
+  // Has a dot - likely a domain
+  if (input.includes(".")) {
+    return `https://${input}`;
+  }
+
+  // No dot - treat as search or try adding .com
+  return `https://www.${trimmed}.com`;
+}
+
 export class OpenTabCommand implements Command {
   commandName = "open_tab";
-  description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
+  description = "Open a new tab with a given URL or site name. Accepts arguments: { url: string }. Supports shortcuts like 'youtube', 'google', etc.";
   async execute(args: any): Promise<CmdResult> {
     const { topWin } = getChrome();
     const url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
-    topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened ${url}` };
+    
+    const normalizedUrl = normalizeUrl(url);
+    topWin.openTrustedLinkIn(normalizedUrl, "tab");
+    return { message: `Opened ${normalizedUrl}` };
   }
 }
 
@@ -175,6 +227,369 @@ export class CopyTabUrlsCommand implements Command {
       return { message: `Copied ${urls.length} URLs to clipboard.` };
     } catch {
       return { message: `Copied fallback. URLs:\n${text}` };
+    }
+  }
+}
+
+export class ReloadTabCommand implements Command {
+  commandName = "reload_tab";
+  description = "Reload the active tab (or a tab by index). Accepts arguments: { index?: number } (1-based).";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const browser = tab?.linkedBrowser;
+    if (browser) {
+      browser.reload();
+      return { message: `Reloaded: ${title}` };
+    }
+    return { message: "Could not reload tab." };
+  }
+}
+
+export class MuteTabCommand implements Command {
+  commandName = "mute_tab";
+  description = "Mute or unmute a tab. Accepts arguments: { index?: number, mute?: boolean }. If mute is not specified, toggles the current state.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const shouldMute = args?.mute ?? !tab.linkedBrowser?.audioMuted;
+    if (shouldMute) {
+      tab.linkedBrowser.mute();
+      return { message: `Muted: ${title}` };
+    } else {
+      tab.linkedBrowser.unmute();
+      return { message: `Unmuted: ${title}` };
+    }
+  }
+}
+
+export class PinTabCommand implements Command {
+  commandName = "pin_tab";
+  description = "Pin or unpin a tab. Accepts arguments: { index?: number, pin?: boolean }. If pin is not specified, toggles the current state.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    const shouldPin = args?.pin ?? !tab.pinned;
+    if (shouldPin) {
+      gBrowser.pinTab(tab);
+      return { message: `Pinned: ${title}` };
+    } else {
+      gBrowser.unpinTab(tab);
+      return { message: `Unpinned: ${title}` };
+    }
+  }
+}
+
+export class DuplicateTabCommand implements Command {
+  commandName = "duplicate_tab";
+  description = "Duplicate the active tab (or a tab by index). Accepts arguments: { index?: number } (1-based).";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    let tab = gBrowser.selectedTab;
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    const title = tab?.label || "(untitled)";
+    gBrowser.duplicateTab(tab);
+    return { message: `Duplicated: ${title}` };
+  }
+}
+
+export class ReopenClosedTabCommand implements Command {
+  commandName = "reopen_closed_tab";
+  description = "Reopen the most recently closed tab. Accepts no arguments.";
+  async execute(_args: any): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    if (!topWin) return { message: "Browser UI not available." };
+    try {
+      const { SessionStore } = topWin.ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs");
+      const closedTabs = SessionStore.getClosedTabDataForWindow(topWin);
+      if (!closedTabs || closedTabs.length === 0) {
+        return { message: "No recently closed tabs to reopen." };
+      }
+      SessionStore.undoCloseTab(topWin, 0);
+      return { message: "Reopened the last closed tab." };
+    } catch (e) {
+      return { message: `Could not reopen tab: ${e}` };
+    }
+  }
+}
+
+export class GroupTabsCommand implements Command {
+  commandName = "group_tabs";
+  description = "Add tabs to a new or existing tab group. Accepts arguments: { indices: number[], groupName?: string }. Indices are 1-based.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin, gBrowser } = getChrome();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+
+    const indices = args?.indices;
+    const groupName = args?.groupName || "New Group";
+    
+    if (!indices || !Array.isArray(indices) || indices.length === 0) {
+      return { message: "Please provide tab indices to group (e.g., { indices: [1, 2, 3] })." };
+    }
+
+    const tabs: any[] = [];
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) {
+        return { message: `No tab ${i}.` };
+      }
+      tabs.push(gBrowser.tabs[i - 1]);
+    }
+
+    try {
+      const group = gBrowser.addTabGroup(tabs, { label: groupName });
+      if (group) {
+        return { message: `Created tab group "${groupName}" with ${tabs.length} tabs.` };
+      }
+      return { message: "Tab groups may not be supported in this Firefox version." };
+    } catch (e) {
+      return { message: `Could not create tab group: ${e}` };
+    }
+  }
+}
+
+export class UngroupTabsCommand implements Command {
+  commandName = "ungroup_tabs";
+  description = "Remove tabs from their group. Accepts arguments: { indices: number[] }. Indices are 1-based.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+
+    const indices = args?.indices;
+    if (!indices || !Array.isArray(indices) || indices.length === 0) {
+      return { message: "Please provide tab indices to ungroup." };
+    }
+
+    let ungroupedCount = 0;
+    for (const idx of indices) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i <= gBrowser.tabs.length) {
+        const tab = gBrowser.tabs[i - 1];
+        if (tab.group) {
+          gBrowser.tabGroups?.ungroupTab(tab);
+          ungroupedCount++;
+        }
+      }
+    }
+    return { message: `Ungrouped ${ungroupedCount} tab(s).` };
+  }
+}
+
+function getTabGroups(gBrowser: any): any[] {
+  // Try multiple ways to get tab groups
+  if (gBrowser.getAllTabGroups) {
+    return gBrowser.getAllTabGroups();
+  }
+  if (gBrowser.tabGroups?.groups) {
+    return gBrowser.tabGroups.groups;
+  }
+  // Try to find groups from tabs
+  const groupSet = new Set<any>();
+  for (const tab of gBrowser.tabs) {
+    if (tab.group) {
+      groupSet.add(tab.group);
+    }
+  }
+  return Array.from(groupSet);
+}
+
+export class ListTabGroupsCommand implements Command {
+  commandName = "list_tab_groups";
+  description = "List all tab groups in the current window. Accepts no arguments.";
+  async execute(_args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups." };
+      }
+      const out = groups.map((g: any, i: number) => {
+        const tabs = g.tabs || [];
+        const label = g.label || g.name || "(unnamed)";
+        const tabTitles = tabs.slice(0, 3).map((t: any) => t.label || "(untitled)").join(", ");
+        const more = tabs.length > 3 ? ` +${tabs.length - 3} more` : "";
+        return `${i + 1}. ${label} (${tabs.length} tabs): ${tabTitles}${more}`;
+      }).join("\n");
+      return { message: out };
+    } catch (e) {
+      return { message: `Tab groups error: ${e}` };
+    }
+  }
+}
+
+export class RenameTabGroupCommand implements Command {
+  commandName = "rename_tab_group";
+  description = "Rename a tab group. Accepts arguments: { from: string, to: string } or { index: number, to: string }.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+
+    const from = args?.from;
+    const to = args?.to;
+    const index = args?.index;
+
+    if (!to) return { message: "Please provide the new group name." };
+
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups to rename." };
+      }
+
+      let group: any = null;
+      if (index != null) {
+        const i = Math.max(1, Math.floor(index));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (from) {
+        group = groups.find((g: any) => {
+          const label = g.label || g.name || "";
+          return label.toLowerCase() === from.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${from}".` };
+        }
+      } else {
+        return { message: "Please provide either 'from' (current name) or 'index' of the group to rename." };
+      }
+
+      group.label = to;
+      return { message: `Renamed tab group to "${to}".` };
+    } catch (e) {
+      return { message: `Could not rename tab group: ${e}` };
+    }
+  }
+}
+
+export class CollapseTabGroupCommand implements Command {
+  commandName = "collapse_tab_group";
+  description = "Collapse or expand a tab group. Accepts arguments: { name?: string, index?: number, collapse?: boolean }.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+
+    const name = args?.name;
+    const index = args?.index;
+    const collapse = args?.collapse;
+
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups found." };
+      }
+
+      let group: any = null;
+      if (index != null) {
+        const i = Math.max(1, Math.floor(index));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (name) {
+        group = groups.find((g: any) => {
+          const label = g.label || g.name || "";
+          return label.toLowerCase() === name.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${name}". Available groups: ${groups.map((g: any) => g.label || g.name || "(unnamed)").join(", ")}` };
+        }
+      } else {
+        group = groups[0];
+      }
+
+      const label = group.label || group.name || "(unnamed)";
+      const shouldCollapse = collapse ?? !group.collapsed;
+      group.collapsed = shouldCollapse;
+      return { message: `${shouldCollapse ? "Collapsed" : "Expanded"} tab group "${label}".` };
+    } catch (e) {
+      return { message: `Could not toggle tab group: ${e}` };
+    }
+  }
+}
+
+export class DeleteTabGroupCommand implements Command {
+  commandName = "delete_tab_group";
+  description = "Delete/remove a tab group (ungroups the tabs but doesn't close them). Accepts arguments: { name?: string, index?: number }.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+
+    const name = args?.name;
+    const index = args?.index;
+
+    try {
+      const groups = getTabGroups(gBrowser);
+      if (groups.length === 0) {
+        return { message: "No tab groups to delete." };
+      }
+
+      let group: any = null;
+      if (index != null) {
+        const i = Math.max(1, Math.floor(index));
+        if (i > groups.length) return { message: `No tab group ${i}.` };
+        group = groups[i - 1];
+      } else if (name) {
+        group = groups.find((g: any) => {
+          const label = g.label || g.name || "";
+          return label.toLowerCase() === name.toLowerCase();
+        });
+        if (!group) {
+          return { message: `No tab group named "${name}". Available groups: ${groups.map((g: any) => g.label || g.name || "(unnamed)").join(", ")}` };
+        }
+      } else {
+        return { message: "Please specify which tab group to delete (by name or index)." };
+      }
+
+      const label = group.label || group.name || "(unnamed)";
+      
+      // Remove the group (ungroups tabs)
+      if (group.ungroup) {
+        group.ungroup();
+      } else if (gBrowser.removeTabGroup) {
+        gBrowser.removeTabGroup(group);
+      } else {
+        // Fallback: manually ungroup each tab
+        const tabs = group.tabs || [];
+        for (const tab of tabs) {
+          if (tab.group) {
+            tab.group = null;
+          }
+        }
+      }
+      
+      return { message: `Deleted tab group "${label}". Tabs have been ungrouped.` };
+    } catch (e) {
+      return { message: `Could not delete tab group: ${e}` };
     }
   }
 }

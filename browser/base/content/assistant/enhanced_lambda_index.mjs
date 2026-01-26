@@ -11,7 +11,7 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
-const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-3-flash-preview" }) : null;
 
 // Cost calculation constants
 const COST_RATES = {

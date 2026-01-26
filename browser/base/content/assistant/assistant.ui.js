@@ -2187,10 +2187,179 @@ async function logout() {
 
 let currentAIMessageElement = null;
 
+function showApprovalModal(request) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "approval-overlay";
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      backdrop-filter: blur(2px);
+    `;
+
+    const modal = document.createElement("div");
+    modal.className = "approval-modal";
+    modal.style.cssText = `
+      background: #F8FAF2;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 360px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      animation: approvalSlideIn 0.2s ease-out;
+    `;
+
+    const iconContainer = document.createElement("div");
+    iconContainer.style.cssText = `
+      width: 48px;
+      height: 48px;
+      background: #FFF3CD;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 24px;
+    `;
+    iconContainer.textContent = "🛡️";
+
+    const title = document.createElement("h3");
+    title.textContent = "Confirm Action";
+    title.style.cssText = `
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-align: center;
+    `;
+
+    const description = document.createElement("p");
+    description.textContent = request.description;
+    description.style.cssText = `
+      margin: 0 0 20px 0;
+      font-size: 14px;
+      color: #666;
+      text-align: center;
+      line-height: 1.5;
+    `;
+
+    const commandBadge = document.createElement("div");
+    commandBadge.style.cssText = `
+      background: #E8F5E9;
+      color: #2E7D32;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: monospace;
+      text-align: center;
+      margin-bottom: 20px;
+    `;
+    commandBadge.textContent = `Command: ${request.command}`;
+
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.style.cssText = `
+      display: flex;
+      gap: 12px;
+    `;
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.textContent = "Cancel";
+    rejectBtn.style.cssText = `
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #E0E0E0;
+      border-radius: 8px;
+      background: white;
+      color: #666;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    `;
+    rejectBtn.addEventListener("mouseenter", () => {
+      rejectBtn.style.background = "#F5F5F5";
+    });
+    rejectBtn.addEventListener("mouseleave", () => {
+      rejectBtn.style.background = "white";
+    });
+
+    const approveBtn = document.createElement("button");
+    approveBtn.textContent = "Approve";
+    approveBtn.style.cssText = `
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #7A9200;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    `;
+    approveBtn.addEventListener("mouseenter", () => {
+      approveBtn.style.background = "#6B8000";
+    });
+    approveBtn.addEventListener("mouseleave", () => {
+      approveBtn.style.background = "#7A9200";
+    });
+
+    buttonsContainer.appendChild(rejectBtn);
+    buttonsContainer.appendChild(approveBtn);
+
+    modal.appendChild(iconContainer);
+    modal.appendChild(title);
+    modal.appendChild(description);
+    modal.appendChild(commandBadge);
+    modal.appendChild(buttonsContainer);
+    overlay.appendChild(modal);
+
+    const cleanup = (result) => {
+      overlay.style.opacity = "0";
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        resolve(result);
+      }, 150);
+    };
+
+    approveBtn.addEventListener("click", () => cleanup(true));
+    rejectBtn.addEventListener("click", () => cleanup(false));
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        cleanup(false);
+      }
+    });
+
+    const handleKeydown = (e) => {
+      if (e.key === "Escape") {
+        cleanup(false);
+        document.removeEventListener("keydown", handleKeydown);
+      } else if (e.key === "Enter") {
+        cleanup(true);
+        document.removeEventListener("keydown", handleKeydown);
+      }
+    };
+    document.addEventListener("keydown", handleKeydown);
+
+    document.body.appendChild(overlay);
+    approveBtn.focus();
+  });
+}
+
 async function send() {
   if (busy) return;
   
-  // Check authentication - both local state and global state
   if (!isAuthenticated || !window.oasisAuthState?.isAuthenticated) {
     append("\n❌ Authentication required: Please sign in to use the AI assistant\n");
     append("🔒 This protects our API tokens from unauthorized usage\n");
@@ -2201,37 +2370,40 @@ async function send() {
   if (!prompt) return;
   q.value = "";
   
-  // Add user message bubble
   addUserMessage(prompt);
   
   stopped = false;
   setBusy(true);
 
-  // Create AI response bubble
   currentAIMessageElement = addAIMessage("");
   let fullResponse = "";
 
   try {
-    // Double-check authentication before making the API call
     if (!window.oasisAuthState?.isAuthenticated) {
       throw new Error('Authentication lost during request. Please sign in again.');
     }
     
-    // Session context is automatically managed
-    await runAssistantStream(prompt, (chunk) => {
-      if (!stopped) {
-        fullResponse += chunk;
-        updateAIMessage(currentAIMessageElement, fullResponse);
-        
-        // Forward the chunk to iframe if it exists
-        if (typeof window.notifyIframeCommandResult === 'function') {
-          window.notifyIframeCommandResult(chunk);
+    await runAssistantStream(
+      prompt,
+      (chunk) => {
+        if (!stopped) {
+          fullResponse += chunk;
+          updateAIMessage(currentAIMessageElement, fullResponse);
+          
+          if (typeof window.notifyIframeCommandResult === 'function') {
+            window.notifyIframeCommandResult(chunk);
+          }
         }
+      },
+      async (approvalRequest) => {
+        console.log("🛡️ Approval request received:", approvalRequest);
+        const approved = await showApprovalModal(approvalRequest);
+        console.log("🛡️ User decision:", approved ? "approved" : "rejected");
+        return approved;
       }
-    });
+    );
     
     if (!stopped) {
-      // Forward completion to iframe
       if (typeof window.notifyIframeCommandResult === 'function') {
         window.notifyIframeCommandResult("\n");
       }
@@ -2243,7 +2415,6 @@ async function send() {
     
     updateAIMessage(currentAIMessageElement, errorMessage);
     
-    // Forward error to iframe if we're in main window
     if (!window.isInIframe && typeof window.notifyIframeCommandResult === 'function') {
       window.notifyIframeCommandResult(null, errorMessage);
     }

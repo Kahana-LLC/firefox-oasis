@@ -181,6 +181,26 @@
       cursor: not-allowed;
       opacity: 0.6;
     }
+    
+    /* Human-in-the-Loop Approval Modal */
+    @keyframes approvalSlideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    
+    .approval-overlay {
+      transition: opacity 0.15s ease-out;
+    }
+    
+    .approval-modal {
+      font-family: 'Geist', system-ui, -apple-system, sans-serif;
+    }
   </style>
 </head>
 <body>
