@@ -625,6 +625,8 @@ acceptRecordingBtn.addEventListener('click', async () => {
       
       if (transcribedText && transcribedText.trim()) {
         q.value = transcribedText;
+        q.style.height = "20px";
+        q.style.height = Math.min(q.scrollHeight, 120) + "px";
         append(`\n🎤 Transcribed: ${transcribedText}\n`);
         mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
       } else {
@@ -2341,6 +2343,7 @@ async function send() {
   const prompt = q.value.trim();
   if (!prompt) return;
   q.value = "";
+  q.style.height = "20px"; // Reset to minimum height after clearing
   mpTrack("assistant_request_start", { length: prompt.length });
   const requestStartTs = Date.now();
   let chunkCount = 0;
@@ -2454,7 +2457,18 @@ go.addEventListener("click", () => {
     send();
   }
 });
-q.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+q.addEventListener("keydown", (e) => { 
+  if (e.key === "Enter" && !e.shiftKey) { 
+    e.preventDefault(); 
+    send(); 
+  } 
+});
+
+// Auto-resize textarea
+q.addEventListener("input", () => {
+  q.style.height = "20px"; // Start from minimum height
+  q.style.height = Math.min(q.scrollHeight, 120) + "px";
+});
 loginButton.addEventListener("click", showLoginForm);
 signupButton.addEventListener("click", showSignupForm);
 
