@@ -64328,10 +64328,17 @@ ${text2}` };
   };
   var SplitTabsCommand = class {
     commandName = "split_tabs";
-    description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
+    description = "Split specified tabs into side-by-side view using Firefox's experimental split view feature. Accepts arguments: { indices: number[] }.";
     async execute(args) {
       const { topWin, gBrowser } = getChrome2();
       if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+
+      // Check if experimental split view is enabled
+      const splitViewEnabled = Services.prefs.getBoolPref("browser.tabs.splitView.enabled", false);
+      if (!splitViewEnabled) {
+        return { message: "Firefox's experimental split view feature is not enabled. Enable it by setting browser.tabs.splitView.enabled to true in about:config." };
+      }
+
       const indices = args?.indices;
       if (!indices || !Array.isArray(indices) || indices.length < 2) {
         return { message: "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] })." };
@@ -64344,41 +64351,23 @@ ${text2}` };
         }
         tabs.push(gBrowser.tabs[i - 1]);
       }
-      const screen = topWin.screen;
-      const availWidth = screen.availWidth;
-      const availHeight = screen.availHeight;
-      const availLeft = screen.availLeft || 0;
-      const availTop = screen.availTop || 0;
-      const numTabs = tabs.length;
-      const windows = [];
-      for (let i = 0; i < numTabs; i++) {
-        const tab = tabs[i];
-        const title = tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)";
-        const newWin = topWin.OpenBrowserWindow();
-        windows.push({ win: newWin, tab, title });
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      await new Promise((r) => setTimeout(r, 300));
-      for (let i = 0; i < numTabs; i++) {
-        const { win, tab, title } = windows[i];
-        const windowWidth = Math.floor(availWidth / numTabs);
-        const windowHeight = availHeight;
-        const xPos = availLeft + windowWidth * i;
-        const yPos = availTop;
-        win.resizeTo(windowWidth, windowHeight);
-        win.moveTo(xPos, yPos);
-        try {
-          const sidebar = win.document.getElementById("sidebar-box");
-          if (sidebar && !sidebar.hidden) {
-            win.SidebarController?.hide();
-          }
-        } catch (e) {
-          console.warn("Failed to close sidebar:", e);
+
+      try {
+        // Create the split view using Firefox's experimental API
+        const splitView = gBrowser.addTabSplitView(tabs);
+        if (!splitView) {
+          return { message: "Failed to create split view. Some tabs may be pinned or incompatible." };
         }
-        win.gBrowser.adoptTab(tab, 0);
+
+        // Show the split view panels
+        gBrowser.showSplitViewPanels(tabs);
+
+        const tabTitles = tabs.map((tab) => tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)").join(", ");
+        return { message: `Split ${tabs.length} tabs into split view: ${tabTitles}` };
+      } catch (error) {
+        console.error("Error creating split view:", error);
+        return { message: `Failed to create split view: ${error.message}` };
       }
-      const tabTitles = windows.map((w2) => w2.title).join(", ");
-      return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
     }
   };
   var SearchMemoryCommand = class {
