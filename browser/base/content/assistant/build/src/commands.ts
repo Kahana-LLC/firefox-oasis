@@ -91,6 +91,17 @@ export class OrganizeWindowsCommand implements Command {
   }
 }
 
+function cleanUrl(url: string): string {
+  if (!url) return "";
+  // Remove common trailing punctuation that LLMs might include
+  let cleaned = url.trim();
+  const trailingChars = [")", "]", "}", ".", ",", ";", '"', "'"];
+  while (trailingChars.some(c => cleaned.endsWith(c))) {
+    cleaned = cleaned.slice(0, -1);
+  }
+  return cleaned;
+}
+
 export class ShowURLCommand implements Command {
   commandName = "show_url";
   description = "Open a URL in a new tab.";
@@ -98,8 +109,10 @@ export class ShowURLCommand implements Command {
     const { topWin } = getChrome();
     if (!topWin) return { message: "Browser UI not available." };
 
-    const url = args?.url;
+    let url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
+
+    url = cleanUrl(url);
 
     topWin.openTrustedLinkIn(url, "tab");
     return { message: `Opened ${url}` };
@@ -111,9 +124,12 @@ export class OpenTabCommand implements Command {
   description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
   async execute(args: any): Promise<CmdResult> {
     const { topWin } = getChrome();
-    const url = args?.url;
+    let url = args?.url;
     if (!url) return { message: "Missing 'url' argument." };
     if (!topWin?.openTrustedLinkIn) return { message: "Cannot open tab (openTrustedLinkIn not found)." };
+    
+    url = cleanUrl(url);
+    
     topWin.openTrustedLinkIn(url, "tab");
     return { message: `Opened ${url}` };
   }

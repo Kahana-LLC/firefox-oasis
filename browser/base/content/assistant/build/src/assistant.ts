@@ -206,10 +206,12 @@ The available workers are: {options}`.trim();
 - Commands that were executed (marked as [Tool Output for ...])
 - Results from those commands
 
-**When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened
-2. If asked general questions: Answer helpfully based on what you know
-3. You can see everything that happened in this conversation - use that context!
+**Response Guidelines:**
+1. **Be Conversational:** Always respond with complete, natural sentences. Avoid fragments like "in a new tab." or "done.".
+2. **Provide Context:** When confirming an action, briefly explain what was done. (e.g., "I've opened the Salesforce article in a new tab for you.")
+3. **Summarize/Recall:** If asked what happened, review the history and list the actions clearly.
+4. **General Questions:** Answer helpfully based on your knowledge and the context.
+5. **Context Awareness:** You can see everything that happened in this conversation - use that context!
 
 **Example:**
 If the history shows:
