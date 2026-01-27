@@ -386,11 +386,17 @@
       justify-content: center;
       transition: all 0.2s ease;
       padding: 0;
+      pointer-events: auto;
+      opacity: 1;
     }
     
     .recording-btn:hover {
       transform: scale(1.05);
       opacity: 0.9;
+    }
+    
+    .recording-btn:active {
+      transform: scale(0.95);
     }
     
     .cancel-recording {

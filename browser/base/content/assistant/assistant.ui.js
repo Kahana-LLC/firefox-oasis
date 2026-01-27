@@ -247,6 +247,10 @@ const log = document.getElementById("log");
 const q   = document.getElementById("q");
 const go  = document.getElementById("go");
 
+// Detect platform for keyboard shortcut display
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const shortcutKey = isMac ? "Cmd+M" : "Ctrl+M";
+
 // Replace send button with SVG icon button
 go.innerHTML = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="36" height="36" rx="18" fill="#7A9200"/>
@@ -312,7 +316,8 @@ recordingControls.className = "recording-controls";
 const cancelRecordingBtn = document.createElement("button");
 cancelRecordingBtn.className = "recording-btn cancel-recording";
 cancelRecordingBtn.id = "cancel-recording";
-cancelRecordingBtn.title = "Cancel recording";
+cancelRecordingBtn.title = "Cancel recording (Esc)";
+cancelRecordingBtn.disabled = false; // Explicitly enable the button
 cancelRecordingBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
@@ -320,7 +325,8 @@ cancelRecordingBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" 
 const acceptRecordingBtn = document.createElement("button");
 acceptRecordingBtn.className = "recording-btn accept-recording";
 acceptRecordingBtn.id = "accept-recording";
-acceptRecordingBtn.title = "Finish recording";
+acceptRecordingBtn.title = `Finish recording (${shortcutKey})`;
+acceptRecordingBtn.disabled = false; // Explicitly enable the button
 acceptRecordingBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
@@ -439,7 +445,7 @@ function setBusy(v) {
 
 // Use the voiceBtn as micButton for compatibility with existing code
 const micButton = voiceBtn;
-micButton.title = "Click to start voice input";
+micButton.title = `Click or press ${shortcutKey} to start voice input`;
 
 let isRecording = false;
 let micStartTs = 0;
@@ -474,6 +480,7 @@ function hideRecordingInline() {
   // Reset bars
   waveformBars.forEach(bar => {
     bar.style.height = '4px';
+    bar.style.opacity = '1';
   });
 }
 
@@ -585,41 +592,79 @@ function fallbackAnimation() {
 // Cancel recording button
 cancelRecordingBtn.addEventListener('click', async () => {
   if (isRecording && voiceInputService) {
-    mpTrack("mic_cancel", { duration_ms: Date.now() - micStartTs });
-    try {
-      // Stop recording without processing
-      await voiceInputService.stopRecording();
-    } catch (error) {
-      console.error("Error stopping recording:", error);
-    }
+    // Immediate UI feedback
+    isRecording = false;
+    hideRecordingInline();
+    append("\n❌ Recording cancelled\n");
     
-    // Stop media stream
+    mpTrack("mic_cancel", { duration_ms: Date.now() - micStartTs });
+    
+    // Stop media stream immediately
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
       mediaStream = null;
     }
     
-    isRecording = false;
-    hideRecordingInline();
-    append("\n❌ Recording cancelled\n");
+    // Stop recording service in background
+    try {
+      await voiceInputService.stopRecording();
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+    }
   }
 });
 
 // Accept recording button
 acceptRecordingBtn.addEventListener('click', async () => {
   if (isRecording && voiceInputService) {
+    // Stop animation immediately
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+    
+    // Close audio context immediately
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close();
+      audioContext = null;
+    }
+    
+    // Stop media stream immediately
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
+    
+    // Freeze waveform bars at current state
+    waveformBars.forEach(bar => {
+      bar.style.opacity = '0.5';
+    });
+    
+    // Show loading on accept button
+    const originalHTML = acceptRecordingBtn.innerHTML;
+    acceptRecordingBtn.innerHTML = `
+    <style>
+      @keyframes spin-loader { 
+        0% { transform: rotate(0deg); } 
+        100% { transform: rotate(360deg); } 
+      }
+    </style>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin-loader 0.8s linear infinite;">
+      <circle cx="12" cy="12" r="9" stroke="#ffffff" stroke-width="3" stroke-opacity="0.25"/>
+      <path d="M12 3 A 9 9 0 0 1 21 12" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+    </svg>`;
     acceptRecordingBtn.disabled = true;
-    acceptRecordingBtn.style.opacity = '0.5';
+    
+    // Disable cancel button
+    cancelRecordingBtn.disabled = true;
+    cancelRecordingBtn.style.opacity = '0.3';
+    cancelRecordingBtn.style.cursor = 'not-allowed';
+    
+    append("\n⏳ Transcribing audio...\n");
     
     try {
       const transcribedText = await voiceInputService.stopRecording();
       mpTrack("mic_accept", { duration_ms: Date.now() - micStartTs });
-      
-      // Stop media stream
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-        mediaStream = null;
-      }
       
       hideRecordingInline();
       
@@ -627,28 +672,32 @@ acceptRecordingBtn.addEventListener('click', async () => {
         q.value = transcribedText;
         q.style.height = "20px";
         q.style.height = Math.min(q.scrollHeight, 120) + "px";
-        append(`\n🎤 Transcribed: ${transcribedText}\n`);
+        
+        // Focus input and move cursor to end
+        q.focus();
+        q.setSelectionRange(q.value.length, q.value.length);
+        
+        append(`✅ Transcribed: ${transcribedText}\n`);
         mpTrack("mic_transcribe_success", { char_count: transcribedText.length });
       } else {
-        append("\n⚠️ No speech detected.\n");
+        append("⚠️ No speech detected.\n");
         mpTrack("mic_transcribe_empty");
       }
     } catch (error) {
       console.error("Transcription error:", error);
       
-      // Stop media stream on error too
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-        mediaStream = null;
-      }
-      
       hideRecordingInline();
-      append(`\n❌ Transcription failed: ${error.message}\n`);
+      append(`❌ Transcription failed: ${error.message}\n`);
       mpTrack("mic_transcribe_error", { message: error.message });
     } finally {
       isRecording = false;
+      
+      // Restore buttons
+      acceptRecordingBtn.innerHTML = originalHTML;
       acceptRecordingBtn.disabled = false;
-      acceptRecordingBtn.style.opacity = '1';
+      cancelRecordingBtn.disabled = false;
+      cancelRecordingBtn.style.opacity = '1';
+      cancelRecordingBtn.style.cursor = 'pointer';
     }
   }
 });
@@ -665,7 +714,11 @@ micButton.addEventListener("click", async () => {
   }
 
   if (!isRecording) {
-    // Start recording
+    // Start recording - show immediate feedback
+    micButton.style.opacity = "0.5";
+    micButton.disabled = true;
+    append("\n🎤 Initializing microphone...\n");
+    
     try {
       await voiceInputService.startRecording();
       mpTrack("mic_start");
@@ -678,10 +731,13 @@ micButton.addEventListener("click", async () => {
       // Start audio visualization
       startAudioVisualization();
       
-      append("\n🎤 Recording...\n");
+      append("Recording started!\n");
     } catch (error) {
       console.error("Recording error:", error);
       append(`\n❌ Failed to start recording: ${error.message}\n`);
+    } finally {
+      micButton.style.opacity = "1";
+      micButton.disabled = false;
     }
   }
 });
@@ -2462,6 +2518,37 @@ q.addEventListener("keydown", (e) => {
     e.preventDefault(); 
     send(); 
   } 
+});
+
+// Keyboard shortcuts for mic functionality (works alongside manual button)
+document.addEventListener("keydown", (e) => {
+  // Ctrl+M (Windows/Linux) or Cmd+M (Mac) - Toggle recording
+  const isToggleShortcut = (e.ctrlKey || e.metaKey) && e.key === "m";
+  
+  if (isToggleShortcut) {
+    e.preventDefault();
+    console.log("Ctrl+M pressed, isRecording:", isRecording);
+    
+    if (!isRecording) {
+      // Start recording (same as clicking mic button)
+      console.log("Starting recording via shortcut");
+      micButton.click();
+      mpTrack("mic_shortcut_start");
+    } else {
+      // Accept recording (finish and transcribe)
+      console.log("Stopping recording via shortcut");
+      acceptRecordingBtn.click();
+      mpTrack("mic_shortcut_accept");
+    }
+  }
+  
+  // Esc - Cancel recording (only works while recording)
+  if (e.key === "Escape" && isRecording) {
+    e.preventDefault();
+    console.log("Esc pressed, canceling recording");
+    cancelRecordingBtn.click();
+    mpTrack("mic_shortcut_cancel");
+  }
 });
 
 // Auto-resize textarea
