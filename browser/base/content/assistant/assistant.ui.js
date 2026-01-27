@@ -366,48 +366,74 @@ voiceBtn.addEventListener("mouseleave", () => {
   voiceBtn.style.opacity = "1";
 });
 
-// Feedback button with text - positioned below input
-const feedbackBtn = document.createElement("button");
-feedbackBtn.id = "feedback-btn";
-feedbackBtn.textContent = "Feedback?";
-feedbackBtn.style.cssText = `
-  padding: 4px 8px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  color: var(--primary-green, #7A9200);
-  font-weight: 500;
-  border-radius: 8px;
-  white-space: nowrap;
+const feedbackContainer = document.createElement("div");
+feedbackContainer.id = "feedback-container";
+feedbackContainer.style.cssText = `
+  display: flex;
+  align-items: center;
+  gap: 6px;
 `;
-feedbackBtn.title = "Submit feedback";
-feedbackBtn.addEventListener("mouseenter", () => {
-  feedbackBtn.style.background = "var(--primary-50, #F2F4E5)";
+
+function createFeedbackButton(id, title, svg) {
+  const btn = document.createElement("button");
+  btn.id = id;
+  btn.title = title;
+  btn.innerHTML = svg;
+  btn.style.cssText = `
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    background: #FFFFFF;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  btn.addEventListener("mouseenter", () => {
+    btn.style.background = "#F2F4E5";
+    btn.style.borderColor = "#D6E0B7";
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.background = "#FFFFFF";
+    btn.style.borderColor = "#E5E7EB";
+  });
+  return btn;
+}
+
+const thumbsUpBtn = createFeedbackButton(
+  "feedback-thumb-up",
+  "Thumbs up",
+  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M7 11V21H4V11H7ZM9 21H17.2C17.9 21 18.5 20.5 18.6 19.8L20 12.8C20.1 12.3 20 11.8 19.6 11.4C19.2 11 18.7 10.8 18.2 10.8H13.5L14.2 7.6C14.3 7.1 14.2 6.6 13.9 6.2L12.9 5L8.7 10.2C8.2 10.8 8 11.5 8 12.3V20C8 20.6 8.4 21 9 21Z" fill="#7A9200"/>
+  </svg>`
+);
+
+const thumbsDownBtn = createFeedbackButton(
+  "feedback-thumb-down",
+  "Thumbs down",
+  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17 13V3H20V13H17ZM15 3H6.8C6.1 3 5.5 3.5 5.4 4.2L4 11.2C3.9 11.7 4 12.2 4.4 12.6C4.8 13 5.3 13.2 5.8 13.2H10.5L9.8 16.4C9.7 16.9 9.8 17.4 10.1 17.8L11.1 19L15.3 13.8C15.8 13.2 16 12.5 16 11.7V4C16 3.4 15.6 3 15 3Z" fill="#7A9200"/>
+  </svg>`
+);
+
+feedbackContainer.appendChild(thumbsUpBtn);
+feedbackContainer.appendChild(thumbsDownBtn);
+
+thumbsUpBtn.addEventListener("click", () => {
+  mpTrack("feedback_thumb_up");
+  openFeedbackModal("positive");
 });
-feedbackBtn.addEventListener("mouseleave", () => {
-  feedbackBtn.style.background = "transparent";
-});
-feedbackBtn.addEventListener("click", () => {
-  mpTrack("feedback_open");
-  try {
-    const feedbackUrl = "https://tally.so/r/3jkNN6";
-    if (typeof openWebLinkIn === 'function') {
-      openWebLinkIn(feedbackUrl, "tab", {});
-    } else if (window.top && window.top.openWebLinkIn) {
-      window.top.openWebLinkIn(feedbackUrl, "tab", {});
-    } else {
-      window.open(feedbackUrl, "_blank");
-    }
-  } catch (error) {
-    console.log("Could not open feedback URL:", error);
-    mpTrack("feedback_open_error", { message: error?.message || String(error) });
-  }
+
+thumbsDownBtn.addEventListener("click", () => {
+  mpTrack("feedback_thumb_down");
+  openFeedbackModal("negative");
 });
 
 // Add all buttons to buttons row: feedback, voice, send
-buttonsRow.appendChild(feedbackBtn);
+buttonsRow.appendChild(feedbackContainer);
 buttonsRow.appendChild(voiceBtn);
 if (go.parentElement === bar) {
   buttonsRow.appendChild(go);
@@ -1862,6 +1888,194 @@ function createModal(title, content) {
   
   document.body.appendChild(modal);
   return { modal, dialog };
+}
+
+const FEEDBACK_OPTIONS = {
+  positive: ["Helpful", "Accurate", "Clear", "Fast"],
+  negative: ["Incorrect", "Not helpful", "Confusing", "Other"]
+};
+
+function showFeedbackMessage(message, isError = false) {
+  const toast = document.createElement("div");
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${isError ? "#ef4444" : "#22c55e"};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 3000);
+}
+
+async function submitFeedback(isNegative, category, additionalInfo) {
+  const supabase = window.supabaseAuth?.supabase;
+  const sessionId = window.supabaseAuth?.currentSession?.session_id || null;
+
+  if (!supabase) {
+    showFeedbackMessage("Feedback service unavailable.", true);
+    return;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    showFeedbackMessage("Please sign in to submit feedback.", true);
+    return;
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    showFeedbackMessage("Please sign in to submit feedback.", true);
+    return;
+  }
+
+  const payload = {
+    user_id: user.id,
+    session_id: sessionId,
+    message_id: null,
+    reported_at: new Date().toISOString(),
+    negative_rating: !!isNegative,
+    category,
+    additional_info: additionalInfo || null
+  };
+
+  const { error } = await supabase.from("feedback_events").insert(payload);
+  if (error) {
+    console.error("Feedback insert failed:", error);
+    mpTrack("feedback_submit_error", { message: error.message || String(error) });
+    showFeedbackMessage("Failed to submit feedback.", true);
+    return;
+  }
+
+  mpTrack("feedback_submit_success", { negative_rating: !!isNegative, category });
+  showFeedbackMessage("Thanks for the feedback.");
+}
+
+function openFeedbackModal(type) {
+  const isNegative = type === "negative";
+  const options = isNegative ? FEEDBACK_OPTIONS.negative : FEEDBACK_OPTIONS.positive;
+  let selectedCategory = "";
+
+  const content = document.createElement("div");
+  content.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
+
+  const description = document.createElement("p");
+  description.textContent = isNegative
+    ? "Tell us what went wrong."
+    : "Tell us what worked well.";
+  description.style.cssText = "margin: 0; color: #6b7280; font-size: 14px; text-align: center;";
+  content.appendChild(description);
+
+  const optionsRow = document.createElement("div");
+  optionsRow.style.cssText = "display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;";
+
+  const optionButtons = options.map((label) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.style.cssText = `
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid #E5E7EB;
+      background: #FFFFFF;
+      color: #374151;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    `;
+    button.addEventListener("click", () => {
+      selectedCategory = label;
+      optionButtons.forEach((btn) => {
+        btn.style.background = "#FFFFFF";
+        btn.style.borderColor = "#E5E7EB";
+        btn.style.color = "#374151";
+      });
+      button.style.background = "#F2F4E5";
+      button.style.borderColor = "#D6E0B7";
+      button.style.color = "#374151";
+      submitButton.disabled = false;
+      submitButton.style.opacity = "1";
+    });
+    optionsRow.appendChild(button);
+    return button;
+  });
+
+  content.appendChild(optionsRow);
+
+  const details = document.createElement("textarea");
+  details.placeholder = "Additional details (optional)";
+  details.rows = 3;
+  details.style.cssText = `
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    padding: 10px 12px;
+    font-size: 13px;
+    resize: vertical;
+    box-sizing: border-box;
+  `;
+  content.appendChild(details);
+
+  const actions = document.createElement("div");
+  actions.style.cssText = "display: flex; gap: 12px; justify-content: center;";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.cssText = `
+    padding: 10px 16px;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+
+  const submitButton = document.createElement("button");
+  submitButton.type = "button";
+  submitButton.textContent = "Submit";
+  submitButton.disabled = true;
+  submitButton.style.cssText = `
+    padding: 10px 16px;
+    background: #7A9200;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.6;
+  `;
+
+  actions.appendChild(cancelButton);
+  actions.appendChild(submitButton);
+  content.appendChild(actions);
+
+  const { modal } = createModal("Feedback", content);
+
+  cancelButton.addEventListener("click", () => {
+    document.body.removeChild(modal);
+  });
+
+  submitButton.addEventListener("click", async () => {
+    if (!selectedCategory) return;
+    submitButton.disabled = true;
+    submitButton.style.opacity = "0.6";
+    await submitFeedback(isNegative, selectedCategory, details.value.trim());
+    if (modal.parentNode) {
+      document.body.removeChild(modal);
+    }
+  });
 }
 
 function showLoginForm() {
