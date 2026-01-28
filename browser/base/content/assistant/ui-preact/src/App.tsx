@@ -126,12 +126,23 @@ function Banner({ email, onClose }: { email: string; onClose: () => void }) {
 // Global relays to ensure functions are available even if App remounts
 let recordStartRelay: any = null;
 let recordUpdateRelay: any = null;
+let resetAssistantSessionRelay: any = null;
+
+// Store the original backend reset function before we overwrite it
+const originalResetAssistantSession = (window as any).resetAssistantSession;
 
 (window as any).oasisRecordToolActionStart = (name: string, messageId?: string, label?: string) => {
   return recordStartRelay?.(name, messageId, label);
 };
 (window as any).oasisRecordToolActionUpdate = (id: string, status: string, output?: string) => {
   return recordUpdateRelay?.(id, status, output);
+};
+(window as any).resetAssistantSession = () => {
+  if (resetAssistantSessionRelay) {
+    return resetAssistantSessionRelay();
+  }
+  // Fallback to original if relay not set
+  return originalResetAssistantSession?.();
 };
 
 export function App() {
@@ -145,12 +156,35 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const logRef = useRef<HTMLDivElement>(null);
 
+  const resetAssistantSession = async () => {
+    console.log("Resetting assistant session (UI + Backend)");
+    setMessages([]);
+    setToolActions([]);
+    
+    // 1. Clear backend state (JSM)
+    if (typeof originalResetAssistantSession === 'function') {
+      try {
+        originalResetAssistantSession();
+      } catch (e) {
+        console.error("Failed to call originalResetAssistantSession", e);
+      }
+    }
+
+    // 2. Clear persistent history (browser logins)
+    const setHistory = (window as any).setAssistantHistory;
+    if (typeof setHistory === 'function') {
+      await setHistory([]);
+    }
+  };
+
   useEffect(() => {
     recordStartRelay = startToolAction;
     recordUpdateRelay = updateToolAction;
+    resetAssistantSessionRelay = resetAssistantSession;
     return () => {
       recordStartRelay = null;
       recordUpdateRelay = null;
+      resetAssistantSessionRelay = null;
     };
   }, []);
 
@@ -556,7 +590,7 @@ export function App() {
 
                    <button 
                      className="send-btn" 
-                     onClick={() => (window as any).resetAssistantSession?.()} 
+                     onClick={() => (window as any).resetAssistantSession()} 
                      title="Clear Chat History"
                      style={{ color: '#666', width: '32px', height: '32px', flex: 'none' }}
                    >
