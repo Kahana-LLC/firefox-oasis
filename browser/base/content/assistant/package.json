@@ -1,0 +1,13 @@
+{
+  "name": "oasis-assistant",
+  "private": true,
+  "scripts": {
+    "install:all": "cd ui-preact && npm install && cd ../build && npm install",
+    "build:ui": "cd ui-preact && npm run build",
+    "build:logic": "cd build && npm run build",
+    "build": "npm run build:ui && npm run build:logic",
+    "watch:ui": "cd ui-preact && npm run build -- --watch",
+    "watch:logic": "cd build && npm run build -- --watch",
+    "watch": "npm run watch:ui & npm run watch:logic & wait"
+  }
+}
