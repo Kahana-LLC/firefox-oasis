@@ -43,31 +43,104 @@ const supabaseAuth = SupabaseAuth.getInstance();
 (window as any).DOMPurify = DOMPurify;
 
 /* ========= Ephemeral chat history per session ========= */
-// Automatically managed - one session per sidebar instance
-let CURRENT_SESSION: BaseMessage[] = [];
-const MAX_TURNS = 12; // keep last 12 user/assistant pairs
+// Managed via a singleton JSM to ensure all windows (sidebar, panel) share the exact same array in memory.
+let AssistantSession: any = null;
+
+try {
+  // @ts-ignore
+  if (window.ChromeUtils && window.ChromeUtils.importESModule) {
+    // @ts-ignore
+    const mod = window.ChromeUtils.importESModule("chrome://browser/content/assistant/AssistantSession.sys.mjs");
+    AssistantSession = mod.AssistantSession;
+    console.log("Successfully imported AssistantSession singleton.");
+  } else {
+    console.warn("ChromeUtils not available, falling back to local state (will desync).");
+    AssistantSession = {
+      _messages: [],
+      get messages() { return [...this._messages]; },
+      addTurn(u: any, a: any) { this._messages.push(u); this._messages.push(a); },
+      clear() { this._messages = []; },
+      setSession(m: any) { this._messages = m; }
+    };
+  }
+} catch (e) {
+  console.error("Failed to import AssistantSession.sys.mjs", e);
+  // Fallback
+  AssistantSession = {
+    _messages: [],
+    get messages() { return [...this._messages]; },
+    addTurn(u: any, a: any) { this._messages.push(u); this._messages.push(a); },
+    clear() { this._messages = []; },
+    setSession(m: any) { this._messages = m; }
+  };
+}
+
+// Listen for updates from the singleton (dispatched via Services.obs)
+try {
+  // @ts-ignore
+  if (window.Services && window.Services.obs) {
+    const observer = {
+      observe: (subject: any, topic: string, data: any) => {
+        if (topic === "oasis-session-updated") {
+          console.log("Received oasis-session-updated observer notification.");
+          try {
+            window.dispatchEvent(new CustomEvent("oasis-history-update"));
+          } catch(e) {}
+        }
+      }
+    };
+    // @ts-ignore
+    window.Services.obs.addObserver(observer, "oasis-session-updated", false);
+  }
+} catch (e) {
+  console.error("Failed to add observer", e);
+}
+
 
 function getCurrentSessionMessages(): BaseMessage[] {
-  return CURRENT_SESSION;
+  // Map raw objects back to LangChain instances if needed
+  // (The JSM stores them as is. If we push LangChain objects, they stay as objects)
+  // But strictly, we should ensure they are instances.
+  const raw = AssistantSession.messages;
+  return raw.map((m: any) => {
+    // If it's already an instance, great. If plain object, convert.
+    // Check if it has _getType
+    if (typeof m._getType === 'function') return m;
+    
+    // Fallback based on type property if we stored plain JSON
+    if (m.type === 'human') return new HumanMessage(m.content);
+    if (m.type === 'ai') return new AIMessage(m.content);
+    
+    // Default
+    return new HumanMessage(m.content || "");
+  });
 }
 
 function pushCurrentTurn(user: string, assistant: string) {
-  CURRENT_SESSION.push(new HumanMessage(user));
-  CURRENT_SESSION.push(new AIMessage(assistant));
-  const cap = MAX_TURNS * 2;
-  if (CURRENT_SESSION.length > cap) {
-    CURRENT_SESSION.splice(0, CURRENT_SESSION.length - cap);
-  }
+  // We create instances here
+  const u = new HumanMessage(user);
+  const a = new AIMessage(assistant);
+  
+  AssistantSession.addTurn(u, a);
+  // No need to save to localStorage manually, JSM holds it in memory.
+  // We can persist to disk if we want session restoration across browser restarts,
+  // but for "toggle sidebar" sync, memory singleton is sufficient and faster.
 }
 
 export function resetAssistantSession() {
-  CURRENT_SESSION = [];
+  AssistantSession.clear();
+  try {
+    window.dispatchEvent(new CustomEvent("oasis-history-update"));
+  } catch(e) {}
 }
 (window as any).resetAssistantSession = resetAssistantSession;
 
 export function getAssistantHistory(): BaseMessage[] {
-  return [...CURRENT_SESSION];
+  return getCurrentSessionMessages();
 }
+(window as any).getAssistantHistory = getAssistantHistory;
+
+/* ========= LangGraph state ========= */
 
 /* ========= LangGraph state ========= */
 const GraphState = Annotation.Root({
@@ -113,14 +186,44 @@ function toWire(messages: BaseMessage[]): WireMsg[] {
 }
 
 /* ========= Build the tool graph ========= */
-async function buildGraph(commands: Command[]) {
+async function buildGraph(commands: Command[], messageId?: string) {
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
+
+  console.log(`🔨 buildGraph: oasisRecordToolActionStart type: ${typeof (window as any).oasisRecordToolActionStart}`);
 
   for (const command of commands) {
     // Node: run the command and emit a message that clearly identifies the tool's output.
     const node = async (state: typeof GraphState.State) => {
-      const result: CmdResult = await command.execute(state.args);
+      const recordStart = (window as any).oasisRecordToolActionStart;
+      const recordUpdate = (window as any).oasisRecordToolActionUpdate;
+      let actionId: string | undefined;
+
+      console.log(`🔨 Executing node: ${command.commandName}, messageId: ${messageId}`);
+
+      if (typeof recordStart === "function") {
+        actionId = recordStart(command.commandName, messageId);
+        console.log(`🔨 recordStart called, got actionId: ${actionId}`);
+      } else {
+        console.warn(`🔨 recordStart is NOT a function: ${typeof recordStart}`);
+      }
+
+      let result: CmdResult;
+      try {
+        result = await command.execute(state.args);
+        console.log(`🔨 command.execute finished: ${command.commandName}, success: ${!!result}`);
+        if (typeof recordUpdate === "function" && actionId) {
+          // Pass the command name (prettified or raw) for the final display
+          recordUpdate(actionId, "done");
+        }
+      } catch (e) {
+        console.error(`🔨 command.execute failed: ${command.commandName}`, e);
+        if (typeof recordUpdate === "function" && actionId) {
+          recordUpdate(actionId, "error", String(e));
+        }
+        result = { success: false, message: String(e) };
+      }
+
       const content = `\n[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
@@ -314,7 +417,8 @@ Remember: You ARE stateful within this conversation. The history is right there 
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
-  inputType: 'text' | 'voice' = 'text' // Add inputType parameter
+  inputType: 'text' | 'voice' = 'text', // Add inputType parameter
+  messageId?: string
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
@@ -355,7 +459,7 @@ export async function runAssistantStream(
     new SearchMemoryCommand(),
     new ShowSubscriptionCommand(),
   ];
-  const graph = await buildGraph(commands);
+  const graph = await buildGraph(commands, messageId);
   
   // Get conversation history for context - automatically managed
   const sessionHistory = getCurrentSessionMessages();

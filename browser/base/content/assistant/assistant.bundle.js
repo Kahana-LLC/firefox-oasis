@@ -64328,17 +64328,10 @@ ${text2}` };
   };
   var SplitTabsCommand = class {
     commandName = "split_tabs";
-    description = "Split specified tabs into side-by-side view using Firefox's experimental split view feature. Accepts arguments: { indices: number[] }.";
+    description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
     async execute(args) {
       const { topWin, gBrowser } = getChrome2();
       if (!gBrowser || !topWin) return { message: "Browser UI not available." };
-
-      // Check if experimental split view is enabled
-      const splitViewEnabled = Services.prefs.getBoolPref("browser.tabs.splitView.enabled", false);
-      if (!splitViewEnabled) {
-        return { message: "Firefox's experimental split view feature is not enabled. Enable it by setting browser.tabs.splitView.enabled to true in about:config." };
-      }
-
       const indices = args?.indices;
       if (!indices || !Array.isArray(indices) || indices.length < 2) {
         return { message: "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] })." };
@@ -64351,23 +64344,41 @@ ${text2}` };
         }
         tabs.push(gBrowser.tabs[i - 1]);
       }
-
-      try {
-        // Create the split view using Firefox's experimental API
-        const splitView = gBrowser.addTabSplitView(tabs);
-        if (!splitView) {
-          return { message: "Failed to create split view. Some tabs may be pinned or incompatible." };
-        }
-
-        // Show the split view panels
-        gBrowser.showSplitViewPanels(tabs);
-
-        const tabTitles = tabs.map((tab) => tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)").join(", ");
-        return { message: `Split ${tabs.length} tabs into split view: ${tabTitles}` };
-      } catch (error) {
-        console.error("Error creating split view:", error);
-        return { message: `Failed to create split view: ${error.message}` };
+      const screen = topWin.screen;
+      const availWidth = screen.availWidth;
+      const availHeight = screen.availHeight;
+      const availLeft = screen.availLeft || 0;
+      const availTop = screen.availTop || 0;
+      const numTabs = tabs.length;
+      const windows = [];
+      for (let i = 0; i < numTabs; i++) {
+        const tab = tabs[i];
+        const title = tab?.label || tab?.linkedBrowser?.currentURI?.spec || "(untitled)";
+        const newWin = topWin.OpenBrowserWindow();
+        windows.push({ win: newWin, tab, title });
+        await new Promise((r) => setTimeout(r, 100));
       }
+      await new Promise((r) => setTimeout(r, 300));
+      for (let i = 0; i < numTabs; i++) {
+        const { win, tab, title } = windows[i];
+        const windowWidth = Math.floor(availWidth / numTabs);
+        const windowHeight = availHeight;
+        const xPos = availLeft + windowWidth * i;
+        const yPos = availTop;
+        win.resizeTo(windowWidth, windowHeight);
+        win.moveTo(xPos, yPos);
+        try {
+          const sidebar = win.document.getElementById("sidebar-box");
+          if (sidebar && !sidebar.hidden) {
+            win.SidebarController?.hide();
+          }
+        } catch (e) {
+          console.warn("Failed to close sidebar:", e);
+        }
+        win.gBrowser.adoptTab(tab, 0);
+      }
+      const tabTitles = windows.map((w2) => w2.title).join(", ");
+      return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
     }
   };
   var SearchMemoryCommand = class {
@@ -64412,26 +64423,94 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   window.voiceInputService = voiceInput_default;
   window.marked = d;
   window.DOMPurify = purify;
-  var CURRENT_SESSION = [];
-  var MAX_TURNS = 12;
+  var AssistantSession = null;
+  try {
+    if (window.ChromeUtils && window.ChromeUtils.importESModule) {
+      const mod = window.ChromeUtils.importESModule("chrome://browser/content/assistant/AssistantSession.sys.mjs");
+      AssistantSession = mod.AssistantSession;
+      console.log("Successfully imported AssistantSession singleton.");
+    } else {
+      console.warn("ChromeUtils not available, falling back to local state (will desync).");
+      AssistantSession = {
+        _messages: [],
+        get messages() {
+          return [...this._messages];
+        },
+        addTurn(u3, a) {
+          this._messages.push(u3);
+          this._messages.push(a);
+        },
+        clear() {
+          this._messages = [];
+        },
+        setSession(m2) {
+          this._messages = m2;
+        }
+      };
+    }
+  } catch (e) {
+    console.error("Failed to import AssistantSession.sys.mjs", e);
+    AssistantSession = {
+      _messages: [],
+      get messages() {
+        return [...this._messages];
+      },
+      addTurn(u3, a) {
+        this._messages.push(u3);
+        this._messages.push(a);
+      },
+      clear() {
+        this._messages = [];
+      },
+      setSession(m2) {
+        this._messages = m2;
+      }
+    };
+  }
+  try {
+    if (window.Services && window.Services.obs) {
+      const observer = {
+        observe: (subject, topic, data) => {
+          if (topic === "oasis-session-updated") {
+            console.log("Received oasis-session-updated observer notification.");
+            try {
+              window.dispatchEvent(new CustomEvent("oasis-history-update"));
+            } catch (e) {
+            }
+          }
+        }
+      };
+      window.Services.obs.addObserver(observer, "oasis-session-updated", false);
+    }
+  } catch (e) {
+    console.error("Failed to add observer", e);
+  }
   function getCurrentSessionMessages() {
-    return CURRENT_SESSION;
+    const raw = AssistantSession.messages;
+    return raw.map((m2) => {
+      if (typeof m2._getType === "function") return m2;
+      if (m2.type === "human") return new HumanMessage(m2.content);
+      if (m2.type === "ai") return new AIMessage(m2.content);
+      return new HumanMessage(m2.content || "");
+    });
   }
   function pushCurrentTurn(user, assistant) {
-    CURRENT_SESSION.push(new HumanMessage(user));
-    CURRENT_SESSION.push(new AIMessage(assistant));
-    const cap = MAX_TURNS * 2;
-    if (CURRENT_SESSION.length > cap) {
-      CURRENT_SESSION.splice(0, CURRENT_SESSION.length - cap);
-    }
+    const u3 = new HumanMessage(user);
+    const a = new AIMessage(assistant);
+    AssistantSession.addTurn(u3, a);
   }
   function resetAssistantSession() {
-    CURRENT_SESSION = [];
+    AssistantSession.clear();
+    try {
+      window.dispatchEvent(new CustomEvent("oasis-history-update"));
+    } catch (e) {
+    }
   }
   window.resetAssistantSession = resetAssistantSession;
   function getAssistantHistory() {
-    return [...CURRENT_SESSION];
+    return getCurrentSessionMessages();
   }
+  window.getAssistantHistory = getAssistantHistory;
   var GraphState = Annotation.Root({
     messages: Annotation({
       reducer: (x2, y2) => x2.concat(y2),
@@ -64469,12 +64548,35 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       return { role, content: msgText(m2) };
     });
   }
-  async function buildGraph(commands) {
+  async function buildGraph(commands, messageId) {
     const toolAgents = {};
     const memberNames = [];
     for (const command of commands) {
       const node = async (state) => {
-        const result = await command.execute(state.args);
+        const recordStart = window.oasisRecordToolActionStart;
+        const recordUpdate = window.oasisRecordToolActionUpdate;
+        let actionId;
+        console.log(`\u{1F528} Executing node: ${command.commandName}, messageId: ${messageId}`);
+        if (typeof recordStart === "function") {
+          actionId = recordStart(command.commandName, messageId);
+          console.log(`\u{1F528} recordStart called, got actionId: ${actionId}`);
+        } else {
+          console.warn(`\u{1F528} recordStart is NOT a function: ${typeof recordStart}`);
+        }
+        let result;
+        try {
+          result = await command.execute(state.args);
+          console.log(`\u{1F528} command.execute finished: ${command.commandName}, success: ${!!result}`);
+          if (typeof recordUpdate === "function" && actionId) {
+            recordUpdate(actionId, "done", result.message);
+          }
+        } catch (e) {
+          console.error(`\u{1F528} command.execute failed: ${command.commandName}`, e);
+          if (typeof recordUpdate === "function" && actionId) {
+            recordUpdate(actionId, "error", String(e));
+          }
+          result = { success: false, message: String(e) };
+        }
         const content = `
 [Tool Output for ${command.commandName}]: ${result.message}`;
         return {
@@ -64637,7 +64739,7 @@ Remember: You ARE stateful within this conversation. The history is right there 
     workflow.addEdge(START, "supervisor");
     return workflow.compile();
   }
-  async function runAssistantStream(prompt, onChunk, inputType = "text") {
+  async function runAssistantStream(prompt, onChunk, inputType = "text", messageId) {
     const isAuthenticated = await supabaseAuth4.isAuthenticated();
     if (!isAuthenticated) {
       const msg = "Please sign in to use the assistant.";
@@ -64672,7 +64774,7 @@ Remember: You ARE stateful within this conversation. The history is right there 
       new SearchMemoryCommand(),
       new ShowSubscriptionCommand()
     ];
-    const graph = await buildGraph(commands);
+    const graph = await buildGraph(commands, messageId);
     const sessionHistory = getCurrentSessionMessages();
     console.log(`\u{1F4DA} Session context: ${sessionHistory.length} messages in history`);
     const stream = await graph.stream(

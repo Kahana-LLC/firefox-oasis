@@ -1982,7 +1982,34 @@ var SidebarController = {
     const sidebarInfo = this.sidebars.get(commandID);
     const isOasisAssistant = commandID === "viewOasisAssistantSidebar" || 
                              (sidebarInfo && sidebarInfo.name === "oasis-assistant");
-    if (isOasisAssistant) {
+
+    // Ensure the toggle handler is attached for Oasis Assistant (in any mode)
+    if (isOasisAssistant && !this._oasisToggleHandler) {
+        this._oasisToggleHandler = (evt) => {
+            if (evt?.data?.type === "oasisOverlayToggleSidebar") {
+                const now = Date.now();
+                if (this._lastOasisToggle && (now - this._lastOasisToggle < 500)) {
+                    console.log("[Sidebar] Ignoring duplicate toggle");
+                    return;
+                }
+                this._lastOasisToggle = now;
+
+                console.log("[Sidebar] Toggling Oasis Sidebar Mode");
+                this._oasisForceSidebar = !this._oasisForceSidebar;
+                // Close current view
+                const overlayShell = document.getElementById("oasis-assistant-shell");
+                if (overlayShell) overlayShell.hidden = true;
+                this.hide({ dismissPanel: false });
+                // Re-open with new mode
+                setTimeout(() => {
+                  this.show("viewOasisAssistantSidebar");
+                }, 0);
+            }
+        };
+        window.addEventListener("message", this._oasisToggleHandler);
+    }
+
+    if (isOasisAssistant && !this._oasisForceSidebar) {
       console.log("[Sidebar] Oasis Assistant detected, attempting to use overlay");
       // Try both getElementById and querySelector in case of namespace issues
       const overlay = document.getElementById("oasis-assistant-overlay") || document.querySelector("#oasis-assistant-overlay");
@@ -2004,9 +2031,12 @@ var SidebarController = {
 
         const { url } = this.sidebars.get(commandID);
         overlay.hidden = false;
+        if (overlayShell) overlayShell.hidden = false; // Ensure shell is visible
         // Load assistant into overlay browser
         overlayBrowser.setAttribute("transparent", "true");
-        overlayBrowser.setAttribute("src", url);
+        if (overlayBrowser.getAttribute("src") !== url) {
+            overlayBrowser.setAttribute("src", url);
+        }
 
         // Get content area for bounds checking
         const contentArea = document.getElementById("tabbrowser-tabbox");
@@ -2122,6 +2152,7 @@ var SidebarController = {
             if (Number.isFinite(data.height)) overlayShell.style.height = `${data.height}px`;
           } else if (data.type === "oasisOverlayExpand") {
             console.log("[Sidebar] Expanding window");
+            this._overlayDocked = false;
             // Expand to 75% of screen size (centered)
             overlayShell.style.left = "12.5vw";
             overlayShell.style.top = "12.5vh";
@@ -2130,6 +2161,7 @@ var SidebarController = {
             console.log("[Sidebar] Window expanded to:", overlayShell.style.width, overlayShell.style.height);
           } else if (data.type === "oasisOverlayMinimize") {
             console.log("[Sidebar] Minimizing window");
+            this._overlayDocked = false;
             // Minimize to title bar only
             const rect = overlayShell.getBoundingClientRect();
             const newHeight = "64px";
@@ -2139,9 +2171,17 @@ var SidebarController = {
             console.log("[Sidebar] Window minimized to:", newWidth, newHeight);
           } else if (data.type === "oasisOverlayExitFullscreen") {
             console.log("[Sidebar] Exiting fullscreen");
+            this._overlayDocked = false;
             // restore standard panel sizing after fullscreen exit
             overlayShell.style.width = "min(95vw, 900px)";
             overlayShell.style.height = "min(85vh, 680px)";
+          } else if (data.type === "oasisOverlayResizeStart") {
+            const rect = overlayShell.getBoundingClientRect();
+            startW = rect.width; startH = rect.height; 
+            startX = data.screenX; startY = data.screenY;
+            resizing = true;
+            window.addEventListener("mousemove", onResizeMove);
+            window.addEventListener("mouseup", onResizeEnd);
           } else if (data.type === "oasisOverlayClose") {
             try {
               this.hide();
@@ -2158,8 +2198,8 @@ var SidebarController = {
         
         const onResizeMove = e => {
           if (!resizing) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
+          const dx = e.screenX - startX;
+          const dy = e.screenY - startY;
           const newW = clamp(startW + dx, 300, window.innerWidth);
           const newH = clamp(startH + dy, 200, window.innerHeight);
           overlayShell.style.width = `${newW}px`;
@@ -2171,44 +2211,6 @@ var SidebarController = {
           window.removeEventListener("mousemove", onResizeMove);
           window.removeEventListener("mouseup", onResizeEnd);
         };
-
-        const onResizeStart = e => {
-          resizing = true;
-          const rect = overlayShell.getBoundingClientRect();
-          startW = rect.width; startH = rect.height; startX = e.clientX; startY = e.clientY;
-          e.preventDefault();
-          e.stopPropagation();
-          window.addEventListener("mousemove", onResizeMove);
-          window.addEventListener("mouseup", onResizeEnd);
-        };
-
-        // Don't create external chrome header - it's now handled inside assistant.ui.js
-        // But still create resizer for bottom-right corner
-        let resizer = document.getElementById("oasis-assistant-resizer");
-        if (!resizer) {
-          console.log("[Sidebar] Creating resizer");
-          resizer = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-          resizer.id = "oasis-assistant-resizer";
-          resizer.style.cssText = "position:absolute; width:18px; height:18px; right:8px; bottom:8px; border:none; background:transparent; cursor:nwse-resize; z-index:2147483647; pointer-events:auto;";
-          overlayShell.appendChild(resizer);
-          
-          console.log("[Sidebar] Adding resize event listener");
-          resizer.addEventListener("mousedown", onResizeStart);
-          
-          console.log("[Sidebar] Resizer created:", !!resizer);
-        } else {
-          console.log("[Sidebar] Resizer already exists");
-        }
-
-        // Chrome-level drag for header and resize grip (header is now inside iframe)
-        const header = null; // Header is inside iframe now
-        const expandBtn = null;
-        const minimizeBtn = null;
-        const closeBtn = null;
-
-        // External drag handling removed - now handled by internal header via messages
-
-        // Button click handlers removed - now handled by internal header via messages
 
         // Fire show event and resolve
         this._fireShowEvent();
