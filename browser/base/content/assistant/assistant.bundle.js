@@ -42383,7 +42383,7 @@ ${suffix}`;
     }
   });
 
-  // node_modules/marked/lib/marked.esm.js
+  // ../../../../../node_modules/marked/lib/marked.esm.js
   function L() {
     return { async: false, breaks: false, extensions: null, gfm: true, hooks: null, pedantic: false, renderer: null, silent: false, tokenizer: null, walkTokens: null };
   }
@@ -43560,7 +43560,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var Ft = b.parse;
   var jt = x.lex;
 
-  // node_modules/dompurify/dist/purify.es.mjs
+  // ../../../../../node_modules/dompurify/dist/purify.es.mjs
   var {
     entries,
     setPrototypeOf,
@@ -64551,6 +64551,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   async function buildGraph(commands, messageId) {
     const toolAgents = {};
     const memberNames = [];
+    console.log(`\u{1F528} buildGraph: oasisRecordToolActionStart type: ${typeof window.oasisRecordToolActionStart}`);
     for (const command of commands) {
       const node = async (state) => {
         const recordStart = window.oasisRecordToolActionStart;
@@ -64568,7 +64569,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           result = await command.execute(state.args);
           console.log(`\u{1F528} command.execute finished: ${command.commandName}, success: ${!!result}`);
           if (typeof recordUpdate === "function" && actionId) {
-            recordUpdate(actionId, "done", result.message);
+            recordUpdate(actionId, "done");
           }
         } catch (e) {
           console.error(`\u{1F528} command.execute failed: ${command.commandName}`, e);

@@ -321,63 +321,79 @@ function securelyClearSession() {
 
 // Initial Auth Check
 async function checkCurrentAuthStatus() {
-    console.log('Checking current auth status...');
+    console.log('Oasis: Checking current auth status...');
     const restoredSession = await securelyLoadSession();
+    
     if (restoredSession) {
-        console.log('Session restored from secure storage', restoredSession.user?.email);
+        console.log('Oasis: Session restored from secure storage', restoredSession.user?.email);
         updateGlobalAuthState(true, restoredSession.user);
         
-        // Verify with Supabase
+        // Verify with Supabase and ensure internal state matches
         if (window.supabaseAuth && window.supabaseAuth.supabase) {
-            window.supabaseAuth.supabase.auth.getUser().then(({ data: { user }, error }) => {
+            try {
+                const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
                 if (error || !user) {
-                    console.warn('Restored session invalid, clearing:', error);
+                    console.warn('Oasis: Restored session invalid or expired, clearing:', error);
                     securelyClearSession();
                     updateGlobalAuthState(false);
                 } else {
-                     // Update session in storage if it changed
-                     window.supabaseAuth.supabase.auth.getSession().then(({ data: { session } }) => {
-                        if (session) securelySaveSession(session);
-                    });
+                     console.log('Oasis: Restored session verified for', user.email);
+                     // Update session in storage if it changed (e.g. refreshed)
+                     const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
+                     if (session) securelySaveSession(session);
                 }
-            });
+            } catch (e) {
+                console.error('Oasis: Error verifying restored session:', e);
+            }
         }
         return;
     }
 
+    console.log('Oasis: No session found in secure storage');
     if (window.supabaseAuth && window.supabaseAuth.supabase) {
-        const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
-        if (user && !error) {
-             updateGlobalAuthState(true, user);
-        } else {
-             updateGlobalAuthState(false);
+        try {
+            const { data: { user }, error } = await window.supabaseAuth.supabase.auth.getUser();
+            if (user && !error) {
+                 console.log('Oasis: Supabase already has a session for', user.email);
+                 updateGlobalAuthState(true, user);
+            } else {
+                 updateGlobalAuthState(false);
+            }
+        } catch (e) {
+            console.error('Oasis: Error checking Supabase status:', e);
+            updateGlobalAuthState(false);
         }
+    } else {
+        updateGlobalAuthState(false);
     }
 }
 
 function updateGlobalAuthState(authenticated, user = null) {
     window.oasisAuthState = { isAuthenticated: authenticated, user: user };
-    console.log('Global auth state updated:', window.oasisAuthState);
+    console.log('Oasis: Global auth state updated:', window.oasisAuthState);
     // Notify UI (Preact) of the change
     try {
         window.dispatchEvent(new CustomEvent('oasis-auth-update', { detail: window.oasisAuthState }));
-    } catch(e) { console.warn('Failed to dispatch auth update', e); }
+    } catch(e) { console.warn('Oasis: Failed to dispatch auth update', e); }
 }
 
 // Subscribe to Supabase auth state changes
 if (window.supabaseAuth) {
     window.supabaseAuth.onAuthStateChange((authState) => {
-        console.log("UI (Shim) received auth state change:", authState.isAuthenticated);
+        console.log("Oasis: UI (Shim) received auth state change:", authState.isAuthenticated);
         
         if (authState.isAuthenticated && authState.session) {
             securelySaveSession(authState.session);
             updateGlobalAuthState(true, authState.user);
         } else if (!authState.isAuthenticated) {
-            securelyClearSession();
-            updateGlobalAuthState(false);
+            // Only clear if we were previously logged in to avoid clearing during initial restoration race
+            if (window.oasisAuthState?.isAuthenticated) {
+                securelyClearSession();
+                updateGlobalAuthState(false);
+            }
         }
     });
 }
 
-// Start Auth Check
-setTimeout(checkCurrentAuthStatus, 50);
+// Start Auth Check immediately
+checkCurrentAuthStatus();

@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ToolActionMessage } from './components/ToolActionMessage';
 import { ToolActionInline } from './components/ToolActionInline';
+import { Feedback } from './components/Feedback';
 import TOOL_LABELS from './toolLabels';
 import './App.css';
 
@@ -208,12 +209,24 @@ export function App() {
 
     // Initial Auth Check
     const checkAuth = async () => {
-      updateFromGlobal();
+      // First, check if the global shim already has the auth state
+      const globalState = (window as any).oasisAuthState;
+      if (globalState && globalState.isAuthenticated) {
+        setAuth({ isAuthenticated: true, user: globalState.user });
+        setView('chat');
+        return;
+      }
+
+      // If not, we can try to ask supabaseAuth directly, but only if it's available
       if ((window as any).supabaseAuth) {
         try {
+            // Give it a tiny bit of time to initialize if it's currently restoring
             const isAuth = await (window as any).supabaseAuth.isAuthenticated();
-            const user = await (window as any).supabaseAuth.getCurrentUser();
-            setAuth({ isAuthenticated: isAuth, user });
+            if (isAuth) {
+                const user = await (window as any).supabaseAuth.getCurrentUser();
+                setAuth({ isAuthenticated: true, user });
+                setView('chat');
+            }
         } catch (e) {
             console.error("Auth check failed:", e);
         }
@@ -268,10 +281,19 @@ export function App() {
     };
   }, []);
 
-  // Tool action helpers: allow external code to report tool runs
-  // Generate unique IDs for messages and tool actions
+  // Generate unique IDs for messages and tool actions (Valid UUID v4 for DB compatibility)
   function uuid() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+    } catch (e) {}
+    
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
   // (labels imported from src/toolLabels.ts)
 
@@ -433,6 +455,20 @@ export function App() {
     }
   };
 
+  const handleLinkClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a');
+    if (anchor && anchor.href && !anchor.href.startsWith('javascript:')) {
+      e.preventDefault();
+      const url = anchor.href;
+      if ((window as any).assistantBridge?.openTab) {
+        (window as any).assistantBridge.openTab(url);
+      } else {
+        window.open(url, '_blank');
+      }
+    }
+  };
+
   const userEmail = auth.user?.email || (typeof auth.user === 'string' ? auth.user : '');
 
   return (
@@ -512,16 +548,21 @@ export function App() {
                     {showTools && (
                       <ToolActionsGroup actions={toolActions} />
                     )}
-                    <div className="ai-response-container">
-                      {(window as any).marked ? (
-                        <div 
-                          className="markdown-body"
-                          dangerouslySetInnerHTML={{ __html: htmlContent }} 
-                        />
-                      ) : (
-                        <div className="message-content" style={{ whiteSpace: 'pre-wrap', background: 'transparent', border: 'none', padding: 0 }}>
-                          {m.content}
-                        </div>
+                    <div className="ai-message-wrapper">
+                      <div className="ai-response-container" onClick={handleLinkClick}>
+                        {(window as any).marked ? (
+                          <div 
+                            className="markdown-body"
+                            dangerouslySetInnerHTML={{ __html: htmlContent }} 
+                          />
+                        ) : (
+                          <div className="message-content" style={{ whiteSpace: 'pre-wrap', background: 'transparent', border: 'none', padding: 0 }}>
+                            {m.content}
+                          </div>
+                        )}
+                      </div>
+                      {isLastAI && !busy && (
+                        <Feedback messageId={m.id} />
                       )}
                     </div>
                   </Fragment>
