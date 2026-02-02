@@ -26,6 +26,8 @@ import {
   SearchMemoryCommand,
   RemoveTabFromHubCommand,
   ShowSubscriptionCommand,
+  SearchBookmarksCommand,
+  RemoveBookmarkCommand,
   Command,
   CmdResult,
 } from "./commands";
@@ -161,7 +163,9 @@ You have the following workers available:
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
+- **search_memory**: { query: string, hub?: string } - search for keywords in AI memory/Hubs. Use this for "remembered" info. NOT for general browser bookmarks.
+- **search_bookmarks**: { query: string } - search for actual Firefox browser bookmarks (including imported Chrome bookmarks). Use this when user asks to find/remove a "bookmark".
+- **remove_bookmark**: { query: string, guid?: string } - remove a browser bookmark. Use this to delete a bookmark found via search_bookmarks.
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
@@ -354,6 +358,8 @@ export async function runAssistantStream(
     new ShowURLCommand(),
     new SearchMemoryCommand(),
     new ShowSubscriptionCommand(),
+    new SearchBookmarksCommand(),
+    new RemoveBookmarkCommand(),
   ];
   const graph = await buildGraph(commands);
   

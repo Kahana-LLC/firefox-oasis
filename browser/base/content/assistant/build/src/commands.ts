@@ -14,7 +14,8 @@ export interface Command {
 function getChrome() {
   const topWin = (window.top as any);
   const gBrowser = topWin?.gBrowser;
-  return { topWin, gBrowser };
+  const PlacesUtils = topWin?.PlacesUtils;
+  return { topWin, gBrowser, PlacesUtils };
 }
 
 /* ===========================
@@ -463,5 +464,74 @@ export class ShowSubscriptionCommand implements Command {
     return { 
         message: `Opened subscription page.\nUsage this month: ${stats.totalUnits} units / ${stats.limit} limit.` 
     };
+  }
+}
+
+export class SearchBookmarksCommand implements Command {
+  commandName = "search_bookmarks";
+  description = "Search for bookmarks by title or URL. Returns list of matches with GUIDs. Arguments: { query: string }.";
+  async execute(args: any): Promise<CmdResult> {
+    const query = args?.query;
+    if (!query) return { message: "What should I search for?" };
+    
+    const { PlacesUtils } = getChrome();
+    if (!PlacesUtils) return { message: "Bookmarks API not available." };
+
+    try {
+      const results = await PlacesUtils.bookmarks.search(query);
+      if (!results.length) return { message: `No bookmarks found for "${query}".` };
+
+      const formatted = results.slice(0, 10).map((b: any) => 
+        `- ${b.title || "(no title)"} (${b.url || "folder"}) [GUID: ${b.guid}]`
+      ).join("\n");
+      
+      return { message: `Found ${results.length} bookmarks:\n${formatted}` };
+    } catch (e) {
+      return { message: `Error searching bookmarks: ${e}` };
+    }
+  }
+}
+
+export class RemoveBookmarkCommand implements Command {
+  commandName = "remove_bookmark";
+  description = "Remove a bookmark. Best used with a GUID from search_bookmarks, but can try to match by title/URL. Arguments: { guid?: string, query?: string }.";
+  async execute(args: any): Promise<CmdResult> {
+    const { PlacesUtils } = getChrome();
+    if (!PlacesUtils) return { message: "Bookmarks API not available." };
+
+    if (args?.guid) {
+      try {
+        await PlacesUtils.bookmarks.remove(args.guid);
+        return { message: `Removed bookmark with GUID ${args.guid}.` };
+      } catch (e) {
+        return { message: `Failed to remove bookmark: ${e}` };
+      }
+    }
+
+    const query = args?.query || args?.url || args?.title;
+    if (!query) return { message: "Please provide a GUID or query to remove." };
+
+    try {
+      // Try to find it
+      const results = await PlacesUtils.bookmarks.search(query);
+      if (!results.length) return { message: `No bookmarks found matching "${query}".` };
+      
+      // If exact match on URL or Title, and only 1, remove it.
+      const exactMatches = results.filter((b: any) => b.url === query || b.title === query);
+      if (exactMatches.length === 1) {
+         await PlacesUtils.bookmarks.remove(exactMatches[0].guid);
+         return { message: `Removed bookmark "${exactMatches[0].title}".` };
+      }
+
+      if (results.length === 1) {
+          await PlacesUtils.bookmarks.remove(results[0].guid);
+          return { message: `Removed bookmark "${results[0].title}".` };
+      }
+
+      return { message: `Found ${results.length} bookmarks matching "${query}". Please specify GUID:\n` + 
+        results.slice(0, 5).map((b: any) => `${b.title} (${b.guid})`).join(", ") };
+    } catch (e) {
+      return { message: `Error removing bookmark: ${e}` };
+    }
   }
 }
