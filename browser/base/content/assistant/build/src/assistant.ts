@@ -250,7 +250,6 @@ async function buildGraph(commands: Command[], messageId?: string) {
           `🔨 command.execute finished: ${command.commandName}, success: ${!!result}`
         );
         if (typeof recordUpdate === "function" && actionId) {
-          // Pass the command name (prettified or raw) for the final display
           recordUpdate(actionId, "done");
         }
       } catch (e) {
@@ -261,12 +260,23 @@ async function buildGraph(commands: Command[], messageId?: string) {
         result = { message: String(e) };
       }
 
+      // If the command requires confirmation, stop the graph and let the modal handle it
+      if (result.requiresConfirmation) {
+        console.log(`⏸️ Command ${command.commandName} requires confirmation, stopping graph`);
+        return {
+          messages: [new AIMessage({ content: "", name: command.commandName })],
+          lastWorker: command.commandName,
+          repeatCount: 0,
+          next: END,
+          args: {},
+        };
+      }
+
       const content = `\n[Tool Output for ${command.commandName}]: ${result.message}`;
       return {
         messages: [new AIMessage({ content, name: command.commandName })],
         lastWorker: command.commandName,
         repeatCount: 0,
-        // ADD THESE TWO LINES:
         next: "supervisor",
         args: {},
       };

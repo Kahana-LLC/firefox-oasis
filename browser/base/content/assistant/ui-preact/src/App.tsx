@@ -238,6 +238,7 @@ function ConfirmationModal({
 let recordStartRelay: any = null;
 let recordUpdateRelay: any = null;
 let resetAssistantSessionRelay: any = null;
+let pendingConfirmationRelay: any = null;
 
 // Store the original backend reset function before we overwrite it
 const originalResetAssistantSession = (window as any).resetAssistantSession;
@@ -254,6 +255,11 @@ const originalResetAssistantSession = (window as any).resetAssistantSession;
   }
   // Fallback to original if relay not set
   return originalResetAssistantSession?.();
+};
+(window as any).oasisSetPendingConfirmationRelay = (data: any) => {
+  if (pendingConfirmationRelay) {
+    pendingConfirmationRelay(data);
+  }
 };
 
 export function App() {
@@ -293,10 +299,12 @@ export function App() {
     recordStartRelay = startToolAction;
     recordUpdateRelay = updateToolAction;
     resetAssistantSessionRelay = resetAssistantSession;
+    pendingConfirmationRelay = setPendingConfirmation;
     return () => {
       recordStartRelay = null;
       recordUpdateRelay = null;
       resetAssistantSessionRelay = null;
+      pendingConfirmationRelay = null;
     };
   }, []);
 
@@ -590,9 +598,9 @@ export function App() {
   const userEmail = auth.user?.email || (typeof auth.user === 'string' ? auth.user : '');
 
   const handleConfirmationApprove = async () => {
+    // Only hide the modal UI - do NOT clear the backend pending confirmation yet
+    // confirm_action will clear it after executing the command
     setPendingConfirmation(null);
-    const clearFn = (window as any).oasisClearPendingConfirmation;
-    if (clearFn) clearFn();
     
     setBusy(true);
     try {

@@ -65003,19 +65003,29 @@ Content: ${content}`;
   function setPendingConfirmation(pc) {
     pendingConfirmation = pc;
     try {
+      const relay = window.oasisSetPendingConfirmationRelay;
+      if (typeof relay === "function") {
+        relay(pc);
+      }
       window.dispatchEvent(
         new CustomEvent("oasis-confirmation-update", { detail: pc })
       );
     } catch (e) {
+      console.error("Failed to set pending confirmation:", e);
     }
   }
   function clearPendingConfirmation() {
     pendingConfirmation = null;
     try {
+      const relay = window.oasisSetPendingConfirmationRelay;
+      if (typeof relay === "function") {
+        relay(null);
+      }
       window.dispatchEvent(
         new CustomEvent("oasis-confirmation-update", { detail: null })
       );
     } catch (e) {
+      console.error("Failed to clear pending confirmation:", e);
     }
   }
   window.oasisGetPendingConfirmation = getPendingConfirmation;
@@ -65443,7 +65453,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   };
   var CreateTabGroupCommand = class {
     commandName = "create_tab_group";
-    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[] }. If no indices provided, uses current tab.";
+    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -65465,6 +65475,44 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       if (groupableTabs.length === 0) {
         return { message: "No groupable tabs (pinned tabs cannot be grouped)." };
       }
+      const tabsInGroups = groupableTabs.filter((t) => t.group);
+      if (tabsInGroups.length > 0 && !args?.confirmed) {
+        const affectedGroups = /* @__PURE__ */ new Set();
+        for (const tab of tabsInGroups) {
+          const groupName = tab.group?.label || "(unnamed)";
+          affectedGroups.add(groupName);
+        }
+        const groupNames = Array.from(affectedGroups).join(", ");
+        const willBeEmpty = [];
+        for (const tab of tabsInGroups) {
+          if (tab.group) {
+            const groupTabs = tab.group.tabs || [];
+            const tabsBeingMoved = groupTabs.filter((t) => tabsInGroups.includes(t));
+            if (tabsBeingMoved.length === groupTabs.length) {
+              const groupLabel = tab.group.label || "(unnamed)";
+              if (!willBeEmpty.includes(groupLabel)) {
+                willBeEmpty.push(groupLabel);
+              }
+            }
+          }
+        }
+        let warningMsg = `${tabsInGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
+        if (willBeEmpty.length > 0) {
+          warningMsg += ` This will delete the following empty group(s): ${willBeEmpty.join(", ")}.`;
+        }
+        warningMsg += ` Create "${name}" anyway?`;
+        setPendingConfirmation({
+          command: "create_tab_group",
+          args: { ...args, confirmed: true },
+          description: warningMsg
+        });
+        return {
+          message: warningMsg,
+          requiresConfirmation: true,
+          confirmationData: { name, affectedGroups: Array.from(affectedGroups), willBeEmpty }
+        };
+      }
+      clearPendingConfirmation();
       try {
         gBrowser.addTabGroup(groupableTabs, { label: name });
         return {
@@ -65530,7 +65578,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   };
   var AddTabToGroupCommand = class {
     commandName = "add_tab_to_group";
-    description = "Add tab(s) to an existing tab group. Accepts arguments: { name: string, query?: string, index?: number, all?: boolean }. Use 'query' to find tab by title/URL. Use 'all: true' to add all ungrouped tabs. If no query/index/all, adds current tab.";
+    description = "Add tab(s) to an existing tab group. Accepts arguments: { name: string, query?: string, index?: number, all?: boolean, confirmed?: boolean }. Use 'query' to find tab by title/URL. Use 'all: true' to add all ungrouped tabs. If no query/index/all, adds current tab.";
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -65571,6 +65619,44 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       if (groupableTabs.length === 0) {
         return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
       }
+      const tabsInOtherGroups = groupableTabs.filter((t) => t.group && t.group !== group);
+      if (tabsInOtherGroups.length > 0 && !args?.confirmed) {
+        const affectedGroups = /* @__PURE__ */ new Set();
+        for (const tab of tabsInOtherGroups) {
+          const groupName = tab.group?.label || "(unnamed)";
+          affectedGroups.add(groupName);
+        }
+        const groupNames = Array.from(affectedGroups).join(", ");
+        const willBeEmpty = [];
+        for (const tab of tabsInOtherGroups) {
+          if (tab.group) {
+            const groupTabs = tab.group.tabs || [];
+            const tabsBeingMoved = groupTabs.filter((t) => tabsInOtherGroups.includes(t));
+            if (tabsBeingMoved.length === groupTabs.length) {
+              const groupLabel = tab.group.label || "(unnamed)";
+              if (!willBeEmpty.includes(groupLabel)) {
+                willBeEmpty.push(groupLabel);
+              }
+            }
+          }
+        }
+        let warningMsg = `${tabsInOtherGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
+        if (willBeEmpty.length > 0) {
+          warningMsg += ` This will delete the following empty group(s): ${willBeEmpty.join(", ")}.`;
+        }
+        warningMsg += ` Add to "${name}" anyway?`;
+        setPendingConfirmation({
+          command: "add_tab_to_group",
+          args: { ...args, confirmed: true },
+          description: warningMsg
+        });
+        return {
+          message: warningMsg,
+          requiresConfirmation: true,
+          confirmationData: { name, affectedGroups: Array.from(affectedGroups), willBeEmpty }
+        };
+      }
+      clearPendingConfirmation();
       try {
         group.addTabs(groupableTabs);
         const titles = groupableTabs.map((t) => t.label || "(untitled)").join(", ");
@@ -65663,7 +65749,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       const commandMap = {
         close_tab: new CloseTabCommand(),
         delete_hub: new DeleteHubCommand(),
-        delete_tab_group: new DeleteTabGroupCommand()
+        delete_tab_group: new DeleteTabGroupCommand(),
+        create_tab_group: new CreateTabGroupCommand(),
+        add_tab_to_group: new AddTabToGroupCommand()
       };
       const cmd = commandMap[pending.command];
       if (!cmd) {
@@ -65846,13 +65934,22 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           }
           result = { message: String(e) };
         }
+        if (result.requiresConfirmation) {
+          console.log(`\u23F8\uFE0F Command ${command.commandName} requires confirmation, stopping graph`);
+          return {
+            messages: [new AIMessage({ content: "", name: command.commandName })],
+            lastWorker: command.commandName,
+            repeatCount: 0,
+            next: END,
+            args: {}
+          };
+        }
         const content = `
 [Tool Output for ${command.commandName}]: ${result.message}`;
         return {
           messages: [new AIMessage({ content, name: command.commandName })],
           lastWorker: command.commandName,
           repeatCount: 0,
-          // ADD THESE TWO LINES:
           next: "supervisor",
           args: {}
         };

@@ -29,19 +29,35 @@ export function getPendingConfirmation(): PendingConfirmation | null {
 export function setPendingConfirmation(pc: PendingConfirmation | null): void {
   pendingConfirmation = pc;
   try {
+    // Try the relay function first (set by UI)
+    const relay = (window as any).oasisSetPendingConfirmationRelay;
+    if (typeof relay === "function") {
+      relay(pc);
+    }
+    // Also dispatch event as backup
     window.dispatchEvent(
       new CustomEvent("oasis-confirmation-update", { detail: pc })
     );
-  } catch (e) {}
+  } catch (e) {
+    console.error("Failed to set pending confirmation:", e);
+  }
 }
 
 export function clearPendingConfirmation(): void {
   pendingConfirmation = null;
   try {
+    // Try the relay function first (set by UI)
+    const relay = (window as any).oasisSetPendingConfirmationRelay;
+    if (typeof relay === "function") {
+      relay(null);
+    }
+    // Also dispatch event as backup
     window.dispatchEvent(
       new CustomEvent("oasis-confirmation-update", { detail: null })
     );
-  } catch (e) {}
+  } catch (e) {
+    console.error("Failed to clear pending confirmation:", e);
+  }
 }
 
 (window as any).oasisGetPendingConfirmation = getPendingConfirmation;
@@ -613,7 +629,7 @@ export class ListTabGroupsCommand implements Command {
 export class CreateTabGroupCommand implements Command {
   commandName = "create_tab_group";
   description =
-    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[] }. If no indices provided, uses current tab.";
+    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
   async execute(args: any): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -639,6 +655,51 @@ export class CreateTabGroupCommand implements Command {
     if (groupableTabs.length === 0) {
       return { message: "No groupable tabs (pinned tabs cannot be grouped)." };
     }
+
+    // Check if any tabs are already in groups
+    const tabsInGroups = groupableTabs.filter((t: any) => t.group);
+    if (tabsInGroups.length > 0 && !args?.confirmed) {
+      const affectedGroups = new Set<string>();
+      for (const tab of tabsInGroups) {
+        const groupName = tab.group?.label || "(unnamed)";
+        affectedGroups.add(groupName);
+      }
+      const groupNames = Array.from(affectedGroups).join(", ");
+      const willBeEmpty: string[] = [];
+      
+      // Check if any groups will be left empty
+      for (const tab of tabsInGroups) {
+        if (tab.group) {
+          const groupTabs = tab.group.tabs || [];
+          const tabsBeingMoved = groupTabs.filter((t: any) => tabsInGroups.includes(t));
+          if (tabsBeingMoved.length === groupTabs.length) {
+            const groupLabel = tab.group.label || "(unnamed)";
+            if (!willBeEmpty.includes(groupLabel)) {
+              willBeEmpty.push(groupLabel);
+            }
+          }
+        }
+      }
+
+      let warningMsg = `${tabsInGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
+      if (willBeEmpty.length > 0) {
+        warningMsg += ` This will delete the following empty group(s): ${willBeEmpty.join(", ")}.`;
+      }
+      warningMsg += ` Create "${name}" anyway?`;
+
+      setPendingConfirmation({
+        command: "create_tab_group",
+        args: { ...args, confirmed: true },
+        description: warningMsg,
+      });
+      return {
+        message: warningMsg,
+        requiresConfirmation: true,
+        confirmationData: { name, affectedGroups: Array.from(affectedGroups), willBeEmpty },
+      };
+    }
+
+    clearPendingConfirmation();
 
     try {
       gBrowser.addTabGroup(groupableTabs, { label: name });
@@ -718,7 +779,7 @@ export class DeleteTabGroupCommand implements Command {
 export class AddTabToGroupCommand implements Command {
   commandName = "add_tab_to_group";
   description =
-    "Add tab(s) to an existing tab group. Accepts arguments: { name: string, query?: string, index?: number, all?: boolean }. Use 'query' to find tab by title/URL. Use 'all: true' to add all ungrouped tabs. If no query/index/all, adds current tab.";
+    "Add tab(s) to an existing tab group. Accepts arguments: { name: string, query?: string, index?: number, all?: boolean, confirmed?: boolean }. Use 'query' to find tab by title/URL. Use 'all: true' to add all ungrouped tabs. If no query/index/all, adds current tab.";
   async execute(args: any): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -766,6 +827,51 @@ export class AddTabToGroupCommand implements Command {
     if (groupableTabs.length === 0) {
       return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
     }
+
+    // Check if any tabs are already in OTHER groups (not the target group)
+    const tabsInOtherGroups = groupableTabs.filter((t: any) => t.group && t.group !== group);
+    if (tabsInOtherGroups.length > 0 && !args?.confirmed) {
+      const affectedGroups = new Set<string>();
+      for (const tab of tabsInOtherGroups) {
+        const groupName = tab.group?.label || "(unnamed)";
+        affectedGroups.add(groupName);
+      }
+      const groupNames = Array.from(affectedGroups).join(", ");
+      const willBeEmpty: string[] = [];
+      
+      // Check if any groups will be left empty
+      for (const tab of tabsInOtherGroups) {
+        if (tab.group) {
+          const groupTabs = tab.group.tabs || [];
+          const tabsBeingMoved = groupTabs.filter((t: any) => tabsInOtherGroups.includes(t));
+          if (tabsBeingMoved.length === groupTabs.length) {
+            const groupLabel = tab.group.label || "(unnamed)";
+            if (!willBeEmpty.includes(groupLabel)) {
+              willBeEmpty.push(groupLabel);
+            }
+          }
+        }
+      }
+
+      let warningMsg = `${tabsInOtherGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
+      if (willBeEmpty.length > 0) {
+        warningMsg += ` This will delete the following empty group(s): ${willBeEmpty.join(", ")}.`;
+      }
+      warningMsg += ` Add to "${name}" anyway?`;
+
+      setPendingConfirmation({
+        command: "add_tab_to_group",
+        args: { ...args, confirmed: true },
+        description: warningMsg,
+      });
+      return {
+        message: warningMsg,
+        requiresConfirmation: true,
+        confirmationData: { name, affectedGroups: Array.from(affectedGroups), willBeEmpty },
+      };
+    }
+
+    clearPendingConfirmation();
 
     try {
       (group as any).addTabs(groupableTabs);
@@ -878,6 +984,8 @@ export class ConfirmActionCommand implements Command {
       close_tab: new CloseTabCommand(),
       delete_hub: new DeleteHubCommand(),
       delete_tab_group: new DeleteTabGroupCommand(),
+      create_tab_group: new CreateTabGroupCommand(),
+      add_tab_to_group: new AddTabToGroupCommand(),
     };
 
     const cmd = commandMap[pending.command];
