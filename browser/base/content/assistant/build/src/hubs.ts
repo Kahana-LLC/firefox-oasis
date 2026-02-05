@@ -35,10 +35,13 @@ async function getRootFolder(): Promise<string> {
     if (!PlacesUtils) throw new Error("PlacesUtils not available");
 
     // Search for existing "Oasis Hubs" folder that's under "Other Bookmarks"
-    const bookmarks = await PlacesUtils.bookmarks.search({ title: ROOT_FOLDER_NAME });
-    const existing = bookmarks.find((b: any) => 
-      b.type === PlacesUtils.bookmarks.TYPE_FOLDER && 
-      b.parentGuid === PlacesUtils.bookmarks.unfiledGuid
+    const bookmarks = await PlacesUtils.bookmarks.search({
+      title: ROOT_FOLDER_NAME,
+    });
+    const existing = bookmarks.find(
+      (b: any) =>
+        b.type === PlacesUtils.bookmarks.TYPE_FOLDER &&
+        b.parentGuid === PlacesUtils.bookmarks.unfiledGuid
     );
     if (existing) {
       return existing.guid;
@@ -58,7 +61,11 @@ async function getRootFolder(): Promise<string> {
 }
 
 function hostOf(u: string): string {
-  try { return new URL(u).host.toLowerCase(); } catch { return ""; }
+  try {
+    return new URL(u).host.toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 // Helper functions to wrap PlacesUtils API
@@ -69,7 +76,7 @@ async function getBookmarkChildren(guid: string): Promise<any[]> {
     // Fetch bookmarks using PlacesUtils.bookmarks.fetch
     const parent = await PlacesUtils.bookmarks.fetch(guid);
     if (!parent) return [];
-    
+
     // Search for children
     const children: any[] = [];
     await PlacesUtils.bookmarks.fetch({ parentGuid: guid }, (bookmark: any) => {
@@ -85,7 +92,7 @@ async function getBookmarkChildren(guid: string): Promise<any[]> {
         uri: u,
       });
     });
-    
+
     return children;
   } catch (e) {
     console.error("Failed to get bookmark children:", e);
@@ -93,14 +100,23 @@ async function getBookmarkChildren(guid: string): Promise<any[]> {
   }
 }
 
-async function createBookmark(details: { parentGuid: string; title: string; url?: string; type?: number }): Promise<any> {
+async function createBookmark(details: {
+  parentGuid: string;
+  title: string;
+  url?: string;
+  type?: number;
+}): Promise<any> {
   const { PlacesUtils } = getChrome();
   if (!PlacesUtils) throw new Error("PlacesUtils not available");
   return await PlacesUtils.bookmarks.insert({
     parentGuid: details.parentGuid,
     title: details.title,
     url: details.url,
-    type: details.type || (details.url ? PlacesUtils.bookmarks.TYPE_BOOKMARK : PlacesUtils.bookmarks.TYPE_FOLDER),
+    type:
+      details.type ||
+      (details.url
+        ? PlacesUtils.bookmarks.TYPE_BOOKMARK
+        : PlacesUtils.bookmarks.TYPE_FOLDER),
   });
 }
 
@@ -110,7 +126,10 @@ async function removeBookmark(guid: string): Promise<void> {
   await PlacesUtils.bookmarks.remove(guid);
 }
 
-async function updateBookmark(guid: string, changes: { title?: string }): Promise<any> {
+async function updateBookmark(
+  guid: string,
+  changes: { title?: string }
+): Promise<any> {
   const { PlacesUtils } = getChrome();
   if (!PlacesUtils) throw new Error("PlacesUtils not available");
   return await PlacesUtils.bookmarks.update(guid, changes);
@@ -134,8 +153,10 @@ class HubManager {
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils } = getChrome();
-      const folders = children.filter((c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER);
-      
+      const folders = children.filter(
+        (c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
+      );
+
       const result = [];
       for (const folder of folders) {
         const items = await getBookmarkChildren(folder.guid);
@@ -153,8 +174,10 @@ class HubManager {
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils } = getChrome();
-      const folders = children.filter((c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER);
-      
+      const folders = children.filter(
+        (c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
+      );
+
       const result = [];
       for (const folder of folders) {
         const bookmarks = await getBookmarkChildren(folder.guid);
@@ -179,13 +202,14 @@ class HubManager {
     try {
       name = (name || "").trim() || this.suggestName();
       const rootId = await this.ensureRootFolder();
-      
+
       // Strict Case-insensitive check
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils } = getChrome();
-      const existing = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === name.toLowerCase()
+      const existing = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === name.toLowerCase()
       );
 
       let folder;
@@ -229,11 +253,12 @@ class HubManager {
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils } = getChrome();
-      const folder = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === name.toLowerCase()
+      const folder = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === name.toLowerCase()
       );
-      
+
       if (!folder) {
         return { name, removed: 0 };
       }
@@ -248,7 +273,9 @@ class HubManager {
           for (const t of Array.from(gBrowser.tabs) as any[]) {
             const u = t?.linkedBrowser?.currentURI?.spec || "";
             if (hostSet.has(hostOf(u))) {
-              try { gBrowser.removeTab(t); } catch {}
+              try {
+                gBrowser.removeTab(t);
+              } catch {}
             }
           }
         }
@@ -273,17 +300,19 @@ class HubManager {
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils } = getChrome();
-      const folder = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === oldName.toLowerCase()
+      const folder = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === oldName.toLowerCase()
       );
-      
+
       if (!folder) return { ok: false };
 
       // Check if target name already exists
-      const existing = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === newName.toLowerCase()
+      const existing = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === newName.toLowerCase()
       );
       if (existing) return { ok: false, msg: "Target exists" };
 
@@ -298,68 +327,27 @@ class HubManager {
 
   async addTabs(name: string, tabs: FxTab[]) {
     try {
-      const { PlacesUtils, gBrowser } = getChrome();
+      const { PlacesUtils } = getChrome();
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      // Case-insensitive match for hub folder
-      const folder = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        (c.title || "").toLowerCase() === name.toLowerCase()
+      const folder = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          (c.title || "").toLowerCase() === name.toLowerCase()
       );
-      
-      // If folder doesn't exist, create it
-      if (!folder) {
-        // ... creation logic needs to be careful if folder finding failed/is complex
-        // But wait, 'folder' is const here. My code was 'let folder'.
-        // I need to restructure to allow folder creation.
-      }
-      
-      // Actually, let's rewrite the whole block to be safe.
+
       let targetFolder = folder;
       if (!targetFolder) {
-         targetFolder = await createBookmark({
+        targetFolder = await createBookmark({
           parentGuid: rootId,
           title: name,
         });
       }
 
-      // 1. Add to bookmark folder
       for (const tab of tabs) {
-        // Use folder.title (correct case) for indexing
         await this.addTabToFolder(targetFolder.guid, tab, targetFolder.title);
       }
       this.updateAllTabMarkers();
-
-      // 2. Visual Grouping using gBrowser native methods
-      if (gBrowser) {
-        try {
-          console.log(`Attempting to group tabs for hub "${name}"`);
-          // Find existing group by label (case-insensitive)
-          const groups = gBrowser.tabGroups || [];
-          let group = Array.from(groups).find((g: any) => (g.label || "").toLowerCase() === name.toLowerCase());
-          
-          // Filter out pinned tabs as they cannot be grouped
-          const groupableTabs = tabs.filter((t: any) => !t.pinned);
-          
-          if (groupableTabs.length > 0) {
-            if (group) {
-              console.log(`Found existing group "${(group as any).label}", adding tabs.`);
-              // Add tabs to existing group
-              (group as any).addTabs(groupableTabs);
-            } else {
-              console.log(`Creating new group "${folder.title}" with tabs.`);
-              // Create new group with these tabs
-              gBrowser.addTabGroup(groupableTabs, { label: folder.title });
-            }
-          } else {
-             console.warn("No groupable tabs (all pinned?)");
-          }
-        } catch (e) {
-          console.error("Failed to group tabs visually:", e);
-        }
-      } else {
-          console.error("gBrowser not available for grouping.");
-      }
 
       return { ok: true };
     } catch (e) {
@@ -371,45 +359,24 @@ class HubManager {
   async removeUrl(name: string, url: string) {
     try {
       name = (name || "").trim();
-      
+
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils, gBrowser } = getChrome();
-      
-      const folder = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === name.toLowerCase()
+      const { PlacesUtils } = getChrome();
+
+      const folder = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === name.toLowerCase()
       );
-      
+
       if (!folder) return { ok: false };
 
       const bookmarks = await getBookmarkChildren(folder.guid);
       const toRemove = bookmarks.filter((b: any) => b.uri === url);
-      
+
       for (const bookmark of toRemove) {
         await removeBookmark(bookmark.guid);
-      }
-
-      if (gBrowser) {
-        try {
-          const groups = gBrowser.tabGroups || [];
-          const group = Array.from(groups).find((g: any) => (g.label || "").toLowerCase() === name.toLowerCase());
-          if (group) {
-             const tabs = (group as any).tabs || [];
-             // Find tabs with matching URL
-             const tabsToRemove = tabs.filter((t: any) => t.linkedBrowser?.currentURI?.spec === url);
-             for (const t of tabsToRemove) {
-                 // Ungroup each tab
-                 if (gBrowser.ungroupTab) {
-                     gBrowser.ungroupTab(t);
-                 } else {
-                     console.warn("gBrowser.ungroupTab not available");
-                 }
-             }
-          }
-        } catch (e) {
-          console.error("Failed to visually ungroup tabs:", e);
-        }
       }
 
       this.updateAllTabMarkers();
@@ -426,97 +393,56 @@ class HubManager {
       const rootId = await this.ensureRootFolder();
       const children = await getBookmarkChildren(rootId);
       const { PlacesUtils, topWin } = getChrome();
-      
-      const folder = children.find((c: any) => 
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && 
-        c.title.toLowerCase() === name.toLowerCase()
+
+      const folder = children.find(
+        (c: any) =>
+          c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
+          c.title.toLowerCase() === name.toLowerCase()
       );
-      
+
       if (!folder) return { ok: false };
 
       const bookmarks = await getBookmarkChildren(folder.guid);
       const items = bookmarks.filter((b: any) => b.uri);
       const urls = items.map((it: any) => it.uri);
-      console.log(`OpenHub: Found ${urls.length} URLs for hub "${name}":`, urls);
+      console.log(
+        `OpenHub: Found ${urls.length} URLs for hub "${name}":`,
+        urls
+      );
 
       if (urls.length === 0) return { ok: true };
 
       let targetBrowser: any;
       if (where === "window") {
         const w = topWin.OpenBrowserWindow();
-        // A bit of a wait for the new window to be ready
         await new Promise(resolve => setTimeout(resolve, 250));
         targetBrowser = w.gBrowser;
       } else {
-        // Use the current gBrowser from getChrome() which uses Services.wm
         targetBrowser = getChrome().gBrowser;
       }
 
       if (!targetBrowser) return { ok: false };
 
-      // Helper to get Services
       let Services = (window as any).Services || (window.top as any)?.Services;
       if (!Services && (window as any).ChromeUtils) {
-          try { Services = (window as any).ChromeUtils.import("resource://gre/modules/Services.jsm").Services; } catch (e) { console.error("Failed to import Services", e); }
+        try {
+          Services = (window as any).ChromeUtils.import(
+            "resource://gre/modules/Services.jsm"
+          ).Services;
+        } catch (e) {
+          console.error("Failed to import Services", e);
+        }
       }
-      const triggeringPrincipal = Services?.scriptSecurityManager?.getSystemPrincipal();
-      if (!triggeringPrincipal) console.error("FATAL: Could not get system principal for addTab");
+      const triggeringPrincipal =
+        Services?.scriptSecurityManager?.getSystemPrincipal();
+      if (!triggeringPrincipal)
+        console.error("FATAL: Could not get system principal for addTab");
 
-      // Check if group already exists in this window
-      const groups = targetBrowser.tabGroups || [];
-      let group = Array.from(groups).find((g: any) => (g.label || "").toLowerCase() === name.toLowerCase());
-
-      if (group) {
-          console.log(`OpenHub: Found existing group "${(group as any).label}", checking for duplicates.`);
-          
-          // Get URLs of tabs currently in this group
-          const existingTabs = (group as any).tabs || [];
-          const existingUrls = new Set(existingTabs.map((t: any) => t.linkedBrowser?.currentURI?.spec));
-          
-          // Filter out URLs that are already in the group
-          const newUrls = urls.filter(u => !existingUrls.has(u));
-          
-          if (newUrls.length === 0) {
-              console.log("OpenHub: All tabs for this hub are already open in the group.");
-              // Optionally verify they are focused? For now just ensure we select the group?
-              // Maybe select the first tab of the group?
-              if (existingTabs.length > 0) {
-                  targetBrowser.selectedTab = existingTabs[0];
-              }
-              return { ok: true };
-          }
-
-          console.log(`OpenHub: Opening ${newUrls.length} new tabs (skipped ${urls.length - newUrls.length} duplicates).`);
-          
-          // Group exists, load ONLY new tabs into it
-          targetBrowser.loadTabs(newUrls, { 
-              triggeringPrincipal, 
-              tabGroup: group,
-              inBackground: false
-          });
-      } else {
-          console.log(`OpenHub: Group not found. Creating new group "${folder.title || name}".`);
-          // Group doesn't exist.
-          // Open first tab to create the group
-          const firstUrl = urls[0];
-          const remainingUrls = urls.slice(1);
-          
-          // addTab is synchronous in returning the tab object
-          const tab = targetBrowser.addTab(firstUrl, { triggeringPrincipal, triggerPrimaryAction: false });
-          
-          // Create group with this first tab
-          // ensure label is set correctly
-          group = targetBrowser.addTabGroup([tab], { label: folder.title || name });
-          
-          // Open remaining tabs into this group
-          if (remainingUrls.length > 0) {
-              targetBrowser.loadTabs(remainingUrls, { 
-                  triggeringPrincipal, 
-                  tabGroup: group,
-                  inBackground: true 
-              });
-          }
-           targetBrowser.selectedTab = tab;
+      for (const url of urls) {
+        targetBrowser.addTab(url, {
+          triggeringPrincipal,
+          triggerPrimaryAction: false,
+        });
       }
 
       return { ok: true };
@@ -561,7 +487,8 @@ class HubManager {
       const all = await this.getAll();
       const names: string[] = [];
       for (const hub of all) {
-        if (hub.items.some((it: HubItem) => it.host === h)) names.push(hub.name);
+        if (hub.items.some((it: HubItem) => it.host === h))
+          names.push(hub.name);
       }
 
       if (names.length) {
@@ -574,12 +501,19 @@ class HubManager {
     } catch {}
   }
 
-  private async addTabToFolder(folderGuid: string, tab: FxTab, hubName?: string) {
+  private async addTabToFolder(
+    folderGuid: string,
+    tab: FxTab,
+    hubName?: string
+  ) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
     if (!url) return;
-    
+
     const title =
-      tab?.label || tab?.linkedBrowser?.contentTitle || tab?.linkedBrowser?.currentURI?.spec || "";
+      tab?.label ||
+      tab?.linkedBrowser?.contentTitle ||
+      tab?.linkedBrowser?.currentURI?.spec ||
+      "";
 
     // Check if URL already exists in this folder
     const existing = await getBookmarkChildren(folderGuid);
@@ -608,7 +542,17 @@ class HubManager {
       }
 
       const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;
-      await localMemory.addDocument(text, { title, type: "hub_item", hub: folderGuid, hubName, description: content.substring(0, 200) }, url);
+      await localMemory.addDocument(
+        text,
+        {
+          title,
+          type: "hub_item",
+          hub: folderGuid,
+          hubName,
+          description: content.substring(0, 200),
+        },
+        url
+      );
     } catch (e) {
       console.error("Failed to index hub item:", e);
     }

@@ -124,6 +124,116 @@ function Banner({ email, onClose }: { email: string; onClose: () => void }) {
   );
 }
 
+interface ConfirmationData {
+  command: string;
+  args: any;
+  description: string;
+}
+
+function ConfirmationModal({ 
+  data, 
+  onConfirm, 
+  onCancel 
+}: { 
+  data: ConfirmationData; 
+  onConfirm: () => void; 
+  onCancel: () => void;
+}) {
+  return (
+    <div className="confirmation-overlay" style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10000,
+    }}>
+      <div className="confirmation-modal" style={{
+        background: '#fff',
+        borderRadius: '12px',
+        padding: '24px',
+        maxWidth: '400px',
+        width: '90%',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          background: '#FFF8E1',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 16px auto',
+        }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+        </div>
+        
+        <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#333' }}>
+          Confirm Action
+        </h3>
+        
+        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#666' }}>
+          {data.description}
+        </p>
+        
+        <div style={{
+          background: '#E8F5E9',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          marginBottom: '20px',
+          fontSize: '13px',
+          color: '#2E7D32',
+        }}>
+          Command: {data.command}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              background: '#fff',
+              color: '#333',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              border: 'none',
+              borderRadius: '8px',
+              background: '#7A9200',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Global relays to ensure functions are available even if App remounts
 let recordStartRelay: any = null;
 let recordUpdateRelay: any = null;
@@ -155,6 +265,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [view, setView] = useState<'chat' | 'auth'>('chat');
   const [bannerVisible, setBannerVisible] = useState(true);
+  const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const resetAssistantSession = async () => {
@@ -236,6 +347,12 @@ export function App() {
 
     window.addEventListener('oasis-auth-update', updateFromGlobal);
     window.addEventListener('oasis-history-update', loadHistory);
+    
+    const handleConfirmationUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setPendingConfirmation(detail);
+    };
+    window.addEventListener('oasis-confirmation-update', handleConfirmationUpdate);
 
     if ((window as any).supabaseAuth?.onAuthStateChange) {
       (window as any).supabaseAuth.onAuthStateChange((state: any) => {
@@ -277,6 +394,7 @@ export function App() {
     return () => {
         window.removeEventListener('oasis-auth-update', updateFromGlobal);
         window.removeEventListener('oasis-history-update', loadHistory);
+        window.removeEventListener('oasis-confirmation-update', handleConfirmationUpdate);
         clearTimeout(pollTimer);
     };
   }, []);
@@ -471,8 +589,51 @@ export function App() {
 
   const userEmail = auth.user?.email || (typeof auth.user === 'string' ? auth.user : '');
 
+  const handleConfirmationApprove = async () => {
+    setPendingConfirmation(null);
+    const clearFn = (window as any).oasisClearPendingConfirmation;
+    if (clearFn) clearFn();
+    
+    setBusy(true);
+    try {
+      const run = (window as any).runAssistantStream;
+      if (typeof run === 'function') {
+        const aiMsgId = uuid();
+        setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
+        await run("yes", (chunk: string) => {
+          setMessages((prev) => {
+            const idx = prev.findIndex(msg => msg.id === aiMsgId);
+            if (idx !== -1) {
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+              return updated;
+            }
+            return prev;
+          });
+        }, 'text', aiMsgId);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConfirmationCancel = async () => {
+    setPendingConfirmation(null);
+    const clearFn = (window as any).oasisClearPendingConfirmation;
+    if (clearFn) clearFn();
+    
+    setMessages((m) => [...m, { id: uuid(), role: 'ai', content: 'Action cancelled.' }]);
+  };
+
   return (
     <div className="assistant-container">
+      {pendingConfirmation && (
+        <ConfirmationModal
+          data={pendingConfirmation}
+          onConfirm={handleConfirmationApprove}
+          onCancel={handleConfirmationCancel}
+        />
+      )}
       <Header auth={auth} onShowAuth={() => setView('auth')} />
       
       {/* Resize Handle */}

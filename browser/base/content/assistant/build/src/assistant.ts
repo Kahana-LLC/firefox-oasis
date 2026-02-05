@@ -6,7 +6,7 @@ import { routeRemote, chatRemote } from "./proxyClient";
 import SupabaseAuth from "./services/supabase";
 import voiceInputService from "./services/voiceInput";
 
-// Local command implementations (tabs / groups)
+// Local command implementations (tabs / groups / hubs)
 import {
   ListTabsCommand,
   OpenTabCommand,
@@ -26,6 +26,15 @@ import {
   SearchMemoryCommand,
   RemoveTabFromHubCommand,
   ShowSubscriptionCommand,
+  ListTabGroupsCommand,
+  CreateTabGroupCommand,
+  DeleteTabGroupCommand,
+  AddTabToGroupCommand,
+  RemoveTabFromGroupCommand,
+  RenameTabGroupCommand,
+  ConfirmActionCommand,
+  getPendingConfirmation,
+  clearPendingConfirmation,
   Command,
   CmdResult,
 } from "./commands";
@@ -50,17 +59,30 @@ try {
   // @ts-ignore
   if (window.ChromeUtils && window.ChromeUtils.importESModule) {
     // @ts-ignore
-    const mod = window.ChromeUtils.importESModule("chrome://browser/content/assistant/AssistantSession.sys.mjs");
+    const mod = window.ChromeUtils.importESModule(
+      "chrome://browser/content/assistant/AssistantSession.sys.mjs"
+    );
     AssistantSession = mod.AssistantSession;
     console.log("Successfully imported AssistantSession singleton.");
   } else {
-    console.warn("ChromeUtils not available, falling back to local state (will desync).");
+    console.warn(
+      "ChromeUtils not available, falling back to local state (will desync)."
+    );
     AssistantSession = {
       _messages: [],
-      get messages() { return [...this._messages]; },
-      addTurn(u: any, a: any) { this._messages.push(u); this._messages.push(a); },
-      clear() { this._messages = []; },
-      setSession(m: any) { this._messages = m; }
+      get messages() {
+        return [...this._messages];
+      },
+      addTurn(u: any, a: any) {
+        this._messages.push(u);
+        this._messages.push(a);
+      },
+      clear() {
+        this._messages = [];
+      },
+      setSession(m: any) {
+        this._messages = m;
+      },
     };
   }
 } catch (e) {
@@ -68,10 +90,19 @@ try {
   // Fallback
   AssistantSession = {
     _messages: [],
-    get messages() { return [...this._messages]; },
-    addTurn(u: any, a: any) { this._messages.push(u); this._messages.push(a); },
-    clear() { this._messages = []; },
-    setSession(m: any) { this._messages = m; }
+    get messages() {
+      return [...this._messages];
+    },
+    addTurn(u: any, a: any) {
+      this._messages.push(u);
+      this._messages.push(a);
+    },
+    clear() {
+      this._messages = [];
+    },
+    setSession(m: any) {
+      this._messages = m;
+    },
   };
 }
 
@@ -85,9 +116,9 @@ try {
           console.log("Received oasis-session-updated observer notification.");
           try {
             window.dispatchEvent(new CustomEvent("oasis-history-update"));
-          } catch(e) {}
+          } catch (e) {}
         }
-      }
+      },
     };
     // @ts-ignore
     window.Services.obs.addObserver(observer, "oasis-session-updated", false);
@@ -95,7 +126,6 @@ try {
 } catch (e) {
   console.error("Failed to add observer", e);
 }
-
 
 function getCurrentSessionMessages(): BaseMessage[] {
   // Map raw objects back to LangChain instances if needed
@@ -105,12 +135,12 @@ function getCurrentSessionMessages(): BaseMessage[] {
   return raw.map((m: any) => {
     // If it's already an instance, great. If plain object, convert.
     // Check if it has _getType
-    if (typeof m._getType === 'function') return m;
-    
+    if (typeof m._getType === "function") return m;
+
     // Fallback based on type property if we stored plain JSON
-    if (m.type === 'human') return new HumanMessage(m.content);
-    if (m.type === 'ai') return new AIMessage(m.content);
-    
+    if (m.type === "human") return new HumanMessage(m.content);
+    if (m.type === "ai") return new AIMessage(m.content);
+
     // Default
     return new HumanMessage(m.content || "");
   });
@@ -120,7 +150,7 @@ function pushCurrentTurn(user: string, assistant: string) {
   // We create instances here
   const u = new HumanMessage(user);
   const a = new AIMessage(assistant);
-  
+
   AssistantSession.addTurn(u, a);
   // No need to save to localStorage manually, JSM holds it in memory.
   // We can persist to disk if we want session restoration across browser restarts,
@@ -131,7 +161,7 @@ export function resetAssistantSession() {
   AssistantSession.clear();
   try {
     window.dispatchEvent(new CustomEvent("oasis-history-update"));
-  } catch(e) {}
+  } catch (e) {}
 }
 (window as any).resetAssistantSession = resetAssistantSession;
 
@@ -150,7 +180,7 @@ const GraphState = Annotation.Root({
   }),
   next: Annotation<string>({
     // CHANGE: Overwrite previous value
-    reducer: (_, y) => y ?? END, 
+    reducer: (_, y) => y ?? END,
     default: () => END,
   }),
   lastWorker: Annotation<string>({
@@ -163,7 +193,7 @@ const GraphState = Annotation.Root({
   }),
   args: Annotation<Record<string, any>>({
     // CHANGE: Overwrite previous arguments
-    reducer: (_, y) => y ?? {}, 
+    reducer: (_, y) => y ?? {},
     default: () => ({}),
   }),
 });
@@ -173,7 +203,8 @@ function msgText(m: any): string {
   if (!m) return "";
   const c = m.content;
   if (typeof c === "string") return c;
-  if (Array.isArray(c)) return c.map(v => (typeof v === "string" ? v : v?.text || "")).join("");
+  if (Array.isArray(c))
+    return c.map(v => (typeof v === "string" ? v : v?.text || "")).join("");
   return String(c ?? "");
 }
 
@@ -190,7 +221,9 @@ async function buildGraph(commands: Command[], messageId?: string) {
   const toolAgents: Record<string, any> = {};
   const memberNames: string[] = [];
 
-  console.log(`🔨 buildGraph: oasisRecordToolActionStart type: ${typeof (window as any).oasisRecordToolActionStart}`);
+  console.log(
+    `🔨 buildGraph: oasisRecordToolActionStart type: ${typeof (window as any).oasisRecordToolActionStart}`
+  );
 
   for (const command of commands) {
     // Node: run the command and emit a message that clearly identifies the tool's output.
@@ -199,7 +232,9 @@ async function buildGraph(commands: Command[], messageId?: string) {
       const recordUpdate = (window as any).oasisRecordToolActionUpdate;
       let actionId: string | undefined;
 
-      console.log(`🔨 Executing node: ${command.commandName}, messageId: ${messageId}`);
+      console.log(
+        `🔨 Executing node: ${command.commandName}, messageId: ${messageId}`
+      );
 
       if (typeof recordStart === "function") {
         actionId = recordStart(command.commandName, messageId);
@@ -211,7 +246,9 @@ async function buildGraph(commands: Command[], messageId?: string) {
       let result: CmdResult;
       try {
         result = await command.execute(state.args);
-        console.log(`🔨 command.execute finished: ${command.commandName}, success: ${!!result}`);
+        console.log(
+          `🔨 command.execute finished: ${command.commandName}, success: ${!!result}`
+        );
         if (typeof recordUpdate === "function" && actionId) {
           // Pass the command name (prettified or raw) for the final display
           recordUpdate(actionId, "done");
@@ -221,7 +258,7 @@ async function buildGraph(commands: Command[], messageId?: string) {
         if (typeof recordUpdate === "function" && actionId) {
           recordUpdate(actionId, "error", String(e));
         }
-        result = { success: false, message: String(e) };
+        result = { message: String(e) };
       }
 
       const content = `\n[Tool Output for ${command.commandName}]: ${result.message}`;
@@ -230,8 +267,8 @@ async function buildGraph(commands: Command[], messageId?: string) {
         lastWorker: command.commandName,
         repeatCount: 0,
         // ADD THESE TWO LINES:
-        next: "supervisor", 
-        args: {}, 
+        next: "supervisor",
+        args: {},
       };
     };
 
@@ -240,7 +277,8 @@ async function buildGraph(commands: Command[], messageId?: string) {
   }
 
   // ---------- Supervisor with routing rules + few-shots ----------
-  const systemTemplate = `You are a supervisor agent that manages a team of workers.
+  const systemTemplate =
+    `You are a supervisor agent that manages a team of workers.
 Your job is to intelligently route the user's request to the appropriate worker.
 You will be given the user's request and the conversation history.
 
@@ -248,23 +286,48 @@ You will be given the user's request and the conversation history.
 You have the following workers available:
 {members}
 
+**IMPORTANT: Hubs vs Tab Groups**
+- **Hubs** are BOOKMARK FOLDERS that persist across sessions. Use hub commands (create_hub, add_tab_to_hub, etc.) for saving/organizing bookmarks.
+- **Tab Groups** are VISUAL groupings of open tabs that exist only in the current window. Use tab group commands (create_tab_group, add_tab_to_group, etc.) for organizing currently open tabs visually.
+
 **Worker Arguments**
+
+*Tab Commands:*
 - **list_tabs**: No arguments needed
 - **open_tab**: { url: string } - the website URL to open
-- **close_tab**: { index?: number } - OPTIONAL 1-based tab number (e.g., "close tab 2" = { index: 2 }). If no index, closes active tab.
+- **close_tab**: { index?: number } - OPTIONAL 1-based tab number. REQUIRES CONFIRMATION.
 - **move_tab_to_new_window**: { index?: number } - OPTIONAL 1-based tab number
 - **copy_tab_urls**: No arguments needed
-- **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows (e.g., "split tab 1 and 2" = { indices: [1, 2] })
-- **create_hub**: { name: string, include?: "none"|"current"|"all" }
-- **delete_hub**: { name: string, closeTabs?: boolean }
+- **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows
+
+*Hub Commands (Bookmark Folders - Persistent):*
+- **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
+- **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
 - **list_hubs**: No arguments needed
 - **rename_hub**: { from: string, to: string }
-- **add_tab_to_hub**: { name: string }
-- **open_hub**: { name: string, where?: "tabs"|"window" }
+- **add_tab_to_hub**: { name: string } - add current tab as bookmark to hub
+- **remove_tab_from_hub**: { name: string, url?: string }
+- **open_hub**: { name: string, where?: "tabs"|"window" } - open all bookmarks from hub
+
+*Tab Group Commands (Visual Grouping - Current Window Only):*
+- **list_tab_groups**: No arguments needed - list visual tab groups
+- **create_tab_group**: { name: string, indices?: number[] } - create visual group from tabs
+- **delete_tab_group**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
+- **add_tab_to_group**: { name: string, query?: string, index?: number, all?: boolean } - add tab(s) to visual group. Use 'all: true' to add ALL ungrouped tabs. Use 'query' to find specific tab by name. Examples: "add all tabs to Work" → { name: "Work", all: true }. "add Reddit to streaming" → { name: "streaming", query: "Reddit" }.
+- **remove_tab_from_group**: { index?: number } - ungroup a tab
+- **rename_tab_group**: { from: string, to: string } - rename a visual tab group
+
+*Other Commands:*
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string } - search for keywords in bookmarks/hubs. Use this when user asks to "search" a hub or "find" something in memory.
+- **search_memory**: { query: string, hub?: string }
+- **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
+
+**Confirmation Handling**
+Some commands require user confirmation before executing (close_tab, delete_hub, delete_tab_group).
+When a user says "yes", "confirm", "do it", "go ahead" after a confirmation request, use: { "next": "confirm_action", "args": { "confirmed": true } }
+When a user says "no", "cancel", "nevermind", use: { "next": "confirm_action", "args": { "confirmed": false } }
 
 **Rules**
 1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
@@ -286,24 +349,41 @@ You MUST respond with a JSON object that follows this schema:
 }
 \`\`\`
 
-**IMPORTANT**: 
-- If the user says "Open X and then Y", you MUST output the command for X first. Wait for the result. Then output the command for Y.
-- Do NOT output "FINISH" until both X and Y are done.
-
 **Examples**
 User: "Open a new tab to google.com"
 → { "next": "open_tab", "args": { "url": "google.com" } }
 
 User: "Close tab 3"
 → { "next": "close_tab", "args": { "index": 3 } }
+(After confirmation request) User: "yes"
+→ { "next": "confirm_action", "args": { "confirmed": true } }
 
-User: "Open google.com. Then open yahoo.com."
-→ First: { "next": "open_tab", "args": { "url": "google.com" } }
-→ (After output): { "next": "open_tab", "args": { "url": "yahoo.com" } }
+User: "Group my first 3 tabs as Work"
+→ { "next": "create_tab_group", "args": { "name": "Work", "indices": [1, 2, 3] } }
 
-User: "List all tabs" then "close the first one"
-→ First: { "next": "list_tabs", "args": {} }
-→ Then: { "next": "close_tab", "args": { "index": 1 } }
+User: "Add the Wikipedia tab to the social group"
+→ { "next": "add_tab_to_group", "args": { "name": "social", "query": "Wikipedia" } }
+
+User: "Add Reddit to the streaming group"
+→ { "next": "add_tab_to_group", "args": { "name": "streaming", "query": "Reddit" } }
+
+User: "Add the Netflix tab to streaming"
+→ { "next": "add_tab_to_group", "args": { "name": "streaming", "query": "Netflix" } }
+
+User: "Add this tab to Work group" (no specific tab name mentioned)
+→ { "next": "add_tab_to_group", "args": { "name": "Work" } } (uses current tab)
+
+User: "Add all tabs to the project group"
+→ { "next": "add_tab_to_group", "args": { "name": "project", "all": true } }
+
+User: "Add all existing tabs to streaming"
+→ { "next": "add_tab_to_group", "args": { "name": "streaming", "all": true } }
+
+User: "Save this tab to my Research hub"
+→ { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+
+User: "Rename tab group Work to Projects"
+→ { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
 
 The available workers are: {options}`.trim();
 
@@ -339,22 +419,28 @@ You should respond:
 - **CNN**"
 
 Remember: You ARE stateful within this conversation. The history is right there in your context!`;
-    
+
     // Debug: Log what messages the chat node receives
-    console.log(`💬 Chat node received ${state.messages.length} messages:`, 
-      state.messages.map((m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`));
-    
+    console.log(
+      `💬 Chat node received ${state.messages.length} messages:`,
+      state.messages.map(
+        (m: any) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`
+      )
+    );
+
     // FORCE the LLM to reply by appending a hidden instruction
     // otherwise it sees "Model: [Tool Output]" and thinks it's done.
     const messagesWithPrompt = [
       ...state.messages,
-      new HumanMessage("The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.")
+      new HumanMessage(
+        "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data."
+      ),
     ];
 
     const res = await chatRemote(CHAT_PROMPT, toWire(messagesWithPrompt));
-    return { 
+    return {
       messages: [new AIMessage(res.content)],
-      lastWorker: "chat"
+      lastWorker: "chat",
     };
   };
 
@@ -363,22 +449,26 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const systemPrompt = systemTemplate
       .replace("{members}", memberNames.join(", "))
       .replace("{options}", options.join(", "));
-  
+
     const out = await routeRemote(systemPrompt, toWire(s.messages), options);
     const nextTool = out?.next;
     const nextArgs = out?.args || {};
-  
+
     // CHECK: If the tool just finished and the LLM tries to call it again, force to chat
     // We use s.lastWorker to know if the IMMEDIATE previous step was a specific tool.
     const justRanTool = memberNames.includes(s.lastWorker);
 
-    console.log(`🕵️ Supervisor Check: lastWorker=${s.lastWorker}, justRanTool=${justRanTool}, nextTool=${nextTool}`);
+    console.log(
+      `🕵️ Supervisor Check: lastWorker=${s.lastWorker}, justRanTool=${justRanTool}, nextTool=${nextTool}`
+    );
 
     if (justRanTool && nextTool === s.lastWorker) {
-      console.log(`🛑 Stopping recursion: ${nextTool} repeated immediately after output.`);
+      console.log(
+        `🛑 Stopping recursion: ${nextTool} repeated immediately after output.`
+      );
       return { next: "chat", args: {} };
     }
-  
+
     // Handle explicit completion
     if (nextTool === "FINISH" || nextTool === END) {
       // If the last action was a tool output, we MUST summarize it for the user via 'chat'
@@ -389,11 +479,11 @@ Remember: You ARE stateful within this conversation. The history is right there 
       }
       return { next: END, args: {} };
     }
-  
+
     if (nextTool && memberNames.includes(nextTool)) {
       return { next: nextTool, args: nextArgs };
     }
-  
+
     return { next: "chat", args: {} };
   };
 
@@ -405,7 +495,10 @@ Remember: You ARE stateful within this conversation. The history is right there 
   workflow.addNode("chat", chatNode);
   workflow.addEdge("chat" as any, END as any);
   workflow.addNode("supervisor", supervisorNode);
-  workflow.addConditionalEdges("supervisor" as any, (x: typeof GraphState.State) => x.next);
+  workflow.addConditionalEdges(
+    "supervisor" as any,
+    (x: typeof GraphState.State) => x.next
+  );
   workflow.addEdge(START, "supervisor" as any);
 
   return workflow.compile();
@@ -417,7 +510,7 @@ Remember: You ARE stateful within this conversation. The history is right there 
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
-  inputType: 'text' | 'voice' = 'text', // Add inputType parameter
+  inputType: "text" | "voice" = "text", // Add inputType parameter
   messageId?: string
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
@@ -430,11 +523,11 @@ export async function runAssistantStream(
   // Check Subscription Limits
   const stats = await subscriptionService.checkAvailability();
   if (stats.isLimitReached) {
-      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
-      onChunk(msg);
-      // Open the subscription page automatically? Optional.
-      // subscriptionService.getSubscriptionUrl();
-      return msg;
+    const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
+    onChunk(msg);
+    // Open the subscription page automatically? Optional.
+    // subscriptionService.getSubscriptionUrl();
+    return msg;
   }
 
   const commands: Command[] = [
@@ -445,7 +538,7 @@ export async function runAssistantStream(
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
-    // Hubs
+    // Hubs (Bookmark Folders - Persistent)
     new CreateHubCommand(),
     new DeleteHubCommand(),
     new ListHubsCommand(),
@@ -453,6 +546,16 @@ export async function runAssistantStream(
     new AddTabToHubCommand(),
     new RemoveTabFromHubCommand(),
     new OpenHubCommand(),
+    // Tab Groups (Visual Grouping - Current Window)
+    new ListTabGroupsCommand(),
+    new CreateTabGroupCommand(),
+    new DeleteTabGroupCommand(),
+    new AddTabToGroupCommand(),
+    new RemoveTabFromGroupCommand(),
+    new RenameTabGroupCommand(),
+    // Confirmation
+    new ConfirmActionCommand(),
+    // Other
     new NewWindowCommand(),
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
@@ -460,13 +563,15 @@ export async function runAssistantStream(
     new ShowSubscriptionCommand(),
   ];
   const graph = await buildGraph(commands, messageId);
-  
+
   // Get conversation history for context - automatically managed
   const sessionHistory = getCurrentSessionMessages();
-  
+
   // Debug: Log how many messages are in context
-  console.log(`📚 Session context: ${sessionHistory.length} messages in history`);
-  
+  console.log(
+    `📚 Session context: ${sessionHistory.length} messages in history`
+  );
+
   const stream = await graph.stream(
     { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
     { recursionLimit: 32 }
@@ -480,11 +585,15 @@ export async function runAssistantStream(
   for await (const state of stream as any) {
     stepCount++;
     console.log(`🔄 Stream step ${stepCount}, keys:`, Object.keys(state));
-    
+
     if ("__end__" in state) {
-      console.log(`🔚 Stream ended. combined length: ${combinedSessionString.length}`);
+      console.log(
+        `🔚 Stream ended. combined length: ${combinedSessionString.length}`
+      );
       if (combinedSessionString && !isSaved) {
-        console.log(`✅ Saving turn to session: "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+        console.log(
+          `✅ Saving turn to session: "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`
+        );
         pushCurrentTurn(prompt, combinedSessionString);
         subscriptionService.trackUsage(inputType);
         isSaved = true;
@@ -492,31 +601,36 @@ export async function runAssistantStream(
       break;
     }
     const step = Object.entries(state).find(([k]) => k !== "__end");
-    console.log(`🔍 Step details:`, { 
-      stepKey: step?.[0], 
+    console.log(`🔍 Step details:`, {
+      stepKey: step?.[0],
       stepValue: step?.[1],
       hasMessages: step?.[1] && "messages" in (step[1] as any),
-      stepKeys: step?.[1] ? Object.keys(step[1] as any) : []
+      stepKeys: step?.[1] ? Object.keys(step[1] as any) : [],
     });
-    
+
     if (step?.[1] && "messages" in (step[1] as any)) {
       const messages = (step[1] as any).messages;
-      console.log(`📨 Processing ${messages.length} messages from step:`, step[0]);
-      
+      console.log(
+        `📨 Processing ${messages.length} messages from step:`,
+        step[0]
+      );
+
       // Process all messages, not just the last one
       for (const msg of messages) {
         let text = "";
-        
+
         // Improved text extraction with better logging
         if (typeof msg?.content === "string") {
           text = msg.content;
         } else if (Array.isArray(msg?.content)) {
-          text = msg.content.map((c: any) => {
-            if (typeof c === "string") return c;
-            if (c?.text) return c.text;
-            if (c?.type === "text" && c.text) return c.text;
-            return String(c || "");
-          }).join("");
+          text = msg.content
+            .map((c: any) => {
+              if (typeof c === "string") return c;
+              if (c?.text) return c.text;
+              if (c?.type === "text" && c.text) return c.text;
+              return String(c || "");
+            })
+            .join("");
         } else if (msg?.content != null) {
           text = String(msg.content);
         }
@@ -526,42 +640,60 @@ export async function runAssistantStream(
           textLength: text.length,
           textPreview: text.substring(0, 100),
           contentType: typeof msg?.content,
-          isArray: Array.isArray(msg?.content)
+          isArray: Array.isArray(msg?.content),
         });
 
         if (text) {
-            // Filter out tool output messages from UI display (but keep in session for supervisor)
-            const isToolOutput = text.includes("[Tool Output for");
-            
-            if (!isToolOutput) {
-                // Since our nodes return complete messages (not streaming tokens), 
-                // we can just append and emit.
-                // Note: If we had token streaming, we'd need per-message buffering.
-                // For now, assume atomic messages.
-                const newContent = text + "\n";
-                console.log(`📤 Emitting chunk to UI:`, { length: newContent.length, preview: newContent.substring(0, 50) });
-                onChunk(newContent);
-                combinedSessionString += newContent;
-                hasEmittedUserMessage = true;
-            } else {
-                // Still add to session string for supervisor context, but don't display to user
-                console.log(`🔧 Tool output (hidden from UI):`, text.substring(0, 50));
-                combinedSessionString += text + "\n";
-            }
+          // Filter out tool output messages from UI display (but keep in session for supervisor)
+          const isToolOutput = text.includes("[Tool Output for");
+
+          if (!isToolOutput) {
+            // Since our nodes return complete messages (not streaming tokens),
+            // we can just append and emit.
+            // Note: If we had token streaming, we'd need per-message buffering.
+            // For now, assume atomic messages.
+            const newContent = text + "\n";
+            console.log(`📤 Emitting chunk to UI:`, {
+              length: newContent.length,
+              preview: newContent.substring(0, 50),
+            });
+            onChunk(newContent);
+            combinedSessionString += newContent;
+            hasEmittedUserMessage = true;
+          } else {
+            // Still add to session string for supervisor context, but don't display to user
+            console.log(
+              `🔧 Tool output (hidden from UI):`,
+              text.substring(0, 50)
+            );
+            combinedSessionString += text + "\n";
+          }
         }
       }
     }
   }
-  console.log(`🏁 Stream finished. Final combined length: ${combinedSessionString.length}, hasEmittedUserMessage: ${hasEmittedUserMessage}`);
+  console.log(
+    `🏁 Stream finished. Final combined length: ${combinedSessionString.length}, hasEmittedUserMessage: ${hasEmittedUserMessage}`
+  );
 
   // If we only have tool output and no user-facing message was emitted, extract and format it
-  if (!hasEmittedUserMessage && combinedSessionString && combinedSessionString.includes("[Tool Output for")) {
-    const toolOutputMatch = combinedSessionString.match(/\[Tool Output for [^\]]+\]:\s*(.+)/s);
+  if (
+    !hasEmittedUserMessage &&
+    combinedSessionString &&
+    combinedSessionString.includes("[Tool Output for")
+  ) {
+    const toolOutputMatch = combinedSessionString.match(
+      /\[Tool Output for [^\]]+\]:\s*(.+)/s
+    );
     if (toolOutputMatch && toolOutputMatch[1]) {
       const toolMessage = toolOutputMatch[1].trim();
-      console.log(`📋 Extracting user-friendly message from tool output:`, toolMessage.substring(0, 100));
+      console.log(
+        `📋 Extracting user-friendly message from tool output:`,
+        toolMessage.substring(0, 100)
+      );
       // Format it as if the AI said it - capitalize first letter
-      const friendlyMessage = toolMessage.charAt(0).toUpperCase() + toolMessage.slice(1) + "\n";
+      const friendlyMessage =
+        toolMessage.charAt(0).toUpperCase() + toolMessage.slice(1) + "\n";
       onChunk(friendlyMessage);
       combinedSessionString = friendlyMessage;
     }
@@ -569,11 +701,13 @@ export async function runAssistantStream(
 
   // SAFETY: Always save the turn even if we didn't hit __end__
   if (combinedSessionString && !isSaved) {
-    console.log(`✅ Saving turn to session (post-stream): "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`);
+    console.log(
+      `✅ Saving turn to session (post-stream): "${prompt}" -> "${combinedSessionString.substring(0, 50)}..."`
+    );
     pushCurrentTurn(prompt, combinedSessionString);
     subscriptionService.trackUsage(inputType);
   }
-  
+
   return combinedSessionString || "(no output)";
 }
 (window as any).runAssistantStream = runAssistantStream;
