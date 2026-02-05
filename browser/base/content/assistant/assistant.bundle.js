@@ -65002,10 +65002,14 @@ Content: ${content}`;
   }
   function setPendingConfirmation(pc) {
     pendingConfirmation = pc;
+    console.log("\u{1F4DD} setPendingConfirmation called with:", pc ? `${pc.command}: ${pc.description}` : "null");
     try {
       const relay = window.oasisSetPendingConfirmationRelay;
       if (typeof relay === "function") {
         relay(pc);
+        console.log("\u2705 Relay function called successfully");
+      } else {
+        console.warn("\u26A0\uFE0F Relay function not available");
       }
       window.dispatchEvent(
         new CustomEvent("oasis-confirmation-update", { detail: pc })
@@ -65733,7 +65737,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     description = "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
     async execute(args) {
       const pending = getPendingConfirmation();
+      console.log("\u{1F50D} ConfirmActionCommand: pending confirmation =", pending);
       if (!pending) {
+        console.warn("\u26A0\uFE0F ConfirmActionCommand: No pending confirmation found!");
         return { message: "No pending action to confirm." };
       }
       const confirmed = args?.confirmed;
@@ -65958,8 +65964,12 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       memberNames.push(command.commandName);
     }
     const systemTemplate = `You are a supervisor agent that manages a team of workers.
-Your job is to intelligently route the user's request to the appropriate worker.
-You will be given the user's request and the conversation history.
+Your job is to intelligently route the user's LATEST request to the appropriate worker.
+
+**IMPORTANT: Treat each user message as an INDEPENDENT request!**
+- The user might ask a general question, then ask to delete a tab group - these are SEPARATE requests.
+- Do NOT get confused by conversation history. Focus on the CURRENT message.
+- If the current message says "delete tab group X", route to delete_tab_group, even if previous messages were questions.
 
 **Workers**
 You have the following workers available:
@@ -66008,14 +66018,22 @@ Some commands require user confirmation before executing (close_tab, delete_hub,
 When a user says "yes", "confirm", "do it", "go ahead" after a confirmation request, use: { "next": "confirm_action", "args": { "confirmed": true } }
 When a user says "no", "cancel", "nevermind", use: { "next": "confirm_action", "args": { "confirmed": false } }
 
+**CRITICAL: Focus on the LATEST user message only!**
+Each user message is an INDEPENDENT request. Do NOT let previous conversation influence your routing decision.
+Always analyze the CURRENT/LATEST message to decide which worker to use.
+
 **Rules**
-1.  **Analyze History:** Review the conversation history. Messages starting with \`[Tool Output for ...]\` are the results of a worker's action.
-2.  **Break Down the Plan:** Read the USER's latest message. Break it down into a chronological list of necessary steps/commands.
-3.  **Find Next Step:** Compare the list of necessary steps against the "Tool Outputs" in the history. Identify the *first* step that has NOT yet been completed.
-4.  **Execute Next Step:** Choose the worker for that specific next step. DO NOT skip steps.
-5.  **Check for Completion:** Only choose "FINISH" if *ALL* steps in the user's latest request have been successfully completed. 
-6.  **Chat:** If the user is just chatting or asking a question, choose "chat".
-7.  **Default:** If unsure, choose the worker that addresses the earliest unfulfilled part of the request.
+1.  **Keyword Detection in LATEST Message:** Look at the user's LATEST message ONLY. If it contains these keywords, use the browser tool:
+    - "tab", "tabs" \u2192 tab commands
+    - "group", "tab group" \u2192 tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
+    - "hub" \u2192 hub commands
+    - "window" \u2192 window commands
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show"
+2.  **General Questions \u2192 Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
+3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
+4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
+5.  **Find Next Step:** For multi-step requests, identify the first step not yet completed.
+6.  **Check for Completion:** Only choose "FINISH" if ALL steps have been completed.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -66064,9 +66082,38 @@ User: "Save this tab to my Research hub"
 User: "Rename tab group Work to Projects"
 \u2192 { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
 
+User: "delete tab group Work"
+\u2192 { "next": "delete_tab_group", "args": { "name": "Work" } }
+
+User: "delete the Science group"
+\u2192 { "next": "delete_tab_group", "args": { "name": "Science" } }
+
+User: "remove tab group xyz"
+\u2192 { "next": "delete_tab_group", "args": { "name": "xyz" } }
+
+User: "What is the capital of France?"
+\u2192 { "next": "chat", "args": {} }
+
+User: "Explain how photosynthesis works"
+\u2192 { "next": "chat", "args": {} }
+
+User: "Help me with my code"
+\u2192 { "next": "chat", "args": {} }
+
+User: "Hi" or "Hello" or "Thanks"
+\u2192 { "next": "chat", "args": {} }
+
 The available workers are: {options}`.trim();
     const chatNode = async (state) => {
-      const CHAT_PROMPT = `You are a helpful Firefox browser assistant with full conversation memory.
+      const CHAT_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into Firefox. You can help with ANYTHING - not just browser tasks.
+
+**Your Capabilities:**
+- Answer ANY question on any topic (science, history, coding, math, writing, etc.)
+- Help with creative tasks (writing, brainstorming, explaining concepts)
+- Provide advice and recommendations
+- Assist with coding and technical problems
+- Have casual conversations
+- Format tool outputs when browser commands have been executed
 
 **Important:** You have access to the complete conversation history, including:
 - All previous user requests
@@ -66076,17 +66123,15 @@ The available workers are: {options}`.trim();
 **Response Guidelines:**
 1. **Use Markdown:** Format your answers beautifully using Markdown.
    - Use **bold** for key terms or emphasis.
-   - Use bullet points or numbered lists for summarizing multiple items (like open tabs).
-   - Use \`code blocks\` for URLs, technical terms, or specific values.
-2. **Interpret Data:** If a tool returns raw data (like JSON arrays or objects), you **MUST** format it into a human-readable list or sentence. NEVER output raw JSON to the user.
-3. **Context Aware:** You can see everything that happened in this conversation - use that context!
-4. **Natural Tone:** Do NOT mention the internal workings, "tool outputs", or that you are using data from a previous step. Just provide the answer naturally.
+   - Use bullet points or numbered lists for organized information.
+   - Use \`code blocks\` for code, URLs, or technical terms.
+   - Use headings for longer explanations.
+2. **Be Helpful:** Answer questions thoroughly and accurately. If you don't know something, say so.
+3. **Interpret Data:** If a tool returns raw data (like JSON), format it into a human-readable response. NEVER output raw JSON.
+4. **Natural Tone:** Be friendly and conversational. Don't mention internal workings or "tool outputs".
+5. **Context Aware:** Use the conversation history to provide relevant, contextual responses.
 
-**When answering questions:**
-1. If asked to summarize or recall: Review the conversation history and list what happened clearly.
-2. If asked general questions: Answer helpfully based on what you know.
-
-**Example:**
+**Example - Tool Output:**
 If the history shows:
   - User: "list tabs"
   - Tool Output: "["Google", "CNN"]"
@@ -66096,18 +66141,24 @@ You should respond:
 - **Google**
 - **CNN**"
 
-Remember: You ARE stateful within this conversation. The history is right there in your context!`;
+**Example - General Question:**
+User: "What is machine learning?"
+You should respond with a clear, helpful explanation of machine learning.
+
+Remember: You are a fully capable AI assistant. Help the user with whatever they need!`;
       console.log(
         `\u{1F4AC} Chat node received ${state.messages.length} messages:`,
         state.messages.map(
           (m) => `${m._getType()}: ${msgText(m).substring(0, 50)}...`
         )
       );
+      const lastMsg = state.messages[state.messages.length - 1];
+      const lastMsgText = msgText(lastMsg);
+      const hasToolOutput = lastMsgText.includes("[Tool Output for");
+      const hiddenInstruction = hasToolOutput ? "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data." : "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
       const messagesWithPrompt = [
         ...state.messages,
-        new HumanMessage(
-          "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data."
-        )
+        new HumanMessage(hiddenInstruction)
       ];
       const res = await chatRemote(CHAT_PROMPT, toWire(messagesWithPrompt));
       return {
@@ -66118,10 +66169,77 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const supervisorNode = async (s) => {
       const options2 = [END, ...memberNames, "chat", "FINISH"];
       const systemPrompt = systemTemplate.replace("{members}", memberNames.join(", ")).replace("{options}", options2.join(", "));
+      const latestUserMsg = [...s.messages].reverse().find((m) => m._getType() === "human");
+      const latestTextRaw = msgText(latestUserMsg) || "";
+      const latestText = latestTextRaw.toLowerCase();
+      const lines = latestTextRaw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const commandLine = lines.find(
+        (l) => /(tab\s*group|group|tabs?|hub|window)/i.test(l) && /(delete|remove|create|make|new|add|list|open|close|rename|show)/i.test(l)
+      ) || latestTextRaw;
+      const commandText = commandLine.toLowerCase();
+      const justRanTool = memberNames.includes(s.lastWorker);
+      const justRanConfirm = s.lastWorker === "confirm_action";
+      const confirmationText = (lines[lines.length - 1] || latestTextRaw).trim();
+      const confirmMatch = confirmationText.match(/^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i);
+      const cancelMatch = confirmationText.match(/^(?:no|cancel|nevermind|don'?t|stop)$/i);
+      if ((confirmMatch || cancelMatch) && !justRanConfirm) {
+        return {
+          next: "confirm_action",
+          args: { confirmed: !!confirmMatch }
+        };
+      }
+      const pending = getPendingConfirmation();
+      if (pending) {
+        console.log("\u23F8\uFE0F Pending confirmation detected, stopping graph for modal");
+        return { next: END, args: {} };
+      }
+      let preRoutedNext = null;
+      let preRoutedArgs = {};
+      if (!justRanTool) {
+        const tabGroupMatch = commandText.match(/(?:delete|remove)\s+(?:tab\s+)?group\s+["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s*$/i) || commandText.match(/(?:delete|remove)\s+(?:the\s+)?["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s+(?:tab\s+)?group/i);
+        if (tabGroupMatch) {
+          preRoutedNext = "delete_tab_group";
+          preRoutedArgs = { name: tabGroupMatch[1].trim() };
+          console.log(`\u{1F3AF} Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
+        }
+        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?([^"'\n]+?)["']?(?:\s+with)?/i);
+        if (createGroupMatch && !preRoutedNext) {
+          preRoutedNext = "create_tab_group";
+          preRoutedArgs = { name: createGroupMatch[1].trim() };
+          const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
+          if (indicesMatch) {
+            const indices = indicesMatch[1].match(/\d+/g)?.map(Number) || [];
+            if (indices.length > 0) preRoutedArgs.indices = indices;
+          }
+        }
+        const listGroupsMatch = commandText.match(/list\s+(?:all\s+)?(?:tab\s+)?groups?/i);
+        if (listGroupsMatch && !preRoutedNext) {
+          preRoutedNext = "list_tab_groups";
+          preRoutedArgs = {};
+        }
+        const listTabsMatch = commandText.match(/list\s+(?:all\s+)?(?:my\s+)?tabs?/i);
+        if (listTabsMatch && !preRoutedNext) {
+          preRoutedNext = "list_tabs";
+          preRoutedArgs = {};
+        }
+        const openTabMatch = commandText.match(/open\s+(?:a\s+)?(?:new\s+)?tab\s+(?:to\s+|with\s+)?["']?([^\s"']+)["']?/i);
+        if (openTabMatch && !preRoutedNext) {
+          preRoutedNext = "open_tab";
+          preRoutedArgs = { url: openTabMatch[1].trim() };
+        }
+        const closeTabMatch = commandText.match(/close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(\d+))?/i);
+        if (closeTabMatch && !preRoutedNext) {
+          preRoutedNext = "close_tab";
+          preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
+        }
+      }
+      if (preRoutedNext) {
+        console.log(`\u{1F3AF} Pre-routed to ${preRoutedNext} with args:`, preRoutedArgs);
+        return { next: preRoutedNext, args: preRoutedArgs };
+      }
       const out = await routeRemote(systemPrompt, toWire(s.messages), options2);
       const nextTool = out?.next;
       const nextArgs = out?.args || {};
-      const justRanTool = memberNames.includes(s.lastWorker);
       console.log(
         `\u{1F575}\uFE0F Supervisor Check: lastWorker=${s.lastWorker}, justRanTool=${justRanTool}, nextTool=${nextTool}`
       );
@@ -66146,7 +66264,10 @@ Remember: You ARE stateful within this conversation. The history is right there 
     const workflow = new StateGraph(GraphState);
     for (const name of memberNames) {
       workflow.addNode(name, toolAgents[name]);
-      workflow.addEdge(name, "supervisor");
+      workflow.addConditionalEdges(
+        name,
+        (x) => x.next || "supervisor"
+      );
     }
     workflow.addNode("chat", chatNode);
     workflow.addEdge("chat", END);

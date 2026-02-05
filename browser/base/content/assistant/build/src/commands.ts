@@ -28,11 +28,15 @@ export function getPendingConfirmation(): PendingConfirmation | null {
 
 export function setPendingConfirmation(pc: PendingConfirmation | null): void {
   pendingConfirmation = pc;
+  console.log("📝 setPendingConfirmation called with:", pc ? `${pc.command}: ${pc.description}` : "null");
   try {
     // Try the relay function first (set by UI)
     const relay = (window as any).oasisSetPendingConfirmationRelay;
     if (typeof relay === "function") {
       relay(pc);
+      console.log("✅ Relay function called successfully");
+    } else {
+      console.warn("⚠️ Relay function not available");
     }
     // Also dispatch event as backup
     window.dispatchEvent(
@@ -964,7 +968,9 @@ export class ConfirmActionCommand implements Command {
     "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
   async execute(args: any): Promise<CmdResult> {
     const pending = getPendingConfirmation();
+    console.log("🔍 ConfirmActionCommand: pending confirmation =", pending);
     if (!pending) {
+      console.warn("⚠️ ConfirmActionCommand: No pending confirmation found!");
       return { message: "No pending action to confirm." };
     }
 
