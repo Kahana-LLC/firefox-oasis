@@ -82,14 +82,13 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {/* Sloth Icon */}
         <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-             <svg width="26" height="22" viewBox="0 0 26 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Simplified Sloth Head from Figma Vector */}
-                <path d="M13 0C19.6 0 25 4.5 25 10C25 15.5 19.6 20 13 20C6.4 20 1 15.5 1 10C1 4.5 6.4 0 13 0Z" fill="#978455" fillOpacity="0.2"/>
-                <path d="M13 2C18 2 22 5.5 22 10C22 14.5 18 18 13 18C8 18 4 14.5 4 10C4 5.5 8 2 13 2Z" fill="#978455"/>
-                <path d="M13 4C16 4 18 6.5 18 10C18 13.5 16 16 13 16C10 16 8 13.5 8 10C8 6.5 10 4 13 4Z" fill="#F8FAF2"/>
-                {/* Eyes */}
-                <circle cx="11" cy="9" r="1.5" fill="#4A3B20"/>
-                <circle cx="15" cy="9" r="1.5" fill="#4A3B20"/>
+             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="#978455"/>
+                <ellipse cx="16.5" cy="18" rx="10.5" ry="8.5" fill="#F8FAF2"/>
+                <ellipse cx="10.3268" cy="18.7453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 18.7453)" fill="#978455"/>
+                <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 12 17.5)" fill="#F8FAF2"/>
+                <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7329 13.5)" fill="#978455"/>
+                <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 17.5)" fill="#F8FAF2"/>
              </svg>
         </div>
         
@@ -165,9 +164,8 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
             e.preventDefault(); e.stopPropagation();
             try { window.parent.postMessage({ type: "oasisOverlayToggleSidebar" }, "*"); } catch (err) {}
         }} title="Toggle Sidebar">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#495800" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <line x1="15" y1="3" x2="15" y2="21"/>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 21C5.20435 21 4.44129 20.6839 3.87868 20.1213C3.31607 19.5587 3 18.7956 3 18V6C3 5.20435 3.31607 4.44129 3.87868 3.87868C4.44129 3.31607 5.20435 3 6 3H18C18.7956 3 19.5587 3.31607 20.1213 3.87868C20.6839 4.44129 21 5.20435 21 6V18C21 18.7956 20.6839 19.5587 20.1213 20.1213C19.5587 20.6839 18.7956 21 18 21H6ZM18 5H10V19H18C18.2652 19 18.5196 18.8946 18.7071 18.7071C18.8946 18.5196 19 18.2652 19 18V6C19 5.73478 18.8946 5.48043 18.7071 5.29289C18.5196 5.10536 18.2652 5 18 5Z" fill="#7A9200"/>
             </svg>
         </HeaderBtn>
         
