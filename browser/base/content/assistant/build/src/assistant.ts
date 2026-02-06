@@ -14,6 +14,8 @@ import {
   MoveTabToNewWindowCommand,
   CopyTabUrlsCommand,
   SplitTabsCommand,
+  AddSplitViewCommand,
+  RemoveSplitViewCommand,
   CreateHubCommand,
   DeleteHubCommand,
   ListHubsCommand,
@@ -314,6 +316,10 @@ You have the following workers available:
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows
 
+*Split View Commands (side-by-side tabs in same window):*
+- **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
+- **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
+
 *Hub Commands (Bookmark Folders - Persistent):*
 - **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
 - **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
@@ -350,10 +356,11 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
 **Rules**
 1.  **Keyword Detection in LATEST Message:** Look at the user's LATEST message ONLY. If it contains these keywords, use the browser tool:
     - "tab", "tabs" → tab commands
+    - "split view", "splitview", "split" → split view commands (add_split_view, remove_split_view)
     - "group", "tab group" → tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" → hub commands
     - "window" → window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show"
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit"
 2.  **General Questions → Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -403,6 +410,21 @@ User: "Add all existing tabs to streaming"
 
 User: "Save this tab to my Research hub"
 → { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+
+User: "Add split view" or "Split this tab"
+→ { "next": "add_split_view", "args": {} }
+
+User: "Split tab 1 and 2" or "Add tab 1 and 2 to split view"
+→ { "next": "add_split_view", "args": { "indices": [1, 2] } }
+
+User: "Split view with the Amazon tab"
+→ { "next": "add_split_view", "args": { "withQuery": "Amazon" } }
+
+User: "Split view with tab 2"
+→ { "next": "add_split_view", "args": { "withIndex": 2 } }
+
+User: "Remove split view" or "Unsplit tabs"
+→ { "next": "remove_split_view", "args": {} }
 
 User: "Rename tab group Work to Projects"
 → { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -608,6 +630,38 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       preRoutedNext = "close_tab";
       preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
     }
+
+    // Split view commands
+    // Match "split tab 1 and 2" or "add tab 1 and 2 to split view" or "splitview tab 1 and tab 2"
+    const twoTabsMatch = commandText.match(/(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i) ||
+                         commandText.match(/(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i);
+    if (twoTabsMatch && !preRoutedNext) {
+      preRoutedNext = "add_split_view";
+      preRoutedArgs = { indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])] };
+    }
+
+    const addSplitViewMatch = commandText.match(/(?:add|create|enable)\s+split\s*view/i) ||
+                              commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
+    if (addSplitViewMatch && !preRoutedNext) {
+      preRoutedNext = "add_split_view";
+      // Check if they specified a tab to split with
+      const withTabMatch = commandText.match(/(?:with|and)\s+(?:tab\s+)?(\d+)/i);
+      const withQueryMatch = commandText.match(/(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i);
+      if (withTabMatch) {
+        preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
+      } else if (withQueryMatch) {
+        preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
+      } else {
+        preRoutedArgs = {};
+      }
+    }
+
+    const removeSplitViewMatch = commandText.match(/(?:remove|disable|close)\s+split\s*view/i) ||
+                                  commandText.match(/unsplit\s+(?:tabs?|view)?/i);
+    if (removeSplitViewMatch && !preRoutedNext) {
+      preRoutedNext = "remove_split_view";
+      preRoutedArgs = {};
+    }
     
     } // End of !justRanTool check
     
@@ -709,6 +763,9 @@ export async function runAssistantStream(
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
+    // Split View (side-by-side tabs in same window)
+    new AddSplitViewCommand(),
+    new RemoveSplitViewCommand(),
     // Hubs (Bookmark Folders - Persistent)
     new CreateHubCommand(),
     new DeleteHubCommand(),

@@ -65339,6 +65339,97 @@ ${text2}` };
       };
     }
   };
+  var AddSplitViewCommand = class {
+    commandName = "add_split_view";
+    description = "Add split view with tabs side-by-side. Accepts arguments: { indices?: [number, number], withIndex?: number, withQuery?: string }. Use 'indices' to specify two tabs by number. Use 'withIndex' or 'withQuery' to split current tab with another. If no arguments, opens split view with a new tab.";
+    async execute(args) {
+      const { topWin, gBrowser } = getChrome2();
+      if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+      const Services = topWin.Services || window.Services;
+      const splitViewEnabled = Services?.prefs?.getBoolPref?.(
+        "browser.tabs.splitView.enabled",
+        false
+      );
+      if (!splitViewEnabled) {
+        return { message: "Split view is not enabled in this browser." };
+      }
+      let tab1 = null;
+      let tab2 = null;
+      const indices = args?.indices;
+      if (indices && Array.isArray(indices) && indices.length >= 2) {
+        const i1 = Math.max(1, Math.floor(indices[0]));
+        const i2 = Math.max(1, Math.floor(indices[1]));
+        if (i1 > gBrowser.tabs.length) return { message: `No tab ${i1}.` };
+        if (i2 > gBrowser.tabs.length) return { message: `No tab ${i2}.` };
+        if (i1 === i2) return { message: "Cannot split a tab with itself." };
+        tab1 = gBrowser.tabs[i1 - 1];
+        tab2 = gBrowser.tabs[i2 - 1];
+      } else {
+        tab1 = gBrowser.selectedTab;
+        const withIndex = args?.withIndex;
+        const withQuery = args?.withQuery?.toLowerCase();
+        if (withIndex != null) {
+          const i = Math.max(1, Math.floor(withIndex));
+          if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+          tab2 = gBrowser.tabs[i - 1];
+        } else if (withQuery) {
+          tab2 = Array.from(gBrowser.tabs).find((t) => {
+            const title = (t.label || "").toLowerCase();
+            const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+            return title.includes(withQuery) || url.includes(withQuery);
+          });
+          if (!tab2) {
+            return { message: `No tab found matching "${args.withQuery}".` };
+          }
+        } else {
+          tab2 = gBrowser.addTrustedTab("about:newtab");
+        }
+      }
+      if (tab1 === tab2) {
+        return { message: "Cannot split a tab with itself." };
+      }
+      if (tab1.pinned || tab2.pinned) {
+        return { message: "Cannot add pinned tabs to split view." };
+      }
+      if (tab1.splitview) {
+        return { message: `Tab "${tab1.label}" is already in a split view.` };
+      }
+      if (tab2.splitview) {
+        return { message: `Tab "${tab2.label}" is already in a split view.` };
+      }
+      try {
+        gBrowser.addTabSplitView([tab1, tab2], {
+          insertBefore: tab1
+        });
+        const title1 = tab1.label || "(untitled)";
+        const title2 = tab2.label || "(new tab)";
+        return {
+          message: `Added split view: "${title1}" and "${title2}".`
+        };
+      } catch (e) {
+        return { message: `Failed to create split view: ${e}` };
+      }
+    }
+  };
+  var RemoveSplitViewCommand = class {
+    commandName = "remove_split_view";
+    description = "Remove split view from the current tab (unsplit tabs).";
+    async execute(_args) {
+      const { gBrowser } = getChrome2();
+      if (!gBrowser) return { message: "Browser UI not available." };
+      const currentTab = gBrowser.selectedTab;
+      const splitview = currentTab.splitview;
+      if (!splitview) {
+        return { message: "This tab is not in a split view." };
+      }
+      try {
+        splitview.unsplitTabs();
+        return { message: "Split view removed. Tabs are now separate." };
+      } catch (e) {
+        return { message: `Failed to remove split view: ${e}` };
+      }
+    }
+  };
   var SplitTabsCommand = class {
     commandName = "split_tabs";
     description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
@@ -65989,6 +66080,10 @@ You have the following workers available:
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows
 
+*Split View Commands (side-by-side tabs in same window):*
+- **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
+- **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
+
 *Hub Commands (Bookmark Folders - Persistent):*
 - **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
 - **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
@@ -66025,10 +66120,11 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
 **Rules**
 1.  **Keyword Detection in LATEST Message:** Look at the user's LATEST message ONLY. If it contains these keywords, use the browser tool:
     - "tab", "tabs" \u2192 tab commands
+    - "split view", "splitview", "split" \u2192 split view commands (add_split_view, remove_split_view)
     - "group", "tab group" \u2192 tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" \u2192 hub commands
     - "window" \u2192 window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show"
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit"
 2.  **General Questions \u2192 Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -66078,6 +66174,21 @@ User: "Add all existing tabs to streaming"
 
 User: "Save this tab to my Research hub"
 \u2192 { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+
+User: "Add split view" or "Split this tab"
+\u2192 { "next": "add_split_view", "args": {} }
+
+User: "Split tab 1 and 2" or "Add tab 1 and 2 to split view"
+\u2192 { "next": "add_split_view", "args": { "indices": [1, 2] } }
+
+User: "Split view with the Amazon tab"
+\u2192 { "next": "add_split_view", "args": { "withQuery": "Amazon" } }
+
+User: "Split view with tab 2"
+\u2192 { "next": "add_split_view", "args": { "withIndex": 2 } }
+
+User: "Remove split view" or "Unsplit tabs"
+\u2192 { "next": "remove_split_view", "args": {} }
 
 User: "Rename tab group Work to Projects"
 \u2192 { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -66232,6 +66343,29 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
           preRoutedNext = "close_tab";
           preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
         }
+        const twoTabsMatch = commandText.match(/(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i) || commandText.match(/(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i);
+        if (twoTabsMatch && !preRoutedNext) {
+          preRoutedNext = "add_split_view";
+          preRoutedArgs = { indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])] };
+        }
+        const addSplitViewMatch = commandText.match(/(?:add|create|enable)\s+split\s*view/i) || commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
+        if (addSplitViewMatch && !preRoutedNext) {
+          preRoutedNext = "add_split_view";
+          const withTabMatch = commandText.match(/(?:with|and)\s+(?:tab\s+)?(\d+)/i);
+          const withQueryMatch = commandText.match(/(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i);
+          if (withTabMatch) {
+            preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
+          } else if (withQueryMatch) {
+            preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
+          } else {
+            preRoutedArgs = {};
+          }
+        }
+        const removeSplitViewMatch = commandText.match(/(?:remove|disable|close)\s+split\s*view/i) || commandText.match(/unsplit\s+(?:tabs?|view)?/i);
+        if (removeSplitViewMatch && !preRoutedNext) {
+          preRoutedNext = "remove_split_view";
+          preRoutedArgs = {};
+        }
       }
       if (preRoutedNext) {
         console.log(`\u{1F3AF} Pre-routed to ${preRoutedNext} with args:`, preRoutedArgs);
@@ -66300,6 +66434,9 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       new MoveTabToNewWindowCommand(),
       new CopyTabUrlsCommand(),
       new SplitTabsCommand(),
+      // Split View (side-by-side tabs in same window)
+      new AddSplitViewCommand(),
+      new RemoveSplitViewCommand(),
       // Hubs (Bookmark Folders - Persistent)
       new CreateHubCommand(),
       new DeleteHubCommand(),

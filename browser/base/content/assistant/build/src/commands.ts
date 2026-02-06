@@ -467,6 +467,112 @@ export class OpenHubCommand implements Command {
   }
 }
 
+export class AddSplitViewCommand implements Command {
+  commandName = "add_split_view";
+  description =
+    "Add split view with tabs side-by-side. Accepts arguments: { indices?: [number, number], withIndex?: number, withQuery?: string }. Use 'indices' to specify two tabs by number. Use 'withIndex' or 'withQuery' to split current tab with another. If no arguments, opens split view with a new tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin, gBrowser } = getChrome();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+
+    const Services = (topWin as any).Services || (window as any).Services;
+    const splitViewEnabled = Services?.prefs?.getBoolPref?.(
+      "browser.tabs.splitView.enabled",
+      false
+    );
+    if (!splitViewEnabled) {
+      return { message: "Split view is not enabled in this browser." };
+    }
+
+    let tab1: any = null;
+    let tab2: any = null;
+
+    const indices = args?.indices;
+    if (indices && Array.isArray(indices) && indices.length >= 2) {
+      const i1 = Math.max(1, Math.floor(indices[0]));
+      const i2 = Math.max(1, Math.floor(indices[1]));
+      if (i1 > gBrowser.tabs.length) return { message: `No tab ${i1}.` };
+      if (i2 > gBrowser.tabs.length) return { message: `No tab ${i2}.` };
+      if (i1 === i2) return { message: "Cannot split a tab with itself." };
+      tab1 = gBrowser.tabs[i1 - 1];
+      tab2 = gBrowser.tabs[i2 - 1];
+    } else {
+      tab1 = gBrowser.selectedTab;
+      const withIndex = args?.withIndex;
+      const withQuery = args?.withQuery?.toLowerCase();
+
+      if (withIndex != null) {
+        const i = Math.max(1, Math.floor(withIndex));
+        if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+        tab2 = gBrowser.tabs[i - 1];
+      } else if (withQuery) {
+        tab2 = Array.from(gBrowser.tabs).find((t: any) => {
+          const title = (t.label || "").toLowerCase();
+          const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+          return title.includes(withQuery) || url.includes(withQuery);
+        });
+        if (!tab2) {
+          return { message: `No tab found matching "${args.withQuery}".` };
+        }
+      } else {
+        tab2 = gBrowser.addTrustedTab("about:newtab");
+      }
+    }
+
+    if (tab1 === tab2) {
+      return { message: "Cannot split a tab with itself." };
+    }
+
+    if (tab1.pinned || tab2.pinned) {
+      return { message: "Cannot add pinned tabs to split view." };
+    }
+
+    if (tab1.splitview) {
+      return { message: `Tab "${tab1.label}" is already in a split view.` };
+    }
+    if (tab2.splitview) {
+      return { message: `Tab "${tab2.label}" is already in a split view.` };
+    }
+
+    try {
+      gBrowser.addTabSplitView([tab1, tab2], {
+        insertBefore: tab1,
+      });
+
+      const title1 = tab1.label || "(untitled)";
+      const title2 = tab2.label || "(new tab)";
+      return {
+        message: `Added split view: "${title1}" and "${title2}".`,
+      };
+    } catch (e) {
+      return { message: `Failed to create split view: ${e}` };
+    }
+  }
+}
+
+export class RemoveSplitViewCommand implements Command {
+  commandName = "remove_split_view";
+  description = "Remove split view from the current tab (unsplit tabs).";
+  async execute(_args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI not available." };
+
+    const currentTab = gBrowser.selectedTab;
+    const splitview = currentTab.splitview;
+
+    if (!splitview) {
+      return { message: "This tab is not in a split view." };
+    }
+
+    try {
+      splitview.unsplitTabs();
+      return { message: "Split view removed. Tabs are now separate." };
+    } catch (e) {
+      return { message: `Failed to remove split view: ${e}` };
+    }
+  }
+}
+
 export class SplitTabsCommand implements Command {
   commandName = "split_tabs";
   description =
