@@ -65623,13 +65623,15 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   };
   var CreateTabGroupCommand = class {
     commandName = "create_tab_group";
-    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
+    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], openUrl?: string, confirmed?: boolean }. Use 'openUrl' to open a URL in the new group. If no indices provided, creates with current tab (or new tab if current is already grouped).";
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = args?.name || "New Group";
       const indices = args?.indices;
       let tabsToGroup = [];
+      let createdNewTab = false;
+      const openUrl = args?.openUrl;
       if (indices && Array.isArray(indices) && indices.length > 0) {
         for (const idx of indices) {
           const i = Math.max(1, Math.floor(idx));
@@ -65638,8 +65640,37 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           }
           tabsToGroup.push(gBrowser.tabs[i - 1]);
         }
+      } else if (openUrl) {
+        const { topWin } = getChrome2();
+        let url = openUrl;
+        if (!url.includes("://")) {
+          try {
+            const Services = topWin.Services || window.Services;
+            if (Services?.uriFixup) {
+              const flags = 2 | 4;
+              const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+              if (fixed?.preferredURI) {
+                url = fixed.preferredURI.spec;
+              }
+            }
+          } catch (e) {
+            if (!url.startsWith("http")) {
+              url = "https://" + url;
+            }
+          }
+        }
+        const newTab = gBrowser.addTrustedTab(url);
+        tabsToGroup = [newTab];
+        createdNewTab = true;
       } else {
-        tabsToGroup = [gBrowser.selectedTab];
+        const currentTab = gBrowser.selectedTab;
+        if (currentTab.group) {
+          const newTab = gBrowser.addTrustedTab("about:newtab");
+          tabsToGroup = [newTab];
+          createdNewTab = true;
+        } else {
+          tabsToGroup = [currentTab];
+        }
       }
       const groupableTabs = tabsToGroup.filter((t) => !t.pinned);
       if (groupableTabs.length === 0) {
@@ -65685,9 +65716,15 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       clearPendingConfirmation();
       try {
         gBrowser.addTabGroup(groupableTabs, { label: name });
-        return {
-          message: `Created tab group "${name}" with ${groupableTabs.length} tab(s).`
-        };
+        let msg;
+        if (openUrl) {
+          msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+        } else if (createdNewTab) {
+          msg = `Created tab group "${name}" with a new tab.`;
+        } else {
+          msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+        }
+        return { message: msg };
       } catch (e) {
         return { message: `Failed to create tab group: ${e}` };
       }
@@ -66412,14 +66449,24 @@ Do NOT mention that you received page content or reference this instruction. Jus
           preRoutedArgs = { name: tabGroupMatch[1].trim() };
           console.log(`\u{1F3AF} Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
         }
-        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?(.+)$/i);
+        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i);
         if (createGroupMatch && !preRoutedNext) {
           let groupName = createGroupMatch[1].trim();
+          let openUrl;
+          const openInItMatch = groupName.match(/\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i);
+          if (openInItMatch) {
+            openUrl = openInItMatch[1].trim();
+            groupName = groupName.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+          }
+          groupName = groupName.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
           groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
           groupName = groupName.replace(/["']/g, "").trim();
           if (groupName) {
             preRoutedNext = "create_tab_group";
             preRoutedArgs = { name: groupName };
+            if (openUrl) {
+              preRoutedArgs.openUrl = openUrl;
+            }
           }
           const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
           if (indicesMatch) {

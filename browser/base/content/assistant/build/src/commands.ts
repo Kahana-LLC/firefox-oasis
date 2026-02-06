@@ -839,7 +839,7 @@ export class ListTabGroupsCommand implements Command {
 export class CreateTabGroupCommand implements Command {
   commandName = "create_tab_group";
   description =
-    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
+    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], openUrl?: string, confirmed?: boolean }. Use 'openUrl' to open a URL in the new group. If no indices provided, creates with current tab (or new tab if current is already grouped).";
   async execute(args: any): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -848,6 +848,8 @@ export class CreateTabGroupCommand implements Command {
     const indices = args?.indices;
 
     let tabsToGroup: any[] = [];
+    let createdNewTab = false;
+    const openUrl = args?.openUrl;
 
     if (indices && Array.isArray(indices) && indices.length > 0) {
       for (const idx of indices) {
@@ -857,8 +859,41 @@ export class CreateTabGroupCommand implements Command {
         }
         tabsToGroup.push(gBrowser.tabs[i - 1]);
       }
+    } else if (openUrl) {
+      // If a URL is specified, create a new tab with that URL for the group
+      const { topWin } = getChrome();
+      let url = openUrl;
+      // Fixup URL if needed
+      if (!url.includes("://")) {
+        try {
+          const Services = (topWin as any).Services || (window as any).Services;
+          if (Services?.uriFixup) {
+            const flags = 2 | 4;
+            const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+            if (fixed?.preferredURI) {
+              url = fixed.preferredURI.spec;
+            }
+          }
+        } catch (e) {
+          // Fallback: add https://
+          if (!url.startsWith("http")) {
+            url = "https://" + url;
+          }
+        }
+      }
+      const newTab = gBrowser.addTrustedTab(url);
+      tabsToGroup = [newTab];
+      createdNewTab = true;
     } else {
-      tabsToGroup = [gBrowser.selectedTab];
+      const currentTab = gBrowser.selectedTab;
+      // If current tab is already in a group, create a new tab instead of moving it
+      if (currentTab.group) {
+        const newTab = gBrowser.addTrustedTab("about:newtab");
+        tabsToGroup = [newTab];
+        createdNewTab = true;
+      } else {
+        tabsToGroup = [currentTab];
+      }
     }
 
     const groupableTabs = tabsToGroup.filter((t: any) => !t.pinned);
@@ -913,9 +948,15 @@ export class CreateTabGroupCommand implements Command {
 
     try {
       gBrowser.addTabGroup(groupableTabs, { label: name });
-      return {
-        message: `Created tab group "${name}" with ${groupableTabs.length} tab(s).`,
-      };
+      let msg: string;
+      if (openUrl) {
+        msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+      } else if (createdNewTab) {
+        msg = `Created tab group "${name}" with a new tab.`;
+      } else {
+        msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+      }
+      return { message: msg };
     } catch (e) {
       return { message: `Failed to create tab group: ${e}` };
     }

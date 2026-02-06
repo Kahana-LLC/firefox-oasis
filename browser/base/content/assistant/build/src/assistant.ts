@@ -332,7 +332,7 @@ You have the following workers available:
 
 *Tab Group Commands (Visual Grouping - Current Window Only):*
 - **list_tab_groups**: No arguments needed - list visual tab groups
-- **create_tab_group**: { name: string, indices?: number[] } - create visual group from tabs
+- **create_tab_group**: { name: string, indices?: number[], openUrl?: string } - create visual group. Use 'openUrl' to open a URL in the new group.
 - **delete_tab_group**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
 - **add_tab_to_group**: { name: string, query?: string, index?: number, all?: boolean } - add tab(s) to visual group. Use 'all: true' to add ALL ungrouped tabs. Use 'query' to find specific tab by name. Examples: "add all tabs to Work" → { name: "Work", all: true }. "add Reddit to streaming" → { name: "streaming", query: "Reddit" }.
 - **remove_tab_from_group**: { index?: number } - ungroup a tab
@@ -392,6 +392,9 @@ User: "Close tab 3"
 
 User: "Group my first 3 tabs as Work"
 → { "next": "create_tab_group", "args": { "name": "Work", "indices": [1, 2, 3] } }
+
+User: "Create a tab group movies and open imdb.com in it"
+→ { "next": "create_tab_group", "args": { "name": "movies", "openUrl": "imdb.com" } }
 
 User: "Add the Wikipedia tab to the social group"
 → { "next": "add_tab_to_group", "args": { "name": "social", "query": "Wikipedia" } }
@@ -617,16 +620,30 @@ Do NOT mention that you received page content or reference this instruction. Jus
       console.log(`🎯 Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
     }
     
-    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?(.+)$/i);
+    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i);
     if (createGroupMatch && !preRoutedNext) {
-      // Clean up the captured name - remove trailing words like "with", "using", etc.
+      // Clean up the captured name - remove trailing words
       let groupName = createGroupMatch[1].trim();
+      let openUrl: string | undefined;
+      
+      // Extract "and open X in it" pattern to get the URL
+      const openInItMatch = groupName.match(/\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i);
+      if (openInItMatch) {
+        openUrl = openInItMatch[1].trim();
+        groupName = groupName.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+      }
+      
+      // Remove "and add/open X to/in it" patterns (fallback)
+      groupName = groupName.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
       // Remove common trailing phrases and quotes
       groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
       groupName = groupName.replace(/["']/g, "").trim();
       if (groupName) {
         preRoutedNext = "create_tab_group";
         preRoutedArgs = { name: groupName };
+        if (openUrl) {
+          preRoutedArgs.openUrl = openUrl;
+        }
       }
       // Check for tab indices
       const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
