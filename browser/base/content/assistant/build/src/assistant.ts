@@ -617,10 +617,17 @@ Do NOT mention that you received page content or reference this instruction. Jus
       console.log(`🎯 Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
     }
     
-    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?([^"'\n]+?)["']?(?:\s+with)?/i);
+    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?(.+)$/i);
     if (createGroupMatch && !preRoutedNext) {
-      preRoutedNext = "create_tab_group";
-      preRoutedArgs = { name: createGroupMatch[1].trim() };
+      // Clean up the captured name - remove trailing words like "with", "using", etc.
+      let groupName = createGroupMatch[1].trim();
+      // Remove common trailing phrases and quotes
+      groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
+      groupName = groupName.replace(/["']/g, "").trim();
+      if (groupName) {
+        preRoutedNext = "create_tab_group";
+        preRoutedArgs = { name: groupName };
+      }
       // Check for tab indices
       const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
       if (indicesMatch) {

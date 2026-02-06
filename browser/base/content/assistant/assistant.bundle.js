@@ -66412,10 +66412,15 @@ Do NOT mention that you received page content or reference this instruction. Jus
           preRoutedArgs = { name: tabGroupMatch[1].trim() };
           console.log(`\u{1F3AF} Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
         }
-        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?([^"'\n]+?)["']?(?:\s+with)?/i);
+        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?(.+)$/i);
         if (createGroupMatch && !preRoutedNext) {
-          preRoutedNext = "create_tab_group";
-          preRoutedArgs = { name: createGroupMatch[1].trim() };
+          let groupName = createGroupMatch[1].trim();
+          groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
+          groupName = groupName.replace(/["']/g, "").trim();
+          if (groupName) {
+            preRoutedNext = "create_tab_group";
+            preRoutedArgs = { name: groupName };
+          }
           const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
           if (indicesMatch) {
             const indices = indicesMatch[1].match(/\d+/g)?.map(Number) || [];
