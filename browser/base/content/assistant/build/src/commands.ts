@@ -658,6 +658,106 @@ export class SplitTabsCommand implements Command {
   }
 }
 
+export class SummarizePageCommand implements Command {
+  commandName = "summarize_page";
+  description =
+    "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser, topWin } = getChrome();
+    if (!gBrowser) return { message: "Browser UI not available." };
+
+    let tab = gBrowser.selectedTab;
+    
+    // Allow specifying tab by index
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    
+    // Allow specifying tab by query (title/URL match)
+    const query = args?.query?.toLowerCase();
+    if (query && !idx) {
+      tab = Array.from(gBrowser.tabs).find((t: any) => {
+        const title = (t.label || "").toLowerCase();
+        const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+        return title.includes(query) || url.includes(query);
+      }) as any;
+      if (!tab) {
+        return { message: `No tab found matching "${args.query}".` };
+      }
+    }
+    
+    const browser = tab?.linkedBrowser;
+    if (!browser) return { message: "No active tab found." };
+
+    const url = browser.currentURI?.spec || "";
+    const title = tab.label || "Untitled";
+    
+    // Skip certain pages that can't be summarized
+    if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+      return { message: "Cannot summarize browser internal pages." };
+    }
+
+    try {
+      // Use PageExtractor actor for Fission-compatible content extraction
+      const currentWindowContext = browser.browsingContext?.currentWindowContext;
+      
+      if (!currentWindowContext) {
+        return { message: "Cannot access page content. The page may still be loading." };
+      }
+
+      const pageExtractor = currentWindowContext.getActor("PageExtractor");
+      
+      if (!pageExtractor) {
+        return { message: "Page content extractor not available." };
+      }
+
+      // Try Reader Mode first (cleaner content), fall back to full text
+      let content = "";
+      try {
+        content = await pageExtractor.getReaderModeContent();
+      } catch (e) {
+        console.warn("Reader mode extraction failed, trying full text:", e);
+      }
+
+      // If reader mode failed or returned empty, try full text extraction
+      if (!content || content.length < 50) {
+        try {
+          const result = await pageExtractor.getText();
+          content = typeof result === "string" ? result : result?.text || "";
+        } catch (e) {
+          console.warn("Full text extraction failed:", e);
+        }
+      }
+
+      // Clean up whitespace
+      content = content
+        .replace(/\s+/g, " ")
+        .replace(/\n\s*\n/g, "\n")
+        .trim();
+
+      if (!content || content.length < 50) {
+        return { message: "Not enough content found on this page to summarize." };
+      }
+
+      // Truncate to reasonable length for LLM (roughly 10k chars ≈ 2.5k tokens)
+      const maxLength = 12000;
+      if (content.length > maxLength) {
+        content = content.substring(0, maxLength) + "...";
+      }
+
+      // Return the content for the chat node to summarize
+      return {
+        message: `__SUMMARIZE_REQUEST__\nTitle: ${title}\nURL: ${url}\n\nContent:\n${content}`,
+      };
+    } catch (e) {
+      return { message: `Failed to extract page content: ${e}` };
+    }
+  }
+}
+
 export class SearchMemoryCommand implements Command {
   commandName = "search_memory";
   description =

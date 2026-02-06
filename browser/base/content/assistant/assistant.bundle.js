@@ -65487,6 +65487,81 @@ ${text2}` };
       return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
     }
   };
+  var SummarizePageCommand = class {
+    commandName = "summarize_page";
+    description = "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+    async execute(args) {
+      const { gBrowser, topWin } = getChrome2();
+      if (!gBrowser) return { message: "Browser UI not available." };
+      let tab = gBrowser.selectedTab;
+      const idx = args?.index;
+      if (idx != null) {
+        const i = Math.max(1, Math.floor(idx));
+        if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+        tab = gBrowser.tabs[i - 1];
+      }
+      const query = args?.query?.toLowerCase();
+      if (query && !idx) {
+        tab = Array.from(gBrowser.tabs).find((t) => {
+          const title2 = (t.label || "").toLowerCase();
+          const url2 = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+          return title2.includes(query) || url2.includes(query);
+        });
+        if (!tab) {
+          return { message: `No tab found matching "${args.query}".` };
+        }
+      }
+      const browser = tab?.linkedBrowser;
+      if (!browser) return { message: "No active tab found." };
+      const url = browser.currentURI?.spec || "";
+      const title = tab.label || "Untitled";
+      if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+        return { message: "Cannot summarize browser internal pages." };
+      }
+      try {
+        const currentWindowContext = browser.browsingContext?.currentWindowContext;
+        if (!currentWindowContext) {
+          return { message: "Cannot access page content. The page may still be loading." };
+        }
+        const pageExtractor = currentWindowContext.getActor("PageExtractor");
+        if (!pageExtractor) {
+          return { message: "Page content extractor not available." };
+        }
+        let content = "";
+        try {
+          content = await pageExtractor.getReaderModeContent();
+        } catch (e) {
+          console.warn("Reader mode extraction failed, trying full text:", e);
+        }
+        if (!content || content.length < 50) {
+          try {
+            const result = await pageExtractor.getText();
+            content = typeof result === "string" ? result : result?.text || "";
+          } catch (e) {
+            console.warn("Full text extraction failed:", e);
+          }
+        }
+        content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
+        if (!content || content.length < 50) {
+          return { message: "Not enough content found on this page to summarize." };
+        }
+        const maxLength = 12e3;
+        if (content.length > maxLength) {
+          content = content.substring(0, maxLength) + "...";
+        }
+        return {
+          message: `__SUMMARIZE_REQUEST__
+Title: ${title}
+URL: ${url}
+
+Content:
+${content}`
+        };
+      } catch (e) {
+        return { message: `Failed to extract page content: ${e}` };
+      }
+    }
+  };
   var SearchMemoryCommand = class {
     commandName = "search_memory";
     description = "Search stored memory (bookmarks/hubs) for a query. Arguments: { query: string, hub?: string }.";
@@ -66106,6 +66181,7 @@ You have the following workers available:
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string }
+- **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
@@ -66124,7 +66200,8 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
     - "group", "tab group" \u2192 tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" \u2192 hub commands
     - "window" \u2192 window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit"
+    - "summarize", "summary", "what is this page" \u2192 summarize_page
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
 2.  **General Questions \u2192 Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -66189,6 +66266,15 @@ User: "Split view with tab 2"
 
 User: "Remove split view" or "Unsplit tabs"
 \u2192 { "next": "remove_split_view", "args": {} }
+
+User: "Summarize this page" or "What is this page about?"
+\u2192 { "next": "summarize_page", "args": {} }
+
+User: "Summarize tab 1" or "Summarize the first tab"
+\u2192 { "next": "summarize_page", "args": { "index": 1 } }
+
+User: "Summarize the Amazon tab"
+\u2192 { "next": "summarize_page", "args": { "query": "Amazon" } }
 
 User: "Rename tab group Work to Projects"
 \u2192 { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -66266,7 +66352,20 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       const lastMsg = state.messages[state.messages.length - 1];
       const lastMsgText = msgText(lastMsg);
       const hasToolOutput = lastMsgText.includes("[Tool Output for");
-      const hiddenInstruction = hasToolOutput ? "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data." : "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+      const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+      let hiddenInstruction;
+      if (hasSummarizeRequest) {
+        hiddenInstruction = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
+1. Captures the main topic and key points
+2. Uses bullet points for easy reading
+3. Keeps it to 3-5 paragraphs max
+4. Highlights any important facts, dates, or conclusions
+Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
+      } else if (hasToolOutput) {
+        hiddenInstruction = "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
+      } else {
+        hiddenInstruction = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+      }
       const messagesWithPrompt = [
         ...state.messages,
         new HumanMessage(hiddenInstruction)
@@ -66366,6 +66465,30 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
           preRoutedNext = "remove_split_view";
           preRoutedArgs = {};
         }
+        const summarizeCurrentTabMatch = commandText.match(/summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+        if (summarizeCurrentTabMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          preRoutedArgs = {};
+        }
+        const summarizeTabMatch = commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) || commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+        if (summarizeTabMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          const tabNum = summarizeTabMatch[1] ? parseInt(summarizeTabMatch[1]) : 1;
+          preRoutedArgs = { index: tabNum };
+        }
+        const summarizeQueryMatch = commandText.match(/summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i);
+        if (summarizeQueryMatch && !preRoutedNext) {
+          const queryText = summarizeQueryMatch[1].trim().toLowerCase();
+          if (!["current", "this", "active"].includes(queryText)) {
+            preRoutedNext = "summarize_page";
+            preRoutedArgs = { query: queryText };
+          }
+        }
+        const summarizeMatch = commandText.match(/summarize\s+(?:this\s+)?(?:page|article|website|site)?/i) || commandText.match(/(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i) || commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
+        if (summarizeMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          preRoutedArgs = {};
+        }
       }
       if (preRoutedNext) {
         console.log(`\u{1F3AF} Pre-routed to ${preRoutedNext} with args:`, preRoutedArgs);
@@ -66459,6 +66582,7 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       new OrganizeWindowsCommand(),
       new ShowURLCommand(),
       new SearchMemoryCommand(),
+      new SummarizePageCommand(),
       new ShowSubscriptionCommand()
     ];
     const graph = await buildGraph(commands, messageId);

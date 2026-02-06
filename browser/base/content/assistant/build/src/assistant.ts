@@ -26,6 +26,7 @@ import {
   OrganizeWindowsCommand,
   ShowURLCommand,
   SearchMemoryCommand,
+  SummarizePageCommand,
   RemoveTabFromHubCommand,
   ShowSubscriptionCommand,
   ListTabGroupsCommand,
@@ -342,6 +343,7 @@ You have the following workers available:
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string }
+- **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
@@ -360,7 +362,8 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
     - "group", "tab group" → tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" → hub commands
     - "window" → window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit"
+    - "summarize", "summary", "what is this page" → summarize_page
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
 2.  **General Questions → Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -425,6 +428,15 @@ User: "Split view with tab 2"
 
 User: "Remove split view" or "Unsplit tabs"
 → { "next": "remove_split_view", "args": {} }
+
+User: "Summarize this page" or "What is this page about?"
+→ { "next": "summarize_page", "args": {} }
+
+User: "Summarize tab 1" or "Summarize the first tab"
+→ { "next": "summarize_page", "args": { "index": 1 } }
+
+User: "Summarize the Amazon tab"
+→ { "next": "summarize_page", "args": { "query": "Amazon" } }
 
 User: "Rename tab group Work to Projects"
 → { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -507,11 +519,22 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
     const lastMsg = state.messages[state.messages.length - 1];
     const lastMsgText = msgText(lastMsg);
     const hasToolOutput = lastMsgText.includes("[Tool Output for");
+    const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
     
     // Append appropriate hidden instruction
-    const hiddenInstruction = hasToolOutput
-      ? "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data."
-      : "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+    let hiddenInstruction: string;
+    if (hasSummarizeRequest) {
+      hiddenInstruction = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
+1. Captures the main topic and key points
+2. Uses bullet points for easy reading
+3. Keeps it to 3-5 paragraphs max
+4. Highlights any important facts, dates, or conclusions
+Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
+    } else if (hasToolOutput) {
+      hiddenInstruction = "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
+    } else {
+      hiddenInstruction = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+    }
     
     const messagesWithPrompt = [
       ...state.messages,
@@ -662,6 +685,42 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       preRoutedNext = "remove_split_view";
       preRoutedArgs = {};
     }
+
+    // Summarize page command
+    // Match "summarize current tab" or "summarize this tab" (current tab, no args needed)
+    const summarizeCurrentTabMatch = commandText.match(/summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+    if (summarizeCurrentTabMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      preRoutedArgs = {};
+    }
+    
+    // Match "summarize tab 1" or "summarize the first tab"
+    const summarizeTabMatch = commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) ||
+                              commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+    if (summarizeTabMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      const tabNum = summarizeTabMatch[1] ? parseInt(summarizeTabMatch[1]) : 1;
+      preRoutedArgs = { index: tabNum };
+    }
+    
+    // Match "summarize the Amazon tab" (but not "current/this/active tab")
+    const summarizeQueryMatch = commandText.match(/summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i);
+    if (summarizeQueryMatch && !preRoutedNext) {
+      const queryText = summarizeQueryMatch[1].trim().toLowerCase();
+      // Skip if it's "current", "this", or "active" - already handled above
+      if (!["current", "this", "active"].includes(queryText)) {
+        preRoutedNext = "summarize_page";
+        preRoutedArgs = { query: queryText };
+      }
+    }
+    
+    const summarizeMatch = commandText.match(/summarize\s+(?:this\s+)?(?:page|article|website|site)?/i) ||
+                           commandText.match(/(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i) ||
+                           commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
+    if (summarizeMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      preRoutedArgs = {};
+    }
     
     } // End of !justRanTool check
     
@@ -788,6 +847,7 @@ export async function runAssistantStream(
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
     new SearchMemoryCommand(),
+    new SummarizePageCommand(),
     new ShowSubscriptionCommand(),
   ];
   const graph = await buildGraph(commands, messageId);
