@@ -14,6 +14,8 @@ import {
   MoveTabToNewWindowCommand,
   CopyTabUrlsCommand,
   SplitTabsCommand,
+  AddSplitViewCommand,
+  RemoveSplitViewCommand,
   CreateHubCommand,
   DeleteHubCommand,
   ListHubsCommand,
@@ -24,6 +26,7 @@ import {
   OrganizeWindowsCommand,
   ShowURLCommand,
   SearchMemoryCommand,
+  SummarizePageCommand,
   RemoveTabFromHubCommand,
   ShowSubscriptionCommand,
   ListTabGroupsCommand,
@@ -314,6 +317,10 @@ You have the following workers available:
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows
 
+*Split View Commands (side-by-side tabs in same window):*
+- **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
+- **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
+
 *Hub Commands (Bookmark Folders - Persistent):*
 - **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
 - **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
@@ -325,7 +332,7 @@ You have the following workers available:
 
 *Tab Group Commands (Visual Grouping - Current Window Only):*
 - **list_tab_groups**: No arguments needed - list visual tab groups
-- **create_tab_group**: { name: string, indices?: number[] } - create visual group from tabs
+- **create_tab_group**: { name: string, indices?: number[], openUrl?: string } - create visual group. Use 'openUrl' to open a URL in the new group.
 - **delete_tab_group**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
 - **add_tab_to_group**: { name: string, query?: string, index?: number, all?: boolean } - add tab(s) to visual group. Use 'all: true' to add ALL ungrouped tabs. Use 'query' to find specific tab by name. Examples: "add all tabs to Work" → { name: "Work", all: true }. "add Reddit to streaming" → { name: "streaming", query: "Reddit" }.
 - **remove_tab_from_group**: { index?: number } - ungroup a tab
@@ -336,6 +343,7 @@ You have the following workers available:
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string }
+- **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
@@ -350,10 +358,12 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
 **Rules**
 1.  **Keyword Detection in LATEST Message:** Look at the user's LATEST message ONLY. If it contains these keywords, use the browser tool:
     - "tab", "tabs" → tab commands
+    - "split view", "splitview", "split" → split view commands (add_split_view, remove_split_view)
     - "group", "tab group" → tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" → hub commands
     - "window" → window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show"
+    - "summarize", "summary", "what is this page" → summarize_page
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
 2.  **General Questions → Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -383,6 +393,9 @@ User: "Close tab 3"
 User: "Group my first 3 tabs as Work"
 → { "next": "create_tab_group", "args": { "name": "Work", "indices": [1, 2, 3] } }
 
+User: "Create a tab group movies and open imdb.com in it"
+→ { "next": "create_tab_group", "args": { "name": "movies", "openUrl": "imdb.com" } }
+
 User: "Add the Wikipedia tab to the social group"
 → { "next": "add_tab_to_group", "args": { "name": "social", "query": "Wikipedia" } }
 
@@ -403,6 +416,30 @@ User: "Add all existing tabs to streaming"
 
 User: "Save this tab to my Research hub"
 → { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+
+User: "Add split view" or "Split this tab"
+→ { "next": "add_split_view", "args": {} }
+
+User: "Split tab 1 and 2" or "Add tab 1 and 2 to split view"
+→ { "next": "add_split_view", "args": { "indices": [1, 2] } }
+
+User: "Split view with the Amazon tab"
+→ { "next": "add_split_view", "args": { "withQuery": "Amazon" } }
+
+User: "Split view with tab 2"
+→ { "next": "add_split_view", "args": { "withIndex": 2 } }
+
+User: "Remove split view" or "Unsplit tabs"
+→ { "next": "remove_split_view", "args": {} }
+
+User: "Summarize this page" or "What is this page about?"
+→ { "next": "summarize_page", "args": {} }
+
+User: "Summarize tab 1" or "Summarize the first tab"
+→ { "next": "summarize_page", "args": { "index": 1 } }
+
+User: "Summarize the Amazon tab"
+→ { "next": "summarize_page", "args": { "query": "Amazon" } }
 
 User: "Rename tab group Work to Projects"
 → { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -485,11 +522,22 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
     const lastMsg = state.messages[state.messages.length - 1];
     const lastMsgText = msgText(lastMsg);
     const hasToolOutput = lastMsgText.includes("[Tool Output for");
+    const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
     
     // Append appropriate hidden instruction
-    const hiddenInstruction = hasToolOutput
-      ? "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data."
-      : "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+    let hiddenInstruction: string;
+    if (hasSummarizeRequest) {
+      hiddenInstruction = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
+1. Captures the main topic and key points
+2. Uses bullet points for easy reading
+3. Keeps it to 3-5 paragraphs max
+4. Highlights any important facts, dates, or conclusions
+Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
+    } else if (hasToolOutput) {
+      hiddenInstruction = "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
+    } else {
+      hiddenInstruction = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+    }
     
     const messagesWithPrompt = [
       ...state.messages,
@@ -572,10 +620,31 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       console.log(`🎯 Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
     }
     
-    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?([^"'\n]+?)["']?(?:\s+with)?/i);
+    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i);
     if (createGroupMatch && !preRoutedNext) {
-      preRoutedNext = "create_tab_group";
-      preRoutedArgs = { name: createGroupMatch[1].trim() };
+      // Clean up the captured name - remove trailing words
+      let groupName = createGroupMatch[1].trim();
+      let openUrl: string | undefined;
+      
+      // Extract "and open X in it" pattern to get the URL
+      const openInItMatch = groupName.match(/\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i);
+      if (openInItMatch) {
+        openUrl = openInItMatch[1].trim();
+        groupName = groupName.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+      }
+      
+      // Remove "and add/open X to/in it" patterns (fallback)
+      groupName = groupName.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
+      // Remove common trailing phrases and quotes
+      groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
+      groupName = groupName.replace(/["']/g, "").trim();
+      if (groupName) {
+        preRoutedNext = "create_tab_group";
+        preRoutedArgs = { name: groupName };
+        if (openUrl) {
+          preRoutedArgs.openUrl = openUrl;
+        }
+      }
       // Check for tab indices
       const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
       if (indicesMatch) {
@@ -607,6 +676,74 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
     if (closeTabMatch && !preRoutedNext) {
       preRoutedNext = "close_tab";
       preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
+    }
+
+    // Split view commands
+    // Match "split tab 1 and 2" or "add tab 1 and 2 to split view" or "splitview tab 1 and tab 2"
+    const twoTabsMatch = commandText.match(/(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i) ||
+                         commandText.match(/(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i);
+    if (twoTabsMatch && !preRoutedNext) {
+      preRoutedNext = "add_split_view";
+      preRoutedArgs = { indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])] };
+    }
+
+    const addSplitViewMatch = commandText.match(/(?:add|create|enable)\s+split\s*view/i) ||
+                              commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
+    if (addSplitViewMatch && !preRoutedNext) {
+      preRoutedNext = "add_split_view";
+      // Check if they specified a tab to split with
+      const withTabMatch = commandText.match(/(?:with|and)\s+(?:tab\s+)?(\d+)/i);
+      const withQueryMatch = commandText.match(/(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i);
+      if (withTabMatch) {
+        preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
+      } else if (withQueryMatch) {
+        preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
+      } else {
+        preRoutedArgs = {};
+      }
+    }
+
+    const removeSplitViewMatch = commandText.match(/(?:remove|disable|close)\s+split\s*view/i) ||
+                                  commandText.match(/unsplit\s+(?:tabs?|view)?/i);
+    if (removeSplitViewMatch && !preRoutedNext) {
+      preRoutedNext = "remove_split_view";
+      preRoutedArgs = {};
+    }
+
+    // Summarize page command
+    // Match "summarize current tab" or "summarize this tab" (current tab, no args needed)
+    const summarizeCurrentTabMatch = commandText.match(/summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+    if (summarizeCurrentTabMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      preRoutedArgs = {};
+    }
+    
+    // Match "summarize tab 1" or "summarize the first tab"
+    const summarizeTabMatch = commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) ||
+                              commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+    if (summarizeTabMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      const tabNum = summarizeTabMatch[1] ? parseInt(summarizeTabMatch[1]) : 1;
+      preRoutedArgs = { index: tabNum };
+    }
+    
+    // Match "summarize the Amazon tab" (but not "current/this/active tab")
+    const summarizeQueryMatch = commandText.match(/summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i);
+    if (summarizeQueryMatch && !preRoutedNext) {
+      const queryText = summarizeQueryMatch[1].trim().toLowerCase();
+      // Skip if it's "current", "this", or "active" - already handled above
+      if (!["current", "this", "active"].includes(queryText)) {
+        preRoutedNext = "summarize_page";
+        preRoutedArgs = { query: queryText };
+      }
+    }
+    
+    const summarizeMatch = commandText.match(/summarize\s+(?:this\s+)?(?:page|article|website|site)?/i) ||
+                           commandText.match(/(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i) ||
+                           commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
+    if (summarizeMatch && !preRoutedNext) {
+      preRoutedNext = "summarize_page";
+      preRoutedArgs = {};
     }
     
     } // End of !justRanTool check
@@ -709,6 +846,9 @@ export async function runAssistantStream(
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
+    // Split View (side-by-side tabs in same window)
+    new AddSplitViewCommand(),
+    new RemoveSplitViewCommand(),
     // Hubs (Bookmark Folders - Persistent)
     new CreateHubCommand(),
     new DeleteHubCommand(),
@@ -731,6 +871,7 @@ export async function runAssistantStream(
     new OrganizeWindowsCommand(),
     new ShowURLCommand(),
     new SearchMemoryCommand(),
+    new SummarizePageCommand(),
     new ShowSubscriptionCommand(),
   ];
   const graph = await buildGraph(commands, messageId);

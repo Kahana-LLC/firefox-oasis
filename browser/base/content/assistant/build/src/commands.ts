@@ -467,6 +467,112 @@ export class OpenHubCommand implements Command {
   }
 }
 
+export class AddSplitViewCommand implements Command {
+  commandName = "add_split_view";
+  description =
+    "Add split view with tabs side-by-side. Accepts arguments: { indices?: [number, number], withIndex?: number, withQuery?: string }. Use 'indices' to specify two tabs by number. Use 'withIndex' or 'withQuery' to split current tab with another. If no arguments, opens split view with a new tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { topWin, gBrowser } = getChrome();
+    if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+
+    const Services = (topWin as any).Services || (window as any).Services;
+    const splitViewEnabled = Services?.prefs?.getBoolPref?.(
+      "browser.tabs.splitView.enabled",
+      false
+    );
+    if (!splitViewEnabled) {
+      return { message: "Split view is not enabled in this browser." };
+    }
+
+    let tab1: any = null;
+    let tab2: any = null;
+
+    const indices = args?.indices;
+    if (indices && Array.isArray(indices) && indices.length >= 2) {
+      const i1 = Math.max(1, Math.floor(indices[0]));
+      const i2 = Math.max(1, Math.floor(indices[1]));
+      if (i1 > gBrowser.tabs.length) return { message: `No tab ${i1}.` };
+      if (i2 > gBrowser.tabs.length) return { message: `No tab ${i2}.` };
+      if (i1 === i2) return { message: "Cannot split a tab with itself." };
+      tab1 = gBrowser.tabs[i1 - 1];
+      tab2 = gBrowser.tabs[i2 - 1];
+    } else {
+      tab1 = gBrowser.selectedTab;
+      const withIndex = args?.withIndex;
+      const withQuery = args?.withQuery?.toLowerCase();
+
+      if (withIndex != null) {
+        const i = Math.max(1, Math.floor(withIndex));
+        if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+        tab2 = gBrowser.tabs[i - 1];
+      } else if (withQuery) {
+        tab2 = Array.from(gBrowser.tabs).find((t: any) => {
+          const title = (t.label || "").toLowerCase();
+          const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+          return title.includes(withQuery) || url.includes(withQuery);
+        });
+        if (!tab2) {
+          return { message: `No tab found matching "${args.withQuery}".` };
+        }
+      } else {
+        tab2 = gBrowser.addTrustedTab("about:newtab");
+      }
+    }
+
+    if (tab1 === tab2) {
+      return { message: "Cannot split a tab with itself." };
+    }
+
+    if (tab1.pinned || tab2.pinned) {
+      return { message: "Cannot add pinned tabs to split view." };
+    }
+
+    if (tab1.splitview) {
+      return { message: `Tab "${tab1.label}" is already in a split view.` };
+    }
+    if (tab2.splitview) {
+      return { message: `Tab "${tab2.label}" is already in a split view.` };
+    }
+
+    try {
+      gBrowser.addTabSplitView([tab1, tab2], {
+        insertBefore: tab1,
+      });
+
+      const title1 = tab1.label || "(untitled)";
+      const title2 = tab2.label || "(new tab)";
+      return {
+        message: `Added split view: "${title1}" and "${title2}".`,
+      };
+    } catch (e) {
+      return { message: `Failed to create split view: ${e}` };
+    }
+  }
+}
+
+export class RemoveSplitViewCommand implements Command {
+  commandName = "remove_split_view";
+  description = "Remove split view from the current tab (unsplit tabs).";
+  async execute(_args: any): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI not available." };
+
+    const currentTab = gBrowser.selectedTab;
+    const splitview = currentTab.splitview;
+
+    if (!splitview) {
+      return { message: "This tab is not in a split view." };
+    }
+
+    try {
+      splitview.unsplitTabs();
+      return { message: "Split view removed. Tabs are now separate." };
+    } catch (e) {
+      return { message: `Failed to remove split view: ${e}` };
+    }
+  }
+}
+
 export class SplitTabsCommand implements Command {
   commandName = "split_tabs";
   description =
@@ -552,6 +658,106 @@ export class SplitTabsCommand implements Command {
   }
 }
 
+export class SummarizePageCommand implements Command {
+  commandName = "summarize_page";
+  description =
+    "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const { gBrowser, topWin } = getChrome();
+    if (!gBrowser) return { message: "Browser UI not available." };
+
+    let tab = gBrowser.selectedTab;
+    
+    // Allow specifying tab by index
+    const idx = args?.index;
+    if (idx != null) {
+      const i = Math.max(1, Math.floor(idx));
+      if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+      tab = gBrowser.tabs[i - 1];
+    }
+    
+    // Allow specifying tab by query (title/URL match)
+    const query = args?.query?.toLowerCase();
+    if (query && !idx) {
+      tab = Array.from(gBrowser.tabs).find((t: any) => {
+        const title = (t.label || "").toLowerCase();
+        const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+        return title.includes(query) || url.includes(query);
+      }) as any;
+      if (!tab) {
+        return { message: `No tab found matching "${args.query}".` };
+      }
+    }
+    
+    const browser = tab?.linkedBrowser;
+    if (!browser) return { message: "No active tab found." };
+
+    const url = browser.currentURI?.spec || "";
+    const title = tab.label || "Untitled";
+    
+    // Skip certain pages that can't be summarized
+    if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+      return { message: "Cannot summarize browser internal pages." };
+    }
+
+    try {
+      // Use PageExtractor actor for Fission-compatible content extraction
+      const currentWindowContext = browser.browsingContext?.currentWindowContext;
+      
+      if (!currentWindowContext) {
+        return { message: "Cannot access page content. The page may still be loading." };
+      }
+
+      const pageExtractor = currentWindowContext.getActor("PageExtractor");
+      
+      if (!pageExtractor) {
+        return { message: "Page content extractor not available." };
+      }
+
+      // Try Reader Mode first (cleaner content), fall back to full text
+      let content = "";
+      try {
+        content = await pageExtractor.getReaderModeContent();
+      } catch (e) {
+        console.warn("Reader mode extraction failed, trying full text:", e);
+      }
+
+      // If reader mode failed or returned empty, try full text extraction
+      if (!content || content.length < 50) {
+        try {
+          const result = await pageExtractor.getText();
+          content = typeof result === "string" ? result : result?.text || "";
+        } catch (e) {
+          console.warn("Full text extraction failed:", e);
+        }
+      }
+
+      // Clean up whitespace
+      content = content
+        .replace(/\s+/g, " ")
+        .replace(/\n\s*\n/g, "\n")
+        .trim();
+
+      if (!content || content.length < 50) {
+        return { message: "Not enough content found on this page to summarize." };
+      }
+
+      // Truncate to reasonable length for LLM (roughly 10k chars ≈ 2.5k tokens)
+      const maxLength = 12000;
+      if (content.length > maxLength) {
+        content = content.substring(0, maxLength) + "...";
+      }
+
+      // Return the content for the chat node to summarize
+      return {
+        message: `__SUMMARIZE_REQUEST__\nTitle: ${title}\nURL: ${url}\n\nContent:\n${content}`,
+      };
+    } catch (e) {
+      return { message: `Failed to extract page content: ${e}` };
+    }
+  }
+}
+
 export class SearchMemoryCommand implements Command {
   commandName = "search_memory";
   description =
@@ -633,7 +839,7 @@ export class ListTabGroupsCommand implements Command {
 export class CreateTabGroupCommand implements Command {
   commandName = "create_tab_group";
   description =
-    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
+    "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], openUrl?: string, confirmed?: boolean }. Use 'openUrl' to open a URL in the new group. If no indices provided, creates with current tab (or new tab if current is already grouped).";
   async execute(args: any): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -642,6 +848,8 @@ export class CreateTabGroupCommand implements Command {
     const indices = args?.indices;
 
     let tabsToGroup: any[] = [];
+    let createdNewTab = false;
+    const openUrl = args?.openUrl;
 
     if (indices && Array.isArray(indices) && indices.length > 0) {
       for (const idx of indices) {
@@ -651,8 +859,41 @@ export class CreateTabGroupCommand implements Command {
         }
         tabsToGroup.push(gBrowser.tabs[i - 1]);
       }
+    } else if (openUrl) {
+      // If a URL is specified, create a new tab with that URL for the group
+      const { topWin } = getChrome();
+      let url = openUrl;
+      // Fixup URL if needed
+      if (!url.includes("://")) {
+        try {
+          const Services = (topWin as any).Services || (window as any).Services;
+          if (Services?.uriFixup) {
+            const flags = 2 | 4;
+            const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+            if (fixed?.preferredURI) {
+              url = fixed.preferredURI.spec;
+            }
+          }
+        } catch (e) {
+          // Fallback: add https://
+          if (!url.startsWith("http")) {
+            url = "https://" + url;
+          }
+        }
+      }
+      const newTab = gBrowser.addTrustedTab(url);
+      tabsToGroup = [newTab];
+      createdNewTab = true;
     } else {
-      tabsToGroup = [gBrowser.selectedTab];
+      const currentTab = gBrowser.selectedTab;
+      // If current tab is already in a group, create a new tab instead of moving it
+      if (currentTab.group) {
+        const newTab = gBrowser.addTrustedTab("about:newtab");
+        tabsToGroup = [newTab];
+        createdNewTab = true;
+      } else {
+        tabsToGroup = [currentTab];
+      }
     }
 
     const groupableTabs = tabsToGroup.filter((t: any) => !t.pinned);
@@ -707,9 +948,15 @@ export class CreateTabGroupCommand implements Command {
 
     try {
       gBrowser.addTabGroup(groupableTabs, { label: name });
-      return {
-        message: `Created tab group "${name}" with ${groupableTabs.length} tab(s).`,
-      };
+      let msg: string;
+      if (openUrl) {
+        msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+      } else if (createdNewTab) {
+        msg = `Created tab group "${name}" with a new tab.`;
+      } else {
+        msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+      }
+      return { message: msg };
     } catch (e) {
       return { message: `Failed to create tab group: ${e}` };
     }

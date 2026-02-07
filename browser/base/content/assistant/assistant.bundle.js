@@ -65339,6 +65339,97 @@ ${text2}` };
       };
     }
   };
+  var AddSplitViewCommand = class {
+    commandName = "add_split_view";
+    description = "Add split view with tabs side-by-side. Accepts arguments: { indices?: [number, number], withIndex?: number, withQuery?: string }. Use 'indices' to specify two tabs by number. Use 'withIndex' or 'withQuery' to split current tab with another. If no arguments, opens split view with a new tab.";
+    async execute(args) {
+      const { topWin, gBrowser } = getChrome2();
+      if (!gBrowser || !topWin) return { message: "Browser UI not available." };
+      const Services = topWin.Services || window.Services;
+      const splitViewEnabled = Services?.prefs?.getBoolPref?.(
+        "browser.tabs.splitView.enabled",
+        false
+      );
+      if (!splitViewEnabled) {
+        return { message: "Split view is not enabled in this browser." };
+      }
+      let tab1 = null;
+      let tab2 = null;
+      const indices = args?.indices;
+      if (indices && Array.isArray(indices) && indices.length >= 2) {
+        const i1 = Math.max(1, Math.floor(indices[0]));
+        const i2 = Math.max(1, Math.floor(indices[1]));
+        if (i1 > gBrowser.tabs.length) return { message: `No tab ${i1}.` };
+        if (i2 > gBrowser.tabs.length) return { message: `No tab ${i2}.` };
+        if (i1 === i2) return { message: "Cannot split a tab with itself." };
+        tab1 = gBrowser.tabs[i1 - 1];
+        tab2 = gBrowser.tabs[i2 - 1];
+      } else {
+        tab1 = gBrowser.selectedTab;
+        const withIndex = args?.withIndex;
+        const withQuery = args?.withQuery?.toLowerCase();
+        if (withIndex != null) {
+          const i = Math.max(1, Math.floor(withIndex));
+          if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+          tab2 = gBrowser.tabs[i - 1];
+        } else if (withQuery) {
+          tab2 = Array.from(gBrowser.tabs).find((t) => {
+            const title = (t.label || "").toLowerCase();
+            const url = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+            return title.includes(withQuery) || url.includes(withQuery);
+          });
+          if (!tab2) {
+            return { message: `No tab found matching "${args.withQuery}".` };
+          }
+        } else {
+          tab2 = gBrowser.addTrustedTab("about:newtab");
+        }
+      }
+      if (tab1 === tab2) {
+        return { message: "Cannot split a tab with itself." };
+      }
+      if (tab1.pinned || tab2.pinned) {
+        return { message: "Cannot add pinned tabs to split view." };
+      }
+      if (tab1.splitview) {
+        return { message: `Tab "${tab1.label}" is already in a split view.` };
+      }
+      if (tab2.splitview) {
+        return { message: `Tab "${tab2.label}" is already in a split view.` };
+      }
+      try {
+        gBrowser.addTabSplitView([tab1, tab2], {
+          insertBefore: tab1
+        });
+        const title1 = tab1.label || "(untitled)";
+        const title2 = tab2.label || "(new tab)";
+        return {
+          message: `Added split view: "${title1}" and "${title2}".`
+        };
+      } catch (e) {
+        return { message: `Failed to create split view: ${e}` };
+      }
+    }
+  };
+  var RemoveSplitViewCommand = class {
+    commandName = "remove_split_view";
+    description = "Remove split view from the current tab (unsplit tabs).";
+    async execute(_args) {
+      const { gBrowser } = getChrome2();
+      if (!gBrowser) return { message: "Browser UI not available." };
+      const currentTab = gBrowser.selectedTab;
+      const splitview = currentTab.splitview;
+      if (!splitview) {
+        return { message: "This tab is not in a split view." };
+      }
+      try {
+        splitview.unsplitTabs();
+        return { message: "Split view removed. Tabs are now separate." };
+      } catch (e) {
+        return { message: `Failed to remove split view: ${e}` };
+      }
+    }
+  };
   var SplitTabsCommand = class {
     commandName = "split_tabs";
     description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
@@ -65394,6 +65485,81 @@ ${text2}` };
       }
       const tabTitles = windows.map((w) => w.title).join(", ");
       return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
+    }
+  };
+  var SummarizePageCommand = class {
+    commandName = "summarize_page";
+    description = "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+    async execute(args) {
+      const { gBrowser, topWin } = getChrome2();
+      if (!gBrowser) return { message: "Browser UI not available." };
+      let tab = gBrowser.selectedTab;
+      const idx = args?.index;
+      if (idx != null) {
+        const i = Math.max(1, Math.floor(idx));
+        if (i > gBrowser.tabs.length) return { message: `No tab ${i}.` };
+        tab = gBrowser.tabs[i - 1];
+      }
+      const query = args?.query?.toLowerCase();
+      if (query && !idx) {
+        tab = Array.from(gBrowser.tabs).find((t) => {
+          const title2 = (t.label || "").toLowerCase();
+          const url2 = (t.linkedBrowser?.currentURI?.spec || "").toLowerCase();
+          return title2.includes(query) || url2.includes(query);
+        });
+        if (!tab) {
+          return { message: `No tab found matching "${args.query}".` };
+        }
+      }
+      const browser = tab?.linkedBrowser;
+      if (!browser) return { message: "No active tab found." };
+      const url = browser.currentURI?.spec || "";
+      const title = tab.label || "Untitled";
+      if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+        return { message: "Cannot summarize browser internal pages." };
+      }
+      try {
+        const currentWindowContext = browser.browsingContext?.currentWindowContext;
+        if (!currentWindowContext) {
+          return { message: "Cannot access page content. The page may still be loading." };
+        }
+        const pageExtractor = currentWindowContext.getActor("PageExtractor");
+        if (!pageExtractor) {
+          return { message: "Page content extractor not available." };
+        }
+        let content = "";
+        try {
+          content = await pageExtractor.getReaderModeContent();
+        } catch (e) {
+          console.warn("Reader mode extraction failed, trying full text:", e);
+        }
+        if (!content || content.length < 50) {
+          try {
+            const result = await pageExtractor.getText();
+            content = typeof result === "string" ? result : result?.text || "";
+          } catch (e) {
+            console.warn("Full text extraction failed:", e);
+          }
+        }
+        content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
+        if (!content || content.length < 50) {
+          return { message: "Not enough content found on this page to summarize." };
+        }
+        const maxLength = 12e3;
+        if (content.length > maxLength) {
+          content = content.substring(0, maxLength) + "...";
+        }
+        return {
+          message: `__SUMMARIZE_REQUEST__
+Title: ${title}
+URL: ${url}
+
+Content:
+${content}`
+        };
+      } catch (e) {
+        return { message: `Failed to extract page content: ${e}` };
+      }
     }
   };
   var SearchMemoryCommand = class {
@@ -65457,13 +65623,15 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   };
   var CreateTabGroupCommand = class {
     commandName = "create_tab_group";
-    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], confirmed?: boolean }. If no indices provided, uses current tab.";
+    description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], openUrl?: string, confirmed?: boolean }. Use 'openUrl' to open a URL in the new group. If no indices provided, creates with current tab (or new tab if current is already grouped).";
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = args?.name || "New Group";
       const indices = args?.indices;
       let tabsToGroup = [];
+      let createdNewTab = false;
+      const openUrl = args?.openUrl;
       if (indices && Array.isArray(indices) && indices.length > 0) {
         for (const idx of indices) {
           const i = Math.max(1, Math.floor(idx));
@@ -65472,8 +65640,37 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           }
           tabsToGroup.push(gBrowser.tabs[i - 1]);
         }
+      } else if (openUrl) {
+        const { topWin } = getChrome2();
+        let url = openUrl;
+        if (!url.includes("://")) {
+          try {
+            const Services = topWin.Services || window.Services;
+            if (Services?.uriFixup) {
+              const flags = 2 | 4;
+              const fixed = Services.uriFixup.getFixupURIInfo(url, flags);
+              if (fixed?.preferredURI) {
+                url = fixed.preferredURI.spec;
+              }
+            }
+          } catch (e) {
+            if (!url.startsWith("http")) {
+              url = "https://" + url;
+            }
+          }
+        }
+        const newTab = gBrowser.addTrustedTab(url);
+        tabsToGroup = [newTab];
+        createdNewTab = true;
       } else {
-        tabsToGroup = [gBrowser.selectedTab];
+        const currentTab = gBrowser.selectedTab;
+        if (currentTab.group) {
+          const newTab = gBrowser.addTrustedTab("about:newtab");
+          tabsToGroup = [newTab];
+          createdNewTab = true;
+        } else {
+          tabsToGroup = [currentTab];
+        }
       }
       const groupableTabs = tabsToGroup.filter((t) => !t.pinned);
       if (groupableTabs.length === 0) {
@@ -65519,9 +65716,15 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       clearPendingConfirmation();
       try {
         gBrowser.addTabGroup(groupableTabs, { label: name });
-        return {
-          message: `Created tab group "${name}" with ${groupableTabs.length} tab(s).`
-        };
+        let msg;
+        if (openUrl) {
+          msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+        } else if (createdNewTab) {
+          msg = `Created tab group "${name}" with a new tab.`;
+        } else {
+          msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+        }
+        return { message: msg };
       } catch (e) {
         return { message: `Failed to create tab group: ${e}` };
       }
@@ -65989,6 +66192,10 @@ You have the following workers available:
 - **copy_tab_urls**: No arguments needed
 - **split_tabs**: { indices: [number, number, ...] } - split tabs into side-by-side windows
 
+*Split View Commands (side-by-side tabs in same window):*
+- **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
+- **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
+
 *Hub Commands (Bookmark Folders - Persistent):*
 - **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
 - **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
@@ -66011,6 +66218,7 @@ You have the following workers available:
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
 - **search_memory**: { query: string, hub?: string }
+- **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
@@ -66025,10 +66233,12 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
 **Rules**
 1.  **Keyword Detection in LATEST Message:** Look at the user's LATEST message ONLY. If it contains these keywords, use the browser tool:
     - "tab", "tabs" \u2192 tab commands
+    - "split view", "splitview", "split" \u2192 split view commands (add_split_view, remove_split_view)
     - "group", "tab group" \u2192 tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
     - "hub" \u2192 hub commands
     - "window" \u2192 window commands
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show"
+    - "summarize", "summary", "what is this page" \u2192 summarize_page
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
 2.  **General Questions \u2192 Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
@@ -66078,6 +66288,30 @@ User: "Add all existing tabs to streaming"
 
 User: "Save this tab to my Research hub"
 \u2192 { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+
+User: "Add split view" or "Split this tab"
+\u2192 { "next": "add_split_view", "args": {} }
+
+User: "Split tab 1 and 2" or "Add tab 1 and 2 to split view"
+\u2192 { "next": "add_split_view", "args": { "indices": [1, 2] } }
+
+User: "Split view with the Amazon tab"
+\u2192 { "next": "add_split_view", "args": { "withQuery": "Amazon" } }
+
+User: "Split view with tab 2"
+\u2192 { "next": "add_split_view", "args": { "withIndex": 2 } }
+
+User: "Remove split view" or "Unsplit tabs"
+\u2192 { "next": "remove_split_view", "args": {} }
+
+User: "Summarize this page" or "What is this page about?"
+\u2192 { "next": "summarize_page", "args": {} }
+
+User: "Summarize tab 1" or "Summarize the first tab"
+\u2192 { "next": "summarize_page", "args": { "index": 1 } }
+
+User: "Summarize the Amazon tab"
+\u2192 { "next": "summarize_page", "args": { "query": "Amazon" } }
 
 User: "Rename tab group Work to Projects"
 \u2192 { "next": "rename_tab_group", "args": { "from": "Work", "to": "Projects" } }
@@ -66155,7 +66389,20 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       const lastMsg = state.messages[state.messages.length - 1];
       const lastMsgText = msgText(lastMsg);
       const hasToolOutput = lastMsgText.includes("[Tool Output for");
-      const hiddenInstruction = hasToolOutput ? "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data." : "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+      const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+      let hiddenInstruction;
+      if (hasSummarizeRequest) {
+        hiddenInstruction = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
+1. Captures the main topic and key points
+2. Uses bullet points for easy reading
+3. Keeps it to 3-5 paragraphs max
+4. Highlights any important facts, dates, or conclusions
+Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
+      } else if (hasToolOutput) {
+        hiddenInstruction = "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
+      } else {
+        hiddenInstruction = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+      }
       const messagesWithPrompt = [
         ...state.messages,
         new HumanMessage(hiddenInstruction)
@@ -66202,10 +66449,25 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
           preRoutedArgs = { name: tabGroupMatch[1].trim() };
           console.log(`\u{1F3AF} Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
         }
-        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called\s+|named\s+)?["']?([^"'\n]+?)["']?(?:\s+with)?/i);
+        const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i);
         if (createGroupMatch && !preRoutedNext) {
-          preRoutedNext = "create_tab_group";
-          preRoutedArgs = { name: createGroupMatch[1].trim() };
+          let groupName = createGroupMatch[1].trim();
+          let openUrl;
+          const openInItMatch = groupName.match(/\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i);
+          if (openInItMatch) {
+            openUrl = openInItMatch[1].trim();
+            groupName = groupName.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+          }
+          groupName = groupName.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
+          groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
+          groupName = groupName.replace(/["']/g, "").trim();
+          if (groupName) {
+            preRoutedNext = "create_tab_group";
+            preRoutedArgs = { name: groupName };
+            if (openUrl) {
+              preRoutedArgs.openUrl = openUrl;
+            }
+          }
           const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
           if (indicesMatch) {
             const indices = indicesMatch[1].match(/\d+/g)?.map(Number) || [];
@@ -66231,6 +66493,53 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
         if (closeTabMatch && !preRoutedNext) {
           preRoutedNext = "close_tab";
           preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
+        }
+        const twoTabsMatch = commandText.match(/(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i) || commandText.match(/(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i);
+        if (twoTabsMatch && !preRoutedNext) {
+          preRoutedNext = "add_split_view";
+          preRoutedArgs = { indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])] };
+        }
+        const addSplitViewMatch = commandText.match(/(?:add|create|enable)\s+split\s*view/i) || commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
+        if (addSplitViewMatch && !preRoutedNext) {
+          preRoutedNext = "add_split_view";
+          const withTabMatch = commandText.match(/(?:with|and)\s+(?:tab\s+)?(\d+)/i);
+          const withQueryMatch = commandText.match(/(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i);
+          if (withTabMatch) {
+            preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
+          } else if (withQueryMatch) {
+            preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
+          } else {
+            preRoutedArgs = {};
+          }
+        }
+        const removeSplitViewMatch = commandText.match(/(?:remove|disable|close)\s+split\s*view/i) || commandText.match(/unsplit\s+(?:tabs?|view)?/i);
+        if (removeSplitViewMatch && !preRoutedNext) {
+          preRoutedNext = "remove_split_view";
+          preRoutedArgs = {};
+        }
+        const summarizeCurrentTabMatch = commandText.match(/summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+        if (summarizeCurrentTabMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          preRoutedArgs = {};
+        }
+        const summarizeTabMatch = commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) || commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+        if (summarizeTabMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          const tabNum = summarizeTabMatch[1] ? parseInt(summarizeTabMatch[1]) : 1;
+          preRoutedArgs = { index: tabNum };
+        }
+        const summarizeQueryMatch = commandText.match(/summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i);
+        if (summarizeQueryMatch && !preRoutedNext) {
+          const queryText = summarizeQueryMatch[1].trim().toLowerCase();
+          if (!["current", "this", "active"].includes(queryText)) {
+            preRoutedNext = "summarize_page";
+            preRoutedArgs = { query: queryText };
+          }
+        }
+        const summarizeMatch = commandText.match(/summarize\s+(?:this\s+)?(?:page|article|website|site)?/i) || commandText.match(/(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i) || commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
+        if (summarizeMatch && !preRoutedNext) {
+          preRoutedNext = "summarize_page";
+          preRoutedArgs = {};
         }
       }
       if (preRoutedNext) {
@@ -66300,6 +66609,9 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       new MoveTabToNewWindowCommand(),
       new CopyTabUrlsCommand(),
       new SplitTabsCommand(),
+      // Split View (side-by-side tabs in same window)
+      new AddSplitViewCommand(),
+      new RemoveSplitViewCommand(),
       // Hubs (Bookmark Folders - Persistent)
       new CreateHubCommand(),
       new DeleteHubCommand(),
@@ -66322,6 +66634,7 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
       new OrganizeWindowsCommand(),
       new ShowURLCommand(),
       new SearchMemoryCommand(),
+      new SummarizePageCommand(),
       new ShowSubscriptionCommand()
     ];
     const graph = await buildGraph(commands, messageId);
