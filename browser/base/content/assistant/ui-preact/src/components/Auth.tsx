@@ -69,7 +69,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
       gap: '24px'
     }}>
       <div style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#495800', margin: '0 0 8px 0' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#7A9200', margin: '0 0 8px 0' }}>
           {mode === 'signup' ? 'Create Account' : 'Welcome Back'}
         </h2>
         <p style={{ color: '#666', margin: 0 }}>

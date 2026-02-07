@@ -120,9 +120,9 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         <div style={{ position: 'relative' }} ref={menuRef}>
             <HeaderBtn onClick={() => setShowMenu(!showMenu)} title="Menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <circle cx="5" cy="12" r="2" fill="#495800"/>
-                    <circle cx="12" cy="12" r="2" fill="#495800"/>
-                    <circle cx="19" cy="12" r="2" fill="#495800"/>
+                    <circle cx="5" cy="12" r="2" fill="#7A9200"/>
+                    <circle cx="12" cy="12" r="2" fill="#7A9200"/>
+                    <circle cx="19" cy="12" r="2" fill="#7A9200"/>
                 </svg>
             </HeaderBtn>
 
@@ -168,10 +168,17 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
                 <path d="M6 21C5.20435 21 4.44129 20.6839 3.87868 20.1213C3.31607 19.5587 3 18.7956 3 18V6C3 5.20435 3.31607 4.44129 3.87868 3.87868C4.44129 3.31607 5.20435 3 6 3H18C18.7956 3 19.5587 3.31607 20.1213 3.87868C20.6839 4.44129 21 5.20435 21 6V18C21 18.7956 20.6839 19.5587 20.1213 20.1213C19.5587 20.6839 18.7956 21 18 21H6ZM18 5H10V19H18C18.2652 19 18.5196 18.8946 18.7071 18.7071C18.8946 18.5196 19 18.2652 19 18V6C19 5.73478 18.8946 5.48043 18.7071 5.29289C18.5196 5.10536 18.2652 5 18 5Z" fill="#7A9200"/>
             </svg>
         </HeaderBtn>
+
+        {/* Minimize Button */}
+        <HeaderBtn onClick={handleMinimize} title="Minimize">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+        </HeaderBtn>
         
         {/* Close Button (Figma doesn't show it but it's essential, styling it cleanly) */}
          <HeaderBtn onClick={handleClose} title="Close" hoverColor="#ffecec">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#495800" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -198,7 +205,7 @@ function HeaderBtn({ onClick, title, children, hoverColor }: any) {
         alignItems: 'center',
         justifyContent: 'center',
         transition: 'background 0.2s',
-        color: '#495800' // Primary Green
+        color: '#7A9200'
       }}
       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hoverColor || 'rgba(122, 146, 0, 0.1)')}
       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}

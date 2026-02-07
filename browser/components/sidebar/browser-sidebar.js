@@ -2042,13 +2042,13 @@ var SidebarController = {
         const contentArea = document.getElementById("tabbrowser-tabbox");
         const contentBounds = contentArea?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
 
-        // Set initial size
+        // Default AI chat dock: size 420×520px, bottom-right of content area, 16px padding
         const defaultWidth = 420;
         const defaultHeight = 520;
         overlayShell.style.width = `${defaultWidth}px`;
         overlayShell.style.height = `${defaultHeight}px`;
         
-        // Position at bottom-right of content area with padding
+        // Position at bottom-right of content area with padding (default AI chat position)
         const padding = 16;
         overlayShell.style.left = `${contentBounds.right - defaultWidth - padding}px`;
         overlayShell.style.top = `${contentBounds.bottom - defaultHeight - padding}px`;
