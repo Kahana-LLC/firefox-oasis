@@ -1,0 +1,25 @@
+1770701923994	SessionStore	DEBUG	Successful file read of clean file
+1770701923994	SessionStore	DEBUG	Completed SessionFile.read() with result.origin: clean
+1770701923994	SessionStore	DEBUG	isAutomaticRestoreEnabled: false
+1770701923994	SessionStore	DEBUG	Discarding previous session as we have initialState
+1770701923995	SessionStore	DEBUG	Previous shutdown ok? false, reason: N/A
+1770701924418	SessionStore	DEBUG	initSession willRestore: false, SessionStartup.sessionType: 3
+1770701924419	SessionStore	DEBUG	initSession deferred restore with 1 initial windows, 1 remaining windows
+1770701924420	SessionStore	DEBUG	restoreWindows will restore 1 windows
+1770701924421	SessionStore	DEBUG	restoreWindow, will restore 0 tabs and 0 tab groups, restoreTabsLazily: true
+1770701924462	SessionStore	DEBUG	sessionstore-windows-restored
+1770701924493	SessionStore	DEBUG	All 1 windows restored
+1770701924788	SessionStore	DEBUG	initialState contains 0 pinned tabs
+1770701924794	SessionStore.LogManager	DEBUG	Flushing file log
+1770701924800	SessionStore.LogManager	DEBUG	Log cleanup threshold time: 1769837924800
+1770701924868	SessionStore.LogManager	DEBUG	Done deleting files.
+1770701941282	SessionStore	DEBUG	SessionWriter.write wrote 5348 bytes in 2ms
+1770701949335	SessionStore	DEBUG	onClose, closing window isLastRegularWindow? true
+1770701949336	SessionStore	DEBUG	Saved closed window:4 with 1 open tabs, 3 closed tabs
+1770701949494	SessionStore	DEBUG	onQuitApplicationGranted, shutdown of 0 windows will be sync? false
+1770701949494	SessionStore	DEBUG	Last session save attempt: 8211ms ago
+1770701949507	SessionStore	DEBUG	SessionSaver scheduling a state save during shutdown
+1770701949541	SessionStore	DEBUG	SessionSave run called during shutdown
+1770701949542	SessionStore	DEBUG	SessionSaver writing state during shutdown
+1770701949581	SessionStore	DEBUG	SessionWriter.write wrote 5319 bytes in 37ms
+1770701949587	SessionStore	DEBUG	SessionSaver sessionstore-state-write-complete during shutdown

@@ -1,0 +1,2 @@
+{"timestamp":931777679,"category":"nimbus_events","name":"enrollment","extra":{"experiment_type":"rollout","experiment":"fx-accounts-ping-release-rollout-2","branch":"control","glean_timestamp":"1770704906745"}}
+{"timestamp":932260725,"category":"glean","name":"restarted","extra":{"glean_timestamp":"1770705389791","glean.startup.date":"2026-02-10T01:36-05:00"},"execution_counter":1}
