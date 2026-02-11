@@ -145,14 +145,12 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
                                 <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>Signed in as</div>
                                 <div style={{ fontSize: '13px', fontWeight: 500, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auth.user?.email}</div>
                             </div>
-                            <MenuItem onClick={handleMinimize}>Minimize</MenuItem>
                             <MenuItem onClick={() => { alert('Settings coming soon'); setShowMenu(false); }}>Settings</MenuItem>
                             <MenuItem onClick={handleSignOut} style={{ color: '#e53935' }}>Sign Out</MenuItem>
                         </div>
                     ) : (
                         <div>
                              <MenuItem onClick={() => { onShowAuth(); setShowMenu(false); }}>Sign In / Sign Up</MenuItem>
-                             <MenuItem onClick={handleMinimize}>Minimize</MenuItem>
                         </div>
                     )}
                 </div>
@@ -166,13 +164,6 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         }} title="Toggle Sidebar">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 21C5.20435 21 4.44129 20.6839 3.87868 20.1213C3.31607 19.5587 3 18.7956 3 18V6C3 5.20435 3.31607 4.44129 3.87868 3.87868C4.44129 3.31607 5.20435 3 6 3H18C18.7956 3 19.5587 3.31607 20.1213 3.87868C20.6839 4.44129 21 5.20435 21 6V18C21 18.7956 20.6839 19.5587 20.1213 20.1213C19.5587 20.6839 18.7956 21 18 21H6ZM18 5H10V19H18C18.2652 19 18.5196 18.8946 18.7071 18.7071C18.8946 18.5196 19 18.2652 19 18V6C19 5.73478 18.8946 5.48043 18.7071 5.29289C18.5196 5.10536 18.2652 5 18 5Z" fill="#7A9200"/>
-            </svg>
-        </HeaderBtn>
-
-        {/* Minimize Button */}
-        <HeaderBtn onClick={handleMinimize} title="Minimize">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
         </HeaderBtn>
         
