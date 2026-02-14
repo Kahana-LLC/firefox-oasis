@@ -1,4 +1,4 @@
-import { h } from 'preact';
+import { h, Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 
 interface AuthProps {
@@ -7,15 +7,17 @@ interface AuthProps {
 }
 
 export function Auth({ onSuccess, onCancel }: AuthProps) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signup');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgotPassword'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
 
     const authService = (window as any).supabaseAuth;
@@ -30,14 +32,27 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
       if (mode === 'signup') {
         // wrapper: signUp(email, password, name)
         result = await authService.signUp(email, password);
-      } else {
+      } else if (mode === 'signin') {
         // wrapper: signInWithEmail(email, password)
         result = await authService.signInWithEmail(email, password);
+      } else if (mode === 'forgotPassword') {
+        result = await authService.resetPasswordForEmail(email);
+        if (!result.error) {
+            setSuccessMessage("Password reset email sent. Please check your inbox.");
+            setLoading(false);
+            return;
+        }
       }
 
       const { user, error: apiError } = result;
 
-      if (apiError) throw apiError;
+      if (apiError) {
+        const errorMessage = authService.handleAuthError 
+          ? authService.handleAuthError(apiError) 
+          : (apiError.message || "An error occurred");
+        setError(errorMessage);
+        return;
+      }
 
       if (user) {
         // Successful
@@ -52,10 +67,38 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
         setError("Please check your email for a confirmation link.");
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      const errorMessage = authService?.handleAuthError 
+        ? authService.handleAuthError(err) 
+        : (err.message || "An error occurred");
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getTitle = () => {
+      switch (mode) {
+          case 'signup': return 'Create Account';
+          case 'signin': return 'Welcome Back';
+          case 'forgotPassword': return 'Reset Password';
+      }
+  };
+
+  const getSubtitle = () => {
+      switch (mode) {
+          case 'signup': return 'Sign up to sync your tabs and history.';
+          case 'signin': return 'Sign in to your Oasis account.';
+          case 'forgotPassword': return 'Enter your email to receive a reset link.';
+      }
+  };
+
+  const getButtonText = () => {
+      if (loading) return 'Processing...';
+      switch (mode) {
+          case 'signup': return 'Sign Up';
+          case 'signin': return 'Sign In';
+          case 'forgotPassword': return 'Send Reset Link';
+      }
   };
 
   return (
@@ -70,10 +113,10 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     }}>
       <div style={{ textAlign: 'center' }}>
         <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#7A9200', margin: '0 0 8px 0' }}>
-          {mode === 'signup' ? 'Create Account' : 'Welcome Back'}
+          {getTitle()}
         </h2>
         <p style={{ color: '#666', margin: 0 }}>
-          {mode === 'signup' ? 'Sign up to sync your tabs and history.' : 'Sign in to your Oasis account.'}
+          {getSubtitle()}
         </p>
       </div>
 
@@ -90,21 +133,40 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
           />
         </div>
 
-        <div>
-           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500, color: '#333' }}>Password</label>
-           <input 
-            type="password" 
-            value={password}
-            onInput={(e: any) => setPassword(e.target.value)}
-            required
-            className="input-field" 
-            style={{ width: '100%', boxSizing: 'border-box', background: 'white', border: '1px solid #e0e0e0' }}
-          />
-        </div>
+        {mode !== 'forgotPassword' && (
+            <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: '#333' }}>Password</label>
+                {mode === 'signin' && (
+                    <button
+                        type="button"
+                        onClick={() => { setMode('forgotPassword'); setError(null); setSuccessMessage(null); }}
+                        style={{ background: 'none', border: 'none', color: '#7A9200', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                    >
+                        Forgot Password?
+                    </button>
+                )}
+            </div>
+            <input 
+                type="password" 
+                value={password}
+                onInput={(e: any) => setPassword(e.target.value)}
+                required
+                className="input-field" 
+                style={{ width: '100%', boxSizing: 'border-box', background: 'white', border: '1px solid #e0e0e0' }}
+            />
+            </div>
+        )}
 
         {error && (
           <div style={{ color: '#d32f2f', fontSize: '13px', background: '#ffebee', padding: '8px', borderRadius: '8px' }}>
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div style={{ color: '#2e7d32', fontSize: '13px', background: '#e8f5e9', padding: '8px', borderRadius: '8px' }}>
+            {successMessage}
           </div>
         )}
 
@@ -124,18 +186,29 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
             marginTop: '8px'
           }}
         >
-          {loading ? 'Processing...' : (mode === 'signup' ? 'Sign Up' : 'Sign In')}
+          {getButtonText()}
         </button>
       </form>
 
       <div style={{ fontSize: '13px', color: '#666' }}>
-        {mode === 'signup' ? "Already have an account? " : "Don't have an account? "}
-        <button 
-          onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); }}
-          style={{ background: 'none', border: 'none', color: '#7A9200', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-        >
-          {mode === 'signup' ? 'Sign In' : 'Sign Up'}
-        </button>
+        {mode === 'forgotPassword' ? (
+             <button 
+             onClick={() => { setMode('signin'); setError(null); setSuccessMessage(null); }}
+             style={{ background: 'none', border: 'none', color: '#7A9200', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+           >
+             Back to Sign In
+           </button>
+        ) : (
+            <>
+                {mode === 'signup' ? "Already have an account? " : "Don't have an account? "}
+                <button 
+                onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); setSuccessMessage(null); }}
+                style={{ background: 'none', border: 'none', color: '#7A9200', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                >
+                {mode === 'signup' ? 'Sign In' : 'Sign Up'}
+                </button>
+            </>
+        )}
       </div>
 
        <button 
