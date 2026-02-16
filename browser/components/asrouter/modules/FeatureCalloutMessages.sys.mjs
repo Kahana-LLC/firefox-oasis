@@ -1351,14 +1351,15 @@ const MESSAGES = () => {
         screens: [
           {
             id: "OASIS_CHAT_STEP_1",
+            progress_bar: false,
             anchors: [
               {
                 selector: "#oasis-chat-button",
                 panel_position: {
-                  anchor_attachment: "bottomright",
-                  callout_attachment: "topleft",
+                  anchor_attachment: "bottomcenter",
+                  callout_attachment: "topright",
                 },
-                arrow_width: 33.94113,
+                arrow_position: "top",
                 highlight_anchor: true,
               },
             ],
@@ -1366,7 +1367,6 @@ const MESSAGES = () => {
               position: "callout",
               width: "380px",
               padding: 16,
-              progress_bar: false,
               page_event_listeners: [
                 {
                   params: {
@@ -1404,95 +1404,6 @@ const MESSAGES = () => {
               },
               primary_button: {
                 label: {
-                  string_id: "oasis-chat-tour-next-button",
-                },
-                style: "primary",
-                has_arrow_icon: true,
-                action: {
-                  type: "SET_PREF",
-                  data: {
-                    pref: {
-                      name: "browser.oasis.chat-feature-tour",
-                      value: JSON.stringify({
-                        screen: "OASIS_CHAT_STEP_2",
-                        complete: false,
-                      }),
-                    },
-                  },
-                },
-              },
-              secondary_button: {
-                label: {
-                  string_id: "oasis-chat-tour-skip-button",
-                },
-                style: "secondary",
-                action: {
-                  type: "SET_PREF",
-                  data: {
-                    pref: {
-                      name: "browser.oasis.chat-feature-tour",
-                      value: JSON.stringify({
-                        screen: "",
-                        complete: true,
-                      }),
-                    },
-                  },
-                  dismiss: true,
-                },
-              },
-              dismiss_button: {
-                action: {
-                  type: "SET_PREF",
-                  data: {
-                    pref: {
-                      name: "browser.oasis.chat-feature-tour",
-                      value: JSON.stringify({
-                        screen: "",
-                        complete: true,
-                      }),
-                    },
-                  },
-                  dismiss: true,
-                },
-                size: "small",
-                marginInline: "0 14px",
-                marginBlock: "14px 0",
-              },
-            },
-          },
-          {
-            id: "OASIS_CHAT_STEP_2",
-            anchors: [
-              {
-                selector: "#oasis-chat-button",
-                panel_position: {
-                  anchor_attachment: "bottomright",
-                  callout_attachment: "topleft",
-                },
-                highlight_anchor: true,
-              },
-            ],
-            content: {
-              position: "callout",
-              width: "380px",
-              padding: 16,
-              progress_bar: false,
-              logo: {
-                imageURL:
-                  "chrome://browser/skin/oasis-chat-icon.svg",
-                height: "48px",
-                width: "48px",
-                marginBlock: "0 16px",
-              },
-              title: {
-                string_id: "oasis-chat-tour-step2-title",
-              },
-              subtitle: {
-                string_id: "oasis-chat-tour-step2-subtitle",
-                paddingInline: "34px 0",
-              },
-              primary_button: {
-                label: {
                   string_id: "oasis-chat-tour-try-button",
                 },
                 style: "primary",
@@ -1521,24 +1432,6 @@ const MESSAGES = () => {
                     ],
                   },
                   dismiss: true,
-                },
-              },
-              secondary_button: {
-                label: {
-                  string_id: "oasis-chat-tour-back-button",
-                },
-                style: "secondary",
-                action: {
-                  type: "SET_PREF",
-                  data: {
-                    pref: {
-                      name: "browser.oasis.chat-feature-tour",
-                      value: JSON.stringify({
-                        screen: "OASIS_CHAT_STEP_1",
-                        complete: false,
-                      }),
-                    },
-                  },
                 },
               },
               dismiss_button: {

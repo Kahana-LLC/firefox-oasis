@@ -111,8 +111,9 @@
   }
 }
 
-/* Arrow pointer animation */
+/* Arrow pointer styling - make it prominent like tab groups */
 #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .arrow {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
   animation: oasis-arrow-bounce 2s ease-in-out infinite;
 }
 
