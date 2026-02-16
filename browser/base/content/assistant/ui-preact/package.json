@@ -3,12 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "esbuild src/index.tsx --bundle --minify --format=iife --global-name=AssistantUI --outfile=../dist/assistant.ui.bundle.js --loader:.ts=ts --loader:.tsx=tsx --target=es2019 --platform=browser --jsx-factory=h --jsx-fragment=Fragment"
+    "build": "esbuild src/index.tsx --bundle --format=iife --global-name=AssistantUI --outfile=../dist/assistant.ui.bundle.js --loader:.ts=ts --loader:.tsx=tsx --target=es2019 --platform=browser --jsx-factory=h --jsx-fragment=Fragment"
   },
   "dependencies": {
     "preact": "^10.15.0"
   },
   "devDependencies": {
-    "esbuild": "^0.27.2"
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3"
   }
 }

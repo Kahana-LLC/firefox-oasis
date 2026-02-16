@@ -136,6 +136,26 @@ export default class SupabaseAuth {
         }
     }
 
+    public async resetPasswordForEmail(email: string): Promise<{ error: AuthError | null }> {
+        try {
+            console.log('Attempting password reset for:', email);
+            const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: 'https://kahana.co/update-password',
+            });
+
+            if (error) {
+                console.error('Password reset error:', error.message);
+                return { error };
+            }
+
+            console.log('Password reset email sent');
+            return { error: null };
+        } catch (error) {
+            console.error('Password reset error:', error);
+            return { error: error as AuthError };
+        }
+    }
+
     public async signOut(): Promise<{ error: AuthError | null }> {
         try {
             console.log('Attempting sign out');
