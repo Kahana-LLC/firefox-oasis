@@ -1,0 +1,237 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this file,
+   - You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; object-src 'none'; script-src resource: chrome:; connect-src https:; img-src https: data: blob: chrome:; style-src 'unsafe-inline' resource: chrome:;"
+    />
+    <title>Welcome to Oasis</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="chrome://branding/content/icon32.png"
+    />
+    <link rel="stylesheet" href="chrome://global/skin/in-content/common.css" />
+    <link
+      rel="stylesheet"
+      href="chrome://browser/content/oasiswelcome/oasiswelcome.css"
+    />
+    <link rel="localization" href="branding/brand.ftl" />
+    
+    <!-- Debug: Check if scripts are loading -->
+    <script>
+      console.log('Oasis Welcome: HTML loaded, checking script loading...');
+      window.oasisWelcomeDebug = {
+        scriptsLoaded: [],
+        scriptsFailed: []
+      };
+    </script>
+    
+    <!-- Load Supabase Auth Service -->
+    <script 
+      src="chrome://browser/content/assistant/assistant.bundle.js"
+      onload="console.log('Oasis Welcome: assistant.bundle.js loaded successfully'); window.oasisWelcomeDebug.scriptsLoaded.push('assistant.bundle.js');"
+      onerror="console.error('Oasis Welcome: Failed to load assistant.bundle.js'); window.oasisWelcomeDebug.scriptsFailed.push('assistant.bundle.js');">
+    </script>
+  </head>
+  <body>
+    <div id="oasis-welcome-root" class="oasis-welcome-container">
+      
+      <!-- Auth Status Banner -->
+      <div id="auth-banner" class="oasis-auth-banner" style="display: none;">
+        <div class="oasis-banner-content">
+          <span class="oasis-banner-label">Signed in as</span>
+          <span class="oasis-banner-email" id="auth-banner-email"></span>
+        </div>
+      </div>
+      
+      <!-- Page 1: Welcome -->
+      <div class="oasis-page active" id="page-1">
+        <div class="oasis-welcome-content">
+          <div class="oasis-logo-section">
+            <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-main-logo" />
+          </div>
+          
+          <div class="oasis-text-section">
+            <h1 class="oasis-welcome-title">Welcome to Oasis</h1>
+            <p class="oasis-welcome-subtitle">Meet the ergonomic way of browsing</p>
+          </div>
+
+          <button class="oasis-primary-button" id="begin-journey-btn">Begin your journey!</button>
+        </div>
+      </div>
+
+      <!-- Page 2: Name Input -->
+      <div class="oasis-page" id="page-2">
+        <div class="oasis-split-layout">
+          <div class="oasis-left-panel">
+            <!-- Left side with cream background -->
+          </div>
+          <div class="oasis-right-panel">
+            <div class="oasis-logo-corner">
+              <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
+            </div>
+            <div class="oasis-form-content">
+              <div class="oasis-form-header">
+                <h2 class="oasis-form-title">what shall we call you?</h2>
+                <p class="oasis-form-subtitle">enter your full name here</p>
+              </div>
+              <div class="oasis-input-container">
+                <input 
+                  type="text" 
+                  id="user-name-input" 
+                  class="oasis-text-input" 
+                  placeholder="Name"
+                  maxlength="100"
+                />
+                <button class="oasis-next-button" id="name-next-btn">next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 3: Import Browser Data -->
+      <div class="oasis-page" id="page-3">
+        <div class="oasis-split-layout">
+          <div class="oasis-left-panel">
+            <!-- Left side with cream background -->
+          </div>
+          <div class="oasis-right-panel">
+            <div class="oasis-logo-corner">
+              <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
+            </div>
+            <div class="oasis-import-content">
+              <div class="oasis-import-header">
+                <h2 class="oasis-import-title">Import your browser data</h2>
+                <p class="oasis-import-subtitle">Choose what you'd like to bring from your previous browser</p>
+              </div>
+
+              <div class="oasis-import-options">
+                <!-- Browser History -->
+                <div class="oasis-import-item">
+                  <div class="oasis-import-item-info">
+                    <div class="oasis-import-icon-container">
+                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="9" stroke="#7a9200" stroke-width="2"/>
+                        <path d="M12 6v6l4 4" stroke="#7a9200" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div class="oasis-import-text">
+                      <h3 class="oasis-import-item-title">Browser History</h3>
+                      <p class="oasis-import-item-desc">Import your browsing history and frequently visited sites</p>
+                    </div>
+                  </div>
+                  <input type="checkbox" class="oasis-checkbox" id="import-history" />
+                  <label for="import-history" class="oasis-checkbox-label"></label>
+                </div>
+
+                <!-- Bookmarks -->
+                <div class="oasis-import-item">
+                  <div class="oasis-import-item-info">
+                    <div class="oasis-import-icon-container">
+                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="#7a9200" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="oasis-import-text">
+                      <h3 class="oasis-import-item-title">Bookmarks</h3>
+                      <p class="oasis-import-item-desc">Import your saved bookmarks and favorite pages</p>
+                    </div>
+                  </div>
+                  <input type="checkbox" class="oasis-checkbox" id="import-bookmarks" checked />
+                  <label for="import-bookmarks" class="oasis-checkbox-label"></label>
+                </div>
+
+                <!-- Extensions -->
+                <div class="oasis-import-item">
+                  <div class="oasis-import-item-info">
+                    <div class="oasis-import-icon-container">
+                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="3" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
+                        <rect x="13" y="3" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
+                        <rect x="3" y="13" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
+                        <rect x="13" y="13" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
+                      </svg>
+                    </div>
+                    <div class="oasis-import-text">
+                      <h3 class="oasis-import-item-title">Extensions</h3>
+                      <p class="oasis-import-item-desc">Import your browser extensions and add ons</p>
+                    </div>
+                  </div>
+                  <input type="checkbox" class="oasis-checkbox" id="import-extensions" checked />
+                  <label for="import-extensions" class="oasis-checkbox-label"></label>
+                </div>
+
+                <!-- Cookies and Login Data -->
+                <div class="oasis-import-item">
+                  <div class="oasis-import-item-info">
+                    <div class="oasis-import-icon-container">
+                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M21 10h-8.35C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H13l2 2 2-2 2 2 4-4z" stroke="#7a9200" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="7" cy="12" r="1" fill="#7a9200"/>
+                      </svg>
+                    </div>
+                    <div class="oasis-import-text">
+                      <h3 class="oasis-import-item-title">Cookies and Login Data</h3>
+                      <p class="oasis-import-item-desc">Import your saved passwords and stay signed in to your accounts</p>
+                    </div>
+                  </div>
+                  <input type="checkbox" class="oasis-checkbox" id="import-cookies" />
+                  <label for="import-cookies" class="oasis-checkbox-label"></label>
+                </div>
+              </div>
+
+              <div class="oasis-import-actions">
+                <button class="oasis-back-button" id="import-back-btn">Back</button>
+                <div class="oasis-right-actions">
+                  <button class="oasis-skip-import-button" id="import-skip-btn">Skip</button>
+                  <button class="oasis-import-button" id="import-confirm-btn">Import</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 4: AI Assistant Sign Up -->
+      <div class="oasis-page" id="page-4">
+        <div class="oasis-split-layout">
+          <div class="oasis-left-panel">
+            <!-- Left side with cream background -->
+          </div>
+          <div class="oasis-right-panel">
+            <div class="oasis-logo-corner">
+              <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
+            </div>
+            <div class="oasis-ai-signup-content">
+              <div class="oasis-ai-signup-header">
+                <h2 class="oasis-ai-signup-title">Sign in or sign up to start using Oasis AI</h2>
+                <p class="oasis-ai-signup-subtitle">Unlock the full potential of AI-powered browsing</p>
+              </div>
+              
+              <div class="oasis-ai-signup-actions">
+                <button class="oasis-open-signup-button" id="open-signup-btn">
+                  Sign Up / Sign In
+                </button>
+                <button class="oasis-skip-ai-button" id="skip-ai-btn">Skip for now</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Load Auth Bridge -->
+    <script src="chrome://browser/content/oasiswelcome/auth-bridge.js"></script>
+    <script src="chrome://browser/content/oasiswelcome/oasiswelcome.js"></script>
+  </body>
+</html>
+

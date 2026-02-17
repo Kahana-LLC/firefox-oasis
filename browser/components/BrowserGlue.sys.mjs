@@ -11,6 +11,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AboutHomeStartupCache: "resource:///modules/AboutHomeStartupCache.sys.mjs",
   AWToolbarButton: "resource:///modules/aboutwelcome/AWToolbarUtils.sys.mjs",
   ASRouter: "resource:///modules/asrouter/ASRouter.sys.mjs",
+  OasisWelcomeManager: "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
   ASRouterDefaultConfig:
     "resource:///modules/asrouter/ASRouterDefaultConfig.sys.mjs",
   ASRouterNewTabHook: "resource:///modules/asrouter/ASRouterNewTabHook.sys.mjs",
@@ -795,6 +796,9 @@ BrowserGlue.prototype = {
     );
 
     this._firstWindowTelemetry(aWindow);
+
+    // Show Oasis custom welcome page if this is the first run
+    lazy.OasisWelcomeManager.maybeShowWelcomeOnStartup(aWindow);
   },
 
   _maybeOfferProfileReset() {

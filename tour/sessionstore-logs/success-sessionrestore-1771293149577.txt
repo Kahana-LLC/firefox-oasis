@@ -1,0 +1,26 @@
+1771293149859	SessionStore	DEBUG	Successful file read of clean file
+1771293149860	SessionStore	DEBUG	Completed SessionFile.read() with result.origin: clean
+1771293149860	SessionStore	DEBUG	isAutomaticRestoreEnabled: false
+1771293149860	SessionStore	DEBUG	Discarding previous session as we have initialState
+1771293149860	SessionStore	DEBUG	Previous shutdown ok? false, reason: N/A
+1771293150174	SessionStore	DEBUG	initialState contains 0 pinned tabs
+1771293150220	SessionStore	DEBUG	initSession willRestore: false, SessionStartup.sessionType: 3
+1771293150220	SessionStore	DEBUG	initSession deferred restore with 1 initial windows, 1 remaining windows
+1771293150221	SessionStore	DEBUG	restoreWindows will restore 1 windows
+1771293150222	SessionStore	DEBUG	restoreWindow, will restore 0 tabs and 0 tab groups, restoreTabsLazily: true
+1771293150240	SessionStore	DEBUG	sessionstore-windows-restored
+1771293150258	SessionStore	DEBUG	All 1 windows restored
+1771293150622	SessionStore.LogManager	DEBUG	Flushing file log
+1771293150624	SessionStore.LogManager	DEBUG	Log cleanup threshold time: 1770429150624
+1771293150636	SessionStore.LogManager	DEBUG	Done deleting files.
+1771293167153	SessionStore	DEBUG	SessionWriter.write wrote 13254 bytes in 2ms
+1771293184255	SessionStore	DEBUG	SessionWriter.write wrote 13275 bytes in 2ms
+1771293214301	SessionStore	DEBUG	onClose, closing window isLastRegularWindow? true
+1771293214301	SessionStore	DEBUG	Saved closed window:9 with 1 open tabs, 8 closed tabs
+1771293214419	SessionStore	DEBUG	onQuitApplicationGranted, shutdown of 0 windows will be sync? false
+1771293214419	SessionStore	DEBUG	Last session save attempt: 30164ms ago
+1771293214422	SessionStore	DEBUG	SessionSaver scheduling a state save during shutdown
+1771293214761	SessionStore	DEBUG	SessionSave run called during shutdown
+1771293214761	SessionStore	DEBUG	SessionSaver writing state during shutdown
+1771293214778	SessionStore	DEBUG	SessionWriter.write wrote 12593 bytes in 14ms
+1771293214784	SessionStore	DEBUG	SessionSaver sessionstore-state-write-complete during shutdown

@@ -1,0 +1,160 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+const DID_SEE_OASIS_WELCOME_PREF = "browser.oasis.welcome.didSee";
+const DID_COMPLETE_OASIS_ONBOARDING_PREF = "browser.oasis.welcome.completed";
+
+const lazy = {};
+
+ChromeUtils.defineLazyGetter(lazy, "log", () => {
+  const { Logger } = ChromeUtils.importESModule(
+    "resource://messaging-system/lib/Logger.sys.mjs"
+  );
+  return new Logger("OasisWelcomeParent");
+});
+
+export class OasisWelcomeParent extends JSWindowActorParent {
+  receiveMessage(message) {
+    const { name, data } = message;
+    lazy.log.debug(`Received message: ${name}`, data);
+
+    switch (name) {
+      case "OasisWelcome:SetUserName":
+        this.setUserName(data);
+        break;
+      case "OasisWelcome:SetImportSettings":
+        this.setImportSettings(data);
+        break;
+      case "OasisWelcome:OpenSignup":
+        this.openSignupInNewTab();
+        break;
+      case "OasisWelcome:Finished":
+        this.completeOnboarding();
+        break;
+      case "SET_OASIS_WELCOME_SEEN":
+        this.markWelcomeSeen(data);
+        break;
+      case "SET_OASIS_ONBOARDING_COMPLETE":
+        this.markOnboardingComplete(data);
+        break;
+      case "OASIS_TELEMETRY":
+        this.sendTelemetry(data);
+        break;
+    }
+  }
+
+  setUserName(data) {
+    try {
+      if (data && data.name) {
+        Services.prefs.setStringPref("browser.oasis.user.name", data.name);
+        lazy.log.debug("Saved user name:", data.name);
+      }
+    } catch (e) {
+      lazy.log.error("Failed to save user name:", e);
+    }
+  }
+
+  setImportSettings(data) {
+    try {
+      if (data) {
+        Services.prefs.setBoolPref("browser.oasis.import.history", data.history || false);
+        Services.prefs.setBoolPref("browser.oasis.import.bookmarks", data.bookmarks || false);
+        Services.prefs.setBoolPref("browser.oasis.import.extensions", data.extensions || false);
+        Services.prefs.setBoolPref("browser.oasis.import.cookies", data.cookies || false);
+        lazy.log.debug("Saved import settings:", data);
+      }
+    } catch (e) {
+      lazy.log.error("Failed to save import settings:", e);
+    }
+  }
+
+  openSignupInNewTab() {
+    try {
+      const window = this.browsingContext.topChromeWindow;
+      if (window && window.gBrowser) {
+        // Get the onboarding tab before opening new one
+        const onboardingTab = window.gBrowser.getTabForBrowser(this.browsingContext.embedderElement);
+        
+        // Open auth page in a new browser tab with proper context
+        const authURL = "chrome://browser/content/oasiswelcome/oasis-auth.html";
+        const newTab = window.gBrowser.addTrustedTab(authURL, {
+          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          inBackground: false,
+        });
+        window.gBrowser.selectedTab = newTab;
+        
+        // Close the onboarding tab
+        if (onboardingTab) {
+          window.gBrowser.removeTab(onboardingTab);
+          lazy.log.debug("Closed onboarding tab");
+        }
+        
+        lazy.log.debug("Opened Oasis auth in new tab");
+      }
+    } catch (e) {
+      lazy.log.error("Failed to open auth in new tab:", e);
+    }
+  }
+
+  completeOnboarding() {
+    try {
+      Services.prefs.setBoolPref(DID_COMPLETE_OASIS_ONBOARDING_PREF, true);
+      lazy.log.debug("Oasis onboarding completed");
+      
+      const window = this.browsingContext.topChromeWindow;
+      if (window && window.gBrowser) {
+        // Open a new tab with the home page before closing the welcome tab
+        // This ensures the browser doesn't close if welcome is the only tab
+        const homePageURL = "about:home";
+        const newTab = window.gBrowser.addTab(homePageURL, {
+          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+        });
+        window.gBrowser.selectedTab = newTab;
+        
+        // Now close the welcome tab
+        const tab = window.gBrowser.getTabForBrowser(this.browsingContext.embedderElement);
+        if (tab) {
+          window.gBrowser.removeTab(tab);
+        }
+      }
+    } catch (e) {
+      lazy.log.error("Failed to complete onboarding:", e);
+    }
+  }
+
+  markWelcomeSeen(data) {
+    try {
+      Services.prefs.setBoolPref(DID_SEE_OASIS_WELCOME_PREF, true);
+      Services.prefs.setCharPref(
+        "browser.oasis.welcome.timestamp",
+        String(data.timestamp || Date.now())
+      );
+      lazy.log.debug("Marked Oasis welcome as seen");
+    } catch (e) {
+      lazy.log.error("Failed to mark welcome as seen:", e);
+    }
+  }
+
+  markOnboardingComplete(data) {
+    try {
+      Services.prefs.setBoolPref(DID_COMPLETE_OASIS_ONBOARDING_PREF, true);
+      Services.prefs.setIntPref(
+        "browser.oasis.welcome.lastPage",
+        data.lastPage || 0
+      );
+      lazy.log.debug("Marked Oasis onboarding as complete");
+    } catch (e) {
+      lazy.log.error("Failed to mark onboarding as complete:", e);
+    }
+  }
+
+  sendTelemetry(data) {
+    lazy.log.debug("Oasis Welcome Telemetry:", data);
+  }
+
+  didDestroy() {
+    lazy.log.debug("OasisWelcomeParent actor destroyed");
+  }
+}
+

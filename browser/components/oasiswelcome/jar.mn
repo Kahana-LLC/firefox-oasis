@@ -1,0 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+browser.jar:
+    content/browser/oasiswelcome/oasiswelcome.html     (content/oasiswelcome.html)
+    content/browser/oasiswelcome/oasiswelcome.css      (content/oasiswelcome.css)
+    content/browser/oasiswelcome/oasiswelcome.js       (content/oasiswelcome.js)
+    content/browser/oasiswelcome/auth-bridge.js        (content/auth-bridge.js)
+    content/browser/oasiswelcome/oasis-auth.html       (content/oasis-auth.html)
+

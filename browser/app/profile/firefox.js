@@ -2123,6 +2123,16 @@ pref("browser.aboutwelcome.enabled", true);
 // Used to set multistage welcome UX
 pref("browser.aboutwelcome.screens", "");
 
+// Oasis custom welcome screen
+pref("browser.oasis.welcome.enabled", true);
+pref("browser.oasis.welcome.didSee", false);
+pref("browser.oasis.welcome.completed", false);
+pref("browser.oasis.user.name", "");
+pref("browser.oasis.import.history", false);
+pref("browser.oasis.import.bookmarks", false);
+pref("browser.oasis.import.extensions", false);
+pref("browser.oasis.import.cookies", false);
+
 // Disable singleProfile messaging mitigation (Bug 1963213) for multiProfile feature users
 pref("messaging-system.profile.singleProfileMessaging.disable", true);
 
