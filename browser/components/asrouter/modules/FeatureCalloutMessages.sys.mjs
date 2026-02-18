@@ -1457,7 +1457,8 @@ const MESSAGES = () => {
         ],
       },
       targeting:
-        "'browser.aboutwelcome.didSeeFinalScreen' | preferenceValue == true && userPrefs.cfrFeatures && !isMajorUpgrade && !activeNotifications",
+        "'browser.aboutwelcome.didSeeFinalScreen' | preferenceValue == true && userPrefs.cfrFeatures && !isMajorUpgrade && !activeNotifications" +
+        ` && ${matchIncompleteTargeting("browser.oasis.chat-feature-tour")}`,
       trigger: {
         id: "defaultBrowserCheck",
       },

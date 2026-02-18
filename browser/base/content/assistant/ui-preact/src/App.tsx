@@ -309,8 +309,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const updateFromGlobal = () => {
-        const globalState = (window as any).oasisAuthState;
+    const updateFromGlobal = (e?: Event) => {
+        // First check event detail if available, then fall back to window.oasisAuthState
+        const eventDetail = (e as CustomEvent)?.detail;
+        const globalState = eventDetail || (window as any).oasisAuthState;
         if (globalState && globalState.isAuthenticated !== undefined) {
              setAuth((prev) => {
                 if (prev.isAuthenticated === globalState.isAuthenticated && prev.user?.id === globalState.user?.id) {
@@ -326,34 +328,71 @@ export function App() {
         }
     };
 
-    // Initial Auth Check
-    const checkAuth = async () => {
+    // Initial Auth Check with retry mechanism
+    const checkAuth = async (retryCount = 0) => {
       // First, check if the global shim already has the auth state
-      const globalState = (window as any).oasisAuthState;
+      let globalState = (window as any).oasisAuthState;
       if (globalState && globalState.isAuthenticated) {
         setAuth({ isAuthenticated: true, user: globalState.user });
         setView('chat');
         return;
       }
 
+      // Try to force session restoration through assistantBridge if available
+      if ((window as any).assistantBridge && typeof (window as any).assistantBridge.ensureSessionRestored === 'function') {
+        try {
+          globalState = await (window as any).assistantBridge.ensureSessionRestored();
+          if (globalState && globalState.isAuthenticated) {
+            setAuth({ isAuthenticated: true, user: globalState.user });
+            setView('chat');
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed to ensure session restoration:", e);
+        }
+      }
+
       // If not, we can try to ask supabaseAuth directly, but only if it's available
       if ((window as any).supabaseAuth) {
         try {
-            // Give it a tiny bit of time to initialize if it's currently restoring
+            // Give it time to initialize and restore session if it's currently restoring
+            await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay for session restoration
+            
             const isAuth = await (window as any).supabaseAuth.isAuthenticated();
             if (isAuth) {
                 const user = await (window as any).supabaseAuth.getCurrentUser();
-                setAuth({ isAuthenticated: true, user });
-                setView('chat');
+                if (user) {
+                  // Update global state if it's not set
+                  if (!(window as any).oasisAuthState) {
+                    (window as any).oasisAuthState = { isAuthenticated: true, user };
+                  }
+                  setAuth({ isAuthenticated: true, user });
+                  setView('chat');
+                  return;
+                }
+            }
+            
+            // If still not authenticated and we haven't retried too many times, retry
+            if (retryCount < 5 && !globalState) {
+              setTimeout(() => checkAuth(retryCount + 1), 500);
             }
         } catch (e) {
             console.error("Auth check failed:", e);
+            // Retry on error if we haven't retried too many times
+            if (retryCount < 3) {
+              setTimeout(() => checkAuth(retryCount + 1), 500);
+            }
+        }
+      } else {
+        // supabaseAuth not available yet, retry if we haven't retried too many times
+        if (retryCount < 10) {
+          setTimeout(() => checkAuth(retryCount + 1), 200);
         }
       }
     };
     checkAuth();
 
-    window.addEventListener('oasis-auth-update', updateFromGlobal);
+    window.addEventListener('oasis-auth-update', (e) => updateFromGlobal(e));
     window.addEventListener('oasis-history-update', loadHistory);
     
     const handleConfirmationUpdate = (e: Event) => {

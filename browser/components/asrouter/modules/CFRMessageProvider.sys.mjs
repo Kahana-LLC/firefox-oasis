@@ -899,8 +899,16 @@ const CFR_MESSAGES = [
   },
 ];
 
+import { FeatureCalloutMessages } from "resource:///modules/asrouter/FeatureCalloutMessages.sys.mjs";
+
 export const CFRMessageProvider = {
   getMessages() {
-    return Promise.resolve(CFR_MESSAGES.filter(msg => !msg.exclude));
+    const cfrMessages = CFR_MESSAGES.filter(msg => !msg.exclude);
+    const featureCalloutMessages = FeatureCalloutMessages.getMessages();
+    // Filter to only include messages in the "cfr" group
+    const cfrFeatureCallouts = featureCalloutMessages.filter(msg => 
+      msg.groups && msg.groups.includes("cfr")
+    );
+    return Promise.resolve([...cfrMessages, ...cfrFeatureCallouts]);
   },
 };

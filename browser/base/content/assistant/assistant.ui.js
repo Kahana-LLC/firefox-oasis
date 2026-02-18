@@ -83,6 +83,16 @@
     },
     getAuthState() {
       return window.oasisAuthState || { isAuthenticated: false, user: null };
+    },
+    async ensureSessionRestored() {
+      // Force session restoration if not already done
+      if (!window.oasisAuthState || !window.oasisAuthState.isAuthenticated) {
+        console.log('assistantBridge: Forcing session restoration...');
+        await checkCurrentAuthStatus();
+        // Wait a bit for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return window.oasisAuthState || { isAuthenticated: false, user: null };
     }
   };
 
@@ -292,6 +302,8 @@ async function securelyLoadSession() {
 
                 if (!error && data.session) {
                     console.log("Supabase session restored successfully");
+                    // Give Supabase a moment to update its internal state
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     return data.session;
                 } else {
                     console.warn("Failed to restore Supabase session:", error);
@@ -338,6 +350,8 @@ async function checkCurrentAuthStatus() {
                     updateGlobalAuthState(false);
                 } else {
                      console.log('Oasis: Restored session verified for', user.email);
+                     // Update global state with verified user (in case user data changed)
+                     updateGlobalAuthState(true, user);
                      // Update session in storage if it changed (e.g. refreshed)
                      const { data: { session } } = await window.supabaseAuth.supabase.auth.getSession();
                      if (session) securelySaveSession(session);

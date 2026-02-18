@@ -41,6 +41,11 @@ export class OasisWelcomeParent extends JSWindowActorParent {
       case "OASIS_TELEMETRY":
         this.sendTelemetry(data);
         break;
+      case "OasisWelcome:TriggerFeatureCallout":
+        this.triggerFeatureCallout().catch(e => {
+          lazy.log.error("Error in triggerFeatureCallout:", e);
+        });
+        break;
     }
   }
 
@@ -118,6 +123,14 @@ export class OasisWelcomeParent extends JSWindowActorParent {
           window.gBrowser.removeTab(tab);
         }
       }
+      
+      // Trigger feature callout after onboarding completes
+      // Use setTimeout to ensure the new tab is ready
+      setTimeout(() => {
+        this.triggerFeatureCallout().catch(e => {
+          lazy.log.error("Failed to trigger callout after onboarding:", e);
+        });
+      }, 1000);
     } catch (e) {
       lazy.log.error("Failed to complete onboarding:", e);
     }
@@ -151,6 +164,101 @@ export class OasisWelcomeParent extends JSWindowActorParent {
 
   sendTelemetry(data) {
     lazy.log.debug("Oasis Welcome Telemetry:", data);
+  }
+
+  async triggerFeatureCallout() {
+    try {
+      lazy.log.debug("Starting triggerFeatureCallout");
+      
+      // Set the preference required for OASIS_CHAT_FEATURE_TOUR to show
+      // The targeting requires: 'browser.aboutwelcome.didSeeFinalScreen' | preferenceValue == true
+      Services.prefs.setBoolPref("browser.aboutwelcome.didSeeFinalScreen", true);
+      lazy.log.debug("Set browser.aboutwelcome.didSeeFinalScreen = true");
+      
+      // Ensure CFR features are enabled for targeting
+      Services.prefs.setBoolPref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", true);
+      lazy.log.debug("Set CFR features preference = true");
+
+      // Reset the tour preference if it's marked as complete, so the callout can show again
+      const tourPrefName = "browser.oasis.chat-feature-tour";
+      if (Services.prefs.prefHasUserValue(tourPrefName)) {
+        const tourPrefValue = Services.prefs.getCharPref(tourPrefName);
+        try {
+          const tourProgress = JSON.parse(tourPrefValue);
+          if (tourProgress.complete) {
+            Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+            lazy.log.debug("Reset Oasis chat feature tour preference to incomplete.");
+          } else {
+            lazy.log.debug("Tour preference already incomplete:", tourPrefValue);
+          }
+        } catch (e) {
+          lazy.log.warn("Failed to parse existing tour preference, resetting:", e);
+          Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+        }
+      } else {
+        // Set default value if pref doesn't exist
+        Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+        lazy.log.debug("Set default Oasis chat feature tour preference.");
+      }
+
+      const { ASRouter } = ChromeUtils.importESModule("resource:///modules/asrouter/ASRouter.sys.mjs");
+      if (!ASRouter) {
+        lazy.log.error("ASRouter module not found");
+        return;
+      }
+      
+      if (typeof ASRouter.sendTriggerMessage !== 'function') {
+        lazy.log.error("ASRouter.sendTriggerMessage is not a function");
+        return;
+      }
+      
+      await ASRouter.waitForInitialized;
+      lazy.log.debug("ASRouter initialized");
+      
+      // Get the most recent browser window (not the auth page window)
+      const window = Services.wm.getMostRecentWindow("navigator:browser");
+      if (!window || !window.gBrowser) {
+        lazy.log.warn("No browser window found");
+        return;
+      }
+      
+      // Wait for the main browser window to be ready and ensure we're on a content page
+      // The callout needs to show on the main browser window, not the auth page
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const browser = window.gBrowser.selectedBrowser;
+      if (!browser) {
+        lazy.log.warn("No selected browser found");
+        return;
+      }
+
+      // Check if the target element exists in the main browser window
+      const chatButton = window.document.getElementById("oasis-chat-button");
+      if (chatButton) {
+        lazy.log.debug("Oasis chat button found in main window, triggering callout");
+      } else {
+        lazy.log.warn("Oasis chat button not found in main window, callout may not show");
+        // Try to find it after a delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const chatButtonRetry = window.document.getElementById("oasis-chat-button");
+        if (chatButtonRetry) {
+          lazy.log.debug("Oasis chat button found on retry");
+        } else {
+          lazy.log.warn("Oasis chat button still not found after retry");
+        }
+      }
+
+      lazy.log.debug("Calling ASRouter.sendTriggerMessage with trigger id: defaultBrowserCheck");
+      const result = await ASRouter.sendTriggerMessage({
+        id: "defaultBrowserCheck", // Trigger ID for OASIS_CHAT_FEATURE_TOUR
+        context: { source: "oasis-auth" },
+        browser: browser
+      });
+      lazy.log.debug("ASRouter.sendTriggerMessage completed, result:", result);
+      lazy.log.debug("Triggered Oasis chat feature callout after successful authentication");
+    } catch (e) {
+      lazy.log.error("Failed to trigger feature callout:", e);
+    }
   }
 
   didDestroy() {

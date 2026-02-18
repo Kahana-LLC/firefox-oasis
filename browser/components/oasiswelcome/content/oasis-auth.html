@@ -51,14 +51,14 @@
       width: 64px;
       height: 64px;
       margin: 0 auto 16px;
-      background: linear-gradient(135deg, #7a9200, #a5c01f);
-      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
-      color: white;
-      font-weight: bold;
+    }
+
+    .logo svg {
+      width: 100%;
+      height: 100%;
     }
 
     .auth-title {
@@ -212,7 +212,42 @@
 <body>
   <div class="auth-container">
     <div class="auth-header">
-      <div class="logo">O</div>
+      <div class="logo">
+        <svg width="64" height="64" viewBox="0 0 210 210" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g clip-path="url(#clip0_oasis_auth)">
+            <mask id="mask0_oasis_auth" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="210" height="210">
+              <path d="M210 0H0V210H210V0Z" fill="white"/>
+              <path d="M105.003 166.523C138.982 166.523 166.527 138.978 166.527 105C166.527 71.0211 138.982 43.4761 105.003 43.4761C71.025 43.4761 43.48 71.0211 43.48 105C43.48 138.978 71.025 166.523 105.003 166.523Z" fill="black"/>
+            </mask>
+            <g mask="url(#mask0_oasis_auth)">
+              <path d="M105.027 189.638C151.757 189.638 189.638 151.757 189.638 105.027C189.638 58.2981 151.757 20.4165 105.027 20.4165C58.2981 20.4165 20.4165 58.2981 20.4165 105.027C20.4165 151.757 58.2981 189.638 105.027 189.638Z" fill="url(#paint0_linear_oasis_auth)"/>
+            </g>
+            <mask id="mask1_oasis_auth" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="49" y="34" width="112" height="123">
+              <path d="M105.001 156.813C135.797 156.813 160.762 129.352 160.762 95.4769C160.762 61.6021 135.797 34.1411 105.001 34.1411C74.2052 34.1411 49.2402 61.6021 49.2402 95.4769C49.2402 129.352 74.2052 156.813 105.001 156.813Z" fill="white"/>
+            </mask>
+            <g mask="url(#mask1_oasis_auth)">
+              <path d="M-44.5454 124.441C-0.134132 95.326 36.8753 124.441 61.3015 124.441C85.7277 124.441 122.737 95.326 167.148 124.441V168.113H-44.5454V124.441Z" fill="url(#paint1_linear_oasis_auth)"/>
+              <path d="M-32.894 127.583C11.5172 103.412 48.5266 127.583 72.9528 127.583C97.379 127.583 134.388 103.412 178.8 127.583V163.839H-32.894V127.583Z" fill="url(#paint2_linear_oasis_auth)"/>
+            </g>
+          </g>
+          <defs>
+            <linearGradient id="paint0_linear_oasis_auth" x1="105.027" y1="20.4165" x2="105.027" y2="189.638" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#788046"/>
+              <stop offset="1" stop-color="#FFD779"/>
+            </linearGradient>
+            <linearGradient id="paint1_linear_oasis_auth" x1="-44.5454" y1="111.501" x2="-44.5454" y2="5772.75" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#BEEEFF"/>
+            </linearGradient>
+            <linearGradient id="paint2_linear_oasis_auth" x1="83.8768" y1="113.849" x2="168.886" y2="163.794" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#98CFE3"/>
+              <stop offset="0.801794" stop-color="#EDF5F8"/>
+            </linearGradient>
+            <clipPath id="clip0_oasis_auth">
+              <rect width="210" height="210" fill="white"/>
+            </clipPath>
+          </defs>
+        </svg>
+      </div>
       <h1 class="auth-title" id="auth-title">Create Account</h1>
       <p class="auth-subtitle" id="auth-subtitle">Sign up to sync your tabs and access AI assistant</p>
     </div>
@@ -372,6 +407,28 @@
       return window.supabaseAuth;
     }
 
+    // Handle window/tab close - open new tab with default page
+    let isDoneButtonClicked = false;
+
+    // Handle window close
+    window.addEventListener('beforeunload', (e) => {
+      // Only open new tab if user is closing the window (not clicking Done)
+      if (!isDoneButtonClicked && typeof Services !== 'undefined' && Services.wm) {
+        try {
+          const win = Services.wm.getMostRecentWindow('navigator:browser');
+          if (win && win.gBrowser) {
+            // Open about:home in a new tab
+            win.gBrowser.addTrustedTab('about:home', {
+              triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+              inBackground: false,
+            });
+          }
+        } catch (err) {
+          console.warn('Could not open new tab on window close:', err);
+        }
+      }
+    });
+
     toggleLink.addEventListener('click', (e) => {
       e.preventDefault();
       authMode = authMode === 'signup' ? 'signin' : 'signup';
@@ -379,31 +436,60 @@
     });
 
     doneButton.addEventListener('click', () => {
+      isDoneButtonClicked = true; // Mark that Done button was clicked
+      
       try {
         if (typeof Services !== 'undefined' && Services.wm) {
-          // Open about:home in a new tab
           const win = Services.wm.getMostRecentWindow('navigator:browser');
           if (win && win.gBrowser) {
+            // Open about:home in a new tab first
             const newTab = win.gBrowser.addTrustedTab('about:home', {
               triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
               inBackground: false,
             });
             win.gBrowser.selectedTab = newTab;
             
-            // Close the auth tab
-            const authTab = win.gBrowser.getTabForBrowser(window.docShell);
-            if (authTab) {
-              win.gBrowser.removeTab(authTab);
-            }
+            // Close the auth tab after opening new tab
+            setTimeout(() => {
+              try {
+                // Find the auth tab by URL
+                const tabs = win.gBrowser.tabs;
+                for (let i = 0; i < tabs.length; i++) {
+                  const tab = tabs[i];
+                  const browser = tab.linkedBrowser;
+                  if (browser && browser.currentURI && 
+                      browser.currentURI.spec.includes('oasis-auth.html')) {
+                    win.gBrowser.removeTab(tab);
+                    break;
+                  }
+                }
+              } catch (e) {
+                console.warn('Could not close auth tab:', e);
+              }
+            }, 150);
             return;
           }
         }
-        // Fallback: just navigate to about:home
-        window.location.href = 'about:home';
+        // Fallback: open in new tab and close current
+        window.open('about:home', '_blank');
+        setTimeout(() => {
+          try {
+            window.close();
+          } catch (e) {
+            console.warn('Could not close window:', e);
+          }
+        }, 200);
       } catch (e) {
-        console.error('Failed to open new tab:', e);
-        // Fallback: just navigate to about:home
-        window.location.href = 'about:home';
+        console.error('Failed to handle Done button:', e);
+        // Fallback: open in new tab and close current
+        window.open('about:home', '_blank');
+        setTimeout(() => {
+          try {
+            window.close();
+          } catch (e) {
+            console.warn('Could not close window:', e);
+          }
+        }, 200);
       }
     });
 
@@ -451,17 +537,100 @@
             await securelySaveSession(sessionData.session);
           }
           
+          // Update auth state on current window
           window.oasisAuthState = {
             isAuthenticated: true,
             user: user
           };
           
+          // Also update auth state on main browser window and dispatch event there
+          try {
+            if (typeof Services !== 'undefined' && Services.wm) {
+              const win = Services.wm.getMostRecentWindow('navigator:browser');
+              if (win) {
+                // Update global auth state on main browser window
+                win.oasisAuthState = {
+                  isAuthenticated: true,
+                  user: user
+                };
+                
+                // Dispatch event on main browser window so AI Assistant can receive it
+                win.dispatchEvent(new win.CustomEvent('oasis-auth-update', {
+                  detail: win.oasisAuthState
+                }));
+                console.log('Oasis Auth: Dispatched auth update event to main browser window');
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to dispatch auth update event to main window:', e);
+          }
+          
+          // Also dispatch on current window (auth page)
           try {
             window.dispatchEvent(new CustomEvent('oasis-auth-update', {
               detail: window.oasisAuthState
             }));
           } catch (e) {
-            console.warn('Failed to dispatch auth update event', e);
+            console.warn('Failed to dispatch auth update event on current window:', e);
+          }
+          
+          // Trigger feature callout after successful authentication
+          try {
+            // Send message to parent actor to trigger feature callout
+            if (typeof RPMSendAsyncMessage !== 'undefined') {
+              RPMSendAsyncMessage("OasisWelcome:TriggerFeatureCallout");
+              console.log('Oasis Auth: Sent message to trigger feature callout via actor');
+            } else {
+              console.warn('Oasis Auth: RPMSendAsyncMessage not available, using fallback');
+            }
+            
+            // Fallback: try to access ASRouter directly if actor message fails
+            // This ensures the callout triggers even if the actor isn't working
+            if (typeof Services !== 'undefined' && Services.wm && Services.prefs) {
+              const win = Services.wm.getMostRecentWindow('navigator:browser');
+              if (win && typeof win.ChromeUtils !== 'undefined') {
+                // Set required preferences first
+                Services.prefs.setBoolPref("browser.aboutwelcome.didSeeFinalScreen", true);
+                Services.prefs.setBoolPref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", true);
+                
+                const tourPrefName = "browser.oasis.chat-feature-tour";
+                if (!Services.prefs.prefHasUserValue(tourPrefName)) {
+                  Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                } else {
+                  try {
+                    const tourPrefValue = Services.prefs.getCharPref(tourPrefName);
+                    const tourProgress = JSON.parse(tourPrefValue);
+                    if (tourProgress.complete) {
+                      Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                    }
+                  } catch (e) {
+                    Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                  }
+                }
+                
+                const { ASRouter } = win.ChromeUtils.importESModule("resource:///modules/asrouter/ASRouter.sys.mjs");
+                if (ASRouter && typeof ASRouter.sendTriggerMessage === 'function') {
+                  await ASRouter.waitForInitialized;
+                  
+                  // Wait for browser window to be ready
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  
+                  const browser = win.gBrowser?.selectedBrowser;
+                  if (browser) {
+                    await ASRouter.sendTriggerMessage({
+                      id: "defaultBrowserCheck", // Correct trigger ID
+                      context: { source: "oasis-auth" },
+                      browser: browser
+                    });
+                    console.log('Oasis Auth: Triggered feature callout via fallback method');
+                  } else {
+                    console.warn('Oasis Auth: No browser found for fallback trigger');
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Failed to trigger feature callout:', e);
           }
           
           // Hide form and show success state

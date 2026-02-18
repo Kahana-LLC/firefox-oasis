@@ -167,3 +167,6 @@ Potential improvements:
 - Architecture based on Firefox's `aboutwelcome` component
 - Uses JSWindowActor API for content/parent communication
 
+
+
+

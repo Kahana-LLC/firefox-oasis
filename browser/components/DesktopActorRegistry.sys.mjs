@@ -229,7 +229,7 @@ let JSWINDOWACTORS = {
         DOMDocElementInserted: {},
       },
     },
-    matches: ["about:welcome*", "chrome://browser/content/oasiswelcome/oasiswelcome.html"],
+    matches: ["about:welcome*", "chrome://browser/content/oasiswelcome/oasiswelcome.html", "chrome://browser/content/oasiswelcome/oasis-auth.html"],
     remoteTypes: ["privilegedabout"],
     includeChrome: true,
   },
