@@ -1,13 +1,19 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import MiniSearch from "minisearch";
 
-// Full-text search using MiniSearch
-// Provides better fuzzy matching and prefix search than Fuse.js for documents.
+function getChrome() {
+  const topWin = (window as any).Services?.wm?.getMostRecentWindow("navigator:browser") || window.top;
+  const gBrowser = topWin?.gBrowser;
+  const PlacesUtils = topWin?.PlacesUtils;
+  return { topWin, gBrowser, PlacesUtils };
+}
+
+// Full-text search using MiniSearch.
 
 interface MemoryDoc {
   id?: number;
   text: string;
-  tokens: string[]; // Kept for compatibility
+  tokens: string[];
   metadata: any;
   timestamp: number;
   url?: string;
@@ -48,24 +54,27 @@ class LocalMemoryService {
     });
 
     this.miniSearch = new MiniSearch({
-      fields: ["text", "title", "description"], // fields to index for full-text search
-      storeFields: ["text", "metadata", "url", "timestamp"], // fields to return with results
+      fields: ["text", "title", "description"],
+      storeFields: ["text", "metadata", "url", "timestamp"],
       extractField: (doc, fieldName) => {
         if (fieldName === "title") return doc.metadata?.title;
         if (fieldName === "description") return doc.metadata?.description;
         return doc[fieldName];
       },
-      tokenize: (text) => this.tokenize(text), // Use consistent tokenizer
+      tokenize: (text) => this.tokenize(text),
       searchOptions: {
         boost: { title: 2 },
         fuzzy: 0.2,
         prefix: true,
-        tokenize: (text) => this.tokenize(text) // Use consistent tokenizer for queries too
+        tokenize: (text) => this.tokenize(text)
       }
     });
     
     // Initialize index immediately
-    this.ensureIndex().catch(console.error);
+    this.ensureIndex().then(() => {
+        // Index fresh content from browser
+        setTimeout(() => this.indexAll(), 5000); // Wait for browser to settle
+    }).catch(console.error);
   }
 
   // Simple tokenizer: lowercase, replace punctuation with spaces, split by whitespace
@@ -134,14 +143,15 @@ class LocalMemoryService {
     console.log(`Removed documents for URL: ${url}`);
   }
 
-  async search(query: string, limit = 5, filter?: { hub?: string }): Promise<{ text: string; score: number; metadata: any }[]> {
+  async search(query: string, limit = 5, filter?: { hub?: string; folder?: string }): Promise<{ text: string; score: number; metadata: any }[]> {
     await this.ensureIndex();
 
+    const folderFilter = filter?.folder || filter?.hub;
     const results = this.miniSearch.search(query, {
       filter: (result) => {
-        if (filter?.hub) {
-          // Case-insensitive hub matching
-          return (result.metadata?.hubName || "").toLowerCase() === filter.hub.toLowerCase();
+        if (folderFilter) {
+          const name = (result.metadata?.folderName || result.metadata?.hubName || "").toLowerCase();
+          return name === folderFilter.toLowerCase();
         }
         return true;
       }
@@ -177,6 +187,141 @@ class LocalMemoryService {
     const db = await this.dbPromise;
     await db.put("usage", { userId, count, timestamp: Date.now() });
     console.log(`[LocalMemory] Saved usage for ${userId}: ${count}`);
+  }
+
+  // --- Indexing from Browser ---
+
+  async indexHistory(maxItems = 1000) {
+    const PlacesUtils = (window as any).PlacesUtils || getChrome().PlacesUtils;
+    if (!PlacesUtils) return;
+
+    try {
+      const options = PlacesUtils.history.getNewQueryOptions();
+      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+      options.maxResults = maxItems;
+      options.includeVisits = true;
+
+      const query = PlacesUtils.history.getNewQuery();
+      const result = PlacesUtils.history.executeQuery(query, options);
+      const root = result.root;
+      root.containerOpen = true;
+
+      for (let i = 0; i < root.childCount; i++) {
+        const node = root.getChild(i);
+        if (node.uri) {
+          await this.addDocument(
+            (node.title || "") + " " + node.uri,
+            { type: "history", title: node.title, url: node.uri, timestamp: node.time, context: "Browsing History" },
+            node.uri
+          );
+        }
+      }
+      root.containerOpen = false;
+      console.log(`[LocalMemory] Indexed ${root.childCount} history items.`);
+    } catch (e) {
+      console.error("[LocalMemory] Failed to index history:", e);
+    }
+  }
+
+  async indexBookmarks() {
+    const { PlacesUtils } = getChrome();
+    const PM = (window as any).PlacesUtils || (window.top as any)?.PlacesUtils;
+    if (!PlacesUtils && !PM) return;
+    const PU = PlacesUtils || PM;
+
+    try {
+      const processFolder = async (folderGuid: string, folderName: string) => {
+        try {
+          const children = await PU.bookmarks.fetch({ parentGuid: folderGuid });
+          if (!children) return;
+
+          for (const child of children) {
+            if (child.type === PU.bookmarks.TYPE_FOLDER) {
+               await processFolder(child.guid, child.title);
+            } else if (child.type === PU.bookmarks.TYPE_BOOKMARK && child.url) {
+               await this.addDocument(
+                  (child.title || "") + " " + child.url,
+                  {
+                    type: "bookmark",
+                    title: child.title,
+                    url: child.url,
+                    timestamp: child.dateAdded,
+                    context: `Bookmark Folder: ${folderName}`,
+                    folderName,
+                    hubName: folderName,
+                  },
+                  child.url
+               );
+            }
+          }
+        } catch (e) {
+             console.warn(`Failed to fetch bookmarks for ${folderGuid}:`, e);
+        }
+      };
+
+      if (PU.bookmarks) {
+          await processFolder(PU.bookmarks.menuGuid, "Bookmarks Menu");
+          await processFolder(PU.bookmarks.toolbarGuid, "Bookmarks Toolbar");
+          await processFolder(PU.bookmarks.unfiledGuid, "Other Bookmarks");
+          console.log("[LocalMemory] Bookmarks indexed.");
+      }
+    } catch (e) {
+      console.error("[LocalMemory] Failed to index bookmarks:", e);
+    }
+  }
+
+  async indexTabGroups() {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return;
+
+    try {
+      const groups = gBrowser.tabGroups || [];
+      // Index groups
+      for (const group of groups) {
+          const groupName = group.label || "(unnamed group)";
+          await this.addDocument(
+             `Tab Group: ${groupName}`,
+             { type: "tab-group", title: groupName, id: group.id },
+             `about:tab-group?id=${group.id}`
+          );
+      }
+
+      // Index open tabs with group context
+      const tabs = gBrowser.tabs || [];
+      for (const tab of tabs) {
+          const url = tab.linkedBrowser?.currentURI?.spec;
+          const title = tab.label || "(untitled)";
+          
+          let context = "Open Tab";
+          if (tab.group) {
+              const gName = tab.group.label || "Unnamed Group";
+              context = `Tab Group: ${gName}`;
+          }
+
+          if (url && !url.startsWith("about:")) {
+             await this.addDocument(
+                 title + " " + url,
+                 { 
+                    type: "tab", 
+                    title, 
+                    url, 
+                    timestamp: Date.now(),
+                    context: context
+                 },
+                 url
+             );
+          }
+      }
+      console.log(`[LocalMemory] Indexed tabs and groups.`);
+    } catch (e) {
+       console.error("[LocalMemory] Failed to index tab groups:", e);
+    }
+  }
+
+  async indexAll() {
+    await this.indexTabGroups();
+    await this.indexBookmarks();
+    await this.indexHistory();
   }
 }
 

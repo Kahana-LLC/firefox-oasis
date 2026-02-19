@@ -12,19 +12,30 @@ const TOOL_LABELS: Record<string,string> = {
   move_tab_to_new_window: 'Moving tab to new window',
   copy_tab_urls: 'Copying tab URLs',
 
-  // Hub/bookmark related
-  create_hub: 'Creating hub',
-  delete_hub: 'Deleting hub',
-  list_hubs: 'Listing hubs',
-  rename_hub: 'Renaming hub',
-  add_tab_to_hub: 'Adding tab to hub',
-  remove_tab_from_hub: 'Removing tab from hub',
-  open_hub: 'Opening hub',
+  // Bookmark Folders (formerly Hubs)
+  create_bookmark_folder: 'Creating folder',
+  delete_bookmark_folder: 'Deleting folder',
+  list_bookmark_folders: 'Listing folders',
+  rename_bookmark_folder: 'Renaming folder',
+  add_tab_to_bookmark_folder: 'Adding tab to folder',
+  remove_tab_from_bookmark_folder: 'Removing tab from folder',
+  open_bookmark_folder: 'Opening folder',
   split_tabs: 'Splitting tabs',
+  
+  // Tab Groups
+  list_tab_groups: 'Listing groups',
+  create_tab_group: 'Creating group',
+  delete_tab_group: 'Deleting group',
+  add_tab_to_group: 'Adding tab to group',
+  remove_tab_from_group: 'Removing from group',
+  rename_tab_group: 'Renaming group',
 
   // Other helpers
   search_memory: 'Searching memory',
+  open_search_result: 'Opening result',
+  summarize_page: 'Summarizing page',
   show_subscription: 'Showing subscription',
+  confirm_action: 'Confirming action',
 
   // UI/bridge actions
   openTab: 'Opening tab',

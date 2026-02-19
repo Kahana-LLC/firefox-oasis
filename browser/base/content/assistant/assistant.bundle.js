@@ -63262,6 +63262,12 @@ Result: ${JSON.stringify(result)}`);
   var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
 
   // src/services/localMemory.ts
+  function getChrome() {
+    const topWin = window.Services?.wm?.getMostRecentWindow("navigator:browser") || window.top;
+    const gBrowser = topWin?.gBrowser;
+    const PlacesUtils = topWin?.PlacesUtils;
+    return { topWin, gBrowser, PlacesUtils };
+  }
   var LocalMemoryService = class {
     dbPromise;
     miniSearch;
@@ -63284,25 +63290,23 @@ Result: ${JSON.stringify(result)}`);
       });
       this.miniSearch = new MiniSearch({
         fields: ["text", "title", "description"],
-        // fields to index for full-text search
         storeFields: ["text", "metadata", "url", "timestamp"],
-        // fields to return with results
         extractField: (doc, fieldName) => {
           if (fieldName === "title") return doc.metadata?.title;
           if (fieldName === "description") return doc.metadata?.description;
           return doc[fieldName];
         },
         tokenize: (text2) => this.tokenize(text2),
-        // Use consistent tokenizer
         searchOptions: {
           boost: { title: 2 },
           fuzzy: 0.2,
           prefix: true,
           tokenize: (text2) => this.tokenize(text2)
-          // Use consistent tokenizer for queries too
         }
       });
-      this.ensureIndex().catch(console.error);
+      this.ensureIndex().then(() => {
+        setTimeout(() => this.indexAll(), 5e3);
+      }).catch(console.error);
     }
     // Simple tokenizer: lowercase, replace punctuation with spaces, split by whitespace
     tokenize(text2) {
@@ -63357,10 +63361,12 @@ Result: ${JSON.stringify(result)}`);
     }
     async search(query, limit = 5, filter) {
       await this.ensureIndex();
+      const folderFilter = filter?.folder || filter?.hub;
       const results = this.miniSearch.search(query, {
         filter: (result) => {
-          if (filter?.hub) {
-            return (result.metadata?.hubName || "").toLowerCase() === filter.hub.toLowerCase();
+          if (folderFilter) {
+            const name = (result.metadata?.folderName || result.metadata?.hubName || "").toLowerCase();
+            return name === folderFilter.toLowerCase();
           }
           return true;
         }
@@ -63392,10 +63398,128 @@ Result: ${JSON.stringify(result)}`);
       await db.put("usage", { userId, count, timestamp: Date.now() });
       console.log(`[LocalMemory] Saved usage for ${userId}: ${count}`);
     }
+    // --- Indexing from Browser ---
+    async indexHistory(maxItems = 1e3) {
+      const PlacesUtils = window.PlacesUtils || getChrome().PlacesUtils;
+      if (!PlacesUtils) return;
+      try {
+        const options = PlacesUtils.history.getNewQueryOptions();
+        options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+        options.maxResults = maxItems;
+        options.includeVisits = true;
+        const query = PlacesUtils.history.getNewQuery();
+        const result = PlacesUtils.history.executeQuery(query, options);
+        const root2 = result.root;
+        root2.containerOpen = true;
+        for (let i = 0; i < root2.childCount; i++) {
+          const node = root2.getChild(i);
+          if (node.uri) {
+            await this.addDocument(
+              (node.title || "") + " " + node.uri,
+              { type: "history", title: node.title, url: node.uri, timestamp: node.time, context: "Browsing History" },
+              node.uri
+            );
+          }
+        }
+        root2.containerOpen = false;
+        console.log(`[LocalMemory] Indexed ${root2.childCount} history items.`);
+      } catch (e) {
+        console.error("[LocalMemory] Failed to index history:", e);
+      }
+    }
+    async indexBookmarks() {
+      const { PlacesUtils } = getChrome();
+      const PM = window.PlacesUtils || window.top?.PlacesUtils;
+      if (!PlacesUtils && !PM) return;
+      const PU = PlacesUtils || PM;
+      try {
+        const processFolder = async (folderGuid, folderName) => {
+          try {
+            const children = await PU.bookmarks.fetch({ parentGuid: folderGuid });
+            if (!children) return;
+            for (const child of children) {
+              if (child.type === PU.bookmarks.TYPE_FOLDER) {
+                await processFolder(child.guid, child.title);
+              } else if (child.type === PU.bookmarks.TYPE_BOOKMARK && child.url) {
+                await this.addDocument(
+                  (child.title || "") + " " + child.url,
+                  {
+                    type: "bookmark",
+                    title: child.title,
+                    url: child.url,
+                    timestamp: child.dateAdded,
+                    context: `Bookmark Folder: ${folderName}`,
+                    folderName,
+                    hubName: folderName
+                  },
+                  child.url
+                );
+              }
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch bookmarks for ${folderGuid}:`, e);
+          }
+        };
+        if (PU.bookmarks) {
+          await processFolder(PU.bookmarks.menuGuid, "Bookmarks Menu");
+          await processFolder(PU.bookmarks.toolbarGuid, "Bookmarks Toolbar");
+          await processFolder(PU.bookmarks.unfiledGuid, "Other Bookmarks");
+          console.log("[LocalMemory] Bookmarks indexed.");
+        }
+      } catch (e) {
+        console.error("[LocalMemory] Failed to index bookmarks:", e);
+      }
+    }
+    async indexTabGroups() {
+      const { gBrowser } = getChrome();
+      if (!gBrowser) return;
+      try {
+        const groups = gBrowser.tabGroups || [];
+        for (const group of groups) {
+          const groupName = group.label || "(unnamed group)";
+          await this.addDocument(
+            `Tab Group: ${groupName}`,
+            { type: "tab-group", title: groupName, id: group.id },
+            `about:tab-group?id=${group.id}`
+          );
+        }
+        const tabs = gBrowser.tabs || [];
+        for (const tab of tabs) {
+          const url = tab.linkedBrowser?.currentURI?.spec;
+          const title = tab.label || "(untitled)";
+          let context = "Open Tab";
+          if (tab.group) {
+            const gName = tab.group.label || "Unnamed Group";
+            context = `Tab Group: ${gName}`;
+          }
+          if (url && !url.startsWith("about:")) {
+            await this.addDocument(
+              title + " " + url,
+              {
+                type: "tab",
+                title,
+                url,
+                timestamp: Date.now(),
+                context
+              },
+              url
+            );
+          }
+        }
+        console.log(`[LocalMemory] Indexed tabs and groups.`);
+      } catch (e) {
+        console.error("[LocalMemory] Failed to index tab groups:", e);
+      }
+    }
+    async indexAll() {
+      await this.indexTabGroups();
+      await this.indexBookmarks();
+      await this.indexHistory();
+    }
   };
   var localMemory = new LocalMemoryService();
 
-  // src/hubs.ts
+  // src/bookmarkFolders.ts
   function getBrowserWindow() {
     const Services = window.Services || window.top?.Services;
     if (Services?.wm) {
@@ -63403,37 +63527,29 @@ Result: ${JSON.stringify(result)}`);
     }
     return window.top;
   }
-  function getChrome() {
+  function getChrome2() {
     const topWin = getBrowserWindow();
     const gBrowser = topWin?.gBrowser;
     const PlacesUtils = topWin?.PlacesUtils;
-    const PlacesTransactions = topWin?.PlacesTransactions;
-    return { topWin, gBrowser, PlacesUtils, PlacesTransactions };
+    return { topWin, gBrowser, PlacesUtils };
   }
   var ROOT_FOLDER_NAME = "Oasis Hubs";
   async function getRootFolder() {
-    try {
-      const { PlacesUtils } = getChrome();
-      if (!PlacesUtils) throw new Error("PlacesUtils not available");
-      const bookmarks = await PlacesUtils.bookmarks.search({
-        title: ROOT_FOLDER_NAME
-      });
-      const existing = bookmarks.find(
-        (b2) => b2.type === PlacesUtils.bookmarks.TYPE_FOLDER && b2.parentGuid === PlacesUtils.bookmarks.unfiledGuid
-      );
-      if (existing) {
-        return existing.guid;
-      }
-      const root2 = await PlacesUtils.bookmarks.insert({
-        title: ROOT_FOLDER_NAME,
-        type: PlacesUtils.bookmarks.TYPE_FOLDER,
-        parentGuid: PlacesUtils.bookmarks.unfiledGuid
-      });
-      return root2.guid;
-    } catch (e) {
-      console.error("Failed to get/create root folder:", e);
-      throw e;
-    }
+    const { PlacesUtils } = getChrome2();
+    if (!PlacesUtils) throw new Error("PlacesUtils not available");
+    const bookmarks = await PlacesUtils.bookmarks.search({
+      title: ROOT_FOLDER_NAME
+    });
+    const existing = bookmarks.find(
+      (b2) => b2.type === PlacesUtils.bookmarks.TYPE_FOLDER && b2.parentGuid === PlacesUtils.bookmarks.unfiledGuid
+    );
+    if (existing) return existing.guid;
+    const root2 = await PlacesUtils.bookmarks.insert({
+      title: ROOT_FOLDER_NAME,
+      type: PlacesUtils.bookmarks.TYPE_FOLDER,
+      parentGuid: PlacesUtils.bookmarks.unfiledGuid
+    });
+    return root2.guid;
   }
   function hostOf(u3) {
     try {
@@ -63443,7 +63559,7 @@ Result: ${JSON.stringify(result)}`);
     }
   }
   async function getBookmarkChildren(guid) {
-    const { PlacesUtils } = getChrome();
+    const { PlacesUtils } = getChrome2();
     if (!PlacesUtils) return [];
     try {
       const parent = await PlacesUtils.bookmarks.fetch(guid);
@@ -63468,7 +63584,7 @@ Result: ${JSON.stringify(result)}`);
     }
   }
   async function createBookmark(details) {
-    const { PlacesUtils } = getChrome();
+    const { PlacesUtils } = getChrome2();
     if (!PlacesUtils) throw new Error("PlacesUtils not available");
     return await PlacesUtils.bookmarks.insert({
       parentGuid: details.parentGuid,
@@ -63478,17 +63594,16 @@ Result: ${JSON.stringify(result)}`);
     });
   }
   async function removeBookmark(guid) {
-    const { PlacesUtils } = getChrome();
+    const { PlacesUtils } = getChrome2();
     if (!PlacesUtils) return;
     await PlacesUtils.bookmarks.remove(guid);
   }
   async function updateBookmark(guid, changes) {
-    const { PlacesUtils } = getChrome();
+    const { PlacesUtils } = getChrome2();
     if (!PlacesUtils) throw new Error("PlacesUtils not available");
-    return await PlacesUtils.bookmarks.update(guid, changes);
+    return await PlacesUtils.bookmarks.update({ guid, ...changes });
   }
-  var HubManager = class {
-    wired = false;
+  var BookmarkFolderManager = class {
     rootFolderId = null;
     async ensureRootFolder() {
       if (this.rootFolderId) return this.rootFolderId;
@@ -63499,7 +63614,7 @@ Result: ${JSON.stringify(result)}`);
       try {
         const rootId = await this.ensureRootFolder();
         const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
+        const { PlacesUtils } = getChrome2();
         const folders = children.filter(
           (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
         );
@@ -63510,7 +63625,7 @@ Result: ${JSON.stringify(result)}`);
         }
         return result;
       } catch (e) {
-        console.error("Failed to list hubs:", e);
+        console.error("Failed to list bookmark folders:", e);
         return [];
       }
     }
@@ -63518,7 +63633,7 @@ Result: ${JSON.stringify(result)}`);
       try {
         const rootId = await this.ensureRootFolder();
         const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
+        const { PlacesUtils } = getChrome2();
         const folders = children.filter(
           (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
         );
@@ -63535,255 +63650,180 @@ Result: ${JSON.stringify(result)}`);
         }
         return result;
       } catch (e) {
-        console.error("Failed to get all hubs:", e);
+        console.error("Failed to get all bookmark folders:", e);
         return [];
       }
     }
     async create(name, opts) {
-      try {
-        name = (name || "").trim() || this.suggestName();
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
-        const existing = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
-        );
-        let folder;
-        if (existing) {
-          folder = existing;
-        } else {
-          folder = await createBookmark({
-            parentGuid: rootId,
-            title: name
-          });
-        }
-        const include = opts?.include || "none";
-        const { gBrowser } = getChrome();
-        let count = 0;
-        if (gBrowser) {
-          if (include === "current") {
-            const tab = gBrowser.selectedTab;
-            await this.addTabs(folder.title, [tab]);
-            count = 1;
-          } else if (include === "all") {
-            const tabs = Array.from(gBrowser.tabs);
-            await this.addTabs(folder.title, tabs);
-            count = tabs.length;
-          }
-        }
-        this.updateAllTabMarkers();
-        return { name: folder.title, count };
-      } catch (e) {
-        console.error("Failed to create hub:", e);
-        throw e;
+      name = (name || "").trim() || this.suggestName();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome2();
+      const existing = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
+      );
+      let folder;
+      if (existing) {
+        folder = existing;
+      } else {
+        folder = await createBookmark({
+          parentGuid: rootId,
+          title: name
+        });
       }
+      const include = opts?.include || "none";
+      const { gBrowser } = getChrome2();
+      let count = 0;
+      if (gBrowser) {
+        if (include === "current") {
+          const tab = gBrowser.selectedTab;
+          await this.addTabs(folder.title, [tab]);
+          count = 1;
+        } else if (include === "all") {
+          const tabs = Array.from(gBrowser.tabs);
+          await this.addTabs(folder.title, tabs);
+          count = tabs.length;
+        }
+      }
+      return { name: folder.title, count };
     }
     async delete(name, opts) {
-      try {
-        name = (name || "").trim();
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
-        const folder = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
-        );
-        if (!folder) {
-          return { name, removed: 0 };
-        }
-        const items = await getBookmarkChildren(folder.guid);
-        const bookmarks = items.filter((b2) => b2.uri);
-        if (opts?.closeTabs) {
-          const { gBrowser } = getChrome();
-          if (gBrowser) {
-            const hostSet = new Set(bookmarks.map((b2) => hostOf(b2.uri)));
-            for (const t of Array.from(gBrowser.tabs)) {
-              const u3 = t?.linkedBrowser?.currentURI?.spec || "";
-              if (hostSet.has(hostOf(u3))) {
-                try {
-                  gBrowser.removeTab(t);
-                } catch {
-                }
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome2();
+      const folder = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
+      );
+      if (!folder) return { name, removed: 0 };
+      const items = await getBookmarkChildren(folder.guid);
+      const bookmarks = items.filter((b2) => b2.uri);
+      if (opts?.closeTabs) {
+        const { gBrowser } = getChrome2();
+        if (gBrowser) {
+          const hostSet = new Set(bookmarks.map((b2) => hostOf(b2.uri)));
+          for (const t of Array.from(gBrowser.tabs)) {
+            const u3 = t?.linkedBrowser?.currentURI?.spec || "";
+            if (hostSet.has(hostOf(u3))) {
+              try {
+                gBrowser.removeTab(t);
+              } catch {
               }
             }
           }
         }
-        await removeBookmark(folder.guid);
-        this.updateAllTabMarkers();
-        return { name: folder.title, removed: bookmarks.length };
-      } catch (e) {
-        console.error("Failed to delete hub:", e);
-        return { name, removed: 0 };
       }
+      await removeBookmark(folder.guid);
+      return { name: folder.title, removed: bookmarks.length };
     }
     async rename(oldName, newName) {
-      try {
-        oldName = (oldName || "").trim();
-        newName = (newName || "").trim();
-        if (!oldName || !newName) return { ok: false };
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
-        const folder = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === oldName.toLowerCase()
-        );
-        if (!folder) return { ok: false };
-        const existing = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === newName.toLowerCase()
-        );
-        if (existing) return { ok: false, msg: "Target exists" };
-        await updateBookmark(folder.guid, { title: newName });
-        this.updateAllTabMarkers();
-        return { ok: true };
-      } catch (e) {
-        console.error("Failed to rename hub:", e);
-        return { ok: false };
-      }
+      oldName = (oldName || "").trim();
+      newName = (newName || "").trim();
+      if (!oldName || !newName) return { ok: false };
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome2();
+      const folder = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === oldName.toLowerCase()
+      );
+      if (!folder) return { ok: false };
+      const existing = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === newName.toLowerCase()
+      );
+      if (existing) return { ok: false, msg: "Target exists" };
+      await updateBookmark(folder.guid, { title: newName });
+      return { ok: true };
     }
     async addTabs(name, tabs) {
-      try {
-        const { PlacesUtils } = getChrome();
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const folder = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && (c.title || "").toLowerCase() === name.toLowerCase()
-        );
-        let targetFolder = folder;
-        if (!targetFolder) {
-          targetFolder = await createBookmark({
-            parentGuid: rootId,
-            title: name
-          });
-        }
-        for (const tab of tabs) {
-          await this.addTabToFolder(targetFolder.guid, tab, targetFolder.title);
-        }
-        this.updateAllTabMarkers();
-        return { ok: true };
-      } catch (e) {
-        console.error("Failed to add tabs to hub:", e);
-        return { ok: false };
+      const { PlacesUtils } = getChrome2();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const folder = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && (c.title || "").toLowerCase() === name.toLowerCase()
+      );
+      let targetFolder = folder;
+      if (!targetFolder) {
+        targetFolder = await createBookmark({
+          parentGuid: rootId,
+          title: name
+        });
       }
+      for (const tab of tabs) {
+        await this.addTabToFolder(targetFolder.guid, tab, targetFolder.title);
+      }
+      return { ok: true };
     }
     async removeUrl(name, url) {
-      try {
-        name = (name || "").trim();
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils } = getChrome();
-        const folder = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
-        );
-        if (!folder) return { ok: false };
-        const bookmarks = await getBookmarkChildren(folder.guid);
-        const toRemove = bookmarks.filter((b2) => b2.uri === url);
-        for (const bookmark of toRemove) {
-          await removeBookmark(bookmark.guid);
-        }
-        this.updateAllTabMarkers();
-        return { ok: toRemove.length > 0 };
-      } catch (e) {
-        console.error("Failed to remove URL from hub:", e);
-        return { ok: false };
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils } = getChrome2();
+      const folder = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
+      );
+      if (!folder) return { ok: false };
+      const bookmarks = await getBookmarkChildren(folder.guid);
+      const toRemove = bookmarks.filter((b2) => b2.uri === url);
+      for (const bookmark of toRemove) {
+        await removeBookmark(bookmark.guid);
       }
+      return { ok: toRemove.length > 0 };
     }
-    async openHub(name, where = "tabs") {
-      try {
-        name = (name || "").trim();
-        const rootId = await this.ensureRootFolder();
-        const children = await getBookmarkChildren(rootId);
-        const { PlacesUtils, topWin } = getChrome();
-        const folder = children.find(
-          (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
-        );
-        if (!folder) return { ok: false };
-        const bookmarks = await getBookmarkChildren(folder.guid);
-        const items = bookmarks.filter((b2) => b2.uri);
-        const urls = items.map((it) => it.uri);
-        console.log(
-          `OpenHub: Found ${urls.length} URLs for hub "${name}":`,
-          urls
-        );
-        if (urls.length === 0) return { ok: true };
-        let targetBrowser;
-        if (where === "window") {
-          const w2 = topWin.OpenBrowserWindow();
-          await new Promise((resolve) => setTimeout(resolve, 250));
-          targetBrowser = w2.gBrowser;
-        } else {
-          targetBrowser = getChrome().gBrowser;
+    async openFolder(name, where = "tabs") {
+      name = (name || "").trim();
+      const rootId = await this.ensureRootFolder();
+      const children = await getBookmarkChildren(rootId);
+      const { PlacesUtils, topWin } = getChrome2();
+      const folder = children.find(
+        (c) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER && c.title.toLowerCase() === name.toLowerCase()
+      );
+      if (!folder) return { ok: false };
+      const bookmarks = await getBookmarkChildren(folder.guid);
+      const items = bookmarks.filter((b2) => b2.uri);
+      const urls = items.map((it) => it.uri);
+      if (urls.length === 0) return { ok: true };
+      let targetBrowser;
+      if (where === "window") {
+        const w2 = topWin.OpenBrowserWindow();
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        targetBrowser = w2.gBrowser;
+      } else {
+        targetBrowser = getChrome2().gBrowser;
+      }
+      if (!targetBrowser) return { ok: false };
+      let Services = window.Services || window.top?.Services;
+      if (!Services && window.ChromeUtils) {
+        try {
+          Services = window.ChromeUtils.import(
+            "resource://gre/modules/Services.jsm"
+          ).Services;
+        } catch (e) {
+          console.error("Failed to import Services", e);
         }
-        if (!targetBrowser) return { ok: false };
-        let Services = window.Services || window.top?.Services;
-        if (!Services && window.ChromeUtils) {
-          try {
-            Services = window.ChromeUtils.import(
-              "resource://gre/modules/Services.jsm"
-            ).Services;
-          } catch (e) {
-            console.error("Failed to import Services", e);
-          }
-        }
-        const triggeringPrincipal = Services?.scriptSecurityManager?.getSystemPrincipal();
-        if (!triggeringPrincipal)
-          console.error("FATAL: Could not get system principal for addTab");
-        for (const url of urls) {
-          targetBrowser.addTab(url, {
+      }
+      const triggeringPrincipal = Services?.scriptSecurityManager?.getSystemPrincipal();
+      const openedTabs = [];
+      for (const url of urls) {
+        try {
+          const tab = targetBrowser.addTrustedTab(url, {
             triggeringPrincipal,
-            triggerPrimaryAction: false
+            relatedToCurrent: false
           });
+          if (tab) openedTabs.push(tab);
+        } catch (e) {
+          console.error("Failed to open tab for URL:", url, e);
         }
-        return { ok: true };
-      } catch (e) {
-        console.error("Failed to open hub:", e);
-        return { ok: false };
       }
-    }
-    // ---- badges on tabs (first matched hub name; count if >1 hubs match) ----
-    wireTabObservers() {
-      if (this.wired) return;
-      const { gBrowser } = getChrome();
-      if (!gBrowser) return;
-      const tb = gBrowser.tabContainer;
-      const upd = () => this.updateAllTabMarkers();
-      tb.addEventListener("TabOpen", upd);
-      tb.addEventListener("TabAttrModified", upd);
-      tb.addEventListener("TabSelect", upd);
-      gBrowser.addTabsProgressListener({
-        onLocationChange: (_b) => this.updateAllTabMarkers()
-      });
-      this.wired = true;
-    }
-    updateAllTabMarkers() {
-      const { gBrowser } = getChrome();
-      if (!gBrowser) return;
-      for (const t of Array.from(gBrowser.tabs)) this.updateMarkerForTab(t);
-    }
-    async updateMarkerForTab(tab) {
-      try {
-        const u3 = tab?.linkedBrowser?.currentURI?.spec || "";
-        const h = hostOf(u3);
-        if (!h) {
-          tab.removeAttribute("oasis-hub");
-          tab.removeAttribute("oasis-hub-count");
-          return;
+      if (where === "tabgroup" && openedTabs.length > 0) {
+        try {
+          targetBrowser.addTabGroup(openedTabs, { label: name });
+        } catch (e) {
+          console.warn("Failed to group opened tabs:", e);
         }
-        const all = await this.getAll();
-        const names = [];
-        for (const hub of all) {
-          if (hub.items.some((it) => it.host === h))
-            names.push(hub.name);
-        }
-        if (names.length) {
-          tab.setAttribute("oasis-hub", names[0]);
-          tab.setAttribute("oasis-hub-count", String(names.length));
-        } else {
-          tab.removeAttribute("oasis-hub");
-          tab.removeAttribute("oasis-hub-count");
-        }
-      } catch {
       }
+      return { ok: true };
     }
-    async addTabToFolder(folderGuid, tab, hubName) {
+    async addTabToFolder(folderGuid, tab, folderName) {
       const url = tab?.linkedBrowser?.currentURI?.spec || "";
       if (!url) return;
       const title = tab?.label || tab?.linkedBrowser?.contentTitle || tab?.linkedBrowser?.currentURI?.spec || "";
@@ -63812,25 +63852,23 @@ Content: ${content}`;
           text2,
           {
             title,
-            type: "hub_item",
+            type: "bookmark_folder_item",
             hub: folderGuid,
-            hubName,
+            hubName: folderName,
+            folderName,
             description: content.substring(0, 200)
           },
           url
         );
       } catch (e) {
-        console.error("Failed to index hub item:", e);
+        console.error("Failed to index bookmark folder item:", e);
       }
     }
     suggestName() {
-      const base = "Hub";
-      let i = 1;
-      return `${base} ${i}`;
+      return "Folder 1";
     }
   };
-  var hubs = new HubManager();
-  hubs.wireTabObservers();
+  var bookmarkFolders = new BookmarkFolderManager();
 
   // src/services/subscription.ts
   var PLAN_LIMITS = {
@@ -64049,7 +64087,7 @@ Content: ${content}`;
   }
   window.oasisGetPendingConfirmation = getPendingConfirmation;
   window.oasisClearPendingConfirmation = clearPendingConfirmation;
-  function getChrome2() {
+  function getChrome3() {
     const topWin = window.top;
     const gBrowser = topWin?.gBrowser;
     return { topWin, gBrowser };
@@ -64058,7 +64096,7 @@ Content: ${content}`;
     commandName = "list_tabs";
     description = "List titles of tabs in the current window. Accepts no arguments.";
     async execute(_args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const titles = Array.from(gBrowser.tabs).map(
         (t) => t.label || t.linkedBrowser?.contentTitle || t.linkedBrowser?.currentURI?.spec || "(untitled)"
@@ -64071,7 +64109,7 @@ Content: ${content}`;
     commandName = "new_window";
     description = "Open a new browser window.";
     async execute(args) {
-      const { topWin } = getChrome2();
+      const { topWin } = getChrome3();
       if (!topWin) return { message: "Browser UI not available." };
       topWin.OpenBrowserWindow();
       return { message: "Successfully opened a new window." };
@@ -64081,7 +64119,7 @@ Content: ${content}`;
     commandName = "organize_windows";
     description = "Arrange two or more windows side-by-side.";
     async execute(args) {
-      const { topWin } = getChrome2();
+      const { topWin } = getChrome3();
       if (!topWin) return { message: "Browser UI not available." };
       const Services = topWin.Services || window.Services;
       if (!Services) {
@@ -64122,7 +64160,7 @@ Content: ${content}`;
     commandName = "show_url";
     description = "Open a URL in a new tab.";
     async execute(args) {
-      const { topWin } = getChrome2();
+      const { topWin } = getChrome3();
       if (!topWin) return { message: "Browser UI not available." };
       const url = args?.url;
       if (!url) return { message: "Missing 'url' argument." };
@@ -64134,7 +64172,7 @@ Content: ${content}`;
     commandName = "open_tab";
     description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
     async execute(args) {
-      const { topWin } = getChrome2();
+      const { topWin } = getChrome3();
       let url = args?.url;
       if (!url) return { message: "Missing 'url' argument." };
       if (!topWin?.openTrustedLinkIn)
@@ -64165,7 +64203,7 @@ Content: ${content}`;
     commandName = "close_tab";
     description = "Close the active tab (or a tab by index). Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       let tab = gBrowser.selectedTab;
       const idx = args?.index;
@@ -64196,7 +64234,7 @@ Content: ${content}`;
     commandName = "move_tab_to_new_window";
     description = "Move the active tab (or a tab by index) to a new window. Accepts arguments: { index?: number } (1-based).";
     async execute(args) {
-      const { topWin, gBrowser } = getChrome2();
+      const { topWin, gBrowser } = getChrome3();
       if (!gBrowser || !topWin) return { message: "Browser UI not available." };
       let tab = gBrowser.selectedTab;
       const idx = args?.index;
@@ -64216,7 +64254,7 @@ Content: ${content}`;
     commandName = "copy_tab_urls";
     description = "Copy all tab URLs in the current window to the clipboard (one per line). Accepts no arguments.";
     async execute(_args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const urls = Array.from(gBrowser.tabs).map((t) => t.linkedBrowser?.currentURI?.spec).filter(Boolean);
       const text2 = urls.join("\n");
@@ -64229,77 +64267,77 @@ ${text2}` };
       }
     }
   };
-  var CreateHubCommand = class {
-    commandName = "create_hub";
-    description = "Create a bookmark folder hub. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
+  var CreateBookmarkFolderCommand = class {
+    commandName = "create_bookmark_folder";
+    description = "Create a managed bookmark folder. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
     async execute(args) {
       const name = args?.name || "";
       const include = args?.include || "none";
-      const res = await hubs.create(name, { include });
-      return { message: `Created hub "${res.name}" with ${res.count} items.` };
+      const res = await bookmarkFolders.create(name, { include });
+      return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
     }
   };
-  var DeleteHubCommand = class {
-    commandName = "delete_hub";
-    description = "Delete a bookmark folder hub by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
+  var DeleteBookmarkFolderCommand = class {
+    commandName = "delete_bookmark_folder";
+    description = "Delete a managed bookmark folder by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
     async execute(args) {
       const name = args?.name;
-      if (!name) return { message: "Which hub should I delete?" };
+      if (!name) return { message: "Which folder should I delete?" };
       if (!args?.confirmed) {
         const closeTabs2 = args?.closeTabs || false;
         const closeMsg = closeTabs2 ? " and close all associated tabs" : "";
         setPendingConfirmation({
-          command: "delete_hub",
+          command: "delete_bookmark_folder",
           args: { ...args, confirmed: true },
-          description: `Delete hub "${name}"${closeMsg}?`
+          description: `Delete bookmark folder "${name}"${closeMsg}?`
         });
         return {
-          message: `Requesting confirmation to delete hub "${name}"${closeMsg}...`,
+          message: `Requesting confirmation to delete bookmark folder "${name}"${closeMsg}...`,
           requiresConfirmation: true,
           confirmationData: { name, closeTabs: closeTabs2 }
         };
       }
       clearPendingConfirmation();
       const closeTabs = args?.closeTabs || false;
-      const res = await hubs.delete(name, { closeTabs });
-      if (res.removed === 0) return { message: `No hub named "${name}".` };
+      const res = await bookmarkFolders.delete(name, { closeTabs });
+      if (res.removed === 0) return { message: `No folder named "${name}".` };
       return {
-        message: `Deleted hub "${res.name}" (${res.removed} items removed).`
+        message: `Deleted bookmark folder "${res.name}" (${res.removed} items removed).`
       };
     }
   };
-  var ListHubsCommand = class {
-    commandName = "list_hubs";
-    description = "List all bookmark folder hubs. Accepts no arguments.";
+  var ListBookmarkFoldersCommand = class {
+    commandName = "list_bookmark_folders";
+    description = "List all managed bookmark folders. Accepts no arguments.";
     async execute(_args) {
-      const items = await hubs.list();
-      if (!items.length) return { message: "No bookmark folder hubs yet." };
+      const items = await bookmarkFolders.list();
+      if (!items.length) return { message: "No bookmark folders yet." };
       return {
         message: JSON.stringify(items.map((h) => `${h.name} (${h.count})`))
       };
     }
   };
-  var RenameHubCommand = class {
-    commandName = "rename_hub";
-    description = "Rename a bookmark folder hub. Accepts arguments: { from: string, to: string }.";
+  var RenameBookmarkFolderCommand = class {
+    commandName = "rename_bookmark_folder";
+    description = "Rename a managed bookmark folder. Accepts arguments: { from: string, to: string }.";
     async execute(args) {
       const from = args?.from;
       const to = args?.to;
       if (!from || !to)
-        return { message: "Please provide old and new hub names." };
-      const r = await hubs.rename(from, to);
+        return { message: "Please provide old and new folder names." };
+      const r = await bookmarkFolders.rename(from, to);
       return {
         message: r.ok ? `Renamed "${from}" to "${to}".` : `Rename failed: ${r.msg || "unknown error"}`
       };
     }
   };
-  var AddTabToHubCommand = class {
-    commandName = "add_tab_to_hub";
-    description = "Add tabs to a bookmark folder hub. Accepts arguments: { name: string, query?: string } (query matches title/URL). If no query, adds current tab.";
+  var AddTabToBookmarkFolderCommand = class {
+    commandName = "add_tab_to_bookmark_folder";
+    description = "Add tabs to a managed bookmark folder. Accepts arguments: { name: string, query?: string } (query matches title/URL). If no query, adds current tab.";
     async execute(args) {
       const name = args?.name;
-      if (!name) return { message: "Which hub should I add tabs to?" };
-      const { gBrowser } = getChrome2();
+      if (!name) return { message: "Which folder should I add tabs to?" };
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI not available." };
       const query = args?.query?.toLowerCase();
       let tabsToAdd = [];
@@ -64315,42 +64353,42 @@ ${text2}` };
       } else {
         tabsToAdd = [gBrowser.selectedTab];
       }
-      const r = await hubs.addTabs(name, tabsToAdd);
+      const r = await bookmarkFolders.addTabs(name, tabsToAdd);
       if (!r.ok) return { message: `Failed to add tabs to "${name}".` };
       const count = tabsToAdd.length;
-      return { message: `Added ${count} tab(s) to hub "${name}".` };
+      return { message: `Added ${count} tab(s) to bookmark folder "${name}".` };
     }
   };
-  var RemoveTabFromHubCommand = class {
-    commandName = "remove_tab_from_hub";
-    description = "Remove a tab from a bookmark folder hub. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
+  var RemoveTabFromBookmarkFolderCommand = class {
+    commandName = "remove_tab_from_bookmark_folder";
+    description = "Remove a tab from a managed bookmark folder. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
     async execute(args) {
       const name = args?.name;
-      if (!name) return { message: "Which hub?" };
+      if (!name) return { message: "Which folder?" };
       let url = args?.url;
       if (!url) {
-        const { gBrowser } = getChrome2();
+        const { gBrowser } = getChrome3();
         if (gBrowser) {
           url = gBrowser.selectedTab?.linkedBrowser?.currentURI?.spec;
         }
       }
       if (!url) return { message: "Could not determine URL to remove." };
-      const r = await hubs.removeUrl(name, url);
+      const r = await bookmarkFolders.removeUrl(name, url);
       return {
-        message: r.ok ? `Removed URL from hub "${name}" and ungrouped any matching tabs.` : `Failed to remove URL from hub "${name}" (maybe not found).`
+        message: r.ok ? `Removed URL from folder "${name}".` : `Failed to remove URL from folder "${name}" (maybe not found).`
       };
     }
   };
-  var OpenHubCommand = class {
-    commandName = "open_hub";
-    description = "Open all bookmarks from a hub folder in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
+  var OpenBookmarkFolderCommand = class {
+    commandName = "open_bookmark_folder";
+    description = "Open all bookmarks from a managed folder. Accepts arguments: { name: string, where?: 'tabs'|'window'|'tabgroup' }. 'tabgroup' creates a new visual group.";
     async execute(args) {
       const name = args?.name;
-      if (!name) return { message: "Which hub should I open?" };
+      if (!name) return { message: "Which folder should I open?" };
       const where = args?.where || "tabs";
-      const r = await hubs.openHub(name, where);
+      const r = await bookmarkFolders.openFolder(name, where);
       return {
-        message: r.ok ? `Opened hub "${name}" in ${where}.` : `Failed to open hub "${name}".`
+        message: r.ok ? `Opened folder "${name}" in ${where}.` : `Failed to open folder "${name}".`
       };
     }
   };
@@ -64358,7 +64396,7 @@ ${text2}` };
     commandName = "add_split_view";
     description = "Add split view with tabs side-by-side. Accepts arguments: { indices?: [number, number], withIndex?: number, withQuery?: string }. Use 'indices' to specify two tabs by number. Use 'withIndex' or 'withQuery' to split current tab with another. If no arguments, opens split view with a new tab.";
     async execute(args) {
-      const { topWin, gBrowser } = getChrome2();
+      const { topWin, gBrowser } = getChrome3();
       if (!gBrowser || !topWin) return { message: "Browser UI not available." };
       const Services = topWin.Services || window.Services;
       const splitViewEnabled = Services?.prefs?.getBoolPref?.(
@@ -64430,7 +64468,7 @@ ${text2}` };
     commandName = "remove_split_view";
     description = "Remove split view from the current tab (unsplit tabs).";
     async execute(_args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI not available." };
       const currentTab = gBrowser.selectedTab;
       const splitview = currentTab.splitview;
@@ -64449,7 +64487,7 @@ ${text2}` };
     commandName = "split_tabs";
     description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
     async execute(args) {
-      const { topWin, gBrowser } = getChrome2();
+      const { topWin, gBrowser } = getChrome3();
       if (!gBrowser || !topWin) return { message: "Browser UI not available." };
       const indices = args?.indices;
       if (!indices || !Array.isArray(indices) || indices.length < 2) {
@@ -64506,7 +64544,7 @@ ${text2}` };
     commandName = "summarize_page";
     description = "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
     async execute(args) {
-      const { gBrowser, topWin } = getChrome2();
+      const { gBrowser, topWin } = getChrome3();
       if (!gBrowser) return { message: "Browser UI not available." };
       let tab = gBrowser.selectedTab;
       const idx = args?.index;
@@ -64579,35 +64617,57 @@ ${content}`
   };
   var SearchMemoryCommand = class {
     commandName = "search_memory";
-    description = "Search stored memory (bookmarks/hubs) for a query. Arguments: { query: string, hub?: string }.";
+    description = `Search across multiple local sources: browsing history, bookmarks (including managed bookmark folders), open tabs, tab groups, and stored memory. Arguments: { query: string, folder?: string }. 'folder' filters results to a specific bookmark folder name. Returns JSON with: { summary: string, resultsBySource: { [source]: [{ title, url, snippet }] }, results: [{ index, source, title, url, context, snippet }] }. Sources are: "history", "bookmark", "bookmark-folder", "tab", "tab-group", "memory".`;
     async execute(args) {
       const query = args?.query;
-      const hub = args?.hub;
+      const folder = args?.folder;
       if (!query) return { message: "Missing 'query' argument." };
       const results = await localMemory.search(
         query,
-        5,
-        hub ? { hub } : void 0
+        10,
+        folder ? { folder } : void 0
       );
       if (results.length === 0) {
         return {
-          message: `No matches found for "${query}"${hub ? ` in hub "${hub}"` : ""}.`
+          message: `No matches found for "${query}"${folder ? ` in bookmark folder "${folder}"` : ""}.`
         };
       }
-      const structured = results.map((r, i) => ({
-        index: i + 1,
-        title: r.metadata?.title || "(no title)",
-        url: r.metadata?.url || "",
-        snippet: r.text.length > 100 ? r.text.substring(0, 100) + "..." : r.text
-      }));
-      return { message: JSON.stringify(structured) };
+      const sourceMap = {
+        history: "history",
+        bookmark: "bookmark",
+        tab: "tab",
+        "tab-group": "tab-group",
+        hub_item: "bookmark-folder",
+        bookmark_folder_item: "bookmark-folder",
+        memory: "memory"
+      };
+      const structured = results.map((r, i) => {
+        const rawType = r.metadata?.type || "memory";
+        const source = sourceMap[rawType] || rawType;
+        return {
+          index: i + 1,
+          source,
+          title: r.metadata?.title || "(no title)",
+          url: r.metadata?.url || r.metadata?.hubName || "",
+          context: r.metadata?.context || (source === "history" ? "Browsing History" : source === "bookmark" ? "Bookmarks" : source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` : source === "tab" ? "Open Tab" : source === "tab-group" ? "Tab Group" : "Memory"),
+          snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text
+        };
+      });
+      const resultsBySource = {};
+      for (const r of structured) {
+        if (!resultsBySource[r.source]) resultsBySource[r.source] = [];
+        resultsBySource[r.source].push({ title: r.title, url: r.url, snippet: r.snippet });
+      }
+      const sourceCounts = Object.entries(resultsBySource).map(([src, items]) => `${items.length} from ${src}`).join(", ");
+      const summary = `Found ${structured.length} result(s) for "${query}"${folder ? ` in bookmark folder "${folder}"` : ""}: ${sourceCounts}.`;
+      return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
     }
   };
   var ShowSubscriptionCommand = class {
     commandName = "show_subscription";
     description = "Show the current subscription plan and usage options.";
     async execute(_args) {
-      const { topWin } = getChrome2();
+      const { topWin } = getChrome3();
       if (!topWin) return { message: "Browser UI not available." };
       const stats = await subscriptionService.checkAvailability();
       const url = subscriptionService.getSubscriptionUrl();
@@ -64622,7 +64682,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "list_tab_groups";
     description = "List all tab groups in the current window. Accepts no arguments.";
     async execute(_args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const groups = gBrowser.tabGroups || [];
       if (groups.length === 0) {
@@ -64640,7 +64700,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "create_tab_group";
     description = "Create a new tab group from specified tabs. Accepts arguments: { name: string, indices?: number[], openUrl?: string, confirmed?: boolean }. Use 'openUrl' to open a URL in the new group. If no indices provided, creates with current tab (or new tab if current is already grouped).";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = args?.name || "New Group";
       const indices = args?.indices;
@@ -64656,7 +64716,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           tabsToGroup.push(gBrowser.tabs[i - 1]);
         }
       } else if (openUrl) {
-        const { topWin } = getChrome2();
+        const { topWin } = getChrome3();
         let url = openUrl;
         if (!url.includes("://")) {
           try {
@@ -64749,7 +64809,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "delete_tab_group";
     description = "Delete a tab group by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = args?.name;
       if (!name) return { message: "Which tab group should I delete?" };
@@ -64802,7 +64862,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "add_tab_to_group";
     description = "Add tab(s) to an existing tab group. Accepts arguments: { name: string, query?: string, index?: number, all?: boolean, confirmed?: boolean }. Use 'query' to find tab by title/URL. Use 'all: true' to add all ungrouped tabs. If no query/index/all, adds current tab.";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = args?.name;
       if (!name) return { message: "Which tab group should I add the tab to?" };
@@ -64892,7 +64952,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "remove_tab_from_group";
     description = "Remove a tab from its tab group (ungroup it). Accepts arguments: { index?: number }. If no index, uses current tab.";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       let tab = gBrowser.selectedTab;
       const idx = args?.index;
@@ -64923,7 +64983,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     commandName = "rename_tab_group";
     description = "Rename a tab group. Accepts arguments: { from: string, to: string }.";
     async execute(args) {
-      const { gBrowser } = getChrome2();
+      const { gBrowser } = getChrome3();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const from = args?.from;
       const to = args?.to;
@@ -64972,7 +65032,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       const commandMap = {
         close_tab: new CloseTabCommand(),
-        delete_hub: new DeleteHubCommand(),
+        delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
         delete_tab_group: new DeleteTabGroupCommand(),
         create_tab_group: new CreateTabGroupCommand(),
         add_tab_to_group: new AddTabToGroupCommand()
@@ -65193,9 +65253,9 @@ Your job is to intelligently route the user's LATEST request to the appropriate 
 You have the following workers available:
 {members}
 
-**IMPORTANT: Hubs vs Tab Groups**
-- **Hubs** are BOOKMARK FOLDERS that persist across sessions. Use hub commands (create_hub, add_tab_to_hub, etc.) for saving/organizing bookmarks.
-- **Tab Groups** are VISUAL groupings of open tabs that exist only in the current window. Use tab group commands (create_tab_group, add_tab_to_group, etc.) for organizing currently open tabs visually.
+**IMPORTANT: Bookmark Folders vs Tab Groups**
+- **Bookmark Folders** are persistent collections of bookmarks. Use them for saving pages for later. Commands: create_bookmark_folder, add_tab_to_bookmark_folder, etc.
+- **Tab Groups** are visual groupings of OPEN tabs in the current window. Use them for organizing your current workspace. Commands: create_tab_group, add_tab_to_group, etc.
 
 **Worker Arguments**
 
@@ -65211,14 +65271,14 @@ You have the following workers available:
 - **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
 - **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
 
-*Hub Commands (Bookmark Folders - Persistent):*
-- **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
-- **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
-- **list_hubs**: No arguments needed
-- **rename_hub**: { from: string, to: string }
-- **add_tab_to_hub**: { name: string } - add current tab as bookmark to hub
-- **remove_tab_from_hub**: { name: string, url?: string }
-- **open_hub**: { name: string, where?: "tabs"|"window" } - open all bookmarks from hub
+*Bookmark Folder Commands (Persistent):*
+- **create_bookmark_folder**: { name: string, include?: "none"|"current"|"all" } - create folder
+- **delete_bookmark_folder**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
+- **list_bookmark_folders**: No arguments needed
+- **rename_bookmark_folder**: { from: string, to: string }
+- **add_tab_to_bookmark_folder**: { name: string } - add current tab as bookmark to folder
+- **remove_tab_from_bookmark_folder**: { name: string, url?: string }
+- **open_bookmark_folder**: { name: string, where?: "tabs"|"window"|"tabgroup" } - open all bookmarks from a folder. Default ("tabs") opens in current window. "window" opens in a NEW window. "tabgroup" creates a visual tab group in the current window. IMPORTANT: When the user says "in a new window", use where: "window". When they say "as a tab group" or "in a tab group", use where: "tabgroup".
 
 *Tab Group Commands (Visual Grouping - Current Window Only):*
 - **list_tab_groups**: No arguments needed - list visual tab groups
@@ -65228,16 +65288,19 @@ You have the following workers available:
 - **remove_tab_from_group**: { index?: number } - ungroup a tab
 - **rename_tab_group**: { from: string, to: string } - rename a visual tab group
 
+*Search & Memory Commands:*
+- **search_memory**: { query: string, folder?: string } - search across browsing history, bookmarks, managed bookmark folders, open tabs, tab groups, and stored memory. Use 'folder' to filter to a specific bookmark folder. Returns JSON with a 'summary' string, 'resultsBySource' (grouped by source), and flat 'results' array. Each result has: source ("history"|"bookmark"|"bookmark-folder"|"tab"|"tab-group"|"memory"), title, url, context, snippet. Present results grouped by source for clarity.
+- **open_search_result**: { url: string, type?: "tab"|"history"|"bookmark" } - open a search result. type="tab" switches to existing tab if found, otherwise opens new tab.
+
 *Other Commands:*
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string }
 - **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
-Some commands require user confirmation before executing (close_tab, delete_hub, delete_tab_group).
+Some commands require user confirmation before executing (close_tab, delete_bookmark_folder, delete_tab_group).
 When a user says "yes", "confirm", "do it", "go ahead" after a confirmation request, use: { "next": "confirm_action", "args": { "confirmed": true } }
 When a user says "no", "cancel", "nevermind", use: { "next": "confirm_action", "args": { "confirmed": false } }
 
@@ -65250,15 +65313,21 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
     - "tab", "tabs" \u2192 tab commands
     - "split view", "splitview", "split" \u2192 split view commands (add_split_view, remove_split_view)
     - "group", "tab group" \u2192 tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
-    - "hub" \u2192 hub commands
+    - "bookmark", "folder" \u2192 bookmark folder commands
     - "window" \u2192 window commands
     - "summarize", "summary", "what is this page" \u2192 summarize_page
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
+    - "search", "find", "memory", "history", "recall", "remember", "look up", "have I visited" \u2192 search_memory, open_search_result
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize", "search", "find"
 2.  **General Questions \u2192 Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
-5.  **Find Next Step:** For multi-step requests, identify the first step not yet completed.
-6.  **Check for Completion:** Only choose "FINISH" if ALL steps have been completed.
+5.  **Nested/Multi-Step Commands:** Many commands support compound actions in a single call:
+    - "Create folder X and add current tab" \u2192 create_bookmark_folder with include: "current"
+    - "Create folder X and add all tabs" \u2192 create_bookmark_folder with include: "all"
+    - "Create tab group X and open Y in it" \u2192 create_tab_group with openUrl
+    When a single command can handle the full request, prefer that over multiple steps.
+6.  **Multi-Tool Sequences:** If the user's message requires TWO DIFFERENT tools in sequence (e.g., "open google.com and then summarize it"), route to the FIRST tool. After it completes, evaluate the original user message again to find the NEXT uncompleted action and route to the appropriate tool. Do NOT route to "chat" until ALL requested actions are done.
+7.  **Check for Completion:** Only choose "FINISH" if ALL steps have been completed.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -65304,8 +65373,29 @@ User: "Add all tabs to the project group"
 User: "Add all existing tabs to streaming"
 \u2192 { "next": "add_tab_to_group", "args": { "name": "streaming", "all": true } }
 
-User: "Save this tab to my Research hub"
-\u2192 { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+User: "Save this tab to my Research folder"
+\u2192 { "next": "add_tab_to_bookmark_folder", "args": { "name": "Research" } }
+
+User: "Open my travel folder"
+\u2192 { "next": "open_bookmark_folder", "args": { "name": "travel" } }
+
+User: "Open the travel folder in a new window"
+\u2192 { "next": "open_bookmark_folder", "args": { "name": "travel", "where": "window" } }
+
+User: "Open my work folder as a tab group"
+\u2192 { "next": "open_bookmark_folder", "args": { "name": "work", "where": "tabgroup" } }
+
+User: "Open the recipes folder in a tab group"
+\u2192 { "next": "open_bookmark_folder", "args": { "name": "recipes", "where": "tabgroup" } }
+
+User: "Create a folder called travel and add the current tab to it"
+\u2192 { "next": "create_bookmark_folder", "args": { "name": "travel", "include": "current" } }
+
+User: "Make a new folder called work and save all tabs"
+\u2192 { "next": "create_bookmark_folder", "args": { "name": "work", "include": "all" } }
+
+User: "Create a bookmark folder recipes and add this tab"
+\u2192 { "next": "create_bookmark_folder", "args": { "name": "recipes", "include": "current" } }
 
 User: "Add split view" or "Split this tab"
 \u2192 { "next": "add_split_view", "args": {} }
@@ -65355,6 +65445,21 @@ User: "Help me with my code"
 User: "Hi" or "Hello" or "Thanks"
 \u2192 { "next": "chat", "args": {} }
 
+User: "Search for Amazon in my bookmarks"
+\u2192 { "next": "search_memory", "args": { "query": "Amazon" } }
+
+User: "Find anything about cooking in my Research folder"
+\u2192 { "next": "search_memory", "args": { "query": "cooking", "folder": "Research" } }
+
+User: "Have I visited any Python tutorials?"
+\u2192 { "next": "search_memory", "args": { "query": "Python tutorial" } }
+
+User: "Search my history for flights"
+\u2192 { "next": "search_memory", "args": { "query": "flights" } }
+
+User: "What did I save in my Work folder?"
+\u2192 { "next": "search_memory", "args": { "query": "*", "folder": "Work" } }
+
 The available workers are: {options}`.trim();
     const chatNode = async (state) => {
       const CHAT_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into Firefox. You can help with ANYTHING - not just browser tasks.
@@ -65382,6 +65487,28 @@ The available workers are: {options}`.trim();
 3. **Interpret Data:** If a tool returns raw data (like JSON), format it into a human-readable response. NEVER output raw JSON.
 4. **Natural Tone:** Be friendly and conversational. Don't mention internal workings or "tool outputs".
 5. **Context Aware:** Use the conversation history to provide relevant, contextual responses.
+
+**Formatting search_memory Results:**
+When the tool output contains search results (from search_memory), the data is structured JSON with:
+- **summary**: A short description like "Found 5 results for 'Amazon'".
+- **resultsBySource**: Results grouped by source (e.g., "history", "bookmark-folder", "tab").
+- **results**: Flat array of all matches with source, title, url, context, snippet.
+
+Present them grouped by source with clear headings. For example:
+
+**Browsing History**
+- [Page Title](url) - snippet of matching content
+
+**Bookmark Folder: Research**
+- [Saved Article](url) - snippet
+
+**Open Tabs**
+- [Tab Title](url) - snippet
+
+If results are empty, say so naturally ("I couldn't find anything matching X in your history or bookmarks.").
+If results come from a specific folder, mention the folder name.
+When there are many results, highlight the top 3-5 most relevant and mention how many total were found.
+Always make URLs clickable using Markdown link syntax.
 
 **Example - Tool Output:**
 If the history shows:
@@ -65439,7 +65566,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
       const latestText = latestTextRaw.toLowerCase();
       const lines = latestTextRaw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       const commandLine = lines.find(
-        (l) => /(tab\s*group|group|tabs?|hub|window)/i.test(l) && /(delete|remove|create|make|new|add|list|open|close|rename|show)/i.test(l)
+        (l) => /(tab\s*group|group|tabs?|bookmark|folder|window|search|memory)/i.test(l) && /(delete|remove|create|make|new|add|list|open|close|rename|show|split|find|summarize)/i.test(l)
       ) || latestTextRaw;
       const commandText = commandLine.toLowerCase();
       const justRanTool = memberNames.includes(s.lastWorker);
@@ -65559,6 +65686,68 @@ Do NOT mention that you received page content or reference this instruction. Jus
           preRoutedNext = "summarize_page";
           preRoutedArgs = {};
         }
+        const searchFolderMatch = commandText.match(/(?:search|find|look\s*up)\s+(?:for\s+)?(.+?)\s+(?:in\s+(?:my\s+)?(?:the\s+)?)([\w\s]+?)\s+folder/i) || commandText.match(/(?:search|find|look\s*up)\s+(?:in\s+(?:my\s+)?(?:the\s+)?)([\w\s]+?)\s+folder\s+(?:for\s+)?(.+)/i);
+        if (searchFolderMatch && !preRoutedNext) {
+          preRoutedNext = "search_memory";
+          preRoutedArgs = { query: searchFolderMatch[1].trim(), folder: searchFolderMatch[2].trim() };
+        }
+        const whatInFolderMatch = commandText.match(/what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\s+(?:my\s+)?(?:the\s+)?([\w\s]+?)\s+folder/i);
+        if (whatInFolderMatch && !preRoutedNext) {
+          preRoutedNext = "search_memory";
+          preRoutedArgs = { query: "*", folder: whatInFolderMatch[1].trim() };
+        }
+        const searchMemoryMatch = commandText.match(/(?:search|find|look\s*up)\s+(?:for\s+)?(?:in\s+(?:my\s+)?(?:history|bookmarks?|memory|tabs?)\s+)?["']?(.+?)["']?\s*$/i) || commandText.match(/have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\s+(?:any\s+)?["']?(.+?)["']?\s*$/i) || commandText.match(/(?:do\s+i\s+have)\s+(?:any(?:thing)?\s+(?:about|on|related\s+to)\s+)?["']?(.+?)["']?\s*(?:saved|bookmarked|in\s+my)/i);
+        if (searchMemoryMatch && !preRoutedNext) {
+          preRoutedNext = "search_memory";
+          preRoutedArgs = { query: searchMemoryMatch[1].trim() };
+        }
+        const createFolderWithCurrentMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s+and\s+(?:add|save|include|put)\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+        const createFolderWithAllMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s+and\s+(?:add|save|include|put)\s+(?:all)\s+tabs/i);
+        if (createFolderWithCurrentMatch && !preRoutedNext) {
+          preRoutedNext = "create_bookmark_folder";
+          preRoutedArgs = { name: createFolderWithCurrentMatch[1].trim(), include: "current" };
+        } else if (createFolderWithAllMatch && !preRoutedNext) {
+          preRoutedNext = "create_bookmark_folder";
+          preRoutedArgs = { name: createFolderWithAllMatch[1].trim(), include: "all" };
+        }
+        const createFolderMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s*$/i);
+        if (createFolderMatch && !preRoutedNext) {
+          preRoutedNext = "create_bookmark_folder";
+          preRoutedArgs = { name: createFolderMatch[1].trim() };
+        }
+        const deleteFolderMatch = commandText.match(/(?:delete|remove)\s+(?:the\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) || commandText.match(/(?:delete|remove)\s+(?:the\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder/i);
+        if (deleteFolderMatch && !preRoutedNext) {
+          preRoutedNext = "delete_bookmark_folder";
+          preRoutedArgs = { name: deleteFolderMatch[1].trim() };
+        }
+        const listFoldersMatch = commandText.match(/list\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?folders/i);
+        if (listFoldersMatch && !preRoutedNext) {
+          preRoutedNext = "list_bookmark_folders";
+          preRoutedArgs = {};
+        }
+        const addToFolderMatch = commandText.match(/(?:save|add)\s+(?:this\s+)?(?:tab\s+)?(?:to\s+(?:my\s+)?(?:the\s+)?)(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) || commandText.match(/(?:save|add)\s+(?:this\s+)?(?:tab\s+)?(?:to\s+(?:my\s+)?(?:the\s+)?)["']?([\w\s]+?)["']?\s*$/i);
+        if (addToFolderMatch && !preRoutedNext) {
+          preRoutedNext = "add_tab_to_bookmark_folder";
+          preRoutedArgs = { name: addToFolderMatch[1].trim() };
+        }
+        const renameFolderMatch = commandText.match(/rename\s+(?:the\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:to|as)\s+["']?([\w\s]+?)["']?\s*$/i);
+        if (renameFolderMatch && !preRoutedNext) {
+          preRoutedNext = "rename_bookmark_folder";
+          preRoutedArgs = { from: renameFolderMatch[1].trim(), to: renameFolderMatch[2].trim() };
+        }
+        const openFolderMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) || commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s*$/i);
+        const openFolderWhereMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:in\s+(?:a\s+)?(?:new\s+)?window)/i) || commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s+(?:in\s+(?:a\s+)?(?:new\s+)?window)/i);
+        const openFolderTabGroupMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:(?:as|in)\s+(?:a\s+)?(?:new\s+)?tab\s*group)/i) || commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s+(?:(?:as|in)\s+(?:a\s+)?(?:new\s+)?tab\s*group)/i);
+        if (openFolderTabGroupMatch && !preRoutedNext) {
+          preRoutedNext = "open_bookmark_folder";
+          preRoutedArgs = { name: openFolderTabGroupMatch[1].trim(), where: "tabgroup" };
+        } else if (openFolderWhereMatch && !preRoutedNext) {
+          preRoutedNext = "open_bookmark_folder";
+          preRoutedArgs = { name: openFolderWhereMatch[1].trim(), where: "window" };
+        } else if (openFolderMatch && !preRoutedNext) {
+          preRoutedNext = "open_bookmark_folder";
+          preRoutedArgs = { name: openFolderMatch[1].trim() };
+        }
       }
       if (preRoutedNext) {
         console.log(`\u{1F3AF} Pre-routed to ${preRoutedNext} with args:`, preRoutedArgs);
@@ -65630,14 +65819,14 @@ Do NOT mention that you received page content or reference this instruction. Jus
       // Split View (side-by-side tabs in same window)
       new AddSplitViewCommand(),
       new RemoveSplitViewCommand(),
-      // Hubs (Bookmark Folders - Persistent)
-      new CreateHubCommand(),
-      new DeleteHubCommand(),
-      new ListHubsCommand(),
-      new RenameHubCommand(),
-      new AddTabToHubCommand(),
-      new RemoveTabFromHubCommand(),
-      new OpenHubCommand(),
+      // Bookmark Folders (Persistent)
+      new CreateBookmarkFolderCommand(),
+      new DeleteBookmarkFolderCommand(),
+      new ListBookmarkFoldersCommand(),
+      new RenameBookmarkFolderCommand(),
+      new AddTabToBookmarkFolderCommand(),
+      new RemoveTabFromBookmarkFolderCommand(),
+      new OpenBookmarkFolderCommand(),
       // Tab Groups (Visual Grouping - Current Window)
       new ListTabGroupsCommand(),
       new CreateTabGroupCommand(),
@@ -65707,7 +65896,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
               if (typeof c === "string") return c;
               if (c?.text) return c.text;
               if (c?.type === "text" && c.text) return c.text;
-              return String(c || "");
+              return String(c || "");ma
             }).join("");
           } else if (msg?.content != null) {
             text2 = String(msg.content);

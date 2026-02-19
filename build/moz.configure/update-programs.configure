@@ -109,18 +109,94 @@ set_config("MOZ_SMPRIVILEGEDEXECUTABLES_REQUIREMENTS", smprivilegedexec_requirem
 
 option(env="MAR_CHANNEL_ID", nargs=1, help="MAR channel identifier")
 
+def normalize_mar_channel_ids(values):
+    channels = []
+    for value in values:
+        for channel in value.replace(",", " ").split():
+            channels.append(channel)
+    return channels
+
+
+def validate_mar_channel_ids(channels, option_name):
+    for channel in channels:
+        if any(char in channel for char in ('"', ",", "\t", " ")):
+            die(
+                "{} must not contain the following 4 characters: "
+                '"\\",",\\t,space". Invalid value: "{}"'.format(
+                    option_name, channel
+                )
+            )
+
+
+@depends("MAR_CHANNEL_ID", "--enable-update-channel")
+def mar_channel_id(mar_channel, update_channel):
+    update_channel = update_channel[0] if update_channel else ""
+    is_oasis_ring = update_channel in ("oasis-canary", "oasis-stable")
+
+    if mar_channel:
+        channels = normalize_mar_channel_ids(mar_channel)
+    elif is_oasis_ring:
+        channels = [update_channel]
+    else:
+        return
+
+    if len(channels) != 1:
+        die("MAR_CHANNEL_ID must resolve to exactly one channel")
+
+    validate_mar_channel_ids(channels, "MAR_CHANNEL_ID")
+
+    if is_oasis_ring and channels[0] != update_channel:
+        die(
+            "For --enable-update-channel={}, MAR_CHANNEL_ID must be {}".format(
+                update_channel, update_channel
+            )
+        )
+
+    return channels[0]
+
+
 set_config(
     "MAR_CHANNEL_ID",
-    depends_if("MAR_CHANNEL_ID")(lambda channel: channel[0]),
+    mar_channel_id,
 )
 
 option(
     env="ACCEPTED_MAR_CHANNEL_IDS", nargs="+", help="Accepted MAR channel identifiers"
 )
 
+
+@depends("ACCEPTED_MAR_CHANNEL_IDS", mar_channel_id, "--enable-update-channel")
+def accepted_mar_channel_ids(accepted_channels, mar_channel, update_channel):
+    update_channel = update_channel[0] if update_channel else ""
+
+    if accepted_channels:
+        channels = normalize_mar_channel_ids(accepted_channels)
+    elif mar_channel:
+        channels = [mar_channel]
+    elif update_channel in ("oasis-canary", "oasis-stable"):
+        channels = [update_channel]
+    else:
+        return
+
+    if not channels:
+        die("ACCEPTED_MAR_CHANNEL_IDS must contain at least one channel")
+
+    validate_mar_channel_ids(channels, "ACCEPTED_MAR_CHANNEL_IDS")
+
+    deduplicated = []
+    for channel in channels:
+        if channel not in deduplicated:
+            deduplicated.append(channel)
+
+    if mar_channel and mar_channel not in deduplicated:
+        die("ACCEPTED_MAR_CHANNEL_IDS must include MAR_CHANNEL_ID")
+
+    return ",".join(deduplicated)
+
+
 set_config(
     "ACCEPTED_MAR_CHANNEL_IDS",
-    depends_if("ACCEPTED_MAR_CHANNEL_IDS")(lambda channels: ",".join(channels)),
+    accepted_mar_channel_ids,
 )
 
 # Use NSS for MAR signatures even on platforms where system libraries are

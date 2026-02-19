@@ -1,4 +1,4 @@
-import { hubs, CreateHubOpts, DeleteHubOpts } from "./hubs";
+import { bookmarkFolders, CreateFolderOpts, DeleteFolderOpts } from "./bookmarkFolders";
 import { localMemory } from "./services/localMemory";
 import { subscriptionService } from "./services/subscription";
 
@@ -306,39 +306,39 @@ export class CopyTabUrlsCommand implements Command {
 }
 
 /* ===========================
- * Hub Commands
+ * Bookmark Folder Commands (formerly Hubs)
  * =========================== */
 
-export class CreateHubCommand implements Command {
-  commandName = "create_hub";
+export class CreateBookmarkFolderCommand implements Command {
+  commandName = "create_bookmark_folder";
   description =
-    "Create a bookmark folder hub. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
+    "Create a managed bookmark folder. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name || "";
     const include = args?.include || "none";
-    const res = await hubs.create(name, { include });
-    return { message: `Created hub "${res.name}" with ${res.count} items.` };
+    const res = await bookmarkFolders.create(name, { include });
+    return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
   }
 }
 
-export class DeleteHubCommand implements Command {
-  commandName = "delete_hub";
+export class DeleteBookmarkFolderCommand implements Command {
+  commandName = "delete_bookmark_folder";
   description =
-    "Delete a bookmark folder hub by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
+    "Delete a managed bookmark folder by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
-    if (!name) return { message: "Which hub should I delete?" };
+    if (!name) return { message: "Which folder should I delete?" };
 
     if (!args?.confirmed) {
       const closeTabs = args?.closeTabs || false;
       const closeMsg = closeTabs ? " and close all associated tabs" : "";
       setPendingConfirmation({
-        command: "delete_hub",
+        command: "delete_bookmark_folder",
         args: { ...args, confirmed: true },
-        description: `Delete hub "${name}"${closeMsg}?`,
+        description: `Delete bookmark folder "${name}"${closeMsg}?`,
       });
       return {
-        message: `Requesting confirmation to delete hub "${name}"${closeMsg}...`,
+        message: `Requesting confirmation to delete bookmark folder "${name}"${closeMsg}...`,
         requiresConfirmation: true,
         confirmationData: { name, closeTabs },
       };
@@ -346,36 +346,36 @@ export class DeleteHubCommand implements Command {
 
     clearPendingConfirmation();
     const closeTabs = args?.closeTabs || false;
-    const res = await hubs.delete(name, { closeTabs });
-    if (res.removed === 0) return { message: `No hub named "${name}".` };
+    const res = await bookmarkFolders.delete(name, { closeTabs });
+    if (res.removed === 0) return { message: `No folder named "${name}".` };
     return {
-      message: `Deleted hub "${res.name}" (${res.removed} items removed).`,
+      message: `Deleted bookmark folder "${res.name}" (${res.removed} items removed).`,
     };
   }
 }
 
-export class ListHubsCommand implements Command {
-  commandName = "list_hubs";
-  description = "List all bookmark folder hubs. Accepts no arguments.";
+export class ListBookmarkFoldersCommand implements Command {
+  commandName = "list_bookmark_folders";
+  description = "List all managed bookmark folders. Accepts no arguments.";
   async execute(_args: any): Promise<CmdResult> {
-    const items = await hubs.list();
-    if (!items.length) return { message: "No bookmark folder hubs yet." };
+    const items = await bookmarkFolders.list();
+    if (!items.length) return { message: "No bookmark folders yet." };
     return {
       message: JSON.stringify(items.map(h => `${h.name} (${h.count})`)),
     };
   }
 }
 
-export class RenameHubCommand implements Command {
-  commandName = "rename_hub";
+export class RenameBookmarkFolderCommand implements Command {
+  commandName = "rename_bookmark_folder";
   description =
-    "Rename a bookmark folder hub. Accepts arguments: { from: string, to: string }.";
+    "Rename a managed bookmark folder. Accepts arguments: { from: string, to: string }.";
   async execute(args: any): Promise<CmdResult> {
     const from = args?.from;
     const to = args?.to;
     if (!from || !to)
-      return { message: "Please provide old and new hub names." };
-    const r = await hubs.rename(from, to);
+      return { message: "Please provide old and new folder names." };
+    const r = await bookmarkFolders.rename(from, to);
     return {
       message: r.ok
         ? `Renamed "${from}" to "${to}".`
@@ -384,13 +384,13 @@ export class RenameHubCommand implements Command {
   }
 }
 
-export class AddTabToHubCommand implements Command {
-  commandName = "add_tab_to_hub";
+export class AddTabToBookmarkFolderCommand implements Command {
+  commandName = "add_tab_to_bookmark_folder";
   description =
-    "Add tabs to a bookmark folder hub. Accepts arguments: { name: string, query?: string } (query matches title/URL). If no query, adds current tab.";
+    "Add tabs to a managed bookmark folder. Accepts arguments: { name: string, query?: string } (query matches title/URL). If no query, adds current tab.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
-    if (!name) return { message: "Which hub should I add tabs to?" };
+    if (!name) return { message: "Which folder should I add tabs to?" };
 
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI not available." };
@@ -414,22 +414,22 @@ export class AddTabToHubCommand implements Command {
       tabsToAdd = [gBrowser.selectedTab];
     }
 
-    const r = await hubs.addTabs(name, tabsToAdd);
+    const r = await bookmarkFolders.addTabs(name, tabsToAdd);
 
     if (!r.ok) return { message: `Failed to add tabs to "${name}".` };
 
     const count = tabsToAdd.length;
-    return { message: `Added ${count} tab(s) to hub "${name}".` };
+    return { message: `Added ${count} tab(s) to bookmark folder "${name}".` };
   }
 }
 
-export class RemoveTabFromHubCommand implements Command {
-  commandName = "remove_tab_from_hub";
+export class RemoveTabFromBookmarkFolderCommand implements Command {
+  commandName = "remove_tab_from_bookmark_folder";
   description =
-    "Remove a tab from a bookmark folder hub. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
+    "Remove a tab from a managed bookmark folder. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
-    if (!name) return { message: "Which hub?" };
+    if (!name) return { message: "Which folder?" };
 
     let url = args?.url;
     if (!url) {
@@ -441,28 +441,28 @@ export class RemoveTabFromHubCommand implements Command {
 
     if (!url) return { message: "Could not determine URL to remove." };
 
-    const r = await hubs.removeUrl(name, url);
+    const r = await bookmarkFolders.removeUrl(name, url);
     return {
       message: r.ok
-        ? `Removed URL from hub "${name}" and ungrouped any matching tabs.`
-        : `Failed to remove URL from hub "${name}" (maybe not found).`,
+        ? `Removed URL from folder "${name}".`
+        : `Failed to remove URL from folder "${name}" (maybe not found).`,
     };
   }
 }
 
-export class OpenHubCommand implements Command {
-  commandName = "open_hub";
+export class OpenBookmarkFolderCommand implements Command {
+  commandName = "open_bookmark_folder";
   description =
-    "Open all bookmarks from a hub folder in tabs or a new window. Accepts arguments: { name: string, where?: 'tabs'|'window' }.";
+    "Open all bookmarks from a managed folder. Accepts arguments: { name: string, where?: 'tabs'|'window'|'tabgroup' }. 'tabgroup' creates a new visual group.";
   async execute(args: any): Promise<CmdResult> {
     const name = args?.name;
-    if (!name) return { message: "Which hub should I open?" };
+    if (!name) return { message: "Which folder should I open?" };
     const where = args?.where || "tabs";
-    const r = await hubs.openHub(name, where);
+    const r = await bookmarkFolders.openFolder(name, where);
     return {
       message: r.ok
-        ? `Opened hub "${name}" in ${where}.`
-        : `Failed to open hub "${name}".`,
+        ? `Opened folder "${name}" in ${where}.`
+        : `Failed to open folder "${name}".`,
     };
   }
 }
@@ -761,33 +761,102 @@ export class SummarizePageCommand implements Command {
 export class SearchMemoryCommand implements Command {
   commandName = "search_memory";
   description =
-    "Search stored memory (bookmarks/hubs) for a query. Arguments: { query: string, hub?: string }.";
+    `Search across multiple local sources: browsing history, bookmarks (including managed bookmark folders), open tabs, tab groups, and stored memory. ` +
+    `Arguments: { query: string, folder?: string }. ` +
+    `'folder' filters results to a specific bookmark folder name. ` +
+    `Returns JSON with: { summary: string, resultsBySource: { [source]: [{ title, url, snippet }] }, results: [{ index, source, title, url, context, snippet }] }. ` +
+    `Sources are: "history", "bookmark", "bookmark-folder", "tab", "tab-group", "memory".`;
   async execute(args: any): Promise<CmdResult> {
     const query = args?.query;
-    const hub = args?.hub;
+    const folder = args?.folder;
     if (!query) return { message: "Missing 'query' argument." };
 
     const results = await localMemory.search(
       query,
-      5,
-      hub ? { hub } : undefined
+      10,
+      folder ? { folder } : undefined
     );
 
     if (results.length === 0) {
       return {
-        message: `No matches found for "${query}"${hub ? ` in hub "${hub}"` : ""}.`,
+        message: `No matches found for "${query}"${folder ? ` in bookmark folder "${folder}"` : ""}.`,
       };
     }
 
-    // Return structured data for the AI to format
-    const structured = results.map((r, i) => ({
-      index: i + 1,
-      title: r.metadata?.title || "(no title)",
-      url: r.metadata?.url || "",
-      snippet: r.text.length > 100 ? r.text.substring(0, 100) + "..." : r.text,
-    }));
+    const sourceMap: Record<string, string> = {
+      history: "history",
+      bookmark: "bookmark",
+      tab: "tab",
+      "tab-group": "tab-group",
+      hub_item: "bookmark-folder",
+      bookmark_folder_item: "bookmark-folder",
+      memory: "memory",
+    };
 
-    return { message: JSON.stringify(structured) };
+    const structured = results.map((r, i) => {
+      const rawType = r.metadata?.type || "memory";
+      const source = sourceMap[rawType] || rawType;
+      return {
+        index: i + 1,
+        source,
+        title: r.metadata?.title || "(no title)",
+        url: r.metadata?.url || r.metadata?.hubName || "",
+        context:
+          r.metadata?.context ||
+          (source === "history" ? "Browsing History" :
+           source === "bookmark" ? "Bookmarks" :
+           source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
+           source === "tab" ? "Open Tab" :
+           source === "tab-group" ? "Tab Group" :
+           "Memory"),
+        snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
+      };
+    });
+
+    const resultsBySource: Record<string, any[]> = {};
+    for (const r of structured) {
+      if (!resultsBySource[r.source]) resultsBySource[r.source] = [];
+      resultsBySource[r.source].push({ title: r.title, url: r.url, snippet: r.snippet });
+    }
+
+    const sourceCounts = Object.entries(resultsBySource)
+      .map(([src, items]) => `${items.length} from ${src}`)
+      .join(", ");
+    const summary = `Found ${structured.length} result(s) for "${query}"${folder ? ` in bookmark folder "${folder}"` : ""}: ${sourceCounts}.`;
+
+    return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
+  }
+}
+
+export class OpenSearchResultCommand implements Command {
+  commandName = "open_search_result";
+  description =
+    "Open a search result. Accepts arguments: { url: string, type?: string }. If type is 'tab', switches to it if found. Otherwise opens in new tab.";
+  async execute(args: any): Promise<CmdResult> {
+    const url = args?.url;
+    const type = args?.type;
+    
+    if (!url) return { message: "Missing 'url' argument." };
+
+    const { topWin, gBrowser } = getChrome();
+    if (!topWin || !gBrowser) return { message: "Browser UI not available." };
+
+    // If it's an open tab, try to find and switch to it
+    if (type === "tab") {
+      const tabs = Array.from(gBrowser.tabs);
+      const foundTab = tabs.find((t: any) => 
+        t.linkedBrowser?.currentURI?.spec === url
+      );
+      
+      if (foundTab) {
+        gBrowser.selectedTab = foundTab;
+        return { message: `Switched to tab: ${url}` };
+      }
+    }
+
+    // Otherwise (or if tab not found), open in new tab
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened in new tab: ${url}` };
   }
 }
 
@@ -1235,7 +1304,7 @@ export class ConfirmActionCommand implements Command {
 
     const commandMap: Record<string, Command> = {
       close_tab: new CloseTabCommand(),
-      delete_hub: new DeleteHubCommand(),
+      delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
       delete_tab_group: new DeleteTabGroupCommand(),
       create_tab_group: new CreateTabGroupCommand(),
       add_tab_to_group: new AddTabToGroupCommand(),

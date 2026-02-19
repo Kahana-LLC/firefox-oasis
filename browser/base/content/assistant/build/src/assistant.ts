@@ -16,18 +16,19 @@ import {
   SplitTabsCommand,
   AddSplitViewCommand,
   RemoveSplitViewCommand,
-  CreateHubCommand,
-  DeleteHubCommand,
-  ListHubsCommand,
-  RenameHubCommand,
-  AddTabToHubCommand,
-  OpenHubCommand,
+  CreateBookmarkFolderCommand,
+  DeleteBookmarkFolderCommand,
+  ListBookmarkFoldersCommand,
+  RenameBookmarkFolderCommand,
+  AddTabToBookmarkFolderCommand,
+  OpenBookmarkFolderCommand,
   NewWindowCommand,
   OrganizeWindowsCommand,
   ShowURLCommand,
   SearchMemoryCommand,
+  OpenSearchResultCommand,
   SummarizePageCommand,
-  RemoveTabFromHubCommand,
+  RemoveTabFromBookmarkFolderCommand,
   ShowSubscriptionCommand,
   ListTabGroupsCommand,
   CreateTabGroupCommand,
@@ -303,9 +304,9 @@ Your job is to intelligently route the user's LATEST request to the appropriate 
 You have the following workers available:
 {members}
 
-**IMPORTANT: Hubs vs Tab Groups**
-- **Hubs** are BOOKMARK FOLDERS that persist across sessions. Use hub commands (create_hub, add_tab_to_hub, etc.) for saving/organizing bookmarks.
-- **Tab Groups** are VISUAL groupings of open tabs that exist only in the current window. Use tab group commands (create_tab_group, add_tab_to_group, etc.) for organizing currently open tabs visually.
+**IMPORTANT: Bookmark Folders vs Tab Groups**
+- **Bookmark Folders** are persistent collections of bookmarks. Use them for saving pages for later. Commands: create_bookmark_folder, add_tab_to_bookmark_folder, etc.
+- **Tab Groups** are visual groupings of OPEN tabs in the current window. Use them for organizing your current workspace. Commands: create_tab_group, add_tab_to_group, etc.
 
 **Worker Arguments**
 
@@ -321,14 +322,14 @@ You have the following workers available:
 - **add_split_view**: { indices?: [number, number], withIndex?: number, withQuery?: string } - add split view. Use 'indices' to specify two tabs by number (e.g., [1, 2]). Use 'withIndex' or 'withQuery' to split current tab with another. If no args, opens current tab with new tab.
 - **remove_split_view**: No arguments needed - remove split view from current tab (unsplit)
 
-*Hub Commands (Bookmark Folders - Persistent):*
-- **create_hub**: { name: string, include?: "none"|"current"|"all" } - create bookmark folder
-- **delete_hub**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
-- **list_hubs**: No arguments needed
-- **rename_hub**: { from: string, to: string }
-- **add_tab_to_hub**: { name: string } - add current tab as bookmark to hub
-- **remove_tab_from_hub**: { name: string, url?: string }
-- **open_hub**: { name: string, where?: "tabs"|"window" } - open all bookmarks from hub
+*Bookmark Folder Commands (Persistent):*
+- **create_bookmark_folder**: { name: string, include?: "none"|"current"|"all" } - create folder
+- **delete_bookmark_folder**: { name: string, closeTabs?: boolean } - REQUIRES CONFIRMATION
+- **list_bookmark_folders**: No arguments needed
+- **rename_bookmark_folder**: { from: string, to: string }
+- **add_tab_to_bookmark_folder**: { name: string } - add current tab as bookmark to folder
+- **remove_tab_from_bookmark_folder**: { name: string, url?: string }
+- **open_bookmark_folder**: { name: string, where?: "tabs"|"window"|"tabgroup" } - open all bookmarks from a folder. Default ("tabs") opens in current window. "window" opens in a NEW window. "tabgroup" creates a visual tab group in the current window. IMPORTANT: When the user says "in a new window", use where: "window". When they say "as a tab group" or "in a tab group", use where: "tabgroup".
 
 *Tab Group Commands (Visual Grouping - Current Window Only):*
 - **list_tab_groups**: No arguments needed - list visual tab groups
@@ -338,16 +339,19 @@ You have the following workers available:
 - **remove_tab_from_group**: { index?: number } - ungroup a tab
 - **rename_tab_group**: { from: string, to: string } - rename a visual tab group
 
+*Search & Memory Commands:*
+- **search_memory**: { query: string, folder?: string } - search across browsing history, bookmarks, managed bookmark folders, open tabs, tab groups, and stored memory. Use 'folder' to filter to a specific bookmark folder. Returns JSON with a 'summary' string, 'resultsBySource' (grouped by source), and flat 'results' array. Each result has: source ("history"|"bookmark"|"bookmark-folder"|"tab"|"tab-group"|"memory"), title, url, context, snippet. Present results grouped by source for clarity.
+- **open_search_result**: { url: string, type?: "tab"|"history"|"bookmark" } - open a search result. type="tab" switches to existing tab if found, otherwise opens new tab.
+
 *Other Commands:*
 - **new_window**: No arguments needed
 - **organize_windows**: No arguments needed
 - **show_url**: { url: string }
-- **search_memory**: { query: string, hub?: string }
 - **summarize_page**: { index?: number, query?: string } - summarize a webpage. Use 'index' for tab number, 'query' to find tab by title/URL. No args = current tab.
 - **confirm_action**: { confirmed: boolean } - confirm or cancel a pending action
 
 **Confirmation Handling**
-Some commands require user confirmation before executing (close_tab, delete_hub, delete_tab_group).
+Some commands require user confirmation before executing (close_tab, delete_bookmark_folder, delete_tab_group).
 When a user says "yes", "confirm", "do it", "go ahead" after a confirmation request, use: { "next": "confirm_action", "args": { "confirmed": true } }
 When a user says "no", "cancel", "nevermind", use: { "next": "confirm_action", "args": { "confirmed": false } }
 
@@ -360,15 +364,21 @@ Always analyze the CURRENT/LATEST message to decide which worker to use.
     - "tab", "tabs" → tab commands
     - "split view", "splitview", "split" → split view commands (add_split_view, remove_split_view)
     - "group", "tab group" → tab group commands (create_tab_group, delete_tab_group, add_tab_to_group, etc.)
-    - "hub" → hub commands
+    - "bookmark", "folder" → bookmark folder commands
     - "window" → window commands
     - "summarize", "summary", "what is this page" → summarize_page
-    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize"
+    - "search", "find", "memory", "history", "recall", "remember", "look up", "have I visited" → search_memory, open_search_result
+    - Action words: "open", "close", "delete", "create", "add", "remove", "rename", "list", "show", "unsplit", "summarize", "search", "find"
 2.  **General Questions → Chat:** If the LATEST message is a question or request NOT about browser actions, choose "chat".
 3.  **Each Message is New:** Ignore the conversation pattern. Just because previous messages were questions doesn't mean the current one is. Evaluate EACH message independently.
 4.  **History for Context Only:** Use conversation history only to understand context (like which tab group was mentioned before), NOT to decide the worker type.
-5.  **Find Next Step:** For multi-step requests, identify the first step not yet completed.
-6.  **Check for Completion:** Only choose "FINISH" if ALL steps have been completed.
+5.  **Nested/Multi-Step Commands:** Many commands support compound actions in a single call:
+    - "Create folder X and add current tab" → create_bookmark_folder with include: "current"
+    - "Create folder X and add all tabs" → create_bookmark_folder with include: "all"
+    - "Create tab group X and open Y in it" → create_tab_group with openUrl
+    When a single command can handle the full request, prefer that over multiple steps.
+6.  **Multi-Tool Sequences:** If the user's message requires TWO DIFFERENT tools in sequence (e.g., "open google.com and then summarize it"), route to the FIRST tool. After it completes, evaluate the original user message again to find the NEXT uncompleted action and route to the appropriate tool. Do NOT route to "chat" until ALL requested actions are done.
+7.  **Check for Completion:** Only choose "FINISH" if ALL steps have been completed.
 
 **Output Format**
 You MUST respond with a JSON object that follows this schema:
@@ -414,8 +424,29 @@ User: "Add all tabs to the project group"
 User: "Add all existing tabs to streaming"
 → { "next": "add_tab_to_group", "args": { "name": "streaming", "all": true } }
 
-User: "Save this tab to my Research hub"
-→ { "next": "add_tab_to_hub", "args": { "name": "Research" } }
+User: "Save this tab to my Research folder"
+→ { "next": "add_tab_to_bookmark_folder", "args": { "name": "Research" } }
+
+User: "Open my travel folder"
+→ { "next": "open_bookmark_folder", "args": { "name": "travel" } }
+
+User: "Open the travel folder in a new window"
+→ { "next": "open_bookmark_folder", "args": { "name": "travel", "where": "window" } }
+
+User: "Open my work folder as a tab group"
+→ { "next": "open_bookmark_folder", "args": { "name": "work", "where": "tabgroup" } }
+
+User: "Open the recipes folder in a tab group"
+→ { "next": "open_bookmark_folder", "args": { "name": "recipes", "where": "tabgroup" } }
+
+User: "Create a folder called travel and add the current tab to it"
+→ { "next": "create_bookmark_folder", "args": { "name": "travel", "include": "current" } }
+
+User: "Make a new folder called work and save all tabs"
+→ { "next": "create_bookmark_folder", "args": { "name": "work", "include": "all" } }
+
+User: "Create a bookmark folder recipes and add this tab"
+→ { "next": "create_bookmark_folder", "args": { "name": "recipes", "include": "current" } }
 
 User: "Add split view" or "Split this tab"
 → { "next": "add_split_view", "args": {} }
@@ -465,6 +496,21 @@ User: "Help me with my code"
 User: "Hi" or "Hello" or "Thanks"
 → { "next": "chat", "args": {} }
 
+User: "Search for Amazon in my bookmarks"
+→ { "next": "search_memory", "args": { "query": "Amazon" } }
+
+User: "Find anything about cooking in my Research folder"
+→ { "next": "search_memory", "args": { "query": "cooking", "folder": "Research" } }
+
+User: "Have I visited any Python tutorials?"
+→ { "next": "search_memory", "args": { "query": "Python tutorial" } }
+
+User: "Search my history for flights"
+→ { "next": "search_memory", "args": { "query": "flights" } }
+
+User: "What did I save in my Work folder?"
+→ { "next": "search_memory", "args": { "query": "*", "folder": "Work" } }
+
 The available workers are: {options}`.trim();
 
   const chatNode = async (state: typeof GraphState.State) => {
@@ -493,6 +539,28 @@ The available workers are: {options}`.trim();
 3. **Interpret Data:** If a tool returns raw data (like JSON), format it into a human-readable response. NEVER output raw JSON.
 4. **Natural Tone:** Be friendly and conversational. Don't mention internal workings or "tool outputs".
 5. **Context Aware:** Use the conversation history to provide relevant, contextual responses.
+
+**Formatting search_memory Results:**
+When the tool output contains search results (from search_memory), the data is structured JSON with:
+- **summary**: A short description like "Found 5 results for 'Amazon'".
+- **resultsBySource**: Results grouped by source (e.g., "history", "bookmark-folder", "tab").
+- **results**: Flat array of all matches with source, title, url, context, snippet.
+
+Present them grouped by source with clear headings. For example:
+
+**Browsing History**
+- [Page Title](url) - snippet of matching content
+
+**Bookmark Folder: Research**
+- [Saved Article](url) - snippet
+
+**Open Tabs**
+- [Tab Title](url) - snippet
+
+If results are empty, say so naturally ("I couldn't find anything matching X in your history or bookmarks.").
+If results come from a specific folder, mention the folder name.
+When there are many results, highlight the top 3-5 most relevant and mention how many total were found.
+Always make URLs clickable using Markdown link syntax.
 
 **Example - Tool Output:**
 If the history shows:
@@ -546,7 +614,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
 
     const res = await chatRemote(CHAT_PROMPT, toWire(messagesWithPrompt));
     return {
-      messages: [new AIMessage(res.content)],
+      messages: [new AIMessage((res as any).content)],
       lastWorker: "chat",
     };
   };
@@ -567,8 +635,8 @@ Do NOT mention that you received page content or reference this instruction. Jus
       .filter(Boolean);
     const commandLine =
       lines.find(l =>
-        /(tab\s*group|group|tabs?|hub|window)/i.test(l) &&
-        /(delete|remove|create|make|new|add|list|open|close|rename|show)/i.test(l)
+        /(tab\s*group|group|tabs?|bookmark|folder|window|search|memory)/i.test(l) &&
+        /(delete|remove|create|make|new|add|list|open|close|rename|show|split|find|summarize)/i.test(l)
       ) || latestTextRaw;
     const commandText = commandLine.toLowerCase();
     
@@ -745,7 +813,94 @@ Do NOT mention that you received page content or reference this instruction. Jus
       preRoutedNext = "summarize_page";
       preRoutedArgs = {};
     }
-    
+
+    // Search memory commands
+    // "search for X in my Y folder" or "find X in folder Y"
+    const searchFolderMatch = commandText.match(/(?:search|find|look\s*up)\s+(?:for\s+)?(.+?)\s+(?:in\s+(?:my\s+)?(?:the\s+)?)([\w\s]+?)\s+folder/i) ||
+                              commandText.match(/(?:search|find|look\s*up)\s+(?:in\s+(?:my\s+)?(?:the\s+)?)([\w\s]+?)\s+folder\s+(?:for\s+)?(.+)/i);
+    if (searchFolderMatch && !preRoutedNext) {
+      preRoutedNext = "search_memory";
+      preRoutedArgs = { query: searchFolderMatch[1].trim(), folder: searchFolderMatch[2].trim() };
+    }
+
+    // "what did I save in my X folder" / "what's in my X folder"
+    const whatInFolderMatch = commandText.match(/what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\s+(?:my\s+)?(?:the\s+)?([\w\s]+?)\s+folder/i);
+    if (whatInFolderMatch && !preRoutedNext) {
+      preRoutedNext = "search_memory";
+      preRoutedArgs = { query: "*", folder: whatInFolderMatch[1].trim() };
+    }
+
+    // "search for X" / "find X in my history/bookmarks" / "have I visited X" / "look up X"
+    const searchMemoryMatch = commandText.match(/(?:search|find|look\s*up)\s+(?:for\s+)?(?:in\s+(?:my\s+)?(?:history|bookmarks?|memory|tabs?)\s+)?["']?(.+?)["']?\s*$/i) ||
+                              commandText.match(/have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\s+(?:any\s+)?["']?(.+?)["']?\s*$/i) ||
+                              commandText.match(/(?:do\s+i\s+have)\s+(?:any(?:thing)?\s+(?:about|on|related\s+to)\s+)?["']?(.+?)["']?\s*(?:saved|bookmarked|in\s+my)/i);
+    if (searchMemoryMatch && !preRoutedNext) {
+      preRoutedNext = "search_memory";
+      preRoutedArgs = { query: searchMemoryMatch[1].trim() };
+    }
+
+    // Bookmark folder commands
+    // Composite: "create folder X and add current tab / all tabs to it"
+    const createFolderWithCurrentMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s+and\s+(?:add|save|include|put)\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
+    const createFolderWithAllMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s+and\s+(?:add|save|include|put)\s+(?:all)\s+tabs/i);
+    if (createFolderWithCurrentMatch && !preRoutedNext) {
+      preRoutedNext = "create_bookmark_folder";
+      preRoutedArgs = { name: createFolderWithCurrentMatch[1].trim(), include: "current" };
+    } else if (createFolderWithAllMatch && !preRoutedNext) {
+      preRoutedNext = "create_bookmark_folder";
+      preRoutedArgs = { name: createFolderWithAllMatch[1].trim(), include: "all" };
+    }
+    // Simple: "create folder X"
+    const createFolderMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?["']?([\w\s]+?)["']?\s*$/i);
+    if (createFolderMatch && !preRoutedNext) {
+      preRoutedNext = "create_bookmark_folder";
+      preRoutedArgs = { name: createFolderMatch[1].trim() };
+    }
+
+    const deleteFolderMatch = commandText.match(/(?:delete|remove)\s+(?:the\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) ||
+                              commandText.match(/(?:delete|remove)\s+(?:the\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder/i);
+    if (deleteFolderMatch && !preRoutedNext) {
+      preRoutedNext = "delete_bookmark_folder";
+      preRoutedArgs = { name: deleteFolderMatch[1].trim() };
+    }
+
+    const listFoldersMatch = commandText.match(/list\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?folders/i);
+    if (listFoldersMatch && !preRoutedNext) {
+      preRoutedNext = "list_bookmark_folders";
+      preRoutedArgs = {};
+    }
+
+    const addToFolderMatch = commandText.match(/(?:save|add)\s+(?:this\s+)?(?:tab\s+)?(?:to\s+(?:my\s+)?(?:the\s+)?)(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) ||
+                             commandText.match(/(?:save|add)\s+(?:this\s+)?(?:tab\s+)?(?:to\s+(?:my\s+)?(?:the\s+)?)["']?([\w\s]+?)["']?\s*$/i);
+    if (addToFolderMatch && !preRoutedNext) {
+      preRoutedNext = "add_tab_to_bookmark_folder";
+      preRoutedArgs = { name: addToFolderMatch[1].trim() };
+    }
+
+    const renameFolderMatch = commandText.match(/rename\s+(?:the\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:to|as)\s+["']?([\w\s]+?)["']?\s*$/i);
+    if (renameFolderMatch && !preRoutedNext) {
+      preRoutedNext = "rename_bookmark_folder";
+      preRoutedArgs = { from: renameFolderMatch[1].trim(), to: renameFolderMatch[2].trim() };
+    }
+
+    const openFolderMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s*$/i) ||
+                            commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s*$/i);
+    // "open folder X in a new window" / "open folder X as/in a tab group"
+    const openFolderWhereMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:in\s+(?:a\s+)?(?:new\s+)?window)/i) ||
+                                 commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s+(?:in\s+(?:a\s+)?(?:new\s+)?window)/i);
+    const openFolderTabGroupMatch = commandText.match(/open\s+(?:the\s+)?(?:my\s+)?(?:bookmark\s+)?folder\s+["']?([\w\s]+?)["']?\s+(?:(?:as|in)\s+(?:a\s+)?(?:new\s+)?tab\s*group)/i) ||
+                                    commandText.match(/open\s+(?:my\s+)?["']?([\w\s]+?)["']?\s+(?:bookmark\s+)?folder\s+(?:(?:as|in)\s+(?:a\s+)?(?:new\s+)?tab\s*group)/i);
+    if (openFolderTabGroupMatch && !preRoutedNext) {
+      preRoutedNext = "open_bookmark_folder";
+      preRoutedArgs = { name: openFolderTabGroupMatch[1].trim(), where: "tabgroup" };
+    } else if (openFolderWhereMatch && !preRoutedNext) {
+      preRoutedNext = "open_bookmark_folder";
+      preRoutedArgs = { name: openFolderWhereMatch[1].trim(), where: "window" };
+    } else if (openFolderMatch && !preRoutedNext) {
+      preRoutedNext = "open_bookmark_folder";
+      preRoutedArgs = { name: openFolderMatch[1].trim() };
+    }
+
     } // End of !justRanTool check
     
     // If pre-routing matched, use it directly
@@ -755,8 +910,8 @@ Do NOT mention that you received page content or reference this instruction. Jus
     }
 
     const out = await routeRemote(systemPrompt, toWire(s.messages), options);
-    const nextTool = out?.next;
-    const nextArgs = out?.args || {};
+    const nextTool = (out as any)?.next;
+    const nextArgs = (out as any)?.args || {};
 
     // CHECK: If the tool just finished and the LLM tries to call it again, force to chat
     // We use s.lastWorker to know if the IMMEDIATE previous step was a specific tool.
@@ -849,14 +1004,14 @@ export async function runAssistantStream(
     // Split View (side-by-side tabs in same window)
     new AddSplitViewCommand(),
     new RemoveSplitViewCommand(),
-    // Hubs (Bookmark Folders - Persistent)
-    new CreateHubCommand(),
-    new DeleteHubCommand(),
-    new ListHubsCommand(),
-    new RenameHubCommand(),
-    new AddTabToHubCommand(),
-    new RemoveTabFromHubCommand(),
-    new OpenHubCommand(),
+    // Bookmark Folders (Persistent)
+    new CreateBookmarkFolderCommand(),
+    new DeleteBookmarkFolderCommand(),
+    new ListBookmarkFoldersCommand(),
+    new RenameBookmarkFolderCommand(),
+    new AddTabToBookmarkFolderCommand(),
+    new RemoveTabFromBookmarkFolderCommand(),
+    new OpenBookmarkFolderCommand(),
     // Tab Groups (Visual Grouping - Current Window)
     new ListTabGroupsCommand(),
     new CreateTabGroupCommand(),
