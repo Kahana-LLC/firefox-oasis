@@ -6,6 +6,7 @@ It is for test workflows and release pipeline prototyping.
 ## Scripts
 - `build-complete-mar.sh`: builds a complete MAR from a packaged app directory.
 - `sign-mar.sh`: signs an unsigned MAR with an NSS DB certificate nickname.
+- `sign-mar-ci.sh`: CI wrapper with pluggable signing backend (`local-test` or external command).
 - `verify-mar.sh`: verifies a signed MAR against one or more DER certs.
 - `check-oasis-cert-material.sh`: fails if Oasis cert files are still identical to dep certs.
 

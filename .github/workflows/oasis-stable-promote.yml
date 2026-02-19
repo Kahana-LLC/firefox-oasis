@@ -1,0 +1,41 @@
+name: Oasis Stable Ring Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: Version to promote to oasis-stable
+        required: true
+        type: string
+      actor:
+        description: Audit actor label
+        required: false
+        default: github-actions
+        type: string
+      reason:
+        description: Audit reason
+        required: false
+        default: manual stable promotion
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote-stable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update stable ring pointer
+        env:
+          OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+        run: |
+          python3 tools/oasis-update-service/publish_update.py \
+            --service "${OASIS_UPDATE_SERVICE_URL}" \
+            --version "${{ inputs.target_version }}" \
+            --ring oasis-stable \
+            --actor "${{ inputs.actor }}" \
+            --reason "${{ inputs.reason }}"

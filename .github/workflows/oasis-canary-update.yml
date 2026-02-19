@@ -1,0 +1,113 @@
+name: Oasis Canary Update Publish
+
+on:
+  push:
+    branches:
+      - canary
+      - oasis-canary
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  OBJDIR: obj-oasis-canary
+  APP_BUNDLE: obj-oasis-canary/dist/firefox/Oasis.app
+  RING: oasis-canary
+  LOCALE: en-US
+
+jobs:
+  build-sign-publish:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and package
+        env:
+          MOZCONFIG: ${{ github.workspace }}/mozconfig-oasis-canary
+        run: |
+          ./mach build
+          ./mach package
+
+      - name: Extract app metadata
+        id: meta
+        run: |
+          APP_INI="${APP_BUNDLE}/Contents/Resources/application.ini"
+          VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
+          BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
+          if [ -z "${VERSION}" ] || [ -z "${BUILD_ID}" ]; then
+            echo "Could not parse Version/BuildID from ${APP_INI}" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check updater cert material
+        env:
+          ALLOW_DEV_OASIS_CERTS: ${{ vars.ALLOW_DEV_OASIS_CERTS }}
+        run: |
+          scripts/update-signing/check-oasis-cert-material.sh
+
+      - name: Build complete MAR
+        id: mar
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          UNSIGNED_MAR="${OBJDIR}/dist/update/oasis-canary-${VERSION}.complete.mar"
+          SIGNED_MAR="${OBJDIR}/dist/update/oasis-canary-${VERSION}.signed.complete.mar"
+          mkdir -p "${OBJDIR}/dist/update"
+          scripts/update-signing/build-complete-mar.sh \
+            "${OBJDIR}" \
+            "${APP_BUNDLE}" \
+            "${UNSIGNED_MAR}" \
+            "${VERSION}" \
+            "${RING}"
+          scripts/update-signing/sign-mar-ci.sh \
+            "${OBJDIR}" \
+            "${UNSIGNED_MAR}" \
+            "${SIGNED_MAR}"
+          scripts/update-signing/verify-mar.sh \
+            "${OBJDIR}" \
+            "${SIGNED_MAR}"
+          echo "signed_mar=${SIGNED_MAR}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OASIS_AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.OASIS_AWS_REGION }}
+
+      - name: Upload MAR to immutable key
+        id: upload
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD_ID="${{ steps.meta.outputs.build_id }}"
+          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
+          S3_KEY="oasis/canary/${VERSION}/${BUILD_ID}/oasis-canary-${VERSION}.signed.complete.mar"
+          aws s3 cp "${SIGNED_MAR}" "s3://${{ secrets.OASIS_S3_BUCKET }}/${S3_KEY}" --no-progress
+          BASE_URL="${{ secrets.OASIS_MAR_PUBLIC_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          echo "mar_url=${BASE_URL}/${S3_KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Register artifact and move canary ring
+        env:
+          OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
+          OASIS_BUILD_TARGET: ${{ secrets.OASIS_BUILD_TARGET }}
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD_ID="${{ steps.meta.outputs.build_id }}"
+          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
+          python3 tools/oasis-update-service/publish_update.py \
+            --service "${OASIS_UPDATE_SERVICE_URL}" \
+            --product Firefox \
+            --version "${VERSION}" \
+            --build-id "${BUILD_ID}" \
+            --build-target "${OASIS_BUILD_TARGET}" \
+            --locale "${LOCALE}" \
+            --mar-url "${{ steps.upload.outputs.mar_url }}" \
+            --mar-path "${SIGNED_MAR}" \
+            --ring "${RING}" \
+            --actor github-actions \
+            --reason "canary publish ${GITHUB_SHA}"
