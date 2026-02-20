@@ -74,6 +74,7 @@ jobs:
           set -euo pipefail
           CI_MOZCONFIG="${RUNNER_TEMP}/mozconfig-oasis-canary"
           cat > "${CI_MOZCONFIG}" <<'EOF'
+          mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-oasis-canary
           ac_add_options --enable-application=browser
           ac_add_options --with-branding=browser/branding/custom
           ac_add_options --enable-release
