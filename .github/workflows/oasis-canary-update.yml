@@ -188,24 +188,36 @@ jobs:
           VERSION="${{ steps.meta.outputs.version }}"
           NOTARY_ZIP="${RUNNER_TEMP}/oasis-notary-${VERSION}.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
-          max_attempts=4
+          max_attempts=8
+          backoffs=(30 60 120 180 240 300 300)
           attempt=1
           while true; do
+            notary_log="$(mktemp)"
             if xcrun notarytool submit "${NOTARY_ZIP}" \
               --apple-id "${OASIS_APPLE_ID}" \
               --team-id "${OASIS_APPLE_TEAM_ID}" \
               --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
-              --wait
+              --wait > "${notary_log}" 2>&1
             then
+              cat "${notary_log}"
+              rm -f "${notary_log}"
               break
+            fi
+            cat "${notary_log}" >&2
+            if ! grep -Eq 'statusCode: 500|HTTP status code: 500|UNEXPECTED_ERROR' "${notary_log}"; then
+              echo "Non-retryable notarization failure." >&2
+              rm -f "${notary_log}"
+              exit 1
             fi
             if [ "${attempt}" -ge "${max_attempts}" ]; then
               echo "Notarization failed after ${attempt} attempts." >&2
+              rm -f "${notary_log}"
               exit 1
             fi
-            backoff_seconds=$((20 * (2 ** (attempt - 1))))
-            echo "Notarization attempt ${attempt} failed. Retrying in ${backoff_seconds}s..." >&2
-            sleep "${backoff_seconds}"
+            sleep_seconds="${backoffs[$((attempt - 1))]}"
+            echo "Notarization attempt ${attempt} failed with transient Apple 500. Retrying in ${sleep_seconds}s..." >&2
+            rm -f "${notary_log}"
+            sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
           done
           xcrun stapler staple "${APP_BUNDLE}"
