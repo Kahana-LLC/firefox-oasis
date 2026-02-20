@@ -188,15 +188,26 @@ jobs:
           VERSION="${{ steps.meta.outputs.version }}"
           NOTARY_ZIP="${RUNNER_TEMP}/oasis-notary-${VERSION}.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
-          xcrun notarytool store-credentials oasis-notary \
-            --apple-id "${OASIS_APPLE_ID}" \
-            --team-id "${OASIS_APPLE_TEAM_ID}" \
-            --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
-            --keychain "${OASIS_APPLE_KEYCHAIN_PATH}"
-          xcrun notarytool submit "${NOTARY_ZIP}" \
-            --keychain-profile oasis-notary \
-            --keychain "${OASIS_APPLE_KEYCHAIN_PATH}" \
-            --wait
+          max_attempts=4
+          attempt=1
+          while true; do
+            if xcrun notarytool submit "${NOTARY_ZIP}" \
+              --apple-id "${OASIS_APPLE_ID}" \
+              --team-id "${OASIS_APPLE_TEAM_ID}" \
+              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --wait
+            then
+              break
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "Notarization failed after ${attempt} attempts." >&2
+              exit 1
+            fi
+            backoff_seconds=$((20 * (2 ** (attempt - 1))))
+            echo "Notarization attempt ${attempt} failed. Retrying in ${backoff_seconds}s..." >&2
+            sleep "${backoff_seconds}"
+            attempt=$((attempt + 1))
+          done
           xcrun stapler staple "${APP_BUNDLE}"
           xcrun stapler validate "${APP_BUNDLE}"
           spctl -a -vv "${APP_BUNDLE}"
