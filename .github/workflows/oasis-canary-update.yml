@@ -69,9 +69,25 @@ jobs:
           npm ci --prefix browser/base/content/assistant/build
           npm run build --prefix browser/base/content/assistant/build
 
+      - name: Create CI mozconfig
+        run: |
+          set -euo pipefail
+          CI_MOZCONFIG="${RUNNER_TEMP}/mozconfig-oasis-canary"
+          cat > "${CI_MOZCONFIG}" <<'EOF'
+          ac_add_options --enable-application=browser
+          ac_add_options --with-branding=browser/branding/custom
+          ac_add_options --enable-release
+          ac_add_options --disable-debug
+          ac_add_options --enable-optimize
+          ac_add_options --disable-crashreporter
+          ac_add_options --enable-updater
+          ac_add_options --enable-update-channel=oasis-canary
+          export MOZ_INCLUDE_SOURCE_INFO=
+          export MOZ_DISABLE_SOURCE_INFO=1
+          EOF
+          echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
+
       - name: Build and package
-        env:
-          MOZCONFIG: ${{ github.workspace }}/mozconfig-oasis-canary
         run: |
           set -euo pipefail
           ./mach build
