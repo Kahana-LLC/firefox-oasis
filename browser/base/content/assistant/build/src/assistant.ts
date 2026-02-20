@@ -1,5 +1,5 @@
-import { marked } from "marked";
-import DOMPurify from "dompurify";
+import { marked } from "../../../../../../toolkit/content/vendor/marked/marked.mjs";
+import DOMPurify from "../../../../../../toolkit/content/vendor/dompurify/dompurify.mjs";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { routeRemote, chatRemote } from "./proxyClient";

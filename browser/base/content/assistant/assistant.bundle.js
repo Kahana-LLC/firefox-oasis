@@ -42383,7 +42383,7 @@ ${suffix}`;
     }
   });
 
-  // ../../../../../node_modules/marked/lib/marked.esm.js
+  // ../../../../../toolkit/content/vendor/marked/marked.mjs
   function L() {
     return { async: false, breaks: false, extensions: null, gfm: true, hooks: null, pedantic: false, renderer: null, silent: false, tokenizer: null, walkTokens: null };
   }
@@ -43560,7 +43560,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var Ft = b.parse;
   var jt = x.lex;
 
-  // ../../../../../node_modules/dompurify/dist/purify.es.mjs
+  // ../../../../../toolkit/content/vendor/dompurify/dompurify.mjs
   var {
     entries,
     setPrototypeOf,
@@ -65959,6 +65959,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
   }
   window.runAssistantStream = runAssistantStream;
 })();
+/*! @license DOMPurify 3.3.1 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.3.1/LICENSE */
 /*! Bundled license information:
 
 @langchain/core/dist/utils/fast-json-patch/src/helpers.js:
@@ -65980,9 +65981,6 @@ mustache/mustache.mjs:
    * mustache.js - Logic-less {{mustache}} templates with JavaScript
    * http://github.com/janl/mustache.js
    *)
-
-dompurify/dist/purify.es.mjs:
-  (*! @license DOMPurify 3.3.1 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.3.1/LICENSE *)
 
 @langchain/core/dist/utils/js-sha1/hash.js:
   (*
