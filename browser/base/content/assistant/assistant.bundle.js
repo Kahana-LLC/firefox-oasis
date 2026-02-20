@@ -65896,7 +65896,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
               if (typeof c === "string") return c;
               if (c?.text) return c.text;
               if (c?.type === "text" && c.text) return c.text;
-              return String(c || "");ma
+              return String(c || "");
             }).join("");
           } else if (msg?.content != null) {
             text2 = String(msg.content);
