@@ -1,113 +1,325 @@
-name: Oasis Canary Update Publish
+name: Oasis Release Publish
 
 on:
   push:
-    branches:
-      - canary
-      - oasis-canary
-  workflow_dispatch:
+    tags:
+      - "v*"
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write
 
 env:
   OBJDIR: obj-oasis-canary
   APP_BUNDLE: obj-oasis-canary/dist/firefox/Oasis.app
-  RING: oasis-canary
+  PRODUCT: Firefox
+  BUILD_TARGET: Darwin_aarch64-gcc3
   LOCALE: en-US
+  RING: oasis-canary
 
 jobs:
-  build-sign-publish:
+  build-sign-release:
     runs-on: macos-14
+    environment: canary-signing
     steps:
-      - name: Checkout
+      - name: Checkout selected ref
         uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "This workflow must run from a tag ref (vX.Y.Z.N)." >&2
+            exit 1
+          fi
+          TAG="${GITHUB_REF_NAME}"
+          if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+){3}$ ]]; then
+            echo "Tag must match vX.Y.Z.N (numeric dot notation)." >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "${VERSION}" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+            echo "Version must match X.Y.Z.N (numeric dot notation)." >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Inject release version
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "${VERSION}" > browser/config/version.txt
+          echo "${VERSION}" > browser/config/version_display.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            browser/base/content/assistant/build/package-lock.json
+            browser/base/content/assistant/ui-preact/package-lock.json
+
+      - name: Build assistant bundles
+        run: |
+          set -euo pipefail
+          npm ci --prefix browser/base/content/assistant/ui-preact
+          npm run build --prefix browser/base/content/assistant/ui-preact
+          npm ci --prefix browser/base/content/assistant/build
+          npm run build --prefix browser/base/content/assistant/build
 
       - name: Build and package
         env:
           MOZCONFIG: ${{ github.workspace }}/mozconfig-oasis-canary
         run: |
+          set -euo pipefail
           ./mach build
           ./mach package
 
-      - name: Extract app metadata
+      - name: Verify packaged version and extract metadata
         id: meta
         run: |
+          set -euo pipefail
           APP_INI="${APP_BUNDLE}/Contents/Resources/application.ini"
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
           VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
           BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
           if [ -z "${VERSION}" ] || [ -z "${BUILD_ID}" ]; then
             echo "Could not parse Version/BuildID from ${APP_INI}" >&2
             exit 1
           fi
+          if [ "${VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Packaged version mismatch: expected ${EXPECTED_VERSION}, got ${VERSION}" >&2
+            exit 1
+          fi
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Locate packaged DMG
+        id: dmg
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          DMG_PATH="$(find "${OBJDIR}/dist" -maxdepth 1 -type f -name "*${VERSION}*.dmg" -print | head -n1)"
+          if [ -z "${DMG_PATH}" ] || [ ! -f "${DMG_PATH}" ]; then
+            echo "Could not find DMG containing version ${VERSION} under ${OBJDIR}/dist." >&2
+            ls -la "${OBJDIR}/dist" >&2
+            exit 1
+          fi
+          DMG_NAME="$(basename "${DMG_PATH}")"
+          echo "dmg_path=${DMG_PATH}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_name=${DMG_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare Apple signing keychain
+        env:
+          OASIS_APPLE_DEVELOPER_ID_P12_B64: ${{ secrets.OASIS_APPLE_DEVELOPER_ID_P12_B64 }}
+          OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_DEVELOPER_ID_P12_B64}" ] || [ -z "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" ]; then
+            echo "Missing Apple Developer ID certificate secrets." >&2
+            exit 1
+          fi
+          KEYCHAIN_PATH="${RUNNER_TEMP}/oasis-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          P12_PATH="${RUNNER_TEMP}/oasis-developer-id.p12"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_APPLE_DEVELOPER_ID_P12_B64"]))' > "${P12_PATH}"
+          ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"')"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}" ${ORIGINAL_KEYCHAINS}
+          security default-keychain -d user -s "${KEYCHAIN_PATH}"
+          security import "${P12_PATH}" -k "${KEYCHAIN_PATH}" -P "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" -A -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          echo "OASIS_APPLE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_DEVELOPER_ID_P12_PATH=${P12_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST<<EOF" >> "${GITHUB_ENV}"
+          echo "${ORIGINAL_KEYCHAINS}" >> "${GITHUB_ENV}"
+          echo "EOF" >> "${GITHUB_ENV}"
+
+      - name: Codesign app bundle
+        env:
+          OASIS_APPLE_SIGNING_IDENTITY: ${{ secrets.OASIS_APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_SIGNING_IDENTITY}" ]; then
+            echo "Missing OASIS_APPLE_SIGNING_IDENTITY." >&2
+            exit 1
+          fi
+          ./mach macos-sign \
+            -a "${APP_BUNDLE}" \
+            -s "${OASIS_APPLE_SIGNING_IDENTITY}" \
+            -e production-without-restricted \
+            -c release
+          codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
+          codesign -dv --verbose=4 "${APP_BUNDLE}"
+
+      - name: Notarize and staple app bundle
+        env:
+          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
+          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
+          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_ID}" ] || [ -z "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" ] || [ -z "${OASIS_APPLE_TEAM_ID}" ]; then
+            echo "Missing one or more Apple notarization secrets." >&2
+            exit 1
+          fi
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTARY_ZIP="${RUNNER_TEMP}/oasis-notary-${VERSION}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
+          xcrun notarytool store-credentials oasis-notary \
+            --apple-id "${OASIS_APPLE_ID}" \
+            --team-id "${OASIS_APPLE_TEAM_ID}" \
+            --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+            --keychain "${OASIS_APPLE_KEYCHAIN_PATH}"
+          xcrun notarytool submit "${NOTARY_ZIP}" \
+            --keychain-profile oasis-notary \
+            --keychain "${OASIS_APPLE_KEYCHAIN_PATH}" \
+            --wait
+          xcrun stapler staple "${APP_BUNDLE}"
+          xcrun stapler validate "${APP_BUNDLE}"
+          spctl -a -vv "${APP_BUNDLE}"
+          echo "OASIS_APPLE_NOTARY_ZIP=${NOTARY_ZIP}" >> "${GITHUB_ENV}"
 
       - name: Check updater cert material
         env:
           ALLOW_DEV_OASIS_CERTS: ${{ vars.ALLOW_DEV_OASIS_CERTS }}
         run: |
+          set -euo pipefail
           scripts/update-signing/check-oasis-cert-material.sh
 
       - name: Build complete MAR
         id: mar
         run: |
+          set -euo pipefail
           VERSION="${{ steps.meta.outputs.version }}"
-          UNSIGNED_MAR="${OBJDIR}/dist/update/oasis-canary-${VERSION}.complete.mar"
-          SIGNED_MAR="${OBJDIR}/dist/update/oasis-canary-${VERSION}.signed.complete.mar"
-          mkdir -p "${OBJDIR}/dist/update"
+          UPDATE_DIR="${OBJDIR}/dist/update"
+          mkdir -p "${UPDATE_DIR}"
+          UNSIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.complete.mar"
+          SIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.signed.complete.mar"
           scripts/update-signing/build-complete-mar.sh \
             "${OBJDIR}" \
             "${APP_BUNDLE}" \
             "${UNSIGNED_MAR}" \
             "${VERSION}" \
             "${RING}"
-          scripts/update-signing/sign-mar-ci.sh \
-            "${OBJDIR}" \
-            "${UNSIGNED_MAR}" \
-            "${SIGNED_MAR}"
-          scripts/update-signing/verify-mar.sh \
-            "${OBJDIR}" \
-            "${SIGNED_MAR}"
+          echo "unsigned_mar=${UNSIGNED_MAR}" >> "${GITHUB_OUTPUT}"
           echo "signed_mar=${SIGNED_MAR}" >> "${GITHUB_OUTPUT}"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.OASIS_AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.OASIS_AWS_REGION }}
-
-      - name: Upload MAR to immutable key
-        id: upload
+      - name: Sign and verify MAR
+        env:
+          OASIS_MAR_SIGNING_CERT_NICKNAME: ${{ secrets.OASIS_MAR_SIGNING_CERT_NICKNAME }}
+          OASIS_MAR_SIGNING_P12_B64: ${{ secrets.OASIS_MAR_SIGNING_P12_B64 }}
+          OASIS_MAR_SIGNING_P12_PASSWORD: ${{ secrets.OASIS_MAR_SIGNING_P12_PASSWORD }}
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          BUILD_ID="${{ steps.meta.outputs.build_id }}"
-          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
-          S3_KEY="oasis/canary/${VERSION}/${BUILD_ID}/oasis-canary-${VERSION}.signed.complete.mar"
-          aws s3 cp "${SIGNED_MAR}" "s3://${{ secrets.OASIS_S3_BUCKET }}/${S3_KEY}" --no-progress
-          BASE_URL="${{ secrets.OASIS_MAR_PUBLIC_BASE_URL }}"
-          BASE_URL="${BASE_URL%/}"
-          echo "mar_url=${BASE_URL}/${S3_KEY}" >> "${GITHUB_OUTPUT}"
+          set -euo pipefail
+          if [ -z "${OASIS_MAR_SIGNING_CERT_NICKNAME}" ] || [ -z "${OASIS_MAR_SIGNING_P12_B64}" ] || [ -z "${OASIS_MAR_SIGNING_P12_PASSWORD}" ]; then
+            echo "Missing one or more signing secrets." >&2
+            exit 1
+          fi
+          NSS_DB_DIR="${RUNNER_TEMP}/oasis-nssdb"
+          P12_PATH="${RUNNER_TEMP}/oasis-signing.p12"
+          mkdir -p "${NSS_DB_DIR}"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_MAR_SIGNING_P12_B64"]))' > "${P12_PATH}"
+          "${OBJDIR}/dist/bin/certutil" -N -d "sql:${NSS_DB_DIR}" --empty-password
+          "${OBJDIR}/dist/bin/pk12util" -i "${P12_PATH}" -d "sql:${NSS_DB_DIR}" -W "${OASIS_MAR_SIGNING_P12_PASSWORD}"
+          scripts/update-signing/sign-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.unsigned_mar }}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            "${NSS_DB_DIR}" \
+            "${OASIS_MAR_SIGNING_CERT_NICKNAME}"
+          scripts/update-signing/verify-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            toolkit/mozapps/update/updater/oasis_primary.der \
+            toolkit/mozapps/update/updater/oasis_secondary.der
+          rm -f "${P12_PATH}"
+          rm -rf "${NSS_DB_DIR}"
 
-      - name: Register artifact and move canary ring
+      - name: Prepare release metadata
+        id: release_meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          SAFE_TARGET="$(echo "${BUILD_TARGET}" | tr '/ ' '__')"
+          TAG="${{ steps.version.outputs.tag }}"
+          ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.signed.complete.mar"
+          DMG_ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.mac.dmg"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} already exists. Publish a new version instead of mutating an existing release." >&2
+            exit 1
+          fi
+          MAR_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET_NAME}"
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${DMG_ASSET_NAME}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "asset_name=${ASSET_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_asset_name=${DMG_ASSET_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "mar_url=${MAR_URL}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_url=${DMG_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release_meta.outputs.tag }}"
+          ASSET_NAME="${{ steps.release_meta.outputs.asset_name }}"
+          DMG_ASSET_NAME="${{ steps.release_meta.outputs.dmg_asset_name }}"
+          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
+          PACKAGED_DMG="${{ steps.dmg.outputs.dmg_path }}"
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          gh release create "${TAG}" \
+            "${SIGNED_MAR}#${ASSET_NAME}" \
+            "${PACKAGED_DMG}#${DMG_ASSET_NAME}" \
+            --target "${COMMIT_SHA}" \
+            --title "${TAG}" \
+            --notes "Oasis release ${TAG}"
+
+      - name: Register artifact and move ring pointer
         env:
           OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
-          OASIS_BUILD_TARGET: ${{ secrets.OASIS_BUILD_TARGET }}
           OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
         run: |
+          set -euo pipefail
           VERSION="${{ steps.meta.outputs.version }}"
           BUILD_ID="${{ steps.meta.outputs.build_id }}"
-          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
           python3 tools/oasis-update-service/publish_update.py \
             --service "${OASIS_UPDATE_SERVICE_URL}" \
-            --product Firefox \
+            --admin-token "${OASIS_ADMIN_TOKEN}" \
+            --product "${PRODUCT}" \
             --version "${VERSION}" \
             --build-id "${BUILD_ID}" \
-            --build-target "${OASIS_BUILD_TARGET}" \
+            --build-target "${BUILD_TARGET}" \
             --locale "${LOCALE}" \
-            --mar-url "${{ steps.upload.outputs.mar_url }}" \
-            --mar-path "${SIGNED_MAR}" \
+            --mar-url "${{ steps.release_meta.outputs.mar_url }}" \
+            --mar-path "${{ steps.mar.outputs.signed_mar }}" \
             --ring "${RING}" \
             --actor github-actions \
-            --reason "canary publish ${GITHUB_SHA}"
+            --reason "canary release publish (run ${GITHUB_RUN_ID}, tag ${{ steps.version.outputs.tag }}, sha ${GITHUB_SHA})"
+
+      - name: Print release asset URLs
+        run: |
+          set -euo pipefail
+          echo "MAR: ${{ steps.release_meta.outputs.mar_url }}"
+          echo "DMG: ${{ steps.release_meta.outputs.dmg_url }}"
+
+      - name: Cleanup signing and notarization material
+        if: always()
+        run: |
+          set +e
+          if [ -n "${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST:-}" ]; then
+            security list-keychains -d user -s ${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST}
+          fi
+          if [ -n "${OASIS_APPLE_KEYCHAIN_PATH:-}" ]; then
+            security default-keychain -d user -s login.keychain-db
+            security delete-keychain "${OASIS_APPLE_KEYCHAIN_PATH}"
+          fi
+          rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH:-}"
+          rm -f "${OASIS_APPLE_NOTARY_ZIP:-}"
