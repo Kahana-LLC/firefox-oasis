@@ -338,6 +338,27 @@ jobs:
 
           codesign --verify --deep --strict --verbose=2 "${PKG_APP}"
 
+      - name: Verify hardened runtime on key binaries
+        run: |
+          set -euo pipefail
+          targets=(
+            "${{ steps.meta.outputs.executable_path }}"
+            "${PKG_APP}/Contents/MacOS/plugin-container.app"
+            "${PKG_APP}/Contents/MacOS/gpu-helper.app"
+            "${PKG_APP}/Contents/MacOS/updater.app"
+          )
+          for target in "${targets[@]}"; do
+            if [ ! -e "${target}" ]; then
+              echo "Expected signed target missing: ${target}" >&2
+              exit 1
+            fi
+            if ! codesign -dvv "${target}" 2>&1 | grep -Eq 'runtime|\(runtime\)'; then
+              echo "Hardened runtime not detected on: ${target}" >&2
+              codesign -dvv "${target}" 2>&1 || true
+              exit 1
+            fi
+          done
+
       - name: Notarize and staple app bundle
         env:
           OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}

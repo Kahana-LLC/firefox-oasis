@@ -614,7 +614,6 @@ def sign_with_rcodesign(
     # input path and its options are specified as standard arguments.
     ctx.log(logging.INFO, "macos-sign", {}, "Signing with rcodesign")
     entitlements_arg_name = rcodesign_entitlements_arg_name(ctx)
-    scoped_runtime_supported = rcodesign_supports_scoped_runtime(ctx)
 
     cs_cmd = ["rcodesign", "sign"]
     if p12_file_arg is not None:
@@ -693,11 +692,7 @@ def sign_with_rcodesign(
                 # arguments.
                 binary_path_relative = os.path.relpath(binary_path, app)
                 if group_runtime:
-                    if scoped_runtime_supported:
-                        cs_cmd.append("--code-signature-flags")
-                        scoped_arg = binary_path_relative + ":runtime"
-                        cs_cmd.append(scoped_arg)
-                    elif not runtime_set_globally:
+                    if not runtime_set_globally:
                         cs_cmd.append("--code-signature-flags")
                         cs_cmd.append("runtime")
                         runtime_set_globally = True
@@ -740,34 +735,6 @@ def rcodesign_entitlements_arg_name(ctx):
         "rcodesign sign --help does not advertise an entitlements XML option",
     )
     sys.exit(1)
-
-
-def rcodesign_supports_scoped_runtime(ctx):
-    help_cmd = ["rcodesign", "sign", "--help"]
-    try:
-        process = subprocess.run(
-            help_cmd, check=True, capture_output=True, text=True
-        )
-    except subprocess.CalledProcessError as e:
-        ctx.log(
-            logging.ERROR,
-            "macos-sign",
-            {"rc": e.returncode},
-            "Unable to query rcodesign scoped runtime support",
-        )
-        sys.exit(e.returncode)
-
-    help_text = f"{process.stdout}\n{process.stderr}".lower()
-    if "scoped settings" in help_text and "code-signature-flags" in help_text:
-        return True
-
-    ctx.log(
-        logging.WARNING,
-        "macos-sign",
-        {},
-        "rcodesign help does not advertise scoped runtime flags; using global runtime flag",
-    )
-    return False
 
 
 def strip_restricted_entitlements(plist_file):
