@@ -7,7 +7,7 @@ The repository includes two release workflows:
 
 Release model:
 
-1. Build/sign/publish once to GitHub Releases (`vX.Y.Z.N`) and move `oasis-canary`.
+1. Build/sign/notarize app, build/sign/notarize DMG, then publish once to GitHub Releases (`vX.Y.Z.N`) and move `oasis-canary`.
 2. Promote to `oasis-stable` by ring pointer only, without rebuilding.
 3. Each canary release publishes two assets: signed MAR (OTA payload) and DMG (fresh installer baseline).
 
@@ -17,7 +17,7 @@ Release model:
 - `OASIS_UPDATE_ADMIN_TOKEN`: bearer token used by `/admin/*` endpoints
 - `OASIS_APPLE_DEVELOPER_ID_P12_B64`: base64-encoded `Developer ID Application` PKCS#12 for macOS codesigning
 - `OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD`: password for the Apple PKCS#12 blob
-- `OASIS_APPLE_SIGNING_IDENTITY`: exact signing identity string for `codesign`
+- `OASIS_APPLE_SIGNING_IDENTITY`: exact signing identity string used to sign DMG containers
 - `OASIS_APPLE_ID`: Apple ID email used for notarization
 - `OASIS_APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for the Apple ID
 - `OASIS_APPLE_TEAM_ID`: Apple Developer Team ID
@@ -31,15 +31,26 @@ Release model:
 
 ## Workflow Inputs
 
-`oasis-canary-update.yml` (`push`):
+`oasis-canary-update.yml` (`push` and `workflow_dispatch`):
 
 - Trigger on tags matching `v*`
+- Manual rerun support with `workflow_dispatch` input `release_tag` (existing `vX.Y.Z.N`)
 - Required release tag format: `vX.Y.Z.N`
 - Workflow derives the internal app version from the tag (for example `v1.4.1.13` -> `1.4.1.13`)
 - Fixed metadata defaults in workflow:
   - ring: `oasis-canary`
   - build target: `Darwin_aarch64-gcc3`
   - locale: `en-US`
+- Packaging/signing/notarization flow:
+  - `./mach build`
+  - `make -C obj-oasis-canary/browser/installer stage-package`
+  - sign staged app with `./mach macos-sign -r` (PKCS#12 input)
+  - notarize + staple app (fail-closed)
+  - generate DMG via `./mach python -m mozbuild.action.make_dmg ...`
+  - sign DMG with `codesign`
+  - notarize + staple DMG (fail-closed)
+  - build/sign/verify MAR from the same staged app
+  - publish release + register Supabase metadata + move canary pointer
 
 `oasis-stable-promote.yml` (`workflow_dispatch`):
 
@@ -133,6 +144,7 @@ printf 'OASIS_MAR_SIGNING_CERT_NICKNAME=oasis-mar-primary\n'
 - Do not reuse release tags; publish a new `vX.Y.Z.N` for every correction.
 - Enable release/tag immutability controls for `v*`.
 - Keep stable promotions pointer-only to preserve binary identity across rings.
+- Canary release is fail-closed on both app notarization and DMG notarization.
 - Rotate Apple app-specific password and Developer ID certificate on a regular cadence or immediately after any credential exposure event.
 - If environment protection allows only `v*` tags, canary releases must be started by pushing a `v*` tag.
 - Supabase artifact registration remains MAR-only; DMG is for bootstrap/manual install.

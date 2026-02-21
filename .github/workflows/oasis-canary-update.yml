@@ -4,13 +4,18 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to run (vX.Y.Z.N)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 env:
   OBJDIR: obj-oasis-canary
-  APP_BUNDLE: obj-oasis-canary/dist/firefox/Oasis.app
   PRODUCT: Firefox
   BUILD_TARGET: Darwin_aarch64-gcc3
   LOCALE: en-US
@@ -23,16 +28,18 @@ jobs:
     steps:
       - name: Checkout selected ref
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
       - name: Resolve version from tag
         id: version
         run: |
           set -euo pipefail
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            echo "This workflow must run from a tag ref (vX.Y.Z.N)." >&2
-            exit 1
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
           fi
-          TAG="${GITHUB_REF_NAME}"
           if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+){3}$ ]]; then
             echo "Tag must match vX.Y.Z.N (numeric dot notation)." >&2
             exit 1
@@ -88,45 +95,13 @@ jobs:
           EOF
           echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
 
-      - name: Build and package
+      - name: Install rcodesign
         run: |
           set -euo pipefail
-          ./mach build
-          ./mach package
-
-      - name: Verify packaged version and extract metadata
-        id: meta
-        run: |
-          set -euo pipefail
-          APP_INI="${APP_BUNDLE}/Contents/Resources/application.ini"
-          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
-          VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
-          BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
-          if [ -z "${VERSION}" ] || [ -z "${BUILD_ID}" ]; then
-            echo "Could not parse Version/BuildID from ${APP_INI}" >&2
-            exit 1
+          if ! command -v rcodesign >/dev/null 2>&1; then
+            cargo install apple-codesign --locked
           fi
-          if [ "${VERSION}" != "${EXPECTED_VERSION}" ]; then
-            echo "Packaged version mismatch: expected ${EXPECTED_VERSION}, got ${VERSION}" >&2
-            exit 1
-          fi
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
-
-      - name: Locate packaged DMG
-        id: dmg
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.meta.outputs.version }}"
-          DMG_PATH="$(find "${OBJDIR}/dist" -maxdepth 1 -type f -name "*${VERSION}*.dmg" -print | head -n1)"
-          if [ -z "${DMG_PATH}" ] || [ ! -f "${DMG_PATH}" ]; then
-            echo "Could not find DMG containing version ${VERSION} under ${OBJDIR}/dist." >&2
-            ls -la "${OBJDIR}/dist" >&2
-            exit 1
-          fi
-          DMG_NAME="$(basename "${DMG_PATH}")"
-          echo "dmg_path=${DMG_PATH}" >> "${GITHUB_OUTPUT}"
-          echo "dmg_name=${DMG_NAME}" >> "${GITHUB_OUTPUT}"
+          rcodesign --version
 
       - name: Prepare Apple signing keychain
         env:
@@ -141,15 +116,25 @@ jobs:
           KEYCHAIN_PATH="${RUNNER_TEMP}/oasis-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
           P12_PATH="${RUNNER_TEMP}/oasis-developer-id.p12"
+          
+          # Decode the P12 from secrets
           python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_APPLE_DEVELOPER_ID_P12_B64"]))' > "${P12_PATH}"
+          
+          # Create and configure the temporary keychain
           ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"')"
           security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
           security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
           security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          
+          # Add to keychain search list
           security list-keychains -d user -s "${KEYCHAIN_PATH}" ${ORIGINAL_KEYCHAINS}
           security default-keychain -d user -s "${KEYCHAIN_PATH}"
+          
+          # Import the certificate/key (allow codesign access)
           security import "${P12_PATH}" -k "${KEYCHAIN_PATH}" -P "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" -A -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          
+          # Export env vars for cleanup
           echo "OASIS_APPLE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
           echo "OASIS_APPLE_KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
           echo "OASIS_APPLE_DEVELOPER_ID_P12_PATH=${P12_PATH}" >> "${GITHUB_ENV}"
@@ -157,22 +142,86 @@ jobs:
           echo "${ORIGINAL_KEYCHAINS}" >> "${GITHUB_ENV}"
           echo "EOF" >> "${GITHUB_ENV}"
 
-      - name: Codesign app bundle
-        env:
-          OASIS_APPLE_SIGNING_IDENTITY: ${{ secrets.OASIS_APPLE_SIGNING_IDENTITY }}
+      - name: Build and stage package
         run: |
           set -euo pipefail
-          if [ -z "${OASIS_APPLE_SIGNING_IDENTITY}" ]; then
-            echo "Missing OASIS_APPLE_SIGNING_IDENTITY." >&2
+          # 1. Build binaries
+          ./mach build
+          
+          # 2. Stage package (resolves symlinks, creates dist/firefox structure)
+          # We use make directly to bypass mach package's DMG creation logic for now
+          make -C "${OBJDIR}/browser/installer" stage-package
+          
+          # 3. Resolve variables needed for packaging
+          # We extract these from the make environment
+          MOZ_PKG_DIR=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_DIR)
+          APP_NAME=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-_APPNAME)
+          PACKAGE=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-PACKAGE)
+          VOLUME_NAME=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_APP_DISPLAYNAME)
+          DSSTORE_PATH=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_MAC_DSSTORE || true)
+          BACKGROUND_PATH=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_MAC_BACKGROUND || true)
+          ICON_PATH=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_MAC_ICON || true)
+          
+          PKG_APP="${OBJDIR}/dist/${MOZ_PKG_DIR}/${APP_NAME}"
+          DMG_PATH="${OBJDIR}/dist/${PACKAGE}"
+          
+          echo "PKG_APP=${PKG_APP}" >> "${GITHUB_ENV}"
+          echo "DMG_PATH=${DMG_PATH}" >> "${GITHUB_ENV}"
+          echo "MOZ_PKG_DIR=${MOZ_PKG_DIR}" >> "${GITHUB_ENV}"
+          echo "VOLUME_NAME=${VOLUME_NAME}" >> "${GITHUB_ENV}"
+          echo "DSSTORE_PATH=${DSSTORE_PATH}" >> "${GITHUB_ENV}"
+          echo "BACKGROUND_PATH=${BACKGROUND_PATH}" >> "${GITHUB_ENV}"
+          echo "ICON_PATH=${ICON_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Verify staged version
+        id: meta
+        run: |
+          set -euo pipefail
+          APP_INI="${PKG_APP}/Contents/Resources/application.ini"
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+          VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
+          BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
+          
+          if [ "${VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Staged version mismatch: expected ${EXPECTED_VERSION}, got ${VERSION}" >&2
             exit 1
           fi
+          EXECUTABLE_PATH=""
+          for candidate in Oasis firefox firefox-bin; do
+            if [ -f "${PKG_APP}/Contents/MacOS/${candidate}" ]; then
+              EXECUTABLE_PATH="${PKG_APP}/Contents/MacOS/${candidate}"
+              break
+            fi
+          done
+          if [ -z "${EXECUTABLE_PATH}" ]; then
+            echo "Could not find executable under ${PKG_APP}/Contents/MacOS" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
+          echo "executable_path=${EXECUTABLE_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare and sign app bundle (rcodesign)
+        run: |
+          set -euo pipefail
+
+          find "${PKG_APP}" \( -name ".mkdir.done" -o -name "*.done" \) -delete
+
+          if find "${PKG_APP}" -type l -print -quit | grep -q .; then
+            echo "Refusing to sign app with symlinks still present: ${PKG_APP}" >&2
+            find "${PKG_APP}" -type l | head -n 20 >&2 || true
+            exit 1
+          fi
+
           ./mach macos-sign \
-            -a "${APP_BUNDLE}" \
-            -s "${OASIS_APPLE_SIGNING_IDENTITY}" \
+            -a "${PKG_APP}" \
+            -r \
+            -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH}" \
+            -p "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
             -e production-without-restricted \
             -c release
-          codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
-          codesign -dv --verbose=4 "${APP_BUNDLE}"
+
+          codesign --verify --deep --strict --verbose=2 "${PKG_APP}"
 
       - name: Notarize and staple app bundle
         env:
@@ -186,8 +235,25 @@ jobs:
             exit 1
           fi
           VERSION="${{ steps.meta.outputs.version }}"
-          NOTARY_ZIP="${RUNNER_TEMP}/oasis-notary-${VERSION}.zip"
-          ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
+          NOTARY_ZIP="${RUNNER_TEMP}/oasis-app-notary-${VERSION}.zip"
+          
+          # Create zip for notarization
+          ditto -c -k --keepParent "${PKG_APP}" "${NOTARY_ZIP}"
+          
+          # Validation checks
+          ZIP_SIZE="$(stat -f%z "${NOTARY_ZIP}")"
+          if [ "${ZIP_SIZE}" -lt 52428800 ]; then
+             echo "ZIP payload too small." >&2; exit 1
+          fi
+          if unzip -l "${NOTARY_ZIP}" | grep -q "__MACOSX/"; then
+            echo "ZIP payload contains __MACOSX, refusing notarization submit." >&2
+            exit 1
+          fi
+          if ! unzip -l "${NOTARY_ZIP}" | grep -Eq 'Contents/MacOS/(Oasis|firefox|firefox-bin)[[:space:]]*$'; then
+            echo "ZIP payload missing expected executable under Contents/MacOS." >&2
+            exit 1
+          fi
+          
           max_attempts=8
           backoffs=(30 60 120 180 240 300 300)
           attempt=1
@@ -197,14 +263,14 @@ jobs:
               --apple-id "${OASIS_APPLE_ID}" \
               --team-id "${OASIS_APPLE_TEAM_ID}" \
               --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
-              --wait > "${notary_log}" 2>&1
+              --wait --verbose > "${notary_log}" 2>&1
             then
               cat "${notary_log}"
               rm -f "${notary_log}"
               break
             fi
             cat "${notary_log}" >&2
-            if ! grep -Eq 'statusCode: 500|HTTP status code: 500|UNEXPECTED_ERROR' "${notary_log}"; then
+            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
               echo "Non-retryable notarization failure." >&2
               rm -f "${notary_log}"
               exit 1
@@ -215,15 +281,119 @@ jobs:
               exit 1
             fi
             sleep_seconds="${backoffs[$((attempt - 1))]}"
-            echo "Notarization attempt ${attempt} failed with transient Apple 500. Retrying in ${sleep_seconds}s..." >&2
+            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
             rm -f "${notary_log}"
             sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
           done
-          xcrun stapler staple "${APP_BUNDLE}"
-          xcrun stapler validate "${APP_BUNDLE}"
-          spctl -a -vv "${APP_BUNDLE}"
-          echo "OASIS_APPLE_NOTARY_ZIP=${NOTARY_ZIP}" >> "${GITHUB_ENV}"
+          
+          # Staple
+          xcrun stapler staple "${PKG_APP}"
+          xcrun stapler validate "${PKG_APP}"
+          spctl -a -vv "${PKG_APP}"
+          echo "OASIS_APPLE_NOTARY_APP_ZIP=${NOTARY_ZIP}" >> "${GITHUB_ENV}"
+
+      - name: Record post-notarization executable hash
+        id: golden_hash
+        run: |
+          set -euo pipefail
+          HASH="$(shasum -a 256 "${{ steps.meta.outputs.executable_path }}" | awk '{print $1}')"
+          echo "hash=${HASH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create signed DMG
+        env:
+          OASIS_APPLE_SIGNING_IDENTITY: ${{ secrets.OASIS_APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_SIGNING_IDENTITY}" ]; then
+            echo "Missing OASIS_APPLE_SIGNING_IDENTITY for DMG signing." >&2
+            exit 1
+          fi
+          
+          # Create DMG using Mozilla tool
+          # This wraps the ALREADY SIGNED/NOTARIZED app from PKG_APP
+          args=()
+          if [ -n "${DSSTORE_PATH:-}" ]; then
+            args+=(--dsstore "${DSSTORE_PATH}")
+          fi
+          if [ -n "${BACKGROUND_PATH:-}" ]; then
+            args+=(--background "${BACKGROUND_PATH}")
+          fi
+          if [ -n "${ICON_PATH:-}" ]; then
+            args+=(--icon "${ICON_PATH}")
+          fi
+          if [ -n "${VOLUME_NAME:-}" ]; then
+            args+=(--volume-name "${VOLUME_NAME}")
+          fi
+
+          ./mach python -m mozbuild.action.make_dmg "${args[@]}" \
+            "${OBJDIR}/dist/${MOZ_PKG_DIR}" \
+            "${DMG_PATH}"
+            
+          # Sign the DMG container (Requires Keychain/codesign)
+          codesign --force --timestamp --sign "${OASIS_APPLE_SIGNING_IDENTITY}" "${DMG_PATH}"
+          codesign -dv --verbose=4 "${DMG_PATH}"
+
+      - name: Notarize and staple DMG
+        env:
+          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
+          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
+          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_ID}" ] || [ -z "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" ] || [ -z "${OASIS_APPLE_TEAM_ID}" ]; then
+            echo "Missing one or more Apple notarization secrets." >&2
+            exit 1
+          fi
+          
+          max_attempts=8
+          backoffs=(30 60 120 180 240 300 300)
+          attempt=1
+          while true; do
+            notary_log="$(mktemp)"
+            if xcrun notarytool submit "${DMG_PATH}" \
+              --apple-id "${OASIS_APPLE_ID}" \
+              --team-id "${OASIS_APPLE_TEAM_ID}" \
+              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --wait --verbose > "${notary_log}" 2>&1
+            then
+              cat "${notary_log}"
+              rm -f "${notary_log}"
+              break
+            fi
+            cat "${notary_log}" >&2
+            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+              echo "Non-retryable notarization failure." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "Notarization failed after ${attempt} attempts." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            sleep_seconds="${backoffs[$((attempt - 1))]}"
+            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            rm -f "${notary_log}"
+            sleep "${sleep_seconds}"
+            attempt=$((attempt + 1))
+          done
+            
+          # Staple DMG
+          xcrun stapler staple "${DMG_PATH}"
+          xcrun stapler validate "${DMG_PATH}"
+
+      - name: Verify golden executable hash before MAR
+        run: |
+          set -euo pipefail
+          EXPECTED_HASH="${{ steps.golden_hash.outputs.hash }}"
+          CURRENT_HASH="$(shasum -a 256 "${{ steps.meta.outputs.executable_path }}" | awk '{print $1}')"
+          if [ "${CURRENT_HASH}" != "${EXPECTED_HASH}" ]; then
+            echo "Golden executable changed after app notarization; refusing MAR build." >&2
+            echo "Expected: ${EXPECTED_HASH}" >&2
+            echo "Actual:   ${CURRENT_HASH}" >&2
+            exit 1
+          fi
 
       - name: Check updater cert material
         env:
@@ -241,12 +411,15 @@ jobs:
           mkdir -p "${UPDATE_DIR}"
           UNSIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.complete.mar"
           SIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.signed.complete.mar"
+          
+          # Use the GOLDEN APP (PKG_APP) which is signed/stapled
           scripts/update-signing/build-complete-mar.sh \
             "${OBJDIR}" \
-            "${APP_BUNDLE}" \
+            "${PKG_APP}" \
             "${UNSIGNED_MAR}" \
             "${VERSION}" \
             "${RING}"
+            
           echo "unsigned_mar=${UNSIGNED_MAR}" >> "${GITHUB_OUTPUT}"
           echo "signed_mar=${SIGNED_MAR}" >> "${GITHUB_OUTPUT}"
 
@@ -313,7 +486,7 @@ jobs:
           ASSET_NAME="${{ steps.release_meta.outputs.asset_name }}"
           DMG_ASSET_NAME="${{ steps.release_meta.outputs.dmg_asset_name }}"
           SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
-          PACKAGED_DMG="${{ steps.dmg.outputs.dmg_path }}"
+          PACKAGED_DMG="${DMG_PATH}"
           COMMIT_SHA="$(git rev-parse HEAD)"
           gh release create "${TAG}" \
             "${SIGNED_MAR}#${ASSET_NAME}" \
@@ -354,6 +527,7 @@ jobs:
         if: always()
         run: |
           set +e
+          # Keychain cleanup
           if [ -n "${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST:-}" ]; then
             security list-keychains -d user -s ${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST}
           fi
@@ -362,4 +536,5 @@ jobs:
             security delete-keychain "${OASIS_APPLE_KEYCHAIN_PATH}"
           fi
           rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH:-}"
-          rm -f "${OASIS_APPLE_NOTARY_ZIP:-}"
+          rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE:-}"
+          rm -f "${OASIS_APPLE_NOTARY_APP_ZIP:-}"
