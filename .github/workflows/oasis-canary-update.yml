@@ -20,6 +20,7 @@ env:
   BUILD_TARGET: Darwin_aarch64-gcc3
   LOCALE: en-US
   RING: oasis-canary
+  RCODESIGN_VERSION: 0.22.0
 
 jobs:
   build-sign-release:
@@ -71,11 +72,8 @@ jobs:
       - name: Restore rcodesign cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/rcodesign
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-unpinned-v1
+          path: ~/.local/rcodesign
+          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.RCODESIGN_VERSION }}-v1
 
       - name: Build assistant bundles
         run: |
@@ -107,11 +105,88 @@ jobs:
       - name: Install rcodesign
         run: |
           set -euo pipefail
-          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
-          if ! command -v rcodesign >/dev/null 2>&1; then
-            cargo install apple-codesign --locked
+          case "${RUNNER_ARCH}" in
+            ARM64)
+              PRIMARY_ARCH="aarch64-apple-darwin"
+              FALLBACK_ARCH="x86_64-apple-darwin"
+              ;;
+            X64)
+              PRIMARY_ARCH="x86_64-apple-darwin"
+              FALLBACK_ARCH="aarch64-apple-darwin"
+              ;;
+            *)
+              echo "Unsupported RUNNER_ARCH: ${RUNNER_ARCH}" >&2
+              exit 1
+              ;;
+          esac
+
+          RELEASE_BASE="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
+          INSTALL_ROOT="${HOME}/.local/rcodesign/${RCODESIGN_VERSION}"
+
+          install_rcodesign() {
+            local target_arch="$1"
+            local install_dir="${INSTALL_ROOT}/${target_arch}"
+            local tar_name="apple-codesign-${RCODESIGN_VERSION}-${target_arch}.tar.gz"
+            local tar_url="${RELEASE_BASE}/${tar_name}"
+            local sha_url="${tar_url}.sha256"
+
+            mkdir -p "${install_dir}"
+            if [ -x "${install_dir}/rcodesign" ]; then
+              echo "Using cached rcodesign from ${install_dir}"
+              echo "${install_dir}" >> "${GITHUB_PATH}"
+              echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
+              return 0
+            fi
+
+            tmpdir="$(mktemp -d)"
+
+            curl -fL "${tar_url}" -o "${tmpdir}/${tar_name}" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            curl -fL "${sha_url}" -o "${tmpdir}/${tar_name}.sha256" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+
+            expected_sha="$(tr -d '[:space:]' < "${tmpdir}/${tar_name}.sha256")"
+            actual_sha="$(shasum -a 256 "${tmpdir}/${tar_name}" | awk '{print $1}')"
+            if [ "${actual_sha}" != "${expected_sha}" ]; then
+              echo "SHA256 mismatch for ${tar_name}" >&2
+              echo "Expected: ${expected_sha}" >&2
+              echo "Actual:   ${actual_sha}" >&2
+              rm -rf "${tmpdir}"
+              return 1
+            fi
+
+            tar -xzf "${tmpdir}/${tar_name}" -C "${tmpdir}" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            rcodesign_path="$(find "${tmpdir}" -type f -name rcodesign | head -n1)"
+            if [ -z "${rcodesign_path}" ]; then
+              echo "rcodesign binary missing from ${tar_name}" >&2
+              rm -rf "${tmpdir}"
+              return 1
+            fi
+
+            cp "${rcodesign_path}" "${install_dir}/rcodesign" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            chmod 755 "${install_dir}/rcodesign"
+            rm -rf "${tmpdir}"
+            echo "${install_dir}" >> "${GITHUB_PATH}"
+            echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
+            return 0
+          }
+
+          if ! install_rcodesign "${PRIMARY_ARCH}"; then
+            echo "Primary rcodesign archive failed, trying fallback ${FALLBACK_ARCH}." >&2
+            install_rcodesign "${FALLBACK_ARCH}"
           fi
-          command -v rcodesign
+
+          which rcodesign
           rcodesign --version
 
       - name: Probe rcodesign CLI
