@@ -20,6 +20,7 @@ env:
   BUILD_TARGET: Darwin_aarch64-gcc3
   LOCALE: en-US
   RING: oasis-canary
+  RCODESIGN_VERSION: 0.22.0
 
 jobs:
   build-sign-release:
@@ -68,6 +69,15 @@ jobs:
             browser/base/content/assistant/build/package-lock.json
             browser/base/content/assistant/ui-preact/package-lock.json
 
+      - name: Restore rcodesign cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/rcodesign
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.RCODESIGN_VERSION }}
+
       - name: Build assistant bundles
         run: |
           set -euo pipefail
@@ -98,8 +108,9 @@ jobs:
       - name: Install rcodesign
         run: |
           set -euo pipefail
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
           if ! command -v rcodesign >/dev/null 2>&1; then
-            cargo install apple-codesign --locked
+            cargo install apple-codesign --version "${RCODESIGN_VERSION}" --locked
           fi
           rcodesign --version
 
@@ -116,9 +127,12 @@ jobs:
           KEYCHAIN_PATH="${RUNNER_TEMP}/oasis-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
           P12_PATH="${RUNNER_TEMP}/oasis-developer-id.p12"
+          P12_PASSWORD_FILE="${RUNNER_TEMP}/oasis-developer-id-password.txt"
           
           # Decode the P12 from secrets
           python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_APPLE_DEVELOPER_ID_P12_B64"]))' > "${P12_PATH}"
+          printf '%s' "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" > "${P12_PASSWORD_FILE}"
+          chmod 600 "${P12_PATH}" "${P12_PASSWORD_FILE}"
           
           # Create and configure the temporary keychain
           ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"')"
@@ -138,6 +152,7 @@ jobs:
           echo "OASIS_APPLE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
           echo "OASIS_APPLE_KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
           echo "OASIS_APPLE_DEVELOPER_ID_P12_PATH=${P12_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE=${P12_PASSWORD_FILE}" >> "${GITHUB_ENV}"
           echo "OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST<<EOF" >> "${GITHUB_ENV}"
           echo "${ORIGINAL_KEYCHAINS}" >> "${GITHUB_ENV}"
           echo "EOF" >> "${GITHUB_ENV}"
