@@ -107,12 +107,10 @@ jobs:
           set -euo pipefail
           case "${RUNNER_ARCH}" in
             ARM64)
-              PRIMARY_ARCH="aarch64-apple-darwin"
-              FALLBACK_ARCH="x86_64-apple-darwin"
+              TARGET_ARCH="aarch64-apple-darwin"
               ;;
             X64)
-              PRIMARY_ARCH="x86_64-apple-darwin"
-              FALLBACK_ARCH="aarch64-apple-darwin"
+              TARGET_ARCH="x86_64-apple-darwin"
               ;;
             *)
               echo "Unsupported RUNNER_ARCH: ${RUNNER_ARCH}" >&2
@@ -122,71 +120,73 @@ jobs:
 
           RELEASE_BASE="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
           INSTALL_ROOT="${HOME}/.local/rcodesign/${RCODESIGN_VERSION}"
+          INSTALL_DIR="${INSTALL_ROOT}/${TARGET_ARCH}"
+          TAR_NAME="apple-codesign-${RCODESIGN_VERSION}-${TARGET_ARCH}.tar.gz"
+          TAR_URL="${RELEASE_BASE}/${TAR_NAME}"
+          SHA_URL="${TAR_URL}.sha256"
 
-          install_rcodesign() {
-            local target_arch="$1"
-            local install_dir="${INSTALL_ROOT}/${target_arch}"
-            local tar_name="apple-codesign-${RCODESIGN_VERSION}-${target_arch}.tar.gz"
-            local tar_url="${RELEASE_BASE}/${tar_name}"
-            local sha_url="${tar_url}.sha256"
+          echo "Installing rcodesign ${RCODESIGN_VERSION} for ${TARGET_ARCH}"
+          echo "rcodesign tarball URL: ${TAR_URL}"
+          echo "rcodesign sha URL: ${SHA_URL}"
+          echo "rcodesign install dir: ${INSTALL_DIR}"
 
-            mkdir -p "${install_dir}"
-            if [ -x "${install_dir}/rcodesign" ]; then
-              echo "Using cached rcodesign from ${install_dir}"
-              echo "${install_dir}" >> "${GITHUB_PATH}"
-              echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
-              return 0
+          mkdir -p "${INSTALL_DIR}"
+          if [ ! -x "${INSTALL_DIR}/rcodesign" ]; then
+            TMP_DIR="$(mktemp -d)"
+            if ! curl -fL "${TAR_URL}" -o "${TMP_DIR}/${TAR_NAME}"; then
+              echo "Failed to download ${TAR_URL}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            if ! curl -fL "${SHA_URL}" -o "${TMP_DIR}/${TAR_NAME}.sha256"; then
+              echo "Failed to download ${SHA_URL}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
             fi
 
-            tmpdir="$(mktemp -d)"
-
-            curl -fL "${tar_url}" -o "${tmpdir}/${tar_name}" || {
-              rm -rf "${tmpdir}"
-              return 1
-            }
-            curl -fL "${sha_url}" -o "${tmpdir}/${tar_name}.sha256" || {
-              rm -rf "${tmpdir}"
-              return 1
-            }
-
-            expected_sha="$(tr -d '[:space:]' < "${tmpdir}/${tar_name}.sha256")"
-            actual_sha="$(shasum -a 256 "${tmpdir}/${tar_name}" | awk '{print $1}')"
-            if [ "${actual_sha}" != "${expected_sha}" ]; then
-              echo "SHA256 mismatch for ${tar_name}" >&2
-              echo "Expected: ${expected_sha}" >&2
-              echo "Actual:   ${actual_sha}" >&2
-              rm -rf "${tmpdir}"
-              return 1
+            EXPECTED_SHA="$(awk '{print $1}' "${TMP_DIR}/${TAR_NAME}.sha256" | tr -d '\r\n')"
+            if ! [[ "${EXPECTED_SHA}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "Invalid SHA256 format in ${SHA_URL}: ${EXPECTED_SHA}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
             fi
 
-            tar -xzf "${tmpdir}/${tar_name}" -C "${tmpdir}" || {
-              rm -rf "${tmpdir}"
-              return 1
-            }
-            rcodesign_path="$(find "${tmpdir}" -type f -name rcodesign | head -n1)"
-            if [ -z "${rcodesign_path}" ]; then
-              echo "rcodesign binary missing from ${tar_name}" >&2
-              rm -rf "${tmpdir}"
-              return 1
+            ACTUAL_SHA="$(shasum -a 256 "${TMP_DIR}/${TAR_NAME}" | awk '{print $1}')"
+            if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
+              echo "SHA256 mismatch for ${TAR_NAME}" >&2
+              echo "Expected: ${EXPECTED_SHA}" >&2
+              echo "Actual:   ${ACTUAL_SHA}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
             fi
 
-            cp "${rcodesign_path}" "${install_dir}/rcodesign" || {
-              rm -rf "${tmpdir}"
-              return 1
-            }
-            chmod 755 "${install_dir}/rcodesign"
-            rm -rf "${tmpdir}"
-            echo "${install_dir}" >> "${GITHUB_PATH}"
-            echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
-            return 0
-          }
+            if ! tar -xzf "${TMP_DIR}/${TAR_NAME}" -C "${TMP_DIR}"; then
+              echo "Failed to extract ${TAR_NAME}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            RCODESIGN_PATH="$(find "${TMP_DIR}" -type f -name rcodesign | head -n1)"
+            if [ -z "${RCODESIGN_PATH}" ]; then
+              echo "rcodesign binary missing from ${TAR_NAME}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
 
-          if ! install_rcodesign "${PRIMARY_ARCH}"; then
-            echo "Primary rcodesign archive failed, trying fallback ${FALLBACK_ARCH}." >&2
-            install_rcodesign "${FALLBACK_ARCH}"
+            if ! cp "${RCODESIGN_PATH}" "${INSTALL_DIR}/rcodesign"; then
+              echo "Failed to install rcodesign into ${INSTALL_DIR}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            chmod 755 "${INSTALL_DIR}/rcodesign"
+            rm -rf "${TMP_DIR}"
+          else
+            echo "Using cached rcodesign from ${INSTALL_DIR}"
           fi
 
-          which rcodesign
+          echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
+          export PATH="${INSTALL_DIR}:${PATH}"
+          echo "OASIS_RCODESIGN_BIN=${INSTALL_DIR}/rcodesign" >> "${GITHUB_ENV}"
+          echo "Resolved rcodesign path: $(command -v rcodesign)"
           rcodesign --version
 
       - name: Probe rcodesign CLI
