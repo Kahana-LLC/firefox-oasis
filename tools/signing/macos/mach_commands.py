@@ -613,6 +613,7 @@ def sign_with_rcodesign(
     # for each path to be signed. If the path is '/', it is the main signing
     # input path and its options are specified as standard arguments.
     ctx.log(logging.INFO, "macos-sign", {}, "Signing with rcodesign")
+    entitlements_arg_name = rcodesign_entitlements_arg_name(ctx)
 
     cs_cmd = ["rcodesign", "sign"]
     if p12_file_arg is not None:
@@ -679,7 +680,7 @@ def sign_with_rcodesign(
                         cs_cmd.append("--code-signature-flags")
                         cs_cmd.append("runtime")
                     if entitlement_file is not None:
-                        cs_cmd.append("--entitlements-xml-path")
+                        cs_cmd.append(entitlements_arg_name)
                         cs_cmd.append(entitlement_file)
                     cs_cmd.append(binary_path)
                     continue
@@ -693,7 +694,7 @@ def sign_with_rcodesign(
                     scoped_arg = binary_path_relative + ":runtime"
                     cs_cmd.append(scoped_arg)
                 if entitlement_file is not None:
-                    cs_cmd.append("--entitlements-xml-path")
+                    cs_cmd.append(entitlements_arg_name)
                     scoped_arg = binary_path_relative + ":" + entitlement_file
                     cs_cmd.append(scoped_arg)
 
@@ -701,6 +702,36 @@ def sign_with_rcodesign(
 
     for temp_file in temp_files_to_cleanup:
         os.remove(temp_file)
+
+
+def rcodesign_entitlements_arg_name(ctx):
+    help_cmd = ["rcodesign", "sign", "--help"]
+    try:
+        process = subprocess.run(
+            help_cmd, check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        ctx.log(
+            logging.ERROR,
+            "macos-sign",
+            {"rc": e.returncode},
+            "Unable to query rcodesign capabilities",
+        )
+        sys.exit(e.returncode)
+
+    help_text = f"{process.stdout}\n{process.stderr}"
+    if "--entitlements-xml-path" in help_text:
+        return "--entitlements-xml-path"
+    if "--entitlements-xml-file" in help_text:
+        return "--entitlements-xml-file"
+
+    ctx.log(
+        logging.ERROR,
+        "macos-sign",
+        {},
+        "rcodesign sign --help does not advertise an entitlements XML option",
+    )
+    sys.exit(1)
 
 
 def strip_restricted_entitlements(plist_file):

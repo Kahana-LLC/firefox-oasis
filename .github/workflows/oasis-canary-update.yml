@@ -192,8 +192,12 @@ jobs:
       - name: Probe rcodesign CLI
         run: |
           set -euo pipefail
-          if ! rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
-            echo "Installed rcodesign is missing --entitlements-xml-path support." >&2
+          if rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
+            echo "rcodesign supports --entitlements-xml-path"
+          elif rcodesign sign --help | grep -q -- "--entitlements-xml-file"; then
+            echo "rcodesign supports --entitlements-xml-file"
+          else
+            echo "Installed rcodesign is missing entitlements XML support." >&2
             exit 1
           fi
           if ! rcodesign sign --help | grep -q -- "--p12-password-file"; then
