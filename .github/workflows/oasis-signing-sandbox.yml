@@ -258,6 +258,7 @@ jobs:
           SUBSTS_DIR="${OBJDIR}/config.statusd/substs"
           MOZ_BUILD_APP_FILE="${SUBSTS_DIR}/MOZ_BUILD_APP"
           MACH_ENV_JSON="${RUNNER_TEMP}/mach-environment.json"
+          MACH_ENV_STDOUT="${RUNNER_TEMP}/mach-environment.stdout"
           MACH_ENV_ERR="${RUNNER_TEMP}/mach-environment.err"
 
           dump_context_diagnostics() {
@@ -273,6 +274,10 @@ jobs:
             if [ -f "${MACH_ENV_ERR}" ]; then
               echo "mach environment stderr:" >&2
               cat "${MACH_ENV_ERR}" >&2 || true
+            fi
+            if [ -f "${MACH_ENV_STDOUT}" ]; then
+              echo "mach environment stdout:" >&2
+              cat "${MACH_ENV_STDOUT}" >&2 || true
             fi
             if [ -f "${MACH_ENV_JSON}" ]; then
               echo "mach environment json head:" >&2
@@ -295,13 +300,24 @@ jobs:
             exit 1
           fi
 
-          if ! ./mach environment --format=json > "${MACH_ENV_JSON}" 2> "${MACH_ENV_ERR}"; then
+          if ! ./mach environment --format=json --verbose --output "${MACH_ENV_JSON}" > "${MACH_ENV_STDOUT}" 2> "${MACH_ENV_ERR}"; then
             echo "mach environment command failed." >&2
             dump_context_diagnostics
             exit 1
           fi
 
-          MACH_MOZ_BUILD_APP="$(python3 -c 'import json, sys; data=json.load(open(sys.argv[1], "r", encoding="utf-8")); print((data.get("substs") or {}).get("MOZ_BUILD_APP", ""))' "${MACH_ENV_JSON}")"
+          if [ ! -s "${MACH_ENV_JSON}" ]; then
+            echo "mach environment JSON output is empty." >&2
+            dump_context_diagnostics
+            exit 1
+          fi
+
+          if ! MACH_MOZ_BUILD_APP="$(python3 -c 'import json, sys; data=json.load(open(sys.argv[1], "r", encoding="utf-8")); print((data.get("substs") or {}).get("MOZ_BUILD_APP", ""))' "${MACH_ENV_JSON}" 2>&1)"; then
+            echo "Failed to parse mach environment JSON." >&2
+            echo "${MACH_MOZ_BUILD_APP}" >&2
+            dump_context_diagnostics
+            exit 1
+          fi
           if [ "${MACH_MOZ_BUILD_APP}" != "browser" ]; then
             echo "mach environment reports MOZ_BUILD_APP=${MACH_MOZ_BUILD_APP}; expected browser." >&2
             dump_context_diagnostics
