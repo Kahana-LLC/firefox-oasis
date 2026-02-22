@@ -38,6 +38,8 @@ jobs:
   sign-notarize:
     runs-on: macos-14
     environment: ${{ inputs.signing_environment }}
+    env:
+      MOZBUILD_STATE_PATH: ${{ runner.temp }}/mozbuild-state
     steps:
       - name: Checkout selected tag
         uses: actions/checkout@v4
@@ -188,6 +190,7 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
           PKG_APP="${OBJDIR}/dist/firefox/Oasis.app"
+          MOZ_BUILD_APP_FILE="${OBJDIR}/config.statusd/substs/MOZ_BUILD_APP"
           DMG_PATH="${OBJDIR}/dist/firefox-${VERSION}.${LOCALE}.mac.dmg"
           DSSTORE_PATH="${GITHUB_WORKSPACE}/browser/branding/custom/dsstore"
           BACKGROUND_PATH="${GITHUB_WORKSPACE}/browser/branding/custom/background.png"
@@ -201,7 +204,7 @@ jobs:
             "${OBJDIR}/dist/bin/pk12util"
             "${OBJDIR}/dist/host/bin/mar"
             "${OBJDIR}/browser/installer/Makefile"
-            "${OBJDIR}/config.statusd"
+            "${MOZ_BUILD_APP_FILE}"
           )
           for path in "${required[@]}"; do
             if [ ! -e "${path}" ]; then
@@ -243,6 +246,64 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
           echo "executable_path=${EXECUTABLE_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate mach context gate
+        run: |
+          set -euo pipefail
+          SUBSTS_DIR="${OBJDIR}/config.statusd/substs"
+          MOZ_BUILD_APP_FILE="${SUBSTS_DIR}/MOZ_BUILD_APP"
+          MACH_ENV_JSON="${RUNNER_TEMP}/mach-environment.json"
+          MACH_ENV_ERR="${RUNNER_TEMP}/mach-environment.err"
+
+          dump_context_diagnostics() {
+            echo "---- context diagnostics ----" >&2
+            echo "MOZBUILD_STATE_PATH=${MOZBUILD_STATE_PATH}" >&2
+            echo "MOZCONFIG=${MOZCONFIG:-<unset>}" >&2
+            echo "objdir=${OBJDIR}" >&2
+            ls -la "${SUBSTS_DIR}" >&2 || true
+            if [ -f "${MOZ_BUILD_APP_FILE}" ]; then
+              echo "MOZ_BUILD_APP file content:" >&2
+              cat "${MOZ_BUILD_APP_FILE}" >&2 || true
+            fi
+            if [ -f "${MACH_ENV_ERR}" ]; then
+              echo "mach environment stderr:" >&2
+              cat "${MACH_ENV_ERR}" >&2 || true
+            fi
+            if [ -f "${MACH_ENV_JSON}" ]; then
+              echo "mach environment json head:" >&2
+              head -c 400 "${MACH_ENV_JSON}" >&2 || true
+              echo >&2
+            fi
+            echo "-----------------------------" >&2
+          }
+
+          if [ ! -f "${MOZ_BUILD_APP_FILE}" ]; then
+            echo "Missing ${MOZ_BUILD_APP_FILE}" >&2
+            dump_context_diagnostics
+            exit 1
+          fi
+
+          FILE_MOZ_BUILD_APP="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")))' "${MOZ_BUILD_APP_FILE}")"
+          if [ "${FILE_MOZ_BUILD_APP}" != "browser" ]; then
+            echo "Invalid ${MOZ_BUILD_APP_FILE}: expected browser, got ${FILE_MOZ_BUILD_APP}" >&2
+            dump_context_diagnostics
+            exit 1
+          fi
+
+          if ! ./mach environment --format=json > "${MACH_ENV_JSON}" 2> "${MACH_ENV_ERR}"; then
+            echo "mach environment command failed." >&2
+            dump_context_diagnostics
+            exit 1
+          fi
+
+          MACH_MOZ_BUILD_APP="$(python3 -c 'import json, sys; data=json.load(open(sys.argv[1], "r", encoding="utf-8")); print((data.get("substs") or {}).get("MOZ_BUILD_APP", ""))' "${MACH_ENV_JSON}")"
+          if [ "${MACH_MOZ_BUILD_APP}" != "browser" ]; then
+            echo "mach environment reports MOZ_BUILD_APP=${MACH_MOZ_BUILD_APP}; expected browser." >&2
+            dump_context_diagnostics
+            exit 1
+          fi
+
+          echo "Mach context validated: MOZ_BUILD_APP=browser"
 
       - name: Prepare Apple signing keychain
         env:
