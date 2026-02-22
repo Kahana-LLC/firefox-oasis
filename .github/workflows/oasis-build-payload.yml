@@ -94,6 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           APP_INI="${OBJDIR}/dist/firefox/Oasis.app/Contents/Resources/application.ini"
+          CONFIG_STATUS_FILE="${OBJDIR}/config.status"
           MOZ_BUILD_APP_FILE="${OBJDIR}/config.statusd/substs/MOZ_BUILD_APP"
           EXPECTED_VERSION="${{ steps.version.outputs.version }}"
           VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
@@ -109,6 +110,7 @@ jobs:
             "${OBJDIR}/dist/bin/pk12util"
             "${OBJDIR}/dist/host/bin/mar"
             "${OBJDIR}/browser/installer/Makefile"
+            "${CONFIG_STATUS_FILE}"
             "${MOZ_BUILD_APP_FILE}"
           )
           for path in "${required[@]}"; do
@@ -120,6 +122,11 @@ jobs:
           FILE_MOZ_BUILD_APP="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")))' "${MOZ_BUILD_APP_FILE}")"
           if [ "${FILE_MOZ_BUILD_APP}" != "browser" ]; then
             echo "Invalid ${MOZ_BUILD_APP_FILE}: expected browser, got ${FILE_MOZ_BUILD_APP}" >&2
+            exit 1
+          fi
+          CONFIG_STATUS_MOZ_BUILD_APP="$(python3 -c 'import os, sys; config_status=sys.argv[1]; topsrc=sys.argv[2]; sys.path.insert(0, os.path.join(topsrc, "python", "mozbuild")); g={"__builtins__": __builtins__, "__file__": config_status}; l={}; exec(compile(open(config_status, "r", encoding="utf-8").read(), config_status, "exec"), g, l); print((l.get("substs") or {}).get("MOZ_BUILD_APP", ""))' "${CONFIG_STATUS_FILE}" "${GITHUB_WORKSPACE}")"
+          if [ "${CONFIG_STATUS_MOZ_BUILD_APP}" != "browser" ]; then
+            echo "Invalid ${CONFIG_STATUS_FILE}: expected MOZ_BUILD_APP=browser, got ${CONFIG_STATUS_MOZ_BUILD_APP}" >&2
             exit 1
           fi
           echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
@@ -139,6 +146,7 @@ jobs:
             "${OBJDIR}/dist/bin" \
             "${OBJDIR}/dist/host/bin" \
             "${OBJDIR}/browser/installer" \
+            "${OBJDIR}/config.status" \
             "${OBJDIR}/config.statusd"
           zstd -T0 -19 "${PAYLOAD_TAR}" -o "${PAYLOAD_ZST}"
           echo "PAYLOAD_ZST=${PAYLOAD_ZST}" >> "${GITHUB_ENV}"
