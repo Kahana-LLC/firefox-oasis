@@ -300,7 +300,7 @@ jobs:
             exit 1
           fi
 
-          if ! ./mach environment --format=json --verbose --output "${MACH_ENV_JSON}" > "${MACH_ENV_STDOUT}" 2> "${MACH_ENV_ERR}"; then
+          if ! ./mach environment --format=json --output "${MACH_ENV_JSON}" > "${MACH_ENV_STDOUT}" 2> "${MACH_ENV_ERR}"; then
             echo "mach environment command failed." >&2
             dump_context_diagnostics
             exit 1
@@ -312,19 +312,20 @@ jobs:
             exit 1
           fi
 
-          if ! MACH_MOZ_BUILD_APP="$(python3 -c 'import json, sys; data=json.load(open(sys.argv[1], "r", encoding="utf-8")); print((data.get("substs") or {}).get("MOZ_BUILD_APP", ""))' "${MACH_ENV_JSON}" 2>&1)"; then
+          if ! MACH_TOPOBJDIR="$(python3 -c 'import json, sys; data=json.load(open(sys.argv[1], "r", encoding="utf-8")); print(data.get("topobjdir",""))' "${MACH_ENV_JSON}" 2>&1)"; then
             echo "Failed to parse mach environment JSON." >&2
-            echo "${MACH_MOZ_BUILD_APP}" >&2
+            echo "${MACH_TOPOBJDIR}" >&2
             dump_context_diagnostics
             exit 1
           fi
-          if [ "${MACH_MOZ_BUILD_APP}" != "browser" ]; then
-            echo "mach environment reports MOZ_BUILD_APP=${MACH_MOZ_BUILD_APP}; expected browser." >&2
+          EXPECTED_TOPOBJDIR="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "${GITHUB_WORKSPACE}/${OBJDIR}")"
+          if [ "${MACH_TOPOBJDIR}" != "${EXPECTED_TOPOBJDIR}" ]; then
+            echo "mach environment topobjdir mismatch: expected ${EXPECTED_TOPOBJDIR}, got ${MACH_TOPOBJDIR}" >&2
             dump_context_diagnostics
             exit 1
           fi
 
-          echo "Mach context validated: MOZ_BUILD_APP=browser"
+          echo "Mach context validated: MOZ_BUILD_APP=browser, topobjdir=${MACH_TOPOBJDIR}"
 
       - name: Prepare Apple signing keychain
         env:
