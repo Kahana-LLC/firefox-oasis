@@ -38,8 +38,6 @@ jobs:
   sign-notarize:
     runs-on: macos-14
     environment: ${{ inputs.signing_environment }}
-    env:
-      MOZBUILD_STATE_PATH: ${{ runner.temp }}/mozbuild-state
     steps:
       - name: Checkout selected tag
         uses: actions/checkout@v4
@@ -58,6 +56,13 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set deterministic mach state path
+        run: |
+          set -euo pipefail
+          STATE_DIR="${RUNNER_TEMP}/mozbuild-state"
+          mkdir -p "${STATE_DIR}"
+          echo "MOZBUILD_STATE_PATH=${STATE_DIR}" >> "${GITHUB_ENV}"
 
       - name: Create CI mozconfig
         run: |
