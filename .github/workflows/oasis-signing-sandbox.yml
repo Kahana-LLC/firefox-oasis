@@ -1,0 +1,618 @@
+name: Oasis Signing Sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Workflow run ID that produced the signing payload artifact
+        required: true
+        type: string
+      release_tag:
+        description: Existing release tag to sign/notarize (vX.Y.Z.N)
+        required: true
+        type: string
+      dry_run:
+        description: Skip GitHub Release publish and Supabase ring updates
+        required: true
+        type: boolean
+        default: true
+      signing_environment:
+        description: GitHub environment name containing signing secrets
+        required: true
+        type: string
+        default: canary-signing
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  OBJDIR: obj-oasis-canary
+  PRODUCT: Firefox
+  BUILD_TARGET: Darwin_aarch64-gcc3
+  LOCALE: en-US
+  RING: oasis-canary
+  RCODESIGN_VERSION: 0.22.0
+
+jobs:
+  sign-notarize:
+    runs-on: macos-14
+    environment: ${{ inputs.signing_environment }}
+    steps:
+      - name: Checkout selected tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ format('refs/tags/{0}', inputs.release_tag) }}
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.release_tag }}"
+          if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+){3}$ ]]; then
+            echo "Tag must match vX.Y.Z.N (numeric dot notation)." >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create CI mozconfig
+        run: |
+          set -euo pipefail
+          CI_MOZCONFIG="${RUNNER_TEMP}/mozconfig-oasis-canary"
+          cat > "${CI_MOZCONFIG}" <<'EOF'
+          mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-oasis-canary
+          ac_add_options --enable-application=browser
+          ac_add_options --with-branding=browser/branding/custom
+          ac_add_options --enable-release
+          ac_add_options --disable-debug
+          ac_add_options --enable-optimize
+          ac_add_options --disable-crashreporter
+          ac_add_options --enable-updater
+          ac_add_options --enable-update-channel=oasis-canary
+          export MOZ_INCLUDE_SOURCE_INFO=
+          export MOZ_DISABLE_SOURCE_INFO=1
+          EOF
+          echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
+
+      - name: Restore rcodesign cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/rcodesign
+          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.RCODESIGN_VERSION }}-v1
+
+      - name: Install rcodesign
+        run: |
+          set -euo pipefail
+          case "${RUNNER_ARCH}" in
+            ARM64)
+              TARGET_ARCH="aarch64-apple-darwin"
+              ;;
+            X64)
+              TARGET_ARCH="x86_64-apple-darwin"
+              ;;
+            *)
+              echo "Unsupported RUNNER_ARCH: ${RUNNER_ARCH}" >&2
+              exit 1
+              ;;
+          esac
+
+          RELEASE_BASE="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
+          INSTALL_ROOT="${HOME}/.local/rcodesign/${RCODESIGN_VERSION}"
+          INSTALL_DIR="${INSTALL_ROOT}/${TARGET_ARCH}"
+          TAR_NAME="apple-codesign-${RCODESIGN_VERSION}-${TARGET_ARCH}.tar.gz"
+          TAR_URL="${RELEASE_BASE}/${TAR_NAME}"
+          SHA_URL="${TAR_URL}.sha256"
+
+          mkdir -p "${INSTALL_DIR}"
+          if [ ! -x "${INSTALL_DIR}/rcodesign" ]; then
+            TMP_DIR="$(mktemp -d)"
+            curl -fL "${TAR_URL}" -o "${TMP_DIR}/${TAR_NAME}"
+            curl -fL "${SHA_URL}" -o "${TMP_DIR}/${TAR_NAME}.sha256"
+            EXPECTED_SHA="$(awk '{print $1}' "${TMP_DIR}/${TAR_NAME}.sha256" | tr -d '\r\n')"
+            if ! [[ "${EXPECTED_SHA}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "Invalid SHA256 format in ${SHA_URL}: ${EXPECTED_SHA}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            ACTUAL_SHA="$(shasum -a 256 "${TMP_DIR}/${TAR_NAME}" | awk '{print $1}')"
+            if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
+              echo "SHA256 mismatch for ${TAR_NAME}" >&2
+              echo "Expected: ${EXPECTED_SHA}" >&2
+              echo "Actual:   ${ACTUAL_SHA}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            tar -xzf "${TMP_DIR}/${TAR_NAME}" -C "${TMP_DIR}"
+            RCODESIGN_PATH="$(find "${TMP_DIR}" -type f -name rcodesign | head -n1)"
+            if [ -z "${RCODESIGN_PATH}" ]; then
+              echo "rcodesign binary missing from ${TAR_NAME}" >&2
+              rm -rf "${TMP_DIR}"
+              exit 1
+            fi
+            cp "${RCODESIGN_PATH}" "${INSTALL_DIR}/rcodesign"
+            chmod 755 "${INSTALL_DIR}/rcodesign"
+            rm -rf "${TMP_DIR}"
+          fi
+
+          echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
+          export PATH="${INSTALL_DIR}:${PATH}"
+          echo "OASIS_RCODESIGN_BIN=${INSTALL_DIR}/rcodesign" >> "${GITHUB_ENV}"
+          echo "Resolved rcodesign path: $(command -v rcodesign)"
+          rcodesign --version
+
+      - name: Probe rcodesign CLI
+        run: |
+          set -euo pipefail
+          if rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
+            echo "rcodesign supports --entitlements-xml-path"
+          elif rcodesign sign --help | grep -q -- "--entitlements-xml-file"; then
+            echo "rcodesign supports --entitlements-xml-file"
+          else
+            echo "Installed rcodesign is missing entitlements XML support." >&2
+            exit 1
+          fi
+          if ! rcodesign sign --help | grep -q -- "--p12-password-file"; then
+            echo "Installed rcodesign is missing --p12-password-file support." >&2
+            exit 1
+          fi
+
+      - name: Download payload artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+          name: oasis-signing-payload-${{ steps.version.outputs.tag }}
+          path: ${{ runner.temp }}/payload
+
+      - name: Extract payload
+        run: |
+          set -euo pipefail
+          if ! command -v zstd >/dev/null 2>&1; then
+            echo "zstd is required but not available on runner." >&2
+            exit 1
+          fi
+          PAYLOAD_ARCHIVE="$(find "${RUNNER_TEMP}/payload" -type f -name '*.tar.zst' | head -n1)"
+          if [ -z "${PAYLOAD_ARCHIVE}" ]; then
+            echo "Payload archive not found under ${RUNNER_TEMP}/payload" >&2
+            exit 1
+          fi
+          PAYLOAD_TAR="${RUNNER_TEMP}/oasis-signing-payload.tar"
+          zstd -d -f "${PAYLOAD_ARCHIVE}" -o "${PAYLOAD_TAR}"
+          tar -C "${GITHUB_WORKSPACE}" -xpf "${PAYLOAD_TAR}"
+
+      - name: Resolve payload paths and validate required files
+        id: payload
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          PKG_APP="${OBJDIR}/dist/firefox/Oasis.app"
+          DMG_PATH="${OBJDIR}/dist/firefox-${VERSION}.${LOCALE}.mac.dmg"
+          DSSTORE_PATH="${GITHUB_WORKSPACE}/browser/branding/custom/dsstore"
+          BACKGROUND_PATH="${GITHUB_WORKSPACE}/browser/branding/custom/background.png"
+          ICON_PATH="${GITHUB_WORKSPACE}/browser/branding/custom/disk.icns"
+          VOLUME_NAME="Oasis"
+          MOZ_PKG_DIR="firefox"
+          required=(
+            "${PKG_APP}"
+            "${OBJDIR}/dist/bin/signmar"
+            "${OBJDIR}/dist/bin/certutil"
+            "${OBJDIR}/dist/bin/pk12util"
+            "${OBJDIR}/dist/host/bin/mar"
+            "${OBJDIR}/browser/installer/Makefile"
+            "${OBJDIR}/config.statusd"
+          )
+          for path in "${required[@]}"; do
+            if [ ! -e "${path}" ]; then
+              echo "Missing required payload path: ${path}" >&2
+              exit 1
+            fi
+          done
+          echo "PKG_APP=${PKG_APP}" >> "${GITHUB_ENV}"
+          echo "DMG_PATH=${DMG_PATH}" >> "${GITHUB_ENV}"
+          echo "MOZ_PKG_DIR=${MOZ_PKG_DIR}" >> "${GITHUB_ENV}"
+          echo "VOLUME_NAME=${VOLUME_NAME}" >> "${GITHUB_ENV}"
+          echo "DSSTORE_PATH=${DSSTORE_PATH}" >> "${GITHUB_ENV}"
+          echo "BACKGROUND_PATH=${BACKGROUND_PATH}" >> "${GITHUB_ENV}"
+          echo "ICON_PATH=${ICON_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Verify staged version
+        id: meta
+        run: |
+          set -euo pipefail
+          APP_INI="${PKG_APP}/Contents/Resources/application.ini"
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+          VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
+          BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
+          if [ "${VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Staged version mismatch: expected ${EXPECTED_VERSION}, got ${VERSION}" >&2
+            exit 1
+          fi
+          EXECUTABLE_PATH=""
+          for candidate in Oasis firefox firefox-bin; do
+            if [ -f "${PKG_APP}/Contents/MacOS/${candidate}" ]; then
+              EXECUTABLE_PATH="${PKG_APP}/Contents/MacOS/${candidate}"
+              break
+            fi
+          done
+          if [ -z "${EXECUTABLE_PATH}" ]; then
+            echo "Could not find executable under ${PKG_APP}/Contents/MacOS" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
+          echo "executable_path=${EXECUTABLE_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare Apple signing keychain
+        env:
+          OASIS_APPLE_DEVELOPER_ID_P12_B64: ${{ secrets.OASIS_APPLE_DEVELOPER_ID_P12_B64 }}
+          OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_APPLE_DEVELOPER_ID_P12_B64}" ] || [ -z "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" ]; then
+            echo "Missing Apple Developer ID certificate secrets." >&2
+            exit 1
+          fi
+          KEYCHAIN_PATH="${RUNNER_TEMP}/oasis-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          P12_PATH="${RUNNER_TEMP}/oasis-developer-id.p12"
+          P12_PASSWORD_FILE="${RUNNER_TEMP}/oasis-developer-id-password.txt"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_APPLE_DEVELOPER_ID_P12_B64"]))' > "${P12_PATH}"
+          printf '%s' "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" > "${P12_PASSWORD_FILE}"
+          chmod 600 "${P12_PATH}" "${P12_PASSWORD_FILE}"
+          ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"')"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}" ${ORIGINAL_KEYCHAINS}
+          security default-keychain -d user -s "${KEYCHAIN_PATH}"
+          security import "${P12_PATH}" -k "${KEYCHAIN_PATH}" -P "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD}" -A -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          echo "OASIS_APPLE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_DEVELOPER_ID_P12_PATH=${P12_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE=${P12_PASSWORD_FILE}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST<<EOF" >> "${GITHUB_ENV}"
+          echo "${ORIGINAL_KEYCHAINS}" >> "${GITHUB_ENV}"
+          echo "EOF" >> "${GITHUB_ENV}"
+
+      - name: Validate PKCS12 with password file
+        run: |
+          set -euo pipefail
+          openssl pkcs12 \
+            -in "${OASIS_APPLE_DEVELOPER_ID_P12_PATH}" \
+            -passin "file:${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
+            -nokeys -noout >/dev/null
+
+      - name: Prepare and sign app bundle (rcodesign)
+        run: |
+          set -euo pipefail
+          find "${PKG_APP}" \( -name ".mkdir.done" -o -name "*.done" \) -delete
+          if find "${PKG_APP}" -type l -print -quit | grep -q .; then
+            echo "Refusing to sign app with symlinks still present: ${PKG_APP}" >&2
+            find "${PKG_APP}" -type l | head -n 20 >&2 || true
+            exit 1
+          fi
+          ./mach macos-sign \
+            -a "${PKG_APP}" \
+            -r \
+            -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH}" \
+            -p "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
+            -e production-without-restricted \
+            -c release \
+            -v
+          codesign --verify --deep --strict --verbose=2 "${PKG_APP}"
+
+      - name: Verify hardened runtime on key binaries
+        run: |
+          set -euo pipefail
+          targets=(
+            "${{ steps.meta.outputs.executable_path }}"
+            "${PKG_APP}/Contents/MacOS/plugin-container.app"
+            "${PKG_APP}/Contents/MacOS/gpu-helper.app"
+            "${PKG_APP}/Contents/MacOS/updater.app"
+          )
+          for target in "${targets[@]}"; do
+            if [ ! -e "${target}" ]; then
+              echo "Expected signed target missing: ${target}" >&2
+              exit 1
+            fi
+            if ! codesign -dvv "${target}" 2>&1 | grep -Eq 'runtime|\(runtime\)'; then
+              echo "Hardened runtime not detected on: ${target}" >&2
+              codesign -dvv "${target}" 2>&1 || true
+              exit 1
+            fi
+          done
+
+      - name: Notarize and staple app bundle
+        env:
+          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
+          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
+          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTARY_ZIP="${RUNNER_TEMP}/oasis-app-notary-${VERSION}.zip"
+          ditto -c -k --keepParent "${PKG_APP}" "${NOTARY_ZIP}"
+          ZIP_SIZE="$(stat -f%z "${NOTARY_ZIP}")"
+          if [ "${ZIP_SIZE}" -lt 52428800 ]; then
+             echo "ZIP payload too small." >&2
+             exit 1
+          fi
+          if unzip -l "${NOTARY_ZIP}" | grep -q "__MACOSX/"; then
+            echo "ZIP payload contains __MACOSX, refusing notarization submit." >&2
+            exit 1
+          fi
+          if ! unzip -l "${NOTARY_ZIP}" | grep -Eq 'Contents/MacOS/(Oasis|firefox|firefox-bin)[[:space:]]*$'; then
+            echo "ZIP payload missing expected executable under Contents/MacOS." >&2
+            exit 1
+          fi
+          max_attempts=8
+          backoffs=(30 60 120 180 240 300 300)
+          attempt=1
+          while true; do
+            notary_log="$(mktemp)"
+            if xcrun notarytool submit "${NOTARY_ZIP}" \
+              --apple-id "${OASIS_APPLE_ID}" \
+              --team-id "${OASIS_APPLE_TEAM_ID}" \
+              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --wait --verbose > "${notary_log}" 2>&1
+            then
+              cat "${notary_log}"
+              rm -f "${notary_log}"
+              break
+            fi
+            cat "${notary_log}" >&2
+            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+              echo "Non-retryable notarization failure." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "Notarization failed after ${attempt} attempts." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            sleep_seconds="${backoffs[$((attempt - 1))]}"
+            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            rm -f "${notary_log}"
+            sleep "${sleep_seconds}"
+            attempt=$((attempt + 1))
+          done
+          xcrun stapler staple "${PKG_APP}"
+          xcrun stapler validate "${PKG_APP}"
+          spctl -a -vv "${PKG_APP}"
+          echo "OASIS_APPLE_NOTARY_APP_ZIP=${NOTARY_ZIP}" >> "${GITHUB_ENV}"
+
+      - name: Record post-notarization executable hash
+        id: golden_hash
+        run: |
+          set -euo pipefail
+          HASH="$(shasum -a 256 "${{ steps.meta.outputs.executable_path }}" | awk '{print $1}')"
+          echo "hash=${HASH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create signed DMG
+        env:
+          OASIS_APPLE_SIGNING_IDENTITY: ${{ secrets.OASIS_APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${DSSTORE_PATH:-}" ] && [ -f "${DSSTORE_PATH}" ]; then
+            args+=(--dsstore "${DSSTORE_PATH}")
+          fi
+          if [ -n "${BACKGROUND_PATH:-}" ] && [ -f "${BACKGROUND_PATH}" ]; then
+            args+=(--background "${BACKGROUND_PATH}")
+          fi
+          if [ -n "${ICON_PATH:-}" ] && [ -f "${ICON_PATH}" ]; then
+            args+=(--icon "${ICON_PATH}")
+          fi
+          if [ -n "${VOLUME_NAME:-}" ]; then
+            args+=(--volume-name "${VOLUME_NAME}")
+          fi
+          ./mach python -m mozbuild.action.make_dmg "${args[@]}" \
+            "${OBJDIR}/dist/${MOZ_PKG_DIR}" \
+            "${DMG_PATH}"
+          codesign --force --timestamp --sign "${OASIS_APPLE_SIGNING_IDENTITY}" "${DMG_PATH}"
+          codesign -dv --verbose=4 "${DMG_PATH}"
+
+      - name: Notarize and staple DMG
+        env:
+          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
+          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
+          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          max_attempts=8
+          backoffs=(30 60 120 180 240 300 300)
+          attempt=1
+          while true; do
+            notary_log="$(mktemp)"
+            if xcrun notarytool submit "${DMG_PATH}" \
+              --apple-id "${OASIS_APPLE_ID}" \
+              --team-id "${OASIS_APPLE_TEAM_ID}" \
+              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --wait --verbose > "${notary_log}" 2>&1
+            then
+              cat "${notary_log}"
+              rm -f "${notary_log}"
+              break
+            fi
+            cat "${notary_log}" >&2
+            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+              echo "Non-retryable notarization failure." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "Notarization failed after ${attempt} attempts." >&2
+              rm -f "${notary_log}"
+              exit 1
+            fi
+            sleep_seconds="${backoffs[$((attempt - 1))]}"
+            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            rm -f "${notary_log}"
+            sleep "${sleep_seconds}"
+            attempt=$((attempt + 1))
+          done
+          xcrun stapler staple "${DMG_PATH}"
+          xcrun stapler validate "${DMG_PATH}"
+
+      - name: Verify golden executable hash before MAR
+        run: |
+          set -euo pipefail
+          EXPECTED_HASH="${{ steps.golden_hash.outputs.hash }}"
+          CURRENT_HASH="$(shasum -a 256 "${{ steps.meta.outputs.executable_path }}" | awk '{print $1}')"
+          if [ "${CURRENT_HASH}" != "${EXPECTED_HASH}" ]; then
+            echo "Golden executable changed after app notarization; refusing MAR build." >&2
+            exit 1
+          fi
+
+      - name: Check updater cert material
+        env:
+          ALLOW_DEV_OASIS_CERTS: ${{ vars.ALLOW_DEV_OASIS_CERTS }}
+        run: |
+          set -euo pipefail
+          scripts/update-signing/check-oasis-cert-material.sh
+
+      - name: Build complete MAR
+        id: mar
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          UPDATE_DIR="${OBJDIR}/dist/update"
+          mkdir -p "${UPDATE_DIR}"
+          UNSIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.complete.mar"
+          SIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.signed.complete.mar"
+          scripts/update-signing/build-complete-mar.sh \
+            "${OBJDIR}" \
+            "${PKG_APP}" \
+            "${UNSIGNED_MAR}" \
+            "${VERSION}" \
+            "${RING}"
+          echo "unsigned_mar=${UNSIGNED_MAR}" >> "${GITHUB_OUTPUT}"
+          echo "signed_mar=${SIGNED_MAR}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sign and verify MAR
+        env:
+          OASIS_MAR_SIGNING_CERT_NICKNAME: ${{ secrets.OASIS_MAR_SIGNING_CERT_NICKNAME }}
+          OASIS_MAR_SIGNING_P12_B64: ${{ secrets.OASIS_MAR_SIGNING_P12_B64 }}
+          OASIS_MAR_SIGNING_P12_PASSWORD: ${{ secrets.OASIS_MAR_SIGNING_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          NSS_DB_DIR="${RUNNER_TEMP}/oasis-nssdb"
+          P12_PATH="${RUNNER_TEMP}/oasis-signing.p12"
+          mkdir -p "${NSS_DB_DIR}"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_MAR_SIGNING_P12_B64"]))' > "${P12_PATH}"
+          "${OBJDIR}/dist/bin/certutil" -N -d "sql:${NSS_DB_DIR}" --empty-password
+          "${OBJDIR}/dist/bin/pk12util" -i "${P12_PATH}" -d "sql:${NSS_DB_DIR}" -W "${OASIS_MAR_SIGNING_P12_PASSWORD}"
+          scripts/update-signing/sign-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.unsigned_mar }}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            "${NSS_DB_DIR}" \
+            "${OASIS_MAR_SIGNING_CERT_NICKNAME}"
+          scripts/update-signing/verify-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            toolkit/mozapps/update/updater/oasis_primary.der \
+            toolkit/mozapps/update/updater/oasis_secondary.der
+          rm -f "${P12_PATH}"
+          rm -rf "${NSS_DB_DIR}"
+
+      - name: Upload sandbox outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: oasis-signing-sandbox-outputs-${{ steps.version.outputs.tag }}
+          path: |
+            ${{ steps.mar.outputs.signed_mar }}
+            ${{ env.DMG_PATH }}
+          if-no-files-found: error
+
+      - name: Prepare release metadata
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        id: release_meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          SAFE_TARGET="$(echo "${BUILD_TARGET}" | tr '/ ' '__')"
+          TAG="${{ steps.version.outputs.tag }}"
+          ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.signed.complete.mar"
+          DMG_ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.mac.dmg"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} already exists. Publish a new version instead of mutating an existing release." >&2
+            exit 1
+          fi
+          MAR_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET_NAME}"
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${DMG_ASSET_NAME}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "asset_name=${ASSET_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_asset_name=${DMG_ASSET_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "mar_url=${MAR_URL}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_url=${DMG_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release_meta.outputs.tag }}"
+          ASSET_NAME="${{ steps.release_meta.outputs.asset_name }}"
+          DMG_ASSET_NAME="${{ steps.release_meta.outputs.dmg_asset_name }}"
+          SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
+          PACKAGED_DMG="${DMG_PATH}"
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          gh release create "${TAG}" \
+            "${SIGNED_MAR}#${ASSET_NAME}" \
+            "${PACKAGED_DMG}#${DMG_ASSET_NAME}" \
+            --target "${COMMIT_SHA}" \
+            --title "${TAG}" \
+            --notes "Oasis release ${TAG}"
+
+      - name: Register artifact and move ring pointer
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        env:
+          OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD_ID="${{ steps.meta.outputs.build_id }}"
+          python3 tools/oasis-update-service/publish_update.py \
+            --service "${OASIS_UPDATE_SERVICE_URL}" \
+            --admin-token "${OASIS_ADMIN_TOKEN}" \
+            --product "${PRODUCT}" \
+            --version "${VERSION}" \
+            --build-id "${BUILD_ID}" \
+            --build-target "${BUILD_TARGET}" \
+            --locale "${LOCALE}" \
+            --mar-url "${{ steps.release_meta.outputs.mar_url }}" \
+            --mar-path "${{ steps.mar.outputs.signed_mar }}" \
+            --ring "${RING}" \
+            --actor github-actions \
+            --reason "sandbox publish (run ${GITHUB_RUN_ID}, tag ${{ steps.version.outputs.tag }}, sha ${GITHUB_SHA})"
+
+      - name: Print mode
+        run: |
+          set -euo pipefail
+          echo "dry_run=${{ inputs.dry_run }}"
+          echo "signed_mar=${{ steps.mar.outputs.signed_mar }}"
+          echo "dmg=${DMG_PATH}"
+
+      - name: Cleanup signing and notarization material
+        if: always()
+        run: |
+          set +e
+          if [ -n "${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST:-}" ]; then
+            security list-keychains -d user -s ${OASIS_APPLE_KEYCHAIN_ORIGINAL_LIST}
+          fi
+          if [ -n "${OASIS_APPLE_KEYCHAIN_PATH:-}" ]; then
+            security default-keychain -d user -s login.keychain-db
+            security delete-keychain "${OASIS_APPLE_KEYCHAIN_PATH}"
+          fi
+          rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH:-}"
+          rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE:-}"
+          rm -f "${OASIS_APPLE_NOTARY_APP_ZIP:-}"
