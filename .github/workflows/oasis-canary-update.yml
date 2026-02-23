@@ -133,6 +133,7 @@ jobs:
             mkdir -p "${install_dir}"
             if [ -x "${install_dir}/rcodesign" ]; then
               echo "Using cached rcodesign from ${install_dir}"
+              export PATH="${install_dir}:${PATH}"
               echo "${install_dir}" >> "${GITHUB_PATH}"
               echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
               return 0
@@ -149,7 +150,12 @@ jobs:
               return 1
             }
 
-            expected_sha="$(tr -d '[:space:]' < "${tmpdir}/${tar_name}.sha256")"
+            expected_sha="$(awk '{print $1}' "${tmpdir}/${tar_name}.sha256" | tr -d '\r\n')"
+            if ! [[ "${expected_sha}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "Invalid SHA256 content in ${tar_name}.sha256: ${expected_sha}" >&2
+              rm -rf "${tmpdir}"
+              return 1
+            fi
             actual_sha="$(shasum -a 256 "${tmpdir}/${tar_name}" | awk '{print $1}')"
             if [ "${actual_sha}" != "${expected_sha}" ]; then
               echo "SHA256 mismatch for ${tar_name}" >&2
@@ -176,6 +182,7 @@ jobs:
             }
             chmod 755 "${install_dir}/rcodesign"
             rm -rf "${tmpdir}"
+            export PATH="${install_dir}:${PATH}"
             echo "${install_dir}" >> "${GITHUB_PATH}"
             echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
             return 0
@@ -186,7 +193,7 @@ jobs:
             install_rcodesign "${FALLBACK_ARCH}"
           fi
 
-          which rcodesign
+          command -v rcodesign
           rcodesign --version
 
       - name: Probe rcodesign CLI
