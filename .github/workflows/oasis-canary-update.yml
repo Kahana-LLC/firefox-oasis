@@ -583,8 +583,7 @@ jobs:
           scripts/update-signing/verify-mar.sh \
             "${OBJDIR}" \
             "${{ steps.mar.outputs.signed_mar }}" \
-            toolkit/mozapps/update/updater/oasis_primary.der \
-            toolkit/mozapps/update/updater/oasis_secondary.der
+            toolkit/mozapps/update/updater/oasis_primary.der
           rm -f "${P12_PATH}"
           rm -rf "${NSS_DB_DIR}"
 
