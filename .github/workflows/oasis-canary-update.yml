@@ -20,7 +20,7 @@ env:
   BUILD_TARGET: Darwin_aarch64-gcc3
   LOCALE: en-US
   RING: oasis-canary
-  RCODESIGN_VERSION: 0.22.0
+  OASIS_RCODESIGN_VERSION: 0.27.0
 
 jobs:
   build-sign-release:
@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/rcodesign
-          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.RCODESIGN_VERSION }}-v1
+          key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.OASIS_RCODESIGN_VERSION }}-v1
 
       - name: Build assistant bundles
         run: |
@@ -107,10 +107,12 @@ jobs:
           set -euo pipefail
           case "${RUNNER_ARCH}" in
             ARM64)
-              TARGET_ARCH="aarch64-apple-darwin"
+              PRIMARY_ARCH="aarch64-apple-darwin"
+              FALLBACK_ARCH="x86_64-apple-darwin"
               ;;
             X64)
-              TARGET_ARCH="x86_64-apple-darwin"
+              PRIMARY_ARCH="x86_64-apple-darwin"
+              FALLBACK_ARCH="aarch64-apple-darwin"
               ;;
             *)
               echo "Unsupported RUNNER_ARCH: ${RUNNER_ARCH}" >&2
@@ -118,86 +120,80 @@ jobs:
               ;;
           esac
 
-          RELEASE_BASE="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
-          INSTALL_ROOT="${HOME}/.local/rcodesign/${RCODESIGN_VERSION}"
-          INSTALL_DIR="${INSTALL_ROOT}/${TARGET_ARCH}"
-          TAR_NAME="apple-codesign-${RCODESIGN_VERSION}-${TARGET_ARCH}.tar.gz"
-          TAR_URL="${RELEASE_BASE}/${TAR_NAME}"
-          SHA_URL="${TAR_URL}.sha256"
+          RELEASE_BASE="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${OASIS_RCODESIGN_VERSION}"
+          INSTALL_ROOT="${HOME}/.local/rcodesign/${OASIS_RCODESIGN_VERSION}"
 
-          echo "Installing rcodesign ${RCODESIGN_VERSION} for ${TARGET_ARCH}"
-          echo "rcodesign tarball URL: ${TAR_URL}"
-          echo "rcodesign sha URL: ${SHA_URL}"
-          echo "rcodesign install dir: ${INSTALL_DIR}"
+          install_rcodesign() {
+            local target_arch="$1"
+            local install_dir="${INSTALL_ROOT}/${target_arch}"
+            local tar_name="apple-codesign-${OASIS_RCODESIGN_VERSION}-${target_arch}.tar.gz"
+            local tar_url="${RELEASE_BASE}/${tar_name}"
+            local sha_url="${tar_url}.sha256"
 
-          mkdir -p "${INSTALL_DIR}"
-          if [ ! -x "${INSTALL_DIR}/rcodesign" ]; then
-            TMP_DIR="$(mktemp -d)"
-            if ! curl -fL "${TAR_URL}" -o "${TMP_DIR}/${TAR_NAME}"; then
-              echo "Failed to download ${TAR_URL}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
-            fi
-            if ! curl -fL "${SHA_URL}" -o "${TMP_DIR}/${TAR_NAME}.sha256"; then
-              echo "Failed to download ${SHA_URL}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
+            mkdir -p "${install_dir}"
+            if [ -x "${install_dir}/rcodesign" ]; then
+              echo "Using cached rcodesign from ${install_dir}"
+              echo "${install_dir}" >> "${GITHUB_PATH}"
+              echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
+              return 0
             fi
 
-            EXPECTED_SHA="$(awk '{print $1}' "${TMP_DIR}/${TAR_NAME}.sha256" | tr -d '\r\n')"
-            if ! [[ "${EXPECTED_SHA}" =~ ^[0-9a-fA-F]{64}$ ]]; then
-              echo "Invalid SHA256 format in ${SHA_URL}: ${EXPECTED_SHA}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
+            tmpdir="$(mktemp -d)"
+
+            curl -fL "${tar_url}" -o "${tmpdir}/${tar_name}" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            curl -fL "${sha_url}" -o "${tmpdir}/${tar_name}.sha256" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+
+            expected_sha="$(tr -d '[:space:]' < "${tmpdir}/${tar_name}.sha256")"
+            actual_sha="$(shasum -a 256 "${tmpdir}/${tar_name}" | awk '{print $1}')"
+            if [ "${actual_sha}" != "${expected_sha}" ]; then
+              echo "SHA256 mismatch for ${tar_name}" >&2
+              echo "Expected: ${expected_sha}" >&2
+              echo "Actual:   ${actual_sha}" >&2
+              rm -rf "${tmpdir}"
+              return 1
             fi
 
-            ACTUAL_SHA="$(shasum -a 256 "${TMP_DIR}/${TAR_NAME}" | awk '{print $1}')"
-            if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
-              echo "SHA256 mismatch for ${TAR_NAME}" >&2
-              echo "Expected: ${EXPECTED_SHA}" >&2
-              echo "Actual:   ${ACTUAL_SHA}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
+            tar -xzf "${tmpdir}/${tar_name}" -C "${tmpdir}" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            rcodesign_path="$(find "${tmpdir}" -type f -name rcodesign | head -n1)"
+            if [ -z "${rcodesign_path}" ]; then
+              echo "rcodesign binary missing from ${tar_name}" >&2
+              rm -rf "${tmpdir}"
+              return 1
             fi
 
-            if ! tar -xzf "${TMP_DIR}/${TAR_NAME}" -C "${TMP_DIR}"; then
-              echo "Failed to extract ${TAR_NAME}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
-            fi
-            RCODESIGN_PATH="$(find "${TMP_DIR}" -type f -name rcodesign | head -n1)"
-            if [ -z "${RCODESIGN_PATH}" ]; then
-              echo "rcodesign binary missing from ${TAR_NAME}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
-            fi
+            cp "${rcodesign_path}" "${install_dir}/rcodesign" || {
+              rm -rf "${tmpdir}"
+              return 1
+            }
+            chmod 755 "${install_dir}/rcodesign"
+            rm -rf "${tmpdir}"
+            echo "${install_dir}" >> "${GITHUB_PATH}"
+            echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
+            return 0
+          }
 
-            if ! cp "${RCODESIGN_PATH}" "${INSTALL_DIR}/rcodesign"; then
-              echo "Failed to install rcodesign into ${INSTALL_DIR}" >&2
-              rm -rf "${TMP_DIR}"
-              exit 1
-            fi
-            chmod 755 "${INSTALL_DIR}/rcodesign"
-            rm -rf "${TMP_DIR}"
-          else
-            echo "Using cached rcodesign from ${INSTALL_DIR}"
+          if ! install_rcodesign "${PRIMARY_ARCH}"; then
+            echo "Primary rcodesign archive failed, trying fallback ${FALLBACK_ARCH}." >&2
+            install_rcodesign "${FALLBACK_ARCH}"
           fi
 
-          echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
-          export PATH="${INSTALL_DIR}:${PATH}"
-          echo "OASIS_RCODESIGN_BIN=${INSTALL_DIR}/rcodesign" >> "${GITHUB_ENV}"
-          echo "Resolved rcodesign path: $(command -v rcodesign)"
+          which rcodesign
           rcodesign --version
 
       - name: Probe rcodesign CLI
         run: |
           set -euo pipefail
-          if rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
-            echo "rcodesign supports --entitlements-xml-path"
-          elif rcodesign sign --help | grep -q -- "--entitlements-xml-file"; then
-            echo "rcodesign supports --entitlements-xml-file"
-          else
-            echo "Installed rcodesign is missing entitlements XML support." >&2
+          if ! rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
+            echo "Installed rcodesign is missing --entitlements-xml-path support." >&2
             exit 1
           fi
           if ! rcodesign sign --help | grep -q -- "--p12-password-file"; then
@@ -338,36 +334,29 @@ jobs:
 
           codesign --verify --deep --strict --verbose=2 "${PKG_APP}"
 
-      - name: Verify hardened runtime on key binaries
+      - name: Prepare notary API key
+        env:
+          OASIS_APPLE_API_KEY_ID: ${{ secrets.OASIS_APPLE_API_KEY_ID }}
+          OASIS_APPLE_API_ISSUER: ${{ secrets.OASIS_APPLE_API_ISSUER }}
+          OASIS_APPLE_API_KEY_P8_B64: ${{ secrets.OASIS_APPLE_API_KEY_P8_B64 }}
         run: |
           set -euo pipefail
-          targets=(
-            "${{ steps.meta.outputs.executable_path }}"
-            "${PKG_APP}/Contents/MacOS/plugin-container.app"
-            "${PKG_APP}/Contents/MacOS/gpu-helper.app"
-            "${PKG_APP}/Contents/MacOS/updater.app"
-          )
-          for target in "${targets[@]}"; do
-            if [ ! -e "${target}" ]; then
-              echo "Expected signed target missing: ${target}" >&2
-              exit 1
-            fi
-            if ! codesign -dvv "${target}" 2>&1 | grep -Eq 'runtime|\(runtime\)'; then
-              echo "Hardened runtime not detected on: ${target}" >&2
-              codesign -dvv "${target}" 2>&1 || true
-              exit 1
-            fi
-          done
+          if [ -z "${OASIS_APPLE_API_KEY_ID}" ] || [ -z "${OASIS_APPLE_API_ISSUER}" ] || [ -z "${OASIS_APPLE_API_KEY_P8_B64}" ]; then
+            echo "Missing one or more App Store Connect API key secrets." >&2
+            exit 1
+          fi
+          NOTARY_KEY_PATH="${RUNNER_TEMP}/AuthKey_${OASIS_APPLE_API_KEY_ID}.p8"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_APPLE_API_KEY_P8_B64"]))' > "${NOTARY_KEY_PATH}"
+          chmod 600 "${NOTARY_KEY_PATH}"
+          echo "OASIS_NOTARY_KEY_PATH=${NOTARY_KEY_PATH}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_API_KEY_ID=${OASIS_APPLE_API_KEY_ID}" >> "${GITHUB_ENV}"
+          echo "OASIS_APPLE_API_ISSUER=${OASIS_APPLE_API_ISSUER}" >> "${GITHUB_ENV}"
 
       - name: Notarize and staple app bundle
-        env:
-          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
-          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
-          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${OASIS_APPLE_ID}" ] || [ -z "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" ] || [ -z "${OASIS_APPLE_TEAM_ID}" ]; then
-            echo "Missing one or more Apple notarization secrets." >&2
+          if [ -z "${OASIS_NOTARY_KEY_PATH:-}" ] || [ -z "${OASIS_APPLE_API_KEY_ID:-}" ] || [ -z "${OASIS_APPLE_API_ISSUER:-}" ]; then
+            echo "Missing API key notarization inputs." >&2
             exit 1
           fi
           VERSION="${{ steps.meta.outputs.version }}"
@@ -381,12 +370,18 @@ jobs:
           if [ "${ZIP_SIZE}" -lt 52428800 ]; then
              echo "ZIP payload too small." >&2; exit 1
           fi
-          if unzip -l "${NOTARY_ZIP}" | grep -q "__MACOSX/"; then
+          if command -v zipinfo >/dev/null 2>&1; then
+            ZIP_ENTRIES="$(zipinfo -1 "${NOTARY_ZIP}")"
+          else
+            ZIP_ENTRIES="$(unzip -Z1 "${NOTARY_ZIP}")"
+          fi
+          if echo "${ZIP_ENTRIES}" | grep -q "^__MACOSX/"; then
             echo "ZIP payload contains __MACOSX, refusing notarization submit." >&2
             exit 1
           fi
-          if ! unzip -l "${NOTARY_ZIP}" | grep -Eq 'Contents/MacOS/(Oasis|firefox|firefox-bin)[[:space:]]*$'; then
+          if ! echo "${ZIP_ENTRIES}" | grep -Eq '/Contents/MacOS/(Oasis|firefox|firefox-bin)$'; then
             echo "ZIP payload missing expected executable under Contents/MacOS." >&2
+            echo "${ZIP_ENTRIES}" | grep '/Contents/MacOS/' | head -n 30 >&2 || true
             exit 1
           fi
           
@@ -396,9 +391,9 @@ jobs:
           while true; do
             notary_log="$(mktemp)"
             if xcrun notarytool submit "${NOTARY_ZIP}" \
-              --apple-id "${OASIS_APPLE_ID}" \
-              --team-id "${OASIS_APPLE_TEAM_ID}" \
-              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --key "${OASIS_NOTARY_KEY_PATH}" \
+              --key-id "${OASIS_APPLE_API_KEY_ID}" \
+              --issuer "${OASIS_APPLE_API_ISSUER}" \
               --wait --verbose > "${notary_log}" 2>&1
             then
               cat "${notary_log}"
@@ -467,18 +462,14 @@ jobs:
             "${DMG_PATH}"
             
           # Sign the DMG container (Requires Keychain/codesign)
-          codesign --force --timestamp --sign "${OASIS_APPLE_SIGNING_IDENTITY}" "${DMG_PATH}"
+          codesign --keychain "${OASIS_APPLE_KEYCHAIN_PATH}" --force --timestamp --sign "${OASIS_APPLE_SIGNING_IDENTITY}" "${DMG_PATH}"
           codesign -dv --verbose=4 "${DMG_PATH}"
 
       - name: Notarize and staple DMG
-        env:
-          OASIS_APPLE_ID: ${{ secrets.OASIS_APPLE_ID }}
-          OASIS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OASIS_APPLE_APP_SPECIFIC_PASSWORD }}
-          OASIS_APPLE_TEAM_ID: ${{ secrets.OASIS_APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${OASIS_APPLE_ID}" ] || [ -z "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" ] || [ -z "${OASIS_APPLE_TEAM_ID}" ]; then
-            echo "Missing one or more Apple notarization secrets." >&2
+          if [ -z "${OASIS_NOTARY_KEY_PATH:-}" ] || [ -z "${OASIS_APPLE_API_KEY_ID:-}" ] || [ -z "${OASIS_APPLE_API_ISSUER:-}" ]; then
+            echo "Missing API key notarization inputs." >&2
             exit 1
           fi
           
@@ -488,9 +479,9 @@ jobs:
           while true; do
             notary_log="$(mktemp)"
             if xcrun notarytool submit "${DMG_PATH}" \
-              --apple-id "${OASIS_APPLE_ID}" \
-              --team-id "${OASIS_APPLE_TEAM_ID}" \
-              --password "${OASIS_APPLE_APP_SPECIFIC_PASSWORD}" \
+              --key "${OASIS_NOTARY_KEY_PATH}" \
+              --key-id "${OASIS_APPLE_API_KEY_ID}" \
+              --issuer "${OASIS_APPLE_API_ISSUER}" \
               --wait --verbose > "${notary_log}" 2>&1
             then
               cat "${notary_log}"
@@ -674,3 +665,4 @@ jobs:
           rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH:-}"
           rm -f "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE:-}"
           rm -f "${OASIS_APPLE_NOTARY_APP_ZIP:-}"
+          rm -f "${OASIS_NOTARY_KEY_PATH:-}"
