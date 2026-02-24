@@ -1,9 +1,6 @@
-name: Oasis Release Publish
+name: Oasis Release Canary
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -133,6 +130,7 @@ jobs:
             mkdir -p "${install_dir}"
             if [ -x "${install_dir}/rcodesign" ]; then
               echo "Using cached rcodesign from ${install_dir}"
+              export PATH="${install_dir}:${PATH}"
               echo "${install_dir}" >> "${GITHUB_PATH}"
               echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
               return 0
@@ -149,7 +147,12 @@ jobs:
               return 1
             }
 
-            expected_sha="$(tr -d '[:space:]' < "${tmpdir}/${tar_name}.sha256")"
+            expected_sha="$(awk '{print $1}' "${tmpdir}/${tar_name}.sha256" | tr -d '\r\n')"
+            if ! [[ "${expected_sha}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "Invalid SHA256 content in ${tar_name}.sha256: ${expected_sha}" >&2
+              rm -rf "${tmpdir}"
+              return 1
+            fi
             actual_sha="$(shasum -a 256 "${tmpdir}/${tar_name}" | awk '{print $1}')"
             if [ "${actual_sha}" != "${expected_sha}" ]; then
               echo "SHA256 mismatch for ${tar_name}" >&2
@@ -176,6 +179,7 @@ jobs:
             }
             chmod 755 "${install_dir}/rcodesign"
             rm -rf "${tmpdir}"
+            export PATH="${install_dir}:${PATH}"
             echo "${install_dir}" >> "${GITHUB_PATH}"
             echo "OASIS_RCODESIGN_BIN=${install_dir}/rcodesign" >> "${GITHUB_ENV}"
             return 0
@@ -186,14 +190,14 @@ jobs:
             install_rcodesign "${FALLBACK_ARCH}"
           fi
 
-          which rcodesign
+          command -v rcodesign
           rcodesign --version
 
       - name: Probe rcodesign CLI
         run: |
           set -euo pipefail
-          if ! rcodesign sign --help | grep -q -- "--entitlements-xml-path"; then
-            echo "Installed rcodesign is missing --entitlements-xml-path support." >&2
+          if ! rcodesign sign --help | grep -Eq -- "--entitlements-xml-(path|file)"; then
+            echo "Installed rcodesign is missing entitlements XML flag support." >&2
             exit 1
           fi
           if ! rcodesign sign --help | grep -q -- "--p12-password-file"; then
@@ -385,8 +389,9 @@ jobs:
             exit 1
           fi
           
-          max_attempts=8
-          backoffs=(30 60 120 180 240 300 300)
+          max_attempts=12
+          backoffs=(30 60 120 180 240 300 300 300 300 300 300)
+          RETRYABLE_NOTARY_RE='statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR|HTTP status code: 408|HTTP status code: 429|NSURLErrorDomain Code=-(1001|1003|1004|1005|1006|1009)|The Internet connection appears to be offline|No network route|timed out|network connection was lost|cannot find host|could not resolve host'
           attempt=1
           while true; do
             notary_log="$(mktemp)"
@@ -401,7 +406,7 @@ jobs:
               break
             fi
             cat "${notary_log}" >&2
-            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+            if ! grep -Eiq "${RETRYABLE_NOTARY_RE}" "${notary_log}"; then
               echo "Non-retryable notarization failure." >&2
               rm -f "${notary_log}"
               exit 1
@@ -412,7 +417,7 @@ jobs:
               exit 1
             fi
             sleep_seconds="${backoffs[$((attempt - 1))]}"
-            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            echo "Notarization attempt ${attempt} failed with transient notarization/network error. Retrying in ${sleep_seconds}s..." >&2
             rm -f "${notary_log}"
             sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
@@ -473,8 +478,9 @@ jobs:
             exit 1
           fi
           
-          max_attempts=8
-          backoffs=(30 60 120 180 240 300 300)
+          max_attempts=12
+          backoffs=(30 60 120 180 240 300 300 300 300 300 300)
+          RETRYABLE_NOTARY_RE='statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR|HTTP status code: 408|HTTP status code: 429|NSURLErrorDomain Code=-(1001|1003|1004|1005|1006|1009)|The Internet connection appears to be offline|No network route|timed out|network connection was lost|cannot find host|could not resolve host'
           attempt=1
           while true; do
             notary_log="$(mktemp)"
@@ -489,7 +495,7 @@ jobs:
               break
             fi
             cat "${notary_log}" >&2
-            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+            if ! grep -Eiq "${RETRYABLE_NOTARY_RE}" "${notary_log}"; then
               echo "Non-retryable notarization failure." >&2
               rm -f "${notary_log}"
               exit 1
@@ -500,7 +506,7 @@ jobs:
               exit 1
             fi
             sleep_seconds="${backoffs[$((attempt - 1))]}"
-            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            echo "Notarization attempt ${attempt} failed with transient notarization/network error. Retrying in ${sleep_seconds}s..." >&2
             rm -f "${notary_log}"
             sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
@@ -576,26 +582,19 @@ jobs:
           scripts/update-signing/verify-mar.sh \
             "${OBJDIR}" \
             "${{ steps.mar.outputs.signed_mar }}" \
-            toolkit/mozapps/update/updater/oasis_primary.der \
-            toolkit/mozapps/update/updater/oasis_secondary.der
+            toolkit/mozapps/update/updater/oasis_primary.der
           rm -f "${P12_PATH}"
           rm -rf "${NSS_DB_DIR}"
 
-      - name: Prepare release metadata
+      - name: Prepare canary release metadata
         id: release_meta
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.meta.outputs.version }}"
           SAFE_TARGET="$(echo "${BUILD_TARGET}" | tr '/ ' '__')"
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="canary"
           ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.signed.complete.mar"
           DMG_ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.mac.dmg"
-          if gh release view "${TAG}" > /dev/null 2>&1; then
-            echo "Release ${TAG} already exists. Publish a new version instead of mutating an existing release." >&2
-            exit 1
-          fi
           MAR_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET_NAME}"
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${DMG_ASSET_NAME}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
@@ -604,7 +603,22 @@ jobs:
           echo "mar_url=${MAR_URL}" >> "${GITHUB_OUTPUT}"
           echo "dmg_url=${DMG_URL}" >> "${GITHUB_OUTPUT}"
 
-      - name: Create GitHub Release
+      - name: Ensure canary release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release_meta.outputs.tag }}"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            gh release edit "${TAG}" --title "Canary Builds" --prerelease
+          else
+            gh release create "${TAG}" \
+              --title "Canary Builds" \
+              --notes "Rolling canary artifacts. Assets are appended by automation." \
+              --prerelease
+          fi
+
+      - name: Upload assets to canary release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -614,13 +628,10 @@ jobs:
           DMG_ASSET_NAME="${{ steps.release_meta.outputs.dmg_asset_name }}"
           SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
           PACKAGED_DMG="${DMG_PATH}"
-          COMMIT_SHA="$(git rev-parse HEAD)"
-          gh release create "${TAG}" \
+          gh release upload "${TAG}" \
             "${SIGNED_MAR}#${ASSET_NAME}" \
             "${PACKAGED_DMG}#${DMG_ASSET_NAME}" \
-            --target "${COMMIT_SHA}" \
-            --title "${TAG}" \
-            --notes "Oasis release ${TAG}"
+            --clobber
 
       - name: Register artifact and move ring pointer
         env:
@@ -642,7 +653,7 @@ jobs:
             --mar-path "${{ steps.mar.outputs.signed_mar }}" \
             --ring "${RING}" \
             --actor github-actions \
-            --reason "canary release publish (run ${GITHUB_RUN_ID}, tag ${{ steps.version.outputs.tag }}, sha ${GITHUB_SHA})"
+            --reason "canary bucket publish (run ${GITHUB_RUN_ID}, source tag ${{ steps.version.outputs.tag }}, sha ${GITHUB_SHA})"
 
       - name: Print release asset URLs
         run: |

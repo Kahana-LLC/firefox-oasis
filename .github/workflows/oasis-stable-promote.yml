@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify GitHub release asset exists
+      - name: Verify canary release asset exists
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,13 +60,13 @@ jobs:
           BUILD_TARGET="${{ inputs.build_target }}"
           LOCALE="${{ inputs.locale }}"
           SAFE_TARGET="$(echo "${BUILD_TARGET}" | tr '/ ' '__')"
-          TAG="v${VERSION}"
+          TAG="canary"
           ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.signed.complete.mar"
           RELEASE_JSON="$(mktemp)"
           gh release view "${TAG}" --json tagName,assets > "${RELEASE_JSON}"
           if ! python3 -c 'import json, sys; payload = json.load(open(sys.argv[1], "r", encoding="utf-8")); asset_name = sys.argv[2]; sys.exit(0 if any(a.get("name") == asset_name for a in payload.get("assets", [])) else 1)' "${RELEASE_JSON}" "${ASSET_NAME}"
           then
-            echo "Expected asset ${ASSET_NAME} was not found under release ${TAG}." >&2
+            echo "Expected canary bucket asset ${ASSET_NAME} was not found under release ${TAG}." >&2
             exit 1
           fi
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
@@ -116,4 +116,4 @@ jobs:
             --version "${{ inputs.target_version }}" \
             --ring oasis-stable \
             --actor "${{ inputs.actor }}" \
-            --reason "${{ inputs.reason }} (run ${GITHUB_RUN_ID}, source ${{ steps.release.outputs.tag }})"
+            --reason "${{ inputs.reason }} (run ${GITHUB_RUN_ID}, source canary bucket)"
