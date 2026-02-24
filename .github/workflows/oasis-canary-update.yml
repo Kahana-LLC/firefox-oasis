@@ -622,11 +622,9 @@ jobs:
           DMG_ASSET_NAME="${{ steps.release_meta.outputs.dmg_asset_name }}"
           SIGNED_MAR="${{ steps.mar.outputs.signed_mar }}"
           PACKAGED_DMG="${DMG_PATH}"
-          COMMIT_SHA="$(git rev-parse HEAD)"
           gh release create "${TAG}" \
             "${SIGNED_MAR}#${ASSET_NAME}" \
             "${PACKAGED_DMG}#${DMG_ASSET_NAME}" \
-            --target "${COMMIT_SHA}" \
             --title "${TAG}" \
             --notes "Oasis release ${TAG}"
 
