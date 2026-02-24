@@ -392,8 +392,9 @@ jobs:
             exit 1
           fi
           
-          max_attempts=8
-          backoffs=(30 60 120 180 240 300 300)
+          max_attempts=12
+          backoffs=(30 60 120 180 240 300 300 300 300 300 300)
+          RETRYABLE_NOTARY_RE='statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR|HTTP status code: 408|HTTP status code: 429|NSURLErrorDomain Code=-(1001|1003|1004|1005|1006|1009)|The Internet connection appears to be offline|No network route|timed out|network connection was lost|cannot find host|could not resolve host'
           attempt=1
           while true; do
             notary_log="$(mktemp)"
@@ -408,7 +409,7 @@ jobs:
               break
             fi
             cat "${notary_log}" >&2
-            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+            if ! grep -Eiq "${RETRYABLE_NOTARY_RE}" "${notary_log}"; then
               echo "Non-retryable notarization failure." >&2
               rm -f "${notary_log}"
               exit 1
@@ -419,7 +420,7 @@ jobs:
               exit 1
             fi
             sleep_seconds="${backoffs[$((attempt - 1))]}"
-            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            echo "Notarization attempt ${attempt} failed with transient notarization/network error. Retrying in ${sleep_seconds}s..." >&2
             rm -f "${notary_log}"
             sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
@@ -480,8 +481,9 @@ jobs:
             exit 1
           fi
           
-          max_attempts=8
-          backoffs=(30 60 120 180 240 300 300)
+          max_attempts=12
+          backoffs=(30 60 120 180 240 300 300 300 300 300 300)
+          RETRYABLE_NOTARY_RE='statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR|HTTP status code: 408|HTTP status code: 429|NSURLErrorDomain Code=-(1001|1003|1004|1005|1006|1009)|The Internet connection appears to be offline|No network route|timed out|network connection was lost|cannot find host|could not resolve host'
           attempt=1
           while true; do
             notary_log="$(mktemp)"
@@ -496,7 +498,7 @@ jobs:
               break
             fi
             cat "${notary_log}" >&2
-            if ! grep -Eq 'statusCode: 50[0-4]|HTTP status code: 50[0-4]|UNEXPECTED_ERROR' "${notary_log}"; then
+            if ! grep -Eiq "${RETRYABLE_NOTARY_RE}" "${notary_log}"; then
               echo "Non-retryable notarization failure." >&2
               rm -f "${notary_log}"
               exit 1
@@ -507,7 +509,7 @@ jobs:
               exit 1
             fi
             sleep_seconds="${backoffs[$((attempt - 1))]}"
-            echo "Notarization attempt ${attempt} failed with transient Apple 5xx. Retrying in ${sleep_seconds}s..." >&2
+            echo "Notarization attempt ${attempt} failed with transient notarization/network error. Retrying in ${sleep_seconds}s..." >&2
             rm -f "${notary_log}"
             sleep "${sleep_seconds}"
             attempt=$((attempt + 1))
