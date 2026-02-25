@@ -677,11 +677,9 @@ def sign_with_rcodesign(
                     # This is the root of the app. Use these signing options
                     # without argument scoping.
                     if group_runtime:
-                        cs_cmd.append("--code-signature-flags")
-                        cs_cmd.append("runtime")
+                        cs_cmd.extend(["--code-signature-flags", "runtime"])
                     if entitlement_file is not None:
-                        cs_cmd.append(entitlements_arg_name)
-                        cs_cmd.append(entitlement_file)
+                        cs_cmd.extend([entitlements_arg_name, entitlement_file])
                     cs_cmd.append(binary_path)
                     continue
 
@@ -690,13 +688,11 @@ def sign_with_rcodesign(
                 # arguments.
                 binary_path_relative = os.path.relpath(binary_path, app)
                 if group_runtime:
-                    cs_cmd.append("--code-signature-flags")
                     scoped_arg = binary_path_relative + ":runtime"
-                    cs_cmd.append(scoped_arg)
+                    cs_cmd.extend(["--code-signature-flags", scoped_arg])
                 if entitlement_file is not None:
-                    cs_cmd.append(entitlements_arg_name)
                     scoped_arg = binary_path_relative + ":" + entitlement_file
-                    cs_cmd.append(scoped_arg)
+                    cs_cmd.extend([entitlements_arg_name, scoped_arg])
 
     run(ctx, cs_cmd, capture_output=not verbose_arg)
 
