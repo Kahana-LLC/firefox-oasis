@@ -624,7 +624,6 @@ def sign_with_rcodesign(
         cs_cmd.append(p12_password_file_arg)
 
     temp_files_to_cleanup = []
-    runtime_set_globally = False
 
     for signing_group in signing_groups:
         # Ignore the 'deep' and 'force' setting for rcodesign
@@ -677,10 +676,9 @@ def sign_with_rcodesign(
                 if pathglob == "/":
                     # This is the root of the app. Use these signing options
                     # without argument scoping.
-                    if group_runtime and not runtime_set_globally:
+                    if group_runtime:
                         cs_cmd.append("--code-signature-flags")
                         cs_cmd.append("runtime")
-                        runtime_set_globally = True
                     if entitlement_file is not None:
                         cs_cmd.append(entitlements_arg_name)
                         cs_cmd.append(entitlement_file)
@@ -692,10 +690,9 @@ def sign_with_rcodesign(
                 # arguments.
                 binary_path_relative = os.path.relpath(binary_path, app)
                 if group_runtime:
-                    if not runtime_set_globally:
-                        cs_cmd.append("--code-signature-flags")
-                        cs_cmd.append("runtime")
-                        runtime_set_globally = True
+                    cs_cmd.append("--code-signature-flags")
+                    scoped_arg = binary_path_relative + ":runtime"
+                    cs_cmd.append(scoped_arg)
                 if entitlement_file is not None:
                     cs_cmd.append(entitlements_arg_name)
                     scoped_arg = binary_path_relative + ":" + entitlement_file
