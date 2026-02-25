@@ -11,7 +11,8 @@ const LIST_OBJECT_RE =
   /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
 const SEARCH_FAMILY_RE =
   /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\b/i;
-const MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove)\b/i;
+const MUTATION_FAMILY_RE =
+  /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
 
 const GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
 const FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;

@@ -21,7 +21,6 @@ export interface ToolAction {
   id: string;
   name: string;
   status: ToolActionStatus;
-  output?: string;
   messageId?: string;
   label?: string;
 }
@@ -52,7 +51,13 @@ export interface SupabaseAuthLike {
   signOut(): Promise<void>;
   signUp(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
   signInWithEmail(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
-  onAuthStateChange?(cb: (state: SupabaseAuthState) => void): void;
+  onAuthStateChange?(
+    cb: (state: SupabaseAuthState) => void
+  ):
+    | void
+    | (() => void)
+    | { unsubscribe?: () => void }
+    | { data?: { subscription?: { unsubscribe?: () => void } } };
   currentSession?: { session_id?: string };
   supabase?: {
     auth: {
@@ -79,7 +84,7 @@ type DOMPurifyLike = {
   sanitize(input: string): string;
 };
 
-export interface OasisWindow extends Window {
+export type OasisWindow = Window & {
   oasisAuthState?: AuthState;
   supabaseAuth?: SupabaseAuthLike;
   assistantBridge?: AssistantBridgeLike;
@@ -99,8 +104,4 @@ export interface OasisWindow extends Window {
   mpTrack?: (event: string, props?: Record<string, unknown>) => void;
   marked?: MarkedLike;
   DOMPurify?: DOMPurifyLike;
-}
-
-declare global {
-  interface Window extends OasisWindow {}
-}
+};

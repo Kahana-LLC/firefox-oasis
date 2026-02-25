@@ -24,6 +24,18 @@ function cleanTargetName(value: string): string {
     .trim();
 }
 
+function isListBookmarkFoldersCommand(input: string): boolean {
+  return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?(?:bookmarks?|folders?|hubs?)\s*$/i.test(
+    String(input || "").trim()
+  );
+}
+
+function isListTabGroupsCommand(input: string): boolean {
+  return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:tab\s+)?groups?\s*$/i.test(
+    String(input || "").trim()
+  );
+}
+
 function parseListTabsTarget(
   input: string
 ): { targetName?: string; explicitContainer?: "tab-group" | "bookmark-folder" } | null {
@@ -120,6 +132,27 @@ export function resolveManifestListRoute(
   });
   if (!candidate || candidate.definition.family !== "list") {
     return null;
+  }
+
+  if (
+    candidate.definition.id === "list.bookmark.folders" ||
+    isListBookmarkFoldersCommand(input)
+  ) {
+    return {
+      type: "tool",
+      next: "list_bookmark_folders",
+      args: {},
+      reason: "list-manifest-bookmark-folders",
+    };
+  }
+
+  if (candidate.definition.id === "list.tab.groups" || isListTabGroupsCommand(input)) {
+    return {
+      type: "tool",
+      next: "list_tab_groups",
+      args: {},
+      reason: "list-manifest-tab-groups",
+    };
   }
 
   const parsed = parseListTabsTarget(input);

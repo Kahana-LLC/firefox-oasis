@@ -48574,7 +48574,7 @@ Content: ${content}`;
   var SHOW_VERB_RE = /^show\b/i;
   var LIST_OBJECT_RE = /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
   var SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\b/i;
-  var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove)\b/i;
+  var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
   var GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
   var FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
   var GENERIC_FOLDER_NAME_RE = /^(?:bookmark(?:\s+folders?)?|folders?|hubs?)$/i;
@@ -48829,9 +48829,6 @@ Content: ${content}`;
   function toolDecision(next, reason, args) {
     return { type: "tool", next, args, reason };
   }
-  function extractIndices(input) {
-    return (input.match(/\d+/g) || []).map((v2) => Number(v2)).filter((v2) => Number.isFinite(v2) && v2 > 0);
-  }
   function firstUrlLike(input) {
     const urlMatch = input.match(/\b(https?:\/\/[^\s]+)\b/i);
     if (urlMatch?.[1]) {
@@ -48851,13 +48848,6 @@ Content: ${content}`;
       }
     }
     return null;
-  }
-  function numberArg(value) {
-    if (!value) {
-      return void 0;
-    }
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : void 0;
   }
   var EXPLICIT_ROUTE_RULES = [
     {
@@ -48883,17 +48873,6 @@ Content: ${content}`;
       resolve: (input) => /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input) ? {} : null
     },
     {
-      next: "open_search_result",
-      reason: "explicit-open-search-result",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:open|go\s+to)\s+(?:the\s+)?(?:search\s+)?result(?:\s+url)?\s+(?<url>https?:\/\/[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/i
-        );
-        const url = match?.groups?.url?.trim();
-        return url ? { url } : null;
-      }
-    },
-    {
       next: "show_url",
       reason: "explicit-show-url",
       resolve: (input) => {
@@ -48902,214 +48881,6 @@ Content: ${content}`;
         );
         const url = match?.groups?.url?.trim();
         return url ? { url } : null;
-      }
-    },
-    {
-      next: "move_tab_to_new_window",
-      reason: "explicit-move-tab-new-window",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:move)\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?\s+to\s+(?:a\s+)?new\s+window/i
-        );
-        if (!match) {
-          return null;
-        }
-        const index2 = numberArg(match.groups?.index);
-        return index2 != null ? { index: index2 } : {};
-      }
-    },
-    {
-      next: "close_tab",
-      reason: "explicit-close-tab",
-      resolve: (input) => {
-        const match = input.match(
-          /close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?/i
-        );
-        if (!match) {
-          return null;
-        }
-        const index2 = numberArg(match.groups?.index);
-        return index2 != null ? { index: index2 } : {};
-      }
-    },
-    {
-      next: "remove_tab_from_group",
-      reason: "explicit-remove-tab-from-group",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:remove|ungroup)\s+(?:the\s+)?(?:this\s+|current\s+|active\s+)?tab(?:\s+(?<index>\d+))?\s+from\s+(?:its\s+)?(?:tab\s+)?group/i
-        );
-        if (!match) {
-          return null;
-        }
-        const index2 = numberArg(match.groups?.index);
-        return index2 != null ? { index: index2 } : {};
-      }
-    },
-    {
-      next: "remove_tab_from_bookmark_folder",
-      reason: "explicit-remove-tab-from-folder",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:remove|delete)\s+(?:this\s+)?(?:tab\s+)?from\s+(?:my\s+)?(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<name>[\w\s]+?)"?\s*$/i
-        );
-        const name = match?.groups?.name?.trim();
-        return name ? { name } : null;
-      }
-    },
-    {
-      next: "split_tabs",
-      reason: "explicit-split-tabs",
-      resolve: (input) => {
-        const match = input.match(/split\s+tabs?\s+(?<indices>[\d,\sand]+)/i);
-        const indicesRaw = match?.groups?.indices;
-        if (!indicesRaw) {
-          return null;
-        }
-        const indices = extractIndices(indicesRaw);
-        return indices.length >= 2 ? { indices } : null;
-      }
-    },
-    {
-      next: "add_split_view",
-      reason: "explicit-add-split-view-two-tabs",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:split|splitview|add)\s+(?:tabs?\s+)?(?<a>\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(?<b>\d+)/i
-        ) || input.match(
-          /(?:add\s+)?tabs?\s+(?<a>\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(?<b>\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i
-        );
-        const a = numberArg(match?.groups?.a);
-        const b2 = numberArg(match?.groups?.b);
-        return a != null && b2 != null ? { indices: [a, b2] } : null;
-      }
-    },
-    {
-      next: "remove_split_view",
-      reason: "explicit-remove-split-view",
-      resolve: (input) => /(?:remove|disable|close)\s+split\s*view|unsplit\s+(?:tabs?|view)?/i.test(
-        input
-      ) ? {} : null
-    },
-    {
-      next: "add_split_view",
-      reason: "explicit-add-split-view",
-      resolve: (input) => {
-        if (!/(?:add|create|enable)\s+split\s*view|split\s+(?:this\s+)?(?:tab|view)/i.test(
-          input
-        )) {
-          return null;
-        }
-        const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
-        const withIndex = numberArg(withTabMatch?.groups?.index);
-        if (withIndex != null) {
-          return { withIndex };
-        }
-        const withQueryMatch = input.match(
-          /(?:with|and)\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*(?:tab)?$/i
-        );
-        const withQuery = withQueryMatch?.groups?.query?.trim();
-        return withQuery ? { withQuery } : {};
-      }
-    },
-    {
-      next: "summarize_page",
-      reason: "explicit-summarize-current-tab",
-      resolve: (input) => /summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i.test(input) ? {} : null
-    },
-    {
-      next: "summarize_page",
-      reason: "explicit-summarize-tab-index",
-      resolve: (input) => {
-        const match = input.match(/summarize\s+(?:the\s+)?tab\s+(?<index>\d+)/i) || input.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
-        if (!match) {
-          return null;
-        }
-        const index2 = numberArg(match.groups?.index) ?? 1;
-        return { index: index2 };
-      }
-    },
-    {
-      next: "summarize_page",
-      reason: "explicit-summarize-tab-query",
-      resolve: (input) => {
-        const match = input.match(
-          /summarize\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*tab/i
-        );
-        const query = match?.groups?.query?.trim();
-        if (!query || /^(?:current|this|active)$/i.test(query)) {
-          return null;
-        }
-        return { query };
-      }
-    },
-    {
-      next: "summarize_page",
-      reason: "explicit-summarize-page",
-      resolve: (input) => /summarize\s+(?:this\s+)?(?:page|article|website|site)?|(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)|give\s+(?:me\s+)?(?:a\s+)?summary/i.test(
-        input
-      ) ? {} : null
-    },
-    {
-      next: "create_bookmark_folder",
-      reason: "explicit-create-folder-with-current",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s+and\s+(?:add|save|include|put)\s+(?:the\s+)?(?:current|this|active)\s+tab/i
-        );
-        const name = match?.groups?.name?.trim();
-        return name ? { name, include: "current" } : null;
-      }
-    },
-    {
-      next: "create_bookmark_folder",
-      reason: "explicit-create-folder-with-all",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s+and\s+(?:add|save|include|put)\s+(?:all)\s+tabs/i
-        );
-        const name = match?.groups?.name?.trim();
-        return name ? { name, include: "all" } : null;
-      }
-    },
-    {
-      next: "create_bookmark_folder",
-      reason: "explicit-create-folder",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s*$/i
-        );
-        const name = match?.groups?.name?.trim();
-        return name ? { name } : null;
-      }
-    },
-    {
-      next: "delete_bookmark_folder",
-      reason: "explicit-delete-folder",
-      resolve: (input) => {
-        const match = firstMatch(input, [
-          /(?:delete|remove)\s+(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<name>[\w\s]+?)"?\s*$/i,
-          /(?:delete|remove)\s+(?:the\s+)?"?(?<name>[\w\s]+?)"?\s+(?:bookmark\s+)?folder/i
-        ]);
-        const name = match?.groups?.name?.trim();
-        return name ? { name } : null;
-      }
-    },
-    {
-      next: "list_bookmark_folders",
-      reason: "explicit-list-folders",
-      resolve: (input) => /list\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?folders/i.test(input) ? {} : null
-    },
-    {
-      next: "rename_bookmark_folder",
-      reason: "explicit-rename-folder",
-      resolve: (input) => {
-        const match = input.match(
-          /rename\s+(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<from>[\w\s]+?)"?\s+(?:to|as)\s+"?(?<to>[\w\s]+?)"?\s*$/i
-        );
-        const from = match?.groups?.from?.trim();
-        const to = match?.groups?.to?.trim();
-        return from && to ? { from, to } : null;
       }
     },
     {
@@ -49149,77 +48920,8 @@ Content: ${content}`;
       }
     },
     {
-      next: "delete_tab_group",
-      reason: "explicit-delete-group",
-      resolve: (input) => {
-        const match = firstMatch(input, [
-          /(?:delete|remove)\s+(?:tab\s+)?group\s+"?(?<name>[^"\n]+?)"?\s*$/i,
-          /(?:delete|remove)\s+(?:the\s+)?"?(?<name>[^"\n]+?)"?\s+(?:tab\s+)?group/i
-        ]);
-        const name = match?.groups?.name?.trim();
-        return name ? { name } : null;
-      }
-    },
-    {
-      next: "create_tab_group",
-      reason: "explicit-create-group",
-      resolve: (input) => {
-        const match = input.match(
-          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?"?(?<name>.+)$/i
-        );
-        if (!match?.groups?.name) {
-          return null;
-        }
-        let name = match.groups.name.trim();
-        let openUrl;
-        const openInIt = name.match(
-          /\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i
-        );
-        if (openInIt?.[1]) {
-          openUrl = openInIt[1].trim();
-          name = name.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
-        }
-        name = name.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
-        name = name.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").replace(/["']/g, "").trim();
-        if (!name) {
-          return null;
-        }
-        const args = { name };
-        if (openUrl) {
-          args.openUrl = openUrl;
-        }
-        const indicesMatch = input.match(
-          /(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i
-        );
-        if (indicesMatch?.[1]) {
-          const indices = extractIndices(indicesMatch[1]);
-          if (indices.length > 0) {
-            args.indices = indices;
-          }
-        }
-        return args;
-      }
-    },
-    {
-      next: "list_tab_groups",
-      reason: "explicit-list-groups",
-      resolve: (input) => /list\s+(?:all\s+)?(?:tab\s+)?groups?/i.test(input) ? {} : null
-    },
-    {
-      next: "rename_tab_group",
-      reason: "explicit-rename-group",
-      resolve: (input) => {
-        const match = input.match(
-          /rename\s+(?:tab\s+)?group\s+"?(?<from>[\w\s]+?)"?\s+(?:to|as)\s+"?(?<to>[\w\s]+?)"?\s*$/i
-        );
-        const from = match?.groups?.from?.trim();
-        const to = match?.groups?.to?.trim();
-        return from && to ? { from, to } : null;
-      }
-    },
-    {
-      next: "open_tab",
-      reason: "explicit-open-tab",
+      next: "open_url",
+      reason: "explicit-open-url",
       resolve: (input) => {
         const match = input.match(
           /open\s+(?:a\s+)?(?:new\s+)?tab\s+(?:to\s+|with\s+)?"?(?<url>[^\s"']+)"?/i
@@ -49229,7 +48931,7 @@ Content: ${content}`;
       }
     },
     {
-      next: "open_tab",
+      next: "open_url",
       reason: "open-url-like",
       resolve: (input, lower) => {
         if (!/^open\s+/i.test(lower)) {
@@ -49237,6 +48939,23 @@ Content: ${content}`;
         }
         const url = firstUrlLike(input);
         return url ? { url } : null;
+      }
+    },
+    {
+      next: "web_search",
+      reason: "open-query-as-search",
+      resolve: (input) => {
+        const match = input.match(
+          /^open\s+(?:a\s+)?(?:new\s+)?tab\s+(?:for\s+|with\s+)?(?<query>.+)$/i
+        );
+        const query = match?.groups?.query?.trim();
+        if (!query) {
+          return null;
+        }
+        if (firstUrlLike(query)) {
+          return null;
+        }
+        return { query };
       }
     }
   ];
@@ -49253,6 +48972,38 @@ Content: ${content}`;
 
   // src/utils/commandManifest.ts
   var COMMAND_MANIFEST = [
+    {
+      id: "list.bookmark.folders",
+      family: "list",
+      commandName: "list_bookmark_folders",
+      phrases: [
+        "list bookmark folders",
+        "list my bookmark folders",
+        "list my bookmarks",
+        "list bookmarks",
+        "show bookmark folders",
+        "show my bookmark folders",
+        "show bookmarks",
+        "show my bookmarks",
+        "list folders",
+        "show folders",
+        "list hubs",
+        "show hubs"
+      ]
+    },
+    {
+      id: "list.tab.groups",
+      family: "list",
+      commandName: "list_tab_groups",
+      phrases: [
+        "list tab groups",
+        "show tab groups",
+        "list groups",
+        "show groups",
+        "list my tab groups",
+        "show my tab groups"
+      ]
+    },
     {
       id: "list.window.tabs",
       family: "list",
@@ -49380,6 +49131,16 @@ Content: ${content}`;
   function cleanTargetName(value) {
     return String(value || "").replace(/["']/g, "").replace(/^\s*(?:my|the)\s+/i, "").replace(/\s+(?:please|now)\s*$/i, "").trim();
   }
+  function isListBookmarkFoldersCommand(input) {
+    return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?(?:bookmarks?|folders?|hubs?)\s*$/i.test(
+      String(input || "").trim()
+    );
+  }
+  function isListTabGroupsCommand(input) {
+    return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:tab\s+)?groups?\s*$/i.test(
+      String(input || "").trim()
+    );
+  }
   function parseListTabsTarget(input) {
     const command = String(input || "").trim();
     if (!/^(?:list|show)\b/i.test(command)) {
@@ -49452,6 +49213,22 @@ Content: ${content}`;
     });
     if (!candidate || candidate.definition.family !== "list") {
       return null;
+    }
+    if (candidate.definition.id === "list.bookmark.folders" || isListBookmarkFoldersCommand(input)) {
+      return {
+        type: "tool",
+        next: "list_bookmark_folders",
+        args: {},
+        reason: "list-manifest-bookmark-folders"
+      };
+    }
+    if (candidate.definition.id === "list.tab.groups" || isListTabGroupsCommand(input)) {
+      return {
+        type: "tool",
+        next: "list_tab_groups",
+        args: {},
+        reason: "list-manifest-tab-groups"
+      };
     }
     const parsed = parseListTabsTarget(input);
     if (!parsed) {
@@ -49723,6 +49500,270 @@ Content: ${content}`;
     };
   }
 
+  // src/utils/mutationExplicitResolver.ts
+  function toolDecision2(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function firstMatch2(input, patterns) {
+    for (const pattern of patterns) {
+      const match = input.match(pattern);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
+  }
+  function numberArg(value) {
+    if (!value) {
+      return void 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : void 0;
+  }
+  function extractIndices(input) {
+    return (input.match(/\d+/g) || []).map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+  }
+  var MUTATION_EXPLICIT_ROUTES = [
+    {
+      next: "split_tabs",
+      reason: "mutation-explicit-split-tabs",
+      resolve: (input) => {
+        const match = input.match(/split\s+tabs?\s+(?<indices>[\d,\sand]+)/i);
+        const indicesRaw = match?.groups?.indices;
+        if (!indicesRaw) {
+          return null;
+        }
+        const indices = extractIndices(indicesRaw);
+        return indices.length >= 2 ? { indices } : null;
+      }
+    },
+    {
+      next: "add_split_view",
+      reason: "mutation-explicit-add-split-view-two-tabs",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:split|splitview|add)\s+(?:tabs?\s+)?(?<a>\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(?<b>\d+)/i
+        ) || input.match(
+          /(?:add\s+)?tabs?\s+(?<a>\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(?<b>\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i
+        );
+        const a = numberArg(match?.groups?.a);
+        const b2 = numberArg(match?.groups?.b);
+        return a != null && b2 != null ? { indices: [a, b2] } : null;
+      }
+    },
+    {
+      next: "remove_split_view",
+      reason: "mutation-explicit-remove-split-view",
+      resolve: (input) => /(?:remove|disable|close)\s+split\s*view|unsplit\s+(?:tabs?|view)?/i.test(
+        input
+      ) ? {} : null
+    },
+    {
+      next: "add_split_view",
+      reason: "mutation-explicit-add-split-view",
+      resolve: (input) => {
+        if (!/(?:add|create|enable)\s+split\s*view|split\s+(?:this\s+)?(?:tab|view)/i.test(
+          input
+        )) {
+          return null;
+        }
+        const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
+        const withIndex = numberArg(withTabMatch?.groups?.index);
+        if (withIndex != null) {
+          return { withIndex };
+        }
+        const withQueryMatch = input.match(
+          /(?:with|and)\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*(?:tab)?$/i
+        );
+        const withQuery = withQueryMatch?.groups?.query?.trim();
+        return withQuery ? { withQuery } : {};
+      }
+    },
+    {
+      next: "move_tab_to_new_window",
+      reason: "mutation-explicit-move-tab-new-window",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:move)\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?\s+to\s+(?:a\s+)?new\s+window/i
+        );
+        if (!match) {
+          return null;
+        }
+        const index2 = numberArg(match.groups?.index);
+        return index2 != null ? { index: index2 } : {};
+      }
+    },
+    {
+      next: "close_tab",
+      reason: "mutation-explicit-close-tab",
+      resolve: (input) => {
+        const match = input.match(
+          /close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?/i
+        );
+        if (!match) {
+          return null;
+        }
+        const index2 = numberArg(match.groups?.index);
+        return index2 != null ? { index: index2 } : {};
+      }
+    },
+    {
+      next: "remove_tab_from_group",
+      reason: "mutation-explicit-remove-tab-from-group",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:remove|ungroup)\s+(?:the\s+)?(?:this\s+|current\s+|active\s+)?tab(?:\s+(?<index>\d+))?\s+from\s+(?:its\s+)?(?:tab\s+)?group/i
+        );
+        if (!match) {
+          return null;
+        }
+        const index2 = numberArg(match.groups?.index);
+        return index2 != null ? { index: index2 } : {};
+      }
+    },
+    {
+      next: "remove_tab_from_bookmark_folder",
+      reason: "mutation-explicit-remove-tab-from-folder",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:remove|delete)\s+(?:this\s+)?(?:tab\s+)?from\s+(?:my\s+)?(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<name>[\w\s]+?)"?\s*$/i
+        );
+        const name = match?.groups?.name?.trim();
+        return name ? { name } : null;
+      }
+    },
+    {
+      next: "create_bookmark_folder",
+      reason: "mutation-explicit-create-folder-with-current",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s+and\s+(?:add|save|include|put)\s+(?:the\s+)?(?:current|this|active)\s+tab/i
+        );
+        const name = match?.groups?.name?.trim();
+        return name ? { name, include: "current" } : null;
+      }
+    },
+    {
+      next: "create_bookmark_folder",
+      reason: "mutation-explicit-create-folder-with-all",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s+and\s+(?:add|save|include|put)\s+(?:all)\s+tabs/i
+        );
+        const name = match?.groups?.name?.trim();
+        return name ? { name, include: "all" } : null;
+      }
+    },
+    {
+      next: "create_bookmark_folder",
+      reason: "mutation-explicit-create-folder",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:bookmark\s+)?folder\s+(?:called\s+|named\s+)?"?(?<name>[\w\s]+?)"?\s*$/i
+        );
+        const name = match?.groups?.name?.trim();
+        return name ? { name } : null;
+      }
+    },
+    {
+      next: "delete_bookmark_folder",
+      reason: "mutation-explicit-delete-folder",
+      resolve: (input) => {
+        const match = firstMatch2(input, [
+          /(?:delete|remove)\s+(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<name>[\w\s]+?)"?\s*$/i,
+          /(?:delete|remove)\s+(?:the\s+)?"?(?<name>[\w\s]+?)"?\s+(?:bookmark\s+)?folder/i
+        ]);
+        const name = match?.groups?.name?.trim();
+        return name ? { name } : null;
+      }
+    },
+    {
+      next: "rename_bookmark_folder",
+      reason: "mutation-explicit-rename-folder",
+      resolve: (input) => {
+        const match = input.match(
+          /rename\s+(?:the\s+)?(?:bookmark\s+)?folder\s+"?(?<from>[\w\s]+?)"?\s+(?:to|as)\s+"?(?<to>[\w\s]+?)"?\s*$/i
+        );
+        const from = match?.groups?.from?.trim();
+        const to = match?.groups?.to?.trim();
+        return from && to ? { from, to } : null;
+      }
+    },
+    {
+      next: "delete_tab_group",
+      reason: "mutation-explicit-delete-group",
+      resolve: (input) => {
+        const match = firstMatch2(input, [
+          /(?:delete|remove)\s+(?:tab\s+)?group\s+"?(?<name>[^"\n]+?)"?\s*$/i,
+          /(?:delete|remove)\s+(?:the\s+)?"?(?<name>[^"\n]+?)"?\s+(?:tab\s+)?group/i
+        ]);
+        const name = match?.groups?.name?.trim();
+        return name ? { name } : null;
+      }
+    },
+    {
+      next: "create_tab_group",
+      reason: "mutation-explicit-create-group",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?"?(?<name>.+)$/i
+        );
+        if (!match?.groups?.name) {
+          return null;
+        }
+        let name = match.groups.name.trim();
+        let openUrl;
+        const openInIt = name.match(
+          /\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i
+        );
+        if (openInIt?.[1]) {
+          openUrl = openInIt[1].trim();
+          name = name.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+        }
+        name = name.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
+        name = name.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").replace(/["']/g, "").trim();
+        if (!name) {
+          return null;
+        }
+        const args = { name };
+        if (openUrl) {
+          args.openUrl = openUrl;
+        }
+        const indicesMatch = input.match(
+          /(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i
+        );
+        if (indicesMatch?.[1]) {
+          const indices = extractIndices(indicesMatch[1]);
+          if (indices.length > 0) {
+            args.indices = indices;
+          }
+        }
+        return args;
+      }
+    },
+    {
+      next: "rename_tab_group",
+      reason: "mutation-explicit-rename-group",
+      resolve: (input) => {
+        const match = input.match(
+          /rename\s+(?:tab\s+)?group\s+"?(?<from>[\w\s]+?)"?\s+(?:to|as)\s+"?(?<to>[\w\s]+?)"?\s*$/i
+        );
+        const from = match?.groups?.from?.trim();
+        const to = match?.groups?.to?.trim();
+        return from && to ? { from, to } : null;
+      }
+    }
+  ];
+  function resolveExplicitMutationRoute(input) {
+    for (const rule of MUTATION_EXPLICIT_ROUTES) {
+      const args = rule.resolve(input);
+      if (args) {
+        return toolDecision2(rule.next, rule.reason, args);
+      }
+    }
+    return null;
+  }
+
   // src/utils/manifestMutationResolver.ts
   function buildAmbiguityPayload(name, opts) {
     return {
@@ -49868,23 +49909,120 @@ Content: ${content}`;
     };
   }
   function resolveManifestMutationRoute(input, snapshot) {
-    const topWin = getBrowserWindow();
-    const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
-    const candidate = resolveManifestCommand(input, {
-      snapshot,
-      hasOpenTabs: tabCount > 0,
-      hasPendingConfirmation: false
-    });
-    if (!candidate || candidate.definition.family !== "mutation") {
-      return null;
+    return resolveExplicitMutationRoute(input) || resolveContainerAddRoute(input, snapshot) || resolveCloseDeleteRoute(input, snapshot);
+  }
+
+  // src/utils/searchResultExplicitResolver.ts
+  function toolDecision3(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function parseSearchResultIndex(input) {
+    const lower = String(input || "").toLowerCase();
+    if (/\b(?:first|1st)\b/.test(lower)) return 1;
+    if (/\b(?:second|2nd)\b/.test(lower)) return 2;
+    if (/\b(?:third|3rd)\b/.test(lower)) return 3;
+    if (/\b(?:fourth|4th)\b/.test(lower)) return 4;
+    if (/\b(?:fifth|5th)\b/.test(lower)) return 5;
+    const numbered = lower.match(/(?:result\s*|number\s*|#)(\d+)/i);
+    if (!numbered?.[1]) {
+      return void 0;
     }
-    if (candidate.definition.id === "mutation.container.add") {
-      return resolveContainerAddRoute(input, snapshot);
+    const parsed = Number(numbered[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : void 0;
+  }
+  var SEARCH_RESULT_ROUTES = [
+    {
+      reason: "search-result-explicit-url",
+      resolve: (input) => {
+        const match = input.match(
+          /(?:open|go\s+to)\s+(?:the\s+)?(?:search\s+)?result(?:\s+url)?\s+(?<url>https?:\/\/[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/i
+        );
+        const url = match?.groups?.url?.trim();
+        return url ? { url } : null;
+      }
+    },
+    {
+      reason: "search-result-followup",
+      resolve: (input) => {
+        if (!/^(?:open|go\s+to)\b/i.test(input)) {
+          return null;
+        }
+        const index2 = parseSearchResultIndex(input);
+        if (index2 != null) {
+          return { index: index2 };
+        }
+        if (!/\b(?:it|that|this|one|result|last)\b/i.test(input)) {
+          return null;
+        }
+        return {};
+      }
     }
-    if (candidate.definition.id === "mutation.target.delete") {
-      return resolveCloseDeleteRoute(input, snapshot);
+  ];
+  function resolveExplicitSearchResultRoute(input) {
+    for (const route of SEARCH_RESULT_ROUTES) {
+      const args = route.resolve(input);
+      if (args) {
+        return toolDecision3("open_search_result", route.reason, args);
+      }
     }
-    return resolveContainerAddRoute(input, snapshot) || resolveCloseDeleteRoute(input, snapshot);
+    return null;
+  }
+
+  // src/utils/summarizeExplicitResolver.ts
+  function toolDecision4(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function numberArg2(value) {
+    if (!value) {
+      return void 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : void 0;
+  }
+  var SUMMARIZE_ROUTES = [
+    {
+      reason: "summarize-current-tab",
+      resolve: (input) => /summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i.test(input) ? {} : null
+    },
+    {
+      reason: "summarize-tab-index",
+      resolve: (input) => {
+        const match = input.match(/summarize\s+(?:the\s+)?tab\s+(?<index>\d+)/i) || input.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+        if (!match) {
+          return null;
+        }
+        const index2 = numberArg2(match.groups?.index) ?? 1;
+        return { index: index2 };
+      }
+    },
+    {
+      reason: "summarize-tab-query",
+      resolve: (input) => {
+        const match = input.match(
+          /summarize\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*tab/i
+        );
+        const query = match?.groups?.query?.trim();
+        if (!query || /^(?:current|this|active)$/i.test(query)) {
+          return null;
+        }
+        return { query };
+      }
+    },
+    {
+      reason: "summarize-page",
+      resolve: (input) => /summarize\s+(?:this\s+)?(?:page|article|website|site)?|(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)|give\s+(?:me\s+)?(?:a\s+)?summary/i.test(
+        input
+      ) ? {} : null
+    }
+  ];
+  function resolveExplicitSummarizeRoute(input) {
+    for (const route of SUMMARIZE_ROUTES) {
+      const args = route.resolve(input);
+      if (args) {
+        return toolDecision4("summarize_page", route.reason, args);
+      }
+    }
+    return null;
   }
 
   // src/utils/decisionEngine.ts
@@ -49906,6 +50044,22 @@ Content: ${content}`;
       if (familyDecision) {
         return familyDecision;
       }
+      if (family === "list" || family === "search" || family === "mutation") {
+        return {
+          type: "chat",
+          actionable: true,
+          reason: `${family}-family-unresolved`,
+          message: family === "list" ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder." : family === "search" ? "I could not determine what to search. Please specify query and optional folder/source." : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly."
+        };
+      }
+    }
+    const searchResultExplicit = resolveExplicitSearchResultRoute(input);
+    if (searchResultExplicit) {
+      return searchResultExplicit;
+    }
+    const summarizeExplicit = resolveExplicitSummarizeRoute(input);
+    if (summarizeExplicit) {
+      return summarizeExplicit;
     }
     const explicit = resolveExplicitRoute(input);
     if (explicit) {
@@ -50148,6 +50302,8 @@ Content: ${content}`;
   var InteractionStateStore = class {
     pendingConfirmation = null;
     pendingAmbiguity = null;
+    continuationQueue = [];
+    recentSearchResults = [];
     assistantWindow;
     constructor(assistantWindow2 = window) {
       this.assistantWindow = assistantWindow2;
@@ -50188,6 +50344,48 @@ Content: ${content}`;
     clearPendingAmbiguity() {
       this.pendingAmbiguity = null;
     }
+    getContinuationQueue() {
+      return [...this.continuationQueue];
+    }
+    setContinuationQueue(queue2) {
+      this.continuationQueue = queue2.map((item) => String(item || "").trim()).filter(Boolean);
+      assistantLogger.debug("interaction", "Continuation queue updated", {
+        length: this.continuationQueue.length
+      });
+    }
+    takeContinuationQueue() {
+      const next = [...this.continuationQueue];
+      this.continuationQueue = [];
+      if (next.length > 0) {
+        assistantLogger.debug("interaction", "Continuation queue consumed", {
+          length: next.length
+        });
+      }
+      return next;
+    }
+    clearContinuationQueue() {
+      if (this.continuationQueue.length > 0) {
+        assistantLogger.debug("interaction", "Continuation queue cleared", {
+          length: this.continuationQueue.length
+        });
+      }
+      this.continuationQueue = [];
+    }
+    getRecentSearchResults() {
+      return this.recentSearchResults.map((result) => ({ ...result }));
+    }
+    setRecentSearchResults(results) {
+      this.recentSearchResults = results.filter((result) => !!result.url).slice(0, 25).map((result) => ({ ...result }));
+      assistantLogger.debug("interaction", "Recent search results updated", {
+        count: this.recentSearchResults.length
+      });
+    }
+    clearRecentSearchResults() {
+      if (this.recentSearchResults.length > 0) {
+        assistantLogger.debug("interaction", "Recent search results cleared");
+      }
+      this.recentSearchResults = [];
+    }
     emitConfirmationUpdate(pending) {
       try {
         const relay = this.assistantWindow.oasisSetPendingConfirmationRelay;
@@ -50225,6 +50423,46 @@ Content: ${content}`;
   function clearPendingAmbiguity() {
     interactionState.clearPendingAmbiguity();
   }
+  function getContinuationQueue() {
+    return interactionState.getContinuationQueue();
+  }
+  function setContinuationQueue(queue2) {
+    interactionState.setContinuationQueue(queue2);
+  }
+  function takeContinuationQueue() {
+    return interactionState.takeContinuationQueue();
+  }
+  function clearContinuationQueue() {
+    interactionState.clearContinuationQueue();
+  }
+  function getRecentSearchResults() {
+    return interactionState.getRecentSearchResults();
+  }
+  function setRecentSearchResults(results) {
+    interactionState.setRecentSearchResults(results);
+  }
+  function clearRecentSearchResults() {
+    interactionState.clearRecentSearchResults();
+  }
+
+  // src/services/commandExecutionRegistry.ts
+  var commandExecutors = /* @__PURE__ */ new Map();
+  function registerCommandExecutors(commands) {
+    commandExecutors.clear();
+    for (const command of commands) {
+      commandExecutors.set(command.commandName, command);
+    }
+  }
+  function getCommandExecutor(commandName) {
+    const key = String(commandName || "").trim();
+    if (!key) {
+      return null;
+    }
+    return commandExecutors.get(key) || null;
+  }
+  function listRegisteredCommandNames() {
+    return Array.from(commandExecutors.keys());
+  }
 
   // src/commands.ts
   function getChrome2() {
@@ -50235,7 +50473,7 @@ Content: ${content}`;
     const value = args[key];
     return typeof value === "string" ? value : void 0;
   }
-  function numberArg2(args, key) {
+  function numberArg3(args, key) {
     const value = args[key];
     return typeof value === "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -50271,6 +50509,9 @@ Content: ${content}`;
   }
   function normalizeQuery(value) {
     return (value || "").trim().toLowerCase();
+  }
+  function toWebSearchUrl(query) {
+    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   }
   function analyzeGroupMoveImpact(tabsToMove) {
     const affectedGroups = /* @__PURE__ */ new Set();
@@ -50473,28 +50714,65 @@ Content: ${content}`;
       return { message: `Successfully opened URL: ${url}` };
     }
   };
-  var OpenTabCommand = class {
-    commandName = "open_tab";
-    description = "Open a new tab with a given URL. Accepts arguments: { url: string }.";
+  var OpenUrlCommand = class {
+    commandName = "open_url";
+    description = "Open a URL in a new browser tab. Arguments: { url: string }.";
     async execute(args) {
       const { topWin, Services } = getChrome2();
-      let url = stringArg(args, "url");
-      if (!url) return { message: "Missing 'url' argument." };
-      if (!topWin?.openTrustedLinkIn)
-        return { message: "Cannot open tab (openTrustedLinkIn not found)." };
-      const isUrlLike = url.includes(".") && !url.includes(" ");
-      if (!isUrlLike) {
-        url = "https://duckduckgo.com/?q=\\" + encodeURIComponent(url);
-      } else {
-        try {
-          url = withUriFixup(url, Services);
-        } catch (e) {
-          assistantLogger.warn("commands", "Failed to fixup URI", e);
-        }
+      const rawUrl = stringArg(args, "url");
+      if (!rawUrl) {
+        return { message: "Missing 'url' argument." };
+      }
+      if (!topWin?.openTrustedLinkIn) {
+        return { message: "Cannot open URL (openTrustedLinkIn not found)." };
+      }
+      const normalizedInput = rawUrl.trim();
+      if (!normalizedInput) {
+        return { message: "Missing 'url' argument." };
+      }
+      let url = normalizedInput;
+      try {
+        url = withUriFixup(normalizedInput, Services);
+      } catch (error) {
+        assistantLogger.warn("commands", "Failed to fixup URI", error);
       }
       topWin.openTrustedLinkIn(url, "tab");
-      const display = !isUrlLike ? stringArg(args, "url") : url;
-      return { message: `Successfully opened tab to: ${display}` };
+      return { message: `Opened URL in a new tab: ${url}` };
+    }
+  };
+  var WebSearchCommand = class {
+    commandName = "web_search";
+    description = "Search the web in a new tab. Arguments: { query: string }.";
+    async execute(args) {
+      const { topWin } = getChrome2();
+      const query = stringArg(args, "query");
+      if (!query) {
+        return { message: "Missing 'query' argument." };
+      }
+      if (!topWin?.openTrustedLinkIn) {
+        return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+      }
+      const searchUrl = toWebSearchUrl(query);
+      topWin.openTrustedLinkIn(searchUrl, "tab");
+      return { message: `Opened web search for "${query}" in a new tab.` };
+    }
+  };
+  var OpenTabCommand = class {
+    commandName = "open_tab";
+    description = "Legacy alias that opens a URL or web query in a new tab. Prefer open_url({url}) or web_search({query}).";
+    async execute(args) {
+      const url = stringArg(args, "url");
+      const query = stringArg(args, "query");
+      if (query?.trim()) {
+        return await new WebSearchCommand().execute({ query });
+      }
+      if (!url) {
+        return { message: "Missing 'url' argument." };
+      }
+      if (url.includes(" ")) {
+        return await new WebSearchCommand().execute({ query: url });
+      }
+      return await new OpenUrlCommand().execute({ url });
     }
   };
   var CloseTabCommand = class {
@@ -50503,7 +50781,7 @@ Content: ${content}`;
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const idx = numberArg2(args, "index");
+      const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
       if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
@@ -50532,7 +50810,7 @@ Content: ${content}`;
       if (!gBrowser || !topWin?.OpenBrowserWindow) {
         return { message: "Browser UI not available." };
       }
-      const idx = numberArg2(args, "index");
+      const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
       if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
@@ -50740,7 +51018,7 @@ ${text2}` };
         tab2 = second;
       } else {
         tab1 = gBrowser.selectedTab || null;
-        const withIndex = numberArg2(args, "withIndex");
+        const withIndex = numberArg3(args, "withIndex");
         const withQuery = normalizeQuery(stringArg(args, "withQuery"));
         if (withIndex != null) {
           const i = Math.max(1, Math.floor(withIndex));
@@ -50864,7 +51142,7 @@ ${text2}` };
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI not available." };
-      const idx = numberArg2(args, "index");
+      const idx = numberArg3(args, "index");
       let tab = tabByIndexOrCurrent(gBrowser, idx);
       if (idx != null && !tab) return { message: `No tab ${idx}.` };
       const query = normalizeQuery(stringArg(args, "query"));
@@ -50983,6 +51261,19 @@ ${content}`
       }
       const scopeSuffix = folder ? ` in bookmark folder "${folder}"` : sourceScope === "bookmark-folder" ? " in bookmark folders" : "";
       if (results.length === 0) {
+        clearRecentSearchResults();
+        if (!folderScoped && !sourceScope && query.trim() !== "*") {
+          setPendingConfirmation({
+            command: "web_search",
+            args: { query },
+            description: `No local matches found for "${query}". Search the web in a new tab?`
+          });
+          return {
+            message: `No local matches found for "${query}". Would you like me to open a web search in a new tab?`,
+            requiresConfirmation: true,
+            confirmationData: { query, url: toWebSearchUrl(query) }
+          };
+        }
         const guidance = folder ? ` Try "list tabs in bookmark folder ${folder}" to inspect what is saved there.` : "";
         return {
           message: `No matches found for "${query}"${scopeSuffix}.${guidance}`
@@ -51011,6 +51302,7 @@ ${content}`
           snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text
         };
       });
+      setRecentSearchResults(structured);
       const resultsBySource = {};
       for (const r of structured) {
         if (!resultsBySource[r.source]) resultsBySource[r.source] = [];
@@ -51026,14 +51318,66 @@ ${content}`
       return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
     }
   };
+  var GetRecentSearchResultsCommand = class {
+    commandName = "get_recent_search_results";
+    description = "Get cached results from the most recent search_memory command. Arguments: { limit?: number }.";
+    async execute(args) {
+      const limit = numberArg3(args, "limit");
+      const cappedLimit = limit != null ? Math.max(1, Math.min(Math.floor(limit), 25)) : 5;
+      const recent = getRecentSearchResults();
+      if (recent.length === 0) {
+        return {
+          message: JSON.stringify({
+            summary: "No recent search results available.",
+            results: []
+          })
+        };
+      }
+      const results = recent.slice(0, cappedLimit).map((result, idx) => ({
+        index: idx + 1,
+        source: result.source,
+        title: result.title,
+        url: result.url,
+        bookmarkGuid: result.bookmarkGuid,
+        context: result.context,
+        snippet: result.snippet
+      }));
+      return {
+        message: JSON.stringify({
+          summary: `Found ${results.length} cached recent search result(s).`,
+          results
+        })
+      };
+    }
+  };
   var OpenSearchResultCommand = class {
     commandName = "open_search_result";
-    description = "Open a search result. Accepts arguments: { url: string, type?: string, bookmarkGuid?: string }. If type is 'tab', switches to it if found. Otherwise opens in new tab.";
+    description = "Open a search result. Accepts arguments: { url?: string, index?: number, type?: string, bookmarkGuid?: string }. If index is provided (or omitted), resolves from recent search results. If type is 'tab', switches to it if found.";
     async execute(args) {
       let url = stringArg(args, "url");
-      const type = stringArg(args, "type");
-      const bookmarkGuid = stringArg(args, "bookmarkGuid");
-      if (!url) return { message: "Missing 'url' argument." };
+      const index2 = numberArg3(args, "index");
+      let type = stringArg(args, "type");
+      let bookmarkGuid = stringArg(args, "bookmarkGuid");
+      if (!url) {
+        const recent = getRecentSearchResults();
+        if (recent.length === 0) {
+          return {
+            message: "No recent search result is available to open. Run a search first or pass a URL."
+          };
+        }
+        const targetIndex = index2 != null ? Math.max(1, Math.floor(index2)) : 1;
+        const selected = recent[targetIndex - 1];
+        if (!selected?.url) {
+          return {
+            message: `Result index ${targetIndex} is out of range. I currently have ${recent.length} recent result(s).`
+          };
+        }
+        url = selected.url;
+        bookmarkGuid = bookmarkGuid || selected.bookmarkGuid;
+        if (!type && selected.source === "tab") {
+          type = "tab";
+        }
+      }
       const { topWin, gBrowser, PlacesUtils } = getChrome2();
       if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
       if (bookmarkGuid && PlacesUtils?.bookmarks?.fetch) {
@@ -51260,7 +51604,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       let tabsToAdd = [];
       const query = normalizeQuery(stringArg(args, "query"));
-      const idx = numberArg2(args, "index");
+      const idx = numberArg3(args, "index");
       const all = booleanArg(args, "all");
       if (all === true) {
         tabsToAdd = getTabs(gBrowser).filter((tab) => !tab.group);
@@ -51328,7 +51672,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const idx = numberArg2(args, "index");
+      const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
       if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
@@ -51470,6 +51814,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           "confirm-action",
           "No pending confirmation found"
         );
+        clearContinuationQueue();
         return { message: "No pending action to confirm." };
       }
       const confirmed = args?.confirmed;
@@ -51480,28 +51825,75 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       if (!confirmed) {
         clearPendingConfirmation();
+        clearContinuationQueue();
         return { message: "Action cancelled." };
       }
-      const commandMap = {
-        close_tab: new CloseTabCommand(),
-        delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
-        delete_tab_group: new DeleteTabGroupCommand(),
-        create_tab_group: new CreateTabGroupCommand(),
-        add_tab_to_group: new AddTabToGroupCommand()
-      };
-      const cmd = commandMap[pending.command];
+      const cmd = getCommandExecutor(pending.command);
       if (!cmd) {
         clearPendingConfirmation();
-        return { message: `Unknown command: ${pending.command}` };
+        clearContinuationQueue();
+        const known = listRegisteredCommandNames().sort();
+        return {
+          message: `Unknown command: ${pending.command}. Known commands: ${known.join(", ")}`
+        };
+      }
+      if (cmd.commandName === this.commandName) {
+        clearPendingConfirmation();
+        clearContinuationQueue();
+        return { message: "Cannot confirm confirm_action recursively." };
       }
       return await cmd.execute(pending.args);
     }
   };
 
   // src/assistant/commandsRegistry.ts
+  var COMMAND_ARG_SCHEMA = {
+    list_tabs: `{"scope?":"window|tab-group|bookmark-folder","name?":"string"}`,
+    open_url: `{"url":"string"}`,
+    web_search: `{"query":"string"}`,
+    open_tab: `{"url":"string"} (legacy alias; prefer open_url/web_search)`,
+    close_tab: `{"index?":"number","confirmed?":"boolean"}`,
+    move_tab_to_new_window: `{"index?":"number"}`,
+    copy_tab_urls: `{}`,
+    split_tabs: `{"indices":"number[]"}`,
+    add_split_view: `{"indices?":"number[]","withIndex?":"number","withQuery?":"string"}`,
+    remove_split_view: `{}`,
+    create_bookmark_folder: `{"name":"string","include?":"none|current|all"}`,
+    delete_bookmark_folder: `{"name":"string","confirmed?":"boolean"}`,
+    list_bookmark_folders: `{}`,
+    rename_bookmark_folder: `{"from":"string","to":"string"}`,
+    add_tab_to_bookmark_folder: `{"name":"string","query?":"string","all?":"boolean"}`,
+    remove_tab_from_bookmark_folder: `{"name":"string","query?":"string","all?":"boolean"}`,
+    open_bookmark_folder: `{"name":"string","where?":"tabgroup|window"}`,
+    list_tab_groups: `{}`,
+    create_tab_group: `{"name":"string","indices?":"number[]","openUrl?":"string","confirmed?":"boolean"}`,
+    delete_tab_group: `{"name":"string","confirmed?":"boolean"}`,
+    add_tab_to_group: `{"name":"string","query?":"string","all?":"boolean","confirmed?":"boolean"}`,
+    remove_tab_from_group: `{"index?":"number"}`,
+    rename_tab_group: `{"from":"string","to":"string"}`,
+    resolve_ambiguity: `{"target?":"bookmark-folder|tab-group|tab|cancel"}`,
+    confirm_action: `{"confirmed":"boolean"}`,
+    new_window: `{}`,
+    organize_windows: `{}`,
+    show_url: `{"url":"string"}`,
+    search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
+    get_recent_search_results: `{"limit?":"number"}`,
+    open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
+    summarize_page: `{"index?":"number","query?":"string"}`,
+    show_subscription: `{}`
+  };
+  function toAssistToolDescription(command) {
+    const schema = COMMAND_ARG_SCHEMA[command.commandName];
+    if (!schema) {
+      return command.description;
+    }
+    return `${command.description} Args JSON: ${schema}`;
+  }
   function createAssistantCommandsRegistry() {
     const commands = [
       new ListTabsCommand(),
+      new OpenUrlCommand(),
+      new WebSearchCommand(),
       new OpenTabCommand(),
       new CloseTabCommand(),
       new MoveTabToNewWindowCommand(),
@@ -51528,13 +51920,19 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       new OrganizeWindowsCommand(),
       new ShowURLCommand(),
       new SearchMemoryCommand(),
+      new GetRecentSearchResultsCommand(),
       new OpenSearchResultCommand(),
       new SummarizePageCommand(),
       new ShowSubscriptionCommand()
     ];
+    registerCommandExecutors(commands);
     return {
       commands,
-      toolCommandNames: new Set(commands.map((command) => command.commandName))
+      toolCommandNames: new Set(commands.map((command) => command.commandName)),
+      assistTools: commands.map((command) => ({
+        name: command.commandName,
+        description: toAssistToolDescription(command)
+      }))
     };
   }
 
@@ -67709,45 +68107,6 @@ Result: ${JSON.stringify(result)}`);
     return result;
   }
 
-  // src/services/assistEndpointState.ts
-  var ASSIST_UNSUPPORTED_RETRY_MS = 6e4;
-  var endpointStates = /* @__PURE__ */ new Map();
-  function normalizeEndpointKey(endpointKey) {
-    return String(endpointKey || "").trim().toLowerCase();
-  }
-  function readEntry(endpointKey) {
-    const key = normalizeEndpointKey(endpointKey);
-    return endpointStates.get(key) || {
-      capability: "unknown",
-      unsupportedAt: 0
-    };
-  }
-  function writeEntry(endpointKey, entry) {
-    endpointStates.set(normalizeEndpointKey(endpointKey), entry);
-  }
-  function shouldAttemptAssist(endpointKey, now = Date.now()) {
-    const entry = readEntry(endpointKey);
-    if (entry.capability !== "unsupported") {
-      return true;
-    }
-    return now - entry.unsupportedAt >= ASSIST_UNSUPPORTED_RETRY_MS;
-  }
-  function markAssistSupported(endpointKey) {
-    writeEntry(endpointKey, {
-      capability: "supported",
-      unsupportedAt: 0
-    });
-  }
-  function markAssistUnsupported(endpointKey, now = Date.now()) {
-    writeEntry(endpointKey, {
-      capability: "unsupported",
-      unsupportedAt: now
-    });
-  }
-  function getAssistCapability(endpointKey) {
-    return readEntry(endpointKey).capability;
-  }
-
   // src/utils/routingUtils.ts
   var CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
   function parseAmbiguityResolution(text2) {
@@ -67775,10 +68134,10 @@ Result: ${JSON.stringify(result)}`);
     const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split)\b/i.test(
       input
     );
-    const hasObject = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page)\b/i.test(
+    const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page)\b/i.test(
       input
-    );
-    return hasAction && hasObject;
+    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(input);
+    return hasAction && hasObjectOrTarget;
   }
 
   // src/prompts/chatPrompt.ts
@@ -67872,54 +68231,18 @@ Do NOT mention that you received page content or reference this instruction. Jus
     return [
       "You route the latest user request to one browser command.",
       `Valid commands: ${commandNames.join(", ")}.`,
+      "For chained requests, you may call route_action_plan with actions[] (max 3) instead of a single command.",
       "Return chat only when the latest user message is not a browser action.",
       "When selecting a command, return only the command and JSON args.",
       "Never invent command names outside the valid list.",
+      "For list/show requests, prefer list_* tools and avoid search_memory unless user explicitly asks to search.",
+      "For local find/search requests over tabs/bookmarks/history, prefer search_memory with folder/source args.",
+      "For add/remove/delete/move requests, prefer mutation tools and keep destructive actions explicit.",
+      "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",
+      "For follow-ups like 'open it' after search results, prefer open_search_result with index (default 1).",
+      "If the user asks to inspect previous search results, use get_recent_search_results.",
       "For ambiguous destructive/container targets, prefer safe commands like resolve_ambiguity instead of guessing."
     ].join(" ");
-  }
-
-  // src/assistant/commandChain.ts
-  var CHAIN_VERBS = [
-    "open",
-    "close",
-    "delete",
-    "remove",
-    "create",
-    "make",
-    "new",
-    "add",
-    "save",
-    "move",
-    "put",
-    "rename",
-    "list",
-    "show",
-    "search",
-    "find",
-    "summarize",
-    "split",
-    "organize",
-    "copy"
-  ];
-  var CHAIN_VERB_PATTERN = CHAIN_VERBS.join("|");
-  var CHAIN_SPLIT_RE = new RegExp(
-    `\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)`,
-    "gi"
-  );
-  function splitCommandChain(input, maxCommands = 3) {
-    const text2 = String(input || "").trim();
-    if (!text2 || maxCommands < 1) {
-      return { commands: [], truncated: false };
-    }
-    const parts = text2.split(CHAIN_SPLIT_RE).map((part) => part.trim()).filter(Boolean);
-    if (parts.length <= maxCommands) {
-      return { commands: parts, truncated: false };
-    }
-    return {
-      commands: parts.slice(0, maxCommands),
-      truncated: true
-    };
   }
 
   // src/assistant/messageUtils.ts
@@ -68007,10 +68330,10 @@ Result: ${toolResult.message}`
       if (!candidate) {
         continue;
       }
-      if (text2 === candidate) {
-        return "";
-      }
       if (text2.startsWith(candidate)) {
+        if (text2.length === candidate.length) {
+          continue;
+        }
         text2 = text2.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
         break;
       }
@@ -68040,6 +68363,581 @@ Result: ${toolResult.message}`
     };
   }
 
+  // src/assistant/supervisorGates.ts
+  var CONFIRM_RE = /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i;
+  var CANCEL_RE2 = /^(?:no|cancel|nevermind|don'?t|stop)$/i;
+  function resolvePendingConfirmationGate(params) {
+    const { confirmationText, pendingConfirmation, justRanConfirm } = params;
+    const confirmMatch = CONFIRM_RE.test(confirmationText);
+    const cancelMatch = CANCEL_RE2.test(confirmationText);
+    if ((confirmMatch || cancelMatch) && pendingConfirmation && !justRanConfirm) {
+      return {
+        kind: "route",
+        next: "confirm_action",
+        args: { confirmed: confirmMatch }
+      };
+    }
+    if (pendingConfirmation) {
+      return { kind: "end" };
+    }
+    return { kind: "none" };
+  }
+  function resolvePendingAmbiguityGate(params) {
+    const { pendingAmbiguity, confirmationText, commandText, lastWorker } = params;
+    if (!pendingAmbiguity) {
+      return { kind: "none" };
+    }
+    if (lastWorker === "resolve_ambiguity") {
+      return { kind: "route", next: "chat", args: {} };
+    }
+    const resolution = parseAmbiguityResolution(confirmationText);
+    if (resolution) {
+      return {
+        kind: "route",
+        next: "resolve_ambiguity",
+        args: { target: resolution }
+      };
+    }
+    const wordCount = confirmationText.split(/\s+/).filter(Boolean).length;
+    if (!looksLikeNewActionCommand(commandText) && wordCount <= 3) {
+      return { kind: "route", next: "resolve_ambiguity", args: {} };
+    }
+    return { kind: "clear" };
+  }
+
+  // src/assistant/commandChain.ts
+  var CHAIN_VERBS = [
+    "open",
+    "close",
+    "delete",
+    "remove",
+    "create",
+    "make",
+    "new",
+    "add",
+    "save",
+    "move",
+    "put",
+    "rename",
+    "list",
+    "show",
+    "search",
+    "find",
+    "summarize",
+    "split",
+    "organize",
+    "copy"
+  ];
+  var CHAIN_VERB_PATTERN = CHAIN_VERBS.join("|");
+  var CHAIN_CONNECTOR_RE = new RegExp(
+    `(?:\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b))`,
+    "i"
+  );
+  var CHAIN_SPLIT_RE = new RegExp(
+    `\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)`,
+    "gi"
+  );
+  function looksLikeCommandChain(input) {
+    return CHAIN_CONNECTOR_RE.test(String(input || "").trim());
+  }
+  function splitCommandChain(input, maxCommands = 3) {
+    const text2 = String(input || "").trim();
+    if (!text2 || maxCommands < 1) {
+      return { commands: [], truncated: false };
+    }
+    const parts = text2.split(CHAIN_SPLIT_RE).map((part) => part.trim()).filter(Boolean);
+    if (parts.length <= maxCommands) {
+      return { commands: parts, truncated: false };
+    }
+    return {
+      commands: parts.slice(0, maxCommands),
+      truncated: true
+    };
+  }
+
+  // src/assistant/supervisorQueue.ts
+  function buildCommandQueuePlan(params) {
+    const {
+      existingQueue,
+      continuationQueue,
+      latestTextRaw,
+      commandLine,
+      lastWorker,
+      justRanTool,
+      maxCommands
+    } = params;
+    let commandQueue;
+    let source;
+    let truncated = false;
+    if (existingQueue.length > 0) {
+      commandQueue = [...existingQueue];
+      source = "existing";
+    } else if (lastWorker === "confirm_action" && continuationQueue.length > 0) {
+      commandQueue = [...continuationQueue];
+      source = "continuation";
+    } else {
+      const split = splitCommandChain(latestTextRaw || commandLine, maxCommands);
+      commandQueue = [...split.commands];
+      truncated = split.truncated;
+      source = "parsed";
+    }
+    if (commandQueue.length === 0 && commandLine) {
+      commandQueue = [commandLine];
+    }
+    if (justRanTool && commandQueue.length > 1) {
+      commandQueue = commandQueue.slice(1);
+    }
+    const activeCommand = commandQueue[0] || commandLine;
+    if (!activeCommand) {
+      return null;
+    }
+    const truncationNotice = source === "parsed" && truncated ? `I can run up to ${maxCommands} commands per request, so I will run the first ${maxCommands}.` : null;
+    return {
+      commandQueue,
+      activeCommand,
+      source,
+      truncated,
+      truncationNotice
+    };
+  }
+  function shouldClearContinuationQueue(params) {
+    const {
+      hasContinuation,
+      shouldResumeContinuation,
+      justRanTool,
+      commandText
+    } = params;
+    if (!hasContinuation || shouldResumeContinuation || justRanTool) {
+      return false;
+    }
+    return looksLikeNewActionCommand(commandText);
+  }
+
+  // src/services/assistEndpointState.ts
+  var ASSIST_UNSUPPORTED_RETRY_MS = 6e4;
+  var endpointStates = /* @__PURE__ */ new Map();
+  function normalizeEndpointKey(endpointKey) {
+    return String(endpointKey || "").trim().toLowerCase();
+  }
+  function readEntry(endpointKey) {
+    const key = normalizeEndpointKey(endpointKey);
+    return endpointStates.get(key) || {
+      capability: "unknown",
+      unsupportedAt: 0
+    };
+  }
+  function writeEntry(endpointKey, entry) {
+    endpointStates.set(normalizeEndpointKey(endpointKey), entry);
+  }
+  function shouldAttemptAssist(endpointKey, now = Date.now()) {
+    const entry = readEntry(endpointKey);
+    if (entry.capability !== "unsupported") {
+      return true;
+    }
+    return now - entry.unsupportedAt >= ASSIST_UNSUPPORTED_RETRY_MS;
+  }
+  function markAssistSupported(endpointKey) {
+    writeEntry(endpointKey, {
+      capability: "supported",
+      unsupportedAt: 0
+    });
+  }
+  function markAssistUnsupported(endpointKey, now = Date.now()) {
+    writeEntry(endpointKey, {
+      capability: "unsupported",
+      unsupportedAt: now
+    });
+  }
+  function getAssistCapability(endpointKey) {
+    return readEntry(endpointKey).capability;
+  }
+
+  // src/assistant/plannedActions.ts
+  var PLAN_PREFIX = "__oasis_plan__:";
+  function asRecord(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    return value;
+  }
+  function normalizeAction(value, memberNameSet) {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const nextRaw = record.next;
+    const next = typeof nextRaw === "string" ? nextRaw.trim() : String(nextRaw || "").trim();
+    if (!next || !memberNameSet.has(next)) {
+      return null;
+    }
+    const argsRecord = asRecord(record.args) || {};
+    return { next, args: argsRecord };
+  }
+  function parsePlannedActions(rawArgs, memberNameSet, maxActions) {
+    const rawActions = Array.isArray(rawArgs.actions) ? rawArgs.actions : [];
+    const actions = [];
+    for (const item of rawActions) {
+      const normalized = normalizeAction(item, memberNameSet);
+      if (!normalized) {
+        continue;
+      }
+      actions.push(normalized);
+      if (actions.length >= maxActions) {
+        break;
+      }
+    }
+    return actions;
+  }
+  function encodePlannedAction(action) {
+    return `${PLAN_PREFIX}${JSON.stringify(action)}`;
+  }
+  function decodePlannedAction(value) {
+    const text2 = String(value || "").trim();
+    if (!text2.startsWith(PLAN_PREFIX)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(text2.slice(PLAN_PREFIX.length));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      const next = String(parsed.next || "").trim();
+      if (!next) {
+        return null;
+      }
+      const args = asRecord(parsed.args) || {};
+      return { next, args };
+    } catch {
+      return null;
+    }
+  }
+
+  // src/assistant/supervisorAssist.ts
+  var PLAN_TOOL_NAME = "route_action_plan";
+  var LIST_FAMILY_TOOLS = /* @__PURE__ */ new Set([
+    "list_tabs",
+    "list_bookmark_folders",
+    "list_tab_groups"
+  ]);
+  var SEARCH_FAMILY_TOOLS = /* @__PURE__ */ new Set([
+    "search_memory",
+    "get_recent_search_results",
+    "open_search_result"
+  ]);
+  var SEARCH_WEB_TOOL = "web_search";
+  var MUTATION_FAMILY_TOOLS = /* @__PURE__ */ new Set([
+    "add_tab_to_bookmark_folder",
+    "add_tab_to_group",
+    "remove_tab_from_bookmark_folder",
+    "remove_tab_from_group",
+    "create_bookmark_folder",
+    "delete_bookmark_folder",
+    "rename_bookmark_folder",
+    "open_bookmark_folder",
+    "create_tab_group",
+    "delete_tab_group",
+    "rename_tab_group",
+    "close_tab",
+    "move_tab_to_new_window",
+    "split_tabs",
+    "add_split_view",
+    "remove_split_view",
+    "confirm_action",
+    "resolve_ambiguity",
+    "new_window",
+    "organize_windows"
+  ]);
+  var SEARCH_WEB_HINT_RE = /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
+  var SEARCH_LOCAL_HINT_RE = /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
+  function constrainAssistRoutingForFamily(params) {
+    const { activeCommandText, assistOptions, assistTools } = params;
+    const family = classifyCommandFamily(activeCommandText);
+    const chainLike = looksLikeCommandChain(activeCommandText);
+    const allowPlanTool = chainLike;
+    const toResult = (options) => {
+      const deduped = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const option of options) {
+        const name = String(option || "").trim();
+        if (!name || seen.has(name)) {
+          continue;
+        }
+        seen.add(name);
+        deduped.push(name);
+      }
+      if (!seen.has("chat")) {
+        deduped.push("chat");
+        seen.add("chat");
+      }
+      const allowedSet = new Set(deduped.filter((option) => option !== "chat"));
+      const tools = assistTools.filter((tool2) => allowedSet.has(tool2.name));
+      return {
+        family,
+        constrained: true,
+        options: deduped,
+        tools,
+        allowPlanTool
+      };
+    };
+    if (chainLike || family === "other") {
+      return {
+        family,
+        constrained: false,
+        options: [...assistOptions],
+        tools: [...assistTools],
+        allowPlanTool
+      };
+    }
+    if (family === "list") {
+      return toResult(
+        assistOptions.filter(
+          (option) => option === "chat" || LIST_FAMILY_TOOLS.has(option)
+        )
+      );
+    }
+    if (family === "search") {
+      const hasWebHint = SEARCH_WEB_HINT_RE.test(activeCommandText);
+      const hasLocalHint = SEARCH_LOCAL_HINT_RE.test(activeCommandText);
+      const allowedTools = new Set(SEARCH_FAMILY_TOOLS);
+      if (hasWebHint || !hasLocalHint) {
+        allowedTools.add(SEARCH_WEB_TOOL);
+      }
+      return toResult(
+        assistOptions.filter(
+          (option) => option === "chat" || allowedTools.has(option)
+        )
+      );
+    }
+    if (family === "mutation") {
+      return toResult(
+        assistOptions.filter(
+          (option) => option === "chat" || MUTATION_FAMILY_TOOLS.has(option)
+        )
+      );
+    }
+    return {
+      family: "other",
+      constrained: false,
+      options: [...assistOptions],
+      tools: [...assistTools],
+      allowPlanTool
+    };
+  }
+  async function tryResolveAssistRoute(params) {
+    const {
+      endpointKey,
+      activeCommandText,
+      commandQueueLength,
+      messages,
+      assistRouterPrompt,
+      assistOptions,
+      assistTools,
+      memberNameSet,
+      maxPlanActions
+    } = params;
+    const shouldTryAssistRouting = commandQueueLength <= 1 && looksLikeNewActionCommand(activeCommandText);
+    if (!shouldTryAssistRouting) {
+      return { kind: "none" };
+    }
+    const constrained = constrainAssistRoutingForFamily({
+      activeCommandText,
+      assistOptions,
+      assistTools
+    });
+    const effectiveOptions = constrained.options;
+    const effectiveTools = constrained.tools;
+    const effectiveOptionSet = new Set(effectiveOptions);
+    const allowPlanTool = constrained.allowPlanTool;
+    const capability = getAssistCapability(endpointKey);
+    if (!shouldAttemptAssist(endpointKey)) {
+      if (capability === "unsupported") {
+        assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+      }
+      return { kind: "none" };
+    }
+    try {
+      const assistMessages = toWire(messages.slice(-10));
+      const optionsForAssist = allowPlanTool ? [...effectiveOptions, PLAN_TOOL_NAME] : effectiveOptions;
+      const toolsForAssist = allowPlanTool ? [
+        ...effectiveTools,
+        {
+          name: PLAN_TOOL_NAME,
+          description: `Plan up to ${maxPlanActions} commands for chained requests. Args JSON: {"actions":[{"next":"<valid command name>","args":{...}}]}`
+        }
+      ] : effectiveTools;
+      const assist = await assistRemote(
+        assistRouterPrompt,
+        assistMessages,
+        optionsForAssist,
+        toolsForAssist
+      );
+      markAssistSupported(endpointKey);
+      const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
+      const assistArgs = isRecord(assist?.args) ? assist.args : {};
+      if (allowPlanTool && assistNext === PLAN_TOOL_NAME) {
+        const actions = parsePlannedActions(assistArgs, memberNameSet, maxPlanActions);
+        if (actions.length > 0) {
+          assistantLogger.debug("router", "Assist returned action plan", {
+            count: actions.length
+          });
+          return { kind: "plan", actions };
+        }
+        return { kind: "none" };
+      }
+      if (assistNext && assistNext !== "chat" && !effectiveOptionSet.has(assistNext)) {
+        assistantLogger.debug("router", "Assist route rejected by family policy", {
+          assistNext,
+          family: constrained.family,
+          constrained: constrained.constrained
+        });
+        return { kind: "none" };
+      }
+      if (assistNext && assistNext !== "chat" && memberNameSet.has(assistNext)) {
+        assistantLogger.debug("router", `Assist route selected: ${assistNext}`);
+        return { kind: "tool", next: assistNext, args: assistArgs };
+      }
+      if (assistNext === "chat") {
+        const content = typeof assist?.content === "string" ? assist.content.trim() : "";
+        if (content) {
+          return { kind: "chat", content };
+        }
+      }
+      return { kind: "none" };
+    } catch (error) {
+      const message = String(error || "");
+      const assistUnsupported = /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
+      if (assistUnsupported) {
+        markAssistUnsupported(endpointKey);
+        assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
+      } else {
+        assistantLogger.warn("router", "Assist route failed, using fallback.", error);
+      }
+      return { kind: "none" };
+    }
+  }
+
+  // src/assistant/toolResultPresenter.ts
+  function safeParseJson(value) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  function toStringList(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+  }
+  function toObjectList(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.filter(
+      (item) => !!item && typeof item === "object" && !Array.isArray(item)
+    );
+  }
+  function formatLines(title, lines) {
+    if (lines.length === 0) {
+      return title;
+    }
+    return `${title}
+
+${lines.map((line) => `- ${line}`).join("\n")}`;
+  }
+  function formatListBookmarkFolders(message) {
+    const parsed = safeParseJson(message);
+    const rows = toStringList(parsed);
+    if (rows.length === 0) {
+      return message;
+    }
+    return formatLines("Here are your bookmark folders:", rows);
+  }
+  function formatListTabGroups(message) {
+    const parsed = safeParseJson(message);
+    const rows = toObjectList(parsed);
+    if (rows.length === 0) {
+      return message;
+    }
+    const lines = rows.map((row) => {
+      const name = typeof row.name === "string" ? row.name : "(unnamed)";
+      const tabCount = typeof row.tabCount === "number" && Number.isFinite(row.tabCount) ? row.tabCount : 0;
+      const collapsed = row.collapsed === true ? "collapsed" : "expanded";
+      return `${name} (${tabCount} tabs, ${collapsed})`;
+    });
+    return formatLines("Here are your tab groups:", lines);
+  }
+  function extractJsonArrayTail(message) {
+    const colon = message.indexOf(":");
+    if (colon < 0) {
+      return null;
+    }
+    const tail = message.slice(colon + 1).trim();
+    if (!tail.startsWith("[")) {
+      return null;
+    }
+    return safeParseJson(tail);
+  }
+  function formatListTabs(message) {
+    const parsedTop = safeParseJson(message);
+    const strings = toStringList(parsedTop);
+    if (strings.length > 0) {
+      return formatLines("Here are your open tabs:", strings);
+    }
+    const tail = extractJsonArrayTail(message);
+    const rows = toObjectList(tail);
+    if (rows.length === 0) {
+      return message;
+    }
+    const containerMatch = message.match(/^Tabs in ([^:]+):/i);
+    const container = containerMatch?.[1]?.trim() || "the requested target";
+    const lines = rows.map((row) => {
+      const title = typeof row.title === "string" ? row.title : "(untitled)";
+      const url = typeof row.url === "string" ? row.url : "";
+      return url ? `${title} (${url})` : title;
+    });
+    return formatLines(`Here are the tabs in ${container}:`, lines);
+  }
+  function formatSearchResults(message) {
+    const parsed = safeParseJson(message);
+    if (!parsed || typeof parsed !== "object") {
+      return message;
+    }
+    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "Search results:";
+    const rows = toObjectList(parsed.results).slice(0, 10);
+    if (rows.length === 0) {
+      return summary || message;
+    }
+    const lines = rows.map((row) => {
+      const index2 = typeof row.index === "number" && Number.isFinite(row.index) ? row.index : void 0;
+      const title = typeof row.title === "string" ? row.title : "(untitled)";
+      const url = typeof row.url === "string" ? row.url : "";
+      const prefix = index2 != null ? `${index2}. ` : "";
+      return url ? `${prefix}${title} (${url})` : `${prefix}${title}`;
+    });
+    return formatLines(summary, lines);
+  }
+  function presentToolResult(payload) {
+    const message = String(payload.message || "").trim();
+    if (!message) {
+      return "Done.";
+    }
+    switch (payload.commandName) {
+      case "list_bookmark_folders":
+        return formatListBookmarkFolders(message);
+      case "list_tab_groups":
+        return formatListTabGroups(message);
+      case "list_tabs":
+        return formatListTabs(message);
+      case "search_memory":
+      case "get_recent_search_results":
+        return formatSearchResults(message);
+      default:
+        return message;
+    }
+  }
+
   // src/assistant/graph.ts
   var GraphState = Annotation.Root({
     messages: Annotation({
@@ -68063,6 +68961,22 @@ Result: ${toolResult.message}`
       default: () => []
     })
   });
+  var INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
+  function splitInternalArgs(args) {
+    const commandArgs = {};
+    let chainNotice = null;
+    for (const [key, value] of Object.entries(args || {})) {
+      if (key === INTERNAL_CHAIN_NOTICE_ARG && typeof value === "string") {
+        chainNotice = value.trim() || null;
+        continue;
+      }
+      if (key.startsWith("__oasis")) {
+        continue;
+      }
+      commandArgs[key] = value;
+    }
+    return { commandArgs, chainNotice };
+  }
   function toAmbiguityPayload(routePending) {
     return {
       kind: routePending.kind || "container_target",
@@ -68085,7 +68999,7 @@ Result: ${toolResult.message}`
       kind: routePending.kind || "container_target"
     });
   }
-  async function buildAssistantGraph(commands, assistantWindow2, messageId) {
+  async function buildAssistantGraph(commands, assistantWindow2, messageId, assistToolDefs = []) {
     const toolAgents = {};
     const memberNames = [];
     for (const command of commands) {
@@ -68096,15 +69010,16 @@ Result: ${toolResult.message}`
         if (typeof recordStart === "function") {
           actionId = recordStart(command.commandName, messageId);
         }
+        const { commandArgs, chainNotice } = splitInternalArgs(state.args);
         let result;
         try {
-          result = await command.execute(state.args);
+          result = await command.execute(commandArgs);
           if (typeof recordUpdate === "function" && actionId) {
             recordUpdate(actionId, "done");
           }
         } catch (error) {
           if (typeof recordUpdate === "function" && actionId) {
-            recordUpdate(actionId, "error", String(error));
+            recordUpdate(actionId, "error");
           }
           assistantLogger.error(
             "graph",
@@ -68114,27 +69029,47 @@ Result: ${toolResult.message}`
           result = { message: String(error) };
         }
         if (result.requiresConfirmation) {
+          const remainingQueue = state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [];
+          if (remainingQueue.length > 0) {
+            setContinuationQueue(remainingQueue);
+          } else {
+            clearContinuationQueue();
+          }
           assistantLogger.debug(
             "graph",
             `Command requires confirmation: ${command.commandName}`
           );
+          const confirmationMessage = String(result.message || "").trim();
+          const toolResultPayload2 = {
+            kind: "tool_result",
+            commandName: command.commandName,
+            message: confirmationMessage
+          };
           return {
-            messages: [new AIMessage({ content: "", name: command.commandName })],
+            messages: [
+              new AIMessage({
+                content: confirmationMessage,
+                name: command.commandName,
+                additional_kwargs: { oasisToolResult: toolResultPayload2 }
+              })
+            ],
             lastWorker: command.commandName,
             next: END,
             args: {},
             commandQueue: state.commandQueue
           };
         }
+        const resultMessage = chainNotice ? `${chainNotice}
+${result.message}` : result.message;
         const toolResultPayload = {
           kind: "tool_result",
           commandName: command.commandName,
-          message: result.message
+          message: resultMessage
         };
         return {
           messages: [
             new AIMessage({
-              content: result.message,
+              content: resultMessage,
               name: command.commandName,
               additional_kwargs: { oasisToolResult: toolResultPayload }
             })
@@ -68149,7 +69084,7 @@ Result: ${toolResult.message}`
       memberNames.push(command.commandName);
     }
     const memberNameSet = new Set(memberNames);
-    const assistTools = commands.map((command) => ({
+    const assistTools = assistToolDefs.length > 0 ? assistToolDefs : commands.map((command) => ({
       name: command.commandName,
       description: command.description
     }));
@@ -68167,8 +69102,16 @@ Result: ${toolResult.message}`
       }
       const lastMsg = state.messages[state.messages.length - 1];
       const lastMsgText = msgText(lastMsg);
-      const hasToolOutput = Boolean(getToolResultPayload(lastMsg));
+      const toolPayload = getToolResultPayload(lastMsg);
+      const hasToolOutput = Boolean(toolPayload);
       const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+      if (toolPayload && !hasSummarizeRequest) {
+        return {
+          messages: [new AIMessage(presentToolResult(toolPayload))],
+          lastWorker: "chat",
+          commandQueue: []
+        };
+      }
       const hiddenInstruction = buildHiddenInstruction({
         hasSummarizeRequest,
         hasToolOutput
@@ -68226,104 +69169,194 @@ Result: ${toolResult.message}`
       const { latestTextRaw, commandLine, commandText, confirmationText } = extractLatestActionableText(state.messages);
       const justRanTool = memberNameSet.has(state.lastWorker);
       const justRanConfirm = state.lastWorker === "confirm_action";
-      const confirmMatch = confirmationText.match(
-        /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i
-      );
-      const cancelMatch = confirmationText.match(/^(?:no|cancel|nevermind|don'?t|stop)$/i);
       const pendingConfirmation = getPendingConfirmation();
-      if ((confirmMatch || cancelMatch) && pendingConfirmation && !justRanConfirm) {
-        return {
-          next: "confirm_action",
-          args: { confirmed: !!confirmMatch }
-        };
+      const confirmationGate = resolvePendingConfirmationGate({
+        confirmationText,
+        pendingConfirmation,
+        justRanConfirm
+      });
+      if (confirmationGate.kind === "route") {
+        return { next: confirmationGate.next, args: confirmationGate.args };
       }
-      if (pendingConfirmation) {
+      if (confirmationGate.kind === "end") {
         return { next: END, args: {} };
       }
       const pendingAmbiguity = getPendingAmbiguity();
-      if (pendingAmbiguity) {
-        if (state.lastWorker === "resolve_ambiguity") {
-          return { next: "chat", args: {} };
-        }
-        const resolution = parseAmbiguityResolution(confirmationText);
-        if (resolution) {
-          return { next: "resolve_ambiguity", args: { target: resolution } };
-        }
-        const wordCount = confirmationText.split(/\s+/).filter(Boolean).length;
-        if (!looksLikeNewActionCommand(commandText) && wordCount <= 3) {
-          return { next: "resolve_ambiguity", args: {} };
-        }
+      const ambiguityGate = resolvePendingAmbiguityGate({
+        pendingAmbiguity,
+        confirmationText,
+        commandText,
+        lastWorker: state.lastWorker
+      });
+      if (ambiguityGate.kind === "route") {
+        return { next: ambiguityGate.next, args: ambiguityGate.args };
+      }
+      if (ambiguityGate.kind === "clear") {
         clearPendingAmbiguity();
       }
+      const pendingContinuationQueue = getContinuationQueue();
+      const shouldResumeContinuation = state.lastWorker === "confirm_action" && pendingContinuationQueue.length > 0 && !getPendingConfirmation();
+      if (shouldClearContinuationQueue({
+        hasContinuation: pendingContinuationQueue.length > 0,
+        shouldResumeContinuation,
+        justRanTool,
+        commandText
+      })) {
+        clearContinuationQueue();
+      }
       if (justRanTool) {
-        if (state.commandQueue.length <= 1) {
+        if (state.commandQueue.length <= 1 && !shouldResumeContinuation) {
           return { next: "chat", args: {}, commandQueue: [] };
         }
       }
-      let commandQueue = state.commandQueue.length > 0 ? [...state.commandQueue] : splitCommandChain(latestTextRaw || commandLine, MAX_NESTED_COMMANDS).commands;
-      if (commandQueue.length === 0) {
-        commandQueue = [commandLine];
+      const continuationQueue = shouldResumeContinuation ? takeContinuationQueue() : [];
+      const hasQueuedCommands = state.commandQueue.length > 0 || continuationQueue.length > 0;
+      const topLevelActionText = commandLine.toLowerCase();
+      const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
+      if (!hasQueuedCommands && commandLine) {
+        const topLevelAssist = await tryResolveAssistRoute({
+          endpointKey,
+          activeCommandText: topLevelActionText,
+          commandQueueLength: 1,
+          messages: state.messages,
+          assistRouterPrompt,
+          assistOptions,
+          assistTools,
+          memberNameSet,
+          maxPlanActions: MAX_NESTED_COMMANDS
+        });
+        if (topLevelAssist.kind === "plan") {
+          const encodedQueue = topLevelAssist.actions.map(
+            (action) => encodePlannedAction(action)
+          );
+          const first = topLevelAssist.actions[0];
+          if (!first) {
+            return { next: "chat", args: {}, commandQueue: [] };
+          }
+          return {
+            next: first.next,
+            args: first.args,
+            commandQueue: encodedQueue
+          };
+        }
+        if (topLevelAssist.kind === "tool") {
+          const guardRoute = routeDeterministically(commandLine);
+          if (guardRoute.type === "tool" && guardRoute.next === "resolve_ambiguity" && guardRoute.pendingAmbiguity) {
+            setRoutePendingAmbiguity(guardRoute.pendingAmbiguity);
+            return {
+              next: guardRoute.next,
+              args: guardRoute.args,
+              commandQueue: [commandLine]
+            };
+          }
+          return {
+            next: topLevelAssist.next,
+            args: topLevelAssist.args,
+            commandQueue: [commandLine]
+          };
+        }
+        if (topLevelAssist.kind === "chat" && !topLevelActionLike) {
+          return {
+            next: "chat",
+            args: { routerMessage: topLevelAssist.content },
+            commandQueue: []
+          };
+        }
       }
-      if (justRanTool && commandQueue.length > 1) {
-        commandQueue = commandQueue.slice(1);
-      }
-      const activeCommand = commandQueue[0] || commandLine;
-      if (!activeCommand) {
+      const queuePlan = buildCommandQueuePlan({
+        existingQueue: state.commandQueue,
+        continuationQueue,
+        latestTextRaw,
+        commandLine,
+        lastWorker: state.lastWorker,
+        justRanTool: justRanTool && state.commandQueue.length > 0,
+        maxCommands: MAX_NESTED_COMMANDS
+      });
+      if (!queuePlan) {
         return { next: "chat", args: {}, commandQueue: [] };
       }
-      const route = routeDeterministically(activeCommand);
+      const { commandQueue, activeCommand, truncationNotice } = queuePlan;
+      const applyNoticeToArgs = (args) => truncationNotice ? { ...args, [INTERNAL_CHAIN_NOTICE_ARG]: truncationNotice } : args;
+      const applyNoticeToMessage = (message) => truncationNotice ? `${truncationNotice}
+${message}` : message;
+      const plannedAction = decodePlannedAction(activeCommand);
+      if (plannedAction) {
+        return {
+          next: plannedAction.next,
+          args: applyNoticeToArgs(plannedAction.args),
+          commandQueue
+        };
+      }
       const activeCommandText = activeCommand.toLowerCase();
-      const shouldTryAssistRouting = commandQueue.length <= 1 && looksLikeNewActionCommand(activeCommandText);
-      const capability = getAssistCapability(endpointKey);
-      if (shouldTryAssistRouting && shouldAttemptAssist(endpointKey)) {
-        try {
-          const assistMessages = toWire(state.messages.slice(-10));
-          const assist = await assistRemote(
-            assistRouterPrompt,
-            assistMessages,
-            assistOptions,
-            assistTools
-          );
-          markAssistSupported(endpointKey);
-          const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
-          const assistArgs = isRecord(assist?.args) ? assist.args : {};
-          if (assistNext && assistNext !== "chat" && memberNameSet.has(assistNext)) {
-            if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
-              setRoutePendingAmbiguity(route.pendingAmbiguity);
-              return { next: route.next, args: route.args, commandQueue };
-            }
-            assistantLogger.debug("router", `Assist route selected: ${assistNext}`);
-            return { next: assistNext, args: assistArgs, commandQueue };
-          }
-          if (assistNext === "chat") {
-            const content = typeof assist?.content === "string" ? assist.content.trim() : "";
-            if (content) {
-              return { next: "chat", args: { routerMessage: content }, commandQueue: [] };
-            }
-          }
-        } catch (error) {
-          const message = String(error || "");
-          const assistUnsupported = /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
-          if (assistUnsupported) {
-            markAssistUnsupported(endpointKey);
-            assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
-          } else {
-            assistantLogger.warn("router", "Assist route failed, using fallback.", error);
-          }
+      const actionLikeCommand = looksLikeNewActionCommand(activeCommandText);
+      const assistRoute = await tryResolveAssistRoute({
+        endpointKey,
+        activeCommandText,
+        commandQueueLength: commandQueue.length,
+        messages: state.messages,
+        assistRouterPrompt,
+        assistOptions,
+        assistTools,
+        memberNameSet,
+        maxPlanActions: MAX_NESTED_COMMANDS
+      });
+      if (assistRoute.kind === "plan") {
+        const encodedQueue = assistRoute.actions.map(
+          (action) => encodePlannedAction(action)
+        );
+        const first = assistRoute.actions[0];
+        if (first) {
+          return {
+            next: first.next,
+            args: applyNoticeToArgs(first.args),
+            commandQueue: encodedQueue
+          };
         }
-      } else if (shouldTryAssistRouting && capability === "unsupported") {
-        assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+      }
+      const route = routeDeterministically(activeCommand);
+      if (assistRoute.kind === "tool") {
+        if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
+          setRoutePendingAmbiguity(route.pendingAmbiguity);
+          return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+        }
+        return {
+          next: assistRoute.next,
+          args: applyNoticeToArgs(assistRoute.args),
+          commandQueue
+        };
+      }
+      if (assistRoute.kind === "chat") {
+        if (actionLikeCommand) {
+          assistantLogger.debug(
+            "router",
+            "Ignoring assist chat response for action-like command"
+          );
+        } else {
+          return {
+            next: "chat",
+            args: { routerMessage: applyNoticeToMessage(assistRoute.content) },
+            commandQueue: []
+          };
+        }
       }
       if (route.type === "tool") {
         if (route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
         }
-        return { next: route.next, args: route.args, commandQueue };
+        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
       }
       if (route.type === "chat") {
-        return { next: "chat", args: { routerMessage: route.message }, commandQueue: [] };
+        return {
+          next: "chat",
+          args: { routerMessage: applyNoticeToMessage(route.message) },
+          commandQueue: []
+        };
       }
-      return { next: "chat", args: {}, commandQueue: [] };
+      return {
+        next: "chat",
+        args: truncationNotice ? { routerMessage: truncationNotice } : {},
+        commandQueue: []
+      };
     };
     const workflow = new StateGraph(GraphState);
     for (const name of memberNames) {
@@ -68738,8 +69771,13 @@ Result: ${toolResult.message}`
         return msg;
       }
     }
-    const { commands, toolCommandNames } = createAssistantCommandsRegistry();
-    const graph = await buildAssistantGraph(commands, assistantWindow, messageId);
+    const { commands, toolCommandNames, assistTools } = createAssistantCommandsRegistry();
+    const graph = await buildAssistantGraph(
+      commands,
+      assistantWindow,
+      messageId,
+      assistTools
+    );
     const sessionHistory = sessionController.getCurrentSessionMessages();
     const stream = await graph.stream(
       { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },

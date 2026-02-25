@@ -5,17 +5,15 @@ import type { PendingAmbiguityPayload } from "../../../shared/contracts.js";
 import type { Command, CmdResult } from "../commands.js";
 import { assistRemote, type AssistTool } from "../proxyClient.js";
 import {
+  clearContinuationQueue,
   clearPendingAmbiguity,
+  getContinuationQueue,
   getPendingAmbiguity,
   getPendingConfirmation,
+  setContinuationQueue,
   setPendingAmbiguity,
+  takeContinuationQueue,
 } from "../services/interactionState.js";
-import {
-  getAssistCapability,
-  markAssistSupported,
-  markAssistUnsupported,
-  shouldAttemptAssist,
-} from "../services/assistEndpointState.js";
 import type {
   AssistantWindowLike,
   OasisRecordToolActionStart,
@@ -23,22 +21,28 @@ import type {
 } from "../types/runtime.js";
 import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
-import {
-  looksLikeNewActionCommand,
-  parseAmbiguityResolution,
-} from "../utils/routingUtils.js";
+import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 import type { PendingAmbiguityPayload as RouterPendingAmbiguityPayload } from "../utils/routerTypes.js";
 import { getAssistantApiBase } from "../awsSignedFetch.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
 import { MAX_NESTED_COMMANDS } from "./constants.js";
-import { splitCommandChain } from "./commandChain.js";
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
+import {
+  resolvePendingAmbiguityGate,
+  resolvePendingConfirmationGate,
+} from "./supervisorGates.js";
+import {
+  buildCommandQueuePlan,
+  shouldClearContinuationQueue,
+} from "./supervisorQueue.js";
+import { tryResolveAssistRoute } from "./supervisorAssist.js";
+import { decodePlannedAction, encodePlannedAction } from "./plannedActions.js";
+import { presentToolResult } from "./toolResultPresenter.js";
 import {
   extractChatContent,
   getToolResultPayload,
-  isRecord,
   msgText,
   toWire,
   type GraphArgs,
@@ -68,6 +72,28 @@ const GraphState = Annotation.Root({
     default: () => [],
   }),
 });
+
+const INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
+
+function splitInternalArgs(
+  args: GraphArgs
+): { commandArgs: GraphArgs; chainNotice: string | null } {
+  const commandArgs: GraphArgs = {};
+  let chainNotice: string | null = null;
+
+  for (const [key, value] of Object.entries(args || {})) {
+    if (key === INTERNAL_CHAIN_NOTICE_ARG && typeof value === "string") {
+      chainNotice = value.trim() || null;
+      continue;
+    }
+    if (key.startsWith("__oasis")) {
+      continue;
+    }
+    commandArgs[key] = value;
+  }
+
+  return { commandArgs, chainNotice };
+}
 
 function toAmbiguityPayload(
   routePending: RouterPendingAmbiguityPayload
@@ -105,7 +131,8 @@ type GraphStateType = typeof GraphState.State;
 export async function buildAssistantGraph(
   commands: Command[],
   assistantWindow: AssistantWindowLike,
-  messageId?: string
+  messageId?: string,
+  assistToolDefs: AssistTool[] = []
 ) {
   const toolAgents: Record<
     string,
@@ -127,15 +154,16 @@ export async function buildAssistantGraph(
         actionId = recordStart(command.commandName, messageId);
       }
 
+      const { commandArgs, chainNotice } = splitInternalArgs(state.args);
       let result: CmdResult;
       try {
-        result = await command.execute(state.args);
+        result = await command.execute(commandArgs);
         if (typeof recordUpdate === "function" && actionId) {
           recordUpdate(actionId, "done");
         }
       } catch (error) {
         if (typeof recordUpdate === "function" && actionId) {
-          recordUpdate(actionId, "error", String(error));
+          recordUpdate(actionId, "error");
         }
         assistantLogger.error(
           "graph",
@@ -146,12 +174,31 @@ export async function buildAssistantGraph(
       }
 
       if (result.requiresConfirmation) {
+        const remainingQueue =
+          state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [];
+        if (remainingQueue.length > 0) {
+          setContinuationQueue(remainingQueue);
+        } else {
+          clearContinuationQueue();
+        }
         assistantLogger.debug(
           "graph",
           `Command requires confirmation: ${command.commandName}`
         );
+        const confirmationMessage = String(result.message || "").trim();
+        const toolResultPayload: ToolResultPayload = {
+          kind: "tool_result",
+          commandName: command.commandName,
+          message: confirmationMessage,
+        };
         return {
-          messages: [new AIMessage({ content: "", name: command.commandName })],
+          messages: [
+            new AIMessage({
+              content: confirmationMessage,
+              name: command.commandName,
+              additional_kwargs: { oasisToolResult: toolResultPayload },
+            }),
+          ],
           lastWorker: command.commandName,
           next: END,
           args: {},
@@ -159,16 +206,19 @@ export async function buildAssistantGraph(
         };
       }
 
+      const resultMessage = chainNotice
+        ? `${chainNotice}\n${result.message}`
+        : result.message;
       const toolResultPayload: ToolResultPayload = {
         kind: "tool_result",
         commandName: command.commandName,
-        message: result.message,
+        message: resultMessage,
       };
 
       return {
         messages: [
           new AIMessage({
-            content: result.message,
+            content: resultMessage,
             name: command.commandName,
             additional_kwargs: { oasisToolResult: toolResultPayload },
           }),
@@ -185,10 +235,13 @@ export async function buildAssistantGraph(
   }
   const memberNameSet = new Set(memberNames);
 
-  const assistTools: AssistTool[] = commands.map(command => ({
-    name: command.commandName,
-    description: command.description,
-  }));
+  const assistTools: AssistTool[] =
+    assistToolDefs.length > 0
+      ? assistToolDefs
+      : commands.map(command => ({
+          name: command.commandName,
+          description: command.description,
+        }));
   const assistOptions = [...memberNames, "chat"];
   const assistRouterPrompt = buildAssistRouterPrompt(memberNames);
   const endpointKey = getAssistantApiBase();
@@ -205,8 +258,18 @@ export async function buildAssistantGraph(
 
     const lastMsg = state.messages[state.messages.length - 1];
     const lastMsgText = msgText(lastMsg as MessageLike);
-    const hasToolOutput = Boolean(getToolResultPayload(lastMsg as MessageLike));
+    const toolPayload = getToolResultPayload(lastMsg as MessageLike);
+    const hasToolOutput = Boolean(toolPayload);
     const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+
+    if (toolPayload && !hasSummarizeRequest) {
+      return {
+        messages: [new AIMessage(presentToolResult(toolPayload))],
+        lastWorker: "chat",
+        commandQueue: [],
+      };
+    }
+
     const hiddenInstruction = buildHiddenInstruction({
       hasSummarizeRequest,
       hasToolOutput,
@@ -271,132 +334,230 @@ export async function buildAssistantGraph(
 
     const justRanTool = memberNameSet.has(state.lastWorker);
     const justRanConfirm = state.lastWorker === "confirm_action";
-
-    const confirmMatch = confirmationText.match(
-      /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i
-    );
-    const cancelMatch = confirmationText.match(/^(?:no|cancel|nevermind|don'?t|stop)$/i);
     const pendingConfirmation = getPendingConfirmation();
-
-    if ((confirmMatch || cancelMatch) && pendingConfirmation && !justRanConfirm) {
-      return {
-        next: "confirm_action",
-        args: { confirmed: !!confirmMatch },
-      };
+    const confirmationGate = resolvePendingConfirmationGate({
+      confirmationText,
+      pendingConfirmation,
+      justRanConfirm,
+    });
+    if (confirmationGate.kind === "route") {
+      return { next: confirmationGate.next, args: confirmationGate.args };
     }
-
-    if (pendingConfirmation) {
+    if (confirmationGate.kind === "end") {
       return { next: END, args: {} };
     }
 
     const pendingAmbiguity = getPendingAmbiguity();
-    if (pendingAmbiguity) {
-      if (state.lastWorker === "resolve_ambiguity") {
-        return { next: "chat", args: {} };
-      }
-
-      const resolution = parseAmbiguityResolution(confirmationText);
-      if (resolution) {
-        return { next: "resolve_ambiguity", args: { target: resolution } };
-      }
-
-      const wordCount = confirmationText.split(/\s+/).filter(Boolean).length;
-      if (!looksLikeNewActionCommand(commandText) && wordCount <= 3) {
-        return { next: "resolve_ambiguity", args: {} };
-      }
-
+    const ambiguityGate = resolvePendingAmbiguityGate({
+      pendingAmbiguity,
+      confirmationText,
+      commandText,
+      lastWorker: state.lastWorker,
+    });
+    if (ambiguityGate.kind === "route") {
+      return { next: ambiguityGate.next, args: ambiguityGate.args };
+    }
+    if (ambiguityGate.kind === "clear") {
       clearPendingAmbiguity();
     }
 
+    const pendingContinuationQueue = getContinuationQueue();
+    const shouldResumeContinuation =
+      state.lastWorker === "confirm_action" &&
+      pendingContinuationQueue.length > 0 &&
+      !getPendingConfirmation();
+
+    if (
+      shouldClearContinuationQueue({
+        hasContinuation: pendingContinuationQueue.length > 0,
+        shouldResumeContinuation,
+        justRanTool,
+        commandText,
+      })
+    ) {
+      clearContinuationQueue();
+    }
+
     if (justRanTool) {
-      if (state.commandQueue.length <= 1) {
+      if (state.commandQueue.length <= 1 && !shouldResumeContinuation) {
         return { next: "chat", args: {}, commandQueue: [] };
       }
     }
 
-    let commandQueue =
-      state.commandQueue.length > 0
-        ? [...state.commandQueue]
-        : splitCommandChain(latestTextRaw || commandLine, MAX_NESTED_COMMANDS).commands;
+    const continuationQueue = shouldResumeContinuation
+      ? takeContinuationQueue()
+      : [];
+    const hasQueuedCommands =
+      state.commandQueue.length > 0 || continuationQueue.length > 0;
+    const topLevelActionText = commandLine.toLowerCase();
+    const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
 
-    if (commandQueue.length === 0) {
-      commandQueue = [commandLine];
+    if (!hasQueuedCommands && commandLine) {
+      const topLevelAssist = await tryResolveAssistRoute({
+        endpointKey,
+        activeCommandText: topLevelActionText,
+        commandQueueLength: 1,
+        messages: state.messages,
+        assistRouterPrompt,
+        assistOptions,
+        assistTools,
+        memberNameSet,
+        maxPlanActions: MAX_NESTED_COMMANDS,
+      });
+
+      if (topLevelAssist.kind === "plan") {
+        const encodedQueue = topLevelAssist.actions.map(action =>
+          encodePlannedAction(action)
+        );
+        const first = topLevelAssist.actions[0];
+        if (!first) {
+          return { next: "chat", args: {}, commandQueue: [] };
+        }
+        return {
+          next: first.next,
+          args: first.args,
+          commandQueue: encodedQueue,
+        };
+      }
+
+      if (topLevelAssist.kind === "tool") {
+        const guardRoute = routeDeterministically(commandLine);
+        if (
+          guardRoute.type === "tool" &&
+          guardRoute.next === "resolve_ambiguity" &&
+          guardRoute.pendingAmbiguity
+        ) {
+          setRoutePendingAmbiguity(guardRoute.pendingAmbiguity);
+          return {
+            next: guardRoute.next,
+            args: guardRoute.args,
+            commandQueue: [commandLine],
+          };
+        }
+        return {
+          next: topLevelAssist.next,
+          args: topLevelAssist.args,
+          commandQueue: [commandLine],
+        };
+      }
+
+      if (topLevelAssist.kind === "chat" && !topLevelActionLike) {
+        return {
+          next: "chat",
+          args: { routerMessage: topLevelAssist.content },
+          commandQueue: [],
+        };
+      }
     }
 
-    if (justRanTool && commandQueue.length > 1) {
-      commandQueue = commandQueue.slice(1);
-    }
-
-    const activeCommand = commandQueue[0] || commandLine;
-    if (!activeCommand) {
+    const queuePlan = buildCommandQueuePlan({
+      existingQueue: state.commandQueue,
+      continuationQueue,
+      latestTextRaw,
+      commandLine,
+      lastWorker: state.lastWorker,
+      justRanTool: justRanTool && state.commandQueue.length > 0,
+      maxCommands: MAX_NESTED_COMMANDS,
+    });
+    if (!queuePlan) {
       return { next: "chat", args: {}, commandQueue: [] };
+    }
+    const { commandQueue, activeCommand, truncationNotice } = queuePlan;
+    const applyNoticeToArgs = (args: GraphArgs): GraphArgs =>
+      truncationNotice
+        ? { ...args, [INTERNAL_CHAIN_NOTICE_ARG]: truncationNotice }
+        : args;
+    const applyNoticeToMessage = (message: string): string =>
+      truncationNotice ? `${truncationNotice}\n${message}` : message;
+
+    const plannedAction = decodePlannedAction(activeCommand);
+    if (plannedAction) {
+      return {
+        next: plannedAction.next,
+        args: applyNoticeToArgs(plannedAction.args),
+        commandQueue,
+      };
+    }
+
+    const activeCommandText = activeCommand.toLowerCase();
+    const actionLikeCommand = looksLikeNewActionCommand(activeCommandText);
+    const assistRoute = await tryResolveAssistRoute({
+      endpointKey,
+      activeCommandText,
+      commandQueueLength: commandQueue.length,
+      messages: state.messages,
+      assistRouterPrompt,
+      assistOptions,
+      assistTools,
+      memberNameSet,
+      maxPlanActions: MAX_NESTED_COMMANDS,
+    });
+
+    if (assistRoute.kind === "plan") {
+      const encodedQueue = assistRoute.actions.map(action =>
+        encodePlannedAction(action)
+      );
+      const first = assistRoute.actions[0];
+      if (first) {
+        return {
+          next: first.next,
+          args: applyNoticeToArgs(first.args),
+          commandQueue: encodedQueue,
+        };
+      }
     }
 
     const route = routeDeterministically(activeCommand);
-    const activeCommandText = activeCommand.toLowerCase();
-    const shouldTryAssistRouting =
-      commandQueue.length <= 1 && looksLikeNewActionCommand(activeCommandText);
-    const capability = getAssistCapability(endpointKey);
-
-    if (shouldTryAssistRouting && shouldAttemptAssist(endpointKey)) {
-      try {
-        const assistMessages = toWire(state.messages.slice(-10));
-        const assist = await assistRemote(
-          assistRouterPrompt,
-          assistMessages,
-          assistOptions,
-          assistTools
-        );
-        markAssistSupported(endpointKey);
-
-        const assistNext =
-          typeof assist?.next === "string" ? assist.next.trim() : "";
-        const assistArgs = isRecord(assist?.args) ? assist.args : {};
-
-        if (assistNext && assistNext !== "chat" && memberNameSet.has(assistNext)) {
-          if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
-            setRoutePendingAmbiguity(route.pendingAmbiguity);
-            return { next: route.next, args: route.args, commandQueue };
-          }
-
-          assistantLogger.debug("router", `Assist route selected: ${assistNext}`);
-          return { next: assistNext, args: assistArgs, commandQueue };
-        }
-
-        if (assistNext === "chat") {
-          const content =
-            typeof assist?.content === "string" ? assist.content.trim() : "";
-          if (content) {
-            return { next: "chat", args: { routerMessage: content }, commandQueue: [] };
-          }
-        }
-      } catch (error) {
-        const message = String(error || "");
-        const assistUnsupported =
-          /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
-        if (assistUnsupported) {
-          markAssistUnsupported(endpointKey);
-          assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
-        } else {
-          assistantLogger.warn("router", "Assist route failed, using fallback.", error);
-        }
+    if (assistRoute.kind === "tool") {
+      if (
+        route.type === "tool" &&
+        route.next === "resolve_ambiguity" &&
+        route.pendingAmbiguity
+      ) {
+        setRoutePendingAmbiguity(route.pendingAmbiguity);
+        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
       }
-    } else if (shouldTryAssistRouting && capability === "unsupported") {
-      assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+      return {
+        next: assistRoute.next,
+        args: applyNoticeToArgs(assistRoute.args),
+        commandQueue,
+      };
+    }
+    if (assistRoute.kind === "chat") {
+      if (actionLikeCommand) {
+        assistantLogger.debug(
+          "router",
+          "Ignoring assist chat response for action-like command"
+        );
+      } else {
+        return {
+          next: "chat",
+          args: { routerMessage: applyNoticeToMessage(assistRoute.content) },
+          commandQueue: [],
+        };
+      }
     }
 
     if (route.type === "tool") {
       if (route.pendingAmbiguity) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
       }
-      return { next: route.next, args: route.args, commandQueue };
+      return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
     }
 
     if (route.type === "chat") {
-      return { next: "chat", args: { routerMessage: route.message }, commandQueue: [] };
+      return {
+        next: "chat",
+        args: { routerMessage: applyNoticeToMessage(route.message) },
+        commandQueue: [],
+      };
     }
 
-    return { next: "chat", args: {}, commandQueue: [] };
+    return {
+      next: "chat",
+      args: truncationNotice ? { routerMessage: truncationNotice } : {},
+      commandQueue: [],
+    };
   };
 
   const workflow = new StateGraph(GraphState);

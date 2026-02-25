@@ -27,13 +27,22 @@ import {
 } from "./services/firefoxFacade";
 import {
   clearPendingAmbiguity,
+  clearContinuationQueue,
   clearPendingConfirmation,
+  clearRecentSearchResults,
+  getRecentSearchResults,
   getPendingAmbiguity,
   getPendingConfirmation,
+  setRecentSearchResults,
   setPendingConfirmation,
   type AmbiguityTarget,
   type InteractionCommandArgs,
+  type RecentSearchResult,
 } from "./services/interactionState";
+import {
+  getCommandExecutor,
+  listRegisteredCommandNames,
+} from "./services/commandExecutionRegistry";
 import type {
   GBrowserLike,
   BrowserTabLike,
@@ -122,6 +131,10 @@ function tabByIndex(gBrowser: { tabs: ArrayLike<BrowserTabLike> }, index: number
 
 function normalizeQuery(value: string | undefined): string {
   return (value || "").trim().toLowerCase();
+}
+
+function toWebSearchUrl(query: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
 function analyzeGroupMoveImpact(tabsToMove: BrowserTabLike[]): {
@@ -392,37 +405,71 @@ export class ShowURLCommand implements Command {
   }
 }
 
+export class OpenUrlCommand implements Command {
+  commandName = "open_url";
+  description = "Open a URL in a new browser tab. Arguments: { url: string }.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { topWin, Services } = getChrome();
+    const rawUrl = stringArg(args, "url");
+    if (!rawUrl) {
+      return { message: "Missing 'url' argument." };
+    }
+    if (!topWin?.openTrustedLinkIn) {
+      return { message: "Cannot open URL (openTrustedLinkIn not found)." };
+    }
+
+    const normalizedInput = rawUrl.trim();
+    if (!normalizedInput) {
+      return { message: "Missing 'url' argument." };
+    }
+
+    let url = normalizedInput;
+    try {
+      url = withUriFixup(normalizedInput, Services);
+    } catch (error) {
+      assistantLogger.warn("commands", "Failed to fixup URI", error);
+    }
+    topWin.openTrustedLinkIn(url, "tab");
+    return { message: `Opened URL in a new tab: ${url}` };
+  }
+}
+
+export class WebSearchCommand implements Command {
+  commandName = "web_search";
+  description =
+    "Search the web in a new tab. Arguments: { query: string }.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    const query = stringArg(args, "query");
+    if (!query) {
+      return { message: "Missing 'query' argument." };
+    }
+    if (!topWin?.openTrustedLinkIn) {
+      return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+    }
+    const searchUrl = toWebSearchUrl(query);
+    topWin.openTrustedLinkIn(searchUrl, "tab");
+    return { message: `Opened web search for "${query}" in a new tab.` };
+  }
+}
+
 export class OpenTabCommand implements Command {
   commandName = "open_tab";
   description =
-    "Open a new tab with a given URL. Accepts arguments: { url: string }.";
+    "Legacy alias that opens a URL or web query in a new tab. Prefer open_url({url}) or web_search({query}).";
   async execute(args: CommandArgs): Promise<CmdResult> {
-    const { topWin, Services } = getChrome();
-    let url = stringArg(args, "url");
-    if (!url) return { message: "Missing 'url' argument." };
-    if (!topWin?.openTrustedLinkIn)
-      return { message: "Cannot open tab (openTrustedLinkIn not found)." };
-
-    // If it doesn't look like a URL (no dots, or has spaces), treat it as a "Smart Open" (I'm Feeling Lucky)
-    // This allows "Open youtube music" to redirect to "music.youtube.com"
-    const isUrlLike = url.includes(".") && !url.includes(" ");
-
-    if (!isUrlLike) {
-      // Use DuckDuckGo "I'm Feeling Ducky" (backslash) to redirect to the first result
-      // Google's btnI often shows a "Redirect Notice" page. DDG is smoother.
-      url = "https://duckduckgo.com/?q=\\" + encodeURIComponent(url);
-    } else {
-      // It looks like a URL (e.g. "google.com"), use Firefox's fixup (adds https://, etc.)
-      try {
-        url = withUriFixup(url, Services);
-      } catch (e) {
-        assistantLogger.warn("commands", "Failed to fixup URI", e);
-      }
+    const url = stringArg(args, "url");
+    const query = stringArg(args, "query");
+    if (query?.trim()) {
+      return await new WebSearchCommand().execute({ query });
     }
-
-    topWin.openTrustedLinkIn(url, "tab");
-    const display = !isUrlLike ? stringArg(args, "url") : url;
-    return { message: `Successfully opened tab to: ${display}` };
+    if (!url) {
+      return { message: "Missing 'url' argument." };
+    }
+    if (url.includes(" ")) {
+      return await new WebSearchCommand().execute({ query: url });
+    }
+    return await new OpenUrlCommand().execute({ url });
   }
 }
 
@@ -1047,6 +1094,21 @@ export class SearchMemoryCommand implements Command {
         : "";
 
     if (results.length === 0) {
+      clearRecentSearchResults();
+      if (!folderScoped && !sourceScope && query.trim() !== "*") {
+        setPendingConfirmation({
+          command: "web_search",
+          args: { query },
+          description: `No local matches found for "${query}". Search the web in a new tab?`,
+        });
+        return {
+          message:
+            `No local matches found for "${query}". ` +
+            `Would you like me to open a web search in a new tab?`,
+          requiresConfirmation: true,
+          confirmationData: { query, url: toWebSearchUrl(query) },
+        };
+      }
       const guidance = folder
         ? ` Try "list tabs in bookmark folder ${folder}" to inspect what is saved there.`
         : "";
@@ -1065,7 +1127,7 @@ export class SearchMemoryCommand implements Command {
       memory: "memory",
     };
 
-    const structured = results.map((r, i) => {
+    const structured: RecentSearchResult[] = results.map((r, i) => {
       const rawType = r.metadata?.type || "memory";
       const source = sourceMap[rawType] || rawType;
       const resolvedUrl = r.url || r.metadata?.url || r.metadata?.hubName || "";
@@ -1086,6 +1148,7 @@ export class SearchMemoryCommand implements Command {
         snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
       };
     });
+    setRecentSearchResults(structured);
 
     const resultsBySource: Record<string, SearchResultItem[]> = {};
     for (const r of structured) {
@@ -1107,16 +1170,75 @@ export class SearchMemoryCommand implements Command {
   }
 }
 
+export class GetRecentSearchResultsCommand implements Command {
+  commandName = "get_recent_search_results";
+  description =
+    "Get cached results from the most recent search_memory command. Arguments: { limit?: number }.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const limit = numberArg(args, "limit");
+    const cappedLimit =
+      limit != null ? Math.max(1, Math.min(Math.floor(limit), 25)) : 5;
+    const recent = getRecentSearchResults();
+    if (recent.length === 0) {
+      return {
+        message: JSON.stringify({
+          summary: "No recent search results available.",
+          results: [],
+        }),
+      };
+    }
+
+    const results = recent.slice(0, cappedLimit).map((result, idx) => ({
+      index: idx + 1,
+      source: result.source,
+      title: result.title,
+      url: result.url,
+      bookmarkGuid: result.bookmarkGuid,
+      context: result.context,
+      snippet: result.snippet,
+    }));
+    return {
+      message: JSON.stringify({
+        summary: `Found ${results.length} cached recent search result(s).`,
+        results,
+      }),
+    };
+  }
+}
+
 export class OpenSearchResultCommand implements Command {
   commandName = "open_search_result";
   description =
-    "Open a search result. Accepts arguments: { url: string, type?: string, bookmarkGuid?: string }. If type is 'tab', switches to it if found. Otherwise opens in new tab.";
+    "Open a search result. Accepts arguments: { url?: string, index?: number, type?: string, bookmarkGuid?: string }. If index is provided (or omitted), resolves from recent search results. If type is 'tab', switches to it if found.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     let url = stringArg(args, "url");
-    const type = stringArg(args, "type");
-    const bookmarkGuid = stringArg(args, "bookmarkGuid");
-    
-    if (!url) return { message: "Missing 'url' argument." };
+    const index = numberArg(args, "index");
+    let type = stringArg(args, "type");
+    let bookmarkGuid = stringArg(args, "bookmarkGuid");
+
+    if (!url) {
+      const recent = getRecentSearchResults();
+      if (recent.length === 0) {
+        return {
+          message:
+            "No recent search result is available to open. Run a search first or pass a URL.",
+        };
+      }
+      const targetIndex = index != null ? Math.max(1, Math.floor(index)) : 1;
+      const selected = recent[targetIndex - 1];
+      if (!selected?.url) {
+        return {
+          message:
+            `Result index ${targetIndex} is out of range. ` +
+            `I currently have ${recent.length} recent result(s).`,
+        };
+      }
+      url = selected.url;
+      bookmarkGuid = bookmarkGuid || selected.bookmarkGuid;
+      if (!type && selected.source === "tab") {
+        type = "tab";
+      }
+    }
 
     const { topWin, gBrowser, PlacesUtils } = getChrome();
     if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
@@ -1648,6 +1770,7 @@ export class ConfirmActionCommand implements Command {
         "confirm-action",
         "No pending confirmation found"
       );
+      clearContinuationQueue();
       return { message: "No pending action to confirm." };
     }
 
@@ -1660,21 +1783,26 @@ export class ConfirmActionCommand implements Command {
 
     if (!confirmed) {
       clearPendingConfirmation();
+      clearContinuationQueue();
       return { message: "Action cancelled." };
     }
 
-    const commandMap: Record<string, Command> = {
-      close_tab: new CloseTabCommand(),
-      delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
-      delete_tab_group: new DeleteTabGroupCommand(),
-      create_tab_group: new CreateTabGroupCommand(),
-      add_tab_to_group: new AddTabToGroupCommand(),
-    };
-
-    const cmd = commandMap[pending.command];
+    const cmd = getCommandExecutor(pending.command);
     if (!cmd) {
       clearPendingConfirmation();
-      return { message: `Unknown command: ${pending.command}` };
+      clearContinuationQueue();
+      const known = listRegisteredCommandNames().sort();
+      return {
+        message:
+          `Unknown command: ${pending.command}. ` +
+          `Known commands: ${known.join(", ")}`,
+      };
+    }
+
+    if (cmd.commandName === this.commandName) {
+      clearPendingConfirmation();
+      clearContinuationQueue();
+      return { message: "Cannot confirm confirm_action recursively." };
     }
 
     return await cmd.execute(pending.args);

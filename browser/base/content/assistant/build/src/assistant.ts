@@ -47,8 +47,14 @@ export async function runAssistantStream(
     }
   }
 
-  const { commands, toolCommandNames } = createAssistantCommandsRegistry();
-  const graph = await buildAssistantGraph(commands, assistantWindow, messageId);
+  const { commands, toolCommandNames, assistTools } =
+    createAssistantCommandsRegistry();
+  const graph = await buildAssistantGraph(
+    commands,
+    assistantWindow,
+    messageId,
+    assistTools
+  );
   const sessionHistory = sessionController.getCurrentSessionMessages();
 
   const stream = await graph.stream(

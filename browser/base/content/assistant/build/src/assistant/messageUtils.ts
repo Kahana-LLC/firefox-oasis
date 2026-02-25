@@ -128,11 +128,10 @@ export function stripLeadingEchoedPayload(
       continue;
     }
 
-    if (text === candidate) {
-      return "";
-    }
-
     if (text.startsWith(candidate)) {
+      if (text.length === candidate.length) {
+        continue;
+      }
       text = text.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
       break;
     }

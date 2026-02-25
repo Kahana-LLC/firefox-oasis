@@ -1,41 +1,17 @@
 import { h, Fragment } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useRef, useState } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
-import { Feedback } from './components/Feedback';
-import TOOL_LABELS from './toolLabels';
-import type {
-  AssistantHistoryEntry,
-  AssistantMessage,
-  AuthState,
-  ConfirmationData,
-  OasisWindow,
-  SupabaseAuthState,
-  ToolAction,
-  ToolActionStatus,
-} from './types';
-import {
-  OASIS_EVENT_AUTH_UPDATE,
-  OASIS_EVENT_CONFIRMATION_UPDATE,
-  OASIS_EVENT_HISTORY_UPDATE,
-} from '../../shared/contracts.js';
+import { ConfirmationModal } from './components/ConfirmationModal';
+import { ChatTimeline } from './components/ChatTimeline';
+import { Composer } from './components/Composer';
+import { useAssistantRuntime } from './hooks/useAssistantRuntime';
+import { useAuthSync } from './hooks/useAuthSync';
+import { useAssistantBridge } from './hooks/useAssistantBridge';
+import type { AuthState, ConfirmationData, OasisWindow } from './types';
 import './App.css';
 
 const oasisWindow: OasisWindow = window;
-
-function ActiveToolIndicator({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#7A9200', fontSize: '13px', margin: '8px 0', paddingLeft: '4px' }}>
-      <svg width="12" height="12" viewBox="0 0 50 50">
-        <circle cx="25" cy="25" r="20" stroke="#7A9200" strokeWidth="4" fill="none" opacity="0.2" />
-        <circle cx="25" cy="25" r="20" stroke="#7A9200" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
-          <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
-        </circle>
-      </svg>
-      <span>{label}</span>
-    </div>
-  );
-}
 
 function Banner({ email, onClose }: { email: string; onClose: () => void }) {
   return (
@@ -54,558 +30,127 @@ function Banner({ email, onClose }: { email: string; onClose: () => void }) {
   );
 }
 
-function ConfirmationModal({ 
-  data, 
-  onConfirm, 
-  onCancel 
-}: { 
-  data: ConfirmationData; 
-  onConfirm: () => void; 
-  onCancel: () => void;
-}) {
-  return (
-    <div className="confirmation-overlay" style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10000,
-    }}>
-      <div className="confirmation-modal" style={{
-        background: '#fff',
-        borderRadius: '12px',
-        padding: '24px',
-        maxWidth: '400px',
-        width: '90%',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          background: '#FFF8E1',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 16px auto',
-        }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-        </div>
-        
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#333' }}>
-          Confirm Action
-        </h3>
-        
-        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#666' }}>
-          {data.description}
-        </p>
-        
-        <div style={{
-          background: '#E8F5E9',
-          borderRadius: '8px',
-          padding: '8px 12px',
-          marginBottom: '20px',
-          fontSize: '13px',
-          color: '#2E7D32',
-        }}>
-          Command: {data.command}
-        </div>
-        
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-              background: '#fff',
-              color: '#333',
-              fontSize: '14px',
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: 'none',
-              borderRadius: '8px',
-              background: '#7A9200',
-              color: '#fff',
-              fontSize: '14px',
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            Approve
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Global relays to ensure functions are available even if App remounts
-let recordStartRelay: ((name: string, messageId?: string, label?: string) => string) | null = null;
-let recordUpdateRelay: ((id: string, status: ToolActionStatus, output?: string) => void) | null = null;
-let resetAssistantSessionRelay: (() => void | Promise<void>) | null = null;
-let pendingConfirmationRelay: ((data: ConfirmationData | null) => void) | null = null;
-
-// Store the original backend reset function before we overwrite it
-const originalResetAssistantSession = oasisWindow.resetAssistantSession;
-
-oasisWindow.oasisRecordToolActionStart = (name: string, messageId?: string, label?: string) => {
-  return recordStartRelay?.(name, messageId, label);
-};
-oasisWindow.oasisRecordToolActionUpdate = (id: string, status: ToolActionStatus, output?: string) => {
-  recordUpdateRelay?.(id, status, output);
-};
-oasisWindow.resetAssistantSession = () => {
-  if (resetAssistantSessionRelay) {
-    return resetAssistantSessionRelay();
-  }
-  // Fallback to original if relay not set
-  return originalResetAssistantSession?.();
-};
-oasisWindow.oasisSetPendingConfirmationRelay = (data: ConfirmationData | null) => {
-  if (pendingConfirmationRelay) {
-    pendingConfirmationRelay(data);
-  }
-};
-
-function userIdOf(user: AuthState["user"]): string | undefined {
-  if (!user || typeof user === "string") return undefined;
-  return typeof user.id === "string" ? user.id : undefined;
-}
-
-function userEmailOf(user: AuthState["user"]): string {
-  if (!user) return "";
-  if (typeof user === "string") return user;
-  return typeof user.email === "string" ? user.email : "";
-}
-
-function sanitizeAssistantChunk(raw: string): string {
-  return String(raw || "")
-    .replace(/\n?\s*\[\s*tool output for[^\]]+\]:[^\n]*(?:\n|$)/gi, "\n")
-    .replace(/\[\s*tool output for[^\]]+\]:\s*/gi, "")
-    .replace(/^\s*tool output for[^:]+:[^\n]*(?:\n|$)/gim, "")
-    .replace(/\n{3,}/g, "\n\n");
+function userEmailOf(user: AuthState['user']): string {
+  if (!user) return '';
+  if (typeof user === 'string') return user;
+  return typeof user.email === 'string' ? user.email : '';
 }
 
 export function App() {
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [auth, setAuth] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [view, setView] = useState<'chat' | 'auth'>('chat');
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
-  const logRef = useRef<HTMLDivElement>(null);
 
-  const resetAssistantSession = async () => {
-    setMessages([]);
-    setToolActions([]);
-    
-    // 1. Clear backend state (JSM)
-    if (typeof originalResetAssistantSession === 'function') {
-      try {
-        originalResetAssistantSession();
-      } catch (e) {
-        console.error("Failed to call originalResetAssistantSession", e);
-      }
-    }
-
-    // 2. Clear persistent history (browser logins)
-    const setHistory = oasisWindow.setAssistantHistory;
-    if (typeof setHistory === 'function') {
-      await setHistory([]);
-    }
-  };
-
-  useEffect(() => {
-    recordStartRelay = startToolAction;
-    recordUpdateRelay = updateToolAction;
-    resetAssistantSessionRelay = resetAssistantSession;
-    pendingConfirmationRelay = setPendingConfirmation;
-    return () => {
-      recordStartRelay = null;
-      recordUpdateRelay = null;
-      resetAssistantSessionRelay = null;
-      pendingConfirmationRelay = null;
-    };
+  const originalResetRef = useRef(oasisWindow.resetAssistantSession);
+  const handleAuthenticated = useCallback(() => {
+    setView('chat');
   }, []);
-
-  useEffect(() => {
-    const updateFromGlobal = () => {
-        const globalState = oasisWindow.oasisAuthState;
-        if (globalState && globalState.isAuthenticated !== undefined) {
-             setAuth((prev) => {
-                if (
-                  prev.isAuthenticated === globalState.isAuthenticated &&
-                  userIdOf(prev.user) === userIdOf(globalState.user)
-                ) {
-                    return prev;
-                }
-                // If user changed, reset banner
-                if (userIdOf(prev.user) !== userIdOf(globalState.user)) {
-                    setBannerVisible(true);
-                }
-                return { isAuthenticated: !!globalState.isAuthenticated, user: globalState.user };
-             });
-             if (globalState.isAuthenticated) setView('chat');
-        }
-    };
-
-    const loadHistory = () => {
-      void (async () => {
-        try {
-          const getHistory = oasisWindow.getAssistantHistory;
-          if (typeof getHistory !== 'function') {
-            return;
-          }
-          const history = await Promise.resolve(getHistory());
-          if (!Array.isArray(history)) {
-            return;
-          }
-          const formatted = history.map((m: AssistantHistoryEntry, idx: number): AssistantMessage => {
-            const isHuman =
-              m.type === 'human' ||
-              m.id?.includes('Human') ||
-              m.constructor.name === 'HumanMessage';
-            const raw = m.content || (m.lc_kwargs ? m.lc_kwargs.content : '') || '';
-            const content = isHuman
-              ? raw
-              : sanitizeAssistantChunk(raw).trim();
-
-            return {
-              id: m.id || `hist-${idx}-${m.role || 'msg'}`,
-              role: isHuman ? 'user' : 'ai',
-              content
-            };
-          });
-          setMessages(formatted);
-        } catch (e) {
-          console.error("Failed to load history:", e);
-        }
-      })();
-    };
-
-    // Initial Auth Check
-    const checkAuth = async () => {
-      // First, check if the global shim already has the auth state
-      const globalState = oasisWindow.oasisAuthState;
-      if (globalState && globalState.isAuthenticated) {
-        setAuth({ isAuthenticated: true, user: globalState.user });
-        setView('chat');
-        return;
-      }
-
-      // If not, we can try to ask supabaseAuth directly, but only if it's available
-      if (oasisWindow.supabaseAuth) {
-        try {
-            // Give it a tiny bit of time to initialize if it's currently restoring
-            const isAuth = await oasisWindow.supabaseAuth.isAuthenticated();
-            if (isAuth) {
-                const user = await oasisWindow.supabaseAuth.getCurrentUser();
-                setAuth({ isAuthenticated: true, user });
-                setView('chat');
-            }
-        } catch (e) {
-            console.error("Auth check failed:", e);
-        }
-      }
-    };
-    checkAuth();
-
-    window.addEventListener(OASIS_EVENT_AUTH_UPDATE, updateFromGlobal);
-    window.addEventListener(OASIS_EVENT_HISTORY_UPDATE, loadHistory);
-    
-    const handleConfirmationUpdate = (e: Event) => {
-      const detail = (e as CustomEvent<ConfirmationData | null>).detail;
-      setPendingConfirmation(detail);
-    };
-    window.addEventListener(OASIS_EVENT_CONFIRMATION_UPDATE, handleConfirmationUpdate);
-
-    if (oasisWindow.supabaseAuth?.onAuthStateChange) {
-      oasisWindow.supabaseAuth.onAuthStateChange((state: SupabaseAuthState) => {
-        setAuth({ isAuthenticated: !!state.isAuthenticated, user: state.user });
-        if (state.isAuthenticated) {
-            setView('chat');
-            setBannerVisible(true);
-        }
-      });
-    }
-
-    const pollTimer = setTimeout(() => {
-        checkAuth();
-    }, 1500);
-    // Try immediately and after a short delay to ensure assistant.ts is ready
-    loadHistory();
-    setTimeout(loadHistory, 500);
-
-    return () => {
-        window.removeEventListener(OASIS_EVENT_AUTH_UPDATE, updateFromGlobal);
-        window.removeEventListener(OASIS_EVENT_HISTORY_UPDATE, loadHistory);
-        window.removeEventListener(OASIS_EVENT_CONFIRMATION_UPDATE, handleConfirmationUpdate);
-        clearTimeout(pollTimer);
-    };
+  const handleUserChanged = useCallback(() => {
+    setBannerVisible(true);
   }, []);
+  const runtime = useAssistantRuntime({
+    auth,
+    setPendingConfirmation,
+    originalResetAssistantSession: originalResetRef.current,
+  });
 
-  // Generate unique IDs for messages and tool actions (Valid UUID v4 for DB compatibility)
-  function uuid() {
+  useAssistantBridge({
+    startToolAction: runtime.startToolAction,
+    updateToolAction: runtime.updateToolAction,
+    resetAssistantSession: runtime.resetAssistantSession,
+    setPendingConfirmation,
+  });
+
+  useAuthSync({
+    setAuth,
+    setMessages: runtime.setMessages,
+    setPendingConfirmation,
+    onAuthenticated: handleAuthenticated,
+    onUserChanged: handleUserChanged,
+  });
+
+  const handleResizeStart = (event: PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
     try {
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-      }
-    } catch (e) {}
-    
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
-
-  function prettifyToolName(name: string) {
-    if (!name) return '';
-    if (name.includes(' ')) return name;
-    const spaced = name
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .replace(/[_-]+/g, ' ')
-      .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-  }
-
-  const startToolAction = (name: string, messageId?: string, label?: string) => {
-    const id = uuid();
-    const display = label || TOOL_LABELS[name] || prettifyToolName(name);
-    setToolActions((prev) => [...prev, { id, name, status: 'running', messageId, label: display }]);
-    return id;
-  };
-
-  const updateToolAction = (id: string, status: ToolActionStatus) => {
-    setToolActions((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-  };
-
-  const activeToolAction = [...toolActions]
-    .reverse()
-    .find(a => a.status === 'running' || a.status === 'pending');
-
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
+      window.parent.postMessage(
+        {
+          type: 'oasisOverlayResizeStart',
+          screenX: event.screenX,
+          screenY: event.screenY,
+        },
+        '*'
+      );
+    } catch {
+      // ignore
     }
-  }, [messages]);
-
-  async function send(textInput?: string) {
-    const text = textInput || input;
-    if (!text.trim()) return;
-    if (!auth.isAuthenticated) {
-      setMessages(m => [...m, { id: uuid(), role: 'ai', content: "Please sign in to use the assistant." }]);
-      return;
-    }
-
-    setInput('');
-    setBusy(true);
-    setToolActions([]);
-    const userMsgId = uuid();
-    setMessages((m) => [...m, { id: userMsgId, role: 'user', content: text }]);
-
-    try {
-      const run = oasisWindow.runAssistantStream;
-      if (typeof run === 'function') {
-        // Add empty AI message and get its id
-        const aiMsgId = uuid();
-
-        setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
-        
-        try {
-          await run(text, (chunk: string) => {
-            const sanitizedChunk = sanitizeAssistantChunk(chunk);
-            if (!sanitizedChunk) {
-              return;
-            }
-            setMessages((prev) => {
-              const idx = prev.findIndex(msg => msg.id === aiMsgId);
-              if (idx !== -1) {
-                const updated = [...prev];
-                updated[idx] = { ...updated[idx], content: updated[idx].content + sanitizedChunk };
-                return updated;
-              }
-              return prev;
-            });
-          }, 'text', aiMsgId);
-        } catch (e) {
-          console.error("Stream error:", e);
-          throw e;
-        }
-      } else {
-        const aiMsgId = uuid();
-        setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '(runAssistantStream not available)' }]);
-      }
-    } catch (e) {
-      setMessages((m) => [...m, { id: uuid(), role: 'ai', content: 'Error: ' + String(e) }]);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
-
-  const toggleRecording = async () => {
-    const service = oasisWindow.voiceInputService;
-    if (!service) {
-      alert("Voice input service not available.");
-      return;
-    }
-
-    if (isRecording) {
-      try {
-        const text = await service.stopRecording();
-        setIsRecording(false);
-        if (text) setInput(text);
-      } catch (e) {
-        console.error("Error stopping recording:", e);
-        setIsRecording(false);
-      }
-    } else {
-      try {
-        await service.startRecording();
-        setIsRecording(true);
-      } catch (e) {
-        console.error("Error starting recording:", e);
-      }
-    }
-  };
-
-  const handleResizeStart = (e: PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-        window.parent.postMessage({ 
-            type: "oasisOverlayResizeStart", 
-            screenX: e.screenX, 
-            screenY: e.screenY 
-        }, "*");
-    } catch (err) {}
   };
 
   const handleFeedback = () => {
-    const feedbackUrl = "https://tally.so/r/3jkNN6";
+    const feedbackUrl = 'https://tally.so/r/3jkNN6';
     if (typeof oasisWindow.openWebLinkIn === 'function') {
-        oasisWindow.openWebLinkIn(feedbackUrl, "tab", {});
-    } else if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === "function") {
-        (window.top as OasisWindow).openWebLinkIn!(feedbackUrl, "tab", {});
-    } else {
-        window.open(feedbackUrl, "_blank");
+      oasisWindow.openWebLinkIn(feedbackUrl, 'tab', {});
+      return;
     }
+    if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === 'function') {
+      (window.top as OasisWindow).openWebLinkIn!(feedbackUrl, 'tab', {});
+      return;
+    }
+    window.open(feedbackUrl, '_blank');
   };
 
-  const handleLinkClick = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const anchor = target.closest('a');
-    if (anchor && anchor.href && !anchor.href.startsWith('javascript:')) {
-      e.preventDefault();
-      const url = anchor.href;
-      if (oasisWindow.assistantBridge?.openTab) {
-        oasisWindow.assistantBridge.openTab(url);
-      } else {
-        window.open(url, '_blank');
-      }
+  const handleLinkClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (!anchor || !anchor.href || anchor.href.startsWith('javascript:')) {
+      return;
+    }
+
+    event.preventDefault();
+    const url = anchor.href;
+    if (oasisWindow.assistantBridge?.openTab) {
+      oasisWindow.assistantBridge.openTab(url);
+    } else {
+      window.open(url, '_blank');
     }
   };
 
   const userEmail = userEmailOf(auth.user);
-
-  const handleConfirmationApprove = async () => {
-    // Only hide the modal UI - do NOT clear the backend pending confirmation yet
-    // confirm_action will clear it after executing the command
-    setPendingConfirmation(null);
-    
-    setBusy(true);
-    try {
-      const run = oasisWindow.runAssistantStream;
-      if (typeof run === 'function') {
-        const aiMsgId = uuid();
-        setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
-        await run("yes", (chunk: string) => {
-          const sanitizedChunk = sanitizeAssistantChunk(chunk);
-          if (!sanitizedChunk) {
-            return;
-          }
-          setMessages((prev) => {
-            const idx = prev.findIndex(msg => msg.id === aiMsgId);
-            if (idx !== -1) {
-              const updated = [...prev];
-              updated[idx] = { ...updated[idx], content: updated[idx].content + sanitizedChunk };
-              return updated;
-            }
-            return prev;
-          });
-        }, 'text', aiMsgId);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleConfirmationCancel = async () => {
-    setPendingConfirmation(null);
-    const clearFn = oasisWindow.oasisClearPendingConfirmation;
-    if (clearFn) clearFn();
-    
-    setMessages((m) => [...m, { id: uuid(), role: 'ai', content: 'Action cancelled.' }]);
-  };
 
   return (
     <div className="assistant-container">
       {pendingConfirmation && (
         <ConfirmationModal
           data={pendingConfirmation}
-          onConfirm={handleConfirmationApprove}
-          onCancel={handleConfirmationCancel}
+          onConfirm={() => {
+            void runtime.handleConfirmationApprove();
+          }}
+          onCancel={() => {
+            void runtime.handleConfirmationCancel();
+          }}
         />
       )}
+
       <Header auth={auth} onShowAuth={() => setView('auth')} />
-      
-      {/* Resize Handle */}
-      <div 
+
+      <div
         onPointerDown={handleResizeStart}
         style={{
-            position: 'fixed',
-            bottom: '0',
-            right: '0',
-            width: '20px',
-            height: '20px',
-            cursor: 'nwse-resize',
-            zIndex: 99999,
+          position: 'fixed',
+          bottom: '0',
+          right: '0',
+          width: '20px',
+          height: '20px',
+          cursor: 'nwse-resize',
+          zIndex: 99999,
         }}
         title="Resize"
       >
-         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', bottom: 2, right: 2, opacity: 0.3 }}>
-            <path d="M14 14L18 18" stroke="#000" strokeWidth="2" strokeLinecap="round"/>
-            <path d="M10 18L18 10" stroke="#000" strokeWidth="2" strokeLinecap="round"/>
-         </svg>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', bottom: 2, right: 2, opacity: 0.3 }}>
+          <path d="M14 14L18 18" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+          <path d="M10 18L18 10" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+        </svg>
       </div>
 
       {view === 'auth' ? (
@@ -616,185 +161,31 @@ export function App() {
             <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
           )}
 
-          <div className="chat-log" ref={logRef}>
-            {messages.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0px', width: '100%', padding: '8px', boxSizing: 'border-box', flexShrink: 0 }}>
-                <div style={{ width: '75%', maxWidth: '260px', minWidth: '100px', flexShrink: 0 }}>
-                  <img
-                    src="chrome://browser/content/assistant/images/empty-state-bg.png"
-                    alt=""
-                    style={{ width: '100%', height: 'auto', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
-                  />
-                </div>
-                <div style={{ color: '#999', fontSize: '13px', lineHeight: '1.4' }}>
-                   Welcome to Oasis AI<br/>
-                   Browse, summarize, or manage your tabs.
-                </div>
-              </div>
-            )}
-            {messages.map((m, i) => {
-              const isLast = i === messages.length - 1;
-              const isLastAI = isLast && m.role === 'ai';
+          <ChatTimeline
+            messages={runtime.messages}
+            busy={runtime.busy}
+            activeToolLabel={runtime.activeToolAction?.label || null}
+            onLinkClick={handleLinkClick}
+          />
 
-              if (m.role === 'user') {
-                return (
-                  <div key={m.id} className="message-bubble message-user">
-                    <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                  </div>
-                );
-              } else if (m.role === 'ai') {
-                let htmlContent = m.content;
-                try {
-                  if (oasisWindow.marked && oasisWindow.DOMPurify) {
-                    const raw = oasisWindow.marked.parse(m.content);
-                    htmlContent = oasisWindow.DOMPurify.sanitize(raw);
-                  }
-                } catch (e) {
-                  console.error("Markdown render error:", e);
-                }
-                return (
-                  <Fragment key={m.id}>
-                    <div className="ai-message-wrapper">
-                      <div className="ai-response-container" onClick={handleLinkClick}>
-                        {oasisWindow.marked ? (
-                          <div 
-                            className="markdown-body"
-                            dangerouslySetInnerHTML={{ __html: htmlContent }} 
-                          />
-                        ) : (
-                          <div className="message-content" style={{ whiteSpace: 'pre-wrap', background: 'transparent', border: 'none', padding: 0 }}>
-                            {m.content}
-                          </div>
-                        )}
-                      </div>
-                      {isLastAI && !busy && (
-                        <Feedback messageId={m.id} />
-                      )}
-                    </div>
-                  </Fragment>
-                );
-              }
-              return null;
-            })}
-
-            {(busy || activeToolAction) && (
-              <ActiveToolIndicator label={activeToolAction?.label || 'Thinking...'} />
-            )}
-
-          </div>
-
-          <div className="input-bar">
-            <textarea 
-                className="input-field"
-                value={isRecording ? "Listening..." : input} 
-                onInput={(e: Event) => {
-                  const target = e.currentTarget as HTMLTextAreaElement;
-                  setInput(target.value);
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder={auth.isAuthenticated ? "Ask me anything..." : "Please sign in..."}
-                disabled={busy || !auth.isAuthenticated || isRecording}
-                rows={1}
-                style={{ 
-                    minHeight: '24px', 
-                    fontSize: '15px',
-                    color: '#333'
-                }}
-              />
-
-            <div className="input-row" style={{ alignItems: 'center', justifyContent: 'space-between', paddingLeft: '8px' }}>
-               <button 
-                 onClick={handleFeedback}
-                 title="Feedback?"
-                 style={{ 
-                    background: 'none', 
-                    border: 'none', 
-                    color: '#7A9200', 
-                    fontSize: '13px', 
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    padding: '4px 8px',
-                    borderRadius: '4px'
-                 }}
-                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F2F4E5')}
-                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-               >
-                 Feedback?
-               </button>
-               
-               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isRecording && (
-                      <div className="voice-wave" style={{ display: 'flex', alignItems: 'center', gap: '2px', height: '20px' }}>
-                          {[...Array(8)].map((_, i) => (
-                              <div key={i} className="wave-bar" style={{ 
-                                  width: '2px', 
-                                  height: '8px', 
-                                  background: '#7A9200', 
-                                  borderRadius: '1px',
-                                  animationDelay: `${i * 0.1}s`
-                              }} />
-                          ))}
-                      </div>
-                    )}
-
-                   <button 
-                     className="send-btn" 
-                     onClick={() => { void oasisWindow.resetAssistantSession?.(); }} 
-                     title="Clear Chat History"
-                     style={{ color: '#666', width: '32px', height: '32px', flex: 'none' }}
-                   >
-                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                       <path d="M23 4v6h-6" />
-                       <path d="M1 20v-6h6" />
-                       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                     </svg>
-                   </button>
-
-                   <button 
-                     className="send-btn" 
-                     onClick={toggleRecording} 
-                     disabled={busy || !auth.isAuthenticated} 
-                     title={isRecording ? "Stop Recording" : "Voice Input"}
-                     style={{ 
-                        background: 'transparent',
-                        width: '36px', 
-                        height: '36px',
-                        border: 'none',
-                        flex: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0
-                    }}
-                   >
-                     {isRecording ? (
-                       <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                         <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
-                         <path d="M17.945 11.75C16.578 11.75 15.475 11.75 14.608 11.867C13.708 11.987 12.95 12.247 12.348 12.848C11.746 13.45 11.488 14.208 11.367 15.108C11.25 15.975 11.25 17.078 11.25 18.445V18.555C11.25 19.922 11.25 21.025 11.367 21.892C11.487 22.792 11.747 23.55 12.348 24.152C12.95 24.754 13.708 25.012 14.608 25.134C15.475 25.25 16.578 25.25 17.945 25.25H18.055C19.422 25.25 20.525 25.25 21.392 25.134C22.292 25.012 23.05 24.754 23.652 24.152C24.254 23.55 24.512 22.792 24.634 21.892C24.75 21.025 24.75 19.922 24.75 18.555V18.445C24.75 17.078 24.75 15.975 24.634 15.108C24.512 14.208 24.254 13.45 23.652 12.848C23.05 12.246 22.292 11.988 21.392 11.867C20.525 11.75 19.422 11.75 18.055 11.75H17.945Z" fill="#7A9200"/>
-                       </svg>
-                     ) : (
-                       <svg width="36" height="36" viewBox="313 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                         <rect x="313" y="0" width="36" height="36" rx="18" fill="#F8FAF2"/>
-                         <path fillRule="evenodd" clipRule="evenodd" d="M327.958 12.8511C327.958 12.0442 328.278 11.2703 328.849 10.6997C329.419 10.1291 330.193 9.80859 331 9.80859C331.807 9.80859 332.581 10.1291 333.152 10.6997C333.722 11.2703 334.043 12.0442 334.043 12.8511V18.4681C334.043 19.2751 333.722 20.0489 333.152 20.6195C332.581 21.1901 331.807 21.5107 331 21.5107C330.193 21.5107 329.419 21.1901 328.849 20.6195C328.278 20.0489 327.958 19.2751 327.958 18.4681V12.8511ZM331 11.2128C330.566 11.2128 330.149 11.3854 329.842 11.6927C329.534 11.9999 329.362 12.4166 329.362 12.8511V18.4681C329.362 18.9026 329.534 19.3193 329.842 19.6266C330.149 19.9338 330.566 20.1064 331 20.1064C331.435 20.1064 331.851 19.9338 332.159 19.6266C332.466 19.3193 332.638 18.9026 332.638 18.4681V12.8511C332.638 12.4166 332.466 11.9999 332.159 11.6927C331.851 11.3854 331.435 11.2128 331 11.2128ZM326.319 17.766C326.506 17.766 326.684 17.84 326.816 17.9716C326.947 18.1033 327.021 18.2819 327.021 18.4681C327.021 19.5233 327.441 20.5353 328.187 21.2815C328.933 22.0276 329.945 22.4468 331 22.4468C332.055 22.4468 333.067 22.0276 333.814 21.2815C334.56 20.5353 334.979 19.5233 334.979 18.4681C334.979 18.2819 335.053 18.1033 335.184 17.9716C335.316 17.84 335.495 17.766 335.681 17.766C335.867 17.766 336.046 17.84 336.177 17.9716C336.309 18.1033 336.383 18.2819 336.383 18.4681C336.383 19.7742 335.908 21.0357 335.047 22.0176C334.186 22.9995 332.997 23.6348 331.702 23.8052V24.7872H333.809C333.995 24.7872 334.173 24.8612 334.305 24.9929C334.437 25.1246 334.511 25.3031 334.511 25.4894C334.511 25.6756 334.437 25.8542 334.305 25.9858C334.173 26.1175 333.995 26.1915 333.809 26.1915H328.192C328.005 26.1915 327.827 26.1175 327.695 25.9858C327.563 25.8542 327.49 25.6756 327.49 25.4894C327.49 25.3031 327.563 25.1246 327.695 24.9929C327.827 24.8612 328.005 24.7872 328.192 24.7872H330.298V23.8052C329.003 23.6348 327.814 22.9995 326.953 22.0176C326.092 21.0357 325.617 19.7742 325.617 18.4681C325.617 18.2819 325.691 18.1033 325.823 17.9716C325.955 17.84 326.133 17.766 326.319 17.766Z" fill="#94A833"/>
-                       </svg>
-                     )}
-                   </button>
-
-                   <button className="send-btn" onClick={() => send()} disabled={busy || !auth.isAuthenticated} title="Send" style={{ width: '36px', height: '36px' }}>
-                    {busy ? (
-                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2">
-                         <rect x="9" y="9" width="6" height="6" />
-                       </svg>
-                    ) : (
-                      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="18" cy="18" r="18" fill="#7A9200"/>
-                        <path d="M18 24V12M18 12L24 18M18 12L12 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </button>
-               </div>
-            </div>
-          </div>
+          <Composer
+            input={runtime.input}
+            isRecording={runtime.isRecording}
+            busy={runtime.busy}
+            isAuthenticated={auth.isAuthenticated}
+            onInput={runtime.setInput}
+            onKeyDown={runtime.handleKeyDown}
+            onSend={() => {
+              void runtime.send();
+            }}
+            onToggleRecording={() => {
+              void runtime.toggleRecording();
+            }}
+            onResetSession={() => {
+              void oasisWindow.resetAssistantSession?.();
+            }}
+            onFeedback={handleFeedback}
+          />
         </Fragment>
       )}
     </div>

@@ -2,6 +2,38 @@ import type { ManifestCommandDefinition } from "./manifestTypes.js";
 
 export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
   {
+    id: "list.bookmark.folders",
+    family: "list",
+    commandName: "list_bookmark_folders",
+    phrases: [
+      "list bookmark folders",
+      "list my bookmark folders",
+      "list my bookmarks",
+      "list bookmarks",
+      "show bookmark folders",
+      "show my bookmark folders",
+      "show bookmarks",
+      "show my bookmarks",
+      "list folders",
+      "show folders",
+      "list hubs",
+      "show hubs",
+    ],
+  },
+  {
+    id: "list.tab.groups",
+    family: "list",
+    commandName: "list_tab_groups",
+    phrases: [
+      "list tab groups",
+      "show tab groups",
+      "list groups",
+      "show groups",
+      "list my tab groups",
+      "show my tab groups",
+    ],
+  },
+  {
     id: "list.window.tabs",
     family: "list",
     commandName: "list_tabs",
