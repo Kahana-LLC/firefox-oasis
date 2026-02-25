@@ -1,5 +1,5 @@
 // TypeScript interfaces for authentication
-import { User, Session, AuthError } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
 export interface UserProfile {
     user_id: string;
@@ -27,4 +27,3 @@ export interface AuthState {
     session: Session | null;
     isAuthenticated: boolean;
 }
-

@@ -1,5 +1,7 @@
 import { h } from 'preact';
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
+import type { OasisWindow } from '../types';
 
 interface AuthProps {
   onSuccess: () => void;
@@ -18,7 +20,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     setError(null);
     setLoading(true);
 
-    const authService = (window as any).supabaseAuth;
+    const authService = (window as OasisWindow).supabaseAuth;
     if (!authService) {
       setError("Auth service not available");
       setLoading(false);
@@ -26,7 +28,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     }
 
     try {
-      let result;
+      let result: Awaited<ReturnType<typeof authService.signUp>>;
       if (mode === 'signup') {
         // wrapper: signUp(email, password, name)
         result = await authService.signUp(email, password);
@@ -51,8 +53,12 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
         // Let's stick to checking user.
         setError("Please check your email for a confirmation link.");
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message?: unknown }).message || "An error occurred")
+          : "An error occurred";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -83,7 +89,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
           <input 
             type="email" 
             value={email}
-            onInput={(e: any) => setEmail(e.target.value)}
+            onInput={(e: JSX.TargetedEvent<HTMLInputElement>) => setEmail(e.currentTarget.value)}
             required
             className="input-field" 
             style={{ width: '100%', boxSizing: 'border-box', background: 'white', border: '1px solid #e0e0e0' }}
@@ -95,7 +101,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
            <input 
             type="password" 
             value={password}
-            onInput={(e: any) => setPassword(e.target.value)}
+            onInput={(e: JSX.TargetedEvent<HTMLInputElement>) => setPassword(e.currentTarget.value)}
             required
             className="input-field" 
             style={{ width: '100%', boxSizing: 'border-box', background: 'white', border: '1px solid #e0e0e0' }}

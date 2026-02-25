@@ -1,46 +1,30 @@
 import { h } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
+import type { AuthState, OasisWindow } from '../types';
 
 interface HeaderProps {
-  auth: {
-    isAuthenticated: boolean;
-    user: any;
-  };
+  auth: AuthState;
   onShowAuth: () => void;
 }
 
+const oasisWindow: OasisWindow = window;
+
 export function Header({ auth, onShowAuth }: HeaderProps) {
-  const [isMaximized, setIsMaximized] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const userEmail =
+    auth.user && typeof auth.user !== "string" ? auth.user.email : undefined;
 
   useEffect(() => {
-    function handleClickOutside(event: any) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node | null)) {
         setShowMenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const handleMinimize = (e: MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    try { window.parent.postMessage({ type: "oasisOverlayMinimize" }, "*"); } catch (err) {}
-  };
-
-  const handleExpand = (e: MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    try {
-      if (isMaximized) {
-        window.parent.postMessage({ type: "oasisOverlayExitFullscreen" }, "*");
-        setIsMaximized(false);
-      } else {
-        window.parent.postMessage({ type: "oasisOverlayExpand" }, "*");
-        setIsMaximized(true);
-      }
-    } catch (err) {}
-  };
 
   const handleClose = (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
@@ -55,8 +39,8 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
   };
 
   const handleSignOut = async () => {
-    if ((window as any).supabaseAuth) {
-      await (window as any).supabaseAuth.signOut();
+    if (oasisWindow.supabaseAuth) {
+      await oasisWindow.supabaseAuth.signOut();
       setShowMenu(false);
     }
   };
@@ -143,7 +127,7 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
                         <div>
                             <div style={{ padding: '12px 16px', borderBottom: '1px solid #f5f5f5', background: '#fafafa' }}>
                                 <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>Signed in as</div>
-                                <div style={{ fontSize: '13px', fontWeight: 500, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auth.user?.email}</div>
+                                <div style={{ fontSize: '13px', fontWeight: 500, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</div>
                             </div>
                             <MenuItem onClick={() => { alert('Settings coming soon'); setShowMenu(false); }}>Settings</MenuItem>
                             <MenuItem onClick={handleSignOut} style={{ color: '#e53935' }}>Sign Out</MenuItem>
@@ -158,7 +142,7 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         </div>
 
         {/* Toggle Sidebar */}
-        <HeaderBtn onClick={(e: any) => {
+        <HeaderBtn onClick={(e: MouseEvent) => {
             e.preventDefault(); e.stopPropagation();
             try { window.parent.postMessage({ type: "oasisOverlayToggleSidebar" }, "*"); } catch (err) {}
         }} title="Toggle Sidebar">
@@ -180,7 +164,14 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
   );
 }
 
-function HeaderBtn({ onClick, title, children, hoverColor }: any) {
+type HeaderBtnProps = {
+  onClick: (e: MouseEvent) => void;
+  title: string;
+  children: ComponentChildren;
+  hoverColor?: string;
+};
+
+function HeaderBtn({ onClick, title, children, hoverColor }: HeaderBtnProps) {
   return (
     <button
       onClick={onClick}
@@ -198,15 +189,21 @@ function HeaderBtn({ onClick, title, children, hoverColor }: any) {
         transition: 'background 0.2s',
         color: '#7A9200'
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hoverColor || 'rgba(122, 146, 0, 0.1)')}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+      onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = hoverColor || 'rgba(122, 146, 0, 0.1)')}
+      onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'transparent')}
     >
       {children}
     </button>
   );
 }
 
-function MenuItem({ onClick, children, style }: any) {
+type MenuItemProps = {
+  onClick: () => void;
+  children: ComponentChildren;
+  style?: JSX.CSSProperties;
+};
+
+function MenuItem({ onClick, children, style }: MenuItemProps) {
     return (
         <div 
             onClick={onClick}
@@ -218,8 +215,8 @@ function MenuItem({ onClick, children, style }: any) {
                 transition: 'background 0.1s',
                 ...style
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+            onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLDivElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+            onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLDivElement>) => (e.currentTarget.style.backgroundColor = 'white')}
         >
             {children}
         </div>

@@ -2214,7 +2214,7 @@ pref("sidebar.visibility", "always-show");
 // Sidebar UI state is stored per-window via session restore. Use this pref
 // as a backup to restore the sidebar UI state when a user has PPB mode on
 // or has history cleared on browser close.
-pref("sidebar.backupState", "{}");
+pref("sidebar.backupState", "{\"command\":\"viewOasisAssistantSidebar\",\"panelOpen\":true}");
 pref("sidebar.expandOnHover", true);
 pref("sidebar.old-sidebar.has-used", false);
 pref("sidebar.new-sidebar.has-used", false);
@@ -3480,7 +3480,7 @@ pref("browser.mailto.dualPrompt.dismissNotNowMinutes", 525600); // one year
 pref("browser.mailto.dualPrompt.dismissXClickMinutes", 1440); // one day
 
 // Pref to initialize the BackupService soon after startup.
-pref("browser.backup.enabled", true);
+pref("browser.backup.enabled", false);
 // Pref to control whether scheduled backups run or not.
 pref("browser.backup.scheduled.enabled", false);
 

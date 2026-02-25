@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node esbuild.config.mjs"
+    "build": "node esbuild.config.mjs",
+    "test:reliability": "tsc -p tests/tsconfig.json && node --test tests/dist/build/tests/**/*.test.js"
   },
   "devDependencies": {
     "dotenv": "^17.2.1",

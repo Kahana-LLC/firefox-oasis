@@ -1,7 +1,4 @@
 const TOOL_LABELS: Record<string,string> = {
-  // Assistant stream / generic
-  runAssistantStream: 'Analyzing tabs',
-
   // Commands (from build/src/commands.ts)
   list_tabs: 'Listing tabs',
   new_window: 'Opening new window',

@@ -2,3 +2,6 @@ project_id = "firefox-oasis"
 
 [functions.oasis-update]
 verify_jwt = false
+
+[functions.oasis-assist]
+verify_jwt = false

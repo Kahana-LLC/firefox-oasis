@@ -1,4 +1,10 @@
-import { transcribeAudio } from "../proxyClient";
+import { transcribeAudio } from "../proxyClient.js";
+import { assistantLogger } from "../utils/assistantLogger.js";
+
+function eventBlob(event: Event): Blob | null {
+  const data = (event as { data?: unknown }).data;
+  return data instanceof Blob ? data : null;
+}
 
 export class VoiceInputService {
   private mediaRecorder: MediaRecorder | null = null;
@@ -16,15 +22,16 @@ export class VoiceInputService {
       
       this.audioChunks = [];
       
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
+      this.mediaRecorder.ondataavailable = (event: Event) => {
+        const blob = eventBlob(event);
+        if (blob && blob.size > 0) {
+          this.audioChunks.push(blob);
         }
       };
       
       this.mediaRecorder.start();
     } catch (error) {
-      console.error("Error starting recording:", error);
+      assistantLogger.error("voice-input", "Error starting recording", error);
       throw new Error("Failed to access microphone. Please check permissions.");
     }
   }
@@ -53,7 +60,7 @@ export class VoiceInputService {
           // Lambda returns { transcript: "..." }
           resolve(result.transcript || '');
         } catch (error) {
-          console.error("Error transcribing audio:", error);
+          assistantLogger.error("voice-input", "Error transcribing audio", error);
           reject(error);
         } finally {
           this.mediaRecorder = null;

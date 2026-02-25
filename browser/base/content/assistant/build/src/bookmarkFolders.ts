@@ -1,119 +1,128 @@
-// Managed bookmark folder system using Firefox Places API.
-// Folders live under "Oasis Bookmark Folders" root in Other Bookmarks.
-
-import { localMemory } from "./services/localMemory";
-
-type FxTab = any;
-
-function getBrowserWindow() {
-  const Services = (window as any).Services || (window.top as any)?.Services;
-  if (Services?.wm) {
-    return Services.wm.getMostRecentWindow("navigator:browser");
-  }
-  return window.top;
-}
-
-function getChrome() {
-  const topWin = getBrowserWindow();
-  const gBrowser = topWin?.gBrowser;
-  const PlacesUtils = topWin?.PlacesUtils;
-  return { topWin, gBrowser, PlacesUtils };
-}
+import {
+  localMemory,
+  type BookmarkFolderMemoryEntry,
+} from "./services/localMemory.js";
+import {
+  fetchBookmarkByGuid,
+  fetchChildrenBookmarks,
+  getChromeContext,
+  getSystemPrincipal,
+  getTabs,
+  normalizeName,
+  tabTitle,
+  tabUrl,
+  toUrlString,
+} from "./services/firefoxFacade.js";
+import type { BrowserTabLike, PlacesBookmarkEntry, PlacesUtilsLike } from "./types/runtime.js";
+import { assistantLogger } from "./utils/assistantLogger.js";
+import { OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED } from "../../shared/contracts.js";
 
 type FolderItem = { url: string; title?: string; host: string; id: string };
+type BookmarkNode = PlacesBookmarkEntry & { uri?: string };
+type PlacesEventLike = {
+  guid?: string;
+  parentGuid?: string;
+  oldParentGuid?: string;
+};
 
 const ROOT_FOLDER_NAME = "Oasis Hubs";
 
-async function getRootFolder(): Promise<string> {
-  const { PlacesUtils } = getChrome();
-  if (!PlacesUtils) throw new Error("PlacesUtils not available");
-
-  const bookmarks = await PlacesUtils.bookmarks.search({
-    title: ROOT_FOLDER_NAME,
-  });
-  const existing = bookmarks.find(
-    (b: any) =>
-      b.type === PlacesUtils.bookmarks.TYPE_FOLDER &&
-      b.parentGuid === PlacesUtils.bookmarks.unfiledGuid
-  );
-  if (existing) return existing.guid;
-
-  const root = await PlacesUtils.bookmarks.insert({
-    title: ROOT_FOLDER_NAME,
-    type: PlacesUtils.bookmarks.TYPE_FOLDER,
-    parentGuid: PlacesUtils.bookmarks.unfiledGuid,
-  });
-  return root.guid;
-}
-
-function hostOf(u: string): string {
+function hostOf(url: string): string {
   try {
-    return new URL(u).host.toLowerCase();
+    return new URL(url).host.toLowerCase();
   } catch {
     return "";
   }
 }
 
-async function getBookmarkChildren(guid: string): Promise<any[]> {
-  const { PlacesUtils } = getChrome();
-  if (!PlacesUtils) return [];
-  try {
-    const parent = await PlacesUtils.bookmarks.fetch(guid);
-    if (!parent) return [];
-
-    const children: any[] = [];
-    await PlacesUtils.bookmarks.fetch({ parentGuid: guid }, (bookmark: any) => {
-      let u = bookmark.url;
-      if (u && typeof u === "object") {
-        u = u.spec || u.href || u.toString();
-      }
-      children.push({
-        guid: bookmark.guid,
-        title: bookmark.title,
-        type: bookmark.type,
-        uri: u,
-      });
-    });
-    return children;
-  } catch (e) {
-    console.error("Failed to get bookmark children:", e);
-    return [];
-  }
+function bookmarkUri(bookmark: PlacesBookmarkEntry): string {
+  return toUrlString(bookmark.url) || String(bookmark.uri || "").trim();
 }
 
-async function createBookmark(details: {
-  parentGuid: string;
-  title: string;
-  url?: string;
-  type?: number;
-}): Promise<any> {
-  const { PlacesUtils } = getChrome();
-  if (!PlacesUtils) throw new Error("PlacesUtils not available");
-  return await PlacesUtils.bookmarks.insert({
+function isFolderNode(places: PlacesUtilsLike | null, bookmark: PlacesBookmarkEntry): boolean {
+  return bookmark.type === places?.bookmarks?.TYPE_FOLDER;
+}
+
+function isBookmarkNode(places: PlacesUtilsLike | null, bookmark: PlacesBookmarkEntry): boolean {
+  return bookmark.type === places?.bookmarks?.TYPE_BOOKMARK;
+}
+
+async function findRootFolderId(places: PlacesUtilsLike | null): Promise<string | null> {
+  if (!places?.bookmarks?.search || !places.bookmarks.unfiledGuid) return null;
+  const results = await places.bookmarks.search({ title: ROOT_FOLDER_NAME });
+  const existing = results.find(
+    bookmark =>
+      isFolderNode(places, bookmark) &&
+      bookmark.parentGuid === places.bookmarks?.unfiledGuid
+  );
+  return existing?.guid || null;
+}
+
+async function ensureRootFolderId(places: PlacesUtilsLike | null): Promise<string> {
+  if (!places?.bookmarks) throw new Error("PlacesUtils.bookmarks not available");
+  const existing = await findRootFolderId(places);
+  if (existing) return existing;
+  if (!places.bookmarks.insert) throw new Error("Bookmarks insert API not available");
+
+  const root = await places.bookmarks.insert({
+    title: ROOT_FOLDER_NAME,
+    type: places.bookmarks.TYPE_FOLDER,
+    parentGuid: places.bookmarks.unfiledGuid,
+  });
+  return root.guid;
+}
+
+async function getBookmarkChildren(
+  places: PlacesUtilsLike | null,
+  guid: string
+): Promise<BookmarkNode[]> {
+  if (!places?.bookmarks?.fetch || !guid) return [];
+  const parent = await fetchBookmarkByGuid(places, guid);
+  if (!parent) return [];
+
+  const children = await fetchChildrenBookmarks(places, guid);
+  return children.map(child => ({
+    ...child,
+    uri: bookmarkUri(child),
+  }));
+}
+
+async function createBookmark(
+  places: PlacesUtilsLike | null,
+  details: {
+    parentGuid: string;
+    title: string;
+    url?: string;
+    type?: number;
+  }
+): Promise<BookmarkNode> {
+  if (!places?.bookmarks?.insert) throw new Error("Bookmarks insert API not available");
+  const created = await places.bookmarks.insert({
     parentGuid: details.parentGuid,
     title: details.title,
     url: details.url,
     type:
       details.type ||
       (details.url
-        ? PlacesUtils.bookmarks.TYPE_BOOKMARK
-        : PlacesUtils.bookmarks.TYPE_FOLDER),
+        ? places.bookmarks.TYPE_BOOKMARK
+        : places.bookmarks.TYPE_FOLDER),
   });
+  return { ...created, uri: bookmarkUri(created) };
 }
 
-async function removeBookmark(guid: string): Promise<void> {
-  const { PlacesUtils } = getChrome();
-  if (!PlacesUtils) return;
-  await PlacesUtils.bookmarks.remove(guid);
+async function removeBookmark(places: PlacesUtilsLike | null, guid: string): Promise<void> {
+  if (!places?.bookmarks?.remove) return;
+  await places.bookmarks.remove(guid);
 }
 
 async function updateBookmark(
+  places: PlacesUtilsLike | null,
   guid: string,
   changes: { title?: string }
-): Promise<any> {
-  const { PlacesUtils } = getChrome();
-  if (!PlacesUtils) throw new Error("PlacesUtils not available");
-  return await PlacesUtils.bookmarks.update({ guid, ...changes });
+): Promise<BookmarkNode> {
+  if (!places?.bookmarks?.update) throw new Error("Bookmarks update API not available");
+  const updated = await places.bookmarks.update({ guid, ...changes });
+  return { ...updated, uri: bookmarkUri(updated) };
 }
 
 export type CreateFolderOpts = { include?: "none" | "current" | "all" };
@@ -121,30 +130,219 @@ export type DeleteFolderOpts = { closeTabs?: boolean };
 
 class BookmarkFolderManager {
   private rootFolderId: string | null = null;
+  private placesObserverRegistered = false;
+  private managedFolderGuids = new Set<string>();
+  private syncTimer: number | null = null;
+  private syncInFlight = false;
+
+  constructor() {
+    this.ensurePlacesObserver();
+    this.scheduleManagedFolderSync("startup");
+  }
+
+  private emitFoldersChanged(folderNames: string[] = []): void {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED, {
+          detail: { folderNames },
+        })
+      );
+    } catch (error) {
+      assistantLogger.warn("bookmark-folders", "failed to emit folder change event", error);
+    }
+  }
+
+  private ensurePlacesObserver(): void {
+    if (this.placesObserverRegistered) return;
+    const { PlacesUtils } = getChromeContext();
+    if (!PlacesUtils?.observers?.addListener) return;
+
+    PlacesUtils.observers.addListener(
+      [
+        "bookmark-added",
+        "bookmark-removed",
+        "bookmark-moved",
+        "bookmark-title-changed",
+        "bookmark-url-changed",
+      ],
+      this.handlePlacesEvents
+    );
+    this.placesObserverRegistered = true;
+  }
+
+  private handlePlacesEvents = async (events: unknown[]): Promise<void> => {
+    try {
+      const rootId = await this.ensureExistingRootFolder();
+      if (!rootId) return;
+
+      let isRelevant = false;
+      for (const rawEvent of events || []) {
+        const event = (rawEvent || {}) as PlacesEventLike;
+        const guid = String(event.guid || "");
+        const parentGuid = String(event.parentGuid || "");
+        const oldParentGuid = String(event.oldParentGuid || "");
+        if (
+          guid === rootId ||
+          parentGuid === rootId ||
+          oldParentGuid === rootId ||
+          this.managedFolderGuids.has(guid) ||
+          this.managedFolderGuids.has(parentGuid) ||
+          this.managedFolderGuids.has(oldParentGuid)
+        ) {
+          isRelevant = true;
+          break;
+        }
+      }
+
+      if (!isRelevant) return;
+      this.scheduleManagedFolderSync("places-event");
+    } catch (error) {
+      assistantLogger.warn("bookmark-folders", "places event processing failed", error);
+    }
+  };
+
+  private scheduleManagedFolderSync(reason: string): void {
+    this.ensurePlacesObserver();
+    if (this.syncTimer != null) return;
+    this.syncTimer = window.setTimeout(() => {
+      this.syncTimer = null;
+      void this.syncManagedFolderMemoryFromBookmarks(reason);
+    }, 250);
+  }
 
   private async ensureRootFolder(): Promise<string> {
+    this.ensurePlacesObserver();
     if (this.rootFolderId) return this.rootFolderId;
-    this.rootFolderId = await getRootFolder();
+    const { PlacesUtils } = getChromeContext();
+    this.rootFolderId = await ensureRootFolderId(PlacesUtils);
     return this.rootFolderId;
+  }
+
+  private async ensureExistingRootFolder(): Promise<string | null> {
+    this.ensurePlacesObserver();
+    const { PlacesUtils } = getChromeContext();
+    if (!PlacesUtils?.bookmarks?.fetch) {
+      this.rootFolderId = null;
+      return null;
+    }
+
+    if (this.rootFolderId) {
+      const existing = await fetchBookmarkByGuid(PlacesUtils, this.rootFolderId);
+      if (existing) return this.rootFolderId;
+      this.rootFolderId = null;
+    }
+
+    const rootId = await findRootFolderId(PlacesUtils);
+    if (rootId) this.rootFolderId = rootId;
+    return rootId;
+  }
+
+  private async getFolderNodes(rootId: string): Promise<BookmarkNode[]> {
+    const { PlacesUtils } = getChromeContext();
+    const children = await getBookmarkChildren(PlacesUtils, rootId);
+    return children.filter(child => isFolderNode(PlacesUtils, child));
+  }
+
+  private async findFolderNode(rootId: string, name: string): Promise<BookmarkNode | null> {
+    const target = normalizeName(name);
+    if (!target) return null;
+    const folders = await this.getFolderNodes(rootId);
+    return (
+      folders.find(folder => normalizeName(folder.title || "") === target) || null
+    );
+  }
+
+  private async collectFolders(
+    rootId: string
+  ): Promise<Array<{ name: string; items: FolderItem[] }>> {
+    const { PlacesUtils } = getChromeContext();
+    const folders = await this.getFolderNodes(rootId);
+    const result: Array<{ name: string; items: FolderItem[] }> = [];
+
+    for (const folder of folders) {
+      const bookmarks = await getBookmarkChildren(PlacesUtils, folder.guid);
+      const items: FolderItem[] = bookmarks
+        .filter(bookmark => !!bookmark.uri)
+        .map(bookmark => ({
+          id: bookmark.guid,
+          url: String(bookmark.uri),
+          title: bookmark.title,
+          host: hostOf(String(bookmark.uri)),
+        }));
+      result.push({ name: folder.title || "Untitled", items });
+    }
+
+    return result;
+  }
+
+  private async syncManagedFolderMemoryFromBookmarks(reason: string): Promise<void> {
+    if (this.syncInFlight) return;
+    this.syncInFlight = true;
+    try {
+      const { PlacesUtils } = getChromeContext();
+      const rootId = await this.ensureExistingRootFolder();
+      if (!rootId) {
+        this.managedFolderGuids.clear();
+        const removed = await localMemory.removeAllBookmarkFolderDocuments();
+        if (removed > 0) {
+          assistantLogger.debug(
+            "bookmark-folders",
+            `managed folder root missing; removed ${removed} memory docs`
+          );
+        }
+        this.emitFoldersChanged([]);
+        return;
+      }
+
+      const folders = await this.getFolderNodes(rootId);
+      this.managedFolderGuids = new Set(folders.map(folder => folder.guid));
+
+      const folderNames: string[] = [];
+      const entries: BookmarkFolderMemoryEntry[] = [];
+
+      for (const folder of folders) {
+        const folderName = folder.title || "Untitled";
+        folderNames.push(folderName);
+        const bookmarks = await getBookmarkChildren(PlacesUtils, folder.guid);
+        for (const bookmark of bookmarks) {
+          if (!bookmark.uri || !isBookmarkNode(PlacesUtils, bookmark)) continue;
+          entries.push({
+            bookmarkGuid: bookmark.guid,
+            parentGuid: folder.guid,
+            folderName,
+            title: bookmark.title || bookmark.uri,
+            url: bookmark.uri,
+          });
+        }
+      }
+
+      const syncResult = await localMemory.syncBookmarkFolderDocuments(entries);
+      this.emitFoldersChanged(folderNames);
+      assistantLogger.debug(
+        "bookmark-folders",
+        `sync complete reason=${reason} folders=${folderNames.length} added=${syncResult.added} updated=${syncResult.updated} removed=${syncResult.removed}`
+      );
+    } catch (error) {
+      assistantLogger.warn("bookmark-folders", "managed folder sync failed", error);
+    } finally {
+      this.syncInFlight = false;
+    }
   }
 
   async list(): Promise<Array<{ name: string; count: number }>> {
     try {
+      const { PlacesUtils } = getChromeContext();
       const rootId = await this.ensureRootFolder();
-      const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils } = getChrome();
-      const folders = children.filter(
-        (c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
-      );
+      const folders = await this.getFolderNodes(rootId);
+      const result: Array<{ name: string; count: number }> = [];
 
-      const result = [];
       for (const folder of folders) {
-        const items = await getBookmarkChildren(folder.guid);
+        const items = await getBookmarkChildren(PlacesUtils, folder.guid);
         result.push({ name: folder.title || "Untitled", count: items.length });
       }
       return result;
-    } catch (e) {
-      console.error("Failed to list bookmark folders:", e);
+    } catch (error) {
+      assistantLogger.error("bookmark-folders", "Failed to list bookmark folders", error);
       return [];
     }
   }
@@ -152,247 +350,195 @@ class BookmarkFolderManager {
   async getAll(): Promise<Array<{ name: string; items: FolderItem[] }>> {
     try {
       const rootId = await this.ensureRootFolder();
-      const children = await getBookmarkChildren(rootId);
-      const { PlacesUtils } = getChrome();
-      const folders = children.filter(
-        (c: any) => c.type === PlacesUtils?.bookmarks.TYPE_FOLDER
-      );
-
-      const result = [];
-      for (const folder of folders) {
-        const bookmarks = await getBookmarkChildren(folder.guid);
-        const items: FolderItem[] = bookmarks
-          .filter((b: any) => b.uri)
-          .map((b: any) => ({
-            id: b.guid,
-            url: b.uri,
-            title: b.title,
-            host: hostOf(b.uri),
-          }));
-        result.push({ name: folder.title || "Untitled", items });
-      }
-      return result;
-    } catch (e) {
-      console.error("Failed to get all bookmark folders:", e);
+      return await this.collectFolders(rootId);
+    } catch (error) {
+      assistantLogger.error("bookmark-folders", "Failed to get all bookmark folders", error);
       return [];
     }
   }
 
-  async create(name: string, opts?: CreateFolderOpts) {
-    name = (name || "").trim() || this.suggestName();
+  async getAllReadOnly(): Promise<{
+    ok: boolean;
+    folders: Array<{ name: string; items: FolderItem[] }>;
+  }> {
+    try {
+      const rootId = await this.ensureExistingRootFolder();
+      if (!rootId) return { ok: true, folders: [] };
+      const folders = await this.collectFolders(rootId);
+      return { ok: true, folders };
+    } catch (error) {
+      assistantLogger.warn("bookmark-folders", "read-only folder lookup failed", error);
+      return { ok: false, folders: [] };
+    }
+  }
+
+  async create(name: string, opts?: CreateFolderOpts): Promise<{ name: string; count: number }> {
+    const context = getChromeContext();
+    const places = context.PlacesUtils;
+    const normalizedName = (name || "").trim() || this.suggestName();
     const rootId = await this.ensureRootFolder();
+    let folder = await this.findFolderNode(rootId, normalizedName);
 
-    const children = await getBookmarkChildren(rootId);
-    const { PlacesUtils } = getChrome();
-    const existing = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === name.toLowerCase()
-    );
-
-    let folder;
-    if (existing) {
-      folder = existing;
-    } else {
-      folder = await createBookmark({
+    if (!folder) {
+      folder = await createBookmark(places, {
         parentGuid: rootId,
-        title: name,
+        title: normalizedName,
       });
     }
 
     const include = opts?.include || "none";
-    const { gBrowser } = getChrome();
+    const tabs = getTabs(context.gBrowser);
     let count = 0;
 
-    if (gBrowser) {
-      if (include === "current") {
-        const tab = gBrowser.selectedTab;
-        await this.addTabs(folder.title, [tab]);
+    if (include === "current" && tabs.length > 0) {
+      const current = context.gBrowser?.selectedTab || tabs[0];
+      if (current) {
+        await this.addTabs(folder.title || normalizedName, [current]);
         count = 1;
-      } else if (include === "all") {
-        const tabs = Array.from(gBrowser.tabs);
-        await this.addTabs(folder.title, tabs);
-        count = tabs.length;
       }
+    } else if (include === "all" && tabs.length > 0) {
+      await this.addTabs(folder.title || normalizedName, tabs);
+      count = tabs.length;
     }
 
-    return { name: folder.title, count };
+    this.scheduleManagedFolderSync("create-folder");
+    return { name: folder.title || normalizedName, count };
   }
 
-  async delete(name: string, opts?: DeleteFolderOpts) {
-    name = (name || "").trim();
+  async delete(
+    name: string,
+    opts?: DeleteFolderOpts
+  ): Promise<{ name: string; removed: number }> {
+    const context = getChromeContext();
     const rootId = await this.ensureRootFolder();
-    const children = await getBookmarkChildren(rootId);
-    const { PlacesUtils } = getChrome();
-    const folder = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === name.toLowerCase()
-    );
-
+    const folder = await this.findFolderNode(rootId, name);
     if (!folder) return { name, removed: 0 };
 
-    const items = await getBookmarkChildren(folder.guid);
-    const bookmarks = items.filter((b: any) => b.uri);
+    const items = await getBookmarkChildren(context.PlacesUtils, folder.guid);
+    const bookmarks = items.filter(bookmark => !!bookmark.uri);
 
     if (opts?.closeTabs) {
-      const { gBrowser } = getChrome();
-      if (gBrowser) {
-        const hostSet = new Set(bookmarks.map((b: any) => hostOf(b.uri)));
-        for (const t of Array.from(gBrowser.tabs) as any[]) {
-          const u = t?.linkedBrowser?.currentURI?.spec || "";
-          if (hostSet.has(hostOf(u))) {
-            try {
-              gBrowser.removeTab(t);
-            } catch {}
-          }
+      const hostSet = new Set(bookmarks.map(bookmark => hostOf(String(bookmark.uri))));
+      for (const tab of getTabs(context.gBrowser)) {
+        if (hostSet.has(hostOf(tabUrl(tab)))) {
+          context.gBrowser?.removeTab?.(tab);
         }
       }
     }
 
-    await removeBookmark(folder.guid);
-    return { name: folder.title, removed: bookmarks.length };
+    await removeBookmark(context.PlacesUtils, folder.guid);
+    await localMemory.removeBookmarkFolderDocuments(folder.title || name);
+    this.scheduleManagedFolderSync("delete-folder");
+    return { name: folder.title || name, removed: bookmarks.length };
   }
 
-  async rename(oldName: string, newName: string) {
-    oldName = (oldName || "").trim();
-    newName = (newName || "").trim();
-    if (!oldName || !newName) return { ok: false };
+  async rename(
+    oldName: string,
+    newName: string
+  ): Promise<{ ok: boolean; msg?: string }> {
+    const normalizedOld = (oldName || "").trim();
+    const normalizedNew = (newName || "").trim();
+    if (!normalizedOld || !normalizedNew) return { ok: false };
 
+    const context = getChromeContext();
     const rootId = await this.ensureRootFolder();
-    const children = await getBookmarkChildren(rootId);
-    const { PlacesUtils } = getChrome();
-    const folder = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === oldName.toLowerCase()
-    );
-
+    const folder = await this.findFolderNode(rootId, normalizedOld);
     if (!folder) return { ok: false };
 
-    const existing = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === newName.toLowerCase()
-    );
+    const existing = await this.findFolderNode(rootId, normalizedNew);
     if (existing) return { ok: false, msg: "Target exists" };
 
-    await updateBookmark(folder.guid, { title: newName });
+    await updateBookmark(context.PlacesUtils, folder.guid, { title: normalizedNew });
+    await localMemory.renameBookmarkFolderDocuments(folder.title || normalizedOld, normalizedNew);
+    this.scheduleManagedFolderSync("rename-folder");
     return { ok: true };
   }
 
-  async addTabs(name: string, tabs: FxTab[]) {
-    const { PlacesUtils } = getChrome();
+  async addTabs(name: string, tabs: BrowserTabLike[]): Promise<{ ok: boolean }> {
+    const context = getChromeContext();
     const rootId = await this.ensureRootFolder();
-    const children = await getBookmarkChildren(rootId);
-    const folder = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        (c.title || "").toLowerCase() === name.toLowerCase()
-    );
+    let folder = await this.findFolderNode(rootId, name);
 
-    let targetFolder = folder;
-    if (!targetFolder) {
-      targetFolder = await createBookmark({
+    if (!folder) {
+      folder = await createBookmark(context.PlacesUtils, {
         parentGuid: rootId,
         title: name,
       });
     }
 
     for (const tab of tabs) {
-      await this.addTabToFolder(targetFolder.guid, tab, targetFolder.title);
+      await this.addTabToFolder(folder.guid, tab, folder.title || name);
     }
 
+    this.scheduleManagedFolderSync("add-tabs");
     return { ok: true };
   }
 
-  async removeUrl(name: string, url: string) {
-    name = (name || "").trim();
+  async removeUrl(name: string, url: string): Promise<{ ok: boolean }> {
+    const normalizedName = (name || "").trim();
     const rootId = await this.ensureRootFolder();
-    const children = await getBookmarkChildren(rootId);
-    const { PlacesUtils } = getChrome();
-
-    const folder = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === name.toLowerCase()
-    );
-
+    const folder = await this.findFolderNode(rootId, normalizedName);
     if (!folder) return { ok: false };
 
-    const bookmarks = await getBookmarkChildren(folder.guid);
-    const toRemove = bookmarks.filter((b: any) => b.uri === url);
-
+    const bookmarks = await getBookmarkChildren(getChromeContext().PlacesUtils, folder.guid);
+    const toRemove = bookmarks.filter(bookmark => bookmark.uri === url);
     for (const bookmark of toRemove) {
-      await removeBookmark(bookmark.guid);
+      await removeBookmark(getChromeContext().PlacesUtils, bookmark.guid);
+    }
+
+    if (toRemove.length > 0) {
+      await localMemory.removeBookmarkFolderDocumentByUrl(folder.title || normalizedName, url);
+      this.scheduleManagedFolderSync("remove-url");
     }
 
     return { ok: toRemove.length > 0 };
   }
 
-  async openFolder(name: string, where: "tabs" | "window" | "tabgroup" = "tabs") {
-    name = (name || "").trim();
+  async openFolder(
+    name: string,
+    where: "tabs" | "window" | "tabgroup" = "tabs"
+  ): Promise<{ ok: boolean }> {
+    const normalizedName = (name || "").trim();
+    const context = getChromeContext();
     const rootId = await this.ensureRootFolder();
-    const children = await getBookmarkChildren(rootId);
-    const { PlacesUtils, topWin } = getChrome();
-
-    const folder = children.find(
-      (c: any) =>
-        c.type === PlacesUtils?.bookmarks.TYPE_FOLDER &&
-        c.title.toLowerCase() === name.toLowerCase()
-    );
-
+    const folder = await this.findFolderNode(rootId, normalizedName);
     if (!folder) return { ok: false };
 
-    const bookmarks = await getBookmarkChildren(folder.guid);
-    const items = bookmarks.filter((b: any) => b.uri);
-    const urls = items.map((it: any) => it.uri);
-
+    const bookmarks = await getBookmarkChildren(context.PlacesUtils, folder.guid);
+    const urls = bookmarks
+      .filter(bookmark => !!bookmark.uri)
+      .map(bookmark => String(bookmark.uri));
     if (urls.length === 0) return { ok: true };
 
-    let targetBrowser: any;
+    let targetBrowser = context.gBrowser;
     if (where === "window") {
-      const w = topWin.OpenBrowserWindow();
+      const newWindow = context.topWin?.OpenBrowserWindow?.();
+      if (!newWindow) return { ok: false };
       await new Promise(resolve => setTimeout(resolve, 250));
-      targetBrowser = w.gBrowser;
-    } else {
-      targetBrowser = getChrome().gBrowser;
+      targetBrowser = newWindow.gBrowser || null;
     }
 
-    if (!targetBrowser) return { ok: false };
-
-    let Services = (window as any).Services || (window.top as any)?.Services;
-    if (!Services && (window as any).ChromeUtils) {
-      try {
-        Services = (window as any).ChromeUtils.import(
-          "resource://gre/modules/Services.jsm"
-        ).Services;
-      } catch (e) {
-        console.error("Failed to import Services", e);
-      }
-    }
-    const triggeringPrincipal =
-      Services?.scriptSecurityManager?.getSystemPrincipal();
-
-    const openedTabs: any[] = [];
+    if (!targetBrowser?.addTrustedTab) return { ok: false };
+    const principal = getSystemPrincipal(context.Services);
+    const openedTabs: BrowserTabLike[] = [];
 
     for (const url of urls) {
       try {
         const tab = targetBrowser.addTrustedTab(url, {
-          triggeringPrincipal,
+          triggeringPrincipal: principal,
           relatedToCurrent: false,
         });
         if (tab) openedTabs.push(tab);
-      } catch (e) {
-        console.error("Failed to open tab for URL:", url, e);
+      } catch (error) {
+        assistantLogger.error("bookmark-folders", `Failed to open tab for URL: ${url}`, error);
       }
     }
 
     if (where === "tabgroup" && openedTabs.length > 0) {
       try {
-        targetBrowser.addTabGroup(openedTabs, { label: name });
-      } catch (e) {
-        console.warn("Failed to group opened tabs:", e);
+        targetBrowser.addTabGroup?.(openedTabs, { label: normalizedName });
+      } catch (error) {
+        assistantLogger.warn("bookmark-folders", "Failed to group opened tabs", error);
       }
     }
 
@@ -401,55 +547,48 @@ class BookmarkFolderManager {
 
   private async addTabToFolder(
     folderGuid: string,
-    tab: FxTab,
+    tab: BrowserTabLike,
     folderName?: string
-  ) {
-    const url = tab?.linkedBrowser?.currentURI?.spec || "";
+  ): Promise<void> {
+    const url = tabUrl(tab);
     if (!url) return;
 
-    const title =
-      tab?.label ||
-      tab?.linkedBrowser?.contentTitle ||
-      tab?.linkedBrowser?.currentURI?.spec ||
-      "";
-
-    const existing = await getBookmarkChildren(folderGuid);
-    const alreadyExists = existing.some((b: any) => b.uri === url);
+    const title = tabTitle(tab);
+    const context = getChromeContext();
+    const existing = await getBookmarkChildren(context.PlacesUtils, folderGuid);
+    const alreadyExists = existing.some(bookmark => bookmark.uri === url);
     if (alreadyExists) return;
 
-    await createBookmark({
+    const createdBookmark = await createBookmark(context.PlacesUtils, {
       parentGuid: folderGuid,
       title,
       url,
     });
 
+    let content = "";
     try {
-      let content = "";
-      try {
-        const doc = tab.linkedBrowser?.contentDocument;
-        if (doc && doc.body) {
-          content = doc.body.innerText.substring(0, 5000);
-        }
-      } catch (e) {
-        console.warn("Failed to extract tab content:", e);
-      }
-
-      const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;
-      await localMemory.addDocument(
-        text,
-        {
-          title,
-          type: "bookmark_folder_item",
-          hub: folderGuid,
-          hubName: folderName,
-          folderName,
-          description: content.substring(0, 200),
-        },
-        url
-      );
-    } catch (e) {
-      console.error("Failed to index bookmark folder item:", e);
+      const bodyText = tab.linkedBrowser?.contentDocument?.body?.innerText || "";
+      content = String(bodyText).substring(0, 5000);
+    } catch (error) {
+      assistantLogger.warn("bookmark-folders", "Failed to extract tab content", error);
     }
+
+    const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;
+    await localMemory.addDocument(
+      text,
+      {
+        title,
+        type: "bookmark_folder_item",
+        hub: folderGuid,
+        hubName: folderName,
+        folderName,
+        url,
+        bookmarkGuid: createdBookmark.guid,
+        parentGuid: folderGuid,
+        description: content.substring(0, 200),
+      },
+      url
+    );
   }
 
   private suggestName(): string {

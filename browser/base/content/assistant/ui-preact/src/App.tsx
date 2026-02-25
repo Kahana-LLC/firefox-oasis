@@ -1,110 +1,40 @@
 import { h, Fragment } from 'preact';
-import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
-import { ToolActionMessage } from './components/ToolActionMessage';
-import { ToolActionInline } from './components/ToolActionInline';
 import { Feedback } from './components/Feedback';
 import TOOL_LABELS from './toolLabels';
+import type {
+  AssistantHistoryEntry,
+  AssistantMessage,
+  AuthState,
+  ConfirmationData,
+  OasisWindow,
+  SupabaseAuthState,
+  ToolAction,
+  ToolActionStatus,
+} from './types';
+import {
+  OASIS_EVENT_AUTH_UPDATE,
+  OASIS_EVENT_CONFIRMATION_UPDATE,
+  OASIS_EVENT_HISTORY_UPDATE,
+} from '../../shared/contracts.js';
 import './App.css';
 
-// Minimal status icon for tool action
-function ToolActionStatusIcon({ status }: { status: 'pending'|'running'|'done'|'error' }) {
-  if (status === 'running' || status === 'pending') {
-    return (
-      <svg width="14" height="14" viewBox="0 0 50 50" style={{ marginRight: 2, verticalAlign: 'middle' }}>
-        <circle cx="25" cy="25" r="20" stroke="#aaa" strokeWidth="4" fill="none" opacity="0.18" />
-        <circle cx="25" cy="25" r="20" stroke="#aaa" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
+const oasisWindow: OasisWindow = window;
+
+function ActiveToolIndicator({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#7A9200', fontSize: '13px', margin: '8px 0', paddingLeft: '4px' }}>
+      <svg width="12" height="12" viewBox="0 0 50 50">
+        <circle cx="25" cy="25" r="20" stroke="#7A9200" strokeWidth="4" fill="none" opacity="0.2" />
+        <circle cx="25" cy="25" r="20" stroke="#7A9200" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
           <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
         </circle>
       </svg>
-    );
-  } else if (status === 'done') {
-    return (
-      <svg width="14" height="14" viewBox="0 0 20 20" style={{ marginRight: 2, verticalAlign: 'middle' }}>
-        <circle cx="10" cy="10" r="9" stroke="#aaa" strokeWidth="2" fill="none" />
-        <path d="M6 10l2 2 4-4" stroke="#aaa" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  } else {
-    return (
-      <svg width="14" height="14" viewBox="0 0 20 20" style={{ marginRight: 2, verticalAlign: 'middle' }}>
-        <circle cx="10" cy="10" r="9" stroke="#d32f2f" strokeWidth="2" fill="none" />
-        <line x1="7" y1="7" x2="13" y2="13" stroke="#d32f2f" strokeWidth="2" />
-        <line x1="13" y1="7" x2="7" y2="13" stroke="#d32f2f" strokeWidth="2" />
-      </svg>
-    );
-  }
-}
-
-function ToolActionsGroup({ actions }: { actions: any[] }) {
-  const [open, setOpen] = useState(true);
-  const anyRunning = actions.some(a => a.status === 'running' || a.status === 'pending');
-  const anyError = actions.some(a => a.status === 'error');
-
-  if (actions.length === 0) return null;
-
-  return (
-    <div className="tool-actions-group" style={{ margin: '8px 0 4px 0', paddingLeft: '4px' }}>
-      <div 
-        onClick={() => setOpen(!open)}
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          cursor: 'pointer', 
-          color: '#999', 
-          fontSize: '12px',
-          gap: '4px',
-          userSelect: 'none',
-          marginBottom: open ? '4px' : '0'
-        }}
-      >
-        <span style={{ fontWeight: 400 }}>Steps</span>
-        <svg 
-          width="10" height="10" 
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" 
-          style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', opacity: 0.6 }}
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </div>
-      {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {actions.map(a => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#999', fontSize: '13px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px' }}>
-                {a.status === 'running' || a.status === 'pending' ? (
-                  <svg width="10" height="10" viewBox="0 0 50 50">
-                    <circle cx="25" cy="25" r="20" stroke="#999" strokeWidth="4" fill="none" opacity="0.2" />
-                    <circle cx="25" cy="25" r="20" stroke="#999" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
-                      <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
-                    </circle>
-                  </svg>
-                ) : a.status === 'done' ? (
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : (
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d32f2f" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                )}
-              </div>
-              <span style={{ opacity: a.status === 'done' ? 0.7 : 1, fontWeight: a.status === 'running' ? 500 : 400 }}>
-                {a.label || a.output || a.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <span>{label}</span>
     </div>
   );
-}
-
-interface AuthState {
-  isAuthenticated: boolean;
-  user: any;
 }
 
 function Banner({ email, onClose }: { email: string; onClose: () => void }) {
@@ -122,12 +52,6 @@ function Banner({ email, onClose }: { email: string; onClose: () => void }) {
       </button>
     </div>
   );
-}
-
-interface ConfirmationData {
-  command: string;
-  args: any;
-  description: string;
 }
 
 function ConfirmationModal({ 
@@ -235,39 +159,58 @@ function ConfirmationModal({
 }
 
 // Global relays to ensure functions are available even if App remounts
-let recordStartRelay: any = null;
-let recordUpdateRelay: any = null;
-let resetAssistantSessionRelay: any = null;
-let pendingConfirmationRelay: any = null;
+let recordStartRelay: ((name: string, messageId?: string, label?: string) => string) | null = null;
+let recordUpdateRelay: ((id: string, status: ToolActionStatus, output?: string) => void) | null = null;
+let resetAssistantSessionRelay: (() => void | Promise<void>) | null = null;
+let pendingConfirmationRelay: ((data: ConfirmationData | null) => void) | null = null;
 
 // Store the original backend reset function before we overwrite it
-const originalResetAssistantSession = (window as any).resetAssistantSession;
+const originalResetAssistantSession = oasisWindow.resetAssistantSession;
 
-(window as any).oasisRecordToolActionStart = (name: string, messageId?: string, label?: string) => {
+oasisWindow.oasisRecordToolActionStart = (name: string, messageId?: string, label?: string) => {
   return recordStartRelay?.(name, messageId, label);
 };
-(window as any).oasisRecordToolActionUpdate = (id: string, status: string, output?: string) => {
-  return recordUpdateRelay?.(id, status, output);
+oasisWindow.oasisRecordToolActionUpdate = (id: string, status: ToolActionStatus, output?: string) => {
+  recordUpdateRelay?.(id, status, output);
 };
-(window as any).resetAssistantSession = () => {
+oasisWindow.resetAssistantSession = () => {
   if (resetAssistantSessionRelay) {
     return resetAssistantSessionRelay();
   }
   // Fallback to original if relay not set
   return originalResetAssistantSession?.();
 };
-(window as any).oasisSetPendingConfirmationRelay = (data: any) => {
+oasisWindow.oasisSetPendingConfirmationRelay = (data: ConfirmationData | null) => {
   if (pendingConfirmationRelay) {
     pendingConfirmationRelay(data);
   }
 };
 
+function userIdOf(user: AuthState["user"]): string | undefined {
+  if (!user || typeof user === "string") return undefined;
+  return typeof user.id === "string" ? user.id : undefined;
+}
+
+function userEmailOf(user: AuthState["user"]): string {
+  if (!user) return "";
+  if (typeof user === "string") return user;
+  return typeof user.email === "string" ? user.email : "";
+}
+
+function sanitizeAssistantChunk(raw: string): string {
+  return String(raw || "")
+    .replace(/\n?\s*\[\s*tool output for[^\]]+\]:[^\n]*(?:\n|$)/gi, "\n")
+    .replace(/\[\s*tool output for[^\]]+\]:\s*/gi, "")
+    .replace(/^\s*tool output for[^:]+:[^\n]*(?:\n|$)/gim, "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 export function App() {
-  const [messages, setMessages] = useState<Array<{id: string, role: 'user' | 'ai', content: string}>>([]);
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [toolActions, setToolActions] = useState<Array<{id:string; name:string; status: 'pending'|'running'|'done'|'error'; output?: string; messageId?: string; label?: string;}>>([]);
+  const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [auth, setAuth] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [view, setView] = useState<'chat' | 'auth'>('chat');
   const [bannerVisible, setBannerVisible] = useState(true);
@@ -275,7 +218,6 @@ export function App() {
   const logRef = useRef<HTMLDivElement>(null);
 
   const resetAssistantSession = async () => {
-    console.log("Resetting assistant session (UI + Backend)");
     setMessages([]);
     setToolActions([]);
     
@@ -289,7 +231,7 @@ export function App() {
     }
 
     // 2. Clear persistent history (browser logins)
-    const setHistory = (window as any).setAssistantHistory;
+    const setHistory = oasisWindow.setAssistantHistory;
     if (typeof setHistory === 'function') {
       await setHistory([]);
     }
@@ -310,14 +252,17 @@ export function App() {
 
   useEffect(() => {
     const updateFromGlobal = () => {
-        const globalState = (window as any).oasisAuthState;
+        const globalState = oasisWindow.oasisAuthState;
         if (globalState && globalState.isAuthenticated !== undefined) {
              setAuth((prev) => {
-                if (prev.isAuthenticated === globalState.isAuthenticated && prev.user?.id === globalState.user?.id) {
+                if (
+                  prev.isAuthenticated === globalState.isAuthenticated &&
+                  userIdOf(prev.user) === userIdOf(globalState.user)
+                ) {
                     return prev;
                 }
                 // If user changed, reset banner
-                if (prev.user?.id !== globalState.user?.id) {
+                if (userIdOf(prev.user) !== userIdOf(globalState.user)) {
                     setBannerVisible(true);
                 }
                 return { isAuthenticated: !!globalState.isAuthenticated, user: globalState.user };
@@ -326,10 +271,44 @@ export function App() {
         }
     };
 
+    const loadHistory = () => {
+      void (async () => {
+        try {
+          const getHistory = oasisWindow.getAssistantHistory;
+          if (typeof getHistory !== 'function') {
+            return;
+          }
+          const history = await Promise.resolve(getHistory());
+          if (!Array.isArray(history)) {
+            return;
+          }
+          const formatted = history.map((m: AssistantHistoryEntry, idx: number): AssistantMessage => {
+            const isHuman =
+              m.type === 'human' ||
+              m.id?.includes('Human') ||
+              m.constructor.name === 'HumanMessage';
+            const raw = m.content || (m.lc_kwargs ? m.lc_kwargs.content : '') || '';
+            const content = isHuman
+              ? raw
+              : sanitizeAssistantChunk(raw).trim();
+
+            return {
+              id: m.id || `hist-${idx}-${m.role || 'msg'}`,
+              role: isHuman ? 'user' : 'ai',
+              content
+            };
+          });
+          setMessages(formatted);
+        } catch (e) {
+          console.error("Failed to load history:", e);
+        }
+      })();
+    };
+
     // Initial Auth Check
     const checkAuth = async () => {
       // First, check if the global shim already has the auth state
-      const globalState = (window as any).oasisAuthState;
+      const globalState = oasisWindow.oasisAuthState;
       if (globalState && globalState.isAuthenticated) {
         setAuth({ isAuthenticated: true, user: globalState.user });
         setView('chat');
@@ -337,12 +316,12 @@ export function App() {
       }
 
       // If not, we can try to ask supabaseAuth directly, but only if it's available
-      if ((window as any).supabaseAuth) {
+      if (oasisWindow.supabaseAuth) {
         try {
             // Give it a tiny bit of time to initialize if it's currently restoring
-            const isAuth = await (window as any).supabaseAuth.isAuthenticated();
+            const isAuth = await oasisWindow.supabaseAuth.isAuthenticated();
             if (isAuth) {
-                const user = await (window as any).supabaseAuth.getCurrentUser();
+                const user = await oasisWindow.supabaseAuth.getCurrentUser();
                 setAuth({ isAuthenticated: true, user });
                 setView('chat');
             }
@@ -353,17 +332,17 @@ export function App() {
     };
     checkAuth();
 
-    window.addEventListener('oasis-auth-update', updateFromGlobal);
-    window.addEventListener('oasis-history-update', loadHistory);
+    window.addEventListener(OASIS_EVENT_AUTH_UPDATE, updateFromGlobal);
+    window.addEventListener(OASIS_EVENT_HISTORY_UPDATE, loadHistory);
     
     const handleConfirmationUpdate = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
+      const detail = (e as CustomEvent<ConfirmationData | null>).detail;
       setPendingConfirmation(detail);
     };
-    window.addEventListener('oasis-confirmation-update', handleConfirmationUpdate);
+    window.addEventListener(OASIS_EVENT_CONFIRMATION_UPDATE, handleConfirmationUpdate);
 
-    if ((window as any).supabaseAuth?.onAuthStateChange) {
-      (window as any).supabaseAuth.onAuthStateChange((state: any) => {
+    if (oasisWindow.supabaseAuth?.onAuthStateChange) {
+      oasisWindow.supabaseAuth.onAuthStateChange((state: SupabaseAuthState) => {
         setAuth({ isAuthenticated: !!state.isAuthenticated, user: state.user });
         if (state.isAuthenticated) {
             setView('chat');
@@ -375,34 +354,14 @@ export function App() {
     const pollTimer = setTimeout(() => {
         checkAuth();
     }, 1500);
-
-    // Restore History
-    const loadHistory = () => {
-        try {
-            const getHistory = (window as any).getAssistantHistory;
-            if (typeof getHistory === 'function') {
-                const history = getHistory();
-                if (Array.isArray(history)) {
-                     const formatted = history.map((m: any, idx: number) => ({
-                         id: m.id || `hist-${idx}-${m.role || 'msg'}`,
-                         role: (m.type === 'human' || m.id?.includes('Human') || m.constructor.name === 'HumanMessage') ? 'user' : 'ai',
-                         content: m.content || (m.lc_kwargs ? m.lc_kwargs.content : '') || ''
-                     }));
-                     setMessages(formatted as any);
-                }
-            }
-        } catch (e) {
-            console.error("Failed to load history:", e);
-        }
-    };
     // Try immediately and after a short delay to ensure assistant.ts is ready
     loadHistory();
     setTimeout(loadHistory, 500);
 
     return () => {
-        window.removeEventListener('oasis-auth-update', updateFromGlobal);
-        window.removeEventListener('oasis-history-update', loadHistory);
-        window.removeEventListener('oasis-confirmation-update', handleConfirmationUpdate);
+        window.removeEventListener(OASIS_EVENT_AUTH_UPDATE, updateFromGlobal);
+        window.removeEventListener(OASIS_EVENT_HISTORY_UPDATE, loadHistory);
+        window.removeEventListener(OASIS_EVENT_CONFIRMATION_UPDATE, handleConfirmationUpdate);
         clearTimeout(pollTimer);
     };
   }, []);
@@ -421,13 +380,10 @@ export function App() {
       return v.toString(16);
     });
   }
-  // (labels imported from src/toolLabels.ts)
 
   function prettifyToolName(name: string) {
     if (!name) return '';
-    // if contains spaces already, return as-is
     if (name.includes(' ')) return name;
-    // camelCase or snake_case or kebab-case to words
     const spaced = name
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .replace(/[_-]+/g, ' ')
@@ -435,43 +391,26 @@ export function App() {
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
-  // Start a tool action and associate it with a messageId (optional) and optional friendly label
   const startToolAction = (name: string, messageId?: string, label?: string) => {
     const id = uuid();
-    console.log(`🛠️ startToolAction: name=${name}, messageId=${messageId}, id=${id}`);
     const display = label || TOOL_LABELS[name] || prettifyToolName(name);
-    setToolActions((prev) => {
-      const added = [...prev, { id, name, status: 'running', messageId, label: display } as any];
-      // If a specific tool action starts for this message, mark the generic runAssistantStream action as done
-      if (messageId && name !== 'runAssistantStream') {
-        return added.map(a => (a.messageId === messageId && a.name === 'runAssistantStream') ? { ...a, status: 'done' } : a);
-      }
-      return added;
-    });
+    setToolActions((prev) => [...prev, { id, name, status: 'running', messageId, label: display }]);
     return id;
   };
-  // Update tool action by id
-  const updateToolAction = (id: string, status: 'done'|'error'|'running'|'pending', output?: string) => {
-    console.log(`🛠️ updateToolAction: id=${id}, status=${status}, output=${output?.substring(0, 30)}`);
-    setToolActions((prev) => prev.map((a) => a.id === id ? { ...a, status, output: output ?? a.output } : a));
+
+  const updateToolAction = (id: string, status: ToolActionStatus) => {
+    setToolActions((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
   };
+
+  const activeToolAction = [...toolActions]
+    .reverse()
+    .find(a => a.status === 'running' || a.status === 'pending');
 
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [messages]);
-
-  const onChunk = (text: string) => {
-    setMessages((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && last.role === 'ai') {
-        return [...prev.slice(0, -1), { ...last, content: last.content + text }];
-      } else {
-        return [...prev, { id: uuid(), role: 'ai', content: text }];
-      }
-    });
-  };
 
   async function send(textInput?: string) {
     const text = textInput || input;
@@ -483,28 +422,29 @@ export function App() {
 
     setInput('');
     setBusy(true);
-    setToolActions([]); 
+    setToolActions([]);
     const userMsgId = uuid();
     setMessages((m) => [...m, { id: userMsgId, role: 'user', content: text }]);
 
     try {
-      const run = (window as any).runAssistantStream;
+      const run = oasisWindow.runAssistantStream;
       if (typeof run === 'function') {
         // Add empty AI message and get its id
         const aiMsgId = uuid();
-        
-        // Start a 'Thinking' step manually
-        startToolAction('runAssistantStream', aiMsgId, 'Thinking...');
-        
+
         setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
         
         try {
           await run(text, (chunk: string) => {
+            const sanitizedChunk = sanitizeAssistantChunk(chunk);
+            if (!sanitizedChunk) {
+              return;
+            }
             setMessages((prev) => {
               const idx = prev.findIndex(msg => msg.id === aiMsgId);
               if (idx !== -1) {
                 const updated = [...prev];
-                updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+                updated[idx] = { ...updated[idx], content: updated[idx].content + sanitizedChunk };
                 return updated;
               }
               return prev;
@@ -533,7 +473,7 @@ export function App() {
   };
 
   const toggleRecording = async () => {
-    const service = (window as any).voiceInputService;
+    const service = oasisWindow.voiceInputService;
     if (!service) {
       alert("Voice input service not available.");
       return;
@@ -572,10 +512,10 @@ export function App() {
 
   const handleFeedback = () => {
     const feedbackUrl = "https://tally.so/r/3jkNN6";
-    if (typeof (window as any).openWebLinkIn === 'function') {
-        (window as any).openWebLinkIn(feedbackUrl, "tab", {});
-    } else if (window.top && (window.top as any).openWebLinkIn) {
-        (window.top as any).openWebLinkIn(feedbackUrl, "tab", {});
+    if (typeof oasisWindow.openWebLinkIn === 'function') {
+        oasisWindow.openWebLinkIn(feedbackUrl, "tab", {});
+    } else if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === "function") {
+        (window.top as OasisWindow).openWebLinkIn!(feedbackUrl, "tab", {});
     } else {
         window.open(feedbackUrl, "_blank");
     }
@@ -587,15 +527,15 @@ export function App() {
     if (anchor && anchor.href && !anchor.href.startsWith('javascript:')) {
       e.preventDefault();
       const url = anchor.href;
-      if ((window as any).assistantBridge?.openTab) {
-        (window as any).assistantBridge.openTab(url);
+      if (oasisWindow.assistantBridge?.openTab) {
+        oasisWindow.assistantBridge.openTab(url);
       } else {
         window.open(url, '_blank');
       }
     }
   };
 
-  const userEmail = auth.user?.email || (typeof auth.user === 'string' ? auth.user : '');
+  const userEmail = userEmailOf(auth.user);
 
   const handleConfirmationApprove = async () => {
     // Only hide the modal UI - do NOT clear the backend pending confirmation yet
@@ -604,16 +544,20 @@ export function App() {
     
     setBusy(true);
     try {
-      const run = (window as any).runAssistantStream;
+      const run = oasisWindow.runAssistantStream;
       if (typeof run === 'function') {
         const aiMsgId = uuid();
         setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
         await run("yes", (chunk: string) => {
+          const sanitizedChunk = sanitizeAssistantChunk(chunk);
+          if (!sanitizedChunk) {
+            return;
+          }
           setMessages((prev) => {
             const idx = prev.findIndex(msg => msg.id === aiMsgId);
             if (idx !== -1) {
               const updated = [...prev];
-              updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+              updated[idx] = { ...updated[idx], content: updated[idx].content + sanitizedChunk };
               return updated;
             }
             return prev;
@@ -627,7 +571,7 @@ export function App() {
 
   const handleConfirmationCancel = async () => {
     setPendingConfirmation(null);
-    const clearFn = (window as any).oasisClearPendingConfirmation;
+    const clearFn = oasisWindow.oasisClearPendingConfirmation;
     if (clearFn) clearFn();
     
     setMessages((m) => [...m, { id: uuid(), role: 'ai', content: 'Action cancelled.' }]);
@@ -672,8 +616,6 @@ export function App() {
             <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
           )}
 
-          {/* Remove global toolActions bar; now shown inline with messages */}
-
           <div className="chat-log" ref={logRef}>
             {messages.length === 0 && (
               <div style={{ textAlign: 'center', marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0px', width: '100%', padding: '8px', boxSizing: 'border-box', flexShrink: 0 }}>
@@ -701,27 +643,20 @@ export function App() {
                   </div>
                 );
               } else if (m.role === 'ai') {
-                // Only show tool actions for the very last AI message
-                const showTools = isLastAI && toolActions.length > 0;
-                
                 let htmlContent = m.content;
                 try {
-                  const w = window as any;
-                  if (w.marked && w.DOMPurify) {
-                    const raw = w.marked.parse(m.content);
-                    htmlContent = w.DOMPurify.sanitize(raw);
+                  if (oasisWindow.marked && oasisWindow.DOMPurify) {
+                    const raw = oasisWindow.marked.parse(m.content);
+                    htmlContent = oasisWindow.DOMPurify.sanitize(raw);
                   }
                 } catch (e) {
                   console.error("Markdown render error:", e);
                 }
                 return (
                   <Fragment key={m.id}>
-                    {showTools && (
-                      <ToolActionsGroup actions={toolActions} />
-                    )}
                     <div className="ai-message-wrapper">
                       <div className="ai-response-container" onClick={handleLinkClick}>
-                        {(window as any).marked ? (
+                        {oasisWindow.marked ? (
                           <div 
                             className="markdown-body"
                             dangerouslySetInnerHTML={{ __html: htmlContent }} 
@@ -742,9 +677,8 @@ export function App() {
               return null;
             })}
 
-            {/* If we're busy but no AI message yet, show tools at the bottom */}
-            {busy && messages.length > 0 && messages[messages.length - 1].role === 'user' && toolActions.length > 0 && (
-              <ToolActionsGroup actions={toolActions} />
+            {(busy || activeToolAction) && (
+              <ActiveToolIndicator label={activeToolAction?.label || 'Thinking...'} />
             )}
 
           </div>
@@ -753,7 +687,10 @@ export function App() {
             <textarea 
                 className="input-field"
                 value={isRecording ? "Listening..." : input} 
-                onInput={(e: any) => setInput(e.target.value)} 
+                onInput={(e: Event) => {
+                  const target = e.currentTarget as HTMLTextAreaElement;
+                  setInput(target.value);
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={auth.isAuthenticated ? "Ask me anything..." : "Please sign in..."}
                 disabled={busy || !auth.isAuthenticated || isRecording}
@@ -802,7 +739,7 @@ export function App() {
 
                    <button 
                      className="send-btn" 
-                     onClick={() => (window as any).resetAssistantSession()} 
+                     onClick={() => { void oasisWindow.resetAssistantSession?.(); }} 
                      title="Clear Chat History"
                      style={{ color: '#666', width: '32px', height: '32px', flex: 'none' }}
                    >

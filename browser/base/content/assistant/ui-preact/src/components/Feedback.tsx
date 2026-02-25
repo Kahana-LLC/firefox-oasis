@@ -1,5 +1,7 @@
-import { h, Fragment } from 'preact';
+import { h } from 'preact';
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
+import type { OasisWindow } from '../types';
 
 interface FeedbackProps {
   messageId: string;
@@ -7,6 +9,7 @@ interface FeedbackProps {
 }
 
 export function Feedback({ messageId, onClose }: FeedbackProps) {
+  const oasisWindow = window as OasisWindow;
   const [showForm, setShowForm] = useState(false);
   const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
   const [comment, setComment] = useState('');
@@ -31,22 +34,22 @@ export function Feedback({ messageId, onClose }: FeedbackProps) {
     );
   };
 
-  const mpTrack = (event: string, props = {}) => {
-    if ((window as any).mpTrack) {
-      (window as any).mpTrack(event, props);
+  const mpTrack = (event: string, props: Record<string, unknown> = {}) => {
+    if (oasisWindow.mpTrack) {
+      oasisWindow.mpTrack(event, props);
     }
   };
 
   const showFeedbackMessage = (message: string, isError = false) => {
-    // Basic implementation of a toast if not available globally
-    console.log(`[Feedback] ${isError ? 'Error: ' : 'Success: '}${message}`);
-    // We could dispatch an event here if there was a global toast listener
+    if (isError) {
+      console.error(`[Feedback] ${message}`);
+    }
   };
 
   const submitToSupabase = async (isNegative: boolean, category: string, additionalInfo: string) => {
-    const supabase = (window as any).supabaseAuth?.supabase;
+    const supabase = oasisWindow.supabaseAuth?.supabase;
     // session_id is usually provided by the bridge or auth service
-    const sessionId = (window as any).supabaseAuth?.currentSession?.session_id || null;
+    const sessionId = oasisWindow.supabaseAuth?.currentSession?.session_id || null;
 
     if (!supabase) {
       showFeedbackMessage("Feedback service unavailable.", true);
@@ -198,7 +201,7 @@ export function Feedback({ messageId, onClose }: FeedbackProps) {
               className="feedback-textarea"
               placeholder="Ask me anything..."
               value={comment}
-              onInput={(e: any) => setComment(e.target.value)}
+              onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => setComment(e.currentTarget.value)}
             />
           </div>
 

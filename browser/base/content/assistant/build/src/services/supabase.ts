@@ -1,7 +1,45 @@
 // Supabase Authentication Service for Browser Assistant
-import { createClient, SupabaseClient, User, Session, AuthError } from '@supabase/supabase-js';
-import { ENV } from '../config/env';
-import { UserProfile, UserSession, AuthState } from '../types/auth';
+import {
+    createClient,
+    SupabaseClient,
+    User,
+    Session,
+    AuthError,
+    AuthChangeEvent,
+} from '@supabase/supabase-js';
+import { ENV } from '../config/env.js';
+import { UserProfile, UserSession, AuthState } from '../types/auth.js';
+import { assistantLogger } from '../utils/assistantLogger.js';
+
+type OAuthCallbackData = {
+    code?: string;
+    access_token?: string;
+    refresh_token?: string;
+};
+
+const logDebug = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.debug(
+        'supabase',
+        String(message ?? ''),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
+
+const logWarn = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.warn(
+        'supabase',
+        String(message ?? ''),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
+
+const logError = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.error(
+        'supabase',
+        String(message ?? ''),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
 
 export default class SupabaseAuth {
     private static instance: SupabaseAuth;
@@ -15,7 +53,7 @@ export default class SupabaseAuth {
         
         // Set up auth state change listener
         this.supabase.auth.onAuthStateChange((event, session) => {
-            console.log('Auth state changed:', event);
+            logDebug('Auth state changed:', event);
             this.handleAuthStateChange(event, session);
         });
     }
@@ -30,12 +68,12 @@ export default class SupabaseAuth {
     // Google OAuth Authentication
     public async signInWithGoogle(): Promise<{ user: User | null; error: AuthError | null }> {
         try {
-            console.log('Attempting Google sign in with manual URL approach');
+            logDebug('Attempting Google sign in with manual URL approach');
             
             // Check if user is already authenticated
             const currentUser = await this.getCurrentUser();
             if (currentUser) {
-                console.log('User already authenticated:', currentUser.id);
+                logDebug('User already authenticated:', currentUser.id);
                 return { user: currentUser, error: null };
             }
             
@@ -57,11 +95,11 @@ export default class SupabaseAuth {
                    });
             
             if (error || !data.url) {
-                console.error('Failed to generate OAuth URL:', error);
+                logError('Failed to generate OAuth URL:', error);
                 return { user: null, error: error || { message: 'Failed to generate OAuth URL', status: 500 } as AuthError };
             }
             
-            console.log('Generated OAuth URL:', data.url);
+            logDebug('Generated OAuth URL:', data.url);
             
             // Since window.open() is blocked from chrome://, we'll show a modal with the URL
             // and let the user manually open it in a new tab
@@ -71,7 +109,7 @@ export default class SupabaseAuth {
             };
             
         } catch (error) {
-            console.error('Google sign in error:', error);
+            logError('Google sign in error:', error);
             return { user: null, error: error as AuthError };
         }
     }
@@ -79,7 +117,7 @@ export default class SupabaseAuth {
     // Email/Password Authentication
     public async signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: AuthError | null }> {
         try {
-            console.log('Attempting email sign in for:', email);
+            logDebug('Attempting email sign in for:', email);
 
             const { data, error } = await this.supabase.auth.signInWithPassword({
                 email,
@@ -87,26 +125,26 @@ export default class SupabaseAuth {
             });
 
             if (error) {
-                console.error('Email sign in error:', error.message);
+                logError('Email sign in error:', error.message);
                 return { user: null, error };
             }
 
             if (data.user) {
                 await this.updateLastLogin(data.user.id);
                 await this.createSession(data.user.id);
-                console.log('Email sign in successful for user:', data.user.id);
+                logDebug('Email sign in successful for user:', data.user.id);
             }
 
             return { user: data.user, error: null };
         } catch (error) {
-            console.error('Sign in error:', error);
+            logError('Sign in error:', error);
             return { user: null, error: error as AuthError };
         }
     }
 
     public async signUp(email: string, password: string, name?: string): Promise<{ user: User | null; error: AuthError | null }> {
         try {
-            console.log('Attempting sign up for:', email);
+            logDebug('Attempting sign up for:', email);
             
             const { data, error } = await this.supabase.auth.signUp({
                 email,
@@ -119,26 +157,26 @@ export default class SupabaseAuth {
             });
 
             if (error) {
-                console.error('Sign up error:', error.message);
+                logError('Sign up error:', error.message);
                 return { user: null, error };
             }
 
             if (data.user) {
                 // Create user profile in our custom users table
                 await this.createUserProfile(data.user, name);
-                console.log('Sign up successful for user:', data.user.id);
+                logDebug('Sign up successful for user:', data.user.id);
             }
 
             return { user: data.user, error: null };
         } catch (error) {
-            console.error('Sign up error:', error);
+            logError('Sign up error:', error);
             return { user: null, error: error as AuthError };
         }
     }
 
     public async signOut(): Promise<{ error: AuthError | null }> {
         try {
-            console.log('Attempting sign out');
+            logDebug('Attempting sign out');
             
             // End current session if exists
             if (this.currentSession) {
@@ -148,15 +186,15 @@ export default class SupabaseAuth {
             const { error } = await this.supabase.auth.signOut();
             
             if (error) {
-                console.error('Sign out error:', error.message);
+                logError('Sign out error:', error.message);
                 return { error };
             }
 
             this.currentSession = null;
-            console.log('Sign out successful');
+            logDebug('Sign out successful');
             return { error: null };
         } catch (error) {
-            console.error('Sign out error:', error);
+            logError('Sign out error:', error);
             return { error: error as AuthError };
         }
     }
@@ -181,26 +219,27 @@ export default class SupabaseAuth {
      * Handle OAuth callback data (similar to Electron's handleOAuthRedirectCallback)
      * Processes auth data from manual input and exchanges it for a session
      */
-    public async handleOAuthCallbackData(authData: any): Promise<{ success: boolean; error?: string }> {
+    public async handleOAuthCallbackData(authData: unknown): Promise<{ success: boolean; error?: string }> {
         try {
-            console.log('Handling OAuth callback data:', authData);
+            const parsedData = this.parseOAuthCallbackData(authData);
+            logDebug('Handling OAuth callback data:', parsedData);
             
             // Handle auth code exchange (preferred method)
-            if (authData.code) {
-                console.log('Exchanging auth code for session...');
-                const { data, error } = await this.supabase.auth.exchangeCodeForSession(authData.code);
+            if (parsedData.code) {
+                logDebug('Exchanging auth code for session...');
+                const { data, error } = await this.supabase.auth.exchangeCodeForSession(parsedData.code);
                 if (error) {
-                    console.error('Failed to exchange code for session:', error.message);
+                    logError('Failed to exchange code for session:', error.message);
                     return { success: false, error: error.message };
                 } else {
-                    console.log('Exchanged code for session for user:', data.user?.id);
+                    logDebug('Exchanged code for session for user:', data.user?.id);
                     
                     // Ensure user profile exists
                     if (data.user) {
                         const existingProfile = await this.getUserProfile();
                         if (!existingProfile) {
                             await this.createUserProfile(data.user, data.user.user_metadata?.name);
-                            console.log('Created user profile from OAuth callback');
+                            logDebug('Created user profile from OAuth callback');
                         }
                         
                         // Update last login and create session
@@ -213,24 +252,24 @@ export default class SupabaseAuth {
             }
 
             // Handle direct token setting (fallback)
-            if (authData.access_token && authData.refresh_token) {
-                console.log('Setting session from tokens...');
+            if (parsedData.access_token && parsedData.refresh_token) {
+                logDebug('Setting session from tokens...');
                 const { data, error } = await this.supabase.auth.setSession({
-                    access_token: authData.access_token,
-                    refresh_token: authData.refresh_token
+                    access_token: parsedData.access_token,
+                    refresh_token: parsedData.refresh_token
                 });
                 if (error) {
-                    console.error('Failed to set session from tokens:', error.message);
+                    logError('Failed to set session from tokens:', error.message);
                     return { success: false, error: error.message };
                 } else {
-                    console.log('Set session from tokens for user:', data.user?.id);
+                    logDebug('Set session from tokens for user:', data.user?.id);
                     
                     // Ensure user profile exists
                     if (data.user) {
                         const existingProfile = await this.getUserProfile();
                         if (!existingProfile) {
                             await this.createUserProfile(data.user, data.user.user_metadata?.name);
-                            console.log('Created user profile from tokens');
+                            logDebug('Created user profile from tokens');
                         }
                         
                         // Update last login and create session
@@ -242,11 +281,11 @@ export default class SupabaseAuth {
                 }
             }
             
-            console.warn('No valid OAuth data found');
+            logWarn('No valid OAuth data found');
             return { success: false, error: 'No valid OAuth data' };
             
         } catch (error) {
-            console.error('Error handling OAuth callback data:', error);
+            logError('Error handling OAuth callback data:', error);
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
         }
     }
@@ -264,13 +303,13 @@ export default class SupabaseAuth {
                 .single();
 
             if (error) {
-                console.error('Error fetching user profile:', error.message);
+                logError('Error fetching user profile:', error.message);
                 return null;
             }
 
             return data as UserProfile;
         } catch (error) {
-            console.error('Error fetching user profile:', error);
+            logError('Error fetching user profile:', error);
             return null;
         }
     }
@@ -280,7 +319,7 @@ export default class SupabaseAuth {
         this.authStateCallbacks.push(callback);
     }
 
-    private async handleAuthStateChange(event: string, session: Session | null): Promise<void> {
+    private async handleAuthStateChange(event: AuthChangeEvent, session: Session | null): Promise<void> {
         const user = session?.user || null;
         const authState: AuthState = {
             user,
@@ -293,7 +332,7 @@ export default class SupabaseAuth {
             try {
                 callback(authState);
             } catch (error) {
-                console.error('Error in auth state callback:', error);
+                logError('Error in auth state callback:', error);
             }
         });
 
@@ -320,12 +359,12 @@ export default class SupabaseAuth {
                 });
 
             if (error) {
-                console.error('Error creating user profile:', error.message);
+                logError('Error creating user profile:', error.message);
             } else {
-                console.log('User profile created successfully');
+                logDebug('User profile created successfully');
             }
         } catch (error) {
-            console.error('Error creating user profile:', error);
+            logError('Error creating user profile:', error);
         }
     }
 
@@ -337,10 +376,10 @@ export default class SupabaseAuth {
                 .eq('user_id', userId);
 
             if (error) {
-                console.error('Error updating last login:', error.message);
+                logError('Error updating last login:', error.message);
             }
         } catch (error) {
-            console.error('Error updating last login:', error);
+            logError('Error updating last login:', error);
         }
     }
 
@@ -364,16 +403,16 @@ export default class SupabaseAuth {
             if (error) {
                 // Ignore RLS errors as they might happen if the user is not fully synced yet
                 if (error.message.includes('row-level security policy')) {
-                    console.warn('Session tracking skipped due to RLS policy (non-critical):', error.message);
+                    logWarn('Session tracking skipped due to RLS policy (non-critical):', error.message);
                 } else {
-                    console.error('Error creating session:', error.message);
+                    logError('Error creating session:', error.message);
                 }
             } else if (data) {
                 this.currentSession = data as UserSession;
-                console.log('Session created:', data.session_id);
+                logDebug('Session created:', data.session_id);
             }
         } catch (error) {
-            console.error('Error creating session:', error);
+            logError('Error creating session:', error);
         }
     }
 
@@ -385,13 +424,25 @@ export default class SupabaseAuth {
                 .eq('session_id', sessionId);
 
             if (error) {
-                console.error('Error ending session:', error.message);
+                logError('Error ending session:', error.message);
             } else {
-                console.log('Session ended:', sessionId);
+                logDebug('Session ended:', sessionId);
             }
         } catch (error) {
-            console.error('Error ending session:', error);
+            logError('Error ending session:', error);
         }
+    }
+
+    private parseOAuthCallbackData(authData: unknown): OAuthCallbackData {
+        if (!authData || typeof authData !== "object") {
+            return {};
+        }
+        const raw = authData as Record<string, unknown>;
+        return {
+            code: typeof raw.code === "string" ? raw.code : undefined,
+            access_token: typeof raw.access_token === "string" ? raw.access_token : undefined,
+            refresh_token: typeof raw.refresh_token === "string" ? raw.refresh_token : undefined,
+        };
     }
 
     // Utility Methods

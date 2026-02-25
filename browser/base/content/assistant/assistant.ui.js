@@ -91,26 +91,30 @@
 
 // Expose global helpers for existing UI code that expects `window.getAssistantHistory` / `window.setAssistantHistory`
 try {
-  window.getAssistantHistory = async function() {
-    try {
-      if (window.assistantBridge && typeof window.assistantBridge.getAssistantHistory === 'function') {
-        return await window.assistantBridge.getAssistantHistory();
+  if (typeof window.getAssistantHistory !== "function") {
+    window.getAssistantHistory = function() {
+      try {
+        if (window.assistantBridge && typeof window.assistantBridge.getAssistantHistory === 'function') {
+          return window.assistantBridge.getAssistantHistory();
+        }
+      } catch (e) {
+        console.error('window.getAssistantHistory error', e);
       }
-    } catch (e) {
-      console.error('window.getAssistantHistory error', e);
-    }
-    return null;
-  };
+      return null;
+    };
+  }
 
-  window.setAssistantHistory = async function(history) {
-    try {
-      if (window.assistantBridge && typeof window.assistantBridge.setAssistantHistory === 'function') {
-        return await window.assistantBridge.setAssistantHistory(history);
+  if (typeof window.setAssistantHistory !== "function") {
+    window.setAssistantHistory = async function(history) {
+      try {
+        if (window.assistantBridge && typeof window.assistantBridge.setAssistantHistory === 'function') {
+          return await window.assistantBridge.setAssistantHistory(history);
+        }
+      } catch (e) {
+        console.error('window.setAssistantHistory error', e);
       }
-    } catch (e) {
-      console.error('window.setAssistantHistory error', e);
-    }
-  };
+    };
+  }
 } catch (e) {
   console.error('Failed to expose assistant history globals', e);
 }
@@ -219,15 +223,6 @@ window.mpTrack = mpTrack;
 window.mpIdentify = mpIdentify;
 
 mpTrack("assistant_ui_loaded_preact");
-
-// --- Voice Input Service ---
-// Import voice input service - it will be bundled in assistant.bundle.js
-let voiceInputService = null;
-try {
-  voiceInputService = window.voiceInputService;
-} catch (e) {
-  console.warn("Voice input service not available:", e);
-}
 
 // --- Auth State Management & Secure Storage ---
 // SupabaseAuth should be available from assistant.bundle.js

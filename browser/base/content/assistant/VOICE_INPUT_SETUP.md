@@ -15,11 +15,11 @@ User clicks mic → Records audio → Sends to Lambda → Deepgram/Gemini → Re
 - Handles microphone access via `navigator.mediaDevices.getUserMedia()`
 - Records audio using `MediaRecorder` API
 - Converts recorded audio to base64
-- Sends to lambda via `transcribeAudio()` in `proxyClient.ts`
+- Sends to the voice Lambda via `transcribeAudio()` in `proxyClient.ts`
 
 ### 2. Proxy Client (`src/proxyClient.ts`)
-- `transcribeAudio(audioBlob)` - Sends audio to lambda with `op: "transcribe"`
-- Uses same authenticated `postSigned()` method as chat/route operations
+- `transcribeAudio(audioBlob)` - Sends audio to the voice endpoint with `op: "transcribe"`
+- Uses the authenticated `postSigned()` method for voice-only operations
 - Includes Supabase JWT token in Authorization header
 
 ### 3. UI Integration (`assistant.ui.js`)
@@ -34,8 +34,13 @@ User clicks mic → Records audio → Sends to Lambda → Deepgram/Gemini → Re
 ```bash
 DEEPGRAM_API_KEY=<your-deepgram-api-key>
 GEMINI_API_KEY=<your-gemini-api-key>
-OASIS_API_BASE=<your-lambda-function-url>
 ```
+
+### Client Endpoint Configuration
+```bash
+OASIS_TRANSCRIBE_URL=<your-voice-lambda-function-url>
+```
+Set this in `browser/base/content/assistant/build/.env.local` for local overrides.
 
 ### Request Format
 ```json

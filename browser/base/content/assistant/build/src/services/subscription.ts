@@ -1,5 +1,6 @@
 import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
+import { assistantLogger } from "../utils/assistantLogger.js";
 
 // Plan Limits (Units per month)
 // Plan A ($20): 1500 units
@@ -16,6 +17,30 @@ const DEFAULT_LIMIT = 50;
 // Unit Costs
 const COST_TEXT = 1;
 const COST_VOICE = 10;
+
+const logDebug = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.debug(
+        "subscription",
+        String(message ?? ""),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
+
+const logWarn = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.warn(
+        "subscription",
+        String(message ?? ""),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
+
+const logError = (message: unknown, ...meta: unknown[]): void => {
+    assistantLogger.error(
+        "subscription",
+        String(message ?? ""),
+        meta.length === 0 ? undefined : meta.length === 1 ? meta[0] : meta
+    );
+};
 
 export interface UsageStats {
     totalUnits: number;
@@ -50,20 +75,20 @@ export class SubscriptionService {
     public async trackUsage(type: 'text' | 'voice', model: string = 'gemini-1.5-flash'): Promise<void> {
         const user = await supabaseAuth.getCurrentUser();
         if (!user) {
-            console.warn("trackUsage: No user found.");
+            logWarn("trackUsage: No user found.");
             return;
         }
 
         // Calculate units
         const units = type === 'voice' ? COST_VOICE : COST_TEXT;
-        console.log(`trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`);
+        logDebug(`trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`);
 
         // Optimistically update cache
         this.cachedUsage += units;
-        console.log(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
+        logDebug(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
         
         // Fail-safe: Save to local memory immediately so we don't lose it if DB fails
-        localMemory.saveUsage(user.id, this.cachedUsage).catch(e => console.error("Failed to save local usage:", e));
+        localMemory.saveUsage(user.id, this.cachedUsage).catch(e => logError("Failed to save local usage:", e));
 
         // Async fire-and-forget insert to not block UI
         const supabase = (supabaseAuth as any).supabase;
@@ -74,8 +99,8 @@ export class SubscriptionService {
             model_used: `${type}:${model}`,
             success: true
         }).then(({ error }: any) => {
-            if (error) console.error("Failed to track usage (DB Insert):", error);
-            else console.log("trackUsage: DB insert successful");
+            if (error) logError("Failed to track usage (DB Insert):", error);
+            else logDebug("trackUsage: DB insert successful");
         });
     }
 
@@ -122,7 +147,7 @@ export class SubscriptionService {
 
     private async refreshUsageData(userId: string): Promise<void> {
         const supabase = (supabaseAuth as any).supabase;
-        console.log("refreshUsageData: syncing usage...");
+        logDebug("refreshUsageData: syncing usage...");
 
         // 1. Get User Plan Limit
         let limit = DEFAULT_LIMIT;
@@ -139,7 +164,7 @@ export class SubscriptionService {
             .eq('is_active', true)
             .maybeSingle();
 
-        console.log(`refreshUsageData: Primary query result:`, {
+        logDebug(`refreshUsageData: Primary query result:`, {
             planData,
             planError,
             hasPlansJoin: planData && planData.plans ? true : false,
@@ -151,10 +176,10 @@ export class SubscriptionService {
             const planName = (planData.plans.name || "").toLowerCase();
             if (dbLimit) {
                 limit = dbLimit;
-                console.log(`refreshUsageData: Using plan limit from DB: ${limit}`);
+                logDebug(`refreshUsageData: Using plan limit from DB: ${limit}`);
             } else if (PLAN_LIMITS[planName]) {
                 limit = PLAN_LIMITS[planName];
-                console.log(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
+                logDebug(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
             }
         } else if (planData && planData.is_active) {
             const stripeSubId = planData.stripe_subscription_id;
@@ -162,7 +187,7 @@ export class SubscriptionService {
                                          typeof stripeSubId === 'string' &&
                                          stripeSubId.trim() !== '';
             
-            console.log(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
+            logDebug(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
                 stripeSubId,
                 hasStripeSubscription,
                 is_active: planData.is_active
@@ -170,14 +195,14 @@ export class SubscriptionService {
             
             if (hasStripeSubscription) {
                 limit = PLAN_LIMITS["basic"];
-                console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+                logDebug(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
             } else {
-                console.warn("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
+                logWarn("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
             }
         }
         
         if (limit === DEFAULT_LIMIT) {
-            console.warn("refreshUsageData: Limit still at default, trying fallback query without join");
+            logWarn("refreshUsageData: Limit still at default, trying fallback query without join");
             const { data: fallbackData, error: fallbackError } = await supabase
                 .from('user_plans')
                 .select('plan_id, stripe_subscription_id, is_active')
@@ -185,14 +210,14 @@ export class SubscriptionService {
                 .eq('is_active', true)
                 .maybeSingle();
             
-            console.log(`refreshUsageData: Fallback query result:`, { 
+            logDebug(`refreshUsageData: Fallback query result:`, { 
                 fallbackData, 
                 fallbackError,
                 userId 
             });
             
             if (fallbackError) {
-                console.error("refreshUsageData: Fallback query error:", fallbackError);
+                logError("refreshUsageData: Fallback query error:", fallbackError);
             }
             
             if (fallbackData && fallbackData.is_active) {
@@ -201,7 +226,7 @@ export class SubscriptionService {
                                              typeof stripeSubId === 'string' &&
                                              stripeSubId.trim() !== '';
                 
-                console.log(`refreshUsageData: Checking stripe_subscription_id:`, {
+                logDebug(`refreshUsageData: Checking stripe_subscription_id:`, {
                     stripeSubId,
                     hasStripeSubscription,
                     type: typeof stripeSubId
@@ -209,19 +234,19 @@ export class SubscriptionService {
                 
                 if (hasStripeSubscription) {
                     limit = PLAN_LIMITS["basic"];
-                    console.log(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+                    logDebug(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
                 } else {
-                    console.warn("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
+                    logWarn("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
                 }
             } else {
-                console.warn("refreshUsageData: No active plan found for user, using free plan limit", {
+                logWarn("refreshUsageData: No active plan found for user, using free plan limit", {
                     fallbackData,
                     userId
                 });
             }
         }
 
-        console.log(`refreshUsageData: Final limit set to: ${limit}`);
+        logDebug(`refreshUsageData: Final limit set to: ${limit}`);
         this.cachedLimit = limit;
 
         // 2. Get Current Month Usage from DB
@@ -241,7 +266,7 @@ export class SubscriptionService {
         }
         
         if (usageError) {
-             console.warn("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
+             logWarn("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
         }
 
         // 3. Get Local Usage (Fail-safe)
@@ -249,7 +274,7 @@ export class SubscriptionService {
 
         // 4. Reconcile: Take the MAX (never go backwards)
         this.cachedUsage = Math.max(dbTotal, localTotal);
-        console.log(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
+        logDebug(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
 
         this.lastFetchTime = Date.now();
     }
