@@ -27,9 +27,10 @@ await esbuild.build({
   platform: "browser",
   format: "iife",
   target: "es2022",
-  outfile: "../assistant.bundle.js",
+  outfile: "./dist/assistant.ui.bundle.js",
   sourcemap: false,
   logLevel: "info",
+  external: ["resource://*"],
   define: {
     "process.env.OASIS_ASSIST_URL": JSON.stringify(OASIS_ASSIST_URL),
     "process.env.OASIS_TRANSCRIBE_URL": JSON.stringify(OASIS_TRANSCRIBE_URL),

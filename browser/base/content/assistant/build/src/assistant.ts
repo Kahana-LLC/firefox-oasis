@@ -10,6 +10,8 @@ import { consumeAssistantGraphStream } from "./assistant/stream.js";
 import SupabaseAuth from "./services/supabase";
 import { subscriptionService } from "./services/subscription";
 import voiceInputService from "./services/voiceInput";
+import { searchService } from "./services/search.js";
+import { tagsService } from "./services/tags.js";
 import type { AssistantWindowLike } from "./types/runtime";
 
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -18,6 +20,8 @@ assistantWindow.supabaseAuth = supabaseAuth;
 assistantWindow.voiceInputService = voiceInputService;
 assistantWindow.marked = marked;
 assistantWindow.DOMPurify = DOMPurify;
+assistantWindow.searchService = searchService;
+assistantWindow.tagsService = tagsService;
 
 const sessionController = createAssistantSessionController(assistantWindow);
 

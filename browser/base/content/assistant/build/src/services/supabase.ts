@@ -338,7 +338,11 @@ export default class SupabaseAuth {
 
         // Handle session creation/destruction
         if (event === 'SIGNED_IN' && user) {
-            await this.createSession(user.id);
+            // Ensure user profile exists before creating a session
+            const profile = await this.getUserProfile();
+            if (profile) {
+                await this.createSession(user.id);
+            }
         } else if (event === 'SIGNED_OUT' && this.currentSession) {
             await this.endSession(this.currentSession.session_id);
             this.currentSession = null;
