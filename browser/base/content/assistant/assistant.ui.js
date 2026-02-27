@@ -222,6 +222,53 @@ function mpIdentify(user) {
 window.mpTrack = mpTrack;
 window.mpIdentify = mpIdentify;
 
+// --- Command Tracking ---
+const runningCommands = new Map();
+
+window.oasisRecordToolActionStart = (commandName, messageId) => {
+  try {
+    const actionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random());
+    const startTime = Date.now();
+    
+    runningCommands.set(actionId, { commandName, messageId, startTime });
+    
+    window.mpTrack("assistant_command_request", {
+      command_name: commandName,
+      message_id: messageId,
+      action_id: actionId,
+    });
+    
+    return actionId;
+  } catch (e) {
+    console.error('oasisRecordToolActionStart error', e);
+    return null;
+  }
+};
+
+window.oasisRecordToolActionUpdate = (actionId, status, errorDetails) => {
+  try {
+    const command = runningCommands.get(actionId);
+    if (!command) {
+      return;
+    }
+    
+    const duration = Date.now() - command.startTime;
+    
+    window.mpTrack("assistant_command_completed", {
+      command_name: command.commandName,
+      message_id: command.messageId,
+      action_id: actionId,
+      status: status,
+      duration_ms: duration,
+      error_details: errorDetails || null,
+    });
+    
+    runningCommands.delete(actionId);
+  } catch (e) {
+    console.error('oasisRecordToolActionUpdate error', e);
+  }
+};
+
 mpTrack("assistant_ui_loaded_preact");
 
 // --- Auth State Management & Secure Storage ---
