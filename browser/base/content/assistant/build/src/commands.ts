@@ -1,6 +1,7 @@
 import { bookmarkFolders, CreateFolderOpts } from "./bookmarkFolders";
 import { localMemory } from "./services/localMemory";
 import { subscriptionService } from "./services/subscription";
+import { semanticHistorySearch } from "./services/semanticHistorySearch";
 import {
   buildFolderUrlMap,
   filterStaleBookmarkFolderResults,
@@ -940,10 +941,10 @@ export class SummarizePageCommand implements Command {
 
     const idx = numberArg(args, "index");
     let tab = tabByIndexOrCurrent(gBrowser, idx);
-    
+
     // Allow specifying tab by index
     if (idx != null && !tab) return { message: `No tab ${idx}.` };
-    
+
     // Allow specifying tab by query (title/URL match)
     const query = normalizeQuery(stringArg(args, "query"));
     if (query && !idx) {
@@ -952,13 +953,13 @@ export class SummarizePageCommand implements Command {
         return { message: `No tab found matching "${stringArg(args, "query") || ""}".` };
       }
     }
-    
+
     const browser = tab?.linkedBrowser;
     if (!browser) return { message: "No active tab found." };
 
     const url = browser.currentURI?.spec || "";
     const title = tabTitle(tab);
-    
+
     // Skip certain pages that can't be summarized
     if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
       return { message: "Cannot summarize browser internal pages." };
@@ -967,13 +968,13 @@ export class SummarizePageCommand implements Command {
     try {
       // Use PageExtractor actor for Fission-compatible content extraction
       const currentWindowContext = browser.browsingContext?.currentWindowContext;
-      
+
       if (!currentWindowContext) {
         return { message: "Cannot access page content. The page may still be loading." };
       }
 
       const pageExtractor = currentWindowContext.getActor("PageExtractor");
-      
+
       if (!pageExtractor) {
         return { message: "Page content extractor not available." };
       }
@@ -1140,11 +1141,11 @@ export class SearchMemoryCommand implements Command {
         context:
           r.metadata?.context ||
           (source === "history" ? "Browsing History" :
-           source === "bookmark" ? "Bookmarks" :
-           source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
-           source === "tab" ? "Open Tab" :
-           source === "tab-group" ? "Tab Group" :
-           "Memory"),
+            source === "bookmark" ? "Bookmarks" :
+              source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
+                source === "tab" ? "Open Tab" :
+                  source === "tab-group" ? "Tab Group" :
+                    "Memory"),
         snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
       };
     });
@@ -1266,7 +1267,7 @@ export class OpenSearchResultCommand implements Command {
     // If it's an open tab, try to find and switch to it
     if (type === "tab") {
       const foundTab = getTabs(gBrowser).find(tab => tabUrl(tab) === url);
-      
+
       if (foundTab) {
         gBrowser.selectedTab = foundTab;
         return { message: `Switched to tab: ${url}` };
@@ -1806,5 +1807,41 @@ export class ConfirmActionCommand implements Command {
     }
 
     return await cmd.execute(pending.args);
+  }
+}
+
+export class SearchHistorySemanticCommand implements Command {
+  commandName = "search_history";
+  description =
+    "Semantically search the user's recent browsing history using AI embeddings. Use this when the user asks about pages they visited, articles they read, or wants to find something from their browsing history. Arguments: { query: string }.";
+
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const query = stringArg(args, "query");
+    if (!query) return { message: "Missing 'query' argument." };
+
+    try {
+      const results = await semanticHistorySearch.search(query, 5);
+
+      if (results.length === 0) {
+        return {
+          message: `No relevant browsing history found for "${query}".`,
+        };
+      }
+
+      const formatted = results.map((r, i) => ({
+        index: i + 1,
+        title: r.title,
+        url: r.url,
+        relevance: Math.round(r.score * 100) + "%",
+        visited: new Date(r.visitDate).toLocaleDateString(),
+      }));
+
+      return { message: JSON.stringify(formatted) };
+    } catch (e: any) {
+      console.error("[SearchHistorySemantic] Search failed:", e);
+      return {
+        message: `History search failed: ${e.message || "Unknown error"}. The embedding model may still be loading — please try again in a moment.`,
+      };
+    }
   }
 }

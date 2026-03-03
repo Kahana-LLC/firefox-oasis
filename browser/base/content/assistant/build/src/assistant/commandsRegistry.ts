@@ -28,6 +28,7 @@ import {
   RenameTabGroupCommand,
   ResolveAmbiguityCommand,
   SearchMemoryCommand,
+  SearchHistorySemanticCommand,
   ShowSubscriptionCommand,
   ShowURLCommand,
   SplitTabsCommand,
@@ -76,6 +77,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
   summarize_page: `{"index?":"number","query?":"string"}`,
   show_subscription: `{}`,
+  search_history: `{"query":"string"}`,
 };
 
 function toAssistToolDescription(command: Command): string {
@@ -121,6 +123,8 @@ export function createAssistantCommandsRegistry(): AssistantCommandsRegistry {
     new OpenSearchResultCommand(),
     new SummarizePageCommand(),
     new ShowSubscriptionCommand(),
+    // Semantic history search (local embeddings + vector DB)
+    new SearchHistorySemanticCommand(),
   ];
   registerCommandExecutors(commands);
 
