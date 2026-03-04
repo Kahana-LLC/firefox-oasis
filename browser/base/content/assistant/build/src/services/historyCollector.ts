@@ -45,11 +45,33 @@ const EXCLUDED_PREFIXES = [
 ];
 
 /**
- * Check if a URL is a user-visible web page.
+ * Search engine result page (SERP) URL patterns to exclude.
+ * The actual destination pages are more valuable than the search pages.
+ */
+const SEARCH_ENGINE_PATTERNS = [
+    /^https?:\/\/(www\.)?google\.\w+\/search\?/,
+    /^https?:\/\/(www\.)?bing\.com\/search\?/,
+    /^https?:\/\/(www\.)?duckduckgo\.com\/\?q=/,
+    /^https?:\/\/(www\.)?yahoo\.com\/search/,
+    /^https?:\/\/(www\.)?baidu\.com\/s\?/,
+    /^https?:\/\/(www\.)?search\.yahoo\.com\//,
+];
+
+/**
+ * Check if a URL is a search engine results page.
+ */
+function isSearchEnginePage(url: string): boolean {
+    return SEARCH_ENGINE_PATTERNS.some((pattern) => pattern.test(url));
+}
+
+/**
+ * Check if a URL is a user-visible web page worth indexing.
  */
 function isUserVisibleUrl(url: string): boolean {
     if (!url) return false;
-    return !EXCLUDED_PREFIXES.some((prefix) => url.startsWith(prefix));
+    if (EXCLUDED_PREFIXES.some((prefix) => url.startsWith(prefix))) return false;
+    if (isSearchEnginePage(url)) return false;
+    return true;
 }
 
 /**

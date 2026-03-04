@@ -6,6 +6,7 @@
  *
  * Key behaviors:
  * - Lazy indexing: history is only fetched & embedded on first search
+ * - Incremental indexing: subsequent searches only embed NEW history entries
  * - Singleton indexing: concurrent calls share one indexing pass
  * - Embeddings generated in a separate content process (WASM isolation)
  */
@@ -19,17 +20,32 @@ const MAX_HISTORY_ENTRIES = 200;
 class SemanticHistorySearch {
     private indexed = false;
     private indexingPromise: Promise<void> | null = null;
+    private indexedUrls = new Set<string>(); // Track what's already indexed
+    private lastIndexTime = 0; // Timestamp of last indexing
 
+    /**
+     * Ensure history is indexed. On first call, indexes everything.
+     * On subsequent calls, incrementally indexes only NEW entries.
+     */
     async ensureIndexed(): Promise<void> {
-        if (this.indexed) return;
-
         if (this.indexingPromise) {
             await this.indexingPromise;
             return;
         }
 
-        this.indexingPromise = this.doIndex();
+        // First time: full indexing
+        if (!this.indexed) {
+            this.indexingPromise = this.doFullIndex();
+            try {
+                await this.indexingPromise;
+            } finally {
+                this.indexingPromise = null;
+            }
+            return;
+        }
 
+        // Subsequent calls: incremental update (only new entries)
+        this.indexingPromise = this.doIncrementalIndex();
         try {
             await this.indexingPromise;
         } finally {
@@ -37,8 +53,11 @@ class SemanticHistorySearch {
         }
     }
 
-    private async doIndex(): Promise<void> {
-        console.log("[SemanticSearch] Starting history indexing...");
+    /**
+     * Full index — happens on first search only.
+     */
+    private async doFullIndex(): Promise<void> {
+        console.log("[SemanticSearch] Starting full history indexing...");
         console.time("[SemanticSearch] Total indexing time");
 
         try {
@@ -70,6 +89,7 @@ class SemanticHistorySearch {
                         embedding,
                     });
 
+                    this.indexedUrls.add(entry.url);
                     successCount++;
 
                     if ((i + 1) % 50 === 0) {
@@ -92,9 +112,64 @@ class SemanticHistorySearch {
             );
 
             this.indexed = true;
+            this.lastIndexTime = Date.now();
         } catch (err) {
             console.error("[SemanticSearch] Indexing failed:", err);
             throw err;
+        }
+    }
+
+    /**
+     * Incremental index — only embed entries not already in the index.
+     * Runs quickly since it only processes new pages visited since last index.
+     */
+    private async doIncrementalIndex(): Promise<void> {
+        try {
+            const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES);
+
+            // Filter to only entries NOT already indexed
+            const newEntries = entries.filter(e => !this.indexedUrls.has(e.url));
+
+            if (newEntries.length === 0) {
+                return; // Nothing new to index — fast path
+            }
+
+            console.log(
+                `[SemanticSearch] Incremental update: ${newEntries.length} new entries to index`
+            );
+
+            let successCount = 0;
+            for (const entry of newEntries) {
+                try {
+                    const textToEmbed = `${entry.title} ${entry.url}`;
+                    const embedding = await embeddingService.embed(textToEmbed);
+
+                    await historyVectorStore.addItem({
+                        title: entry.title,
+                        url: entry.url,
+                        snippet: entry.title,
+                        visitDate: entry.visitDate,
+                        embedding,
+                    });
+
+                    this.indexedUrls.add(entry.url);
+                    successCount++;
+                } catch (err) {
+                    console.warn(
+                        `[SemanticSearch] Failed to embed entry "${entry.title}":`,
+                        err
+                    );
+                }
+            }
+
+            const dbCount = await historyVectorStore.getCount();
+            console.log(
+                `[SemanticSearch] Incremental update done. ${successCount} new entries added (${dbCount} total in DB)`
+            );
+            this.lastIndexTime = Date.now();
+        } catch (err) {
+            console.error("[SemanticSearch] Incremental indexing failed:", err);
+            // Don't throw — incremental failure shouldn't break search
         }
     }
 
@@ -114,6 +189,7 @@ class SemanticHistorySearch {
 
     async reindex(): Promise<void> {
         this.indexed = false;
+        this.indexedUrls.clear();
         await historyVectorStore.clear();
         await this.ensureIndexed();
     }
