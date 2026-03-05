@@ -5,7 +5,6 @@
   window.assistantBridge = {
     openTab(url) {
       try {
-        console.log('assistantBridge.openTab', url);
         // Try to open a tab in the most recent browser window (best-effort)
         try {
           const win = Services.wm.getMostRecentWindow('navigator:browser');
@@ -15,7 +14,7 @@
             return true;
           }
         } catch (e) {
-          console.warn('assistantBridge: failed to open tab via gBrowser', e);
+          void e;
         }
 
         // Fallback: try window.open
@@ -30,6 +29,4 @@
       return window.oasisAuthState || { isAuthenticated: false, user: null };
     }
   };
-
-  console.log('assistantBridge loaded');
 })();

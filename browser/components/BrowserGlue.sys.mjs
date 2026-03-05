@@ -45,6 +45,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   OnboardingMessageProvider:
     "resource:///modules/asrouter/OnboardingMessageProvider.sys.mjs",
+  OasisWelcomeManager:
+    "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
   PageDataService:
     "moz-src:///browser/components/pagedata/PageDataService.sys.mjs",
   PdfJs: "resource://pdf.js/PdfJs.sys.mjs",
@@ -793,6 +795,8 @@ BrowserGlue.prototype = {
       },
       aWindow
     );
+
+    lazy.OasisWelcomeManager.maybeShowWelcomeOnStartup(aWindow);
 
     this._firstWindowTelemetry(aWindow);
   },
