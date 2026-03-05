@@ -50,12 +50,20 @@ jobs:
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
-      - name: Inject release version
+      - name: Export build overrides
+        env:
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
         run: |
           set -euo pipefail
+          if [ -z "${OASIS_UPDATE_SERVICE_URL:-}" ]; then
+            echo "Missing OASIS_UPDATE_SERVICE_URL for build overrides." >&2
+            exit 1
+          fi
           VERSION="${{ steps.version.outputs.version }}"
-          echo "${VERSION}" > browser/config/version.txt
-          echo "${VERSION}" > browser/config/version_display.txt
+          UPDATE_URL="${OASIS_UPDATE_SERVICE_URL%/}/update/6/%PRODUCT%/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%SYSTEM_CAPABILITIES%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml"
+          echo "OASIS_APP_VERSION=${VERSION}" >> "${GITHUB_ENV}"
+          echo "OASIS_APP_VERSION_DISPLAY=${VERSION}" >> "${GITHUB_ENV}"
+          echo "MOZ_APPUPDATE_URL=${UPDATE_URL}" >> "${GITHUB_ENV}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -314,6 +322,42 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
           echo "executable_path=${EXECUTABLE_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate staged update URL
+        env:
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_UPDATE_SERVICE_URL:-}" ]; then
+            echo "Missing OASIS_UPDATE_SERVICE_URL secret for update URL validation." >&2
+            exit 1
+          fi
+
+          APP_INI="${PKG_APP}/Contents/Resources/application.ini"
+          UPDATE_URL="$(awk -F= '/^URL=/{print $2; exit}' "${APP_INI}")"
+          if [ -z "${UPDATE_URL}" ]; then
+            echo "App update URL missing in ${APP_INI}" >&2
+            exit 1
+          fi
+          if [[ "${UPDATE_URL}" == *"aus5.mozilla.org"* ]]; then
+            echo "App update URL still points to Mozilla AUS: ${UPDATE_URL}" >&2
+            exit 1
+          fi
+
+          SERVICE_BASE="${OASIS_UPDATE_SERVICE_URL%/}"
+          EXPECTED_PREFIX="${SERVICE_BASE}/update/6/"
+          if [[ "${UPDATE_URL}" != "${EXPECTED_PREFIX}"* ]]; then
+            echo "App update URL does not point to Oasis update service." >&2
+            echo "Expected prefix: ${EXPECTED_PREFIX}" >&2
+            echo "Actual URL:      ${UPDATE_URL}" >&2
+            exit 1
+          fi
+          if [[ "${UPDATE_URL}" != *"/%CHANNEL%/"* ]]; then
+            echo "App update URL missing %CHANNEL% placeholder: ${UPDATE_URL}" >&2
+            exit 1
+          fi
+
+          echo "Validated update URL: ${UPDATE_URL}"
 
       - name: Prepare and sign app bundle (rcodesign)
         run: |

@@ -1041,6 +1041,16 @@ option(
     default=None,
 )
 
+option(env="OASIS_APP_VERSION", nargs=1, help="Override Oasis application version")
+
+option(
+    env="OASIS_APP_VERSION_DISPLAY",
+    nargs=1,
+    help="Override Oasis application display version",
+)
+
+option(env="MOZ_APPUPDATE_URL", nargs=1, help="Override full app update URL")
+
 
 # set RELEASE_OR_BETA and NIGHTLY_BUILD variables depending on the cycle we're in
 # The logic works like this:
@@ -1051,12 +1061,22 @@ option(
     build_project,
     version_path,
     "--as-milestone",
+    "OASIS_APP_VERSION",
+    "OASIS_APP_VERSION_DISPLAY",
     "--help",
 )
 @imports(_from="__builtin__", _import="open")
 @imports("os")
 @imports("re")
-def milestone(build_env, build_project, version_path, as_milestone, _):
+def milestone(
+    build_env,
+    build_project,
+    version_path,
+    as_milestone,
+    oasis_app_version,
+    oasis_app_version_display,
+    _,
+):
     versions = []
     paths = ["config/milestone.txt"]
     if build_project == "js":
@@ -1103,6 +1123,11 @@ def milestone(build_env, build_project, version_path, as_milestone, _):
     # otherwise version.txt content from the project directory, otherwise the
     # firefox version for display.
     app_version_display = versions[-1] if len(versions) > 3 else firefox_version_display
+    if oasis_app_version:
+        app_version = oasis_app_version[0]
+        app_version_display = oasis_app_version[0]
+    if oasis_app_version_display:
+        app_version_display = oasis_app_version_display[0]
 
     is_nightly = is_release_or_beta = None
 
@@ -1183,6 +1208,16 @@ set_define("MOZILLA_UAVERSION", depends(milestone)(lambda m: '"%s"' % m.uaversio
 set_config("MOZ_APP_VERSION", milestone.app_version)
 set_config("MOZ_APP_VERSION_DISPLAY", milestone.app_version_display)
 set_config("MOZ_APP_MAXVERSION", moz_app_maxversion)
+
+
+@depends("MOZ_APPUPDATE_URL")
+def app_update_url(value):
+    if not value:
+        return ""
+    return value[0].strip()
+
+
+set_config("MOZ_APPUPDATE_URL", app_update_url)
 
 
 # The app update channel is 'default' when not supplied. The value is used in
