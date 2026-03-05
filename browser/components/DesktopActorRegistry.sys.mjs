@@ -218,6 +218,23 @@ let JSWINDOWACTORS = {
     enablePreference: "browser.aboutwelcome.enabled",
   },
 
+  OasisWelcome: {
+    parent: {
+      esModuleURI: "resource:///actors/OasisWelcomeParent.sys.mjs",
+    },
+    child: {
+      esModuleURI: "resource:///actors/OasisWelcomeChild.sys.mjs",
+      events: {
+        DOMDocElementInserted: {},
+      },
+    },
+    matches: [
+      "chrome://browser/content/oasiswelcome/oasiswelcome.html",
+      "chrome://browser/content/oasiswelcome/oasis-auth.html",
+    ],
+    includeChrome: true,
+  },
+
   AIChatContent: {
     parent: {
       esModuleURI:
@@ -512,6 +529,7 @@ let JSWINDOWACTORS = {
       "about:home",
       "about:newtab",
       "about:welcome",
+      "chrome://browser/content/oasiswelcome/oasiswelcome.html",
       "chrome://browser/content/syncedtabs/sidebar.xhtml",
       "chrome://browser/content/places/historySidebar.xhtml",
       "chrome://browser/content/places/bookmarksSidebar.xhtml",

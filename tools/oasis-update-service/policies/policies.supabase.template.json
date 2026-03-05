@@ -1,0 +1,5 @@
+{
+  "policies": {
+    "AppUpdateURL": "https://<project-ref>.supabase.co/functions/v1/oasis-update/update/6/%PRODUCT%/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%SYSTEM_CAPABILITIES%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml"
+  }
+}

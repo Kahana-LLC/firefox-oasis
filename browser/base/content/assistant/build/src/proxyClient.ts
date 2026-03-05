@@ -1,30 +1,45 @@
-import { postSigned } from "./awsSignedFetch";
-import SupabaseAuth from "./services/supabase";
+import { postSigned } from "./awsSignedFetch.js";
+import SupabaseAuth from "./services/supabase.js";
 
 export type WireMsg = { role: "user" | "model"; content: string };
+export type AssistTool = {
+  name: string;
+  description?: string;
+};
+export type AssistResponse = {
+  next?: string;
+  args?: Record<string, unknown>;
+  content?: string;
+  reason?: string;
+  [key: string]: unknown;
+};
+type TtsResponse = { audio: string; mimeType?: string };
 
 const supabaseAuth = SupabaseAuth.getInstance();
 
-async function checkAuthentication(): Promise<boolean> {
+async function ensureAuthenticated(): Promise<void> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
-    throw new Error("Authentication required: Please sign in to use the AI assistant");
+    throw new Error("Authentication required: Please sign in to use voice features");
   }
-  return true;
 }
 
-export async function routeRemote(system: string, messages: WireMsg[], options: string[]) {
-  await checkAuthentication();
-  return postSigned("route", { system, messages, options });
-}
-
-export async function chatRemote(system: string, messages: WireMsg[]) {
-  await checkAuthentication();
-  return postSigned("chat", { system, messages });
+export async function assistRemote(
+  system: string,
+  messages: WireMsg[],
+  options: string[],
+  tools: AssistTool[] = []
+): Promise<AssistResponse> {
+  return postSigned<AssistResponse>("assist", {
+    system,
+    messages,
+    options,
+    tools,
+  });
 }
 
 export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
-  await checkAuthentication();
+  await ensureAuthenticated();
   
   // Convert blob to base64
   const arrayBuffer = await audioBlob.arrayBuffer();
@@ -33,16 +48,19 @@ export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: st
   );
   
   // Call lambda with op: "transcribe"
-  const result = await postSigned("transcribe", { audio: base64Audio, mimeType: audioBlob.type });
+  const result = await postSigned<{ transcript: string }>("transcribe", {
+    audio: base64Audio,
+    mimeType: audioBlob.type,
+  });
   
   // Backend returns { transcript: "..." }
   return result;
 }
 
 export async function textToSpeech(text: string): Promise<Blob> {
-  await checkAuthentication();
+  await ensureAuthenticated();
   
-  const result = await postSigned("tts", { text });
+  const result = await postSigned<TtsResponse>("tts", { text });
   
   // The lambda should return base64 encoded audio
   const audioData = atob(result.audio);

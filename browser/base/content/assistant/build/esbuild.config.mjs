@@ -1,11 +1,25 @@
 import esbuild from "esbuild";
+import dotenv from "dotenv";
 
-const OASIS_API_BASE = "https://segvax3qd7tkhcckzrijydbz6m0cijdu.lambda-url.us-east-2.on.aws/";
-const OASIS_TRANSCRIBE_URL = "https://uzfhm4tjnp7k5lpf2vkyqmrpxq0pxxed.lambda-url.us-east-2.on.aws/"; // Add your transcription lambda URL here
-const AWS_REGION = "us-east-2";
-const COGNITO_IDENTITY_POOL_ID = "us-east-2:21ce1894-9a97-48ac-8741-b69f7eafea1c";
-const SUPABASE_URL = "https://wvclepquxxczgrukfqyr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY";
+dotenv.config({ path: ".env.defaults", quiet: true });
+dotenv.config({ path: ".env.local", override: true, quiet: true });
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(
+      `Missing required env var ${name}. Set it in build/.env.defaults, build/.env.local, or shell env.`
+    );
+  }
+  return value.trim();
+}
+
+const OASIS_ASSIST_URL = requireEnv("OASIS_ASSIST_URL");
+const OASIS_TRANSCRIBE_URL = requireEnv("OASIS_TRANSCRIBE_URL");
+const AWS_REGION = requireEnv("AWS_REGION");
+const COGNITO_IDENTITY_POOL_ID = requireEnv("COGNITO_IDENTITY_POOL_ID");
+const SUPABASE_URL = requireEnv("SUPABASE_URL");
+const SUPABASE_ANON_KEY = requireEnv("SUPABASE_ANON_KEY");
 
 await esbuild.build({
   entryPoints: ["./src/assistant.ts"],
@@ -17,7 +31,7 @@ await esbuild.build({
   sourcemap: false,
   logLevel: "info",
   define: {
-    "process.env.OASIS_API_BASE": JSON.stringify(OASIS_API_BASE),
+    "process.env.OASIS_ASSIST_URL": JSON.stringify(OASIS_ASSIST_URL),
     "process.env.OASIS_TRANSCRIBE_URL": JSON.stringify(OASIS_TRANSCRIBE_URL),
     "process.env.AWS_REGION": JSON.stringify(AWS_REGION),
     "process.env.COGNITO_IDENTITY_POOL_ID": JSON.stringify(COGNITO_IDENTITY_POOL_ID),
