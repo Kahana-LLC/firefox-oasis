@@ -9,6 +9,7 @@
   --oasis-subtitle-color: #848484;
   --oasis-bg-color: #ffffff;
   --oasis-border-radius: 64px;
+  color-scheme: light !important;
 }
 
 * {
@@ -24,6 +25,9 @@ body {
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu",
     "Helvetica Neue", sans-serif;
+  color-scheme: light;
+  background-color: #ffffff !important;
+  color: #333 !important;
 }
 
 body {
@@ -31,6 +35,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: #ffffff !important;
 }
 
 .oasis-welcome-container {
@@ -40,6 +45,9 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--oasis-bg-color);
+  background-color: #ffffff !important;
+  color: #333 !important;
+  color-scheme: light !important;
 }
 
 .oasis-welcome-content {
@@ -136,6 +144,8 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
+  background-color: #ffffff !important;
+  color: #333 !important;
 }
 
 .oasis-left-panel {
@@ -146,7 +156,9 @@ body {
 
 .oasis-right-panel {
   flex: 1;
-  background: white;
+  background: white !important;
+  background-color: #ffffff !important;
+  color: #333 !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,7 +194,7 @@ body {
   font-size: 24px;
   font-weight: 600;
   line-height: 28px;
-  color: #333;
+  color: #000000 !important;
   margin: 0 0 8px 0;
   text-align: left;
 }
@@ -191,7 +203,7 @@ body {
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
-  color: #848484;
+  color: #333333 !important;
   margin: 0;
   text-align: left;
 }
@@ -209,13 +221,15 @@ body {
   padding: 12px;
   font-size: 20px;
   line-height: 24px;
-  color: #666;
+  color: #000000 !important;
   background: transparent;
   border: none;
   border-bottom: 2px solid #f2f2f2;
   outline: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   transition: border-color 0.2s ease;
+  font-weight: 400;
+  opacity: 1 !important;
 }
 
 .oasis-text-input:focus {
@@ -223,7 +237,17 @@ body {
 }
 
 .oasis-text-input::placeholder {
-  color: #999;
+  color: #999999 !important;
+  opacity: 1 !important;
+}
+
+/* Autofill styling */
+.oasis-text-input:-webkit-autofill,
+.oasis-text-input:-webkit-autofill:hover,
+.oasis-text-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  color: #000000 !important;
 }
 
 .oasis-next-button {
@@ -567,6 +591,334 @@ body {
   }
 }
 
+/* Page 3: Import Content */
+.oasis-import-content {
+  max-width: 523px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.oasis-import-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.oasis-import-title {
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 40px;
+  color: #333;
+  margin: 0;
+  text-align: left;
+  letter-spacing: -0.5px;
+}
+
+.oasis-import-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #666;
+  margin: 0;
+  text-align: left;
+}
+
+/* Browser Selector */
+.oasis-browser-selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.oasis-selector-label {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #848484;
+  margin: 0;
+  text-align: left;
+}
+
+.oasis-browser-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8faf2;
+  border-radius: 8px;
+  padding: 0 8px;
+  height: 40px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+
+.oasis-browser-selector:hover {
+  border-color: #d0d0d0;
+  background: #fafbf4;
+}
+
+.oasis-browser-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.oasis-browser-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.oasis-browser-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.oasis-browser-name {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #7a9200;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oasis-selector-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  transform: rotate(180deg);
+  margin-left: 8px;
+}
+
+.oasis-arrow-icon {
+  width: 24px;
+  height: 24px;
+  color: #999;
+  display: block;
+}
+
+/* Import Options */
+.oasis-import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  flex-shrink: 1;
+}
+
+.oasis-import-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.oasis-import-option:last-child {
+  border-bottom: none;
+}
+
+.oasis-option-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.oasis-option-icon-box {
+  background: #f8faf2;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+}
+
+.oasis-option-icon {
+  width: 24px;
+  height: 24px;
+  color: #7a9200;
+  flex-shrink: 0;
+}
+
+.oasis-option-center {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.oasis-option-name {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #333;
+  margin: 0;
+  text-align: left;
+}
+
+.oasis-option-description {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #666;
+  margin: 0;
+  text-align: left;
+}
+
+.oasis-option-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #d0d0d0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.oasis-option-checkbox:hover {
+  border-color: #7a9200;
+  background: #f8faf2;
+}
+
+.oasis-option-checkbox:checked {
+  background: #7a9200;
+  border-color: #7a9200;
+}
+
+.oasis-option-checkbox:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Import Actions */
+.oasis-import-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.oasis-back-button {
+  background: transparent;
+  color: #7a9200;
+  border: 1px solid #d0d0d0;
+  border-radius: 64px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.oasis-back-button:hover {
+  border-color: #7a9200;
+  background: #f8faf2;
+}
+
+.oasis-back-button:active {
+  transform: scale(0.98);
+}
+
+.oasis-right-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.oasis-skip-import-button {
+  background: transparent;
+  color: #7a9200;
+  border: none;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.oasis-skip-import-button:hover {
+  color: #8ba300;
+  text-decoration: underline;
+}
+
+.oasis-skip-import-button:active {
+  transform: scale(0.98);
+}
+
+.oasis-import-button {
+  background: #7a9200;
+  color: white;
+  border: 1px solid #7a9200;
+  border-radius: 64px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  min-width: 100px;
+}
+
+.oasis-import-button:hover {
+  background: #8ba300;
+  border-color: #8ba300;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-import-button:active {
+  transform: translateY(0);
+}
+
 /* Dark mode support (optional) */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -592,225 +944,6 @@ body {
   }
 }
 
-/* ========== Page 3: Import Browser Data Styles ========== */
-
-.oasis-import-content {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  width: 523px;
-  padding-bottom: 80px;
-}
-
-.oasis-import-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.oasis-import-title {
-  font-family: 'Bricolage Grotesque', sans-serif;
-  font-size: 28px;
-  font-weight: 500;
-  line-height: 36px;
-  color: #333;
-  margin: 0;
-  text-align: left;
-}
-
-.oasis-import-subtitle {
-  font-family: 'Geist', sans-serif;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 22px;
-  color: #666;
-  margin: 0;
-}
-
-.oasis-import-options {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 100%;
-}
-
-.oasis-import-item {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  min-height: 60px;
-  position: relative;
-}
-
-.oasis-import-item-info {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-  align-items: center;
-}
-
-.oasis-import-icon-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  background: #f8faf2;
-  border-radius: 12px;
-  flex-shrink: 0;
-}
-
-.oasis-import-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.oasis-import-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.oasis-import-item-title {
-  font-family: 'Geist', sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 20px;
-  color: #333;
-  margin: 0;
-}
-
-.oasis-import-item-desc {
-  font-family: 'Geist', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 20px;
-  color: #666;
-  margin: 0;
-}
-
-/* Custom Checkbox Styles */
-.oasis-checkbox {
-  position: absolute;
-  opacity: 0;
-  cursor: pointer;
-  height: 0;
-  width: 0;
-}
-
-.oasis-checkbox-label {
-  position: relative;
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #7a9200;
-  border-radius: 8px;
-  background: transparent;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.oasis-checkbox-label::after {
-  content: "";
-  position: absolute;
-  display: none;
-  left: 10px;
-  top: 5px;
-  width: 8px;
-  height: 14px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.oasis-checkbox:checked + .oasis-checkbox-label {
-  background: #7a9200;
-  border-color: #7a9200;
-}
-
-.oasis-checkbox:checked + .oasis-checkbox-label::after {
-  display: block;
-}
-
-.oasis-checkbox-label:hover {
-  background: rgba(122, 146, 0, 0.1);
-}
-
-.oasis-checkbox:checked + .oasis-checkbox-label:hover {
-  background: #6a8000;
-}
-
-.oasis-import-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin-top: 16px;
-}
-
-.oasis-back-button {
-  padding: 12px 20px;
-  background: transparent;
-  border: none;
-  border-radius: 64px;
-  font-family: 'Geist', sans-serif;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 20px;
-  color: #7a9200;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.oasis-back-button:hover {
-  background: rgba(122, 146, 0, 0.1);
-}
-
-.oasis-right-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.oasis-skip-import-button {
-  padding: 12px 20px;
-  background: transparent;
-  border: none;
-  border-radius: 64px;
-  font-family: 'Geist', sans-serif;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 20px;
-  color: #7a9200;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.oasis-skip-import-button:hover {
-  background: rgba(122, 146, 0, 0.1);
-}
-
-.oasis-import-button {
-  padding: 12px 20px;
-  min-width: 120px;
-  background: #7a9200;
-  border: 1px solid #7a9200;
-  border-radius: 64px;
-  font-family: 'Geist', sans-serif;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 20px;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.oasis-import-button:hover {
-  background: #6a8000;
-  border-color: #6a8000;
-}
-
 .oasis-import-button:active {
   transform: scale(0.98);
 }
@@ -818,6 +951,36 @@ body {
 /* ========================================
    Page 4: AI Assistant Sign Up
    ======================================== */
+
+.oasis-user-name-display-section {
+  margin-bottom: 48px;
+  width: 100%;
+}
+
+.oasis-user-name-display {
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 40px;
+  letter-spacing: 0;
+  color: #333333;
+  margin: 0 0 12px 0;
+  text-align: center;
+  word-break: break-word;
+}
+
+.oasis-user-name-subtitle {
+  font-family: 'Geist', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  letter-spacing: 0;
+  color: #666666;
+  margin: 0;
+  text-align: center;
+  word-break: break-word;
+}
+
 .oasis-ai-signup-content {
   display: flex;
   flex-direction: column;
@@ -907,4 +1070,155 @@ body {
 
 .oasis-skip-ai-button:active {
   transform: scale(0.98);
+}
+
+/* ========================================
+   Migration Wizard Wrapper (Firefox Integration)
+   ======================================== */
+
+.oasis-migration-wizard-wrapper {
+  width: 100%;
+  padding: 24px 0;
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Migration Wizard Web Component Styling */
+migration-wizard {
+  display: block !important;
+  width: 100% !important;
+  --migration-wizard-header-font-size: 16px;
+  --migration-wizard-header-font-weight: 600;
+  --migration-wizard-header-color: #333;
+  --migration-wizard-background: #ffffff;
+  --migration-wizard-item-bg: #f8faf2;
+  --migration-wizard-item-hover-bg: #f0f2e8;
+  --migration-wizard-checkbox-color: #7a9200;
+  --migration-wizard-checkbox-hover-color: #8ba300;
+  --migration-wizard-text-color: #666;
+  --migration-wizard-border-radius: 8px;
+  --migration-wizard-item-border-color: #e8e8e8;
+  background-color: #ffffff !important;
+  color: #333 !important;
+}
+
+/* Override Firefox migration wizard card styles */
+migration-wizard::part(deck) {
+  background: #ffffff !important;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #333 !important;
+}
+
+/* Style migration wizard items to match Oasis import items */
+migration-wizard::part(importable-item) {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+migration-wizard::part(importable-item) label {
+  font-family: 'Geist', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+}
+
+/* Style checkbox in migration wizard */
+migration-wizard::part(checkbox) {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px;
+  border: 1px solid #7a9200;
+  background: white;
+  cursor: pointer;
+  accent-color: #7a9200;
+}
+
+migration-wizard::part(checkbox):checked {
+  background: #7a9200;
+  border-color: #7a9200;
+}
+
+/* Browser selector styled to match Oasis design */
+migration-wizard::part(source-selector) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8faf2;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  margin-bottom: 24px;
+}
+
+migration-wizard::part(source-icon) {
+  width: 20px;
+  height: 20px;
+}
+
+/* Header and subheader text */
+migration-wizard::part(header) {
+  font-family: 'Geist', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+migration-wizard::part(subheader) {
+  font-family: 'Geist', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+/* Force all migration wizard content to be visible and light */
+migration-wizard * {
+  background-color: #ffffff !important;
+  color: #333 !important;
+  border-color: #e0e0e0 !important;
+}
+
+migration-wizard,
+migration-wizard::before,
+migration-wizard::after {
+  background-color: #ffffff !important;
+  color: #333 !important;
+}
+
+/* Ensure migration wizard and all nested panels are visible */
+migration-wizard::part(panel) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background-color: #ffffff !important;
+}
+
+migration-wizard::part(panel-item) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background-color: #ffffff !important;
+  color: #333 !important;
+}
+
+/* Source list styling */
+migration-wizard::part(source-list) {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: #ffffff !important;
+}
+
+/* Import items visibility */
+migration-wizard::part(importable-items) {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: #ffffff !important;
+  color: #333 !important;
 }

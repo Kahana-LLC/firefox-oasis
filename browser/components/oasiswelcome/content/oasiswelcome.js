@@ -15,16 +15,64 @@ const userData = {
   }
 };
 
+
+
 function showPage(pageNumber) {
-  const pages = document.querySelectorAll(".oasis-page");
-  pages.forEach((page, index) => {
-    if (index + 1 === pageNumber) {
-      page.classList.add("active");
-    } else {
-      page.classList.remove("active");
-    }
-  });
-  currentPage = pageNumber;
+  console.log(`=== showPage called with pageNumber: ${pageNumber} ===`);
+  
+  try {
+    const pages = document.querySelectorAll(".oasis-page");
+    console.log(`Found ${pages.length} pages in DOM`);
+    
+    pages.forEach((page, index) => {
+      const pageNum = index + 1;
+      const wasActive = page.classList.contains("active");
+      
+      if (pageNum === pageNumber) {
+        page.classList.add("active");
+        console.log(`Page ${pageNum}: Added 'active' class`);
+      } else {
+        page.classList.remove("active");
+        if (wasActive) {
+          console.log(`Page ${pageNum}: Removed 'active' class`);
+        }
+      }
+    });
+    
+    currentPage = pageNumber;
+    console.log(`currentPage set to ${currentPage}`);
+  } catch (err) {
+    console.error("Error in showPage:", err);
+  }
+  
+  // When showing page 3, ensure button event listeners are attached
+  if (pageNumber === 3) {
+    console.log("=== PAGE 3 SHOWN - VERIFYING BUTTONS ===");
+    const backBtn = document.getElementById("import-back-btn");
+    const skipBtn = document.getElementById("import-skip-btn");
+    const confirmBtn = document.getElementById("import-confirm-btn");
+    
+    console.log("Back button DOM status:", {
+      exists: !!backBtn,
+      displayed: backBtn ? `${backBtn.offsetWidth}x${backBtn.offsetHeight}` : 'N/A',
+      visible: backBtn ? backBtn.offsetParent !== null : 'N/A',
+      clickable: backBtn ? window.getComputedStyle(backBtn).pointerEvents : 'N/A'
+    });
+    
+    console.log("Skip button DOM status:", {
+      exists: !!skipBtn,
+      displayed: skipBtn ? `${skipBtn.offsetWidth}x${skipBtn.offsetHeight}` : 'N/A',
+      visible: skipBtn ? skipBtn.offsetParent !== null : 'N/A',
+      clickable: skipBtn ? window.getComputedStyle(skipBtn).pointerEvents : 'N/A'
+    });
+    
+    console.log("Import button DOM status:", {
+      exists: !!confirmBtn,
+      displayed: confirmBtn ? `${confirmBtn.offsetWidth}x${confirmBtn.offsetHeight}` : 'N/A',
+      visible: confirmBtn ? confirmBtn.offsetParent !== null : 'N/A',
+      clickable: confirmBtn ? window.getComputedStyle(confirmBtn).pointerEvents : 'N/A'
+    });
+  }
 }
 
 function showAuthBanner(email) {
@@ -44,6 +92,8 @@ function hideAuthBanner() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("=== Oasis Welcome DOMContentLoaded ===");
+  
   const beginBtn = document.getElementById("begin-journey-btn");
   const nameNextBtn = document.getElementById("name-next-btn");
   const nameInput = document.getElementById("user-name-input");
@@ -92,23 +142,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Page 2: Name Input
+  // Page 3: Name Input
   if (nameNextBtn) {
     nameNextBtn.addEventListener("click", () => {
       const name = nameInput.value.trim();
       if (name) {
         userData.name = name;
 
-        // Display name on page 5 (auth page)
+        // Display name on page 4 (auth page)
         if (userNameDisplay) {
-          userNameDisplay.textContent = name;
+          userNameDisplay.textContent = "Welcome to Oasis, " + name + ".";
         }
 
         // Save name to preferences
         RPMSendAsyncMessage("OasisWelcome:SetUserName", { name });
 
-        // Go to import page
-        showPage(3);
+        // Go to AI sign-up page
+        showPage(4);
       } else {
         nameInput.focus();
       }
@@ -123,62 +173,95 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Page 3: Import Browser Data
+  // Page 2: Import Browser Data
   const importBackBtn = document.getElementById("import-back-btn");
   const importSkipBtn = document.getElementById("import-skip-btn");
   const importConfirmBtn = document.getElementById("import-confirm-btn");
+  const browserSelectorBtn = document.getElementById("browser-selector-btn");
+  const importCheckboxes = document.querySelectorAll(".oasis-option-checkbox");
 
-  // Import checkboxes
-  const historyCheckbox = document.getElementById("import-history");
-  const bookmarksCheckbox = document.getElementById("import-bookmarks");
-  const extensionsCheckbox = document.getElementById("import-extensions");
-  const cookiesCheckbox = document.getElementById("import-cookies");
+  console.log("=== PAGE 2 IMPORT BUTTONS SETUP ===");
+  console.log("importBackBtn:", importBackBtn);
+  console.log("importSkipBtn:", importSkipBtn);
+  console.log("importConfirmBtn:", importConfirmBtn);
+  console.log("importCheckboxes:", importCheckboxes.length);
 
-  // Track checkbox changes
-  if (historyCheckbox) {
-    historyCheckbox.addEventListener("change", () => {
-      userData.importSettings.history = historyCheckbox.checked;
-    });
-  }
-  if (bookmarksCheckbox) {
-    bookmarksCheckbox.addEventListener("change", () => {
-      userData.importSettings.bookmarks = bookmarksCheckbox.checked;
-    });
-  }
-  if (extensionsCheckbox) {
-    extensionsCheckbox.addEventListener("change", () => {
-      userData.importSettings.extensions = extensionsCheckbox.checked;
-    });
-  }
-  if (cookiesCheckbox) {
-    cookiesCheckbox.addEventListener("change", () => {
-      userData.importSettings.cookies = cookiesCheckbox.checked;
-    });
-  }
-
-  // Back button - go to page 2
+  // Back button - navigate to page 1
   if (importBackBtn) {
     importBackBtn.addEventListener("click", () => {
-      showPage(2);
+      console.log("[IMPORT] Back button clicked");
+      showPage(1);
     });
   }
 
-  // Skip button - go to AI signup page (page 4)
+  // Skip button - skip import and go to page 3 (name input)
   if (importSkipBtn) {
     importSkipBtn.addEventListener("click", () => {
-      showPage(4);
+      console.log("[IMPORT] Skip button clicked");
+      
+      // Save that import was skipped
+      const importData = {
+        browserId: null,
+        resources: [],
+        completed: false
+      };
+      
+      if (typeof RPMSendAsyncMessage !== "undefined") {
+        RPMSendAsyncMessage("OasisWelcome:SetImportSettings", importData);
+      }
+      
+      showPage(3);
     });
   }
 
-  // Import button - save settings and go to AI signup page (page 4)
+  // Import button - start migration with selected options
   if (importConfirmBtn) {
     importConfirmBtn.addEventListener("click", () => {
-      // Save import preferences
-      RPMSendAsyncMessage("OasisWelcome:SetImportSettings", userData.importSettings);
-      // Go to AI signup page
-      showPage(4);
+      console.log("[IMPORT] Import button clicked");
+      
+      // Collect selected resources from checkboxes
+      const selectedResources = [];
+      importCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          const optionId = checkbox.id; // import-history, import-bookmarks, etc.
+          const resourceName = optionId.replace('import-', '');
+          selectedResources.push(resourceName);
+          console.log("[IMPORT] Selected resource:", resourceName);
+        }
+      });
+      
+      // Save import settings
+      const importData = {
+        browserId: 'chrome',
+        resources: selectedResources,
+        completed: true
+      };
+      
+      console.log("[IMPORT] Import data:", importData);
+      
+      if (typeof RPMSendAsyncMessage !== "undefined") {
+        RPMSendAsyncMessage("OasisWelcome:SetImportSettings", importData);
+      }
+      
+      // Proceed to next page (Name input)
+      showPage(3);
     });
   }
+
+  // Browser selector button - could open dropdown to select different browser
+  if (browserSelectorBtn) {
+    browserSelectorBtn.addEventListener("click", () => {
+      console.log("[IMPORT] Browser selector clicked");
+      // TODO: Implement browser selection dropdown
+    });
+  }
+
+  // Track import selections
+  let importSettings = {
+    browserId: null,
+    resources: [],
+    completed: false
+  };
 
   // Page 4: AI Assistant Sign Up
   const openSignupBtn = document.getElementById("open-signup-btn");

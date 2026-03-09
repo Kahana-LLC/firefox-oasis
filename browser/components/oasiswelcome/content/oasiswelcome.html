@@ -6,10 +6,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="light" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; object-src 'none'; script-src resource: chrome:; connect-src https:; img-src https: data: blob: chrome:; style-src 'unsafe-inline' resource: chrome:;"
+      content="default-src 'none'; object-src 'none'; script-src resource: chrome: 'unsafe-inline'; connect-src https:; img-src https: data: blob: chrome:; style-src 'unsafe-inline' resource: chrome:;"
     />
     <title>Welcome to Oasis</title>
     <link
@@ -23,7 +23,10 @@
       href="chrome://browser/content/oasiswelcome/oasiswelcome.css"
     />
     <link rel="localization" href="branding/brand.ftl" />
+    <link rel="localization" href="browser/migrationWizard.ftl" />
 
+    <!-- Load Migration Wizard -->
+    <script src="chrome://browser/components/migration/content/migration-wizard.js"></script>
     <!-- Load Supabase Auth Service -->
     <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
   </head>
@@ -54,8 +57,126 @@
         </div>
       </div>
 
-      <!-- Page 2: Name Input -->
       <div class="oasis-page" id="page-2">
+        <div class="oasis-split-layout">
+          <div class="oasis-left-panel">
+            <!-- Left side with cream background -->
+          </div>
+          <div class="oasis-right-panel">
+            <div class="oasis-logo-corner">
+              <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
+            </div>
+            <div class="oasis-import-content">
+              <!-- Header -->
+              <div class="oasis-import-header">
+                <h2 class="oasis-import-title">Import your browser data</h2>
+                <p class="oasis-import-subtitle">Choose what you'd like to bring from your previous browser</p>
+              </div>
+
+              <!-- Browser Selector -->
+              <div class="oasis-browser-selector-section">
+                <p class="oasis-selector-label">Importing from</p>
+                <div class="oasis-browser-selector" id="browser-selector-btn">
+                  <div class="oasis-browser-info">
+                    <div class="oasis-browser-icon-container">
+                      <svg class="oasis-browser-icon" viewBox="0 0 32 32" width="16" height="16">
+                        <circle cx="16" cy="16" r="14" fill="#4285F4"/>
+                        <circle cx="16" cy="16" r="11" fill="white"/>
+                        <path d="M16 5c6.08 0 11 4.92 11 11s-4.92 11-11 11S5 22.08 5 16 9.92 5 16 5m0-2C9.4 3 4 8.4 4 15c0 6.6 5.4 12 12 12s12-5.4 12-12c0-6.6-5.4-12-12-12z" fill="#4285F4"/>
+                      </svg>
+                    </div>
+                    <span class="oasis-browser-name">Chrome</span>
+                  </div>
+                  <div class="oasis-selector-arrow">
+                    <svg class="oasis-arrow-icon" viewBox="0 0 24 24" width="24" height="24">
+                      <path fill="currentColor" d="M7 10l5 5 5-5z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Import Options -->
+              <div class="oasis-import-options">
+                <!-- History -->
+                <div class="oasis-import-option">
+                  <div class="oasis-option-left">
+                    <div class="oasis-option-icon-box">
+                      <svg class="oasis-option-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.46-.46-3.74-2.22V8H12z"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="oasis-option-center">
+                    <div class="oasis-option-name">Browser history</div>
+                    <div class="oasis-option-description">Import your browsing history and frequently visited sites</div>
+                  </div>
+                  <input type="checkbox" id="import-history" class="oasis-option-checkbox" checked />
+                </div>
+
+                <!-- Bookmarks -->
+                <div class="oasis-import-option">
+                  <div class="oasis-option-left">
+                    <div class="oasis-option-icon-box">
+                      <svg class="oasis-option-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M17 3H5c-1.11 0-1.99.9-1.99 2L3 21l9-4 9 4V5c0-1.1-.89-2-2-2z"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="oasis-option-center">
+                    <div class="oasis-option-name">Bookmarks</div>
+                    <div class="oasis-option-description">Keep your bookmarks, tags and reading list</div>
+                  </div>
+                  <input type="checkbox" id="import-bookmarks" class="oasis-option-checkbox" checked />
+                </div>
+
+                <!-- Extensions -->
+                <div class="oasis-import-option">
+                  <div class="oasis-option-left">
+                    <div class="oasis-option-icon-box">
+                      <svg class="oasis-option-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M23.2605 6.96924L18.0105 1.71924H16.95L12.981 5.68824V3.74874L12.231 2.99874H3.22949L2.47949 3.74874V21.7487L3.22949 22.4987H21.2295L21.9795 21.7487V12.7487L21.2295 11.9987H19.29L23.259 8.02974L23.2605 6.96924ZM3.97949 4.50024H11.4795V12.0002H3.97949V4.50024ZM3.97949 13.5002H11.4795V21.0002H3.97949V13.5002ZM20.4795 21.0002H12.9795V13.5002H20.4795V21.0002ZM12.9795 12.0002V9.31074L15.669 12.0002H12.9795ZM17.4795 11.6897L13.29 7.50024L17.4795 3.31074L21.669 7.50024L17.4795 11.6897Z" fill="#7A9200"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="oasis-option-center">
+                    <div class="oasis-option-name">Extensions</div>
+                    <div class="oasis-option-description">Import your browser extensions and add ons</div>
+                  </div>
+                  <input type="checkbox" id="import-extensions" class="oasis-option-checkbox" />
+                </div>
+
+                <!-- Cookies and Login Data -->
+                <div class="oasis-import-option">
+                  <div class="oasis-option-left">
+                    <div class="oasis-option-icon-box">
+                      <svg class="oasis-option-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.758 11.828L18.607 3.979L20.021 5.393L18.607 6.808L21.081 9.282L19.667 10.697L17.192 8.222L15.778 9.636L17.899 11.757L16.485 13.172L14.364 11.05L12.172 13.242C12.8514 14.276 13.1235 15.5252 12.9357 16.7481C12.7479 17.9711 12.1135 19.081 11.155 19.8635C10.1966 20.646 8.98218 21.0455 7.74639 20.9848C6.5106 20.9241 5.34115 20.4076 4.46397 19.535C3.58622 18.6591 3.06528 17.4882 3.00231 16.2497C2.93933 15.0113 3.33881 13.7936 4.12318 12.8332C4.90755 11.8727 6.02085 11.238 7.24691 11.0522C8.47297 10.8665 9.72431 11.143 10.758 11.828ZM10.121 18.121C10.4123 17.8455 10.6454 17.5143 10.8066 17.1471C10.9677 16.7799 11.0536 16.3842 11.0592 15.9832C11.0647 15.5823 10.9899 15.1843 10.839 14.8128C10.6881 14.4412 10.4643 14.1037 10.1808 13.8202C9.89724 13.5367 9.55974 13.3128 9.18821 13.162C8.81669 13.0111 8.41869 12.9362 8.01775 12.9418C7.6168 12.9474 7.22104 13.0333 6.85385 13.1944C6.48667 13.3556 6.15552 13.5887 5.87997 13.88C5.3335 14.4458 5.03112 15.2036 5.03795 15.9902C5.04479 16.7768 5.36029 17.5292 5.91652 18.0855C6.47274 18.6417 7.22518 18.9572 8.01177 18.964C8.79836 18.9709 9.55617 18.6685 10.122 18.122" fill="#7A9200"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="oasis-option-center">
+                    <div class="oasis-option-name">Cookies and Login Data</div>
+                    <div class="oasis-option-description">Import your saved passwords and stay signed in to your accounts</div>
+                  </div>
+                  <input type="checkbox" id="import-cookies" class="oasis-option-checkbox" />
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="oasis-import-actions">
+                <button class="oasis-back-button" id="import-back-btn">Back</button>
+                <div class="oasis-right-actions">
+                  <button class="oasis-skip-import-button" id="import-skip-btn">Skip</button>
+                  <button class="oasis-import-button" id="import-confirm-btn">Import</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 3: Name Input -->
+      <div class="oasis-page" id="page-3">
         <div class="oasis-split-layout">
           <div class="oasis-left-panel">
             <!-- Left side with cream background -->
@@ -84,109 +205,6 @@
         </div>
       </div>
 
-      <!-- Page 3: Import Browser Data -->
-      <div class="oasis-page" id="page-3">
-        <div class="oasis-split-layout">
-          <div class="oasis-left-panel">
-            <!-- Left side with cream background -->
-          </div>
-          <div class="oasis-right-panel">
-            <div class="oasis-logo-corner">
-              <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
-            </div>
-            <div class="oasis-import-content">
-              <div class="oasis-import-header">
-                <h2 class="oasis-import-title">Import your browser data</h2>
-                <p class="oasis-import-subtitle">Choose what you'd like to bring from your previous browser</p>
-              </div>
-
-              <div class="oasis-import-options">
-                <!-- Browser History -->
-                <div class="oasis-import-item">
-                  <div class="oasis-import-item-info">
-                    <div class="oasis-import-icon-container">
-                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="9" stroke="#7a9200" stroke-width="2"/>
-                        <path d="M12 6v6l4 4" stroke="#7a9200" stroke-width="2" stroke-linecap="round"/>
-                      </svg>
-                    </div>
-                    <div class="oasis-import-text">
-                      <h3 class="oasis-import-item-title">Browser History</h3>
-                      <p class="oasis-import-item-desc">Import your browsing history and frequently visited sites</p>
-                    </div>
-                  </div>
-                  <input type="checkbox" class="oasis-checkbox" id="import-history" />
-                  <label for="import-history" class="oasis-checkbox-label"></label>
-                </div>
-
-                <!-- Bookmarks -->
-                <div class="oasis-import-item">
-                  <div class="oasis-import-item-info">
-                    <div class="oasis-import-icon-container">
-                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="#7a9200" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
-                    <div class="oasis-import-text">
-                      <h3 class="oasis-import-item-title">Bookmarks</h3>
-                      <p class="oasis-import-item-desc">Import your saved bookmarks and favorite pages</p>
-                    </div>
-                  </div>
-                  <input type="checkbox" class="oasis-checkbox" id="import-bookmarks" checked />
-                  <label for="import-bookmarks" class="oasis-checkbox-label"></label>
-                </div>
-
-                <!-- Extensions -->
-                <div class="oasis-import-item">
-                  <div class="oasis-import-item-info">
-                    <div class="oasis-import-icon-container">
-                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <rect x="3" y="3" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
-                        <rect x="13" y="3" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
-                        <rect x="3" y="13" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
-                        <rect x="13" y="13" width="8" height="8" rx="2" stroke="#7a9200" stroke-width="2"/>
-                      </svg>
-                    </div>
-                    <div class="oasis-import-text">
-                      <h3 class="oasis-import-item-title">Extensions</h3>
-                      <p class="oasis-import-item-desc">Import your browser extensions and add ons</p>
-                    </div>
-                  </div>
-                  <input type="checkbox" class="oasis-checkbox" id="import-extensions" checked />
-                  <label for="import-extensions" class="oasis-checkbox-label"></label>
-                </div>
-
-                <!-- Cookies and Login Data -->
-                <div class="oasis-import-item">
-                  <div class="oasis-import-item-info">
-                    <div class="oasis-import-icon-container">
-                      <svg class="oasis-import-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M21 10h-8.35C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H13l2 2 2-2 2 2 4-4z" stroke="#7a9200" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <circle cx="7" cy="12" r="1" fill="#7a9200"/>
-                      </svg>
-                    </div>
-                    <div class="oasis-import-text">
-                      <h3 class="oasis-import-item-title">Cookies and Login Data</h3>
-                      <p class="oasis-import-item-desc">Import your saved passwords and stay signed in to your accounts</p>
-                    </div>
-                  </div>
-                  <input type="checkbox" class="oasis-checkbox" id="import-cookies" />
-                  <label for="import-cookies" class="oasis-checkbox-label"></label>
-                </div>
-              </div>
-
-              <div class="oasis-import-actions">
-                <button class="oasis-back-button" id="import-back-btn">Back</button>
-                <div class="oasis-right-actions">
-                  <button class="oasis-skip-import-button" id="import-skip-btn">Skip</button>
-                  <button class="oasis-import-button" id="import-confirm-btn">Import</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Page 4: AI Assistant Sign Up -->
       <div class="oasis-page" id="page-4">
         <div class="oasis-split-layout">
@@ -198,6 +216,10 @@
               <img src="chrome://branding/content/about-logo.png" alt="Oasis Logo" class="oasis-small-logo" />
             </div>
             <div class="oasis-ai-signup-content">
+              <div class="oasis-user-name-display-section">
+                <div class="oasis-user-name-display" id="user-name-display">Welcome</div>
+                <p class="oasis-user-name-subtitle">Meet the ergonomic way of browsing</p>
+              </div>
               <div class="oasis-ai-signup-header">
                 <h2 class="oasis-ai-signup-title">Sign in or sign up to start using Oasis AI</h2>
                 <p class="oasis-ai-signup-subtitle">Unlock the full potential of AI-powered browsing</p>
