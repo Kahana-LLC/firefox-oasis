@@ -5,14 +5,16 @@
  * Places database using the privileged PlacesUtils API. This is the
  * same API used by hubs.ts for bookmark access.
  *
- * Returns cleaned, deduplicated { title, url, visitDate } items,
+ * Returns cleaned, deduplicated { title, url, visitDate, snippet } items,
  * filtering out internal Firefox pages (about:, chrome://, etc.)
+ * and search engine result pages.
  */
 
 export interface HistoryEntry {
     title: string;
     url: string;
     visitDate: number; // epoch ms
+    snippet: string;   // first ~500 chars of page body text
 }
 
 /**
@@ -74,14 +76,67 @@ function isUserVisibleUrl(url: string): boolean {
     return true;
 }
 
+// ─── Snippet Extraction ────────────────────────────────────────
+
+const SNIPPET_MAX_LENGTH = 500;
+const SNIPPET_FETCH_TIMEOUT = 5000; // 5s max per page
+
+/**
+ * Fetch a URL and extract the first ~500 chars of readable body text.
+ * Returns empty string on any failure (timeout, 404, CORS, etc.)
+ * — the caller falls back to title+url for embedding.
+ */
+async function fetchPageSnippet(url: string): Promise<string> {
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
+
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: { "Accept": "text/html" },
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) return "";
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+            return ""; // Skip PDFs, images, etc.
+        }
+
+        const html = await response.text();
+
+        // Strip scripts, styles, and HTML tags — keep only readable text
+        const textContent = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+            .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+            .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+            .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&[a-zA-Z]+;/g, " ")  // HTML entities
+            .replace(/\s+/g, " ")
+            .trim()
+            .substring(0, SNIPPET_MAX_LENGTH);
+
+        return textContent;
+    } catch {
+        return ""; // Silently fail — title+url fallback is fine
+    }
+}
+
+// ─── Main History Fetch ────────────────────────────────────────
+
 /**
  * Fetch recent browsing history from Firefox Places API.
  *
  * @param maxResults - Maximum number of history entries to return (default 200)
+ * @param includeSnippets - Whether to fetch page content snippets (default false)
  * @returns Array of history entries sorted by visit date (most recent first)
  */
 export async function fetchRecentHistory(
-    maxResults = 200
+    maxResults = 200,
+    includeSnippets = false
 ): Promise<HistoryEntry[]> {
     const PlacesUtils = getPlacesUtils();
 
@@ -122,6 +177,7 @@ export async function fetchRecentHistory(
                 url,
                 // Places stores time in microseconds; convert to ms
                 visitDate: Math.floor(node.time / 1000),
+                snippet: "", // populated below if includeSnippets=true
             });
         }
 
@@ -131,6 +187,29 @@ export async function fetchRecentHistory(
         console.log(
             `[HistoryCollector] Fetched ${entries.length} unique history entries`
         );
+
+        // Fetch snippets if requested (parallel, batched to avoid overwhelming)
+        if (includeSnippets && entries.length > 0) {
+            console.log(`[HistoryCollector] Fetching snippets for ${entries.length} entries...`);
+            console.time("[HistoryCollector] Fetch snippets");
+
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+                const batch = entries.slice(i, i + BATCH_SIZE);
+                const snippets = await Promise.all(
+                    batch.map(e => fetchPageSnippet(e.url))
+                );
+                batch.forEach((entry, j) => {
+                    entry.snippet = snippets[j];
+                });
+            }
+
+            const withSnippets = entries.filter(e => e.snippet.length > 0).length;
+            console.timeEnd("[HistoryCollector] Fetch snippets");
+            console.log(
+                `[HistoryCollector] Got snippets for ${withSnippets}/${entries.length} entries`
+            );
+        }
 
         return entries;
     } catch (e) {

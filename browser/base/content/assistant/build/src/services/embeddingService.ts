@@ -145,6 +145,22 @@ class EmbeddingService {
         return results;
     }
 
+    /**
+     * Start loading the model in the background.
+     * Does not block — just kicks off the download.
+     * If it fails, no harm done — ensureBrowser() will retry on first search.
+     */
+    preload(): void {
+        if (this.ready || this.readyPromise) return; // Already loading or loaded
+
+        console.log("[EmbeddingService] 🚀 Background pre-warming started...");
+        this.ensureBrowser().catch(err => {
+            console.warn("[EmbeddingService] Pre-warming failed (will retry on search):", err);
+            // Reset so ensureBrowser() tries again on actual search
+            this.readyPromise = null;
+        });
+    }
+
     isLoaded(): boolean {
         return this.modelLoaded;
     }

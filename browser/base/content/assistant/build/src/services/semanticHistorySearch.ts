@@ -6,6 +6,7 @@
  *
  * Key behaviors:
  * - Lazy indexing: history is only fetched & embedded on first search
+ * - IndexedDB persistence: index survives browser restarts
  * - Incremental indexing: subsequent searches only embed NEW history entries
  * - Singleton indexing: concurrent calls share one indexing pass
  * - Embeddings generated in a separate content process (WASM isolation)
@@ -24,8 +25,9 @@ class SemanticHistorySearch {
     private lastIndexTime = 0; // Timestamp of last indexing
 
     /**
-     * Ensure history is indexed. On first call, indexes everything.
-     * On subsequent calls, incrementally indexes only NEW entries.
+     * Ensure history is indexed. On first call, tries to restore from
+     * IndexedDB. If no saved data, does a full index. On subsequent
+     * calls, incrementally indexes only NEW entries.
      */
     async ensureIndexed(): Promise<void> {
         if (this.indexingPromise) {
@@ -33,9 +35,9 @@ class SemanticHistorySearch {
             return;
         }
 
-        // First time: full indexing
+        // First time: try restore, then full index if needed
         if (!this.indexed) {
-            this.indexingPromise = this.doFullIndex();
+            this.indexingPromise = this.tryRestoreOrFullIndex();
             try {
                 await this.indexingPromise;
             } finally {
@@ -54,14 +56,46 @@ class SemanticHistorySearch {
     }
 
     /**
-     * Full index — happens on first search only.
+     * Try to restore from IndexedDB first. If no saved data, do full index.
+     * After indexing, save to IndexedDB for next session.
+     */
+    private async tryRestoreOrFullIndex(): Promise<void> {
+        // Step 1: Try restoring from IndexedDB
+        console.log("[SemanticSearch] Checking IndexedDB for saved index...");
+        console.time("[SemanticSearch] Restore from IndexedDB");
+
+        const restoredUrls = await historyVectorStore.restoreFromStorage();
+
+        if (restoredUrls && restoredUrls.size > 0) {
+            console.timeEnd("[SemanticSearch] Restore from IndexedDB");
+            this.indexedUrls = restoredUrls;
+            this.indexed = true;
+            console.log(`[SemanticSearch] ✅ Restored ${restoredUrls.size} entries from IndexedDB — skipping full index`);
+
+            // Do incremental to pick up any new pages since last save
+            await this.doIncrementalIndex();
+            return;
+        }
+
+        console.timeEnd("[SemanticSearch] Restore from IndexedDB");
+        console.log("[SemanticSearch] No saved index found — starting full index");
+
+        // Step 2: No saved data — do full index
+        await this.doFullIndex();
+
+        // Step 3: Save to IndexedDB for next session
+        await this.persistToStorage();
+    }
+
+    /**
+     * Full index — happens on first search when no saved data exists.
      */
     private async doFullIndex(): Promise<void> {
         console.log("[SemanticSearch] Starting full history indexing...");
         console.time("[SemanticSearch] Total indexing time");
 
         try {
-            const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES);
+            const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES, true);
 
             if (entries.length === 0) {
                 console.warn("[SemanticSearch] No history entries found to index");
@@ -78,13 +112,16 @@ class SemanticHistorySearch {
                 const entry = entries[i];
 
                 try {
-                    const textToEmbed = `${entry.title} ${entry.url}`;
+                    // Use snippet for richer embeddings, fall back to title+url
+                    const textToEmbed = entry.snippet
+                        ? `${entry.title} ${entry.snippet}`
+                        : `${entry.title} ${entry.url}`;
                     const embedding = await embeddingService.embed(textToEmbed);
 
                     await historyVectorStore.addItem({
                         title: entry.title,
                         url: entry.url,
-                        snippet: entry.title,
+                        snippet: entry.snippet || entry.title,
                         visitDate: entry.visitDate,
                         embedding,
                     });
@@ -122,17 +159,50 @@ class SemanticHistorySearch {
     /**
      * Incremental index — only embed entries not already in the index.
      * Runs quickly since it only processes new pages visited since last index.
+     * Saves to IndexedDB if new entries were added.
      */
     private async doIncrementalIndex(): Promise<void> {
         try {
-            const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES);
+            // First, quick check for new URLs (no snippet fetching — fast!)
+            const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES, false);
 
             // Filter to only entries NOT already indexed
-            const newEntries = entries.filter(e => !this.indexedUrls.has(e.url));
+            const newUrls = entries.filter(e => !this.indexedUrls.has(e.url));
 
-            if (newEntries.length === 0) {
+            if (newUrls.length === 0) {
                 return; // Nothing new to index — fast path
             }
+
+            // Now fetch again with snippets only for the new entries
+            // (re-fetch is needed because we need snippet content for embedding)
+            const newEntries = await Promise.all(
+                newUrls.map(async (entry) => {
+                    try {
+                        const response = await fetch(entry.url, {
+                            signal: AbortSignal.timeout(5000),
+                            headers: { "Accept": "text/html" },
+                        });
+                        if (!response.ok) return entry;
+                        const ct = response.headers.get("content-type") || "";
+                        if (!ct.includes("text/html")) return entry;
+                        const html = await response.text();
+                        entry.snippet = html
+                            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+                            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+                            .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+                            .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+                            .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+                            .replace(/<[^>]+>/g, " ")
+                            .replace(/&[a-zA-Z]+;/g, " ")
+                            .replace(/\s+/g, " ")
+                            .trim()
+                            .substring(0, 500);
+                    } catch {
+                        // Snippet fetch failed — use empty snippet (title+url fallback)
+                    }
+                    return entry;
+                })
+            );
 
             console.log(
                 `[SemanticSearch] Incremental update: ${newEntries.length} new entries to index`
@@ -141,13 +211,15 @@ class SemanticHistorySearch {
             let successCount = 0;
             for (const entry of newEntries) {
                 try {
-                    const textToEmbed = `${entry.title} ${entry.url}`;
+                    const textToEmbed = entry.snippet
+                        ? `${entry.title} ${entry.snippet}`
+                        : `${entry.title} ${entry.url}`;
                     const embedding = await embeddingService.embed(textToEmbed);
 
                     await historyVectorStore.addItem({
                         title: entry.title,
                         url: entry.url,
-                        snippet: entry.title,
+                        snippet: entry.snippet || entry.title,
                         visitDate: entry.visitDate,
                         embedding,
                     });
@@ -167,9 +239,25 @@ class SemanticHistorySearch {
                 `[SemanticSearch] Incremental update done. ${successCount} new entries added (${dbCount} total in DB)`
             );
             this.lastIndexTime = Date.now();
+
+            // Persist updated index to IndexedDB
+            if (successCount > 0) {
+                await this.persistToStorage();
+            }
         } catch (err) {
             console.error("[SemanticSearch] Incremental indexing failed:", err);
             // Don't throw — incremental failure shouldn't break search
+        }
+    }
+
+    /**
+     * Save current state to IndexedDB for persistence across restarts.
+     */
+    private async persistToStorage(): Promise<void> {
+        try {
+            await historyVectorStore.saveToStorage(this.indexedUrls);
+        } catch (err) {
+            console.warn("[SemanticSearch] Failed to persist to storage:", err);
         }
     }
 
@@ -191,6 +279,7 @@ class SemanticHistorySearch {
         this.indexed = false;
         this.indexedUrls.clear();
         await historyVectorStore.clear();
+        await historyVectorStore.clearStorage();
         await this.ensureIndexed();
     }
 

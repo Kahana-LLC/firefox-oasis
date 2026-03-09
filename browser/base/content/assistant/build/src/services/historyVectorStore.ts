@@ -1,18 +1,22 @@
 /**
- * History Vector Store — Orama In-Memory Vector Database
+ * History Vector Store — Orama In-Memory Vector Database with IndexedDB Persistence
  *
  * Creates and manages an Orama database with a schema designed for
  * browser history entries. Supports:
  * - Inserting history items with pre-computed embeddings
  * - Vector similarity search
  * - Full reset for re-indexing
- *
- * The DB is in-memory only — destroyed when the sidebar session ends.
- * No data is persisted to disk or sent over the network.
+ * - Save/restore to IndexedDB for persistence across browser restarts
  */
 
-import { create, insert, search, count } from "@orama/orama";
+import { create, insert, search, count, save, load } from "@orama/orama";
 import { VECTOR_DIMENSIONS } from "./embeddingService";
+
+// IndexedDB constants
+const IDB_NAME = "oasis-semantic-search";
+const IDB_STORE = "vector-index";
+const IDB_KEY_SNAPSHOT = "orama-snapshot";
+const IDB_KEY_URLS = "indexed-urls";
 
 export interface HistoryItem {
     title: string;
@@ -63,7 +67,7 @@ class HistoryVectorStore {
     async search(
         queryEmbedding: number[],
         limit = 5,
-        minSimilarity = 0.5
+        minSimilarity = 0.3
     ): Promise<SearchResult[]> {
         await this.init();
 
@@ -95,6 +99,126 @@ class HistoryVectorStore {
     async clear(): Promise<void> {
         this.db = null;
         await this.init();
+    }
+
+    // ─── IndexedDB Persistence ─────────────────────────────────
+
+    /**
+     * Save the current Orama DB state + indexed URLs to IndexedDB.
+     */
+    async saveToStorage(indexedUrls: Set<string>): Promise<void> {
+        if (!this.db) return;
+
+        try {
+            const snapshot = save(this.db);
+            const snapshotJson = JSON.stringify(snapshot);
+            const urlsJson = JSON.stringify([...indexedUrls]);
+
+            await this.idbPut(IDB_KEY_SNAPSHOT, snapshotJson);
+            await this.idbPut(IDB_KEY_URLS, urlsJson);
+
+            console.log(
+                `[HistoryVectorStore] Saved to IndexedDB (${(snapshotJson.length / 1024).toFixed(1)} KB snapshot, ${indexedUrls.size} URLs)`
+            );
+        } catch (err) {
+            console.warn("[HistoryVectorStore] Failed to save to IndexedDB:", err);
+        }
+    }
+
+    /**
+     * Restore the Orama DB + indexed URLs from IndexedDB.
+     * Returns the set of indexed URLs if restore was successful, null if not.
+     */
+    async restoreFromStorage(): Promise<Set<string> | null> {
+        try {
+            const snapshotJson = await this.idbGet(IDB_KEY_SNAPSHOT);
+            const urlsJson = await this.idbGet(IDB_KEY_URLS);
+
+            if (!snapshotJson) {
+                console.log("[HistoryVectorStore] No saved data in IndexedDB");
+                return null;
+            }
+
+            await this.init(); // Create empty DB with schema
+            const snapshot = JSON.parse(snapshotJson);
+            load(this.db, snapshot);
+
+            const itemCount = await count(this.db);
+            console.log(
+                `[HistoryVectorStore] Restored ${itemCount} entries from IndexedDB`
+            );
+
+            // Restore indexed URLs
+            const urls = urlsJson ? new Set<string>(JSON.parse(urlsJson)) : new Set<string>();
+            return urls;
+        } catch (err) {
+            console.warn("[HistoryVectorStore] Failed to restore from IndexedDB:", err);
+            // Reset DB in case of partial load
+            this.db = null;
+            return null;
+        }
+    }
+
+    /**
+     * Clear the persisted data from IndexedDB.
+     */
+    async clearStorage(): Promise<void> {
+        try {
+            await this.idbDelete(IDB_KEY_SNAPSHOT);
+            await this.idbDelete(IDB_KEY_URLS);
+            console.log("[HistoryVectorStore] Cleared IndexedDB storage");
+        } catch (err) {
+            console.warn("[HistoryVectorStore] Failed to clear IndexedDB:", err);
+        }
+    }
+
+    // ─── IndexedDB Helpers ─────────────────────────────────────
+
+    private openIDB(): Promise<IDBDatabase> {
+        return new Promise((resolve, reject) => {
+            if (typeof indexedDB === "undefined" || !indexedDB) {
+                reject(new Error("IndexedDB not available"));
+                return;
+            }
+            const request = indexedDB.open(IDB_NAME, 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains(IDB_STORE)) {
+                    request.result.createObjectStore(IDB_STORE);
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    private async idbPut(key: string, value: string): Promise<void> {
+        const db = await this.openIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            tx.objectStore(IDB_STORE).put(value, key);
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+        });
+    }
+
+    private async idbGet(key: string): Promise<string | null> {
+        const db = await this.openIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readonly");
+            const getReq = tx.objectStore(IDB_STORE).get(key);
+            getReq.onsuccess = () => { db.close(); resolve(getReq.result || null); };
+            getReq.onerror = () => { db.close(); reject(getReq.error); };
+        });
+    }
+
+    private async idbDelete(key: string): Promise<void> {
+        const db = await this.openIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            tx.objectStore(IDB_STORE).delete(key);
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+        });
     }
 }
 
