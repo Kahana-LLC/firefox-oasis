@@ -1365,42 +1365,13 @@ const MESSAGES = () => {
             ],
             content: {
               position: "callout",
-              width: "380px",
+              width: "340px",
               padding: 16,
-              page_event_listeners: [
-                {
-                  params: {
-                    type: "click",
-                    selectors: "#oasis-chat-button",
-                  },
-                  action: {
-                    type: "SET_PREF",
-                    data: {
-                      pref: {
-                        name: "browser.oasis.chat-feature-tour",
-                        value: JSON.stringify({
-                          screen: "",
-                          complete: true,
-                        }),
-                      },
-                    },
-                    dismiss: true,
-                  },
-                },
-              ],
-              logo: {
-                imageURL:
-                  "chrome://browser/skin/oasis-chat-sparkle.svg",
-                height: "48px",
-                width: "48px",
-                marginBlock: "0 16px",
-              },
               title: {
                 string_id: "oasis-chat-tour-step1-title",
               },
               subtitle: {
                 string_id: "oasis-chat-tour-step1-subtitle",
-                paddingInline: "34px 0",
               },
               primary_button: {
                 label: {
@@ -1408,28 +1379,9 @@ const MESSAGES = () => {
                 },
                 style: "primary",
                 action: {
-                  type: "MULTI_ACTION",
+                  type: "CLICK_ELEMENT",
                   data: {
-                    actions: [
-                      {
-                        type: "CLICK_ELEMENT",
-                        data: {
-                          selector: "#oasis-chat-button",
-                        },
-                      },
-                      {
-                        type: "SET_PREF",
-                        data: {
-                          pref: {
-                            name: "browser.oasis.chat-feature-tour",
-                            value: JSON.stringify({
-                              screen: "",
-                              complete: true,
-                            }),
-                          },
-                        },
-                      },
-                    ],
+                    selector: "#oasis-chat-button",
                   },
                   dismiss: true,
                 },
@@ -1449,8 +1401,6 @@ const MESSAGES = () => {
                   dismiss: true,
                 },
                 size: "small",
-                marginInline: "0 14px",
-                marginBlock: "14px 0",
               },
             },
           },

@@ -233,8 +233,8 @@ taskbar-tabs-value-prop-callout-subtitle = Launch it in its own window and a sim
 
 ## Oasis Chat tour callout
 
-oasis-chat-tour-step1-title = Meet Oasis AI in your toolbar
-oasis-chat-tour-step1-subtitle = Click the Oasis AI button any time to chat, summarize, and get help while you browse.
+oasis-chat-tour-step1-title = Get started with Oasis AI
+oasis-chat-tour-step1-subtitle = Oasis helps you manage tabs, automate workflows, and stay focused. Click here whenever you want to open or hide it.
 oasis-chat-tour-try-button = Try Oasis AI
 
 ## Windows 10 EoS Sync messages group 1 callouts
