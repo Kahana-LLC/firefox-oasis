@@ -1930,36 +1930,90 @@ var SidebarController = {
     // Fire oasisSidebarOpen trigger when oasis assistant sidebar opens
     // Schedule before _show() to avoid issues with the .then() chain
     if (commandID === "viewOasisAssistantSidebar") {
-      console.log("[OasisCoach] viewOasisAssistantSidebar show() called, scheduling trigger in 2500ms");
       const win = window;
       setTimeout(async () => {
         try {
-          console.log("[OasisCoach] Timer fired, importing ASRouter...");
           const { ASRouter } = ChromeUtils.importESModule(
             "resource:///modules/asrouter/ASRouter.sys.mjs"
           );
           await ASRouter.waitForInitialized;
-          console.log("[OasisCoach] ASRouter initialized");
 
-          // Find the message directly from ASRouter state
-          const allMessages = ASRouter.state.messages;
-          const sidebarMsg = allMessages.find(m => m.id === "OASIS_SIDEBAR_COACH_TOUR");
-          console.log("[OasisCoach] Found message:", !!sidebarMsg);
+          const sidebarMsg = ASRouter.state.messages.find(
+            m => m.id === "OASIS_SIDEBAR_COACH_TOUR"
+          );
 
           if (sidebarMsg) {
-            // Call FeatureCalloutBroker directly, bypassing ASRouter routing
             const { FeatureCalloutBroker } = ChromeUtils.importESModule(
               "resource:///modules/asrouter/FeatureCalloutBroker.sys.mjs"
             );
-            console.log("[OasisCoach] isCalloutShowing:", FeatureCalloutBroker.isCalloutShowing);
-            console.log("[OasisCoach] Calling showFeatureCallout directly...");
+
+            // Create spotlight overlay: dims entire screen except toggle button
+            let spotlight = null;
+            const shell = win.document.getElementById("oasis-assistant-shell");
+            if (shell) {
+              const shellRect = shell.getBoundingClientRect();
+              // Toggle button: top:28px right:72px inside shell, ~32x32
+              const pad = 6;
+              const btnTop = shellRect.top + 28 - pad;
+              const btnLeft = shellRect.right - 72 - 32 - pad;
+              const btnW = 32 + pad * 2;
+              const btnH = 32 + pad * 2;
+
+              spotlight = win.document.createElement("div");
+              spotlight.id = "oasis-coach-spotlight";
+              spotlight.style.cssText = `
+                position: fixed;
+                top: ${btnTop}px;
+                left: ${btnLeft}px;
+                width: ${btnW}px;
+                height: ${btnH}px;
+                border-radius: 8px;
+                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+                z-index: 2147483647;
+                pointer-events: none;
+              `;
+              win.document.documentElement.appendChild(spotlight);
+            }
+
             const shown = await FeatureCalloutBroker.showFeatureCallout(
               win.gBrowser.selectedBrowser,
               sidebarMsg
             );
-            console.log("[OasisCoach] showFeatureCallout result:", shown);
-          } else {
-            console.log("[OasisCoach] Message not found in ASRouter state");
+
+            // Remove spotlight if callout wasn't shown
+            if (!shown && spotlight?.parentElement) {
+              spotlight.remove();
+              spotlight = null;
+            }
+
+            // Clean up spotlight when callout is dismissed
+            if (spotlight) {
+              const cleanupSpotlight = () => {
+                if (spotlight?.parentElement) {
+                  spotlight.remove();
+                }
+              };
+
+              // Wait for panel to render, then listen for dismiss
+              win.setTimeout(() => {
+                const calloutEl = win.document.querySelector(
+                  'panel[type="arrow"] .onboardingContainer'
+                );
+                if (calloutEl) {
+                  const panel = calloutEl.closest("panel");
+                  if (panel) {
+                    panel.addEventListener(
+                      "popuphidden",
+                      cleanupSpotlight,
+                      { once: true }
+                    );
+                  }
+                }
+              }, 500);
+
+              // Safety: remove after 60 seconds regardless
+              win.setTimeout(cleanupSpotlight, 60000);
+            }
           }
         } catch (err) {
           console.error("[OasisCoach] Error:", err);
