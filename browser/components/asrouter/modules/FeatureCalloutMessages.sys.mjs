@@ -1418,6 +1418,79 @@ const MESSAGES = () => {
       priority: 3,
       skip_in_tests: "it's not tested in automation",
     },
+    {
+      id: "OASIS_SIDEBAR_COACH_TOUR",
+      template: "feature_callout",
+      groups: ["cfr"],
+      content: {
+        id: "OASIS_SIDEBAR_COACH_TOUR",
+        template: "multistage",
+        backdrop: "transparent",
+        transitions: true,
+        disableHistoryUpdates: true,
+        screens: [
+          {
+            id: "OASIS_SIDEBAR_STEP",
+            progress_bar: false,
+            anchors: [
+              {
+                selector: "#oasis-sidebar-toggle-anchor",
+                panel_position: {
+                  anchor_attachment: "bottomcenter",
+                  callout_attachment: "topright",
+                  offset_x: 0,
+                  offset_y: 4,
+                },
+              },
+              {
+                selector: "#oasis-assistant-shell",
+                panel_position: {
+                  anchor_attachment: "bottomright",
+                  callout_attachment: "topright",
+                  offset_x: -72,
+                  offset_y: -465,
+                },
+              },
+            ],
+            content: {
+              position: "callout",
+              width: "340px",
+              padding: 16,
+              title: {
+                string_id: "oasis-chat-tour-step2-title",
+              },
+              subtitle: {
+                string_id: "oasis-chat-tour-step2-subtitle",
+              },
+              primary_button: {
+                label: {
+                  string_id: "oasis-chat-tour-step2-next-button",
+                },
+                style: "primary",
+                action: {
+                  dismiss: true,
+                },
+              },
+              dismiss_button: {
+                action: {
+                  dismiss: true,
+                },
+                size: "small",
+              },
+            },
+          },
+        ],
+      },
+      targeting: "true",
+      trigger: {
+        id: "oasisSidebarOpen",
+      },
+      frequency: {
+        lifetime: 1,
+      },
+      priority: 2,
+      skip_in_tests: "it's not tested in automation",
+    },
   ];
   messages = add24HourImpressionJEXLTargeting(
     ["FIREFOX_VIEW_TAB_PICKUP_REMINDER"],

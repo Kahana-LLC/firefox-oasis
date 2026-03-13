@@ -1926,7 +1926,48 @@ var SidebarController = {
     if (!this.sidebars.has(commandID)) {
       return false;
     }
-    return this._show(commandID).then(() => {
+
+    // Fire oasisSidebarOpen trigger when oasis assistant sidebar opens
+    // Schedule before _show() to avoid issues with the .then() chain
+    if (commandID === "viewOasisAssistantSidebar") {
+      console.log("[OasisCoach] viewOasisAssistantSidebar show() called, scheduling trigger in 2500ms");
+      const win = window;
+      setTimeout(async () => {
+        try {
+          console.log("[OasisCoach] Timer fired, importing ASRouter...");
+          const { ASRouter } = ChromeUtils.importESModule(
+            "resource:///modules/asrouter/ASRouter.sys.mjs"
+          );
+          await ASRouter.waitForInitialized;
+          console.log("[OasisCoach] ASRouter initialized");
+
+          // Find the message directly from ASRouter state
+          const allMessages = ASRouter.state.messages;
+          const sidebarMsg = allMessages.find(m => m.id === "OASIS_SIDEBAR_COACH_TOUR");
+          console.log("[OasisCoach] Found message:", !!sidebarMsg);
+
+          if (sidebarMsg) {
+            // Call FeatureCalloutBroker directly, bypassing ASRouter routing
+            const { FeatureCalloutBroker } = ChromeUtils.importESModule(
+              "resource:///modules/asrouter/FeatureCalloutBroker.sys.mjs"
+            );
+            console.log("[OasisCoach] isCalloutShowing:", FeatureCalloutBroker.isCalloutShowing);
+            console.log("[OasisCoach] Calling showFeatureCallout directly...");
+            const shown = await FeatureCalloutBroker.showFeatureCallout(
+              win.gBrowser.selectedBrowser,
+              sidebarMsg
+            );
+            console.log("[OasisCoach] showFeatureCallout result:", shown);
+          } else {
+            console.log("[OasisCoach] Message not found in ASRouter state");
+          }
+        } catch (err) {
+          console.error("[OasisCoach] Error:", err);
+        }
+      }, 2500);
+    }
+
+    return this._show(commandID).then(async () => {
       this._loadSidebarExtension(commandID);
 
       if (triggerNode) {
@@ -1936,6 +1977,7 @@ var SidebarController = {
       this.dismissSidebarBadge(commandID);
 
       this._fireFocusedEvent();
+
       return true;
     });
   },

@@ -237,6 +237,11 @@ oasis-chat-tour-step1-title = Get started with Oasis AI
 oasis-chat-tour-step1-subtitle = Oasis helps you manage tabs, automate workflows, and stay focused. Click here whenever you want to open or hide it.
 oasis-chat-tour-try-button = Try Oasis AI
 
+oasis-chat-tour-step2-title = Switch how Oasis shows up
+oasis-chat-tour-step2-subtitle = Sidebar, floating, minimized and yes, you can resize it too. Set it up how you like.
+oasis-chat-tour-step2-skip-button = Skip
+oasis-chat-tour-step2-next-button = Next
+
 ## Windows 10 EoS Sync messages group 1 callouts
 
 windows-10-eos-sync-urgency-title-1 = Don’t lose everything you’ve saved when you move to Windows 11.
