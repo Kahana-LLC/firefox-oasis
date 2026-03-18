@@ -260,12 +260,83 @@ export class OasisWelcomeParent extends JSWindowActorParent {
         "Calling ASRouter.sendTriggerMessage with trigger id:",
         OASIS_CHAT_TOUR_TRIGGER_ID
       );
-      const result = await ASRouter.sendTriggerMessage({
-        id: OASIS_CHAT_TOUR_TRIGGER_ID,
-        context: { source: "oasis-auth" },
-        browser: browser
-      });
-      lazy.log.debug("ASRouter.sendTriggerMessage completed, result:", result);
+
+      // Find the message directly and use FeatureCalloutBroker for spotlight support
+      const chatMsg = ASRouter.state.messages.find(
+        m => m.id === "OASIS_CHAT_FEATURE_TOUR"
+      );
+
+      if (!chatMsg) {
+        lazy.log.warn("OASIS_CHAT_FEATURE_TOUR message not found in ASRouter state");
+        return;
+      }
+
+      const { FeatureCalloutBroker } = ChromeUtils.importESModule(
+        "resource:///modules/asrouter/FeatureCalloutBroker.sys.mjs"
+      );
+
+      // Create spotlight overlay: dims entire screen except oasis-chat-button
+      let spotlight = null;
+      const chatBtn = window.document.getElementById("oasis-chat-button");
+      if (chatBtn) {
+        const btnRect = chatBtn.getBoundingClientRect();
+        const pad = 6;
+
+        spotlight = window.document.createElement("div");
+        spotlight.id = "oasis-coach-spotlight";
+        spotlight.style.cssText = `
+          position: fixed;
+          top: ${btnRect.top - pad}px;
+          left: ${btnRect.left - pad}px;
+          width: ${btnRect.width + pad * 2}px;
+          height: ${btnRect.height + pad * 2}px;
+          border-radius: 8px;
+          box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+          z-index: 2147483647;
+          pointer-events: none;
+        `;
+        window.document.documentElement.appendChild(spotlight);
+      }
+
+      const shown = await FeatureCalloutBroker.showFeatureCallout(
+        browser,
+        chatMsg
+      );
+      lazy.log.debug("showFeatureCallout result:", shown);
+
+      // Remove spotlight if callout wasn't shown
+      if (!shown && spotlight?.parentElement) {
+        spotlight.remove();
+        spotlight = null;
+      }
+
+      // Clean up spotlight when callout is dismissed
+      if (spotlight) {
+        const cleanupSpotlight = () => {
+          if (spotlight?.parentElement) {
+            spotlight.remove();
+          }
+        };
+
+        // Listen for panel dismiss
+        lazy.setTimeout(() => {
+          const calloutEl = window.document.querySelector(
+            'panel[type="arrow"] .onboardingContainer'
+          );
+          if (calloutEl) {
+            const panel = calloutEl.closest("panel");
+            if (panel) {
+              panel.addEventListener("popuphidden", cleanupSpotlight, {
+                once: true,
+              });
+            }
+          }
+        }, 500);
+
+        // Safety: remove after 60 seconds regardless
+        lazy.setTimeout(cleanupSpotlight, 60000);
+      }
+
       lazy.log.debug("Triggered Oasis chat feature callout after successful authentication");
     } catch (e) {
       lazy.log.error("Failed to trigger feature callout:", e);
