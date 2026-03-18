@@ -9,8 +9,10 @@ import { assistantLogger } from "../utils/assistantLogger.js";
 import {
   getToolResultPayload,
   hasMessages,
+  isRecord,
   stripLeadingEchoedPayload,
   type MessageLike,
+  type UsageMeta,
 } from "./messageUtils.js";
 import { STREAM_GUARD_MESSAGE } from "./constants.js";
 
@@ -21,7 +23,7 @@ type ConsumeAssistantStreamArgs = {
   inputType: AssistantInputType;
   toolCommandNames: Set<string>;
   pushCurrentTurn: (user: string, assistant: string) => void;
-  trackUsage: (inputType: AssistantInputType) => void;
+  trackUsage: (inputType: AssistantInputType, meta?: UsageMeta) => void;
 };
 
 function extractMessageText(msg: MessageLike): string {
@@ -80,6 +82,7 @@ export async function consumeAssistantGraphStream(
   let toolMessageCount = 0;
   let emittedChars = 0;
   let guardTriggered = false;
+  let lastUsageMeta: UsageMeta | undefined;
 
   let streamGuardState = createStreamGuardState();
 
@@ -87,7 +90,7 @@ export async function consumeAssistantGraphStream(
     if ("__end__" in state) {
       if (combinedSessionString && !isSaved) {
         pushCurrentTurn(prompt, combinedSessionString);
-        trackUsage(inputType);
+        trackUsage(inputType, lastUsageMeta);
         isSaved = true;
       }
       break;
@@ -157,6 +160,11 @@ export async function consumeAssistantGraphStream(
         continue;
       }
 
+      const kwargs = (msg as { additional_kwargs?: unknown }).additional_kwargs;
+      if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
+        lastUsageMeta = kwargs.oasisUsageMeta as UsageMeta;
+      }
+
       const newContent = `${sanitizedText}\n`;
       onChunk(newContent);
       combinedSessionString += newContent;
@@ -183,7 +191,7 @@ export async function consumeAssistantGraphStream(
 
   if (combinedSessionString && !isSaved) {
     pushCurrentTurn(prompt, combinedSessionString);
-    trackUsage(inputType);
+    trackUsage(inputType, lastUsageMeta);
   }
 
   assistantLogger.debug("stream", "Run summary", {

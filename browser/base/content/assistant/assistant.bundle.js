@@ -48375,7 +48375,7 @@ Content: ${content}`;
      * @param type 'text' or 'voice'
      * @param model Optional model name for record keeping
      */
-    async trackUsage(type, model = "gemini-1.5-flash") {
+    async trackUsage(type, model = "gemini-1.5-flash", meta) {
       const user = await supabaseAuth.getCurrentUser();
       if (!user) {
         logWarn3("trackUsage: No user found.");
@@ -48391,7 +48391,11 @@ Content: ${content}`;
         user_id: user.id,
         usage_count: units,
         model_used: `${type}:${model}`,
-        success: true
+        success: true,
+        command_type: meta?.command_type ?? null,
+        user_intent: meta?.user_intent ?? null,
+        input_tokens: meta?.input_tokens ?? null,
+        output_tokens: meta?.output_tokens ?? null
       }).then(({ error }) => {
         if (error) logError3("Failed to track usage (DB Insert):", error);
         else logDebug3("trackUsage: DB insert successful");
@@ -68086,12 +68090,13 @@ Result: ${JSON.stringify(result)}`);
       throw new Error("Authentication required: Please sign in to use voice features");
     }
   }
-  async function assistRemote(system, messages, options, tools = []) {
+  async function assistRemote(system, messages, options, tools = [], generationConfig) {
     return postSigned("assist", {
       system,
       messages,
       options,
-      tools
+      tools,
+      ...generationConfig ? { generation_config: generationConfig } : {}
     });
   }
   async function transcribeAudio(audioBlob) {
@@ -68131,12 +68136,12 @@ Result: ${JSON.stringify(result)}`);
   }
   function looksLikeNewActionCommand(text2) {
     const input = String(text2 || "");
-    const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split)\b/i.test(
+    const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit)\b/i.test(
       input
     );
-    const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page)\b/i.test(
+    const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
       input
-    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(input);
+    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(input) || /\b(?:youtube|google|gmail|github|twitter|instagram|facebook|reddit|netflix|spotify|amazon|wikipedia|slack|notion|linear|figma|jira|vercel|supabase|openai|anthropic|claude|chatgpt|linkedin|whatsapp|discord|twitch|tiktok|pinterest|dropbox|zoom|meet|calendar|drive|docs|sheets|maps)\b/i.test(input);
     return hasAction && hasObjectOrTarget;
   }
 
@@ -68158,13 +68163,13 @@ Result: ${JSON.stringify(result)}`);
 Treat command traces as internal context only. Never repeat raw tool payloads verbatim.
 
 **Response Guidelines:**
-1. **Use Markdown:** Format your answers beautifully using Markdown.
+1. **Use Markdown inside the response field:** Format your answer using Markdown.
    - Use **bold** for key terms or emphasis.
    - Use bullet points or numbered lists for organized information.
    - Use \`code blocks\` for code, URLs, or technical terms.
    - Use headings for longer explanations.
 2. **Be Helpful:** Answer questions thoroughly and accurately. If you don't know something, say so.
-3. **Interpret Data:** If command context contains raw data (like JSON), summarize it into human-readable text. NEVER output raw JSON blobs.
+3. **Interpret Data:** If command context contains raw data, summarize it into human-readable prose inside the response field. Do not echo raw serialized payloads, IDs, or data dumps directly.
 4. **Natural Tone:** Be friendly and conversational. Don't mention internal workings or "tool outputs".
 5. **Context Aware:** Use the conversation history to provide relevant, contextual responses.
 6. **No Trace Echo:** Never start a response by repeating command payload text, IDs, or serialized objects.
@@ -68196,16 +68201,30 @@ If the history shows:
   - User: "list tabs"
   - Internal command result: "["Google", "CNN"]"
 
-You should respond:
+You should respond with the response field set to:
 "Here are your open tabs:
 - **Google**
 - **CNN**"
 
 **Example - General Question:**
 User: "What is machine learning?"
-You should respond with a clear, helpful explanation of machine learning.
+You should respond with a clear, helpful explanation inside the response field.
 
-Remember: You are a fully capable AI assistant. Help the user with whatever they need!`;
+Remember: You are a fully capable AI assistant. Help the user with whatever they need!
+
+**IMPORTANT \u2014 Output Format:**
+Your ENTIRE reply must be a single valid JSON object \u2014 no text before or after it, no markdown fences around it.
+The Markdown formatting described above goes inside the "response" string value, not at the top level.
+
+{"response":"<your full Markdown answer here>","command_type":"<category>","user_intent":"<category>"}
+
+command_type \u2014 what the user is asking you to DO:
+  info_retrieval, navigation, organization, content_transform, content_create, search, automation, system, help, other
+
+user_intent \u2014 the user's underlying goal:
+  learning, research, work, dev, marketing, shopping, personal, entertainment, meta, other
+
+Use "other" only when genuinely uncertain. Output ONLY the JSON object.`;
 
   // src/prompts/hiddenInstructions.ts
   var SUMMARIZE_INSTRUCTION = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
@@ -68246,6 +68265,43 @@ Do NOT mention that you received page content or reference this instruction. Jus
   }
 
   // src/assistant/messageUtils.ts
+  var TOOL_COMMAND_TYPE_MAP = {
+    open_url: "navigation",
+    navigate_tab: "navigation",
+    new_window: "navigation",
+    open_bookmark_folder: "navigation",
+    open_search_result: "navigation",
+    close_tab: "organization",
+    create_tab_group: "organization",
+    delete_tab_group: "organization",
+    rename_tab_group: "organization",
+    add_tab_to_group: "organization",
+    remove_tab_from_group: "organization",
+    move_tab_to_new_window: "organization",
+    split_tabs: "organization",
+    add_split_view: "organization",
+    remove_split_view: "organization",
+    organize_windows: "organization",
+    create_bookmark_folder: "organization",
+    delete_bookmark_folder: "organization",
+    rename_bookmark_folder: "organization",
+    add_tab_to_bookmark_folder: "organization",
+    remove_tab_from_bookmark_folder: "organization",
+    list_tabs: "info_retrieval",
+    list_bookmark_folders: "info_retrieval",
+    list_tab_groups: "info_retrieval",
+    search_memory: "search",
+    get_recent_search_results: "search",
+    web_search: "search"
+  };
+  function classifyToolAction(commandName) {
+    return {
+      command_type: TOOL_COMMAND_TYPE_MAP[commandName] ?? "other",
+      user_intent: "other",
+      input_tokens: null,
+      output_tokens: null
+    };
+  }
   function isRecord(value) {
     return !!value && typeof value === "object";
   }
@@ -68319,6 +68375,117 @@ Result: ${toolResult.message}`
       return String(response.content ?? "");
     }
     return "";
+  }
+  var VALID_COMMAND_TYPES = /* @__PURE__ */ new Set([
+    "info_retrieval",
+    "navigation",
+    "organization",
+    "content_transform",
+    "content_create",
+    "search",
+    "automation",
+    "system",
+    "help",
+    "other"
+  ]);
+  var VALID_USER_INTENTS = /* @__PURE__ */ new Set([
+    "learning",
+    "research",
+    "work",
+    "dev",
+    "marketing",
+    "shopping",
+    "personal",
+    "entertainment",
+    "meta",
+    "other"
+  ]);
+  function parseChatEnvelope(response) {
+    const defaultMeta = {
+      command_type: "other",
+      user_intent: "other",
+      input_tokens: null,
+      output_tokens: null
+    };
+    let inputTokens = null;
+    let outputTokens = null;
+    if (isRecord(response)) {
+      const usage = response.usage_metadata;
+      if (isRecord(usage)) {
+        if (typeof usage.prompt_token_count === "number") {
+          inputTokens = usage.prompt_token_count;
+        }
+        if (typeof usage.candidates_token_count === "number") {
+          outputTokens = usage.candidates_token_count;
+        }
+      }
+    }
+    const tokenMeta = { input_tokens: inputTokens, output_tokens: outputTokens };
+    if (!isRecord(response)) {
+      return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+    }
+    const contentField = response.content;
+    if (isRecord(contentField)) {
+      return extractFromParsed(contentField, tokenMeta, defaultMeta);
+    }
+    if (typeof contentField !== "string" || !contentField.trim()) {
+      return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+    }
+    let jsonStr = contentField.trim();
+    const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    }
+    const direct = tryJsonParse(jsonStr);
+    if (direct !== null) {
+      return extractFromParsed(direct, tokenMeta, defaultMeta);
+    }
+    const repaired = jsonStr.replace(/\r\n/g, "\\n").replace(/\r/g, "\\n").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+    const fromRepair = tryJsonParse(repaired);
+    if (fromRepair !== null) {
+      return extractFromParsed(fromRepair, tokenMeta, defaultMeta);
+    }
+    const regexResult = extractViaRegex(jsonStr, tokenMeta, defaultMeta);
+    if (regexResult !== null) {
+      return regexResult;
+    }
+    return { text: jsonStr || contentField, meta: { ...defaultMeta, ...tokenMeta } };
+  }
+  function tryJsonParse(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  }
+  function extractFromParsed(parsed, tokenMeta, defaultMeta) {
+    if (!isRecord(parsed) || typeof parsed.response !== "string") {
+      return {
+        text: typeof parsed === "string" ? parsed : "",
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
+    }
+    const commandType = VALID_COMMAND_TYPES.has(String(parsed.command_type ?? "")) ? parsed.command_type : "other";
+    const userIntent = VALID_USER_INTENTS.has(String(parsed.user_intent ?? "")) ? parsed.user_intent : "other";
+    return {
+      text: parsed.response,
+      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
+    };
+  }
+  function extractViaRegex(str, tokenMeta, defaultMeta) {
+    const responseMatch = str.match(/"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/);
+    if (!responseMatch) {
+      return null;
+    }
+    const responseText = responseMatch[1].replace(/\\n/g, "\n").replace(/\\t/g, "	").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    const cmdMatch = str.match(/"command_type"\s*:\s*"([^"]+)"/);
+    const intentMatch = str.match(/"user_intent"\s*:\s*"([^"]+)"/);
+    const commandType = cmdMatch && VALID_COMMAND_TYPES.has(cmdMatch[1]) ? cmdMatch[1] : "other";
+    const userIntent = intentMatch && VALID_USER_INTENTS.has(intentMatch[1]) ? intentMatch[1] : "other";
+    return {
+      text: responseText || str,
+      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
+    };
   }
   function stripLeadingEchoedPayload(value, payloads) {
     let text2 = String(value || "").trim();
@@ -68939,6 +69106,51 @@ ${lines.map((line) => `- ${line}`).join("\n")}`;
   }
 
   // src/assistant/graph.ts
+  var CHAT_GENERATION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        response: {
+          type: "string",
+          description: "The assistant's complete reply to the user. Use Markdown formatting: **bold**, bullet lists, `code blocks`, headings. Do NOT include raw JSON or internal data dumps."
+        },
+        command_type: {
+          type: "string",
+          enum: [
+            "info_retrieval",
+            "navigation",
+            "organization",
+            "content_transform",
+            "content_create",
+            "search",
+            "automation",
+            "system",
+            "help",
+            "other"
+          ],
+          description: "The action category: info_retrieval=answer a factual question, navigation=open/visit a URL or site, organization=manage tabs/bookmarks/groups, content_transform=summarize/translate/rewrite, content_create=write/generate new content, search=find in history/memory/web, automation=multi-step browser task, system=browser settings or preferences, help=how-to question about the assistant, other=none of the above."
+        },
+        user_intent: {
+          type: "string",
+          enum: [
+            "learning",
+            "research",
+            "work",
+            "dev",
+            "marketing",
+            "shopping",
+            "personal",
+            "entertainment",
+            "meta",
+            "other"
+          ],
+          description: "The user's underlying goal: learning=understand a topic, research=gather info for a decision, work=professional/business task, dev=coding or technical task, marketing=content or growth, shopping=buy or find products, personal=personal life task, entertainment=leisure/media/fun, meta=asking about the AI itself, other=none of the above."
+        }
+      },
+      required: ["response", "command_type", "user_intent"]
+    }
+  };
   var GraphState = Annotation.Root({
     messages: Annotation({
       reducer: (x2, y2) => x2.concat(y2),
@@ -69107,7 +69319,12 @@ ${result.message}` : result.message;
       const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
       if (toolPayload && !hasSummarizeRequest) {
         return {
-          messages: [new AIMessage(presentToolResult(toolPayload))],
+          messages: [
+            new AIMessage({
+              content: presentToolResult(toolPayload),
+              additional_kwargs: { oasisUsageMeta: classifyToolAction(toolPayload.commandName) }
+            })
+          ],
           lastWorker: "chat",
           commandQueue: []
         };
@@ -69122,7 +69339,7 @@ ${result.message}` : result.message;
       ];
       let res;
       try {
-        res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"]);
+        res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
       } catch (error) {
         assistantLogger.warn("chat", "Assist chat call failed.", error);
         if (hasToolOutput) {
@@ -69143,8 +69360,9 @@ ${result.message}` : result.message;
           commandQueue: []
         };
       }
-      const chatText = extractChatContent(res).trim();
-      if (!chatText) {
+      const { text: chatText, meta: usageMeta } = parseChatEnvelope(res);
+      const trimmedText = chatText.trim();
+      if (!trimmedText) {
         if (hasToolOutput) {
           const fallback = String(msgText(lastMsg) || "").trim();
           return {
@@ -69160,7 +69378,12 @@ ${result.message}` : result.message;
         };
       }
       return {
-        messages: [new AIMessage(chatText)],
+        messages: [
+          new AIMessage({
+            content: trimmedText,
+            additional_kwargs: { oasisUsageMeta: usageMeta }
+          })
+        ],
         lastWorker: "chat",
         commandQueue: []
       };
@@ -69561,12 +69784,13 @@ ${message}` : message;
     let toolMessageCount = 0;
     let emittedChars = 0;
     let guardTriggered = false;
+    let lastUsageMeta;
     let streamGuardState = createStreamGuardState();
     for await (const state of stream) {
       if ("__end__" in state) {
         if (combinedSessionString && !isSaved) {
           pushCurrentTurn(prompt, combinedSessionString);
-          trackUsage(inputType);
+          trackUsage(inputType, lastUsageMeta);
           isSaved = true;
         }
         break;
@@ -69624,6 +69848,10 @@ ${message}` : message;
         if (!sanitizedText) {
           continue;
         }
+        const kwargs = msg.additional_kwargs;
+        if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
+          lastUsageMeta = kwargs.oasisUsageMeta;
+        }
         const newContent = `${sanitizedText}
 `;
         onChunk(newContent);
@@ -69648,7 +69876,7 @@ ${message}` : message;
     }
     if (combinedSessionString && !isSaved) {
       pushCurrentTurn(prompt, combinedSessionString);
-      trackUsage(inputType);
+      trackUsage(inputType, lastUsageMeta);
     }
     assistantLogger.debug("stream", "Run summary", {
       steps: streamGuardState.stepCount,
@@ -69790,9 +70018,9 @@ ${message}` : message;
       inputType,
       toolCommandNames,
       pushCurrentTurn: sessionController.pushCurrentTurn,
-      trackUsage: (nextInputType) => {
+      trackUsage: (nextInputType, meta) => {
         if (isAuthenticated) {
-          subscriptionService.trackUsage(nextInputType);
+          subscriptionService.trackUsage(nextInputType, void 0, meta);
         }
       }
     });

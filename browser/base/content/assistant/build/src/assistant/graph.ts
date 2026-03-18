@@ -28,6 +28,39 @@ import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
 import { MAX_NESTED_COMMANDS } from "./constants.js";
+
+const CHAT_GENERATION_CONFIG = {
+  responseMimeType: "application/json",
+  responseJsonSchema: {
+    type: "object",
+    properties: {
+      response: {
+        type: "string",
+        description:
+          "The assistant's complete reply to the user. Use Markdown formatting: **bold**, bullet lists, `code blocks`, headings. Do NOT include raw JSON or internal data dumps.",
+      },
+      command_type: {
+        type: "string",
+        enum: [
+          "info_retrieval", "navigation", "organization", "content_transform",
+          "content_create", "search", "automation", "system", "help", "other",
+        ],
+        description:
+          "The action category: info_retrieval=answer a factual question, navigation=open/visit a URL or site, organization=manage tabs/bookmarks/groups, content_transform=summarize/translate/rewrite, content_create=write/generate new content, search=find in history/memory/web, automation=multi-step browser task, system=browser settings or preferences, help=how-to question about the assistant, other=none of the above.",
+      },
+      user_intent: {
+        type: "string",
+        enum: [
+          "learning", "research", "work", "dev", "marketing",
+          "shopping", "personal", "entertainment", "meta", "other",
+        ],
+        description:
+          "The user's underlying goal: learning=understand a topic, research=gather info for a decision, work=professional/business task, dev=coding or technical task, marketing=content or growth, shopping=buy or find products, personal=personal life task, entertainment=leisure/media/fun, meta=asking about the AI itself, other=none of the above.",
+      },
+    },
+    required: ["response", "command_type", "user_intent"],
+  },
+};
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
 import {
   resolvePendingAmbiguityGate,
@@ -41,9 +74,11 @@ import { tryResolveAssistRoute } from "./supervisorAssist.js";
 import { decodePlannedAction, encodePlannedAction } from "./plannedActions.js";
 import { presentToolResult } from "./toolResultPresenter.js";
 import {
+  classifyToolAction,
   extractChatContent,
   getToolResultPayload,
   msgText,
+  parseChatEnvelope,
   toWire,
   type GraphArgs,
   type MessageLike,
@@ -264,7 +299,12 @@ export async function buildAssistantGraph(
 
     if (toolPayload && !hasSummarizeRequest) {
       return {
-        messages: [new AIMessage(presentToolResult(toolPayload))],
+        messages: [
+          new AIMessage({
+            content: presentToolResult(toolPayload),
+            additional_kwargs: { oasisUsageMeta: classifyToolAction(toolPayload.commandName) },
+          }),
+        ],
         lastWorker: "chat",
         commandQueue: [],
       };
@@ -282,7 +322,7 @@ export async function buildAssistantGraph(
 
     let res: unknown;
     try {
-      res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"]);
+      res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
     } catch (error) {
       assistantLogger.warn("chat", "Assist chat call failed.", error);
       if (hasToolOutput) {
@@ -304,8 +344,9 @@ export async function buildAssistantGraph(
       };
     }
 
-    const chatText = extractChatContent(res).trim();
-    if (!chatText) {
+    const { text: chatText, meta: usageMeta } = parseChatEnvelope(res);
+    const trimmedText = chatText.trim();
+    if (!trimmedText) {
       if (hasToolOutput) {
         const fallback = String(msgText(lastMsg as MessageLike) || "").trim();
         return {
@@ -322,7 +363,12 @@ export async function buildAssistantGraph(
     }
 
     return {
-      messages: [new AIMessage(chatText)],
+      messages: [
+        new AIMessage({
+          content: trimmedText,
+          additional_kwargs: { oasisUsageMeta: usageMeta },
+        }),
+      ],
       lastWorker: "chat",
       commandQueue: [],
     };

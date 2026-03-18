@@ -28,13 +28,15 @@ export async function assistRemote(
   system: string,
   messages: WireMsg[],
   options: string[],
-  tools: AssistTool[] = []
+  tools: AssistTool[] = [],
+  generationConfig?: Record<string, unknown>
 ): Promise<AssistResponse> {
   return postSigned<AssistResponse>("assist", {
     system,
     messages,
     options,
     tools,
+    ...(generationConfig ? { generation_config: generationConfig } : {}),
   });
 }
 
