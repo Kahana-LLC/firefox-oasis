@@ -273,11 +273,15 @@ async function securelySaveSession(session) {
 
 async function securelyLoadSession() {
     try {
+        console.log("[OasisAssistant] securelyLoadSession: checking login manager...");
         const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
         const login = logins.find(l => l.username === LOGIN_USERNAME);
+        console.log("[OasisAssistant] securelyLoadSession: login found in manager:", !!login);
 
         if (login) {
             const sessionData = JSON.parse(login.password);
+            console.log("[OasisAssistant] securelyLoadSession: has access_token:", !!sessionData.access_token);
+            console.log("[OasisAssistant] securelyLoadSession: has supabaseAuth:", !!window.supabaseAuth);
 
             if (window.supabaseAuth && window.supabaseAuth.supabase) {
                 const { data, error } = await window.supabaseAuth.supabase.auth.setSession({
@@ -285,6 +289,7 @@ async function securelyLoadSession() {
                     refresh_token: sessionData.refresh_token
                 });
 
+                console.log("[OasisAssistant] securelyLoadSession: setSession result:", data?.session ? "got session" : "null", "error:", error?.message || "none");
                 if (!error && data.session) {
                     return data.session;
                 } else {
@@ -294,7 +299,7 @@ async function securelyLoadSession() {
             }
         }
     } catch (e) {
-        console.error("Failed to load secure session:", e);
+        console.error("[OasisAssistant] Failed to load secure session:", e);
     }
     return null;
 }
@@ -314,9 +319,12 @@ function securelyClearSession() {
 
 // Initial Auth Check
 async function checkCurrentAuthStatus() {
+    console.log("[OasisAssistant] checkCurrentAuthStatus starting...");
     const restoredSession = await securelyLoadSession();
+    console.log("[OasisAssistant] securelyLoadSession result:", restoredSession ? "got session" : "null");
 
     if (restoredSession) {
+        console.log("[OasisAssistant] Restored session, updating auth state");
         updateGlobalAuthState(true, restoredSession.user);
 
         // Verify with Supabase and ensure internal state matches

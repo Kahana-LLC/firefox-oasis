@@ -527,9 +527,25 @@
         }
 
         if (user) {
-          const session = await supabaseAuth.getSession();
+          console.log("[OasisAuth] Auth success, user:", user.id || user.email);
+
+          // Try to get and save the session for AI assistant sync
+          let session = await supabaseAuth.getSession();
+          console.log("[OasisAuth] getSession() result:", session ? "got session" : "null");
+          if (!session && window.supabaseAuth?.supabase) {
+            // Retry: session may not be immediately available after signup
+            console.log("[OasisAuth] Retrying via supabase.auth.getSession()...");
+            await new Promise(r => setTimeout(r, 500));
+            const { data } = await window.supabaseAuth.supabase.auth.getSession();
+            session = data?.session;
+            console.log("[OasisAuth] Retry result:", session ? "got session" : "still null");
+          }
           if (session) {
+            console.log("[OasisAuth] Saving session to login manager...");
             await securelySaveSession(session);
+            console.log("[OasisAuth] Session saved successfully");
+          } else {
+            console.warn("[OasisAuth] No session available after auth - AI sync may not work");
           }
 
           // Update auth state on current window
@@ -537,11 +553,13 @@
             isAuthenticated: true,
             user: user
           };
+          console.log("[OasisAuth] Set oasisAuthState on current window");
 
           // Also update auth state on main browser window and dispatch event there
           try {
             if (typeof Services !== 'undefined' && Services.wm) {
               const win = Services.wm.getMostRecentWindow('navigator:browser');
+              console.log("[OasisAuth] Main browser window found:", !!win);
               if (win) {
                 // Update global auth state on main browser window
                 win.oasisAuthState = {
@@ -553,9 +571,11 @@
                 win.dispatchEvent(new win.CustomEvent('oasis-auth-update', {
                   detail: win.oasisAuthState
                 }));
+                console.log("[OasisAuth] Dispatched oasis-auth-update on main window");
               }
             }
           } catch (e) {
+            console.warn("Oasis Auth: Failed to update main browser window:", e);
           }
 
           // Also dispatch on current window (auth page)
@@ -564,6 +584,7 @@
               detail: window.oasisAuthState
             }));
           } catch (e) {
+            console.warn("Oasis Auth: Failed to dispatch auth event on auth page:", e);
           }
 
           // Finalize onboarding via parent actor (close auth tab, return to browser, and trigger tour)

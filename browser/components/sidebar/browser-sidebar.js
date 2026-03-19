@@ -2125,6 +2125,34 @@ var SidebarController = {
             overlayBrowser.setAttribute("src", url);
         }
 
+        // Forward auth state from chrome window to assistant overlay content
+        console.log("[OasisSidebar] oasisAuthState on chrome window:", window.oasisAuthState?.isAuthenticated);
+        if (window.oasisAuthState?.isAuthenticated) {
+          const forwardAuth = () => {
+            try {
+              const contentWin = overlayBrowser.contentWindow;
+              console.log("[OasisSidebar] Forwarding auth to overlay, contentWindow:", !!contentWin);
+              if (contentWin) {
+                contentWin.oasisAuthState = window.oasisAuthState;
+                contentWin.dispatchEvent(
+                  new contentWin.CustomEvent("oasis-auth-update", {
+                    detail: window.oasisAuthState,
+                  })
+                );
+                console.log("[OasisSidebar] Auth forwarded successfully");
+              }
+            } catch (e) {
+              console.log("[OasisSidebar] Auth forward error:", e.message);
+            }
+          };
+          // Try immediately and after a delay to catch bundle init
+          overlayBrowser.addEventListener("load", () => {
+            console.log("[OasisSidebar] Overlay browser loaded, scheduling auth forward");
+            setTimeout(forwardAuth, 500);
+            setTimeout(forwardAuth, 2000);
+          }, { once: true });
+        }
+
         // Get content area for bounds checking
         const contentArea = document.getElementById("tabbrowser-tabbox");
         const contentBounds = contentArea?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
