@@ -1930,9 +1930,18 @@ var SidebarController = {
     // Fire oasisSidebarOpen trigger when oasis assistant sidebar opens
     // Schedule before _show() to avoid issues with the .then() chain
     if (commandID === "viewOasisAssistantSidebar") {
+      // Only show the sidebar coach mark once
+      const SIDEBAR_COACH_SEEN_PREF = "browser.oasis.sidebar-coach-tour.seen";
+      try {
+        if (Services.prefs.getBoolPref(SIDEBAR_COACH_SEEN_PREF, false)) {
+          // Already shown, skip
+        } else {
       const win = window;
       setTimeout(async () => {
         try {
+          // Mark as seen immediately to prevent re-trigger
+          Services.prefs.setBoolPref(SIDEBAR_COACH_SEEN_PREF, true);
+
           const { ASRouter } = ChromeUtils.importESModule(
             "resource:///modules/asrouter/ASRouter.sys.mjs"
           );
@@ -2019,6 +2028,10 @@ var SidebarController = {
           console.error("[OasisCoach] Error:", err);
         }
       }, 2500);
+        } // end else (not seen)
+      } catch (e) {
+        // Pref read error, ignore
+      }
     }
 
     return this._show(commandID).then(async () => {
