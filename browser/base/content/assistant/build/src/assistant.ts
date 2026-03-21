@@ -46,6 +46,10 @@ import { subscriptionService } from "./services/subscription";
 // Expose Supabase auth for UI
 const supabaseAuth = SupabaseAuth.getInstance();
 (window as any).supabaseAuth = supabaseAuth;
+(window as any).oasisSetOAuthCallbackBaseUrl = (url: string) =>
+  supabaseAuth.setOAuthCallbackBaseUrl(url);
+(window as any).oasisGetOAuthCallbackBaseUrl = () =>
+  supabaseAuth.getOAuthCallbackBaseUrl();
 
 // Expose voice input service for UI
 (window as any).voiceInputService = voiceInputService;
@@ -265,7 +269,9 @@ async function buildGraph(commands: Command[], messageId?: string) {
 
       // If the command requires confirmation, stop the graph and let the modal handle it
       if (result.requiresConfirmation) {
-        console.log(`⏸️ Command ${command.commandName} requires confirmation, stopping graph`);
+        console.log(
+          `⏸️ Command ${command.commandName} requires confirmation, stopping graph`
+        );
         return {
           messages: [new AIMessage({ content: "", name: command.commandName })],
           lastWorker: command.commandName,
@@ -523,7 +529,7 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
     const lastMsgText = msgText(lastMsg);
     const hasToolOutput = lastMsgText.includes("[Tool Output for");
     const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
-    
+
     // Append appropriate hidden instruction
     let hiddenInstruction: string;
     if (hasSummarizeRequest) {
@@ -534,11 +540,13 @@ Remember: You are a fully capable AI assistant. Help the user with whatever they
 4. Highlights any important facts, dates, or conclusions
 Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
     } else if (hasToolOutput) {
-      hiddenInstruction = "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
+      hiddenInstruction =
+        "The tool has provided the data above. Using that data, write a natural language response to the user's original request. Do NOT reference this instruction or the fact that you are using tool data.";
     } else {
-      hiddenInstruction = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+      hiddenInstruction =
+        "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
     }
-    
+
     const messagesWithPrompt = [
       ...state.messages,
       new HumanMessage(hiddenInstruction),
@@ -558,7 +566,9 @@ Do NOT mention that you received page content or reference this instruction. Jus
       .replace("{options}", options.join(", "));
 
     // Get the latest user message for keyword detection
-    const latestUserMsg = [...s.messages].reverse().find(m => m._getType() === "human");
+    const latestUserMsg = [...s.messages]
+      .reverse()
+      .find(m => m._getType() === "human");
     const latestTextRaw = msgText(latestUserMsg) || "";
     const latestText = latestTextRaw.toLowerCase();
     const lines = latestTextRaw
@@ -566,22 +576,29 @@ Do NOT mention that you received page content or reference this instruction. Jus
       .map(l => l.trim())
       .filter(Boolean);
     const commandLine =
-      lines.find(l =>
-        /(tab\s*group|group|tabs?|hub|window)/i.test(l) &&
-        /(delete|remove|create|make|new|add|list|open|close|rename|show)/i.test(l)
+      lines.find(
+        l =>
+          /(tab\s*group|group|tabs?|hub|window)/i.test(l) &&
+          /(delete|remove|create|make|new|add|list|open|close|rename|show)/i.test(
+            l
+          )
       ) || latestTextRaw;
     const commandText = commandLine.toLowerCase();
-    
+
     // Check for confirmation keywords FIRST (before checking pending confirmation)
     // This allows confirm_action to run even when there's a pending confirmation
     // BUT: Don't route to confirm_action if we just ran it (prevents infinite loops)
     const justRanTool = memberNames.includes(s.lastWorker);
     const justRanConfirm = s.lastWorker === "confirm_action";
-    
+
     const confirmationText = (lines[lines.length - 1] || latestTextRaw).trim();
-    const confirmMatch = confirmationText.match(/^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i);
-    const cancelMatch = confirmationText.match(/^(?:no|cancel|nevermind|don'?t|stop)$/i);
-    
+    const confirmMatch = confirmationText.match(
+      /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i
+    );
+    const cancelMatch = confirmationText.match(
+      /^(?:no|cancel|nevermind|don'?t|stop)$/i
+    );
+
     if ((confirmMatch || cancelMatch) && !justRanConfirm) {
       // User is trying to confirm/cancel - route to confirm_action
       // But only if we didn't just run confirm_action (prevents loops)
@@ -590,167 +607,222 @@ Do NOT mention that you received page content or reference this instruction. Jus
         args: { confirmed: !!confirmMatch },
       };
     }
-    
+
     // If there's a pending confirmation but user didn't say yes/no, stop the graph
     const pending = getPendingConfirmation();
     if (pending) {
       console.log("⏸️ Pending confirmation detected, stopping graph for modal");
       return { next: END, args: {} };
     }
-    
+
     // Pre-routing: Detect obvious browser commands by keywords BEFORE calling LLM
     // This prevents the LLM from getting confused by long conversation history
     // BUT: Skip pre-routing if we just ran a tool (to avoid loops when confirmation is needed)
     // (justRanTool was already declared above for confirmation check)
     let preRoutedNext: string | null = null;
     let preRoutedArgs: Record<string, any> = {};
-    
+
     // Only do pre-routing if we didn't just run a tool (prevents infinite loops)
     // When a tool requires confirmation, it sets pending confirmation and returns END
     // The next supervisor call should detect pending confirmation and stop, not pre-route again
     if (!justRanTool) {
-    
-    // Tab group commands
-    // Match "delete tab group NAME" or "delete group NAME" or "delete NAME group"
-    const tabGroupMatch = commandText.match(/(?:delete|remove)\s+(?:tab\s+)?group\s+["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s*$/i) ||
-                          commandText.match(/(?:delete|remove)\s+(?:the\s+)?["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s+(?:tab\s+)?group/i);
-    if (tabGroupMatch) {
-      preRoutedNext = "delete_tab_group";
-      preRoutedArgs = { name: tabGroupMatch[1].trim() };
-      console.log(`🎯 Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`);
-    }
-    
-    const createGroupMatch = commandText.match(/(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i);
-    if (createGroupMatch && !preRoutedNext) {
-      // Clean up the captured name - remove trailing words
-      let groupName = createGroupMatch[1].trim();
-      let openUrl: string | undefined;
-      
-      // Extract "and open X in it" pattern to get the URL
-      const openInItMatch = groupName.match(/\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i);
-      if (openInItMatch) {
-        openUrl = openInItMatch[1].trim();
-        groupName = groupName.replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "").trim();
+      // Tab group commands
+      // Match "delete tab group NAME" or "delete group NAME" or "delete NAME group"
+      const tabGroupMatch =
+        commandText.match(
+          /(?:delete|remove)\s+(?:tab\s+)?group\s+["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s*$/i
+        ) ||
+        commandText.match(
+          /(?:delete|remove)\s+(?:the\s+)?["']?([^"'\n\s]+(?:\s+[^"'\n\s]+)*)["']?\s+(?:tab\s+)?group/i
+        );
+      if (tabGroupMatch) {
+        preRoutedNext = "delete_tab_group";
+        preRoutedArgs = { name: tabGroupMatch[1].trim() };
+        console.log(
+          `🎯 Pre-routing delete_tab_group with name: "${preRoutedArgs.name}"`
+        );
       }
-      
-      // Remove "and add/open X to/in it" patterns (fallback)
-      groupName = groupName.replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "").trim();
-      // Remove common trailing phrases and quotes
-      groupName = groupName.replace(/\s+(?:with|using|from|for)\s+.*$/i, "").trim();
-      groupName = groupName.replace(/["']/g, "").trim();
-      if (groupName) {
-        preRoutedNext = "create_tab_group";
-        preRoutedArgs = { name: groupName };
-        if (openUrl) {
-          preRoutedArgs.openUrl = openUrl;
+
+      const createGroupMatch = commandText.match(
+        /(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup)\s+(?:called\s+|named\s+)?["']?(.+)$/i
+      );
+      if (createGroupMatch && !preRoutedNext) {
+        // Clean up the captured name - remove trailing words
+        let groupName = createGroupMatch[1].trim();
+        let openUrl: string | undefined;
+
+        // Extract "and open X in it" pattern to get the URL
+        const openInItMatch = groupName.match(
+          /\s+and\s+(?:open|go\s+to)\s+(.+?)\s+(?:in\s+it|in\s+the\s+group|in\s+that\s+group|there)$/i
+        );
+        if (openInItMatch) {
+          openUrl = openInItMatch[1].trim();
+          groupName = groupName
+            .replace(/\s+and\s+(?:open|go\s+to)\s+.+$/i, "")
+            .trim();
+        }
+
+        // Remove "and add/open X to/in it" patterns (fallback)
+        groupName = groupName
+          .replace(/\s+and\s+(?:add|open|put)\s+.+$/i, "")
+          .trim();
+        // Remove common trailing phrases and quotes
+        groupName = groupName
+          .replace(/\s+(?:with|using|from|for)\s+.*$/i, "")
+          .trim();
+        groupName = groupName.replace(/["']/g, "").trim();
+        if (groupName) {
+          preRoutedNext = "create_tab_group";
+          preRoutedArgs = { name: groupName };
+          if (openUrl) {
+            preRoutedArgs.openUrl = openUrl;
+          }
+        }
+        // Check for tab indices
+        const indicesMatch = commandText.match(
+          /(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i
+        );
+        if (indicesMatch) {
+          const indices = indicesMatch[1].match(/\d+/g)?.map(Number) || [];
+          if (indices.length > 0) preRoutedArgs.indices = indices;
         }
       }
-      // Check for tab indices
-      const indicesMatch = commandText.match(/(?:with\s+)?tabs?\s+([\d,\s]+(?:and\s+\d+)?)/i);
-      if (indicesMatch) {
-        const indices = indicesMatch[1].match(/\d+/g)?.map(Number) || [];
-        if (indices.length > 0) preRoutedArgs.indices = indices;
-      }
-    }
-    
-    const listGroupsMatch = commandText.match(/list\s+(?:all\s+)?(?:tab\s+)?groups?/i);
-    if (listGroupsMatch && !preRoutedNext) {
-      preRoutedNext = "list_tab_groups";
-      preRoutedArgs = {};
-    }
-    
-    // Tab commands
-    const listTabsMatch = commandText.match(/list\s+(?:all\s+)?(?:my\s+)?tabs?/i);
-    if (listTabsMatch && !preRoutedNext) {
-      preRoutedNext = "list_tabs";
-      preRoutedArgs = {};
-    }
-    
-    const openTabMatch = commandText.match(/open\s+(?:a\s+)?(?:new\s+)?tab\s+(?:to\s+|with\s+)?["']?([^\s"']+)["']?/i);
-    if (openTabMatch && !preRoutedNext) {
-      preRoutedNext = "open_tab";
-      preRoutedArgs = { url: openTabMatch[1].trim() };
-    }
-    
-    const closeTabMatch = commandText.match(/close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(\d+))?/i);
-    if (closeTabMatch && !preRoutedNext) {
-      preRoutedNext = "close_tab";
-      preRoutedArgs = closeTabMatch[1] ? { index: parseInt(closeTabMatch[1]) } : {};
-    }
 
-    // Split view commands
-    // Match "split tab 1 and 2" or "add tab 1 and 2 to split view" or "splitview tab 1 and tab 2"
-    const twoTabsMatch = commandText.match(/(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i) ||
-                         commandText.match(/(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i);
-    if (twoTabsMatch && !preRoutedNext) {
-      preRoutedNext = "add_split_view";
-      preRoutedArgs = { indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])] };
-    }
-
-    const addSplitViewMatch = commandText.match(/(?:add|create|enable)\s+split\s*view/i) ||
-                              commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
-    if (addSplitViewMatch && !preRoutedNext) {
-      preRoutedNext = "add_split_view";
-      // Check if they specified a tab to split with
-      const withTabMatch = commandText.match(/(?:with|and)\s+(?:tab\s+)?(\d+)/i);
-      const withQueryMatch = commandText.match(/(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i);
-      if (withTabMatch) {
-        preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
-      } else if (withQueryMatch) {
-        preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
-      } else {
+      const listGroupsMatch = commandText.match(
+        /list\s+(?:all\s+)?(?:tab\s+)?groups?/i
+      );
+      if (listGroupsMatch && !preRoutedNext) {
+        preRoutedNext = "list_tab_groups";
         preRoutedArgs = {};
       }
-    }
 
-    const removeSplitViewMatch = commandText.match(/(?:remove|disable|close)\s+split\s*view/i) ||
-                                  commandText.match(/unsplit\s+(?:tabs?|view)?/i);
-    if (removeSplitViewMatch && !preRoutedNext) {
-      preRoutedNext = "remove_split_view";
-      preRoutedArgs = {};
-    }
-
-    // Summarize page command
-    // Match "summarize current tab" or "summarize this tab" (current tab, no args needed)
-    const summarizeCurrentTabMatch = commandText.match(/summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i);
-    if (summarizeCurrentTabMatch && !preRoutedNext) {
-      preRoutedNext = "summarize_page";
-      preRoutedArgs = {};
-    }
-    
-    // Match "summarize tab 1" or "summarize the first tab"
-    const summarizeTabMatch = commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) ||
-                              commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
-    if (summarizeTabMatch && !preRoutedNext) {
-      preRoutedNext = "summarize_page";
-      const tabNum = summarizeTabMatch[1] ? parseInt(summarizeTabMatch[1]) : 1;
-      preRoutedArgs = { index: tabNum };
-    }
-    
-    // Match "summarize the Amazon tab" (but not "current/this/active tab")
-    const summarizeQueryMatch = commandText.match(/summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i);
-    if (summarizeQueryMatch && !preRoutedNext) {
-      const queryText = summarizeQueryMatch[1].trim().toLowerCase();
-      // Skip if it's "current", "this", or "active" - already handled above
-      if (!["current", "this", "active"].includes(queryText)) {
-        preRoutedNext = "summarize_page";
-        preRoutedArgs = { query: queryText };
+      // Tab commands
+      const listTabsMatch = commandText.match(
+        /list\s+(?:all\s+)?(?:my\s+)?tabs?/i
+      );
+      if (listTabsMatch && !preRoutedNext) {
+        preRoutedNext = "list_tabs";
+        preRoutedArgs = {};
       }
-    }
-    
-    const summarizeMatch = commandText.match(/summarize\s+(?:this\s+)?(?:page|article|website|site)?/i) ||
-                           commandText.match(/(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i) ||
-                           commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
-    if (summarizeMatch && !preRoutedNext) {
-      preRoutedNext = "summarize_page";
-      preRoutedArgs = {};
-    }
-    
+
+      const openTabMatch = commandText.match(
+        /open\s+(?:a\s+)?(?:new\s+)?tab\s+(?:to\s+|with\s+)?["']?([^\s"']+)["']?/i
+      );
+      if (openTabMatch && !preRoutedNext) {
+        preRoutedNext = "open_tab";
+        preRoutedArgs = { url: openTabMatch[1].trim() };
+      }
+
+      const closeTabMatch = commandText.match(
+        /close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(\d+))?/i
+      );
+      if (closeTabMatch && !preRoutedNext) {
+        preRoutedNext = "close_tab";
+        preRoutedArgs = closeTabMatch[1]
+          ? { index: parseInt(closeTabMatch[1]) }
+          : {};
+      }
+
+      // Split view commands
+      // Match "split tab 1 and 2" or "add tab 1 and 2 to split view" or "splitview tab 1 and tab 2"
+      const twoTabsMatch =
+        commandText.match(
+          /(?:split|splitview|add)\s+(?:tabs?\s+)?(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)/i
+        ) ||
+        commandText.match(
+          /(?:add\s+)?tabs?\s+(\d+)\s+(?:and|,|with)\s+(?:tab\s+)?(\d+)\s+(?:to\s+)?(?:split\s*view|splitview)/i
+        );
+      if (twoTabsMatch && !preRoutedNext) {
+        preRoutedNext = "add_split_view";
+        preRoutedArgs = {
+          indices: [parseInt(twoTabsMatch[1]), parseInt(twoTabsMatch[2])],
+        };
+      }
+
+      const addSplitViewMatch =
+        commandText.match(/(?:add|create|enable)\s+split\s*view/i) ||
+        commandText.match(/split\s+(?:this\s+)?(?:tab|view)/i);
+      if (addSplitViewMatch && !preRoutedNext) {
+        preRoutedNext = "add_split_view";
+        // Check if they specified a tab to split with
+        const withTabMatch = commandText.match(
+          /(?:with|and)\s+(?:tab\s+)?(\d+)/i
+        );
+        const withQueryMatch = commandText.match(
+          /(?:with|and)\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*(?:tab)?$/i
+        );
+        if (withTabMatch) {
+          preRoutedArgs = { withIndex: parseInt(withTabMatch[1]) };
+        } else if (withQueryMatch) {
+          preRoutedArgs = { withQuery: withQueryMatch[1].trim() };
+        } else {
+          preRoutedArgs = {};
+        }
+      }
+
+      const removeSplitViewMatch =
+        commandText.match(/(?:remove|disable|close)\s+split\s*view/i) ||
+        commandText.match(/unsplit\s+(?:tabs?|view)?/i);
+      if (removeSplitViewMatch && !preRoutedNext) {
+        preRoutedNext = "remove_split_view";
+        preRoutedArgs = {};
+      }
+
+      // Summarize page command
+      // Match "summarize current tab" or "summarize this tab" (current tab, no args needed)
+      const summarizeCurrentTabMatch = commandText.match(
+        /summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i
+      );
+      if (summarizeCurrentTabMatch && !preRoutedNext) {
+        preRoutedNext = "summarize_page";
+        preRoutedArgs = {};
+      }
+
+      // Match "summarize tab 1" or "summarize the first tab"
+      const summarizeTabMatch =
+        commandText.match(/summarize\s+(?:the\s+)?tab\s+(\d+)/i) ||
+        commandText.match(/summarize\s+(?:the\s+)?(?:first|1st)\s+tab/i);
+      if (summarizeTabMatch && !preRoutedNext) {
+        preRoutedNext = "summarize_page";
+        const tabNum = summarizeTabMatch[1]
+          ? parseInt(summarizeTabMatch[1])
+          : 1;
+        preRoutedArgs = { index: tabNum };
+      }
+
+      // Match "summarize the Amazon tab" (but not "current/this/active tab")
+      const summarizeQueryMatch = commandText.match(
+        /summarize\s+(?:the\s+)?["']?([^"'\d][^"']+?)["']?\s*tab/i
+      );
+      if (summarizeQueryMatch && !preRoutedNext) {
+        const queryText = summarizeQueryMatch[1].trim().toLowerCase();
+        // Skip if it's "current", "this", or "active" - already handled above
+        if (!["current", "this", "active"].includes(queryText)) {
+          preRoutedNext = "summarize_page";
+          preRoutedArgs = { query: queryText };
+        }
+      }
+
+      const summarizeMatch =
+        commandText.match(
+          /summarize\s+(?:this\s+)?(?:page|article|website|site)?/i
+        ) ||
+        commandText.match(
+          /(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)/i
+        ) ||
+        commandText.match(/give\s+(?:me\s+)?(?:a\s+)?summary/i);
+      if (summarizeMatch && !preRoutedNext) {
+        preRoutedNext = "summarize_page";
+        preRoutedArgs = {};
+      }
     } // End of !justRanTool check
-    
+
     // If pre-routing matched, use it directly
     if (preRoutedNext) {
-      console.log(`🎯 Pre-routed to ${preRoutedNext} with args:`, preRoutedArgs);
+      console.log(
+        `🎯 Pre-routed to ${preRoutedNext} with args:`,
+        preRoutedArgs
+      );
       return { next: preRoutedNext, args: preRoutedArgs };
     }
 
