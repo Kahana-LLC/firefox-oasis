@@ -13,15 +13,37 @@ export class OasisWelcomeChild extends JSWindowActorChild {
     Cu.exportFunction(this.sendToParent.bind(this), window, {
       defineAs: "RPMSendAsyncMessage",
     });
+    Cu.exportFunction(this.queryParent.bind(this), window, {
+      defineAs: "RPMQueryAsync",
+    });
   }
 
   sendToParent(type, data) {
     this.sendAsyncMessage(type, data);
   }
 
+  wrapPromise(promise) {
+    return new this.contentWindow.Promise((resolve, reject) =>
+      promise.then(resolve, reject)
+    );
+  }
+
+  queryParent(type, data) {
+    return this.wrapPromise(
+      new Promise((resolve, reject) => {
+        super
+          .sendQuery(type, data)
+          .then(
+            result => resolve(Cu.cloneInto(result, this.contentWindow)),
+            reject
+          );
+      })
+    );
+  }
+
   receiveMessage(message) {
     const { name, data } = message;
-    
+
     switch (name) {
       case "OasisWelcome:UpdateContent":
         this.handleContentUpdate(data);
@@ -36,7 +58,3 @@ export class OasisWelcomeChild extends JSWindowActorChild {
     }
   }
 }
-
-
-
-

@@ -4,6 +4,10 @@
 
 const DID_SEE_OASIS_WELCOME_PREF = "browser.oasis.welcome.didSee";
 const DID_COMPLETE_OASIS_ONBOARDING_PREF = "browser.oasis.welcome.completed";
+const LOGIN_HOSTNAME = "https://kahana.co";
+const LOGIN_REALM = "Oasis Assistant";
+const LOGIN_USERNAME = "oasis_assistant_session";
+const OAUTH_HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
 
 const lazy = {};
 
@@ -46,7 +50,87 @@ export class OasisWelcomeParent extends JSWindowActorParent {
           lazy.log.error("Error in triggerFeatureCallout:", e);
         });
         break;
+      case "OasisWelcome:GetOAuthBridgeState":
+        return this.getOAuthBridgeState(data);
     }
+  }
+
+  getOAuthBridgeState(data = {}) {
+    const target = data?.target || "onboarding";
+    const allowFallbackTarget = !!data?.allowFallbackTarget;
+    const consumeCookie = data?.consumeCookie !== false;
+    const response = {
+      cookiePayload: null,
+      sessionData: null,
+    };
+
+    try {
+      let latest = null;
+      let latestFallback = null;
+      for (const cookie of Services.cookies.cookies) {
+        if (cookie.name !== OAUTH_HANDOFF_COOKIE_NAME) {
+          continue;
+        }
+
+        try {
+          const payload = JSON.parse(decodeURIComponent(cookie.value));
+          const timestamp = payload?.timestamp || 0;
+          const matchesTarget = !payload?.target || payload.target === target;
+
+          if (!matchesTarget) {
+            if (
+              allowFallbackTarget &&
+              (!latestFallback ||
+                timestamp > (latestFallback.payload?.timestamp || 0))
+            ) {
+              latestFallback = { cookie, payload };
+            }
+            continue;
+          }
+
+          if (!latest || timestamp > (latest.payload?.timestamp || 0)) {
+            latest = { cookie, payload };
+          }
+        } catch (e) {
+          lazy.log.error("Failed to parse OAuth handoff cookie:", e);
+        }
+      }
+
+      const selected = latest || latestFallback;
+      if (selected?.payload) {
+        response.cookiePayload = selected.payload;
+        if (consumeCookie) {
+          try {
+            Services.cookies.remove(
+              selected.cookie.host,
+              selected.cookie.name,
+              selected.cookie.path,
+              selected.cookie.originAttributes || {}
+            );
+          } catch (e) {
+            lazy.log.error("Failed to clear OAuth handoff cookie:", e);
+          }
+        }
+      }
+    } catch (e) {
+      lazy.log.error("Failed to read OAuth handoff cookies:", e);
+    }
+
+    try {
+      const logins = Services.logins.findLogins(
+        LOGIN_HOSTNAME,
+        null,
+        LOGIN_REALM
+      );
+      const login = logins.find(entry => entry.username === LOGIN_USERNAME);
+      if (login) {
+        response.sessionData = JSON.parse(login.password);
+      }
+    } catch (e) {
+      lazy.log.error("Failed to read shared auth session:", e);
+    }
+
+    return response;
   }
 
   setUserName(data) {
@@ -63,10 +147,22 @@ export class OasisWelcomeParent extends JSWindowActorParent {
   setImportSettings(data) {
     try {
       if (data) {
-        Services.prefs.setBoolPref("browser.oasis.import.history", data.history || false);
-        Services.prefs.setBoolPref("browser.oasis.import.bookmarks", data.bookmarks || false);
-        Services.prefs.setBoolPref("browser.oasis.import.extensions", data.extensions || false);
-        Services.prefs.setBoolPref("browser.oasis.import.cookies", data.cookies || false);
+        Services.prefs.setBoolPref(
+          "browser.oasis.import.history",
+          data.history || false
+        );
+        Services.prefs.setBoolPref(
+          "browser.oasis.import.bookmarks",
+          data.bookmarks || false
+        );
+        Services.prefs.setBoolPref(
+          "browser.oasis.import.extensions",
+          data.extensions || false
+        );
+        Services.prefs.setBoolPref(
+          "browser.oasis.import.cookies",
+          data.cookies || false
+        );
         lazy.log.debug("Saved import settings:", data);
       }
     } catch (e) {
@@ -79,22 +175,25 @@ export class OasisWelcomeParent extends JSWindowActorParent {
       const window = this.browsingContext.topChromeWindow;
       if (window && window.gBrowser) {
         // Get the onboarding tab before opening new one
-        const onboardingTab = window.gBrowser.getTabForBrowser(this.browsingContext.embedderElement);
-        
+        const onboardingTab = window.gBrowser.getTabForBrowser(
+          this.browsingContext.embedderElement
+        );
+
         // Open auth page in a new browser tab with proper context
         const authURL = "chrome://browser/content/oasiswelcome/oasis-auth.html";
         const newTab = window.gBrowser.addTrustedTab(authURL, {
-          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          triggeringPrincipal:
+            Services.scriptSecurityManager.getSystemPrincipal(),
           inBackground: false,
         });
         window.gBrowser.selectedTab = newTab;
-        
+
         // Close the onboarding tab
         if (onboardingTab) {
           window.gBrowser.removeTab(onboardingTab);
           lazy.log.debug("Closed onboarding tab");
         }
-        
+
         lazy.log.debug("Opened Oasis auth in new tab");
       }
     } catch (e) {
@@ -106,24 +205,27 @@ export class OasisWelcomeParent extends JSWindowActorParent {
     try {
       Services.prefs.setBoolPref(DID_COMPLETE_OASIS_ONBOARDING_PREF, true);
       lazy.log.debug("Oasis onboarding completed");
-      
+
       const window = this.browsingContext.topChromeWindow;
       if (window && window.gBrowser) {
         // Open a new tab with the home page before closing the welcome tab
         // This ensures the browser doesn't close if welcome is the only tab
         const homePageURL = "about:home";
         const newTab = window.gBrowser.addTab(homePageURL, {
-          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          triggeringPrincipal:
+            Services.scriptSecurityManager.getSystemPrincipal(),
         });
         window.gBrowser.selectedTab = newTab;
-        
+
         // Now close the welcome tab
-        const tab = window.gBrowser.getTabForBrowser(this.browsingContext.embedderElement);
+        const tab = window.gBrowser.getTabForBrowser(
+          this.browsingContext.embedderElement
+        );
         if (tab) {
           window.gBrowser.removeTab(tab);
         }
       }
-      
+
       // Trigger feature callout after onboarding completes
       // Use setTimeout to ensure the new tab is ready
       setTimeout(() => {
@@ -169,14 +271,20 @@ export class OasisWelcomeParent extends JSWindowActorParent {
   async triggerFeatureCallout() {
     try {
       lazy.log.debug("Starting triggerFeatureCallout");
-      
+
       // Set the preference required for OASIS_CHAT_FEATURE_TOUR to show
       // The targeting requires: 'browser.aboutwelcome.didSeeFinalScreen' | preferenceValue == true
-      Services.prefs.setBoolPref("browser.aboutwelcome.didSeeFinalScreen", true);
+      Services.prefs.setBoolPref(
+        "browser.aboutwelcome.didSeeFinalScreen",
+        true
+      );
       lazy.log.debug("Set browser.aboutwelcome.didSeeFinalScreen = true");
-      
+
       // Ensure CFR features are enabled for targeting
-      Services.prefs.setBoolPref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", true);
+      Services.prefs.setBoolPref(
+        "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features",
+        true
+      );
       lazy.log.debug("Set CFR features preference = true");
 
       // Reset the tour preference if it's marked as complete, so the callout can show again
@@ -186,46 +294,65 @@ export class OasisWelcomeParent extends JSWindowActorParent {
         try {
           const tourProgress = JSON.parse(tourPrefValue);
           if (tourProgress.complete) {
-            Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
-            lazy.log.debug("Reset Oasis chat feature tour preference to incomplete.");
+            Services.prefs.setCharPref(
+              tourPrefName,
+              JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false })
+            );
+            lazy.log.debug(
+              "Reset Oasis chat feature tour preference to incomplete."
+            );
           } else {
-            lazy.log.debug("Tour preference already incomplete:", tourPrefValue);
+            lazy.log.debug(
+              "Tour preference already incomplete:",
+              tourPrefValue
+            );
           }
         } catch (e) {
-          lazy.log.warn("Failed to parse existing tour preference, resetting:", e);
-          Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+          lazy.log.warn(
+            "Failed to parse existing tour preference, resetting:",
+            e
+          );
+          Services.prefs.setCharPref(
+            tourPrefName,
+            JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false })
+          );
         }
       } else {
         // Set default value if pref doesn't exist
-        Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+        Services.prefs.setCharPref(
+          tourPrefName,
+          JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false })
+        );
         lazy.log.debug("Set default Oasis chat feature tour preference.");
       }
 
-      const { ASRouter } = ChromeUtils.importESModule("resource:///modules/asrouter/ASRouter.sys.mjs");
+      const { ASRouter } = ChromeUtils.importESModule(
+        "resource:///modules/asrouter/ASRouter.sys.mjs"
+      );
       if (!ASRouter) {
         lazy.log.error("ASRouter module not found");
         return;
       }
-      
-      if (typeof ASRouter.sendTriggerMessage !== 'function') {
+
+      if (typeof ASRouter.sendTriggerMessage !== "function") {
         lazy.log.error("ASRouter.sendTriggerMessage is not a function");
         return;
       }
-      
+
       await ASRouter.waitForInitialized;
       lazy.log.debug("ASRouter initialized");
-      
+
       // Get the most recent browser window (not the auth page window)
       const window = Services.wm.getMostRecentWindow("navigator:browser");
       if (!window || !window.gBrowser) {
         lazy.log.warn("No browser window found");
         return;
       }
-      
+
       // Wait for the main browser window to be ready and ensure we're on a content page
       // The callout needs to show on the main browser window, not the auth page
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       const browser = window.gBrowser.selectedBrowser;
       if (!browser) {
         lazy.log.warn("No selected browser found");
@@ -235,12 +362,17 @@ export class OasisWelcomeParent extends JSWindowActorParent {
       // Check if the target element exists in the main browser window
       const chatButton = window.document.getElementById("oasis-chat-button");
       if (chatButton) {
-        lazy.log.debug("Oasis chat button found in main window, triggering callout");
+        lazy.log.debug(
+          "Oasis chat button found in main window, triggering callout"
+        );
       } else {
-        lazy.log.warn("Oasis chat button not found in main window, callout may not show");
+        lazy.log.warn(
+          "Oasis chat button not found in main window, callout may not show"
+        );
         // Try to find it after a delay
         await new Promise(resolve => setTimeout(resolve, 500));
-        const chatButtonRetry = window.document.getElementById("oasis-chat-button");
+        const chatButtonRetry =
+          window.document.getElementById("oasis-chat-button");
         if (chatButtonRetry) {
           lazy.log.debug("Oasis chat button found on retry");
         } else {
@@ -248,14 +380,18 @@ export class OasisWelcomeParent extends JSWindowActorParent {
         }
       }
 
-      lazy.log.debug("Calling ASRouter.sendTriggerMessage with trigger id: defaultBrowserCheck");
+      lazy.log.debug(
+        "Calling ASRouter.sendTriggerMessage with trigger id: defaultBrowserCheck"
+      );
       const result = await ASRouter.sendTriggerMessage({
         id: "defaultBrowserCheck", // Trigger ID for OASIS_CHAT_FEATURE_TOUR
         context: { source: "oasis-auth" },
-        browser: browser
+        browser: browser,
       });
       lazy.log.debug("ASRouter.sendTriggerMessage completed, result:", result);
-      lazy.log.debug("Triggered Oasis chat feature callout after successful authentication");
+      lazy.log.debug(
+        "Triggered Oasis chat feature callout after successful authentication"
+      );
     } catch (e) {
       lazy.log.error("Failed to trigger feature callout:", e);
     }
@@ -265,4 +401,3 @@ export class OasisWelcomeParent extends JSWindowActorParent {
     lazy.log.debug("OasisWelcomeParent actor destroyed");
   }
 }
-
