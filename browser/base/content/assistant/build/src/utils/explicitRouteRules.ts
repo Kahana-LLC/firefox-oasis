@@ -1,3 +1,13 @@
+/**
+ * Explicit route rules — regex patterns for non-family-specific commands.
+ *
+ * Catches commands that don't fit neatly into list/search/mutation:
+ * "open <url>", "new window", "copy tab urls", "show subscription",
+ * "open bookmark folder X as tab group", etc.
+ *
+ * Each rule has a regex + arg extractor. Tried after family resolvers
+ * fail. Called by decisionEngine.ts.
+ */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type ExplicitRouteRule = {

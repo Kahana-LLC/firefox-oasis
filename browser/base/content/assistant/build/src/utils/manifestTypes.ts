@@ -1,3 +1,4 @@
+/** Type definitions for the command manifest: slot definitions, condition contexts, command definitions, and resolution results. */
 import type { IntentFamily, RouteArgs, RoutingStateSnapshot } from "./routerTypes.js";
 
 export type ManifestSlotSource =

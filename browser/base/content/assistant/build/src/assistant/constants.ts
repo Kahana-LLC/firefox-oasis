@@ -1,3 +1,4 @@
+/** Graph execution limits. Used by graph.ts and supervisorQueue.ts. */
 export const ASSISTANT_RECURSION_LIMIT = 24;
 export const MAX_NESTED_COMMANDS = 3;
 export const STREAM_GUARD_MESSAGE =

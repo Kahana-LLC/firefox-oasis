@@ -1,3 +1,11 @@
+/**
+ * Routing helpers — small utilities for routing decisions.
+ *
+ * - parseAmbiguityResolution(): parses "tab group" / "folder" / "cancel"
+ *   from user responses to ambiguity prompts
+ * - looksLikeNewActionCommand(): detects if text has an action verb
+ *   + a browser object (used to decide if a new routing cycle is needed)
+ */
 const CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
 
 export function parseAmbiguityResolution(

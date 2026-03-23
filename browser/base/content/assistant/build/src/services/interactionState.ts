@@ -1,3 +1,14 @@
+/**
+ * Interaction state store — transient state for multi-turn flows.
+ *
+ * Singleton managing:
+ * - pendingConfirmation: destructive action awaiting "yes"/"no"
+ * - pendingAmbiguity: target matching both a tab group and folder
+ * - continuationQueue: remaining chained commands after confirmation
+ * - recentSearchResults: cached results for "open result #N" follow-ups
+ *
+ * Emits CustomEvents to notify the UI of state changes.
+ */
 import type { AssistantWindowLike } from "../types/runtime.js";
 import type {
   AmbiguityTarget,

@@ -1,3 +1,4 @@
+/** Helpers for search_memory results: builds folder-URL maps and filters stale bookmark folder entries that no longer exist. */
 import {
   getMemoryDocFolderName,
   getMemoryDocSource,

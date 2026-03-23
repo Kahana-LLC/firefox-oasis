@@ -1,3 +1,13 @@
+/**
+ * Mutation explicit resolver — regex rules for destructive/creative commands.
+ *
+ * Array of regex patterns that extract args from mutation commands:
+ * split tabs, close tab, create/delete/rename bookmark folders and
+ * tab groups, move tab to window, remove split view, etc.
+ *
+ * Each rule produces { next, args } directly from named capture groups.
+ * Called by manifestMutationResolver.ts.
+ */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type MutationRoute = {

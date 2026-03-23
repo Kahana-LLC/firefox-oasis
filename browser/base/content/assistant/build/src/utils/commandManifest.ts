@@ -1,3 +1,13 @@
+/**
+ * Command manifest — static phrase-to-command mapping.
+ *
+ * Maps known natural language phrases to command names and families.
+ * E.g., "list bookmark folders" -> list_bookmark_folders (family: list).
+ * Each entry defines: id, family, commandName, phrases[], and optional
+ * slots[] and conditions.
+ *
+ * Used by manifestResolver.ts for fast phrase-based matching.
+ */
 import type { ManifestCommandDefinition } from "./manifestTypes.js";
 
 export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
@@ -48,6 +58,37 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     slots: [
       { name: "name", type: "target_name", source: "rest", optional: true },
       { name: "scope", type: "scope", source: "rest", optional: true },
+    ],
+  },
+  {
+    id: "search.history",
+    family: "search",
+    commandName: "search_history",
+    priority: 1,
+    phrases: [
+      "what pages did i visit",
+      "what did i read",
+      "what did i browse",
+      "find that article",
+      "find that page",
+      "find that site",
+      "what sites did i visit",
+      "pages i visited",
+      "articles i read",
+      "browsing history",
+      "search history",
+      "search my history",
+      "find in my history",
+      "what was that page",
+      "what was that site",
+      "what was that article",
+      "did i visit",
+      "did i look at",
+      "did i read",
+      "did i browse",
+    ],
+    slots: [
+      { name: "query", type: "string", source: "quoted_or_rest" },
     ],
   },
   {

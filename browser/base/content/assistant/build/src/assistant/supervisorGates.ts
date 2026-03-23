@@ -1,3 +1,14 @@
+/**
+ * Confirmation & ambiguity gates — checked BEFORE any routing.
+ *
+ * When the supervisor receives a new user message, these gates run first:
+ * - Confirmation gate: if a destructive action is pending and the user
+ *   says "yes"/"no", routes directly to confirm_action (skips LLM).
+ * - Ambiguity gate: if the user was asked "tab group or bookmark folder?",
+ *   routes to resolve_ambiguity based on their reply.
+ *
+ * If neither gate fires, normal routing proceeds.
+ */
 import type {
   PendingAmbiguity,
   PendingConfirmation,

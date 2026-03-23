@@ -1,3 +1,4 @@
+/** Command lookup registry — maps command names to Command instances. Used by confirm_action to re-execute a pending command by name. */
 import type { Command } from "../commands.js";
 
 const commandExecutors = new Map<string, Command>();

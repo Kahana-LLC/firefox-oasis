@@ -1,6 +1,18 @@
+/**
+ * LLM-based routing — asks the remote Assist API which command to run.
+ *
+ * Called by the supervisor node when it needs to route a user request.
+ * 1. Classifies the command family (list/search/mutation/other)
+ * 2. Constrains the available tools to the relevant family
+ * 3. Sends the router prompt + tools + conversation history to the LLM
+ * 4. Parses the LLM response into a tool route, chat decision, or action plan
+ *
+ * Falls through to deterministic routing (decisionEngine.ts) if the
+ * Assist API is unavailable or returns an error.
+ */
 import type { BaseMessage } from "@langchain/core/messages";
 
-import { assistRemote, type AssistTool } from "../proxyClient.js";
+import { assistRemote, type AssistResponse, type AssistTool } from "../proxyClient.js";
 import {
   getAssistCapability,
   markAssistSupported,
@@ -23,6 +35,7 @@ const LIST_FAMILY_TOOLS = new Set([
 ]);
 const SEARCH_FAMILY_TOOLS = new Set([
   "search_memory",
+  "search_history",
   "get_recent_search_results",
   "open_search_result",
 ]);
@@ -204,14 +217,14 @@ export async function tryResolveAssistRoute(params: {
       : effectiveOptions;
     const toolsForAssist = allowPlanTool
       ? [
-          ...effectiveTools,
-          {
-            name: PLAN_TOOL_NAME,
-            description:
-              `Plan up to ${maxPlanActions} commands for chained requests. ` +
-              `Args JSON: {"actions":[{"next":"<valid command name>","args":{...}}]}`,
-          },
-        ]
+        ...effectiveTools,
+        {
+          name: PLAN_TOOL_NAME,
+          description:
+            `Plan up to ${maxPlanActions} commands for chained requests. ` +
+            `Args JSON: {"actions":[{"next":"<valid command name>","args":{...}}]}`,
+        },
+      ]
       : effectiveTools;
     const assist = await assistRemote(
       assistRouterPrompt,

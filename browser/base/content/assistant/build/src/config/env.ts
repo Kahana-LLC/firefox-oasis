@@ -1,4 +1,4 @@
-// Environment configuration for Supabase
+/** Environment configuration — Supabase URL, anon key, app version. Injected at build time via process.env. */
 export const ENV = {
   SUPABASE_URL: process.env.SUPABASE_URL || "",
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || "",

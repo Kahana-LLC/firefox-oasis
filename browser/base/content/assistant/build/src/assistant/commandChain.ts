@@ -1,3 +1,13 @@
+/**
+ * Command chain parser — splits multi-command inputs.
+ *
+ * Detects and splits chained user inputs like "do X; then Y" or
+ * "open tabs and then list bookmarks" into separate command strings.
+ * Uses connector patterns: ";", "and then", "then", "and <verb>".
+ * Max 3 commands per chain.
+ *
+ * Called by supervisorQueue.ts to populate the command queue.
+ */
 const CHAIN_VERBS = [
   "open",
   "close",

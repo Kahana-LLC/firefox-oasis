@@ -1,4 +1,4 @@
-// Supabase Authentication Service for Browser Assistant
+/** Supabase auth service — Google OAuth and email/password auth, session management, user profile CRUD. Singleton. */
 import {
     createClient,
     SupabaseClient,

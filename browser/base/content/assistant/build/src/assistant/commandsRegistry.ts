@@ -1,3 +1,14 @@
+/**
+ * Command registry — instantiates all commands and builds tool definitions.
+ *
+ * Creates instances of all 30+ Command classes and generates the
+ * tool definitions (name + description + JSON arg schema) that are
+ * sent to the remote LLM for routing decisions.
+ *
+ * COMMAND_ARG_SCHEMA defines the argument shape for each command.
+ * These schemas are appended to each tool's description so the LLM
+ * knows what arguments to extract from the user's message.
+ */
 import {
   AddSplitViewCommand,
   AddTabToBookmarkFolderCommand,

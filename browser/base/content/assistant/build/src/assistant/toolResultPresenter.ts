@@ -1,3 +1,14 @@
+/**
+ * Tool result presenter — formats raw command output for display.
+ *
+ * Converts JSON tool output into user-friendly text:
+ * - list_bookmark_folders: bullet list of folder names
+ * - list_tab_groups: names with tab counts and collapsed state
+ * - list_tabs: formatted titles and URLs
+ * - search_memory/get_recent_search_results: structured results
+ *
+ * Called by the chat node before sending output to the user.
+ */
 import type { ToolResultPayload } from "./messageUtils.js";
 
 type SearchResultRow = {

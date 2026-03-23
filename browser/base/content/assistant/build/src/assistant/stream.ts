@@ -1,3 +1,15 @@
+/**
+ * Graph output stream consumer.
+ *
+ * Iterates over the async output of `graph.stream()`, filters out
+ * internal tool messages, strips echoed payloads, and sends clean
+ * text to the UI via `onChunk()`. Also:
+ * - Saves completed turns to session history
+ * - Tracks usage for subscription limits
+ * - Detects infinite loops via stream guards
+ *
+ * Called from assistant.ts after the graph is built.
+ */
 import type { AssistantInputType } from "../../../shared/contracts.js";
 import {
   advanceStreamGuard,

@@ -1,3 +1,15 @@
+/**
+ * Intent parser — regex-based NLP for classifying user input.
+ *
+ * Key functions:
+ * - classifyCommandFamily(): list / search / mutation / other
+ * - parseContainerAddIntent(): "add X to Y" pattern extraction
+ * - parseCloseDeleteTargetIntent(): "close/delete X" extraction
+ * - parseSearchMemoryIntent(): "search X in Y folder" extraction
+ * - looksActionableText(): has an action verb + browser object?
+ *
+ * Used by decisionEngine.ts and the family resolvers.
+ */
 import type { ContainerType, IntentFamily, ParsedIntent } from "./routerTypes.js";
 
 const ACTION_WORD_RE =

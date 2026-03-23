@@ -1,3 +1,13 @@
+/**
+ * Remote API client for the backend Lambda.
+ *
+ * Provides three endpoints via AWS-signed HTTP requests:
+ * - assistRemote(): sends user message + tools to the LLM for routing
+ * - transcribeAudio(): converts voice recordings to text
+ * - textToSpeech(): converts text responses to audio
+ *
+ * All requests require Supabase authentication.
+ */
 import { postSigned } from "./awsSignedFetch.js";
 import SupabaseAuth from "./services/supabase.js";
 

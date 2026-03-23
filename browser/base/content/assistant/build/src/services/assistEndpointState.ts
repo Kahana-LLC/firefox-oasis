@@ -1,3 +1,11 @@
+/**
+ * Assist API health tracking.
+ *
+ * Tracks whether the remote Assist endpoint is working. If a call
+ * returns 404, the endpoint is marked "unsupported" with a 60-second
+ * cooldown before retrying. Prevents wasted API calls to a failing
+ * endpoint. Used by supervisorAssist.ts.
+ */
 export type AssistEndpointCapability = "unknown" | "supported" | "unsupported";
 
 type AssistEndpointEntry = {

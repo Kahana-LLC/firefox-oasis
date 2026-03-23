@@ -1,3 +1,14 @@
+/**
+ * List-family resolver — handles "list/show" commands deterministically.
+ *
+ * Parses target names from inputs like "list tabs in Research group",
+ * cross-references with the routing state snapshot to determine if
+ * the target is a tab group, bookmark folder, or ambiguous.
+ *
+ * Returns: list_tabs (with scope + name args), list_bookmark_folders,
+ * list_tab_groups, or null if no match.
+ * Called by decisionEngine.ts for list-family commands.
+ */
 import { normalizeRouteName } from "./intentParser.js";
 import { resolveManifestCommand } from "./manifestResolver.js";
 import type { DeterministicRouteDecision, RoutingStateSnapshot } from "./routerTypes.js";

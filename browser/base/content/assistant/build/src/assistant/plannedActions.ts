@@ -1,3 +1,11 @@
+/**
+ * Planned actions — encode/decode multi-step action plans.
+ *
+ * When the LLM returns a route_action_plan (multiple commands to run
+ * sequentially), this module serializes each planned action into the
+ * command queue as prefixed JSON strings, and deserializes them when
+ * the supervisor dequeues the next command.
+ */
 import type { GraphArgs } from "./messageUtils.js";
 
 export type PlannedAction = {

@@ -1,3 +1,15 @@
+/**
+ * Entry point for the Oasis AI Assistant.
+ *
+ * Called by the UI when the user sends a message. Orchestrates:
+ * 1. Auth & subscription checks
+ * 2. Command registry creation (all 30+ browser commands)
+ * 3. LangGraph state machine construction
+ * 4. Streaming graph execution back to the UI
+ *
+ * Exports `runAssistantStream` and `resetAssistantSession` onto
+ * the browser's window object for the privileged shim to call.
+ */
 import { marked } from "../../../../../../toolkit/content/vendor/marked/marked.mjs";
 import DOMPurify from "../../../../../../toolkit/content/vendor/dompurify/dompurify.mjs";
 import { HumanMessage } from "@langchain/core/messages";

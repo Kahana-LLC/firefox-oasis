@@ -1,3 +1,4 @@
+/** Structured logging with domain scopes. Debug/info logs are gated behind the browser.oasis.assistant.debug pref. */
 const DEBUG_PREF_NAME = "browser.oasis.assistant.debug";
 
 type LogScope = string;

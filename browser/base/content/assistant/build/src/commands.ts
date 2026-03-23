@@ -1,3 +1,15 @@
+/**
+ * All browser command implementations.
+ *
+ * Each command is a class implementing the Command interface with:
+ * - commandName: identifier used for routing (e.g. "close_tab")
+ * - description: human-readable text sent to the LLM for tool selection
+ * - execute(args): performs the browser action and returns a result
+ *
+ * Commands cover: tab management, navigation, bookmark folders, tab groups,
+ * search (full-text + semantic), window management, page summarization,
+ * and interaction flows (confirmation, ambiguity resolution).
+ */
 import { bookmarkFolders, CreateFolderOpts } from "./bookmarkFolders";
 import { localMemory } from "./services/localMemory";
 import { subscriptionService } from "./services/subscription";

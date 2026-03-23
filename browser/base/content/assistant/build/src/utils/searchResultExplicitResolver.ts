@@ -1,3 +1,4 @@
+/** Routes "open result #N" or "open the first result" follow-up commands to open_search_result. Parses ordinal and numeric index from user input. */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type SearchResultRoute = {

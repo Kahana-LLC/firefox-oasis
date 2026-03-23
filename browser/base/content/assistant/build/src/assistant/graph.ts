@@ -1,3 +1,16 @@
+/**
+ * LangGraph state machine — the core execution engine.
+ *
+ * Defines a supervisor-worker graph with three node types:
+ * - Supervisor: central routing hub that decides tool vs. chat
+ * - Tool nodes: one per registered Command, executes browser actions
+ * - Chat node: calls the remote LLM for natural language responses
+ *
+ * Flow: START → supervisor → tool/chat → supervisor → ... → END
+ * Recursion limit: 24 steps. Max 3 chained commands per request.
+ *
+ * Called from assistant.ts via `buildAssistantGraph()`.
+ */
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 

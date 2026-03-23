@@ -1,3 +1,12 @@
+/**
+ * Manifest resolver — finds the best matching manifest entry.
+ *
+ * Scores user input against all phrases in COMMAND_MANIFEST using
+ * normalized string matching (exact=1.0, prefix=0.9, contains=0.75).
+ * Returns the highest-scoring ManifestResolution or null.
+ * Used by manifestList/Search/MutationResolver to identify the
+ * command family and candidate command name.
+ */
 import { normalizeRouteName } from "./intentParser.js";
 import { COMMAND_MANIFEST } from "./commandManifest.js";
 import type {

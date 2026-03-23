@@ -1,3 +1,10 @@
+/**
+ * Deterministic router — entry point for non-AI routing.
+ *
+ * Called from graph.ts as a fallback when the LLM-based routing is
+ * unavailable. Gets a snapshot of the current browser state (tab
+ * groups, bookmark folders) and delegates to decisionEngine.ts.
+ */
 import { decideDeterministicRoute } from "./decisionEngine.js";
 import { routingStateCache } from "./routingStateCache.js";
 import type {

@@ -1,3 +1,16 @@
+/**
+ * Decision engine — orchestrator for deterministic routing.
+ *
+ * Tries resolvers in this order:
+ * 1. Classify command family (list/search/mutation/other)
+ * 2. Run the matching family resolver (manifestList/Search/Mutation)
+ * 3. Try explicit route rules (regex patterns for URLs, commands)
+ * 4. Try search result and summarize resolvers
+ * 5. Check if text looks actionable but unrecognized
+ * 6. Return no_match (falls through to chat)
+ *
+ * Called by deterministicRouter.ts.
+ */
 import { classifyCommandFamily, looksActionableText } from "./intentParser.js";
 import { resolveExplicitRoute } from "./explicitRouteRules.js";
 import { resolveManifestListRoute } from "./manifestListResolver.js";

@@ -1,3 +1,15 @@
+/**
+ * Mutation-family resolver — handles add/delete/rename/close commands.
+ *
+ * Three resolution strategies tried in order:
+ * 1. Explicit mutation regex (mutationExplicitResolver.ts)
+ * 2. Container-add parsing: "add X to Y" with tab group/folder disambiguation
+ * 3. Close/delete target parsing: "delete Research" with entity resolution
+ *
+ * Cross-references target names with the routing state snapshot to
+ * detect ambiguity (same name in both groups and folders).
+ * Called by decisionEngine.ts for mutation-family commands.
+ */
 import {
   normalizeRouteName,
   parseCloseDeleteTargetIntent,
