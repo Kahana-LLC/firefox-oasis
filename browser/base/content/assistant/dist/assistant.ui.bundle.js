@@ -2752,33 +2752,6 @@ var AssistantUI = (() => {
         }
       };
       checkAuth();
-      window.addEventListener("oasis-auth-update", e3 => updateFromGlobal(e3));
-      window.addEventListener("oasis-history-update", loadHistory);
-      const handleConfirmationUpdate = e3 => {
-        const detail = e3.detail;
-        setPendingConfirmation(detail);
-      };
-      window.addEventListener(
-        "oasis-confirmation-update",
-        handleConfirmationUpdate
-      );
-      if (
-        (_a2 = window.supabaseAuth) == null ? void 0 : _a2.onAuthStateChange
-      ) {
-        window.supabaseAuth.onAuthStateChange(state => {
-          setAuth({
-            isAuthenticated: !!state.isAuthenticated,
-            user: state.user,
-          });
-          if (state.isAuthenticated) {
-            setView("chat");
-            setBannerVisible(true);
-          }
-        });
-      }
-      const pollTimer = setTimeout(() => {
-        checkAuth();
-      }, 1500);
       const loadHistory = () => {
         try {
           const getHistory = window.getAssistantHistory;
@@ -2808,6 +2781,33 @@ var AssistantUI = (() => {
           console.error("Failed to load history:", e3);
         }
       };
+      window.addEventListener("oasis-auth-update", e3 => updateFromGlobal(e3));
+      window.addEventListener("oasis-history-update", loadHistory);
+      const handleConfirmationUpdate = e3 => {
+        const detail = e3.detail;
+        setPendingConfirmation(detail);
+      };
+      window.addEventListener(
+        "oasis-confirmation-update",
+        handleConfirmationUpdate
+      );
+      if (
+        (_a2 = window.supabaseAuth) == null ? void 0 : _a2.onAuthStateChange
+      ) {
+        window.supabaseAuth.onAuthStateChange(state => {
+          setAuth({
+            isAuthenticated: !!state.isAuthenticated,
+            user: state.user,
+          });
+          if (state.isAuthenticated) {
+            setView("chat");
+            setBannerVisible(true);
+          }
+        });
+      }
+      const pollTimer = setTimeout(() => {
+        checkAuth();
+      }, 1500);
       loadHistory();
       setTimeout(loadHistory, 500);
       return () => {

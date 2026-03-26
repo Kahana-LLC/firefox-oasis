@@ -18,6 +18,17 @@ ChromeUtils.defineLazyGetter(lazy, "log", () => {
   return new Logger("OasisWelcomeParent");
 });
 
+ChromeUtils.defineLazyGetter(lazy, "setTimeout", () => {
+  const { setTimeout } = ChromeUtils.importESModule(
+    "resource://gre/modules/Timer.sys.mjs"
+  );
+  return setTimeout;
+});
+
+function delay(ms) {
+  return new Promise(resolve => lazy.setTimeout(resolve, ms));
+}
+
 export class OasisWelcomeParent extends JSWindowActorParent {
   receiveMessage(message) {
     const { name, data } = message;
@@ -52,6 +63,8 @@ export class OasisWelcomeParent extends JSWindowActorParent {
         break;
       case "OasisWelcome:GetOAuthBridgeState":
         return this.getOAuthBridgeState(data);
+      case "OasisWelcome:PersistSharedSession":
+        return this.persistSharedSession(data);
     }
   }
 
@@ -131,6 +144,55 @@ export class OasisWelcomeParent extends JSWindowActorParent {
     }
 
     return response;
+  }
+
+  async persistSharedSession(data = {}) {
+    const sessionData = data?.sessionData;
+    if (!sessionData?.access_token || !sessionData?.refresh_token) {
+      return { success: false, error: "Missing session tokens" };
+    }
+
+    try {
+      const logins = Services.logins.findLogins(
+        LOGIN_HOSTNAME,
+        null,
+        LOGIN_REALM
+      );
+      for (const login of logins) {
+        if (login.username === LOGIN_USERNAME) {
+          Services.logins.removeLogin(login);
+        }
+      }
+
+      const loginInfo = new Components.Constructor(
+        "@mozilla.org/login-manager/loginInfo;1",
+        Ci.nsILoginInfo,
+        "init"
+      )(
+        LOGIN_HOSTNAME,
+        null,
+        LOGIN_REALM,
+        LOGIN_USERNAME,
+        JSON.stringify(sessionData),
+        "",
+        ""
+      );
+
+      await Services.logins.addLoginAsync(loginInfo);
+      lazy.log.debug("Persisted shared Oasis session", {
+        email: sessionData.user?.email || null,
+      });
+      return {
+        success: true,
+        email: sessionData.user?.email || null,
+      };
+    } catch (e) {
+      lazy.log.error("Failed to persist shared Oasis session:", e);
+      return {
+        success: false,
+        error: e?.message || String(e),
+      };
+    }
   }
 
   setUserName(data) {
@@ -228,7 +290,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
 
       // Trigger feature callout after onboarding completes
       // Use setTimeout to ensure the new tab is ready
-      setTimeout(() => {
+      lazy.setTimeout(() => {
         this.triggerFeatureCallout().catch(e => {
           lazy.log.error("Failed to trigger callout after onboarding:", e);
         });
@@ -351,7 +413,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
 
       // Wait for the main browser window to be ready and ensure we're on a content page
       // The callout needs to show on the main browser window, not the auth page
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await delay(1000);
 
       const browser = window.gBrowser.selectedBrowser;
       if (!browser) {
@@ -370,7 +432,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
           "Oasis chat button not found in main window, callout may not show"
         );
         // Try to find it after a delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await delay(500);
         const chatButtonRetry =
           window.document.getElementById("oasis-chat-button");
         if (chatButtonRetry) {

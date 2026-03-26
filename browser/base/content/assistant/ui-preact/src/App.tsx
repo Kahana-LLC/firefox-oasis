@@ -392,6 +392,25 @@ export function App() {
     };
     checkAuth();
 
+    const loadHistory = () => {
+        try {
+            const getHistory = (window as any).getAssistantHistory;
+            if (typeof getHistory === 'function') {
+                const history = getHistory();
+                if (Array.isArray(history)) {
+                     const formatted = history.map((m: any, idx: number) => ({
+                         id: m.id || `hist-${idx}-${m.role || 'msg'}`,
+                         role: (m.type === 'human' || m.id?.includes('Human') || m.constructor.name === 'HumanMessage') ? 'user' : 'ai',
+                         content: m.content || (m.lc_kwargs ? m.lc_kwargs.content : '') || ''
+                     }));
+                     setMessages(formatted as any);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load history:", e);
+        }
+    };
+
     window.addEventListener('oasis-auth-update', (e) => updateFromGlobal(e));
     window.addEventListener('oasis-history-update', loadHistory);
     
@@ -415,25 +434,6 @@ export function App() {
         checkAuth();
     }, 1500);
 
-    // Restore History
-    const loadHistory = () => {
-        try {
-            const getHistory = (window as any).getAssistantHistory;
-            if (typeof getHistory === 'function') {
-                const history = getHistory();
-                if (Array.isArray(history)) {
-                     const formatted = history.map((m: any, idx: number) => ({
-                         id: m.id || `hist-${idx}-${m.role || 'msg'}`,
-                         role: (m.type === 'human' || m.id?.includes('Human') || m.constructor.name === 'HumanMessage') ? 'user' : 'ai',
-                         content: m.content || (m.lc_kwargs ? m.lc_kwargs.content : '') || ''
-                     }));
-                     setMessages(formatted as any);
-                }
-            }
-        } catch (e) {
-            console.error("Failed to load history:", e);
-        }
-    };
     // Try immediately and after a short delay to ensure assistant.ts is ready
     loadHistory();
     setTimeout(loadHistory, 500);

@@ -14,6 +14,11 @@ export default class SupabaseAuth {
   private supabase: SupabaseClient;
   private currentSession: UserSession | null = null;
   private authStateCallbacks: Array<(state: AuthState) => void> = [];
+  private lastTrackedSessionUserId: string | null = null;
+  private sessionTrackInFlight: {
+    userId: string;
+    promise: Promise<void>;
+  } | null = null;
   private oauthCallbackBaseUrl: string | null = null;
   private activeOAuthLaunch: {
     provider: "google" | "azure" | "apple";
@@ -651,10 +656,13 @@ export default class SupabaseAuth {
 
     // Handle session creation/destruction
     if (event === "SIGNED_IN" && user) {
-      await this.createSession(user.id);
+      await this.trackSessionForUser(user.id);
     } else if (event === "SIGNED_OUT" && this.currentSession) {
+      this.lastTrackedSessionUserId = null;
       await this.endSession(this.currentSession.session_id);
       this.currentSession = null;
+    } else if (event === "SIGNED_OUT") {
+      this.lastTrackedSessionUserId = null;
     }
   }
 
@@ -692,6 +700,40 @@ export default class SupabaseAuth {
     } catch (error) {
       console.error("Error updating last login:", error);
     }
+  }
+
+  private async trackSessionForUser(userId: string): Promise<void> {
+    if (
+      this.currentSession?.user_id === userId &&
+      !(this.currentSession as any)?.ended_at
+    ) {
+      this.lastTrackedSessionUserId = userId;
+      return;
+    }
+
+    if (this.lastTrackedSessionUserId === userId) {
+      return;
+    }
+
+    if (this.sessionTrackInFlight?.userId === userId) {
+      await this.sessionTrackInFlight.promise;
+      return;
+    }
+
+    const pendingTrack = {
+      userId,
+      promise: Promise.resolve(),
+    };
+
+    pendingTrack.promise = this.createSession(userId).finally(() => {
+      if (this.sessionTrackInFlight === pendingTrack) {
+        this.sessionTrackInFlight = null;
+      }
+    });
+
+    this.sessionTrackInFlight = pendingTrack;
+    await pendingTrack.promise;
+    this.lastTrackedSessionUserId = userId;
   }
 
   private async createSession(userId: string): Promise<void> {

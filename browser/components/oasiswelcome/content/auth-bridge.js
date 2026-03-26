@@ -52,6 +52,37 @@
   // Secure Storage Functions (Same as AI Assistant)
   async function securelySaveSession(session) {
     if (!session || !session.access_token) return;
+    const sessionData = {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+      user: session.user,
+    };
+    if (typeof window.RPMQueryAsync === "function") {
+      try {
+        const response = await window.RPMQueryAsync(
+          "OasisWelcome:PersistSharedSession",
+          { sessionData }
+        );
+        if (response?.success) {
+          console.log("Oasis Welcome: Session persisted through parent actor", {
+            email: response.email || session.user?.email || null,
+            hasAccessToken: !!session.access_token,
+            hasRefreshToken: !!session.refresh_token,
+          });
+          return;
+        }
+        console.warn(
+          "Oasis Welcome: Parent actor failed to persist session, falling back locally",
+          response
+        );
+      } catch (e) {
+        console.warn(
+          "Oasis Welcome: Parent actor session persistence failed, falling back locally",
+          e
+        );
+      }
+    }
     if (!Services || !Components || !Ci) {
       return;
     }
@@ -76,17 +107,16 @@
         null,
         LOGIN_REALM,
         LOGIN_USERNAME,
-        JSON.stringify({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          expires_at: session.expires_at,
-          user: session.user,
-        }),
+        JSON.stringify(sessionData),
         "",
         ""
       );
       await Services.logins.addLoginAsync(loginInfo);
-      console.log("Oasis Welcome: Session securely saved to Password Manager");
+      console.log("Oasis Welcome: Session securely saved to Password Manager", {
+        email: session.user?.email || null,
+        hasAccessToken: !!session.access_token,
+        hasRefreshToken: !!session.refresh_token,
+      });
     } catch (e) {
       console.error("Oasis Welcome: Failed to save session securely:", e);
     }
@@ -213,10 +243,27 @@
   }
 
   async function finalizeAuthSuccess(user) {
-    const session = await window.supabaseAuth.getSession();
+    let session = await window.supabaseAuth.getSession();
+    if (!session && window.supabaseAuth?.supabase?.auth?.getSession) {
+      try {
+        const {
+          data: { session: resolvedSession },
+        } = await window.supabaseAuth.supabase.auth.getSession();
+        session = resolvedSession;
+      } catch (e) {
+        console.warn(
+          "Oasis Welcome: Failed to resolve session from Supabase",
+          e
+        );
+      }
+    }
     if (session) {
       await securelySaveSession(session);
     }
+    console.log("Oasis Welcome: Finalized auth success", {
+      email: user?.email || null,
+      hasSession: !!session,
+    });
     updateGlobalAuthState(true, user);
     return { success: true, user };
   }

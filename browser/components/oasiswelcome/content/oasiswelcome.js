@@ -169,23 +169,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Page 2: Name Input
+  // Page 3: Name Input
   if (nameNextBtn) {
     nameNextBtn.addEventListener("click", () => {
       const name = nameInput.value.trim();
       if (name) {
         userData.name = name;
 
-        // Display name on page 5 (auth page)
+        // Display name on page 4 (auth page)
         if (userNameDisplay) {
-          userNameDisplay.textContent = name;
+          userNameDisplay.textContent = "Welcome to Oasis, " + name + ".";
         }
 
         // Save name to preferences
         RPMSendAsyncMessage("OasisWelcome:SetUserName", { name });
 
-        // Go to import page
-        showPage(3);
+        showPage(4);
       } else {
         nameInput.focus();
       }
@@ -200,10 +199,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Page 3: Import Browser Data
+  // Page 2: Import Browser Data
   const importBackBtn = document.getElementById("import-back-btn");
   const importSkipBtn = document.getElementById("import-skip-btn");
   const importConfirmBtn = document.getElementById("import-confirm-btn");
+  const browserSelectorBtn = document.getElementById("browser-selector-btn");
 
   // Import checkboxes
   const historyCheckbox = document.getElementById("import-history");
@@ -233,22 +233,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Back button - go to page 2
+  // Back button - go to page 1
   if (importBackBtn) {
     importBackBtn.addEventListener("click", () => {
-      showPage(2);
+      showPage(1);
     });
   }
 
-  // Skip button - go to AI signup page (page 4)
+  // Skip button - go to name input page (page 3)
   if (importSkipBtn) {
     importSkipBtn.addEventListener("click", () => {
-      console.log("Skipping import, going to AI signup...");
-      showPage(4);
+      console.log("Skipping import, going to name input...");
+      showPage(3);
     });
   }
 
-  // Import button - save settings and go to AI signup page (page 4)
+  // Import button - save settings and go to name input page (page 3)
   if (importConfirmBtn) {
     importConfirmBtn.addEventListener("click", () => {
       console.log("Import settings:", userData.importSettings);
@@ -257,9 +257,12 @@ document.addEventListener("DOMContentLoaded", () => {
         "OasisWelcome:SetImportSettings",
         userData.importSettings
       );
-      // Go to AI signup page
-      showPage(4);
+      showPage(3);
     });
+  }
+
+  if (browserSelectorBtn) {
+    browserSelectorBtn.addEventListener("click", () => {});
   }
 
   if (authToggleLink) {

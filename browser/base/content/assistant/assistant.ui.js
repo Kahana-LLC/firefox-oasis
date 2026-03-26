@@ -184,8 +184,10 @@ const MIXPANEL_TOKEN = "4a23d4890cf107ac290b2d5e878e2561";
     const script = document.createElement("script");
     script.src = bundleSrc;
     script.defer = true;
-    script.onload = () =>
+    script.onload = () => {
       console.log("assistant: Preact UI bundle loaded", bundleSrc);
+      installSupabaseAuthGuards();
+    };
     script.onerror = e =>
       console.error("assistant: Failed to load Preact UI bundle", e);
     document.head.appendChild(script);
@@ -288,6 +290,7 @@ try {
 // --- Auth State Management & Secure Storage ---
 // SupabaseAuth should be available from assistant.bundle.js
 console.log("SupabaseAuth available:", !!window.supabaseAuth);
+installSupabaseAuthGuards();
 
 const LOGIN_HOSTNAME = "https://kahana.co";
 const LOGIN_REALM = "Oasis Assistant";
@@ -299,6 +302,9 @@ let oauthHandoffInFlight = false;
 let storageUnavailable = false;
 let authStatusCheckInFlight = false;
 let lastAuthStateSignature = "";
+let lastSavedSessionPayload = "";
+let sessionSaveInFlight = null;
+let loggedMissingSecureSession = false;
 
 function getOAuthFlowId(payload) {
   return payload?.flow_id || payload?.flowId || payload?.state || "unknown";
@@ -313,80 +319,123 @@ function logOAuthFlow(flowId, message, details) {
   console.log(`${prefix} ${message}`);
 }
 
-// Secure Storage Functions (Privileged)
+function buildSessionPayload(session) {
+  return JSON.stringify({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: session.expires_at,
+    user: session.user,
+  });
+}
+
+function getStoredSessionLogin() {
+  const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
+  return logins.find(login => login.username === LOGIN_USERNAME) || null;
+}
+
 async function securelySaveSession(session) {
-  if (!session || !session.access_token) return;
-  try {
-    const logins = Services.logins.findLogins(
-      LOGIN_HOSTNAME,
-      null,
-      LOGIN_REALM
-    );
-    let existingLogin = null;
-    for (const login of logins) {
-      if (login.username === LOGIN_USERNAME) {
-        existingLogin = login;
+  if (!session?.access_token || !session?.refresh_token) {
+    return;
+  }
+
+  const payload = buildSessionPayload(session);
+  if (sessionSaveInFlight) {
+    await sessionSaveInFlight.promise;
+  }
+  if (payload === lastSavedSessionPayload) {
+    return;
+  }
+
+  const pendingSave = { payload, promise: null };
+  pendingSave.promise = (async () => {
+    try {
+      const logins = Services.logins.findLogins(
+        LOGIN_HOSTNAME,
+        null,
+        LOGIN_REALM
+      );
+      const matchingLogins = logins.filter(
+        login => login.username === LOGIN_USERNAME
+      );
+
+      if (
+        matchingLogins.length === 1 &&
+        matchingLogins[0].password === payload
+      ) {
+        lastSavedSessionPayload = payload;
+        return;
+      }
+
+      for (const login of matchingLogins) {
         Services.logins.removeLogin(login);
       }
-    }
 
-    const loginInfo = new Components.Constructor(
-      "@mozilla.org/login-manager/loginInfo;1",
-      Ci.nsILoginInfo,
-      "init"
-    )(
-      LOGIN_HOSTNAME,
-      null,
-      LOGIN_REALM,
-      LOGIN_USERNAME,
-      JSON.stringify({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        user: session.user,
-      }),
-      "",
-      ""
-    );
-    await Services.logins.addLoginAsync(loginInfo);
-    console.log("Session securely saved to Password Manager");
-  } catch (e) {
-    console.error("Failed to save session securely:", e);
-  }
+      const loginInfo = new Components.Constructor(
+        "@mozilla.org/login-manager/loginInfo;1",
+        Ci.nsILoginInfo,
+        "init"
+      )(LOGIN_HOSTNAME, null, LOGIN_REALM, LOGIN_USERNAME, payload, "", "");
+      await Services.logins.addLoginAsync(loginInfo);
+      lastSavedSessionPayload = payload;
+      console.log("Session securely saved to Password Manager");
+    } catch (e) {
+      const existingLogin = getStoredSessionLogin();
+      if (existingLogin?.password === payload) {
+        lastSavedSessionPayload = payload;
+        return;
+      }
+      console.error("Failed to save session securely:", e);
+    } finally {
+      if (sessionSaveInFlight === pendingSave) {
+        sessionSaveInFlight = null;
+      }
+    }
+  })();
+
+  sessionSaveInFlight = pendingSave;
+  await pendingSave.promise;
 }
 
 async function securelyLoadSession() {
   try {
-    const logins = Services.logins.findLogins(
-      LOGIN_HOSTNAME,
-      null,
-      LOGIN_REALM
+    const login = getStoredSessionLogin();
+
+    if (!login) {
+      lastSavedSessionPayload = "";
+      if (!loggedMissingSecureSession) {
+        console.log("No secure session login entry found");
+        loggedMissingSecureSession = true;
+      }
+      return null;
+    }
+
+    const sessionData = JSON.parse(login.password);
+    lastSavedSessionPayload = login.password;
+    loggedMissingSecureSession = false;
+    console.log(
+      "Found secure session data for user:",
+      sessionData.user?.email,
+      {
+        hasAccessToken: !!sessionData.access_token,
+        hasRefreshToken: !!sessionData.refresh_token,
+      }
     );
-    const login = logins.find(l => l.username === LOGIN_USERNAME);
 
-    if (login) {
-      const sessionData = JSON.parse(login.password);
-      console.log(
-        "Found secure session data for user:",
-        sessionData.user?.email
-      );
+    if (window.supabaseAuth && window.supabaseAuth.supabase) {
+      const { data, error } =
+        await window.supabaseAuth.supabase.auth.setSession({
+          access_token: sessionData.access_token,
+          refresh_token: sessionData.refresh_token,
+        });
 
-      if (window.supabaseAuth && window.supabaseAuth.supabase) {
-        const { data, error } =
-          await window.supabaseAuth.supabase.auth.setSession({
-            access_token: sessionData.access_token,
-            refresh_token: sessionData.refresh_token,
-          });
-
-        if (!error && data.session) {
-          console.log("Supabase session restored successfully");
-          // Give Supabase a moment to update its internal state
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return data.session;
-        } else {
-          console.warn("Failed to restore Supabase session:", error);
-          securelyClearSession();
-        }
+      if (!error && data.session) {
+        console.log("Supabase session restored successfully");
+        // Give Supabase a moment to update its internal state
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return data.session;
+      } else {
+        console.warn("Failed to restore Supabase session:", error);
+        securelyClearSession();
       }
     }
   } catch (e) {
@@ -397,19 +446,74 @@ async function securelyLoadSession() {
 
 function securelyClearSession() {
   try {
-    const logins = Services.logins.findLogins(
-      LOGIN_HOSTNAME,
-      null,
-      LOGIN_REALM
-    );
-    for (const login of logins) {
-      if (login.username === LOGIN_USERNAME) {
-        Services.logins.removeLogin(login);
-      }
+    const login = getStoredSessionLogin();
+    if (login) {
+      Services.logins.removeLogin(login);
     }
+    lastSavedSessionPayload = "";
+    loggedMissingSecureSession = false;
     console.log("Secure session cleared");
   } catch (e) {
     console.error("Failed to clear secure session:", e);
+  }
+}
+
+function installSupabaseAuthGuards() {
+  const auth = window.supabaseAuth;
+  if (!auth || auth.__oasisSessionGuardsInstalled) {
+    return;
+  }
+
+  auth.__oasisSessionGuardsInstalled = true;
+  auth.__oasisLastTrackedSessionUserId = null;
+  auth.__oasisTrackedSessionInFlight = null;
+
+  if (typeof auth.createSession === "function") {
+    const originalCreateSession = auth.createSession.bind(auth);
+    auth.createSession = async userId => {
+      if (!userId) {
+        return;
+      }
+      if (
+        auth.currentSession?.user_id === userId &&
+        !auth.currentSession?.ended_at
+      ) {
+        auth.__oasisLastTrackedSessionUserId = userId;
+        return;
+      }
+      if (auth.__oasisLastTrackedSessionUserId === userId) {
+        return;
+      }
+      if (auth.__oasisTrackedSessionInFlight?.userId === userId) {
+        await auth.__oasisTrackedSessionInFlight.promise;
+        return;
+      }
+
+      const pendingTrack = { userId, promise: null };
+      pendingTrack.promise = (async () => {
+        try {
+          await originalCreateSession(userId);
+          auth.__oasisLastTrackedSessionUserId = userId;
+        } finally {
+          if (auth.__oasisTrackedSessionInFlight === pendingTrack) {
+            auth.__oasisTrackedSessionInFlight = null;
+          }
+        }
+      })();
+
+      auth.__oasisTrackedSessionInFlight = pendingTrack;
+      await pendingTrack.promise;
+    };
+  }
+
+  if (typeof auth.handleAuthStateChange === "function") {
+    const originalHandleAuthStateChange = auth.handleAuthStateChange.bind(auth);
+    auth.handleAuthStateChange = async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        auth.__oasisLastTrackedSessionUserId = null;
+      }
+      return originalHandleAuthStateChange(event, session);
+    };
   }
 }
 
@@ -437,6 +541,13 @@ function clearStoredOAuthValue(key) {
     storageUnavailable = true;
     console.warn("Oasis: localStorage unavailable for OAuth cleanup:", e);
   }
+}
+
+function isStorageUnavailableError(error) {
+  return (
+    error?.name === "NS_ERROR_NOT_AVAILABLE" ||
+    String(error).includes("NS_ERROR_NOT_AVAILABLE")
+  );
 }
 
 function readCookieOAuthValue(target) {
@@ -468,6 +579,10 @@ function readCookieOAuthValue(target) {
   return null;
 }
 
+function hasUsableOAuthData(payload) {
+  return !!(payload?.code || (payload?.access_token && payload?.refresh_token));
+}
+
 function clearCookieOAuthValue(cookie) {
   if (!cookie) {
     return;
@@ -485,12 +600,20 @@ function clearCookieOAuthValue(cookie) {
 }
 
 function persistOAuthError(errorData) {
+  if (storageUnavailable) {
+    return;
+  }
   try {
     localStorage.setItem(OAUTH_ERROR_KEY, JSON.stringify(errorData));
     window.dispatchEvent(
       new CustomEvent("oasis-auth-error", { detail: errorData })
     );
   } catch (e) {
+    if (isStorageUnavailableError(e)) {
+      storageUnavailable = true;
+      console.warn("Oasis: localStorage unavailable for OAuth errors:", e);
+      return;
+    }
     console.error("Oasis: Failed to persist OAuth error:", e);
   }
 }
@@ -510,6 +633,16 @@ async function consumeCookieOAuthHandoff() {
   if (payload.error) {
     logOAuthFlow(flowId, "Received error handoff payload from cookie", payload);
     persistOAuthError(payload);
+    clearCookieOAuthValue(cookie);
+    return false;
+  }
+
+  if (!hasUsableOAuthData(payload)) {
+    logOAuthFlow(
+      flowId,
+      "Ignoring metadata-only cookie handoff payload",
+      payload
+    );
     clearCookieOAuthValue(cookie);
     return false;
   }
