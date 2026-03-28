@@ -55,8 +55,16 @@ const CHAT_GENERATION_CONFIG = {
       command_type: {
         type: "string",
         enum: [
-          "info_retrieval", "navigation", "organization", "content_transform",
-          "content_create", "search", "automation", "system", "help", "other",
+          "info_retrieval",
+          "navigation",
+          "organization",
+          "content_transform",
+          "content_create",
+          "search",
+          "automation",
+          "system",
+          "help",
+          "other",
         ],
         description:
           "The action category: info_retrieval=answer a factual question, navigation=open/visit a URL or site, organization=manage tabs/bookmarks/groups, content_transform=summarize/translate/rewrite, content_create=write/generate new content, search=find in history/memory/web, automation=multi-step browser task, system=browser settings or preferences, help=how-to question about the assistant, other=none of the above.",
@@ -64,8 +72,16 @@ const CHAT_GENERATION_CONFIG = {
       user_intent: {
         type: "string",
         enum: [
-          "learning", "research", "work", "dev", "marketing",
-          "shopping", "personal", "entertainment", "meta", "other",
+          "learning",
+          "research",
+          "work",
+          "dev",
+          "marketing",
+          "shopping",
+          "personal",
+          "entertainment",
+          "meta",
+          "other",
         ],
         description:
           "The user's underlying goal: learning=understand a topic, research=gather info for a decision, work=professional/business task, dev=coding or technical task, marketing=content or growth, shopping=buy or find products, personal=personal life task, entertainment=leisure/media/fun, meta=asking about the AI itself, other=none of the above.",
@@ -123,9 +139,10 @@ const GraphState = Annotation.Root({
 
 const INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
 
-function splitInternalArgs(
-  args: GraphArgs
-): { commandArgs: GraphArgs; chainNotice: string | null } {
+function splitInternalArgs(args: GraphArgs): {
+  commandArgs: GraphArgs;
+  chainNotice: string | null;
+} {
   const commandArgs: GraphArgs = {};
   let chainNotice: string | null = null;
 
@@ -315,7 +332,9 @@ export async function buildAssistantGraph(
         messages: [
           new AIMessage({
             content: presentToolResult(toolPayload),
-            additional_kwargs: { oasisUsageMeta: classifyToolAction(toolPayload.commandName) },
+            additional_kwargs: {
+              oasisUsageMeta: classifyToolAction(toolPayload.commandName),
+            },
           }),
         ],
         lastWorker: "chat",
@@ -335,7 +354,13 @@ export async function buildAssistantGraph(
 
     let res: unknown;
     try {
-      res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
+      res = await assistRemote(
+        CHAT_SYSTEM_PROMPT,
+        toWire(messagesWithPrompt),
+        ["chat"],
+        [],
+        CHAT_GENERATION_CONFIG
+      );
     } catch (error) {
       assistantLogger.warn("chat", "Assist chat call failed.", error);
       if (hasToolOutput) {
@@ -369,7 +394,9 @@ export async function buildAssistantGraph(
         };
       }
       return {
-        messages: [new AIMessage("I couldn't generate a response. Please try again.")],
+        messages: [
+          new AIMessage("I couldn't generate a response. Please try again."),
+        ],
         lastWorker: "chat",
         commandQueue: [],
       };
@@ -574,7 +601,11 @@ export async function buildAssistantGraph(
         route.pendingAmbiguity
       ) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
-        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+        return {
+          next: route.next,
+          args: applyNoticeToArgs(route.args),
+          commandQueue,
+        };
       }
       return {
         next: assistRoute.next,
@@ -601,7 +632,11 @@ export async function buildAssistantGraph(
       if (route.pendingAmbiguity) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
       }
-      return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+      return {
+        next: route.next,
+        args: applyNoticeToArgs(route.args),
+        commandQueue,
+      };
     }
 
     if (route.type === "chat") {

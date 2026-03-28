@@ -48613,10 +48613,10 @@ Content: ${content}`;
 
   // src/services/subscription.ts
   var PLAN_LIMITS = {
-    "free": 50,
-    "basic": 1500,
+    free: 50,
+    basic: 1500,
     // $20/mo
-    "pro": 3e3
+    pro: 3e3
     // $40/mo
   };
   var DEFAULT_LIMIT = 50;
@@ -48671,7 +48671,9 @@ Content: ${content}`;
         return;
       }
       const units = type === "voice" ? COST_VOICE : COST_TEXT;
-      logDebug3(`trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`);
+      logDebug3(
+        `trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`
+      );
       this.cachedUsage += units;
       logDebug3(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
       localMemory.saveUsage(user.id, this.cachedUsage).catch((e) => logError3("Failed to save local usage:", e));
@@ -48724,12 +48726,14 @@ Content: ${content}`;
       const supabase = supabaseAuth.supabase;
       logDebug3("refreshUsageData: syncing usage...");
       let limit = DEFAULT_LIMIT;
-      const { data: planData, error: planError } = await supabase.from("user_plans").select(`
+      const { data: planData, error: planError } = await supabase.from("user_plans").select(
+        `
                 plan_id,
                 stripe_subscription_id,
                 is_active,
                 plans ( name, llm_call_limit )
-            `).eq("user_id", userId).eq("is_active", true).maybeSingle();
+            `
+      ).eq("user_id", userId).eq("is_active", true).maybeSingle();
       logDebug3(`refreshUsageData: Primary query result:`, {
         planData,
         planError,
@@ -48744,25 +48748,36 @@ Content: ${content}`;
           logDebug3(`refreshUsageData: Using plan limit from DB: ${limit}`);
         } else if (PLAN_LIMITS[planName]) {
           limit = PLAN_LIMITS[planName];
-          logDebug3(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
+          logDebug3(
+            `refreshUsageData: Using plan limit from name mapping: ${limit}`
+          );
         }
       } else if (planData && planData.is_active) {
         const stripeSubId = planData.stripe_subscription_id;
         const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
-        logDebug3(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
-          stripeSubId,
-          hasStripeSubscription,
-          is_active: planData.is_active
-        });
+        logDebug3(
+          `refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`,
+          {
+            stripeSubId,
+            hasStripeSubscription,
+            is_active: planData.is_active
+          }
+        );
         if (hasStripeSubscription) {
           limit = PLAN_LIMITS["basic"];
-          logDebug3(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+          logDebug3(
+            `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`
+          );
         } else {
-          logWarn3("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
+          logWarn3(
+            "refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query"
+          );
         }
       }
       if (limit === DEFAULT_LIMIT) {
-        logWarn3("refreshUsageData: Limit still at default, trying fallback query without join");
+        logWarn3(
+          "refreshUsageData: Limit still at default, trying fallback query without join"
+        );
         const { data: fallbackData, error: fallbackError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
         logDebug3(`refreshUsageData: Fallback query result:`, {
           fallbackData,
@@ -48782,15 +48797,22 @@ Content: ${content}`;
           });
           if (hasStripeSubscription) {
             limit = PLAN_LIMITS["basic"];
-            logDebug3(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+            logDebug3(
+              `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`
+            );
           } else {
-            logWarn3("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
+            logWarn3(
+              "refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit"
+            );
           }
         } else {
-          logWarn3("refreshUsageData: No active plan found for user, using free plan limit", {
-            fallbackData,
-            userId
-          });
+          logWarn3(
+            "refreshUsageData: No active plan found for user, using free plan limit",
+            {
+              fallbackData,
+              userId
+            }
+          );
         }
       }
       logDebug3(`refreshUsageData: Final limit set to: ${limit}`);
@@ -48801,14 +48823,22 @@ Content: ${content}`;
       startOfMonth.setHours(0, 0, 0, 0);
       const { data: usageData, error: usageError } = await supabase.from("llm_usage").select("usage_count").eq("user_id", userId).gte("timestamp", startOfMonth.toISOString());
       if (usageData) {
-        dbTotal = usageData.reduce((acc, row) => acc + (row.usage_count || 0), 0);
+        dbTotal = usageData.reduce(
+          (acc, row) => acc + (row.usage_count || 0),
+          0
+        );
       }
       if (usageError) {
-        logWarn3("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
+        logWarn3(
+          "refreshUsageData: DB fetch failed (RLS?), using local only.",
+          usageError.message
+        );
       }
       const localTotal = await localMemory.getUsage(userId);
       this.cachedUsage = Math.max(dbTotal, localTotal);
-      logDebug3(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
+      logDebug3(
+        `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
+      );
       this.lastFetchTime = Date.now();
     }
   };
@@ -73648,7 +73678,9 @@ Result: ${JSON.stringify(result)}`);
   async function ensureAuthenticated() {
     const isAuthenticated = await supabaseAuth3.isAuthenticated();
     if (!isAuthenticated) {
-      throw new Error("Authentication required: Please sign in to use voice features");
+      throw new Error(
+        "Authentication required: Please sign in to use voice features"
+      );
     }
   }
   async function assistRemote(system, messages, options, tools = [], generationConfig) {
@@ -73664,7 +73696,10 @@ Result: ${JSON.stringify(result)}`);
     await ensureAuthenticated();
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64Audio = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      new Uint8Array(arrayBuffer).reduce(
+        (data, byte) => data + String.fromCharCode(byte),
+        ""
+      )
     );
     const result = await postSigned("transcribe", {
       audio: base64Audio,
@@ -73702,7 +73737,11 @@ Result: ${JSON.stringify(result)}`);
     );
     const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
       input
-    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(input) || /\b(?:youtube|google|gmail|github|twitter|instagram|facebook|reddit|netflix|spotify|amazon|wikipedia|slack|notion|linear|figma|jira|vercel|supabase|openai|anthropic|claude|chatgpt|linkedin|whatsapp|discord|twitch|tiktok|pinterest|dropbox|zoom|meet|calendar|drive|docs|sheets|maps)\b/i.test(input);
+    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(
+      input
+    ) || /\b(?:youtube|google|gmail|github|twitter|instagram|facebook|reddit|netflix|spotify|amazon|wikipedia|slack|notion|linear|figma|jira|vercel|supabase|openai|anthropic|claude|chatgpt|linkedin|whatsapp|discord|twitch|tiktok|pinterest|dropbox|zoom|meet|calendar|drive|docs|sheets|maps)\b/i.test(
+      input
+    );
     return hasAction && hasObjectOrTarget;
   }
 
@@ -73984,14 +74023,20 @@ Result: ${toolResult.message}`
     }
     const tokenMeta = { input_tokens: inputTokens, output_tokens: outputTokens };
     if (!isRecord(response)) {
-      return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+      return {
+        text: extractChatContent(response),
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
     }
     const contentField = response.content;
     if (isRecord(contentField)) {
       return extractFromParsed(contentField, tokenMeta, defaultMeta);
     }
     if (typeof contentField !== "string" || !contentField.trim()) {
-      return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+      return {
+        text: extractChatContent(response),
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
     }
     let jsonStr = contentField.trim();
     const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
@@ -74011,7 +74056,10 @@ Result: ${toolResult.message}`
     if (regexResult !== null) {
       return regexResult;
     }
-    return { text: jsonStr || contentField, meta: { ...defaultMeta, ...tokenMeta } };
+    return {
+      text: jsonStr || contentField,
+      meta: { ...defaultMeta, ...tokenMeta }
+    };
   }
   function tryJsonParse(str) {
     try {
@@ -74027,15 +74075,21 @@ Result: ${toolResult.message}`
         meta: { ...defaultMeta, ...tokenMeta }
       };
     }
-    const commandType = VALID_COMMAND_TYPES.has(String(parsed.command_type ?? "")) ? parsed.command_type : "other";
-    const userIntent = VALID_USER_INTENTS.has(String(parsed.user_intent ?? "")) ? parsed.user_intent : "other";
+    const commandType = VALID_COMMAND_TYPES.has(
+      String(parsed.command_type ?? "")
+    ) ? parsed.command_type : "other";
+    const userIntent = VALID_USER_INTENTS.has(
+      String(parsed.user_intent ?? "")
+    ) ? parsed.user_intent : "other";
     return {
       text: parsed.response,
       meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
     };
   }
   function extractViaRegex(str, tokenMeta, defaultMeta) {
-    const responseMatch = str.match(/"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/);
+    const responseMatch = str.match(
+      /"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/
+    );
     if (!responseMatch) {
       return null;
     }
@@ -74885,7 +74939,9 @@ ${result.message}` : result.message;
           messages: [
             new AIMessage({
               content: presentToolResult(toolPayload),
-              additional_kwargs: { oasisUsageMeta: classifyToolAction(toolPayload.commandName) }
+              additional_kwargs: {
+                oasisUsageMeta: classifyToolAction(toolPayload.commandName)
+              }
             })
           ],
           lastWorker: "chat",
@@ -74902,7 +74958,13 @@ ${result.message}` : result.message;
       ];
       let res;
       try {
-        res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
+        res = await assistRemote(
+          CHAT_SYSTEM_PROMPT,
+          toWire(messagesWithPrompt),
+          ["chat"],
+          [],
+          CHAT_GENERATION_CONFIG
+        );
       } catch (error) {
         assistantLogger.warn("chat", "Assist chat call failed.", error);
         if (hasToolOutput) {
@@ -74935,7 +74997,9 @@ ${result.message}` : result.message;
           };
         }
         return {
-          messages: [new AIMessage("I couldn't generate a response. Please try again.")],
+          messages: [
+            new AIMessage("I couldn't generate a response. Please try again.")
+          ],
           lastWorker: "chat",
           commandQueue: []
         };
@@ -75103,7 +75167,11 @@ ${message}` : message;
       if (assistRoute.kind === "tool") {
         if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
-          return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+          return {
+            next: route.next,
+            args: applyNoticeToArgs(route.args),
+            commandQueue
+          };
         }
         return {
           next: assistRoute.next,
@@ -75129,7 +75197,11 @@ ${message}` : message;
         if (route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
         }
-        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+        return {
+          next: route.next,
+          args: applyNoticeToArgs(route.args),
+          commandQueue
+        };
       }
       if (route.type === "chat") {
         return {

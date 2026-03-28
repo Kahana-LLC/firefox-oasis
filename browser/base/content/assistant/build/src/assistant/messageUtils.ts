@@ -80,7 +80,6 @@ export function classifyToolAction(commandName: string): UsageMeta {
   };
 }
 
-
 export type ToolResultPayload = {
   kind: "tool_result";
   commandName: string;
@@ -193,13 +192,29 @@ export function extractChatContent(response: unknown): string {
 }
 
 const VALID_COMMAND_TYPES = new Set<string>([
-  "info_retrieval", "navigation", "organization", "content_transform",
-  "content_create", "search", "automation", "system", "help", "other",
+  "info_retrieval",
+  "navigation",
+  "organization",
+  "content_transform",
+  "content_create",
+  "search",
+  "automation",
+  "system",
+  "help",
+  "other",
 ]);
 
 const VALID_USER_INTENTS = new Set<string>([
-  "learning", "research", "work", "dev", "marketing",
-  "shopping", "personal", "entertainment", "meta", "other",
+  "learning",
+  "research",
+  "work",
+  "dev",
+  "marketing",
+  "shopping",
+  "personal",
+  "entertainment",
+  "meta",
+  "other",
 ]);
 
 export type ParsedChatEnvelope = {
@@ -235,7 +250,10 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
   // The content field may already be a parsed JSON object (Gemini structured output)
   // or a JSON string we need to parse ourselves.
   if (!isRecord(response)) {
-    return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+    return {
+      text: extractChatContent(response),
+      meta: { ...defaultMeta, ...tokenMeta },
+    };
   }
 
   const contentField = (response as { content?: unknown }).content;
@@ -246,7 +264,10 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
   }
 
   if (typeof contentField !== "string" || !contentField.trim()) {
-    return { text: extractChatContent(response), meta: { ...defaultMeta, ...tokenMeta } };
+    return {
+      text: extractChatContent(response),
+      meta: { ...defaultMeta, ...tokenMeta },
+    };
   }
 
   let jsonStr = contentField.trim();
@@ -282,7 +303,10 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
   }
 
   // Full fallback: display whatever came back
-  return { text: jsonStr || contentField, meta: { ...defaultMeta, ...tokenMeta } };
+  return {
+    text: jsonStr || contentField,
+    meta: { ...defaultMeta, ...tokenMeta },
+  };
 }
 
 function tryJsonParse(str: string): unknown {
@@ -304,10 +328,14 @@ function extractFromParsed(
       meta: { ...defaultMeta, ...tokenMeta },
     };
   }
-  const commandType: CommandType = VALID_COMMAND_TYPES.has(String(parsed.command_type ?? ""))
+  const commandType: CommandType = VALID_COMMAND_TYPES.has(
+    String(parsed.command_type ?? "")
+  )
     ? (parsed.command_type as CommandType)
     : "other";
-  const userIntent: UserIntent = VALID_USER_INTENTS.has(String(parsed.user_intent ?? ""))
+  const userIntent: UserIntent = VALID_USER_INTENTS.has(
+    String(parsed.user_intent ?? "")
+  )
     ? (parsed.user_intent as UserIntent)
     : "other";
   return {
@@ -322,33 +350,35 @@ function extractViaRegex(
   defaultMeta: UsageMeta
 ): ParsedChatEnvelope | null {
   // Match "response":"<value>" where value may span multiple lines
-  const responseMatch = str.match(/"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/);
+  const responseMatch = str.match(
+    /"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/
+  );
   if (!responseMatch) {
     return null;
   }
   const responseText = responseMatch[1]
     .replace(/\\n/g, "\n")
     .replace(/\\t/g, "\t")
-    .replace(/\\"/g, "\"")
+    .replace(/\\"/g, '"')
     .replace(/\\\\/g, "\\");
 
   const cmdMatch = str.match(/"command_type"\s*:\s*"([^"]+)"/);
   const intentMatch = str.match(/"user_intent"\s*:\s*"([^"]+)"/);
 
-  const commandType: CommandType = cmdMatch && VALID_COMMAND_TYPES.has(cmdMatch[1])
-    ? (cmdMatch[1] as CommandType)
-    : "other";
-  const userIntent: UserIntent = intentMatch && VALID_USER_INTENTS.has(intentMatch[1])
-    ? (intentMatch[1] as UserIntent)
-    : "other";
+  const commandType: CommandType =
+    cmdMatch && VALID_COMMAND_TYPES.has(cmdMatch[1])
+      ? (cmdMatch[1] as CommandType)
+      : "other";
+  const userIntent: UserIntent =
+    intentMatch && VALID_USER_INTENTS.has(intentMatch[1])
+      ? (intentMatch[1] as UserIntent)
+      : "other";
 
   return {
     text: responseText || str,
     meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta },
   };
 }
-
-
 
 export function stripLeadingEchoedPayload(
   value: string,
@@ -369,7 +399,10 @@ export function stripLeadingEchoedPayload(
       if (text.length === candidate.length) {
         continue;
       }
-      text = text.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
+      text = text
+        .slice(candidate.length)
+        .replace(/^[\s:.,;!-]+/, "")
+        .trim();
       break;
     }
   }
