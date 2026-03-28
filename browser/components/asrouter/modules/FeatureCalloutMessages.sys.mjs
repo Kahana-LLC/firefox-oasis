@@ -1390,7 +1390,7 @@ const MESSAGES = () => {
               ],
               logo: {
                 imageURL:
-                  "chrome://browser/skin/oasis-chat-sparkle.svg",
+                  "chrome://browser/skin/oasis-chat-icon.svg",
                 height: "48px",
                 width: "48px",
                 marginBlock: "0 16px",
@@ -1460,7 +1460,7 @@ const MESSAGES = () => {
         "'browser.aboutwelcome.didSeeFinalScreen' | preferenceValue == true && userPrefs.cfrFeatures && !isMajorUpgrade && !activeNotifications" +
         ` && ${matchIncompleteTargeting("browser.oasis.chat-feature-tour")}`,
       trigger: {
-        id: "oasisAuthSuccess",
+        id: "defaultBrowserCheck",
       },
       frequency: {
         lifetime: 5,

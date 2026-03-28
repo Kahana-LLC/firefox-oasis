@@ -260,10 +260,10 @@
     <form class="auth-form" id="auth-form">
       <div class="form-field">
         <label class="form-label" for="email">Email</label>
-        <input
-          type="email"
-          id="email"
-          class="form-input"
+        <input 
+          type="email" 
+          id="email" 
+          class="form-input" 
           placeholder="your@email.com"
           required
           autocomplete="email"
@@ -272,10 +272,10 @@
 
       <div class="form-field">
         <label class="form-label" for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          class="form-input"
+        <input 
+          type="password" 
+          id="password" 
+          class="form-input" 
           placeholder="Enter your password"
           required
           autocomplete="current-password"
@@ -307,7 +307,7 @@
 
   <!-- Load Supabase Auth from Assistant Bundle -->
   <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
-
+  
   <script>
     "use strict";
 
@@ -362,6 +362,7 @@
           ""
         );
         await Services.logins.addLoginAsync(loginInfo);
+        console.log("Oasis Auth: Session securely saved");
       } catch (e) {
         console.error("Oasis Auth: Failed to save session:", e);
       }
@@ -423,6 +424,7 @@
             });
           }
         } catch (err) {
+          console.warn('Could not open new tab on window close:', err);
         }
       }
     });
@@ -435,7 +437,7 @@
 
     doneButton.addEventListener('click', () => {
       isDoneButtonClicked = true; // Mark that Done button was clicked
-
+      
       try {
         if (typeof Services !== 'undefined' && Services.wm) {
           const win = Services.wm.getMostRecentWindow('navigator:browser');
@@ -446,7 +448,7 @@
               inBackground: false,
             });
             win.gBrowser.selectedTab = newTab;
-
+            
             // Close the auth tab after opening new tab
             setTimeout(() => {
               try {
@@ -455,13 +457,14 @@
                 for (let i = 0; i < tabs.length; i++) {
                   const tab = tabs[i];
                   const browser = tab.linkedBrowser;
-                  if (browser && browser.currentURI &&
+                  if (browser && browser.currentURI && 
                       browser.currentURI.spec.includes('oasis-auth.html')) {
                     win.gBrowser.removeTab(tab);
                     break;
                   }
                 }
               } catch (e) {
+                console.warn('Could not close auth tab:', e);
               }
             }, 150);
             return;
@@ -473,7 +476,7 @@
           try {
             window.close();
           } catch (e) {
-            void e;
+            console.warn('Could not close window:', e);
           }
         }, 200);
       } catch (e) {
@@ -484,7 +487,7 @@
           try {
             window.close();
           } catch (e) {
-            void e;
+            console.warn('Could not close window:', e);
           }
         }, 200);
       }
@@ -492,7 +495,7 @@
 
     authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-
+      
       const email = emailInput.value.trim();
       const password = passwordInput.value;
 
@@ -508,7 +511,7 @@
 
       try {
         const supabaseAuth = await waitForSupabaseAuth();
-
+        
         if (!supabaseAuth) {
           throw new Error('Authentication service not available');
         }
@@ -527,17 +530,19 @@
         }
 
         if (user) {
-          const session = await supabaseAuth.getSession();
-          if (session) {
-            await securelySaveSession(session);
+          console.log('Authentication successful:', user.email || user.id);
+          
+          const { data: sessionData } = await supabaseAuth.getSession();
+          if (sessionData && sessionData.session) {
+            await securelySaveSession(sessionData.session);
           }
-
+          
           // Update auth state on current window
           window.oasisAuthState = {
             isAuthenticated: true,
             user: user
           };
-
+          
           // Also update auth state on main browser window and dispatch event there
           try {
             if (typeof Services !== 'undefined' && Services.wm) {
@@ -548,34 +553,90 @@
                   isAuthenticated: true,
                   user: user
                 };
-
+                
                 // Dispatch event on main browser window so AI Assistant can receive it
                 win.dispatchEvent(new win.CustomEvent('oasis-auth-update', {
                   detail: win.oasisAuthState
                 }));
+                console.log('Oasis Auth: Dispatched auth update event to main browser window');
               }
             }
           } catch (e) {
+            console.warn('Failed to dispatch auth update event to main window:', e);
           }
-
+          
           // Also dispatch on current window (auth page)
           try {
             window.dispatchEvent(new CustomEvent('oasis-auth-update', {
               detail: window.oasisAuthState
             }));
           } catch (e) {
+            console.warn('Failed to dispatch auth update event on current window:', e);
           }
-
-          // Finalize onboarding via parent actor (close auth tab, return to browser, and trigger tour)
-          if (typeof RPMSendAsyncMessage !== 'undefined') {
-            RPMSendAsyncMessage("OasisWelcome:Finished");
-            return;
+          
+          // Trigger feature callout after successful authentication
+          try {
+            // Send message to parent actor to trigger feature callout
+            if (typeof RPMSendAsyncMessage !== 'undefined') {
+              RPMSendAsyncMessage("OasisWelcome:TriggerFeatureCallout");
+              console.log('Oasis Auth: Sent message to trigger feature callout via actor');
+            } else {
+              console.warn('Oasis Auth: RPMSendAsyncMessage not available, using fallback');
+            }
+            
+            // Fallback: try to access ASRouter directly if actor message fails
+            // This ensures the callout triggers even if the actor isn't working
+            if (typeof Services !== 'undefined' && Services.wm && Services.prefs) {
+              const win = Services.wm.getMostRecentWindow('navigator:browser');
+              if (win && typeof win.ChromeUtils !== 'undefined') {
+                // Set required preferences first
+                Services.prefs.setBoolPref("browser.aboutwelcome.didSeeFinalScreen", true);
+                Services.prefs.setBoolPref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", true);
+                
+                const tourPrefName = "browser.oasis.chat-feature-tour";
+                if (!Services.prefs.prefHasUserValue(tourPrefName)) {
+                  Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                } else {
+                  try {
+                    const tourPrefValue = Services.prefs.getCharPref(tourPrefName);
+                    const tourProgress = JSON.parse(tourPrefValue);
+                    if (tourProgress.complete) {
+                      Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                    }
+                  } catch (e) {
+                    Services.prefs.setCharPref(tourPrefName, JSON.stringify({ screen: "OASIS_CHAT_STEP_1", complete: false }));
+                  }
+                }
+                
+                const { ASRouter } = win.ChromeUtils.importESModule("resource:///modules/asrouter/ASRouter.sys.mjs");
+                if (ASRouter && typeof ASRouter.sendTriggerMessage === 'function') {
+                  await ASRouter.waitForInitialized;
+                  
+                  // Wait for browser window to be ready
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  
+                  const browser = win.gBrowser?.selectedBrowser;
+                  if (browser) {
+                    await ASRouter.sendTriggerMessage({
+                      id: "defaultBrowserCheck", // Correct trigger ID
+                      context: { source: "oasis-auth" },
+                      browser: browser
+                    });
+                    console.log('Oasis Auth: Triggered feature callout via fallback method');
+                  } else {
+                    console.warn('Oasis Auth: No browser found for fallback trigger');
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Failed to trigger feature callout:', e);
           }
-
-          // Fallback when actor bridge is unavailable
+          
+          // Hide form and show success state
           authForm.style.display = 'none';
           authToggle.style.display = 'none';
-          successMessage.classList.remove('visible');
+          successMessage.classList.remove('visible'); // Hide inline success message
           successState.style.display = 'block';
           finalSuccessMessage.textContent = `✓ Signed in as ${user.email || user.id}`;
           finalSuccessMessage.style.display = 'block';
@@ -595,10 +656,11 @@
     (async function init() {
       loadingIndicator.style.display = 'block';
       authForm.style.display = 'none';
-
+      
       const supabaseAuth = await waitForSupabaseAuth();
-
+      
       if (supabaseAuth) {
+        console.log('Supabase Auth service loaded successfully');
         loadingIndicator.style.display = 'none';
         authForm.style.display = 'flex';
       } else {
@@ -608,3 +670,4 @@
   </script>
 </body>
 </html>
+

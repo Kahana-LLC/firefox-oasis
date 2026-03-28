@@ -49,8 +49,18 @@ export interface SupabaseAuthLike {
   isAuthenticated(): Promise<boolean>;
   getCurrentUser(): Promise<AuthUser | null>;
   signOut(): Promise<void>;
-  signUp(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
-  signInWithEmail(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signUp(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signInWithEmail(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  resetPasswordForEmail(
+    email: string
+  ): Promise<{ error: { message?: string } | null }>;
+  handleAuthError?(error: unknown): string;
   onAuthStateChange?(
     cb: (state: SupabaseAuthState) => void
   ):
@@ -71,7 +81,9 @@ export interface SupabaseAuthLike {
 
 export interface AssistantBridgeLike {
   openTab(url: string): boolean;
-  getAssistantHistory?(): AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?():
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?(history: AssistantHistoryEntry[]): Promise<void>;
   getAuthState?(): AuthState;
 }
@@ -93,14 +105,20 @@ export type OasisWindow = Window & {
     startRecording(): Promise<void>;
     stopRecording(): Promise<string | null>;
   };
-  getAssistantHistory?: () => AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?: () =>
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?: (history: AssistantHistoryEntry[]) => Promise<void>;
   resetAssistantSession?: () => void | Promise<void>;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
-  openWebLinkIn?: (url: string, where: string, options: Record<string, unknown>) => void;
+  openWebLinkIn?: (
+    url: string,
+    where: string,
+    options: Record<string, unknown>
+  ) => void;
   mpTrack?: (event: string, props?: Record<string, unknown>) => void;
   marked?: MarkedLike;
   DOMPurify?: DOMPurifyLike;

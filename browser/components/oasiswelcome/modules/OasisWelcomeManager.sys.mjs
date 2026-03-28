@@ -5,9 +5,6 @@
 const DID_SEE_OASIS_WELCOME_PREF = "browser.oasis.welcome.didSee";
 const DID_COMPLETE_OASIS_ONBOARDING_PREF = "browser.oasis.welcome.completed";
 const OASIS_WELCOME_ENABLED_PREF = "browser.oasis.welcome.enabled";
-const OASIS_WELCOME_URL =
-  "chrome://browser/content/oasiswelcome/oasiswelcome.html";
-const OASIS_AUTH_URL = "chrome://browser/content/oasiswelcome/oasis-auth.html";
 
 const lazy = {};
 
@@ -41,44 +38,28 @@ export const OasisWelcomeManager = {
       return;
     }
 
-    const url = OASIS_WELCOME_URL;
-
+    const url = "about:welcome";
+    
     try {
       const browser = window.gBrowser.selectedBrowser;
-      const currentSpec = browser.currentURI?.spec ?? "";
-
-      if (currentSpec === url || currentSpec === OASIS_AUTH_URL) {
-        return;
-      }
-
+      const currentURI = browser.currentURI;
+      
       // If current tab is blank or default page, replace it
-      if (
-        currentSpec === "about:blank" ||
-        currentSpec === "about:newtab" ||
-        currentSpec === "about:home" ||
-        currentSpec.startsWith("about:welcome")
-      ) {
+      if (currentURI.spec === "about:blank" || 
+          currentURI.spec === "about:newtab" ||
+          currentURI.spec === "about:home") {
         browser.loadURI(Services.io.newURI(url), {
           triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
         });
-        this.resetZoom(window, browser);
       } else {
         // Otherwise open in new tab
-        const tab = window.gBrowser.addTrustedTab(url, {
+        window.gBrowser.selectedTab = window.gBrowser.addTrustedTab(url, {
           inBackground: false,
           triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
         });
-        window.gBrowser.selectedTab = tab;
-        this.resetZoom(window, tab.linkedBrowser);
       }
     } catch (e) {
       console.error("Failed to open Oasis Welcome page:", e);
-    }
-  },
-
-  resetZoom(window, browser) {
-    if (window?.ZoomManager?.setZoomForBrowser && browser) {
-      window.ZoomManager.setZoomForBrowser(browser, 1.0);
     }
   },
 
@@ -90,3 +71,4 @@ export const OasisWelcomeManager = {
     return false;
   },
 };
+

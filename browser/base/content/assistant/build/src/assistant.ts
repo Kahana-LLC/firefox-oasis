@@ -30,6 +30,10 @@ assistantWindow.supabaseAuth = supabaseAuth;
 assistantWindow.voiceInputService = voiceInputService;
 assistantWindow.marked = marked;
 assistantWindow.DOMPurify = DOMPurify;
+assistantWindow.oasisSetOAuthCallbackBaseUrl = (url: string) =>
+  supabaseAuth.setOAuthCallbackBaseUrl(url);
+assistantWindow.oasisGetOAuthCallbackBaseUrl = () =>
+  supabaseAuth.getOAuthCallbackBaseUrl();
 
 const sessionController = createAssistantSessionController(assistantWindow);
 

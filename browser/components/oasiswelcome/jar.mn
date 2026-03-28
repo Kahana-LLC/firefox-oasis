@@ -8,3 +8,4 @@ browser.jar:
     content/browser/oasiswelcome/oasiswelcome.js       (content/oasiswelcome.js)
     content/browser/oasiswelcome/auth-bridge.js        (content/auth-bridge.js)
     content/browser/oasiswelcome/oasis-auth.html       (content/oasis-auth.html)
+

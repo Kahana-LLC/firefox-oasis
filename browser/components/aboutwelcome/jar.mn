@@ -6,6 +6,8 @@ browser.jar:
   content/browser/aboutwelcome/aboutwelcome.bundle.js (./content/aboutwelcome.bundle.js)
   content/browser/aboutwelcome/aboutwelcome.css (./content/aboutwelcome.css)
   content/browser/aboutwelcome/aboutwelcome.html (./content/aboutwelcome.html)
+  content/browser/aboutwelcome/oasiswelcome.css (./content/oasiswelcome.css)
+  content/browser/aboutwelcome/oasiswelcome.js (./content/oasiswelcome.js)
 
 # This section is for image assets for about:welcome. These are currently
 # placed in the chrome://activity-stream/ path to provide backwards compability

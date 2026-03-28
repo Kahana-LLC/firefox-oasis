@@ -47996,6 +47996,10 @@ Content: ${content}`;
     supabase;
     currentSession = null;
     authStateCallbacks = [];
+    lastTrackedSessionUserId = null;
+    sessionTrackInFlight = null;
+    oauthCallbackBaseUrl = null;
+    activeOAuthLaunch = null;
     constructor() {
       this.supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
       this.supabase.auth.onAuthStateChange((event, session) => {
@@ -48009,41 +48013,226 @@ Content: ${content}`;
       }
       return _SupabaseAuth.instance;
     }
+    setOAuthCallbackBaseUrl(url) {
+      const normalized = this.normalizeOAuthCallbackBaseUrl(url);
+      this.oauthCallbackBaseUrl = normalized;
+      if (typeof window !== "undefined") {
+        window.__oasisOAuthCallbackBaseUrl = normalized;
+      }
+      return this.getOAuthCallbackBaseUrl();
+    }
+    getOAuthCallbackBaseUrl() {
+      if (this.oauthCallbackBaseUrl) {
+        return this.oauthCallbackBaseUrl;
+      }
+      if (typeof window !== "undefined") {
+        const runtimeOverride = window.__oasisOAuthCallbackBaseUrl;
+        const normalizedRuntime = this.normalizeOAuthCallbackBaseUrl(runtimeOverride);
+        if (normalizedRuntime) {
+          this.oauthCallbackBaseUrl = normalizedRuntime;
+          return normalizedRuntime;
+        }
+        try {
+          const override = window.localStorage?.getItem(
+            "oasis_oauth_callback_base_url"
+          );
+          const normalizedStorage = this.normalizeOAuthCallbackBaseUrl(override);
+          if (normalizedStorage) {
+            this.oauthCallbackBaseUrl = normalizedStorage;
+            return normalizedStorage;
+          }
+        } catch {
+        }
+      }
+      return "https://kahana.co";
+    }
+    normalizeOAuthCallbackBaseUrl(url) {
+      if (!url || !/^https?:\/\//i.test(url)) {
+        return null;
+      }
+      return url.replace(/\/+$/, "");
+    }
+    createOAuthFlowId() {
+      return `oauth_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+    getActiveOAuthLaunch(provider, target) {
+      if (!this.activeOAuthLaunch) {
+        return null;
+      }
+      if (Date.now() - this.activeOAuthLaunch.startedAt > 15e3) {
+        this.activeOAuthLaunch = null;
+        return null;
+      }
+      if (this.activeOAuthLaunch.provider === provider && this.activeOAuthLaunch.target === target) {
+        return this.activeOAuthLaunch;
+      }
+      return null;
+    }
+    beginOAuthLaunch(provider, target) {
+      const existingLaunch = this.getActiveOAuthLaunch(provider, target);
+      if (existingLaunch) {
+        logWarn2(
+          `[Oasis OAuth][${existingLaunch.flowId}] Reusing active OAuth launcher URL`
+        );
+        return existingLaunch;
+      }
+      const flowId = this.createOAuthFlowId();
+      this.setFirefoxOAuthMarker(target, provider, flowId);
+      const launcherUrl = this.getOAuthLauncherUrl(provider, target, flowId);
+      const launch = {
+        provider,
+        target,
+        flowId,
+        launcherUrl,
+        startedAt: Date.now()
+      };
+      this.activeOAuthLaunch = launch;
+      return launch;
+    }
+    clearActiveOAuthLaunch(flowId) {
+      if (!this.activeOAuthLaunch) {
+        return;
+      }
+      if (!flowId || this.activeOAuthLaunch.flowId === flowId) {
+        this.activeOAuthLaunch = null;
+      }
+    }
+    getOAuthRedirectUrl(target = "assistant", flowId) {
+      const params = new URLSearchParams({
+        flow: "assistant",
+        handoff_target: target
+      });
+      if (flowId) {
+        params.set("flow_id", flowId);
+      }
+      return `${this.getOAuthCallbackBaseUrl()}/oauth-callback?${params.toString()}`;
+    }
+    getOAuthLauncherUrl(provider, target = "assistant", flowId) {
+      const params = new URLSearchParams({
+        flow: "assistant",
+        handoff_target: target,
+        provider
+      });
+      if (flowId) {
+        params.set("flow_id", flowId);
+      }
+      return `${this.getOAuthCallbackBaseUrl()}/oasis-auth?${params.toString()}`;
+    }
+    setFirefoxOAuthMarker(target, provider, flowId) {
+      if (typeof window === "undefined") {
+        return;
+      }
+      const Services = window.Services || (globalThis.ChromeUtils ? globalThis.ChromeUtils.import(
+        "resource://gre/modules/Services.jsm"
+      ).Services : null);
+      const Ci = window.Ci || globalThis.Ci;
+      if (!Services?.cookies || !Ci?.nsICookie) {
+        return;
+      }
+      const payload = encodeURIComponent(
+        JSON.stringify({
+          target,
+          provider,
+          flowId,
+          timestamp: Date.now(),
+          callbackBaseUrl: this.getOAuthCallbackBaseUrl()
+        })
+      );
+      const expiry = Date.now() + 3 * 60 * 1e3;
+      const writeCookie = (baseUrl) => {
+        try {
+          const parsed = new URL(baseUrl);
+          const schemeMap = parsed.protocol === "https:" ? Ci.nsICookie.SCHEME_HTTPS : Ci.nsICookie.SCHEME_HTTP;
+          Services.cookies.add(
+            parsed.hostname,
+            "/",
+            "oasis_firefox_oauth_target",
+            payload,
+            parsed.protocol === "https:",
+            false,
+            false,
+            expiry,
+            {},
+            Ci.nsICookie.SAMESITE_LAX,
+            schemeMap
+          );
+        } catch (e) {
+          logWarn2("Failed to set Firefox OAuth marker cookie:", e);
+        }
+      };
+      const callbackBaseUrl = this.getOAuthCallbackBaseUrl();
+      writeCookie(callbackBaseUrl);
+      if (!callbackBaseUrl.includes("kahana.co")) {
+        writeCookie("https://kahana.co");
+      }
+    }
     // Google OAuth Authentication
-    async signInWithGoogle() {
+    async signInWithGoogle(target = "assistant") {
       try {
-        logDebug2("Attempting Google sign in with manual URL approach");
+        const launch = this.beginOAuthLaunch("google", target);
+        const { flowId, launcherUrl } = launch;
+        logDebug2(`[Oasis OAuth][${flowId}] Preparing Google OAuth launcher URL`);
         const currentUser = await this.getCurrentUser();
         if (currentUser) {
-          logDebug2("User already authenticated:", currentUser.id);
+          logDebug2(
+            `[Oasis OAuth][${flowId}] User already authenticated:`,
+            currentUser.id
+          );
           return { user: currentUser, error: null };
         }
-        const { data, error } = await this.supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            skipBrowserRedirect: true,
-            // Use Kahana's official domain for OAuth callback
-            redirectTo: "https://kahana.co/oauth-callback",
-            // Request consent prompt and offline access for refresh token
-            queryParams: {
-              prompt: "select_account",
-              access_type: "offline",
-              include_granted_scopes: "true",
-              response_type: "code"
-            }
-          }
-        });
-        if (error || !data.url) {
-          logError2("Failed to generate OAuth URL:", error);
-          return { user: null, error: error || { message: "Failed to generate OAuth URL", status: 500 } };
-        }
-        logDebug2("Generated OAuth URL:", data.url);
+        logDebug2(`[Oasis OAuth][${flowId}] Generated launcher URL:`, launcherUrl);
         return {
           user: null,
-          error: new Error(`GOOGLE_OAUTH_URL:${data.url}`)
+          error: new Error(`GOOGLE_OAUTH_URL:${launcherUrl}`)
         };
       } catch (error) {
         logError2("Google sign in error:", error);
+        return { user: null, error };
+      }
+    }
+    async signInWithAzure(target = "assistant") {
+      try {
+        const launch = this.beginOAuthLaunch("azure", target);
+        const { flowId, launcherUrl } = launch;
+        logDebug2(`[Oasis OAuth][${flowId}] Preparing Azure OAuth launcher URL`);
+        const currentUser = await this.getCurrentUser();
+        if (currentUser) {
+          logDebug2(
+            `[Oasis OAuth][${flowId}] User already authenticated:`,
+            currentUser.id
+          );
+          return { user: currentUser, error: null };
+        }
+        logDebug2(`[Oasis OAuth][${flowId}] Generated launcher URL:`, launcherUrl);
+        return {
+          user: null,
+          error: new Error(`AZURE_OAUTH_URL:${launcherUrl}`)
+        };
+      } catch (error) {
+        logError2("Azure sign in error:", error);
+        return { user: null, error };
+      }
+    }
+    async signInWithApple(target = "assistant") {
+      try {
+        const launch = this.beginOAuthLaunch("apple", target);
+        const { flowId, launcherUrl } = launch;
+        logDebug2(`[Oasis OAuth][${flowId}] Preparing Apple OAuth launcher URL`);
+        const currentUser = await this.getCurrentUser();
+        if (currentUser) {
+          logDebug2(
+            `[Oasis OAuth][${flowId}] User already authenticated:`,
+            currentUser.id
+          );
+          return { user: currentUser, error: null };
+        }
+        logDebug2(`[Oasis OAuth][${flowId}] Generated launcher URL:`, launcherUrl);
+        return {
+          user: null,
+          error: new Error(`APPLE_OAUTH_URL:${launcherUrl}`)
+        };
+      } catch (error) {
+        logError2("Apple sign in error:", error);
         return { user: null, error };
       }
     }
@@ -48096,6 +48285,23 @@ Content: ${content}`;
         return { user: null, error };
       }
     }
+    async resetPasswordForEmail(email) {
+      try {
+        logDebug2("Attempting password reset for:", email);
+        const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: "https://kahana.co/update-password"
+        });
+        if (error) {
+          logError2("Password reset error:", error.message);
+          return { error };
+        }
+        logDebug2("Password reset email sent");
+        return { error: null };
+      } catch (error) {
+        logError2("Password reset error:", error);
+        return { error };
+      }
+    }
     async signOut() {
       try {
         logDebug2("Attempting sign out");
@@ -48117,11 +48323,15 @@ Content: ${content}`;
     }
     // Session Management
     async getCurrentUser() {
-      const { data: { user } } = await this.supabase.auth.getUser();
+      const {
+        data: { user }
+      } = await this.supabase.auth.getUser();
       return user;
     }
     async getSession() {
-      const { data: { session } } = await this.supabase.auth.getSession();
+      const {
+        data: { session }
+      } = await this.supabase.auth.getSession();
       return session;
     }
     async isAuthenticated() {
@@ -48133,57 +48343,94 @@ Content: ${content}`;
      * Processes auth data from manual input and exchanges it for a session
      */
     async handleOAuthCallbackData(authData) {
+      const raw = authData && typeof authData === "object" ? authData : null;
+      const flowId = String((raw && (raw.flow_id ?? raw.flowId)) ?? "unknown");
       try {
-        const parsedData = this.parseOAuthCallbackData(authData);
-        logDebug2("Handling OAuth callback data:", parsedData);
-        if (parsedData.code) {
-          logDebug2("Exchanging auth code for session...");
-          const { data, error } = await this.supabase.auth.exchangeCodeForSession(parsedData.code);
+        logDebug2(`[Oasis OAuth][${flowId}] Handling callback data:`, authData);
+        const code = typeof raw?.code === "string" ? raw.code : void 0;
+        const accessToken = typeof raw?.access_token === "string" ? raw.access_token : void 0;
+        const refreshToken = typeof raw?.refresh_token === "string" ? raw.refresh_token : void 0;
+        if (code) {
+          logDebug2(
+            `[Oasis OAuth][${flowId}] Exchanging auth code for session...`
+          );
+          const { data, error } = await this.supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            logError2("Failed to exchange code for session:", error.message);
+            logError2(
+              `[Oasis OAuth][${flowId}] Failed to exchange code for session:`,
+              error.message
+            );
+            this.clearActiveOAuthLaunch(flowId);
             return { success: false, error: error.message };
           } else {
-            logDebug2("Exchanged code for session for user:", data.user?.id);
+            logDebug2(
+              `[Oasis OAuth][${flowId}] Exchanged code for session for user:`,
+              data.user?.id
+            );
             if (data.user) {
               const existingProfile = await this.getUserProfile();
               if (!existingProfile) {
-                await this.createUserProfile(data.user, data.user.user_metadata?.name);
-                logDebug2("Created user profile from OAuth callback");
+                await this.createUserProfile(
+                  data.user,
+                  data.user.user_metadata?.name
+                );
+                logDebug2(
+                  `[Oasis OAuth][${flowId}] Created user profile from OAuth callback`
+                );
               }
               await this.updateLastLogin(data.user.id);
               await this.createSession(data.user.id);
             }
+            this.clearActiveOAuthLaunch(flowId);
             return { success: true };
           }
         }
-        if (parsedData.access_token && parsedData.refresh_token) {
-          logDebug2("Setting session from tokens...");
+        if (accessToken && refreshToken) {
+          logDebug2(`[Oasis OAuth][${flowId}] Setting session from tokens...`);
           const { data, error } = await this.supabase.auth.setSession({
-            access_token: parsedData.access_token,
-            refresh_token: parsedData.refresh_token
+            access_token: accessToken,
+            refresh_token: refreshToken
           });
           if (error) {
-            logError2("Failed to set session from tokens:", error.message);
+            logError2(
+              `[Oasis OAuth][${flowId}] Failed to set session from tokens:`,
+              error.message
+            );
+            this.clearActiveOAuthLaunch(flowId);
             return { success: false, error: error.message };
           } else {
-            logDebug2("Set session from tokens for user:", data.user?.id);
+            logDebug2(
+              `[Oasis OAuth][${flowId}] Set session from tokens for user:`,
+              data.user?.id
+            );
             if (data.user) {
               const existingProfile = await this.getUserProfile();
               if (!existingProfile) {
-                await this.createUserProfile(data.user, data.user.user_metadata?.name);
-                logDebug2("Created user profile from tokens");
+                await this.createUserProfile(
+                  data.user,
+                  data.user.user_metadata?.name
+                );
+                logDebug2(
+                  `[Oasis OAuth][${flowId}] Created user profile from tokens`
+                );
               }
               await this.updateLastLogin(data.user.id);
               await this.createSession(data.user.id);
             }
+            this.clearActiveOAuthLaunch(flowId);
             return { success: true };
           }
         }
-        logWarn2("No valid OAuth data found");
+        logWarn2(`[Oasis OAuth][${flowId}] No valid OAuth data found`);
+        this.clearActiveOAuthLaunch(flowId);
         return { success: false, error: "No valid OAuth data" };
       } catch (error) {
-        logError2("Error handling OAuth callback data:", error);
-        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+        logError2(`[Oasis OAuth][${flowId}] Error handling callback data:`, error);
+        this.clearActiveOAuthLaunch(flowId);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        };
       }
     }
     // User Profile Management
@@ -48221,10 +48468,13 @@ Content: ${content}`;
         }
       });
       if (event === "SIGNED_IN" && user) {
-        await this.createSession(user.id);
+        await this.trackSessionForUser(user.id);
       } else if (event === "SIGNED_OUT" && this.currentSession) {
+        this.lastTrackedSessionUserId = null;
         await this.endSession(this.currentSession.session_id);
         this.currentSession = null;
+      } else if (event === "SIGNED_OUT") {
+        this.lastTrackedSessionUserId = null;
       }
     }
     // Database Operations
@@ -48257,6 +48507,31 @@ Content: ${content}`;
         logError2("Error updating last login:", error);
       }
     }
+    async trackSessionForUser(userId) {
+      if (this.currentSession?.user_id === userId && !this.currentSession?.ended_at) {
+        this.lastTrackedSessionUserId = userId;
+        return;
+      }
+      if (this.lastTrackedSessionUserId === userId) {
+        return;
+      }
+      if (this.sessionTrackInFlight?.userId === userId) {
+        await this.sessionTrackInFlight.promise;
+        return;
+      }
+      const pendingTrack = {
+        userId,
+        promise: Promise.resolve()
+      };
+      pendingTrack.promise = this.createSession(userId).finally(() => {
+        if (this.sessionTrackInFlight === pendingTrack) {
+          this.sessionTrackInFlight = null;
+        }
+      });
+      this.sessionTrackInFlight = pendingTrack;
+      await pendingTrack.promise;
+      this.lastTrackedSessionUserId = userId;
+    }
     async createSession(userId) {
       try {
         const deviceInfo = {
@@ -48270,7 +48545,10 @@ Content: ${content}`;
         }).select().single();
         if (error) {
           if (error.message.includes("row-level security policy")) {
-            logWarn2("Session tracking skipped due to RLS policy (non-critical):", error.message);
+            logWarn2(
+              "Session tracking skipped due to RLS policy (non-critical):",
+              error.message
+            );
           } else {
             logError2("Error creating session:", error.message);
           }
@@ -48294,20 +48572,9 @@ Content: ${content}`;
         logError2("Error ending session:", error);
       }
     }
-    parseOAuthCallbackData(authData) {
-      if (!authData || typeof authData !== "object") {
-        return {};
-      }
-      const raw = authData;
-      return {
-        code: typeof raw.code === "string" ? raw.code : void 0,
-        access_token: typeof raw.access_token === "string" ? raw.access_token : void 0,
-        refresh_token: typeof raw.refresh_token === "string" ? raw.refresh_token : void 0
-      };
-    }
     // Utility Methods
     handleAuthError(error) {
-      if (error.message && error.message.startsWith("GOOGLE_OAUTH_URL:")) {
+      if (error.message && (error.message.startsWith("GOOGLE_OAUTH_URL:") || error.message.startsWith("AZURE_OAUTH_URL:") || error.message.startsWith("APPLE_OAUTH_URL:"))) {
         return error.message;
       }
       switch (error.message) {
@@ -53255,7 +53522,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         embedding: item.embedding
       });
     }
-    async search(queryEmbedding, limit = 5, minSimilarity = 0.3) {
+    async search(queryEmbedding, limit = 5, minSimilarity = 0.5) {
       await this.init();
       const results = await search2(this.db, {
         mode: "vector",
@@ -54243,6 +54510,37 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       ]
     },
     {
+      id: "search.history",
+      family: "search",
+      commandName: "search_history",
+      priority: 1,
+      phrases: [
+        "what pages did i visit",
+        "what did i read",
+        "what did i browse",
+        "find that article",
+        "find that page",
+        "find that site",
+        "what sites did i visit",
+        "pages i visited",
+        "articles i read",
+        "browsing history",
+        "search history",
+        "search my history",
+        "find in my history",
+        "what was that page",
+        "what was that site",
+        "what was that article",
+        "did i visit",
+        "did i look at",
+        "did i read",
+        "did i browse"
+      ],
+      slots: [
+        { name: "query", type: "string", source: "quoted_or_rest" }
+      ]
+    },
+    {
       id: "search.memory",
       family: "search",
       commandName: "search_memory",
@@ -54665,6 +54963,16 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     });
     if (!candidate || candidate.definition.family !== "search") {
       return null;
+    }
+    if (candidate.definition.commandName === "search_history") {
+      const parsed2 = parseSearchMemoryIntent(input);
+      const query = parsed2?.query || input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
+      return {
+        type: "tool",
+        next: "search_history",
+        args: { query },
+        reason: "search-manifest-history"
+      };
     }
     const missingFolderQuery = parseFolderSearchMissingQuery(input, snapshot);
     if (missingFolderQuery) {
@@ -75007,6 +75315,8 @@ ${message}` : message;
   assistantWindow.voiceInputService = voiceInput_default;
   assistantWindow.marked = d;
   assistantWindow.DOMPurify = purify;
+  assistantWindow.oasisSetOAuthCallbackBaseUrl = (url) => supabaseAuth4.setOAuthCallbackBaseUrl(url);
+  assistantWindow.oasisGetOAuthCallbackBaseUrl = () => supabaseAuth4.getOAuthCallbackBaseUrl();
   var sessionController = createAssistantSessionController(assistantWindow);
   function resetAssistantSession() {
     sessionController.resetAssistantSession();

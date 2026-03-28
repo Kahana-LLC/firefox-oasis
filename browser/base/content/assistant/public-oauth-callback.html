@@ -1,162 +1,150 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oasis Browser - Authentication</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oasis OAuth Callback</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: white;
-        }
-        .container {
-            text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            border-radius: 1rem;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            max-width: 500px;
-            width: 90%;
-        }
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid #fff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .success { 
-            color: #d4edda; 
-            background-color: #28a745; 
-            border-color: #28a745; 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin: 1rem 0;
-        }
-        .error { 
-            color: #f8d7da; 
-            background-color: #dc3545; 
-            border-color: #dc3545; 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin: 1rem 0;
-        }
-        .info {
-            color: #d1ecf1;
-            background-color: #0c5460;
-            border-color: #bee5eb;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 1rem 0;
-        }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f6f7f2;
+        margin: 0;
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        color: #1f2937;
+      }
+      .container {
+        width: 100%;
+        max-width: 480px;
+        background: white;
+        padding: 32px;
+        border-radius: 20px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 16px;
+        line-height: 1.5;
+        color: #4b5563;
+      }
+      .success {
+        color: #4f6f00;
+        background: #f2f4e5;
+        padding: 12px 14px;
+        border-radius: 12px;
+        margin: 16px 0;
+      }
+      .error {
+        color: #b42318;
+        background: #fef3f2;
+        padding: 12px 14px;
+        border-radius: 12px;
+        margin: 16px 0;
+      }
+      .code-field {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d0d5dd;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 14px;
+        margin: 12px 0;
+        background: #fff;
+      }
+      .copy-button {
+        border: none;
+        border-radius: 999px;
+        background: #708500;
+        color: white;
+        padding: 12px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .button-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .secondary-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #d0d5dd;
+        border-radius: 999px;
+        background: #fff;
+        color: #344054;
+        padding: 12px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="spinner"></div>
-        <h1 id="statusTitle">Processing Authentication...</h1>
-        <p id="statusMessage">Please wait while we securely process your login.</p>
-        <div id="details"></div>
+      <h1 id="statusTitle">OAuth successful</h1>
+      <p id="statusMessage">
+        Copy the code below, then return to Oasis Assistant to complete sign-in.
+      </p>
+      <div id="details"></div>
     </div>
 
     <script>
-        const statusTitle = document.getElementById('statusTitle');
-        const statusMessage = document.getElementById('statusMessage');
-        const detailsDiv = document.getElementById('details');
+      const statusTitle = document.getElementById("statusTitle");
+      const statusMessage = document.getElementById("statusMessage");
+      const detailsDiv = document.getElementById("details");
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const error = params.get("error");
+      const errorDescription = params.get("error_description");
+      const assistantUrl = code
+        ? `chrome://browser/content/assistant/assistant.xhtml?oauth_code=${encodeURIComponent(code)}`
+        : "chrome://browser/content/assistant/assistant.xhtml";
 
-        function getUrlParams() {
-            const params = {};
-            // Check URL hash first (for implicit flow)
-            if (window.location.hash) {
-                window.location.hash.substring(1).split('&').forEach(part => {
-                    const [key, value] = part.split('=');
-                    if (key && value) {
-                        params[key] = decodeURIComponent(value);
-                    }
-                });
-            }
-            // Check URL search params (for authorization code flow)
-            if (window.location.search) {
-                window.location.search.substring(1).split('&').forEach(part => {
-                    const [key, value] = part.split('=');
-                    if (key && value) {
-                        params[key] = decodeURIComponent(value);
-                    }
-                });
-            }
-            return params;
-        }
+      if (error) {
+        statusTitle.textContent = "OAuth failed";
+        statusMessage.textContent = "Return to Oasis Assistant and try again.";
+        detailsDiv.innerHTML = `<div class="error">${errorDescription || error}</div>`;
+      } else if (!code) {
+        statusTitle.textContent = "Missing code";
+        statusMessage.textContent =
+          "No OAuth code was found in this callback URL.";
+        detailsDiv.innerHTML =
+          '<div class="error">Please restart sign-in from Oasis Assistant.</div>';
+      } else {
+        detailsDiv.innerHTML = `
+                <div class="success">OAuth successful</div>
+                <input class="code-field" id="oauth-code" type="text" readonly value="${code}">
+                <div class="button-row">
+                    <button class="copy-button" id="copy-code-button" type="button">Copy code</button>
+                    <a class="secondary-button" id="open-assistant-button" href="${assistantUrl}">Open Oasis Assistant</a>
+                </div>
+            `;
 
-        const params = getUrlParams();
-        console.log('OAuth callback received parameters:', params);
-
-        if (params.error) {
-            // Handle error
-            statusTitle.textContent = 'Authentication Failed!';
-            statusMessage.innerHTML = `<div class="error">Error: ${params.error_description || params.error}</div>`;
-            detailsDiv.innerHTML = 'Please return to the Oasis Browser assistant and try again.';
-            
-        } else if (params.access_token || params.code) {
-            // Handle success
-            statusTitle.textContent = 'Authentication Successful!';
-            statusMessage.innerHTML = `<div class="success">Redirecting to Oasis Browser...</div>`;
-            
-            const authData = {
-                success: true,
-                timestamp: Date.now(),
-                access_token: params.access_token,
-                refresh_token: params.refresh_token,
-                expires_in: params.expires_in,
-                token_type: params.token_type,
-                code: params.code,
-                provider_token: params.provider_token,
-                provider_refresh_token: params.provider_refresh_token,
-                url: window.location.href
-            };
-            
-            console.log('Auth data prepared:', authData);
-            
-            // Try to communicate with the assistant
+        document
+          .getElementById("copy-code-button")
+          .addEventListener("click", async () => {
             try {
-                // Send success to parent window if available
-                if (window.opener) {
-                    window.opener.postMessage({
-                        type: 'oauth-success',
-                        data: authData
-                    }, 'chrome://browser/content/assistant/assistant.xhtml');
-                    console.log('Sent OAuth success message to opener.');
-                }
-                
-                // Also try to close the window
-                setTimeout(() => {
-                    window.close();
-                }, 2000);
+              await navigator.clipboard.writeText(code);
+              document.getElementById("copy-code-button").textContent =
+                "Copied";
             } catch (e) {
-                console.log('Could not communicate with parent window:', e);
-                // Fallback: show instructions
-                detailsDiv.innerHTML = 'Please return to the Oasis Browser assistant.';
+              const field = document.getElementById("oauth-code");
+              field.focus();
+              field.select();
             }
-            
-        } else {
-            // No auth parameters found
-            statusTitle.textContent = 'OAuth Handler Ready';
-            statusMessage.innerHTML = `<div class="info">This page handles OAuth callbacks for Oasis Browser.</div>`;
-            detailsDiv.innerHTML = 'If you reached this page by mistake, please return to the assistant.';
-        }
+          });
+      }
     </script>
-</body>
+  </body>
 </html>
