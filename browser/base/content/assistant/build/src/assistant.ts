@@ -85,9 +85,9 @@ export async function runAssistantStream(
     inputType,
     toolCommandNames,
     pushCurrentTurn: sessionController.pushCurrentTurn,
-    trackUsage: nextInputType => {
+    trackUsage: (nextInputType, meta) => {
       if (isAuthenticated) {
-        subscriptionService.trackUsage(nextInputType);
+        subscriptionService.trackUsage(nextInputType, undefined, meta);
       }
     },
   });
