@@ -61,7 +61,7 @@ Later, other branches can merge into the same integration branch; final merge to
 
 - [ ] `git checkout main-march-28-2026`
 - [ ] Confirm tip matches integration intent: `git log -1 --oneline` should be the same as **`origin/main`** until merges start (e.g. `7ca1251c820e` or newer if `main` moved).
-- [ ] Optional: push the branch to remote when ready:
+- [x] Optional: push the branch to remote when ready:
   - `git push -u origin main-march-28-2026`
 
 **Checkpoint:** On `main-march-28-2026`, clean `git status` (except intentional untracked files).
