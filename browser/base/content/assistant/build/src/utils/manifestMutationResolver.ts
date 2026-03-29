@@ -1,17 +1,28 @@
+/**
+ * Mutation-family resolver — handles add/delete/rename/close commands.
+ *
+ * Three resolution strategies tried in order:
+ * 1. Explicit mutation regex (mutationExplicitResolver.ts)
+ * 2. Container-add parsing: "add X to Y" with tab group/folder disambiguation
+ * 3. Close/delete target parsing: "delete Research" with entity resolution
+ *
+ * Cross-references target names with the routing state snapshot to
+ * detect ambiguity (same name in both groups and folders).
+ * Called by decisionEngine.ts for mutation-family commands.
+ */
 import {
   normalizeRouteName,
   parseCloseDeleteTargetIntent,
   parseContainerAddIntent,
 } from "./intentParser.js";
-import { resolveManifestCommand } from "./manifestResolver.js";
 import { resolveTargetName } from "./entityResolver.js";
+import { resolveExplicitMutationRoute } from "./mutationExplicitResolver.js";
 import type {
   DeterministicRouteDecision,
   PendingAmbiguityPayload,
   RouteArgs,
   RoutingStateSnapshot,
 } from "./routerTypes.js";
-import { getBrowserWindow } from "../types/runtime.js";
 
 function buildAmbiguityPayload(
   name: string,
@@ -198,24 +209,9 @@ export function resolveManifestMutationRoute(
   input: string,
   snapshot: RoutingStateSnapshot
 ): DeterministicRouteDecision | null {
-  const topWin = getBrowserWindow();
-  const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
-  const candidate = resolveManifestCommand(input, {
-    snapshot,
-    hasOpenTabs: tabCount > 0,
-    hasPendingConfirmation: false,
-  });
-  if (!candidate || candidate.definition.family !== "mutation") {
-    return null;
-  }
-
-  if (candidate.definition.id === "mutation.container.add") {
-    return resolveContainerAddRoute(input, snapshot);
-  }
-
-  if (candidate.definition.id === "mutation.target.delete") {
-    return resolveCloseDeleteRoute(input, snapshot);
-  }
-
-  return resolveContainerAddRoute(input, snapshot) || resolveCloseDeleteRoute(input, snapshot);
+  return (
+    resolveExplicitMutationRoute(input) ||
+    resolveContainerAddRoute(input, snapshot) ||
+    resolveCloseDeleteRoute(input, snapshot)
+  );
 }

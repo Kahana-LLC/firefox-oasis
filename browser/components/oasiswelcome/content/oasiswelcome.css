@@ -1,0 +1,910 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+:root {
+  --oasis-primary-color: #7a9200;
+  --oasis-primary-hover: #8ba300;
+  --oasis-title-color: #495800;
+  --oasis-subtitle-color: #848484;
+  --oasis-bg-color: #ffffff;
+  --oasis-border-radius: 64px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu",
+    "Helvetica Neue", sans-serif;
+}
+
+body {
+  background: var(--oasis-bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.oasis-welcome-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--oasis-bg-color);
+}
+
+.oasis-welcome-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 600px;
+  padding: 40px;
+}
+
+/* Logo Section */
+.oasis-logo-section {
+  margin-bottom: 32px;
+}
+
+.oasis-main-logo {
+  width: 93px;
+  height: 93px;
+  display: block;
+}
+
+/* Text Section */
+.oasis-text-section {
+  margin-bottom: 32px;
+}
+
+.oasis-welcome-title {
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 48px;
+  letter-spacing: -1.2px;
+  color: var(--oasis-title-color);
+  margin: 0 0 8px 0;
+}
+
+.oasis-welcome-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--oasis-subtitle-color);
+  margin: 0;
+}
+
+/* Button */
+.oasis-primary-button {
+  background: var(--oasis-primary-color);
+  color: white;
+  border: 1px solid var(--oasis-primary-color);
+  border-radius: var(--oasis-border-radius);
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 210px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.oasis-primary-button:hover {
+  background: var(--oasis-primary-hover);
+  border-color: var(--oasis-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-primary-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(122, 146, 0, 0.2);
+}
+
+/* Page Management */
+.oasis-page {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+
+.oasis-page.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Page 2: Split Layout */
+.oasis-split-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.oasis-left-panel {
+  flex: 0 0 49.2%;
+  background: #f8faf2;
+  border-radius: 24px 0 0 24px;
+}
+
+.oasis-right-panel {
+  flex: 1;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 40px;
+}
+
+/* Logo Corner */
+.oasis-logo-corner {
+  position: absolute;
+  top: 25px;
+  right: 32px;
+}
+
+.oasis-small-logo {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+/* Form Content */
+.oasis-form-content {
+  max-width: 326px;
+  width: 100%;
+}
+
+.oasis-form-header {
+  margin-bottom: 48px;
+}
+
+.oasis-form-title {
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 28px;
+  color: #333;
+  margin: 0 0 8px 0;
+  text-align: left;
+}
+
+.oasis-form-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #848484;
+  margin: 0;
+  text-align: left;
+}
+
+/* Input Container */
+.oasis-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.oasis-text-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 20px;
+  line-height: 24px;
+  color: #666;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #f2f2f2;
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: border-color 0.2s ease;
+}
+
+.oasis-text-input:focus {
+  border-bottom-color: var(--oasis-primary-color);
+}
+
+.oasis-text-input::placeholder {
+  color: #999;
+}
+
+.oasis-next-button {
+  background: var(--oasis-primary-color);
+  color: white;
+  border: 1px solid var(--oasis-primary-color);
+  border-radius: var(--oasis-border-radius);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.oasis-next-button:hover {
+  background: var(--oasis-primary-hover);
+  border-color: var(--oasis-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-next-button:active {
+  transform: translateY(0);
+}
+
+/* Page 3: Sign In */
+.oasis-signin-content {
+  max-width: 442px;
+  width: 100%;
+}
+
+.oasis-signin-header {
+  margin-bottom: 48px;
+}
+
+.oasis-signin-title {
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 40px;
+  color: #333;
+  margin: 0 0 10px 0;
+  text-align: left;
+}
+
+.oasis-signin-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #666;
+  margin: 0;
+  text-align: left;
+}
+
+.oasis-signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+#auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.oasis-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oasis-form-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  text-align: left;
+}
+
+.oasis-third-party-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.oasis-signin-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #f2f2f2;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.oasis-signin-option:hover {
+  border-color: #e0e0e0;
+  background: #fafafa;
+}
+
+.oasis-signin-option svg {
+  flex-shrink: 0;
+}
+
+.oasis-signin-option span {
+  flex: 1;
+}
+
+.oasis-signin-divider {
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: #000;
+}
+
+.oasis-email-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+}
+
+.oasis-email-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #666;
+  background: white;
+  border: 1px solid #f2f2f2;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.oasis-email-input:focus {
+  border-color: var(--oasis-primary-color);
+}
+
+.oasis-email-input::placeholder {
+  color: #999;
+}
+
+.oasis-signup-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #000;
+}
+
+.oasis-signup-link a {
+  color: #000;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.oasis-signup-link a:hover {
+  color: var(--oasis-primary-color);
+}
+
+.oasis-auth-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #666;
+  justify-content: center;
+}
+
+.oasis-auth-toggle a {
+  color: var(--oasis-primary-color);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.oasis-auth-toggle a:hover {
+  color: var(--oasis-primary-hover);
+}
+
+.oasis-auth-error {
+  color: #d32f2f;
+  font-size: 13px;
+  background: #ffebee;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.oasis-skip-button {
+  background: transparent;
+  color: #999;
+  border: none;
+  padding: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.oasis-skip-button:hover {
+  color: #666;
+}
+
+/* Auth Banner */
+.oasis-auth-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #7A9200 0%, #8BA300 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(122, 146, 0, 0.3);
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.oasis-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oasis-banner-label {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.oasis-banner-email {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.oasis-signin-button {
+  width: 100%;
+  background: var(--oasis-primary-color);
+  color: white;
+  border: 1px solid var(--oasis-primary-color);
+  border-radius: var(--oasis-border-radius);
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oasis-signin-button:hover {
+  background: var(--oasis-primary-hover);
+  border-color: var(--oasis-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-signin-button:active {
+  transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .oasis-welcome-content {
+    padding: 20px;
+  }
+
+  .oasis-main-logo {
+    width: 72px;
+    height: 72px;
+  }
+
+  .oasis-welcome-title {
+    font-size: 32px;
+    line-height: 40px;
+    letter-spacing: -0.96px;
+  }
+
+  .oasis-welcome-subtitle {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .oasis-primary-button {
+    padding: 14px 20px;
+    font-size: 14px;
+    min-width: 180px;
+  }
+
+  .oasis-split-layout {
+    flex-direction: column;
+  }
+
+  .oasis-left-panel {
+    flex: 0 0 30%;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .oasis-right-panel {
+    padding: 20px;
+  }
+
+  .oasis-form-content {
+    max-width: 100%;
+  }
+
+  .oasis-signin-content {
+    max-width: 100%;
+  }
+
+  .oasis-signin-title {
+    font-size: 24px;
+    line-height: 32px;
+  }
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --oasis-bg-color: #1c1c1e;
+    --oasis-title-color: #a3b800;
+    --oasis-subtitle-color: #b0b0b0;
+  }
+
+  .oasis-right-panel {
+    background: #1c1c1e;
+  }
+
+  .oasis-form-title {
+    color: #e5e5e5;
+  }
+
+  .oasis-text-input {
+    color: #e5e5e5;
+  }
+
+  .oasis-text-input::placeholder {
+    color: #666;
+  }
+}
+
+/* ========== Page 3: Import Browser Data Styles ========== */
+
+.oasis-import-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 523px;
+  padding-bottom: 80px;
+}
+
+.oasis-import-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oasis-import-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 36px;
+  color: #333;
+  margin: 0;
+  text-align: left;
+}
+
+.oasis-import-subtitle {
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #666;
+  margin: 0;
+}
+
+.oasis-import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.oasis-import-item {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 60px;
+  position: relative;
+}
+
+.oasis-import-item-info {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  align-items: center;
+}
+
+.oasis-import-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: #f8faf2;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.oasis-import-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.oasis-import-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.oasis-import-item-title {
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #333;
+  margin: 0;
+}
+
+.oasis-import-item-desc {
+  font-family: 'Geist', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #666;
+  margin: 0;
+}
+
+/* Custom Checkbox Styles */
+.oasis-checkbox {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.oasis-checkbox-label {
+  position: relative;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #7a9200;
+  border-radius: 8px;
+  background: transparent;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.oasis-checkbox-label::after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 10px;
+  top: 5px;
+  width: 8px;
+  height: 14px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.oasis-checkbox:checked + .oasis-checkbox-label {
+  background: #7a9200;
+  border-color: #7a9200;
+}
+
+.oasis-checkbox:checked + .oasis-checkbox-label::after {
+  display: block;
+}
+
+.oasis-checkbox-label:hover {
+  background: rgba(122, 146, 0, 0.1);
+}
+
+.oasis-checkbox:checked + .oasis-checkbox-label:hover {
+  background: #6a8000;
+}
+
+.oasis-import-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 16px;
+}
+
+.oasis-back-button {
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-radius: 64px;
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #7a9200;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oasis-back-button:hover {
+  background: rgba(122, 146, 0, 0.1);
+}
+
+.oasis-right-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.oasis-skip-import-button {
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-radius: 64px;
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #7a9200;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oasis-skip-import-button:hover {
+  background: rgba(122, 146, 0, 0.1);
+}
+
+.oasis-import-button {
+  padding: 12px 20px;
+  min-width: 120px;
+  background: #7a9200;
+  border: 1px solid #7a9200;
+  border-radius: 64px;
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oasis-import-button:hover {
+  background: #6a8000;
+  border-color: #6a8000;
+}
+
+.oasis-import-button:active {
+  transform: scale(0.98);
+}
+
+/* ========================================
+   Page 4: AI Assistant Sign Up
+   ======================================== */
+.oasis-ai-signup-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.oasis-ai-signup-header {
+  margin-bottom: 40px;
+}
+
+.oasis-ai-signup-title {
+  font-family: 'Geist', sans-serif;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+  max-width: 500px;
+}
+
+.oasis-ai-signup-subtitle {
+  font-family: 'Geist', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #666;
+  margin: 0;
+}
+
+.oasis-ai-signup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.oasis-open-signup-button {
+  padding: 16px 32px;
+  background: #7a9200;
+  border: none;
+  border-radius: 64px;
+  font-family: 'Geist', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-open-signup-button:hover {
+  background: #6a8000;
+  box-shadow: 0 4px 12px rgba(122, 146, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.oasis-open-signup-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(122, 146, 0, 0.2);
+}
+
+.oasis-skip-ai-button {
+  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid #e0e0e0;
+  border-radius: 64px;
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oasis-skip-ai-button:hover {
+  background: rgba(122, 146, 0, 0.05);
+  border-color: #7a9200;
+  color: #7a9200;
+}
+
+.oasis-skip-ai-button:active {
+  transform: scale(0.98);
+}

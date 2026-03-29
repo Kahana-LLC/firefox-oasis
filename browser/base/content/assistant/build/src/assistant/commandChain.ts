@@ -1,3 +1,13 @@
+/**
+ * Command chain parser — splits multi-command inputs.
+ *
+ * Detects and splits chained user inputs like "do X; then Y" or
+ * "open tabs and then list bookmarks" into separate command strings.
+ * Uses connector patterns: ";", "and then", "then", "and <verb>".
+ * Max 3 commands per chain.
+ *
+ * Called by supervisorQueue.ts to populate the command queue.
+ */
 const CHAIN_VERBS = [
   "open",
   "close",
@@ -22,6 +32,10 @@ const CHAIN_VERBS = [
 ] as const;
 
 const CHAIN_VERB_PATTERN = CHAIN_VERBS.join("|");
+const CHAIN_CONNECTOR_RE = new RegExp(
+  `(?:\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b))`,
+  "i"
+);
 const CHAIN_SPLIT_RE = new RegExp(
   `\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)`,
   "gi"
@@ -31,6 +45,10 @@ export type CommandChainResult = {
   commands: string[];
   truncated: boolean;
 };
+
+export function looksLikeCommandChain(input: string): boolean {
+  return CHAIN_CONNECTOR_RE.test(String(input || "").trim());
+}
 
 export function splitCommandChain(
   input: string,

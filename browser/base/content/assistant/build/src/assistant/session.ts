@@ -1,3 +1,13 @@
+/**
+ * Session controller — manages conversation history.
+ *
+ * Imports the AssistantSession singleton from Firefox's privileged
+ * module system (chrome://). Falls back to an in-memory store if
+ * ChromeUtils is unavailable. Provides:
+ * - getCurrentSessionMessages(): gets full history as BaseMessage[]
+ * - pushCurrentTurn(): appends a user+assistant message pair
+ * - resetAssistantSession(): clears all history
+ */
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 import { OASIS_EVENT_HISTORY_UPDATE } from "../../../shared/contracts.js";

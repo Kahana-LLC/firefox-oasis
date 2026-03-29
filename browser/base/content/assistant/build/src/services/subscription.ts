@@ -1,3 +1,11 @@
+/**
+ * Subscription service — usage tracking and plan limits.
+ *
+ * Tracks usage units per command (text=1, voice=10), checks monthly
+ * limits based on the user's plan (free=50, basic=1500, pro=3000),
+ * persists to both Supabase and local IndexedDB (fail-safe).
+ * Called before each assistant run to check availability.
+ */
 import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
 import { assistantLogger } from "../utils/assistantLogger.js";

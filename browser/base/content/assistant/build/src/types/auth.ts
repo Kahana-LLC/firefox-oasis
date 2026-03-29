@@ -1,4 +1,4 @@
-// TypeScript interfaces for authentication
+/** Auth types — UserProfile, UserSession, and AuthState interfaces for Supabase integration. */
 import { User, Session } from '@supabase/supabase-js';
 
 export interface UserProfile {

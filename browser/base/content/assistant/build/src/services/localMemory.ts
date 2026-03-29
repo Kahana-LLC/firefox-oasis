@@ -1,3 +1,14 @@
+/**
+ * Local memory — full-text search engine (MiniSearch + IndexedDB).
+ *
+ * Indexes open tabs, tab groups, bookmarks, browsing history, and
+ * managed bookmark folders into a searchable local database. Supports
+ * fuzzy matching, prefix search, and title boosting. Deduplicates
+ * entries via computed dedupe keys.
+ *
+ * Auto-indexes on startup: tab groups, bookmarks, then history (5s delay).
+ * Used by the search_memory and related commands.
+ */
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import MiniSearch, { type SearchResult } from "minisearch";
 import {

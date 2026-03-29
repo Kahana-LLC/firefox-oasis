@@ -1,3 +1,14 @@
+/**
+ * Interaction state store — transient state for multi-turn flows.
+ *
+ * Singleton managing:
+ * - pendingConfirmation: destructive action awaiting "yes"/"no"
+ * - pendingAmbiguity: target matching both a tab group and folder
+ * - continuationQueue: remaining chained commands after confirmation
+ * - recentSearchResults: cached results for "open result #N" follow-ups
+ *
+ * Emits CustomEvents to notify the UI of state changes.
+ */
 import type { AssistantWindowLike } from "../types/runtime.js";
 import type {
   AmbiguityTarget,
@@ -14,9 +25,21 @@ export type PendingConfirmation = PendingConfirmationPayload;
 
 export type PendingAmbiguity = PendingAmbiguityPayload;
 
+export type RecentSearchResult = {
+  index: number;
+  source: string;
+  title: string;
+  url: string;
+  bookmarkGuid?: string;
+  context?: string;
+  snippet?: string;
+};
+
 class InteractionStateStore {
   private pendingConfirmation: PendingConfirmation | null = null;
   private pendingAmbiguity: PendingAmbiguity | null = null;
+  private continuationQueue: string[] = [];
+  private recentSearchResults: RecentSearchResult[] = [];
   private readonly assistantWindow: AssistantWindowLike;
 
   constructor(assistantWindow: AssistantWindowLike = window as AssistantWindowLike) {
@@ -68,6 +91,60 @@ class InteractionStateStore {
     this.pendingAmbiguity = null;
   }
 
+  getContinuationQueue(): string[] {
+    return [...this.continuationQueue];
+  }
+
+  setContinuationQueue(queue: string[]): void {
+    this.continuationQueue = queue
+      .map(item => String(item || "").trim())
+      .filter(Boolean);
+    assistantLogger.debug("interaction", "Continuation queue updated", {
+      length: this.continuationQueue.length,
+    });
+  }
+
+  takeContinuationQueue(): string[] {
+    const next = [...this.continuationQueue];
+    this.continuationQueue = [];
+    if (next.length > 0) {
+      assistantLogger.debug("interaction", "Continuation queue consumed", {
+        length: next.length,
+      });
+    }
+    return next;
+  }
+
+  clearContinuationQueue(): void {
+    if (this.continuationQueue.length > 0) {
+      assistantLogger.debug("interaction", "Continuation queue cleared", {
+        length: this.continuationQueue.length,
+      });
+    }
+    this.continuationQueue = [];
+  }
+
+  getRecentSearchResults(): RecentSearchResult[] {
+    return this.recentSearchResults.map(result => ({ ...result }));
+  }
+
+  setRecentSearchResults(results: RecentSearchResult[]): void {
+    this.recentSearchResults = results
+      .filter(result => !!result.url)
+      .slice(0, 25)
+      .map(result => ({ ...result }));
+    assistantLogger.debug("interaction", "Recent search results updated", {
+      count: this.recentSearchResults.length,
+    });
+  }
+
+  clearRecentSearchResults(): void {
+    if (this.recentSearchResults.length > 0) {
+      assistantLogger.debug("interaction", "Recent search results cleared");
+    }
+    this.recentSearchResults = [];
+  }
+
   private emitConfirmationUpdate(pending: PendingConfirmation | null): void {
     try {
       const relay = this.assistantWindow.oasisSetPendingConfirmationRelay;
@@ -111,4 +188,32 @@ export function setPendingAmbiguity(pending: PendingAmbiguity | null): void {
 
 export function clearPendingAmbiguity(): void {
   interactionState.clearPendingAmbiguity();
+}
+
+export function getContinuationQueue(): string[] {
+  return interactionState.getContinuationQueue();
+}
+
+export function setContinuationQueue(queue: string[]): void {
+  interactionState.setContinuationQueue(queue);
+}
+
+export function takeContinuationQueue(): string[] {
+  return interactionState.takeContinuationQueue();
+}
+
+export function clearContinuationQueue(): void {
+  interactionState.clearContinuationQueue();
+}
+
+export function getRecentSearchResults(): RecentSearchResult[] {
+  return interactionState.getRecentSearchResults();
+}
+
+export function setRecentSearchResults(results: RecentSearchResult[]): void {
+  interactionState.setRecentSearchResults(results);
+}
+
+export function clearRecentSearchResults(): void {
+  interactionState.clearRecentSearchResults();
 }

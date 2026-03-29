@@ -1,3 +1,13 @@
+/**
+ * Type definitions for the deterministic routing system.
+ *
+ * Key types:
+ * - IntentFamily: list | search | mutation | other
+ * - ParsedIntent: structured result of intent parsing
+ * - DeterministicRouteDecision: tool, chat, or no_match result
+ * - RoutingStateSnapshot: current tab group + folder names
+ * - RoutingStateMutation: change event for the routing state cache
+ */
 export type ContainerType = "bookmark-folder" | "tab-group";
 export type RouteArgs = Record<string, unknown>;
 export type RoutingEntityType = "folder" | "group";

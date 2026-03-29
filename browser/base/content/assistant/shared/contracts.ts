@@ -32,8 +32,7 @@ export type OasisRecordToolActionStart = (
 
 export type OasisRecordToolActionUpdate = (
   actionId: string,
-  status: ToolBridgeUpdateStatus,
-  output?: string
+  status: ToolBridgeUpdateStatus
 ) => void;
 
 export type AssistantHistoryWireEntry = {

@@ -1,3 +1,12 @@
+/**
+ * Hidden instructions — context-dependent instructions for the LLM.
+ *
+ * Appended as a hidden HumanMessage right before the chat LLM call.
+ * The user never sees these. Three modes:
+ * - Summarize: instructions for page summarization
+ * - Tool output: instructions to present tool results naturally
+ * - Default: generic "respond helpfully" instruction
+ */
 export type HiddenInstructionContext = {
   hasSummarizeRequest: boolean;
   hasToolOutput: boolean;

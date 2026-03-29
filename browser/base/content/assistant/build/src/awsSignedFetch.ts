@@ -1,4 +1,4 @@
-// Sends POSTs to assistant/voice backends with Supabase JWT
+/** AWS-signed HTTP POST client. Sends JSON payloads to the assistant/voice Lambda endpoints with Supabase JWT authentication. Used by proxyClient.ts. */
 import SupabaseAuth from "./services/supabase.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
 

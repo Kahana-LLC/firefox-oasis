@@ -1,3 +1,14 @@
+/**
+ * Firefox API facade — abstraction over privileged browser APIs.
+ *
+ * Resolves the chrome window, gBrowser, PlacesUtils, and Services.
+ * Provides helpers for tab/group/bookmark operations:
+ * - getTabs(), getTabGroups(), findTabsByQuery(), findGroupByName()
+ * - tabUrl(), tabTitle(), findTabByIndex()
+ * - withUriFixup(), fetchChildrenBookmarks(), fetchBookmarkByGuid()
+ *
+ * Decouples command implementations from direct Firefox API access.
+ */
 import {
   getBrowserWindow,
   type AssistantWindowLike,

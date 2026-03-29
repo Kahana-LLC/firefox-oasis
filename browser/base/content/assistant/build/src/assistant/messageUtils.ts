@@ -1,3 +1,11 @@
+/**
+ * Message utilities — serialization and extraction helpers.
+ *
+ * Converts LangChain BaseMessages to wire format for the remote API,
+ * extracts text content from various message shapes, detects tool
+ * result payloads embedded in additional_kwargs, and strips echoed
+ * tool output from assistant responses.
+ */
 import type { BaseMessage } from "@langchain/core/messages";
 
 export type GraphArgs = Record<string, unknown>;
@@ -128,11 +136,10 @@ export function stripLeadingEchoedPayload(
       continue;
     }
 
-    if (text === candidate) {
-      return "";
-    }
-
     if (text.startsWith(candidate)) {
+      if (text.length === candidate.length) {
+        continue;
+      }
       text = text.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
       break;
     }

@@ -1,3 +1,4 @@
+/** Voice input service — microphone recording, audio blob creation, and transcription via the remote Lambda. */
 import { transcribeAudio } from "../proxyClient.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 

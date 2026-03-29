@@ -1,3 +1,4 @@
+/** Resolves a target name against live browser state: checks tab groups, bookmark folders, and matching open tabs. Used by manifestMutationResolver.ts for ambiguity detection. */
 import type { ResolutionResult, RoutingStateSnapshot } from "./routerTypes.js";
 import { normalizeRouteName } from "./intentParser.js";
 import { getBrowserWindow, type BrowserTabLike } from "../types/runtime.js";

@@ -1,3 +1,14 @@
+/**
+ * List-family resolver — handles "list/show" commands deterministically.
+ *
+ * Parses target names from inputs like "list tabs in Research group",
+ * cross-references with the routing state snapshot to determine if
+ * the target is a tab group, bookmark folder, or ambiguous.
+ *
+ * Returns: list_tabs (with scope + name args), list_bookmark_folders,
+ * list_tab_groups, or null if no match.
+ * Called by decisionEngine.ts for list-family commands.
+ */
 import { normalizeRouteName } from "./intentParser.js";
 import { resolveManifestCommand } from "./manifestResolver.js";
 import type { DeterministicRouteDecision, RoutingStateSnapshot } from "./routerTypes.js";
@@ -22,6 +33,18 @@ function cleanTargetName(value: string): string {
     .replace(/^\s*(?:my|the)\s+/i, "")
     .replace(/\s+(?:please|now)\s*$/i, "")
     .trim();
+}
+
+function isListBookmarkFoldersCommand(input: string): boolean {
+  return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:bookmark\s+)?(?:bookmarks?|folders?|hubs?)\s*$/i.test(
+    String(input || "").trim()
+  );
+}
+
+function isListTabGroupsCommand(input: string): boolean {
+  return /^(?:list|show)\s+(?:all\s+)?(?:my\s+)?(?:tab\s+)?groups?\s*$/i.test(
+    String(input || "").trim()
+  );
 }
 
 function parseListTabsTarget(
@@ -120,6 +143,27 @@ export function resolveManifestListRoute(
   });
   if (!candidate || candidate.definition.family !== "list") {
     return null;
+  }
+
+  if (
+    candidate.definition.id === "list.bookmark.folders" ||
+    isListBookmarkFoldersCommand(input)
+  ) {
+    return {
+      type: "tool",
+      next: "list_bookmark_folders",
+      args: {},
+      reason: "list-manifest-bookmark-folders",
+    };
+  }
+
+  if (candidate.definition.id === "list.tab.groups" || isListTabGroupsCommand(input)) {
+    return {
+      type: "tool",
+      next: "list_tab_groups",
+      args: {},
+      reason: "list-manifest-tab-groups",
+    };
   }
 
   const parsed = parseListTabsTarget(input);

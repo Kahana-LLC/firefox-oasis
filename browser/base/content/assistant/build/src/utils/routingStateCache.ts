@@ -1,3 +1,14 @@
+/**
+ * Routing state cache — live snapshot of tab groups and bookmark folders.
+ *
+ * Caches the normalized names of all tab groups and bookmark folders
+ * from the browser. The deterministic resolvers use this to verify
+ * that a target name like "Research" actually exists before routing.
+ *
+ * Listens for TabGroupCreate, TabGroupRemoved, and bookmark folder
+ * change events. Auto-refreshes every 15 seconds. Supports instant
+ * mutations (upsert/delete/rename) after command execution.
+ */
 import { bookmarkFolders } from "../bookmarkFolders.js";
 import { getBrowserWindow } from "../types/runtime.js";
 import {

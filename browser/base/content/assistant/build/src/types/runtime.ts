@@ -1,3 +1,4 @@
+/** Type definitions for Firefox's privileged runtime objects: gBrowser, tabs, tab groups, PlacesUtils, Services, and the assistant's window interface. */
 import type { BaseMessage } from "@langchain/core/messages";
 import type SupabaseAuth from "../services/supabase.js";
 import type voiceInputService from "../services/voiceInput.js";

@@ -1,3 +1,11 @@
+/**
+ * Stream guards — infinite loop detection for graph execution.
+ *
+ * Tracks step count and same-step streaks during graph.stream().
+ * If the graph exceeds 36 total steps or repeats the same node
+ * 8+ times, execution is halted to prevent runaway loops.
+ * Used by stream.ts.
+ */
 export type StreamGuardConfig = {
   maxStreamSteps: number;
   maxSameStepStreak: number;

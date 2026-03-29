@@ -1,3 +1,10 @@
+/**
+ * Chat system prompt — defines the assistant's conversational persona.
+ *
+ * Used by the chat node when generating natural language responses.
+ * Defines "Oasis AI" as a general-purpose assistant, with instructions
+ * for Markdown formatting, search result presentation, and tone.
+ */
 export const CHAT_SYSTEM_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into Firefox. You can help with ANYTHING - not just browser tasks.
 
 **Your Capabilities:**
