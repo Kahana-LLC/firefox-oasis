@@ -121,17 +121,17 @@ function formatListTabs(message: string): string {
 }
 
 function formatSearchResults(message: string): string {
-  const parsed = safeParseJson(message) as
-    | {
-        summary?: unknown;
-        results?: unknown;
-      }
-    | null;
+  const parsed = safeParseJson(message) as {
+    summary?: unknown;
+    results?: unknown;
+  } | null;
   if (!parsed || typeof parsed !== "object") {
     return message;
   }
   const summary =
-    typeof parsed.summary === "string" ? parsed.summary.trim() : "Search results:";
+    typeof parsed.summary === "string"
+      ? parsed.summary.trim()
+      : "Search results:";
   const rows = toObjectList<SearchResultRow>(parsed.results).slice(0, 10);
   if (rows.length === 0) {
     return summary || message;

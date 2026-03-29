@@ -24,7 +24,9 @@ const ACTIONABLE_VERB_PATTERN =
 export function extractLatestActionableText(
   messages: BaseMessage[]
 ): LatestActionableText {
-  const latestUserMsg = [...messages].reverse().find(m => m._getType() === "human");
+  const latestUserMsg = [...messages]
+    .reverse()
+    .find(m => m._getType() === "human");
   const latestTextRaw = msgText(latestUserMsg) || "";
   const lines = latestTextRaw
     .split(/\r?\n/)

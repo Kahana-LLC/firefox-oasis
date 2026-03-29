@@ -24,7 +24,10 @@ function toolDecision(
   return { type: "tool", next, args, reason };
 }
 
-function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null {
+function firstMatch(
+  input: string,
+  patterns: RegExp[]
+): RegExpMatchArray | null {
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
@@ -99,7 +102,9 @@ const MUTATION_EXPLICIT_ROUTES: MutationRoute[] = [
       ) {
         return null;
       }
-      const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
+      const withTabMatch = input.match(
+        /(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i
+      );
       const withIndex = numberArg(withTabMatch?.groups?.index);
       if (withIndex != null) {
         return { withIndex };

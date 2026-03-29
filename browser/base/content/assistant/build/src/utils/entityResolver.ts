@@ -17,11 +17,14 @@ export function resolveTargetName(
     for (let i = 0; i < tabs.length; i++) {
       const tab = tabs[i] as BrowserTabLike;
       const title = normalizeRouteName(tab?.label || "");
-      const url = normalizeRouteName(tab?.linkedBrowser?.currentURI?.spec || "");
+      const url = normalizeRouteName(
+        tab?.linkedBrowser?.currentURI?.spec || ""
+      );
       if (
         title === normalizedTarget ||
         url === normalizedTarget ||
-        (normalizedTarget.length > 2 && (title.includes(normalizedTarget) || url.includes(normalizedTarget)))
+        (normalizedTarget.length > 2 &&
+          (title.includes(normalizedTarget) || url.includes(normalizedTarget)))
       ) {
         tabMatches.push(i + 1);
       }

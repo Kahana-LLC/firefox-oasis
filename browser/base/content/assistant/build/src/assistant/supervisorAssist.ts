@@ -12,7 +12,11 @@
  */
 import type { BaseMessage } from "@langchain/core/messages";
 
-import { assistRemote, type AssistResponse, type AssistTool } from "../proxyClient.js";
+import {
+  assistRemote,
+  type AssistResponse,
+  type AssistTool,
+} from "../proxyClient.js";
 import {
   getAssistCapability,
   markAssistSupported,
@@ -205,7 +209,10 @@ export async function tryResolveAssistRoute(params: {
   const capability = getAssistCapability(endpointKey);
   if (!shouldAttemptAssist(endpointKey)) {
     if (capability === "unsupported") {
-      assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+      assistantLogger.debug(
+        "router",
+        "Assist endpoint currently cooling down."
+      );
     }
     return { kind: "none" };
   }
@@ -217,14 +224,14 @@ export async function tryResolveAssistRoute(params: {
       : effectiveOptions;
     const toolsForAssist = allowPlanTool
       ? [
-        ...effectiveTools,
-        {
-          name: PLAN_TOOL_NAME,
-          description:
-            `Plan up to ${maxPlanActions} commands for chained requests. ` +
-            `Args JSON: {"actions":[{"next":"<valid command name>","args":{...}}]}`,
-        },
-      ]
+          ...effectiveTools,
+          {
+            name: PLAN_TOOL_NAME,
+            description:
+              `Plan up to ${maxPlanActions} commands for chained requests. ` +
+              `Args JSON: {"actions":[{"next":"<valid command name>","args":{...}}]}`,
+          },
+        ]
       : effectiveTools;
     const assist = await assistRemote(
       assistRouterPrompt,
@@ -234,11 +241,16 @@ export async function tryResolveAssistRoute(params: {
     );
     markAssistSupported(endpointKey);
 
-    const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
+    const assistNext =
+      typeof assist?.next === "string" ? assist.next.trim() : "";
     const assistArgs = isRecord(assist?.args) ? assist.args : {};
 
     if (allowPlanTool && assistNext === PLAN_TOOL_NAME) {
-      const actions = parsePlannedActions(assistArgs, memberNameSet, maxPlanActions);
+      const actions = parsePlannedActions(
+        assistArgs,
+        memberNameSet,
+        maxPlanActions
+      );
       if (actions.length > 0) {
         assistantLogger.debug("router", "Assist returned action plan", {
           count: actions.length,
@@ -253,11 +265,15 @@ export async function tryResolveAssistRoute(params: {
       assistNext !== "chat" &&
       !effectiveOptionSet.has(assistNext)
     ) {
-      assistantLogger.debug("router", "Assist route rejected by family policy", {
-        assistNext,
-        family: constrained.family,
-        constrained: constrained.constrained,
-      });
+      assistantLogger.debug(
+        "router",
+        "Assist route rejected by family policy",
+        {
+          assistNext,
+          family: constrained.family,
+          constrained: constrained.constrained,
+        }
+      );
       return { kind: "none" };
     }
 
@@ -267,7 +283,8 @@ export async function tryResolveAssistRoute(params: {
     }
 
     if (assistNext === "chat") {
-      const content = typeof assist?.content === "string" ? assist.content.trim() : "";
+      const content =
+        typeof assist?.content === "string" ? assist.content.trim() : "";
       if (content) {
         return { kind: "chat", content };
       }
@@ -280,9 +297,16 @@ export async function tryResolveAssistRoute(params: {
       /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
     if (assistUnsupported) {
       markAssistUnsupported(endpointKey);
-      assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
+      assistantLogger.warn(
+        "router",
+        "Assist endpoint unavailable, using fallback."
+      );
     } else {
-      assistantLogger.warn("router", "Assist route failed, using fallback.", error);
+      assistantLogger.warn(
+        "router",
+        "Assist route failed, using fallback.",
+        error
+      );
     }
     return { kind: "none" };
   }

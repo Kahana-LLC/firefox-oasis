@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'preact/hooks';
-import TOOL_LABELS from '../toolLabels';
+import { useCallback, useMemo, useState } from "preact/hooks";
+import TOOL_LABELS from "../toolLabels";
 import type {
   AssistantHistoryEntry,
   AssistantMessage,
@@ -8,45 +8,45 @@ import type {
   OasisWindow,
   ToolAction,
   ToolActionStatus,
-} from '../types';
+} from "../types";
 
 const oasisWindow: OasisWindow = window;
 
 function uuid() {
   try {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
     }
   } catch {
     // ignore
   }
 
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
     const random = (Math.random() * 16) | 0;
-    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
     return value.toString(16);
   });
 }
 
 function prettifyToolName(name: string): string {
-  if (!name) return '';
-  if (name.includes(' ')) return name;
+  if (!name) return "";
+  if (name.includes(" ")) return name;
   const spaced = name
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function normalizeAssistantChunk(raw: string): string {
-  return String(raw || '');
+  return String(raw || "");
 }
 
 function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
   return (
-    entry.type === 'human' ||
-    entry.id?.includes('Human') ||
-    entry.constructor?.name === 'HumanMessage'
+    entry.type === "human" ||
+    entry.id?.includes("Human") ||
+    entry.constructor?.name === "HumanMessage"
   );
 }
 
@@ -56,13 +56,11 @@ export function mapHistoryEntriesToMessages(
   return history.map((entry, index) => {
     const isHuman = isHumanHistoryEntry(entry);
     const content =
-      entry.content ||
-      (entry.lc_kwargs ? entry.lc_kwargs.content : '') ||
-      '';
+      entry.content || (entry.lc_kwargs ? entry.lc_kwargs.content : "") || "";
 
     return {
-      id: entry.id || `hist-${index}-${entry.role || 'msg'}`,
-      role: isHuman ? 'user' : 'ai',
+      id: entry.id || `hist-${index}-${entry.role || "msg"}`,
+      role: isHuman ? "user" : "ai",
       content,
     };
   });
@@ -73,40 +71,51 @@ export function useAssistantRuntime(params: {
   setPendingConfirmation: (data: ConfirmationData | null) => void;
   originalResetAssistantSession?: (() => void | Promise<void>) | undefined;
 }) {
-  const { auth, setPendingConfirmation, originalResetAssistantSession } = params;
+  const { auth, setPendingConfirmation, originalResetAssistantSession } =
+    params;
 
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
 
-  const appendChunkToMessage = useCallback((messageId: string, chunk: string) => {
-    setMessages((previous) => {
-      const index = previous.findIndex((message) => message.id === messageId);
-      if (index === -1) {
-        return previous;
-      }
-      const updated = [...previous];
-      const current = updated[index];
-      updated[index] = { ...current, content: `${current.content}${chunk}` };
-      return updated;
-    });
-  }, []);
+  const appendChunkToMessage = useCallback(
+    (messageId: string, chunk: string) => {
+      setMessages(previous => {
+        const index = previous.findIndex(message => message.id === messageId);
+        if (index === -1) {
+          return previous;
+        }
+        const updated = [...previous];
+        const current = updated[index];
+        updated[index] = { ...current, content: `${current.content}${chunk}` };
+        return updated;
+      });
+    },
+    []
+  );
 
   const runStreamTurn = useCallback(
-    async (prompt: string, inputType: 'text' | 'voice' = 'text') => {
+    async (prompt: string, inputType: "text" | "voice" = "text") => {
       const run = oasisWindow.runAssistantStream;
-      if (typeof run !== 'function') {
-        setMessages((previous) => [
+      if (typeof run !== "function") {
+        setMessages(previous => [
           ...previous,
-          { id: uuid(), role: 'ai', content: '(runAssistantStream not available)' },
+          {
+            id: uuid(),
+            role: "ai",
+            content: "(runAssistantStream not available)",
+          },
         ]);
         return;
       }
 
       const aiMessageId = uuid();
-      setMessages((previous) => [...previous, { id: aiMessageId, role: 'ai', content: '' }]);
+      setMessages(previous => [
+        ...previous,
+        { id: aiMessageId, role: "ai", content: "" },
+      ]);
 
       await run(
         prompt,
@@ -124,28 +133,37 @@ export function useAssistantRuntime(params: {
     [appendChunkToMessage]
   );
 
-  const startToolAction = useCallback((name: string, messageId?: string, label?: string) => {
-    const id = uuid();
-    const display = label || TOOL_LABELS[name] || prettifyToolName(name);
-    setToolActions((previous) => [
-      ...previous,
-      { id, name, status: 'running', messageId, label: display },
-    ]);
-    return id;
-  }, []);
+  const startToolAction = useCallback(
+    (name: string, messageId?: string, label?: string) => {
+      const id = uuid();
+      const display = label || TOOL_LABELS[name] || prettifyToolName(name);
+      setToolActions(previous => [
+        ...previous,
+        { id, name, status: "running", messageId, label: display },
+      ]);
+      return id;
+    },
+    []
+  );
 
-  const updateToolAction = useCallback((id: string, status: ToolActionStatus) => {
-    setToolActions((previous) =>
-      previous.map((action) => (action.id === id ? { ...action, status } : action))
-    );
-  }, []);
+  const updateToolAction = useCallback(
+    (id: string, status: ToolActionStatus) => {
+      setToolActions(previous =>
+        previous.map(action =>
+          action.id === id ? { ...action, status } : action
+        )
+      );
+    },
+    []
+  );
 
   const activeToolAction = useMemo(
     () =>
       [...toolActions]
         .reverse()
-        .find((action) => action.status === 'running' || action.status === 'pending') ||
-      null,
+        .find(
+          action => action.status === "running" || action.status === "pending"
+        ) || null,
     [toolActions]
   );
 
@@ -153,12 +171,12 @@ export function useAssistantRuntime(params: {
     setMessages([]);
     setToolActions([]);
 
-    if (typeof originalResetAssistantSession === 'function') {
+    if (typeof originalResetAssistantSession === "function") {
       await Promise.resolve(originalResetAssistantSession());
     }
 
     const setHistory = oasisWindow.setAssistantHistory;
-    if (typeof setHistory === 'function') {
+    if (typeof setHistory === "function") {
       await setHistory([]);
     }
   }, [originalResetAssistantSession]);
@@ -171,32 +189,32 @@ export function useAssistantRuntime(params: {
       }
 
       if (!auth.isAuthenticated) {
-        setMessages((previous) => [
+        setMessages(previous => [
           ...previous,
           {
             id: uuid(),
-            role: 'ai',
-            content: 'Please sign in to use the assistant.',
+            role: "ai",
+            content: "Please sign in to use the assistant.",
           },
         ]);
         return;
       }
 
-      setInput('');
+      setInput("");
       setBusy(true);
       setToolActions([]);
       const userMessageId = uuid();
-      setMessages((previous) => [
+      setMessages(previous => [
         ...previous,
-        { id: userMessageId, role: 'user', content: text },
+        { id: userMessageId, role: "user", content: text },
       ]);
 
       try {
-        await runStreamTurn(text, 'text');
+        await runStreamTurn(text, "text");
       } catch (error) {
-        setMessages((previous) => [
+        setMessages(previous => [
           ...previous,
-          { id: uuid(), role: 'ai', content: `Error: ${String(error)}` },
+          { id: uuid(), role: "ai", content: `Error: ${String(error)}` },
         ]);
       } finally {
         setBusy(false);
@@ -207,7 +225,7 @@ export function useAssistantRuntime(params: {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void send();
       }
@@ -218,7 +236,7 @@ export function useAssistantRuntime(params: {
   const toggleRecording = useCallback(async () => {
     const service = oasisWindow.voiceInputService;
     if (!service) {
-      alert('Voice input service not available.');
+      alert("Voice input service not available.");
       return;
     }
 
@@ -244,7 +262,7 @@ export function useAssistantRuntime(params: {
     setBusy(true);
     setToolActions([]);
     try {
-      await runStreamTurn('yes', 'text');
+      await runStreamTurn("yes", "text");
     } finally {
       setBusy(false);
     }
@@ -255,15 +273,15 @@ export function useAssistantRuntime(params: {
     setBusy(true);
     setToolActions([]);
     try {
-      await runStreamTurn('no', 'text');
+      await runStreamTurn("no", "text");
     } catch {
       const clearPending = oasisWindow.oasisClearPendingConfirmation;
-      if (typeof clearPending === 'function') {
+      if (typeof clearPending === "function") {
         clearPending();
       }
-      setMessages((previous) => [
+      setMessages(previous => [
         ...previous,
-        { id: uuid(), role: 'ai', content: 'Action cancelled.' },
+        { id: uuid(), role: "ai", content: "Action cancelled." },
       ]);
     } finally {
       setBusy(false);

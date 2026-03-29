@@ -17,7 +17,9 @@ const ASSIST_UNSUPPORTED_RETRY_MS = 60_000;
 const endpointStates = new Map<string, AssistEndpointEntry>();
 
 function normalizeEndpointKey(endpointKey: string): string {
-  return String(endpointKey || "").trim().toLowerCase();
+  return String(endpointKey || "")
+    .trim()
+    .toLowerCase();
 }
 
 function readEntry(endpointKey: string): AssistEndpointEntry {

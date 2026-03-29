@@ -25,9 +25,7 @@ const TOOL_OUTPUT_INSTRUCTION =
 const DEFAULT_INSTRUCTION =
   "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
 
-export function buildHiddenInstruction(
-  ctx: HiddenInstructionContext
-): string {
+export function buildHiddenInstruction(ctx: HiddenInstructionContext): string {
   if (ctx.hasSummarizeRequest) {
     return SUMMARIZE_INSTRUCTION;
   }

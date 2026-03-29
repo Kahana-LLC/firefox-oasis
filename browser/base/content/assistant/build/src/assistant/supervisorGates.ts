@@ -79,7 +79,8 @@ export function resolvePendingAmbiguityGate(params: {
   commandText: string;
   lastWorker: string;
 }): AmbiguityGateDecision {
-  const { pendingAmbiguity, confirmationText, commandText, lastWorker } = params;
+  const { pendingAmbiguity, confirmationText, commandText, lastWorker } =
+    params;
   if (!pendingAmbiguity) {
     return { kind: "none" };
   }

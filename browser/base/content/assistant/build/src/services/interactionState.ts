@@ -42,7 +42,9 @@ class InteractionStateStore {
   private recentSearchResults: RecentSearchResult[] = [];
   private readonly assistantWindow: AssistantWindowLike;
 
-  constructor(assistantWindow: AssistantWindowLike = window as AssistantWindowLike) {
+  constructor(
+    assistantWindow: AssistantWindowLike = window as AssistantWindowLike
+  ) {
     this.assistantWindow = assistantWindow;
     this.assistantWindow.oasisGetPendingConfirmation = () =>
       this.getPendingConfirmation();
@@ -170,7 +172,9 @@ export function getPendingConfirmation(): PendingConfirmation | null {
   return interactionState.getPendingConfirmation();
 }
 
-export function setPendingConfirmation(pending: PendingConfirmation | null): void {
+export function setPendingConfirmation(
+  pending: PendingConfirmation | null
+): void {
   interactionState.setPendingConfirmation(pending);
 }
 

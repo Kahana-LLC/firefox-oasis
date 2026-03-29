@@ -95,7 +95,9 @@ function stringArg(args: CommandArgs, key: string): string | undefined {
 
 function numberArg(args: CommandArgs, key: string): number | undefined {
   const value = args[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function booleanArg(args: CommandArgs, key: string): boolean | undefined {
@@ -107,7 +109,9 @@ function numberArrayArg(args: CommandArgs, key: string): number[] {
   const value = args[key];
   if (!Array.isArray(value)) return [];
   return value
-    .map(item => (typeof item === "number" && Number.isFinite(item) ? item : null))
+    .map(item =>
+      typeof item === "number" && Number.isFinite(item) ? item : null
+    )
     .filter((item): item is number => item != null);
 }
 
@@ -130,12 +134,18 @@ function ambiguityTargetArg(
   return undefined;
 }
 
-function tabByIndexOrCurrent(gBrowser: GBrowserLike | null, index: number | undefined): BrowserTabLike | null {
+function tabByIndexOrCurrent(
+  gBrowser: GBrowserLike | null,
+  index: number | undefined
+): BrowserTabLike | null {
   if (index == null) return gBrowser?.selectedTab || null;
   return findTabByIndex(gBrowser, index);
 }
 
-function tabByIndex(gBrowser: { tabs: ArrayLike<BrowserTabLike> }, index: number): BrowserTabLike | null {
+function tabByIndex(
+  gBrowser: { tabs: ArrayLike<BrowserTabLike> },
+  index: number
+): BrowserTabLike | null {
   const i = Math.max(1, Math.floor(index));
   const tabs = Array.from(gBrowser.tabs);
   if (i > tabs.length) return null;
@@ -165,7 +175,9 @@ function analyzeGroupMoveImpact(tabsToMove: BrowserTabLike[]): {
     affectedGroups.add(groupName);
 
     const groupTabs = group.tabs || [];
-    const movingTabs = groupTabs.filter(groupTab => tabsToMove.includes(groupTab));
+    const movingTabs = groupTabs.filter(groupTab =>
+      tabsToMove.includes(groupTab)
+    );
     if (groupTabs.length > 0 && movingTabs.length === groupTabs.length) {
       emptiedGroups.add(groupName);
     }
@@ -191,7 +203,9 @@ const LIST_WINDOW_SCOPE_ALIASES = new Set([
 ]);
 
 function normalizeListTargetName(value: string): string {
-  let next = String(value || "").replace(/["']/g, " ").trim();
+  let next = String(value || "")
+    .replace(/["']/g, " ")
+    .trim();
   next = next.replace(/^\s*(?:my|the)\s+/i, "");
   next = next.replace(
     /\s+(?:tab\s*group|bookmark\s*folder|folder|group|hub)\s*$/i,
@@ -344,7 +358,8 @@ export class NewWindowCommand implements Command {
   description = "Open a new browser window.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+    if (!topWin?.OpenBrowserWindow)
+      return { message: "Browser UI not available." };
 
     topWin.OpenBrowserWindow();
     return { message: "Successfully opened a new window." };
@@ -408,7 +423,8 @@ export class ShowURLCommand implements Command {
   description = "Open a URL in a new tab.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn)
+      return { message: "Browser UI not available." };
 
     const url = stringArg(args, "url");
     if (!url) return { message: "Missing 'url' argument." };
@@ -449,8 +465,7 @@ export class OpenUrlCommand implements Command {
 
 export class WebSearchCommand implements Command {
   commandName = "web_search";
-  description =
-    "Search the web in a new tab. Arguments: { query: string }.";
+  description = "Search the web in a new tab. Arguments: { query: string }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
     const query = stringArg(args, "query");
@@ -458,7 +473,9 @@ export class WebSearchCommand implements Command {
       return { message: "Missing 'query' argument." };
     }
     if (!topWin?.openTrustedLinkIn) {
-      return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+      return {
+        message: "Cannot open web search (openTrustedLinkIn not found).",
+      };
     }
     const searchUrl = toWebSearchUrl(query);
     topWin.openTrustedLinkIn(searchUrl, "tab");
@@ -495,7 +512,8 @@ export class CloseTabCommand implements Command {
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const title = tabTitle(tab);
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -529,7 +547,8 @@ export class MoveTabToNewWindowCommand implements Command {
 
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
 
     const title = tabTitle(tab);
     const newWin = topWin.OpenBrowserWindow();
@@ -580,7 +599,9 @@ export class CreateBookmarkFolderCommand implements Command {
       entity: "folder",
       name: res.name,
     });
-    return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
+    return {
+      message: `Created bookmark folder "${res.name}" with ${res.count} items.`,
+    };
   }
 }
 
@@ -681,7 +702,9 @@ export class AddTabToBookmarkFolderCommand implements Command {
       tabsToAdd = findTabsByQuery(gBrowser, query);
 
       if (tabsToAdd.length === 0) {
-        return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tabs found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     } else {
       // Default to current tab
@@ -795,14 +818,17 @@ export class AddSplitViewCommand implements Command {
       } else if (withQuery) {
         tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
         if (!tab2) {
-          return { message: `No tab found matching "${stringArg(args, "withQuery") || ""}".` };
+          return {
+            message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`,
+          };
         }
       } else {
         tab2 = gBrowser.addTrustedTab?.("about:newtab") || null;
       }
     }
 
-    if (!tab1 || !tab2) return { message: "Unable to resolve tabs for split view." };
+    if (!tab1 || !tab2)
+      return { message: "Unable to resolve tabs for split view." };
     if (tab1 === tab2) {
       return { message: "Cannot split a tab with itself." };
     }
@@ -864,7 +890,8 @@ export class SplitTabsCommand implements Command {
     "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin, gBrowser } = getChrome();
-    if (!gBrowser || !topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+    if (!gBrowser || !topWin?.OpenBrowserWindow)
+      return { message: "Browser UI not available." };
 
     const indices = numberArrayArg(args, "indices");
     if (indices.length < 2) {
@@ -891,7 +918,11 @@ export class SplitTabsCommand implements Command {
     const availTop = screen.availTop || 0;
 
     const numTabs = tabs.length;
-    const windows: Array<{ win: BrowserWindowLike; tab: BrowserTabLike; title: string }> = [];
+    const windows: Array<{
+      win: BrowserWindowLike;
+      tab: BrowserTabLike;
+      title: string;
+    }> = [];
 
     // Create windows for each tab
     for (let i = 0; i < numTabs; i++) {
@@ -924,9 +955,9 @@ export class SplitTabsCommand implements Command {
 
       // Close the sidebar if it's open (since session storage isn't implemented yet)
       try {
-        const sidebar = win.document?.getElementById("sidebar-box") as
-          | { hidden?: boolean }
-          | null;
+        const sidebar = win.document?.getElementById("sidebar-box") as {
+          hidden?: boolean;
+        } | null;
         if (sidebar && !sidebar.hidden) {
           win.SidebarController?.hide?.();
         }
@@ -962,7 +993,9 @@ export class SummarizePageCommand implements Command {
     if (query && !idx) {
       tab = findTabsByQuery(gBrowser, query)[0] || null;
       if (!tab) {
-        return { message: `No tab found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tab found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     }
 
@@ -973,16 +1006,23 @@ export class SummarizePageCommand implements Command {
     const title = tabTitle(tab);
 
     // Skip certain pages that can't be summarized
-    if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+    if (
+      url.startsWith("about:") ||
+      url.startsWith("chrome://") ||
+      url.startsWith("moz-extension://")
+    ) {
       return { message: "Cannot summarize browser internal pages." };
     }
 
     try {
       // Use PageExtractor actor for Fission-compatible content extraction
-      const currentWindowContext = browser.browsingContext?.currentWindowContext;
+      const currentWindowContext =
+        browser.browsingContext?.currentWindowContext;
 
       if (!currentWindowContext) {
-        return { message: "Cannot access page content. The page may still be loading." };
+        return {
+          message: "Cannot access page content. The page may still be loading.",
+        };
       }
 
       const pageExtractor = currentWindowContext.getActor("PageExtractor");
@@ -1020,7 +1060,9 @@ export class SummarizePageCommand implements Command {
         .trim();
 
       if (!content || content.length < 50) {
-        return { message: "Not enough content found on this page to summarize." };
+        return {
+          message: "Not enough content found on this page to summarize.",
+        };
       }
 
       // Truncate to reasonable length for LLM (roughly 10k chars ≈ 2.5k tokens)
@@ -1051,7 +1093,8 @@ export class SearchMemoryCommand implements Command {
     const query = stringArg(args, "query");
     const folder = stringArg(args, "folder");
     const source = stringArg(args, "source");
-    const sourceScope = source === "bookmark-folder" ? "bookmark-folder" : undefined;
+    const sourceScope =
+      source === "bookmark-folder" ? "bookmark-folder" : undefined;
     if (!query) return { message: "Missing 'query' argument." };
 
     let results = await localMemory.search(
@@ -1064,7 +1107,10 @@ export class SearchMemoryCommand implements Command {
       const snapshot = await bookmarkFolders.getAllReadOnly();
       if (snapshot.ok) {
         const folderToUrls = buildFolderUrlMap(snapshot.folders);
-        const filtered = filterStaleBookmarkFolderResults(results, folderToUrls);
+        const filtered = filterStaleBookmarkFolderResults(
+          results,
+          folderToUrls
+        );
         results = filtered.results;
         if (filtered.dropped > 0) {
           assistantLogger.debug(
@@ -1082,10 +1128,13 @@ export class SearchMemoryCommand implements Command {
     }
 
     const folderScoped = Boolean(folder);
-    const requiresBookmarkFolderOnly = folderScoped || sourceScope === "bookmark-folder";
+    const requiresBookmarkFolderOnly =
+      folderScoped || sourceScope === "bookmark-folder";
     if (requiresBookmarkFolderOnly) {
       const before = results.length;
-      results = results.filter((r) => getMemoryDocSource(r) === "bookmark-folder");
+      results = results.filter(
+        r => getMemoryDocSource(r) === "bookmark-folder"
+      );
       if (before !== results.length) {
         assistantLogger.debug(
           "search-memory",
@@ -1152,13 +1201,19 @@ export class SearchMemoryCommand implements Command {
         bookmarkGuid: r.metadata?.bookmarkGuid || undefined,
         context:
           r.metadata?.context ||
-          (source === "history" ? "Browsing History" :
-            source === "bookmark" ? "Bookmarks" :
-              source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
-                source === "tab" ? "Open Tab" :
-                  source === "tab-group" ? "Tab Group" :
-                    "Memory"),
-        snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
+          (source === "history"
+            ? "Browsing History"
+            : source === "bookmark"
+              ? "Bookmarks"
+              : source === "bookmark-folder"
+                ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}`
+                : source === "tab"
+                  ? "Open Tab"
+                  : source === "tab-group"
+                    ? "Tab Group"
+                    : "Memory"),
+        snippet:
+          r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
       };
     });
     setRecentSearchResults(structured);
@@ -1179,7 +1234,13 @@ export class SearchMemoryCommand implements Command {
       .join(", ");
     const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
 
-    return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
+    return {
+      message: JSON.stringify({
+        summary,
+        resultsBySource,
+        results: structured,
+      }),
+    };
   }
 }
 
@@ -1254,7 +1315,8 @@ export class OpenSearchResultCommand implements Command {
     }
 
     const { topWin, gBrowser, PlacesUtils } = getChrome();
-    if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn || !gBrowser)
+      return { message: "Browser UI not available." };
 
     // If we have a bookmark GUID, prefer a fresh URL from Places at open-time.
     if (bookmarkGuid && PlacesUtils?.bookmarks?.fetch) {
@@ -1297,7 +1359,8 @@ export class ShowSubscriptionCommand implements Command {
   description = "Show the current subscription plan and usage options.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn)
+      return { message: "Browser UI not available." };
 
     const stats = await subscriptionService.checkAvailability();
     const url = subscriptionService.getSubscriptionUrl();
@@ -1374,7 +1437,8 @@ export class CreateTabGroupCommand implements Command {
         }
       }
       const newTab = gBrowser.addTrustedTab?.(url);
-      if (!newTab) return { message: "Failed to open a tab for the new group." };
+      if (!newTab)
+        return { message: "Failed to open a tab for the new group." };
       tabsToGroup = [newTab];
       createdNewTab = true;
     } else {
@@ -1382,7 +1446,8 @@ export class CreateTabGroupCommand implements Command {
       // If current tab is already in a group, create a new tab instead of moving it
       if (currentTab?.group) {
         const newTab = gBrowser.addTrustedTab?.("about:newtab");
-        if (!newTab) return { message: "Failed to create a tab for the new group." };
+        if (!newTab)
+          return { message: "Failed to create a tab for the new group." };
         tabsToGroup = [newTab];
         createdNewTab = true;
       } else {
@@ -1541,7 +1606,9 @@ export class AddTabToGroupCommand implements Command {
       tabsToAdd = findTabsByQuery(gBrowser, query);
 
       if (tabsToAdd.length === 0) {
-        return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tabs found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     } else if (idx != null) {
       const tab = tabByIndex(gBrowser, idx);
@@ -1556,12 +1623,20 @@ export class AddTabToGroupCommand implements Command {
 
     const groupableTabs = tabsToAdd.filter(tab => !tab.pinned);
     if (groupableTabs.length === 0) {
-      return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
+      return {
+        message:
+          "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups).",
+      };
     }
 
     // Check if any tabs are already in OTHER groups (not the target group)
-    const tabsInOtherGroups = groupableTabs.filter(tab => tab.group && tab.group !== group);
-    if (tabsInOtherGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
+    const tabsInOtherGroups = groupableTabs.filter(
+      tab => tab.group && tab.group !== group
+    );
+    if (
+      tabsInOtherGroups.length > 0 &&
+      booleanArg(args, "confirmed") !== true
+    ) {
       const impact = analyzeGroupMoveImpact(tabsInOtherGroups);
       const groupNames = impact.affectedGroups.join(", ");
 
@@ -1597,7 +1672,9 @@ export class AddTabToGroupCommand implements Command {
         name: group.label || name,
       });
       const titles = groupableTabs.map(tab => tabTitle(tab)).join(", ");
-      return { message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}` };
+      return {
+        message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}`,
+      };
     } catch (e) {
       return { message: `Failed to add tab to group: ${e}` };
     }
@@ -1614,7 +1691,8 @@ export class RemoveTabFromGroupCommand implements Command {
 
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
 
     const title = tabTitle(tab);
 
@@ -1659,7 +1737,8 @@ export class RenameTabGroupCommand implements Command {
     }
 
     const existingWithNewName = groups.find(
-      existingGroup => normalizeName(existingGroup.label || "") === normalizeName(to)
+      existingGroup =>
+        normalizeName(existingGroup.label || "") === normalizeName(to)
     );
     if (existingWithNewName) {
       return { message: `A tab group named "${to}" already exists.` };
@@ -1698,16 +1777,19 @@ export class ResolveAmbiguityCommand implements Command {
     }
 
     if (pending.kind === "close_delete_target") {
-      const allowed = new Set<AmbiguityTarget>(pending.choices || ["tab", "tab-group", "bookmark-folder"]);
+      const allowed = new Set<AmbiguityTarget>(
+        pending.choices || ["tab", "tab-group", "bookmark-folder"]
+      );
       if (!target || !allowed.has(target as AmbiguityTarget)) {
-        const optionLabels = Array.from(allowed).map((opt) => {
+        const optionLabels = Array.from(allowed).map(opt => {
           if (opt === "tab-group") return "tab group";
           if (opt === "bookmark-folder") return "bookmark folder";
           return "tab";
         });
-        const choicesText = optionLabels.length > 1
-          ? `${optionLabels.slice(0, -1).join(", ")} or ${optionLabels[optionLabels.length - 1]}`
-          : optionLabels[0] || "tab, tab group, or bookmark folder";
+        const choicesText =
+          optionLabels.length > 1
+            ? `${optionLabels.slice(0, -1).join(", ")} or ${optionLabels[optionLabels.length - 1]}`
+            : optionLabels[0] || "tab, tab group, or bookmark folder";
         return {
           message:
             `I found multiple matches for "${pending.name}". ` +
@@ -1773,16 +1855,11 @@ export class ConfirmActionCommand implements Command {
     "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const pending = getPendingConfirmation();
-    assistantLogger.debug(
-      "confirm-action",
-      "Received confirmation input",
-      { hasPending: !!pending }
-    );
+    assistantLogger.debug("confirm-action", "Received confirmation input", {
+      hasPending: !!pending,
+    });
     if (!pending) {
-      assistantLogger.debug(
-        "confirm-action",
-        "No pending confirmation found"
-      );
+      assistantLogger.debug("confirm-action", "No pending confirmation found");
       clearContinuationQueue();
       return { message: "No pending action to confirm." };
     }

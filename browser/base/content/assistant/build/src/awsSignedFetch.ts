@@ -50,7 +50,7 @@ export async function postSigned<TResponse = Record<string, unknown>>(
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
-  
+
   // Assist auth is optional; pass JWT if present.
   // Voice endpoints still require JWT from the client side.
   if (op === "assist" && token) {

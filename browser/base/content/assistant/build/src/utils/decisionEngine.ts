@@ -29,7 +29,9 @@ type FamilyDecisionHandler = (
   snapshot: RoutingStateSnapshot
 ) => DeterministicRouteDecision | null;
 
-const FAMILY_HANDLERS: Readonly<Record<IntentFamily, FamilyDecisionHandler | null>> = {
+const FAMILY_HANDLERS: Readonly<
+  Record<IntentFamily, FamilyDecisionHandler | null>
+> = {
   list: resolveManifestListRoute,
   search: resolveManifestSearchRoute,
   mutation: resolveManifestMutationRoute,

@@ -10,7 +10,11 @@
  */
 import { normalizeRouteName, parseSearchMemoryIntent } from "./intentParser.js";
 import { resolveManifestCommand } from "./manifestResolver.js";
-import type { DeterministicRouteDecision, RouteArgs, RoutingStateSnapshot } from "./routerTypes.js";
+import type {
+  DeterministicRouteDecision,
+  RouteArgs,
+  RoutingStateSnapshot,
+} from "./routerTypes.js";
 import { getBrowserWindow } from "../types/runtime.js";
 
 function cleanSearchTarget(value: string): string {
@@ -24,7 +28,9 @@ function cleanSearchTarget(value: string): string {
 }
 
 function cleanSearchQuery(value: string): string {
-  return String(value || "").replace(/["']/g, "").trim();
+  return String(value || "")
+    .replace(/["']/g, "")
+    .trim();
 }
 
 function escapeRegExp(value: string): string {
@@ -35,9 +41,11 @@ function parseFolderSearchMissingQuery(
   input: string,
   snapshot: RoutingStateSnapshot
 ): string | null {
-  const match = String(input || "").trim().match(
-    /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+|the\s+)?(?<target>.+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s*$/i
-  );
+  const match = String(input || "")
+    .trim()
+    .match(
+      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+|the\s+)?(?<target>.+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s*$/i
+    );
   if (!match?.groups?.target) {
     return null;
   }
@@ -151,7 +159,9 @@ export function resolveManifestSearchRoute(
   snapshot: RoutingStateSnapshot
 ): DeterministicRouteDecision | null {
   const topWin = getBrowserWindow();
-  const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
+  const tabCount = topWin?.gBrowser?.tabs
+    ? Array.from(topWin.gBrowser.tabs).length
+    : 0;
   const candidate = resolveManifestCommand(input, {
     snapshot,
     hasOpenTabs: tabCount > 0,
@@ -164,7 +174,9 @@ export function resolveManifestSearchRoute(
   // If the manifest resolved to search_history, route directly
   if (candidate.definition.commandName === "search_history") {
     const parsed = parseSearchMemoryIntent(input);
-    const query = parsed?.query || input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
+    const query =
+      parsed?.query ||
+      input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
     return {
       type: "tool",
       next: "search_history",

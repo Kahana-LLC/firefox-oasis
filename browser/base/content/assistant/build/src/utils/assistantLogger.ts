@@ -22,9 +22,7 @@ type LoggerHost = {
 function isDebugEnabled(globalRef: typeof globalThis = globalThis): boolean {
   try {
     const host = globalRef as unknown as LoggerHost;
-    const prefs =
-      host.window?.Services?.prefs ||
-      host.Services?.prefs;
+    const prefs = host.window?.Services?.prefs || host.Services?.prefs;
     if (!prefs?.getBoolPref) {
       return false;
     }

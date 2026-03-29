@@ -21,7 +21,11 @@ import {
   tabUrl,
   toUrlString,
 } from "./services/firefoxFacade.js";
-import type { BrowserTabLike, PlacesBookmarkEntry, PlacesUtilsLike } from "./types/runtime.js";
+import type {
+  BrowserTabLike,
+  PlacesBookmarkEntry,
+  PlacesUtilsLike,
+} from "./types/runtime.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
 import { OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED } from "../../shared/contracts.js";
 
@@ -47,15 +51,23 @@ function bookmarkUri(bookmark: PlacesBookmarkEntry): string {
   return toUrlString(bookmark.url) || String(bookmark.uri || "").trim();
 }
 
-function isFolderNode(places: PlacesUtilsLike | null, bookmark: PlacesBookmarkEntry): boolean {
+function isFolderNode(
+  places: PlacesUtilsLike | null,
+  bookmark: PlacesBookmarkEntry
+): boolean {
   return bookmark.type === places?.bookmarks?.TYPE_FOLDER;
 }
 
-function isBookmarkNode(places: PlacesUtilsLike | null, bookmark: PlacesBookmarkEntry): boolean {
+function isBookmarkNode(
+  places: PlacesUtilsLike | null,
+  bookmark: PlacesBookmarkEntry
+): boolean {
   return bookmark.type === places?.bookmarks?.TYPE_BOOKMARK;
 }
 
-async function findRootFolderId(places: PlacesUtilsLike | null): Promise<string | null> {
+async function findRootFolderId(
+  places: PlacesUtilsLike | null
+): Promise<string | null> {
   if (!places?.bookmarks?.search || !places.bookmarks.unfiledGuid) return null;
   const results = await places.bookmarks.search({ title: ROOT_FOLDER_NAME });
   const existing = results.find(
@@ -66,11 +78,15 @@ async function findRootFolderId(places: PlacesUtilsLike | null): Promise<string 
   return existing?.guid || null;
 }
 
-async function ensureRootFolderId(places: PlacesUtilsLike | null): Promise<string> {
-  if (!places?.bookmarks) throw new Error("PlacesUtils.bookmarks not available");
+async function ensureRootFolderId(
+  places: PlacesUtilsLike | null
+): Promise<string> {
+  if (!places?.bookmarks)
+    throw new Error("PlacesUtils.bookmarks not available");
   const existing = await findRootFolderId(places);
   if (existing) return existing;
-  if (!places.bookmarks.insert) throw new Error("Bookmarks insert API not available");
+  if (!places.bookmarks.insert)
+    throw new Error("Bookmarks insert API not available");
 
   const root = await places.bookmarks.insert({
     title: ROOT_FOLDER_NAME,
@@ -104,7 +120,8 @@ async function createBookmark(
     type?: number;
   }
 ): Promise<BookmarkNode> {
-  if (!places?.bookmarks?.insert) throw new Error("Bookmarks insert API not available");
+  if (!places?.bookmarks?.insert)
+    throw new Error("Bookmarks insert API not available");
   const created = await places.bookmarks.insert({
     parentGuid: details.parentGuid,
     title: details.title,
@@ -118,7 +135,10 @@ async function createBookmark(
   return { ...created, uri: bookmarkUri(created) };
 }
 
-async function removeBookmark(places: PlacesUtilsLike | null, guid: string): Promise<void> {
+async function removeBookmark(
+  places: PlacesUtilsLike | null,
+  guid: string
+): Promise<void> {
   if (!places?.bookmarks?.remove) return;
   await places.bookmarks.remove(guid);
 }
@@ -128,7 +148,8 @@ async function updateBookmark(
   guid: string,
   changes: { title?: string }
 ): Promise<BookmarkNode> {
-  if (!places?.bookmarks?.update) throw new Error("Bookmarks update API not available");
+  if (!places?.bookmarks?.update)
+    throw new Error("Bookmarks update API not available");
   const updated = await places.bookmarks.update({ guid, ...changes });
   return { ...updated, uri: bookmarkUri(updated) };
 }
@@ -156,7 +177,11 @@ class BookmarkFolderManager {
         })
       );
     } catch (error) {
-      assistantLogger.warn("bookmark-folders", "failed to emit folder change event", error);
+      assistantLogger.warn(
+        "bookmark-folders",
+        "failed to emit folder change event",
+        error
+      );
     }
   }
 
@@ -205,7 +230,11 @@ class BookmarkFolderManager {
       if (!isRelevant) return;
       this.scheduleManagedFolderSync("places-event");
     } catch (error) {
-      assistantLogger.warn("bookmark-folders", "places event processing failed", error);
+      assistantLogger.warn(
+        "bookmark-folders",
+        "places event processing failed",
+        error
+      );
     }
   };
 
@@ -235,7 +264,10 @@ class BookmarkFolderManager {
     }
 
     if (this.rootFolderId) {
-      const existing = await fetchBookmarkByGuid(PlacesUtils, this.rootFolderId);
+      const existing = await fetchBookmarkByGuid(
+        PlacesUtils,
+        this.rootFolderId
+      );
       if (existing) return this.rootFolderId;
       this.rootFolderId = null;
     }
@@ -251,12 +283,16 @@ class BookmarkFolderManager {
     return children.filter(child => isFolderNode(PlacesUtils, child));
   }
 
-  private async findFolderNode(rootId: string, name: string): Promise<BookmarkNode | null> {
+  private async findFolderNode(
+    rootId: string,
+    name: string
+  ): Promise<BookmarkNode | null> {
     const target = normalizeName(name);
     if (!target) return null;
     const folders = await this.getFolderNodes(rootId);
     return (
-      folders.find(folder => normalizeName(folder.title || "") === target) || null
+      folders.find(folder => normalizeName(folder.title || "") === target) ||
+      null
     );
   }
 
@@ -283,7 +319,9 @@ class BookmarkFolderManager {
     return result;
   }
 
-  private async syncManagedFolderMemoryFromBookmarks(reason: string): Promise<void> {
+  private async syncManagedFolderMemoryFromBookmarks(
+    reason: string
+  ): Promise<void> {
     if (this.syncInFlight) return;
     this.syncInFlight = true;
     try {
@@ -331,7 +369,11 @@ class BookmarkFolderManager {
         `sync complete reason=${reason} folders=${folderNames.length} added=${syncResult.added} updated=${syncResult.updated} removed=${syncResult.removed}`
       );
     } catch (error) {
-      assistantLogger.warn("bookmark-folders", "managed folder sync failed", error);
+      assistantLogger.warn(
+        "bookmark-folders",
+        "managed folder sync failed",
+        error
+      );
     } finally {
       this.syncInFlight = false;
     }
@@ -350,7 +392,11 @@ class BookmarkFolderManager {
       }
       return result;
     } catch (error) {
-      assistantLogger.error("bookmark-folders", "Failed to list bookmark folders", error);
+      assistantLogger.error(
+        "bookmark-folders",
+        "Failed to list bookmark folders",
+        error
+      );
       return [];
     }
   }
@@ -360,7 +406,11 @@ class BookmarkFolderManager {
       const rootId = await this.ensureRootFolder();
       return await this.collectFolders(rootId);
     } catch (error) {
-      assistantLogger.error("bookmark-folders", "Failed to get all bookmark folders", error);
+      assistantLogger.error(
+        "bookmark-folders",
+        "Failed to get all bookmark folders",
+        error
+      );
       return [];
     }
   }
@@ -375,12 +425,19 @@ class BookmarkFolderManager {
       const folders = await this.collectFolders(rootId);
       return { ok: true, folders };
     } catch (error) {
-      assistantLogger.warn("bookmark-folders", "read-only folder lookup failed", error);
+      assistantLogger.warn(
+        "bookmark-folders",
+        "read-only folder lookup failed",
+        error
+      );
       return { ok: false, folders: [] };
     }
   }
 
-  async create(name: string, opts?: CreateFolderOpts): Promise<{ name: string; count: number }> {
+  async create(
+    name: string,
+    opts?: CreateFolderOpts
+  ): Promise<{ name: string; count: number }> {
     const context = getChromeContext();
     const places = context.PlacesUtils;
     const normalizedName = (name || "").trim() || this.suggestName();
@@ -426,7 +483,9 @@ class BookmarkFolderManager {
     const bookmarks = items.filter(bookmark => !!bookmark.uri);
 
     if (opts?.closeTabs) {
-      const hostSet = new Set(bookmarks.map(bookmark => hostOf(String(bookmark.uri))));
+      const hostSet = new Set(
+        bookmarks.map(bookmark => hostOf(String(bookmark.uri)))
+      );
       for (const tab of getTabs(context.gBrowser)) {
         if (hostSet.has(hostOf(tabUrl(tab)))) {
           context.gBrowser?.removeTab?.(tab);
@@ -456,13 +515,21 @@ class BookmarkFolderManager {
     const existing = await this.findFolderNode(rootId, normalizedNew);
     if (existing) return { ok: false, msg: "Target exists" };
 
-    await updateBookmark(context.PlacesUtils, folder.guid, { title: normalizedNew });
-    await localMemory.renameBookmarkFolderDocuments(folder.title || normalizedOld, normalizedNew);
+    await updateBookmark(context.PlacesUtils, folder.guid, {
+      title: normalizedNew,
+    });
+    await localMemory.renameBookmarkFolderDocuments(
+      folder.title || normalizedOld,
+      normalizedNew
+    );
     this.scheduleManagedFolderSync("rename-folder");
     return { ok: true };
   }
 
-  async addTabs(name: string, tabs: BrowserTabLike[]): Promise<{ ok: boolean }> {
+  async addTabs(
+    name: string,
+    tabs: BrowserTabLike[]
+  ): Promise<{ ok: boolean }> {
     const context = getChromeContext();
     const rootId = await this.ensureRootFolder();
     let folder = await this.findFolderNode(rootId, name);
@@ -488,14 +555,20 @@ class BookmarkFolderManager {
     const folder = await this.findFolderNode(rootId, normalizedName);
     if (!folder) return { ok: false };
 
-    const bookmarks = await getBookmarkChildren(getChromeContext().PlacesUtils, folder.guid);
+    const bookmarks = await getBookmarkChildren(
+      getChromeContext().PlacesUtils,
+      folder.guid
+    );
     const toRemove = bookmarks.filter(bookmark => bookmark.uri === url);
     for (const bookmark of toRemove) {
       await removeBookmark(getChromeContext().PlacesUtils, bookmark.guid);
     }
 
     if (toRemove.length > 0) {
-      await localMemory.removeBookmarkFolderDocumentByUrl(folder.title || normalizedName, url);
+      await localMemory.removeBookmarkFolderDocumentByUrl(
+        folder.title || normalizedName,
+        url
+      );
       this.scheduleManagedFolderSync("remove-url");
     }
 
@@ -512,7 +585,10 @@ class BookmarkFolderManager {
     const folder = await this.findFolderNode(rootId, normalizedName);
     if (!folder) return { ok: false };
 
-    const bookmarks = await getBookmarkChildren(context.PlacesUtils, folder.guid);
+    const bookmarks = await getBookmarkChildren(
+      context.PlacesUtils,
+      folder.guid
+    );
     const urls = bookmarks
       .filter(bookmark => !!bookmark.uri)
       .map(bookmark => String(bookmark.uri));
@@ -538,7 +614,11 @@ class BookmarkFolderManager {
         });
         if (tab) openedTabs.push(tab);
       } catch (error) {
-        assistantLogger.error("bookmark-folders", `Failed to open tab for URL: ${url}`, error);
+        assistantLogger.error(
+          "bookmark-folders",
+          `Failed to open tab for URL: ${url}`,
+          error
+        );
       }
     }
 
@@ -546,7 +626,11 @@ class BookmarkFolderManager {
       try {
         targetBrowser.addTabGroup?.(openedTabs, { label: normalizedName });
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "Failed to group opened tabs", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "Failed to group opened tabs",
+          error
+        );
       }
     }
 
@@ -575,10 +659,15 @@ class BookmarkFolderManager {
 
     let content = "";
     try {
-      const bodyText = tab.linkedBrowser?.contentDocument?.body?.innerText || "";
+      const bodyText =
+        tab.linkedBrowser?.contentDocument?.body?.innerText || "";
       content = String(bodyText).substring(0, 5000);
     } catch (error) {
-      assistantLogger.warn("bookmark-folders", "Failed to extract tab content", error);
+      assistantLogger.warn(
+        "bookmark-folders",
+        "Failed to extract tab content",
+        error
+      );
     }
 
     const text = `Title: ${title}\nURL: ${url}\nContent: ${content}`;

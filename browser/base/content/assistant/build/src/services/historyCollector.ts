@@ -11,10 +11,10 @@
  */
 
 export interface HistoryEntry {
-    title: string;
-    url: string;
-    visitDate: number; // epoch ms
-    snippet: string;   // first ~500 chars of page body text
+  title: string;
+  url: string;
+  visitDate: number; // epoch ms
+  snippet: string; // first ~500 chars of page body text
 }
 
 /**
@@ -22,28 +22,28 @@ export interface HistoryEntry {
  * Follows the same pattern as hubs.ts / commands.ts.
  */
 function getPlacesUtils(): any {
-    const topWin = (window as any).top;
-    const Services = topWin?.Services || (window as any).Services;
+  const topWin = (window as any).top;
+  const Services = topWin?.Services || (window as any).Services;
 
-    if (Services?.wm) {
-        const browserWin = Services.wm.getMostRecentWindow("navigator:browser");
-        return browserWin?.PlacesUtils;
-    }
-    return topWin?.PlacesUtils;
+  if (Services?.wm) {
+    const browserWin = Services.wm.getMostRecentWindow("navigator:browser");
+    return browserWin?.PlacesUtils;
+  }
+  return topWin?.PlacesUtils;
 }
 
 /**
  * Internal URL prefixes that should be excluded from search results.
  */
 const EXCLUDED_PREFIXES = [
-    "about:",
-    "chrome://",
-    "moz-extension://",
-    "resource://",
-    "data:",
-    "blob:",
-    "javascript:",
-    "view-source:",
+  "about:",
+  "chrome://",
+  "moz-extension://",
+  "resource://",
+  "data:",
+  "blob:",
+  "javascript:",
+  "view-source:",
 ];
 
 /**
@@ -51,29 +51,29 @@ const EXCLUDED_PREFIXES = [
  * The actual destination pages are more valuable than the search pages.
  */
 const SEARCH_ENGINE_PATTERNS = [
-    /^https?:\/\/(www\.)?google\.\w+\/search\?/,
-    /^https?:\/\/(www\.)?bing\.com\/search\?/,
-    /^https?:\/\/(www\.)?duckduckgo\.com\/\?q=/,
-    /^https?:\/\/(www\.)?yahoo\.com\/search/,
-    /^https?:\/\/(www\.)?baidu\.com\/s\?/,
-    /^https?:\/\/(www\.)?search\.yahoo\.com\//,
+  /^https?:\/\/(www\.)?google\.\w+\/search\?/,
+  /^https?:\/\/(www\.)?bing\.com\/search\?/,
+  /^https?:\/\/(www\.)?duckduckgo\.com\/\?q=/,
+  /^https?:\/\/(www\.)?yahoo\.com\/search/,
+  /^https?:\/\/(www\.)?baidu\.com\/s\?/,
+  /^https?:\/\/(www\.)?search\.yahoo\.com\//,
 ];
 
 /**
  * Check if a URL is a search engine results page.
  */
 function isSearchEnginePage(url: string): boolean {
-    return SEARCH_ENGINE_PATTERNS.some((pattern) => pattern.test(url));
+  return SEARCH_ENGINE_PATTERNS.some(pattern => pattern.test(url));
 }
 
 /**
  * Check if a URL is a user-visible web page worth indexing.
  */
 function isUserVisibleUrl(url: string): boolean {
-    if (!url) return false;
-    if (EXCLUDED_PREFIXES.some((prefix) => url.startsWith(prefix))) return false;
-    if (isSearchEnginePage(url)) return false;
-    return true;
+  if (!url) return false;
+  if (EXCLUDED_PREFIXES.some(prefix => url.startsWith(prefix))) return false;
+  if (isSearchEnginePage(url)) return false;
+  return true;
 }
 
 // ─── Snippet Extraction ────────────────────────────────────────
@@ -87,42 +87,45 @@ const SNIPPET_FETCH_TIMEOUT = 5000; // 5s max per page
  * — the caller falls back to title+url for embedding.
  */
 async function fetchPageSnippet(url: string): Promise<string> {
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
 
-        const response = await fetch(url, {
-            signal: controller.signal,
-            headers: { "Accept": "text/html" },
-        });
-        clearTimeout(timeout);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "text/html" },
+    });
+    clearTimeout(timeout);
 
-        if (!response.ok) return "";
+    if (!response.ok) return "";
 
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-            return ""; // Skip PDFs, images, etc.
-        }
-
-        const html = await response.text();
-
-        // Strip scripts, styles, and HTML tags — keep only readable text
-        const textContent = html
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-            .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
-            .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
-            .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
-            .replace(/<[^>]+>/g, " ")
-            .replace(/&[a-zA-Z]+;/g, " ")  // HTML entities
-            .replace(/\s+/g, " ")
-            .trim()
-            .substring(0, SNIPPET_MAX_LENGTH);
-
-        return textContent;
-    } catch {
-        return ""; // Silently fail — title+url fallback is fine
+    const contentType = response.headers.get("content-type") || "";
+    if (
+      !contentType.includes("text/html") &&
+      !contentType.includes("text/plain")
+    ) {
+      return ""; // Skip PDFs, images, etc.
     }
+
+    const html = await response.text();
+
+    // Strip scripts, styles, and HTML tags — keep only readable text
+    const textContent = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&[a-zA-Z]+;/g, " ") // HTML entities
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, SNIPPET_MAX_LENGTH);
+
+    return textContent;
+  } catch {
+    return ""; // Silently fail — title+url fallback is fine
+  }
 }
 
 // ─── Main History Fetch ────────────────────────────────────────
@@ -135,85 +138,87 @@ async function fetchPageSnippet(url: string): Promise<string> {
  * @returns Array of history entries sorted by visit date (most recent first)
  */
 export async function fetchRecentHistory(
-    maxResults = 200,
-    includeSnippets = false
+  maxResults = 200,
+  includeSnippets = false
 ): Promise<HistoryEntry[]> {
-    const PlacesUtils = getPlacesUtils();
+  const PlacesUtils = getPlacesUtils();
 
-    if (!PlacesUtils) {
-        console.warn("[HistoryCollector] PlacesUtils not available");
-        return [];
+  if (!PlacesUtils) {
+    console.warn("[HistoryCollector] PlacesUtils not available");
+    return [];
+  }
+
+  try {
+    console.time("[HistoryCollector] Fetch history");
+
+    const options = PlacesUtils.history.getNewQueryOptions();
+    options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+    options.maxResults = maxResults * 2; // fetch extra to account for filtering/dedup
+    options.includeHidden = false;
+
+    const query = PlacesUtils.history.getNewQuery();
+    const result = PlacesUtils.history.executeQuery(query, options);
+    const root = result.root;
+    root.containerOpen = true;
+
+    const entries: HistoryEntry[] = [];
+    const seenUrls = new Set<string>();
+
+    for (let i = 0; i < root.childCount && entries.length < maxResults; i++) {
+      const node = root.getChild(i);
+      const url = node.uri;
+
+      // Skip internal/non-user-visible pages
+      if (!isUserVisibleUrl(url)) continue;
+
+      // Deduplicate by URL (keep most recent visit)
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+
+      entries.push({
+        title: node.title || url, // fallback to URL if no title
+        url,
+        // Places stores time in microseconds; convert to ms
+        visitDate: Math.floor(node.time / 1000),
+        snippet: "", // populated below if includeSnippets=true
+      });
     }
 
-    try {
-        console.time("[HistoryCollector] Fetch history");
+    root.containerOpen = false;
 
-        const options = PlacesUtils.history.getNewQueryOptions();
-        options.sortingMode = options.SORT_BY_DATE_DESCENDING;
-        options.maxResults = maxResults * 2; // fetch extra to account for filtering/dedup
-        options.includeHidden = false;
+    console.timeEnd("[HistoryCollector] Fetch history");
+    console.log(
+      `[HistoryCollector] Fetched ${entries.length} unique history entries`
+    );
 
-        const query = PlacesUtils.history.getNewQuery();
-        const result = PlacesUtils.history.executeQuery(query, options);
-        const root = result.root;
-        root.containerOpen = true;
+    // Fetch snippets if requested (parallel, batched to avoid overwhelming)
+    if (includeSnippets && entries.length > 0) {
+      console.log(
+        `[HistoryCollector] Fetching snippets for ${entries.length} entries...`
+      );
+      console.time("[HistoryCollector] Fetch snippets");
 
-        const entries: HistoryEntry[] = [];
-        const seenUrls = new Set<string>();
-
-        for (let i = 0; i < root.childCount && entries.length < maxResults; i++) {
-            const node = root.getChild(i);
-            const url = node.uri;
-
-            // Skip internal/non-user-visible pages
-            if (!isUserVisibleUrl(url)) continue;
-
-            // Deduplicate by URL (keep most recent visit)
-            if (seenUrls.has(url)) continue;
-            seenUrls.add(url);
-
-            entries.push({
-                title: node.title || url, // fallback to URL if no title
-                url,
-                // Places stores time in microseconds; convert to ms
-                visitDate: Math.floor(node.time / 1000),
-                snippet: "", // populated below if includeSnippets=true
-            });
-        }
-
-        root.containerOpen = false;
-
-        console.timeEnd("[HistoryCollector] Fetch history");
-        console.log(
-            `[HistoryCollector] Fetched ${entries.length} unique history entries`
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+        const batch = entries.slice(i, i + BATCH_SIZE);
+        const snippets = await Promise.all(
+          batch.map(e => fetchPageSnippet(e.url))
         );
+        batch.forEach((entry, j) => {
+          entry.snippet = snippets[j];
+        });
+      }
 
-        // Fetch snippets if requested (parallel, batched to avoid overwhelming)
-        if (includeSnippets && entries.length > 0) {
-            console.log(`[HistoryCollector] Fetching snippets for ${entries.length} entries...`);
-            console.time("[HistoryCollector] Fetch snippets");
-
-            const BATCH_SIZE = 5;
-            for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-                const batch = entries.slice(i, i + BATCH_SIZE);
-                const snippets = await Promise.all(
-                    batch.map(e => fetchPageSnippet(e.url))
-                );
-                batch.forEach((entry, j) => {
-                    entry.snippet = snippets[j];
-                });
-            }
-
-            const withSnippets = entries.filter(e => e.snippet.length > 0).length;
-            console.timeEnd("[HistoryCollector] Fetch snippets");
-            console.log(
-                `[HistoryCollector] Got snippets for ${withSnippets}/${entries.length} entries`
-            );
-        }
-
-        return entries;
-    } catch (e) {
-        console.error("[HistoryCollector] Failed to fetch history:", e);
-        return [];
+      const withSnippets = entries.filter(e => e.snippet.length > 0).length;
+      console.timeEnd("[HistoryCollector] Fetch snippets");
+      console.log(
+        `[HistoryCollector] Got snippets for ${withSnippets}/${entries.length} entries`
+      );
     }
+
+    return entries;
+  } catch (e) {
+    console.error("[HistoryCollector] Failed to fetch history:", e);
+    return [];
+  }
 }

@@ -10,7 +10,11 @@
  *
  * Used by decisionEngine.ts and the family resolvers.
  */
-import type { ContainerType, IntentFamily, ParsedIntent } from "./routerTypes.js";
+import type {
+  ContainerType,
+  IntentFamily,
+  ParsedIntent,
+} from "./routerTypes.js";
 
 const ACTION_WORD_RE =
   /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy)\b/i;
@@ -27,7 +31,8 @@ const MUTATION_FAMILY_RE =
   /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
 
 const GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
-const FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
+const FOLDER_LABEL_RE =
+  /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
 const GENERIC_FOLDER_NAME_RE = /^(?:bookmark(?:\s+folders?)?|folders?|hubs?)$/i;
 
 function cleanCaptured(text: string): string {
@@ -99,10 +104,14 @@ export function classifyCommandFamily(commandText: string): IntentFamily {
 }
 
 export function normalizeRouteName(value: string): string {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
-export function parseContainerAddIntent(commandText: string): ParsedIntent | null {
+export function parseContainerAddIntent(
+  commandText: string
+): ParsedIntent | null {
   const input = String(commandText || "").trim();
   if (!input) return null;
 
@@ -178,7 +187,9 @@ export function parseContainerAddIntent(commandText: string): ParsedIntent | nul
   return null;
 }
 
-export function parseCloseDeleteTargetIntent(commandText: string): ParsedIntent | null {
+export function parseCloseDeleteTargetIntent(
+  commandText: string
+): ParsedIntent | null {
   const input = String(commandText || "").trim();
   if (!input) return null;
 
@@ -200,9 +211,9 @@ export function parseCloseDeleteTargetIntent(commandText: string): ParsedIntent 
   };
 }
 
-export function parseSearchFolderSlots(commandText: string):
-  | { query: string; folder: string }
-  | null {
+export function parseSearchFolderSlots(
+  commandText: string
+): { query: string; folder: string } | null {
   const input = String(commandText || "").trim();
   if (!input) return null;
 
@@ -265,9 +276,9 @@ export function parseSearchFolderSlots(commandText: string):
   return null;
 }
 
-export function parseSearchMemoryIntent(commandText: string):
-  | { query: string; folder?: string; source?: "bookmark-folder" }
-  | null {
+export function parseSearchMemoryIntent(
+  commandText: string
+): { query: string; folder?: string; source?: "bookmark-folder" } | null {
   const input = String(commandText || "").trim();
   if (!input) {
     return null;

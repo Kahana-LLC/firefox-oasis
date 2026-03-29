@@ -1,9 +1,5 @@
-import { useEffect } from 'preact/hooks';
-import type {
-  ConfirmationData,
-  OasisWindow,
-  ToolActionStatus,
-} from '../types';
+import { useEffect } from "preact/hooks";
+import type { ConfirmationData, OasisWindow, ToolActionStatus } from "../types";
 
 const oasisWindow: OasisWindow = window;
 
@@ -38,7 +34,9 @@ export function useAssistantBridge(params: {
       updateToolAction(id, status);
     };
     oasisWindow.resetAssistantSession = () => resetAssistantSession();
-    oasisWindow.oasisSetPendingConfirmationRelay = (data: ConfirmationData | null) => {
+    oasisWindow.oasisSetPendingConfirmationRelay = (
+      data: ConfirmationData | null
+    ) => {
       setPendingConfirmation(data);
     };
 

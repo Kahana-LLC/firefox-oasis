@@ -12,7 +12,10 @@ import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 import { OASIS_EVENT_HISTORY_UPDATE } from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
-import type { AssistantSessionLike, AssistantWindowLike } from "../types/runtime.js";
+import type {
+  AssistantSessionLike,
+  AssistantWindowLike,
+} from "../types/runtime.js";
 import { msgText, type MessageLike } from "./messageUtils.js";
 
 type SessionObserver = {
@@ -59,7 +62,9 @@ function importAssistantSession(
     const mod = assistantWindow.ChromeUtils.importESModule(
       "chrome://browser/content/assistant/AssistantSession.sys.mjs"
     );
-    const importedSession = mod.AssistantSession as AssistantSessionLike | undefined;
+    const importedSession = mod.AssistantSession as
+      | AssistantSessionLike
+      | undefined;
     if (importedSession) {
       assistantLogger.info("session", "Imported AssistantSession singleton.");
       return importedSession;
@@ -70,7 +75,11 @@ function importAssistantSession(
     );
     return createFallbackSessionStore();
   } catch (error) {
-    assistantLogger.error("session", "Failed to import AssistantSession singleton.", error);
+    assistantLogger.error(
+      "session",
+      "Failed to import AssistantSession singleton.",
+      error
+    );
     return createFallbackSessionStore();
   }
 }
@@ -85,7 +94,9 @@ function installSessionObserver(assistantWindow: AssistantWindowLike): void {
       observe: (_subject: unknown, topic: string, _data: string | null) => {
         if (topic === "oasis-session-updated") {
           try {
-            assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+            assistantWindow.dispatchEvent(
+              new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+            );
           } catch {
             // no-op
           }
@@ -94,7 +105,11 @@ function installSessionObserver(assistantWindow: AssistantWindowLike): void {
     };
     services.obs.addObserver(observer, "oasis-session-updated", false);
   } catch (error) {
-    assistantLogger.error("session", "Failed to install session observer.", error);
+    assistantLogger.error(
+      "session",
+      "Failed to install session observer.",
+      error
+    );
   }
 }
 
@@ -131,7 +146,9 @@ export function createAssistantSessionController(
   function resetAssistantSession(): void {
     session.clear();
     try {
-      assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+      assistantWindow.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+      );
     } catch {
       // no-op
     }

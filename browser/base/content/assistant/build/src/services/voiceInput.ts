@@ -16,20 +16,20 @@ export class VoiceInputService {
     try {
       // Request microphone access
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       // Create MediaRecorder with appropriate MIME type
       const mimeType = this.getSupportedMimeType();
       this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
-      
+
       this.audioChunks = [];
-      
+
       this.mediaRecorder.ondataavailable = (event: Event) => {
         const blob = eventBlob(event);
         if (blob && blob.size > 0) {
           this.audioChunks.push(blob);
         }
       };
-      
+
       this.mediaRecorder.start();
     } catch (error) {
       assistantLogger.error("voice-input", "Error starting recording", error);
@@ -52,16 +52,20 @@ export class VoiceInputService {
           }
 
           // Create audio blob from chunks
-          const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+          const mimeType = this.mediaRecorder?.mimeType || "audio/webm";
           const audioBlob = new Blob(this.audioChunks, { type: mimeType });
-          
+
           // Send to Deepgram via lambda
           const result = await transcribeAudio(audioBlob);
-          
+
           // Lambda returns { transcript: "..." }
-          resolve(result.transcript || '');
+          resolve(result.transcript || "");
         } catch (error) {
-          assistantLogger.error("voice-input", "Error transcribing audio", error);
+          assistantLogger.error(
+            "voice-input",
+            "Error transcribing audio",
+            error
+          );
           reject(error);
         } finally {
           this.mediaRecorder = null;
@@ -92,10 +96,10 @@ export class VoiceInputService {
 
   private getSupportedMimeType(): string {
     const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4",
     ];
 
     for (const type of types) {
@@ -104,7 +108,7 @@ export class VoiceInputService {
       }
     }
 
-    return ''; // Let browser choose default
+    return ""; // Let browser choose default
   }
 }
 

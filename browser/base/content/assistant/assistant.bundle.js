@@ -46800,7 +46800,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
           if (oldVersion < 3) {
             const docsStore = transaction.objectStore("documents");
             if (!docsStore.indexNames.contains("by-dedupe-key")) {
-              docsStore.createIndex("by-dedupe-key", "dedupeKey", { unique: true });
+              docsStore.createIndex("by-dedupe-key", "dedupeKey", {
+                unique: true
+              });
             }
           }
         }
@@ -46919,14 +46921,16 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       const docs = await db.getAll("documents");
       this.miniSearch.removeAll();
       if (docs.length > 0) {
-        this.miniSearch.addAll(docs.map((d2) => ({
-          id: d2.id,
-          text: d2.text,
-          metadata: d2.metadata,
-          url: d2.url,
-          timestamp: d2.timestamp,
-          dedupeKey: d2.dedupeKey
-        })));
+        this.miniSearch.addAll(
+          docs.map((d2) => ({
+            id: d2.id,
+            text: d2.text,
+            metadata: d2.metadata,
+            url: d2.url,
+            timestamp: d2.timestamp,
+            dedupeKey: d2.dedupeKey
+          }))
+        );
       }
       this.isIndexDirty = false;
       logDebug(`[LocalMemory] Index rebuilt with ${docs.length} documents`);
@@ -46971,7 +46975,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed ${removed} documents for folder: ${folderName}`);
+        logDebug(
+          `[LocalMemory] Removed ${removed} documents for folder: ${folderName}`
+        );
       }
       return removed;
     }
@@ -46981,7 +46987,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed all bookmark-folder documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed all bookmark-folder documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -46996,7 +47004,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed ${removed} folder documents for URL: ${url}`);
+        logDebug(
+          `[LocalMemory] Removed ${removed} folder documents for URL: ${url}`
+        );
       }
       return removed;
     }
@@ -47014,10 +47024,16 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         if (typeof metadata.context === "string" && metadata.context.toLowerCase().startsWith("bookmark folder:")) {
           metadata.context = `Bookmark Folder: ${to}`;
         }
-        return { ...doc, metadata, dedupeKey: computeMemoryDedupeKey({ ...doc, metadata }) };
+        return {
+          ...doc,
+          metadata,
+          dedupeKey: computeMemoryDedupeKey({ ...doc, metadata })
+        };
       });
       if (updated > 0) {
-        logDebug(`[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`);
+        logDebug(
+          `[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`
+        );
       }
       return updated;
     }
@@ -47118,7 +47134,9 @@ Content: ${entry.description || ""}`;
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed stale bookmark-source documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed stale bookmark-source documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -47131,7 +47149,9 @@ Content: ${entry.description || ""}`;
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -47142,7 +47162,9 @@ Content: ${entry.description || ""}`;
         filter: (result) => {
           if (folderFilter) {
             const name = normalizeMemoryName(
-              String(result.metadata?.folderName || result.metadata?.hubName || "")
+              String(
+                result.metadata?.folderName || result.metadata?.hubName || ""
+              )
             );
             return name === normalizeMemoryName(folderFilter);
           }
@@ -47202,7 +47224,13 @@ Content: ${entry.description || ""}`;
           if (node.uri) {
             await this.addDocument(
               (node.title || "") + " " + node.uri,
-              { type: "history", title: node.title, url: node.uri, timestamp: node.time, context: "Browsing History" },
+              {
+                type: "history",
+                title: node.title,
+                url: node.uri,
+                timestamp: node.time,
+                context: "Browsing History"
+              },
               node.uri
             );
           }
@@ -47272,7 +47300,9 @@ Content: ${entry.description || ""}`;
         if (!hadTraversalFailure) {
           await this.removeStaleBookmarkSourceDocuments(validBookmarkKeys);
         } else {
-          logWarn("[LocalMemory] Skipped stale bookmark cleanup due to traversal failures.");
+          logWarn(
+            "[LocalMemory] Skipped stale bookmark cleanup due to traversal failures."
+          );
         }
         logDebug("[LocalMemory] Bookmarks indexed.");
       } catch (e) {
@@ -47284,7 +47314,9 @@ Content: ${entry.description || ""}`;
       if (!gBrowser) return;
       try {
         const validLiveKeys = /* @__PURE__ */ new Set();
-        const groups = Array.from(gBrowser.tabGroups || []);
+        const groups = Array.from(
+          gBrowser.tabGroups || []
+        );
         for (const group of groups) {
           const groupName = group.label || "(unnamed group)";
           const groupMetadata = {
@@ -47301,11 +47333,7 @@ Content: ${entry.description || ""}`;
               url: groupUrl
             })
           );
-          await this.addDocument(
-            groupText,
-            groupMetadata,
-            groupUrl
-          );
+          await this.addDocument(groupText, groupMetadata, groupUrl);
         }
         const tabs = Array.from(gBrowser.tabs || []);
         for (const tab of tabs) {
@@ -47332,11 +47360,7 @@ Content: ${entry.description || ""}`;
                 url
               })
             );
-            await this.addDocument(
-              tabText,
-              tabMetadata,
-              url
-            );
+            await this.addDocument(tabText, tabMetadata, url);
           }
         }
         await this.removeStaleLiveSourceDocuments(validLiveKeys);
@@ -47417,7 +47441,9 @@ Content: ${entry.description || ""}`;
   function findGroupByName(gBrowser, name) {
     const target = normalizeName(name);
     if (!target) return null;
-    return getTabGroups(gBrowser).find((group) => normalizeName(group.label || "") === target) || null;
+    return getTabGroups(gBrowser).find(
+      (group) => normalizeName(group.label || "") === target
+    ) || null;
   }
   function withUriFixup(rawInput, services) {
     let input = String(rawInput || "").trim();
@@ -47432,9 +47458,12 @@ Content: ${entry.description || ""}`;
   async function fetchChildrenBookmarks(places, parentGuid) {
     if (!places?.bookmarks?.fetch || !parentGuid) return [];
     const collected = [];
-    const fetched = await places.bookmarks.fetch({ parentGuid }, (bookmark) => {
-      collected.push(bookmark);
-    });
+    const fetched = await places.bookmarks.fetch(
+      { parentGuid },
+      (bookmark) => {
+        collected.push(bookmark);
+      }
+    );
     if (collected.length > 0) {
       return collected;
     }
@@ -47485,10 +47514,12 @@ Content: ${entry.description || ""}`;
     return existing?.guid || null;
   }
   async function ensureRootFolderId(places) {
-    if (!places?.bookmarks) throw new Error("PlacesUtils.bookmarks not available");
+    if (!places?.bookmarks)
+      throw new Error("PlacesUtils.bookmarks not available");
     const existing = await findRootFolderId(places);
     if (existing) return existing;
-    if (!places.bookmarks.insert) throw new Error("Bookmarks insert API not available");
+    if (!places.bookmarks.insert)
+      throw new Error("Bookmarks insert API not available");
     const root2 = await places.bookmarks.insert({
       title: ROOT_FOLDER_NAME,
       type: places.bookmarks.TYPE_FOLDER,
@@ -47507,7 +47538,8 @@ Content: ${entry.description || ""}`;
     }));
   }
   async function createBookmark(places, details) {
-    if (!places?.bookmarks?.insert) throw new Error("Bookmarks insert API not available");
+    if (!places?.bookmarks?.insert)
+      throw new Error("Bookmarks insert API not available");
     const created = await places.bookmarks.insert({
       parentGuid: details.parentGuid,
       title: details.title,
@@ -47521,7 +47553,8 @@ Content: ${entry.description || ""}`;
     await places.bookmarks.remove(guid);
   }
   async function updateBookmark(places, guid, changes) {
-    if (!places?.bookmarks?.update) throw new Error("Bookmarks update API not available");
+    if (!places?.bookmarks?.update)
+      throw new Error("Bookmarks update API not available");
     const updated = await places.bookmarks.update({ guid, ...changes });
     return { ...updated, uri: bookmarkUri(updated) };
   }
@@ -47543,7 +47576,11 @@ Content: ${entry.description || ""}`;
           })
         );
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "failed to emit folder change event", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "failed to emit folder change event",
+          error
+        );
       }
     }
     ensurePlacesObserver() {
@@ -47580,7 +47617,11 @@ Content: ${entry.description || ""}`;
         if (!isRelevant) return;
         this.scheduleManagedFolderSync("places-event");
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "places event processing failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "places event processing failed",
+          error
+        );
       }
     };
     scheduleManagedFolderSync(reason) {
@@ -47606,7 +47647,10 @@ Content: ${entry.description || ""}`;
         return null;
       }
       if (this.rootFolderId) {
-        const existing = await fetchBookmarkByGuid(PlacesUtils, this.rootFolderId);
+        const existing = await fetchBookmarkByGuid(
+          PlacesUtils,
+          this.rootFolderId
+        );
         if (existing) return this.rootFolderId;
         this.rootFolderId = null;
       }
@@ -47685,7 +47729,11 @@ Content: ${entry.description || ""}`;
           `sync complete reason=${reason} folders=${folderNames.length} added=${syncResult.added} updated=${syncResult.updated} removed=${syncResult.removed}`
         );
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "managed folder sync failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "managed folder sync failed",
+          error
+        );
       } finally {
         this.syncInFlight = false;
       }
@@ -47702,7 +47750,11 @@ Content: ${entry.description || ""}`;
         }
         return result;
       } catch (error) {
-        assistantLogger.error("bookmark-folders", "Failed to list bookmark folders", error);
+        assistantLogger.error(
+          "bookmark-folders",
+          "Failed to list bookmark folders",
+          error
+        );
         return [];
       }
     }
@@ -47711,7 +47763,11 @@ Content: ${entry.description || ""}`;
         const rootId = await this.ensureRootFolder();
         return await this.collectFolders(rootId);
       } catch (error) {
-        assistantLogger.error("bookmark-folders", "Failed to get all bookmark folders", error);
+        assistantLogger.error(
+          "bookmark-folders",
+          "Failed to get all bookmark folders",
+          error
+        );
         return [];
       }
     }
@@ -47722,7 +47778,11 @@ Content: ${entry.description || ""}`;
         const folders = await this.collectFolders(rootId);
         return { ok: true, folders };
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "read-only folder lookup failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "read-only folder lookup failed",
+          error
+        );
         return { ok: false, folders: [] };
       }
     }
@@ -47762,7 +47822,9 @@ Content: ${entry.description || ""}`;
       const items = await getBookmarkChildren(context.PlacesUtils, folder.guid);
       const bookmarks = items.filter((bookmark) => !!bookmark.uri);
       if (opts?.closeTabs) {
-        const hostSet = new Set(bookmarks.map((bookmark) => hostOf(String(bookmark.uri))));
+        const hostSet = new Set(
+          bookmarks.map((bookmark) => hostOf(String(bookmark.uri)))
+        );
         for (const tab of getTabs(context.gBrowser)) {
           if (hostSet.has(hostOf(tabUrl(tab)))) {
             context.gBrowser?.removeTab?.(tab);
@@ -47784,8 +47846,13 @@ Content: ${entry.description || ""}`;
       if (!folder) return { ok: false };
       const existing = await this.findFolderNode(rootId, normalizedNew);
       if (existing) return { ok: false, msg: "Target exists" };
-      await updateBookmark(context.PlacesUtils, folder.guid, { title: normalizedNew });
-      await localMemory.renameBookmarkFolderDocuments(folder.title || normalizedOld, normalizedNew);
+      await updateBookmark(context.PlacesUtils, folder.guid, {
+        title: normalizedNew
+      });
+      await localMemory.renameBookmarkFolderDocuments(
+        folder.title || normalizedOld,
+        normalizedNew
+      );
       this.scheduleManagedFolderSync("rename-folder");
       return { ok: true };
     }
@@ -47810,13 +47877,19 @@ Content: ${entry.description || ""}`;
       const rootId = await this.ensureRootFolder();
       const folder = await this.findFolderNode(rootId, normalizedName);
       if (!folder) return { ok: false };
-      const bookmarks = await getBookmarkChildren(getChromeContext().PlacesUtils, folder.guid);
+      const bookmarks = await getBookmarkChildren(
+        getChromeContext().PlacesUtils,
+        folder.guid
+      );
       const toRemove = bookmarks.filter((bookmark) => bookmark.uri === url);
       for (const bookmark of toRemove) {
         await removeBookmark(getChromeContext().PlacesUtils, bookmark.guid);
       }
       if (toRemove.length > 0) {
-        await localMemory.removeBookmarkFolderDocumentByUrl(folder.title || normalizedName, url);
+        await localMemory.removeBookmarkFolderDocumentByUrl(
+          folder.title || normalizedName,
+          url
+        );
         this.scheduleManagedFolderSync("remove-url");
       }
       return { ok: toRemove.length > 0 };
@@ -47827,7 +47900,10 @@ Content: ${entry.description || ""}`;
       const rootId = await this.ensureRootFolder();
       const folder = await this.findFolderNode(rootId, normalizedName);
       if (!folder) return { ok: false };
-      const bookmarks = await getBookmarkChildren(context.PlacesUtils, folder.guid);
+      const bookmarks = await getBookmarkChildren(
+        context.PlacesUtils,
+        folder.guid
+      );
       const urls = bookmarks.filter((bookmark) => !!bookmark.uri).map((bookmark) => String(bookmark.uri));
       if (urls.length === 0) return { ok: true };
       let targetBrowser = context.gBrowser;
@@ -47848,14 +47924,22 @@ Content: ${entry.description || ""}`;
           });
           if (tab) openedTabs.push(tab);
         } catch (error) {
-          assistantLogger.error("bookmark-folders", `Failed to open tab for URL: ${url}`, error);
+          assistantLogger.error(
+            "bookmark-folders",
+            `Failed to open tab for URL: ${url}`,
+            error
+          );
         }
       }
       if (where === "tabgroup" && openedTabs.length > 0) {
         try {
           targetBrowser.addTabGroup?.(openedTabs, { label: normalizedName });
         } catch (error) {
-          assistantLogger.warn("bookmark-folders", "Failed to group opened tabs", error);
+          assistantLogger.warn(
+            "bookmark-folders",
+            "Failed to group opened tabs",
+            error
+          );
         }
       }
       return { ok: true };
@@ -47878,7 +47962,11 @@ Content: ${entry.description || ""}`;
         const bodyText = tab.linkedBrowser?.contentDocument?.body?.innerText || "";
         content = String(bodyText).substring(0, 5e3);
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "Failed to extract tab content", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "Failed to extract tab content",
+          error
+        );
       }
       const text2 = `Title: ${title}
 URL: ${url}
@@ -48875,38 +48963,58 @@ Content: ${content}`;
           this.browser.setAttribute("src", "about:blank");
           this.browser.style.cssText = "display:none; width:0; height:0; position:fixed; visibility:hidden;";
           browserWin.document.documentElement.appendChild(this.browser);
-          console.log("[EmbeddingService] Browser element appended, waiting for init...");
+          console.log(
+            "[EmbeddingService] Browser element appended, waiting for init..."
+          );
           setTimeout(() => {
             try {
               if (!this.browser.messageManager) {
-                console.error("[EmbeddingService] messageManager not available after timeout");
+                console.error(
+                  "[EmbeddingService] messageManager not available after timeout"
+                );
                 reject(new Error("messageManager not available"));
                 return;
               }
               console.log("[EmbeddingService] Loading frame script...");
-              this.browser.messageManager.loadFrameScript(FRAME_SCRIPT_URL, false);
-              this.browser.messageManager.addMessageListener("EmbedWorkerReady", () => {
-                if (this.ready) return;
-                console.log("[EmbeddingService] \u2705 Worker ready in content process!");
-                this.ready = true;
-                resolve();
-              });
-              this.browser.messageManager.addMessageListener("EmbedModelLoaded", () => {
-                console.log("[EmbeddingService] Model loaded in content process");
-                this.modelLoaded = true;
-              });
-              this.browser.messageManager.addMessageListener("EmbedResponse", (msg) => {
-                const { id, embedding, error } = msg.data;
-                const pending = this.pendingRequests.get(id);
-                if (pending) {
-                  this.pendingRequests.delete(id);
-                  if (error) {
-                    pending.reject(new Error(error));
-                  } else {
-                    pending.resolve(embedding);
+              this.browser.messageManager.loadFrameScript(
+                FRAME_SCRIPT_URL,
+                false
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedWorkerReady",
+                () => {
+                  if (this.ready) return;
+                  console.log(
+                    "[EmbeddingService] \u2705 Worker ready in content process!"
+                  );
+                  this.ready = true;
+                  resolve();
+                }
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedModelLoaded",
+                () => {
+                  console.log(
+                    "[EmbeddingService] Model loaded in content process"
+                  );
+                  this.modelLoaded = true;
+                }
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedResponse",
+                (msg) => {
+                  const { id, embedding, error } = msg.data;
+                  const pending = this.pendingRequests.get(id);
+                  if (pending) {
+                    this.pendingRequests.delete(id);
+                    if (error) {
+                      pending.reject(new Error(error));
+                    } else {
+                      pending.resolve(embedding);
+                    }
                   }
                 }
-              });
+              );
               console.log("[EmbeddingService] Message listeners set up");
             } catch (err) {
               console.error("[EmbeddingService] Setup failed:", err);
@@ -48915,8 +49023,12 @@ Content: ${content}`;
           }, 1e3);
           setTimeout(() => {
             if (!this.ready) {
-              console.error("[EmbeddingService] Timeout: never received EmbedWorkerReady");
-              reject(new Error("Embedding browser failed to initialize within 60s"));
+              console.error(
+                "[EmbeddingService] Timeout: never received EmbedWorkerReady"
+              );
+              reject(
+                new Error("Embedding browser failed to initialize within 60s")
+              );
             }
           }, 6e4);
         } catch (err) {
@@ -48931,7 +49043,10 @@ Content: ${content}`;
       const id = `embed-${++this.requestCounter}`;
       return new Promise((resolve, reject) => {
         this.pendingRequests.set(id, { resolve, reject });
-        this.browser.messageManager.sendAsyncMessage("EmbedRequest", { id, text: text2 });
+        this.browser.messageManager.sendAsyncMessage("EmbedRequest", {
+          id,
+          text: text2
+        });
         const timeout = this.modelLoaded ? 3e4 : 12e4;
         setTimeout(() => {
           if (this.pendingRequests.has(id)) {
@@ -48957,7 +49072,10 @@ Content: ${content}`;
       if (this.ready || this.readyPromise) return;
       console.log("[EmbeddingService] \u{1F680} Background pre-warming started...");
       this.ensureBrowser().catch((err) => {
-        console.warn("[EmbeddingService] Pre-warming failed (will retry on search):", err);
+        console.warn(
+          "[EmbeddingService] Pre-warming failed (will retry on search):",
+          err
+        );
         this.readyPromise = null;
       });
     }
@@ -53625,7 +53743,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         const urls = urlsJson ? new Set(JSON.parse(urlsJson)) : /* @__PURE__ */ new Set();
         return urls;
       } catch (err) {
-        console.warn("[HistoryVectorStore] Failed to restore from IndexedDB:", err);
+        console.warn(
+          "[HistoryVectorStore] Failed to restore from IndexedDB:",
+          err
+        );
         this.db = null;
         return null;
       }
@@ -53752,7 +53873,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: { "Accept": "text/html" }
+        headers: { Accept: "text/html" }
       });
       clearTimeout(timeout);
       if (!response.ok) return "";
@@ -53807,7 +53928,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         `[HistoryCollector] Fetched ${entries2.length} unique history entries`
       );
       if (includeSnippets && entries2.length > 0) {
-        console.log(`[HistoryCollector] Fetching snippets for ${entries2.length} entries...`);
+        console.log(
+          `[HistoryCollector] Fetching snippets for ${entries2.length} entries...`
+        );
         console.time("[HistoryCollector] Fetch snippets");
         const BATCH_SIZE = 5;
         for (let i = 0; i < entries2.length; i += BATCH_SIZE) {
@@ -53879,7 +54002,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         console.timeEnd("[SemanticSearch] Restore from IndexedDB");
         this.indexedUrls = restoredUrls;
         this.indexed = true;
-        console.log(`[SemanticSearch] \u2705 Restored ${restoredUrls.size} entries from IndexedDB \u2014 skipping full index`);
+        console.log(
+          `[SemanticSearch] \u2705 Restored ${restoredUrls.size} entries from IndexedDB \u2014 skipping full index`
+        );
         await this.doIncrementalIndex();
         return;
       }
@@ -53960,7 +54085,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
             try {
               const response = await fetch(entry.url, {
                 signal: AbortSignal.timeout(5e3),
-                headers: { "Accept": "text/html" }
+                headers: { Accept: "text/html" }
               });
               if (!response.ok) return entry;
               const ct = response.headers.get("content-type") || "";
@@ -54537,7 +54662,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       id: "list.container.tabs",
       family: "list",
       commandName: "list_tabs",
-      phrases: ["list tabs in", "show tabs in", "list my", "show my", "list the", "show the"],
+      phrases: [
+        "list tabs in",
+        "show tabs in",
+        "list my",
+        "show my",
+        "list the",
+        "show the"
+      ],
       slots: [
         { name: "name", type: "target_name", source: "rest", optional: true },
         { name: "scope", type: "scope", source: "rest", optional: true }
@@ -54570,9 +54702,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "did i read",
         "did i browse"
       ],
-      slots: [
-        { name: "query", type: "string", source: "quoted_or_rest" }
-      ]
+      slots: [{ name: "query", type: "string", source: "quoted_or_rest" }]
     },
     {
       id: "search.memory",
@@ -54599,7 +54729,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       phrases: ["add", "save", "move", "put"],
       slots: [
         { name: "name", type: "target_name", source: "rest", optional: true },
-        { name: "query", type: "string", source: "quoted_or_rest", optional: true }
+        {
+          name: "query",
+          type: "string",
+          source: "quoted_or_rest",
+          optional: true
+        }
       ]
     },
     {
@@ -54607,7 +54742,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       family: "mutation",
       commandName: "resolve_ambiguity",
       phrases: ["close", "delete", "remove"],
-      slots: [{ name: "target", type: "target_name", source: "rest", optional: true }]
+      slots: [
+        { name: "target", type: "target_name", source: "rest", optional: true }
+      ]
     }
   ];
 
@@ -54702,7 +54839,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     if (/\btab\s*groups?\b/i.test(command) && !/\btabs?\s+(?:in|from)\b/i.test(command)) {
       return null;
     }
-    const tabsWithTarget = command.match(/\btabs?\s+(?:in|from)\s+(?<target>.+)$/i);
+    const tabsWithTarget = command.match(
+      /\btabs?\s+(?:in|from)\s+(?<target>.+)$/i
+    );
     if (tabsWithTarget?.groups?.target) {
       const rawTarget = cleanTargetName(tabsWithTarget.groups.target);
       if (!rawTarget) {
@@ -55050,7 +55189,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
         const title = normalizeRouteName(tab?.label || "");
-        const url = normalizeRouteName(tab?.linkedBrowser?.currentURI?.spec || "");
+        const url = normalizeRouteName(
+          tab?.linkedBrowser?.currentURI?.spec || ""
+        );
         if (title === normalizedTarget || url === normalizedTarget || normalizedTarget.length > 2 && (title.includes(normalizedTarget) || url.includes(normalizedTarget))) {
           tabMatches.push(i + 1);
         }
@@ -55130,7 +55271,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         )) {
           return null;
         }
-        const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
+        const withTabMatch = input.match(
+          /(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i
+        );
         const withIndex = numberArg(withTabMatch?.groups?.index);
         if (withIndex != null) {
           return { withIndex };
@@ -55735,7 +55878,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           (event) => {
             const detail = event.detail;
             if (Array.isArray(detail?.folderNames)) {
-              this.replaceFolderNames(detail.folderNames, "bookmark-folders-event");
+              this.replaceFolderNames(
+                detail.folderNames,
+                "bookmark-folders-event"
+              );
               return;
             }
             this.markDirty("bookmark-folders-event");
@@ -56047,7 +56193,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   function numberArrayArg(args, key) {
     const value = args[key];
     if (!Array.isArray(value)) return [];
-    return value.map((item) => typeof item === "number" && Number.isFinite(item) ? item : null).filter((item) => item != null);
+    return value.map(
+      (item) => typeof item === "number" && Number.isFinite(item) ? item : null
+    ).filter((item) => item != null);
   }
   function ambiguityTargetArg(args) {
     const value = stringArg(args, "target");
@@ -56085,7 +56233,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const groupName = group.label || "(unnamed)";
       affectedGroups.add(groupName);
       const groupTabs = group.tabs || [];
-      const movingTabs = groupTabs.filter((groupTab) => tabsToMove.includes(groupTab));
+      const movingTabs = groupTabs.filter(
+        (groupTab) => tabsToMove.includes(groupTab)
+      );
       if (groupTabs.length > 0 && movingTabs.length === groupTabs.length) {
         emptiedGroups.add(groupName);
       }
@@ -56222,7 +56372,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     description = "Open a new browser window.";
     async execute(_args) {
       const { topWin } = getChrome2();
-      if (!topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+      if (!topWin?.OpenBrowserWindow)
+        return { message: "Browser UI not available." };
       topWin.OpenBrowserWindow();
       return { message: "Successfully opened a new window." };
     }
@@ -56270,7 +56421,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     description = "Open a URL in a new tab.";
     async execute(args) {
       const { topWin } = getChrome2();
-      if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn)
+        return { message: "Browser UI not available." };
       const url = stringArg(args, "url");
       if (!url) return { message: "Missing 'url' argument." };
       topWin.openTrustedLinkIn(url, "tab");
@@ -56313,7 +56465,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: "Missing 'query' argument." };
       }
       if (!topWin?.openTrustedLinkIn) {
-        return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+        return {
+          message: "Cannot open web search (openTrustedLinkIn not found)."
+        };
       }
       const searchUrl = toWebSearchUrl(query);
       topWin.openTrustedLinkIn(searchUrl, "tab");
@@ -56346,7 +56500,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -56375,7 +56530,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       }
       const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       const newWin = topWin.OpenBrowserWindow();
       await new Promise((r) => setTimeout(r, 250));
@@ -56413,7 +56569,9 @@ ${text2}` };
         entity: "folder",
         name: res.name
       });
-      return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
+      return {
+        message: `Created bookmark folder "${res.name}" with ${res.count} items.`
+      };
     }
   };
   var DeleteBookmarkFolderCommand = class {
@@ -56499,7 +56657,9 @@ ${text2}` };
       } else if (query) {
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
-          return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       } else {
         const current = gBrowser.selectedTab;
@@ -56590,13 +56750,16 @@ ${text2}` };
         } else if (withQuery) {
           tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
           if (!tab2) {
-            return { message: `No tab found matching "${stringArg(args, "withQuery") || ""}".` };
+            return {
+              message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`
+            };
           }
         } else {
           tab2 = gBrowser.addTrustedTab?.("about:newtab") || null;
         }
       }
-      if (!tab1 || !tab2) return { message: "Unable to resolve tabs for split view." };
+      if (!tab1 || !tab2)
+        return { message: "Unable to resolve tabs for split view." };
       if (tab1 === tab2) {
         return { message: "Cannot split a tab with itself." };
       }
@@ -56648,7 +56811,8 @@ ${text2}` };
     description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
     async execute(args) {
       const { topWin, gBrowser } = getChrome2();
-      if (!gBrowser || !topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+      if (!gBrowser || !topWin?.OpenBrowserWindow)
+        return { message: "Browser UI not available." };
       const indices = numberArrayArg(args, "indices");
       if (indices.length < 2) {
         return {
@@ -56712,7 +56876,9 @@ ${text2}` };
       if (query && !idx) {
         tab = findTabsByQuery(gBrowser, query)[0] || null;
         if (!tab) {
-          return { message: `No tab found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tab found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       }
       const browser = tab?.linkedBrowser;
@@ -56725,7 +56891,9 @@ ${text2}` };
       try {
         const currentWindowContext = browser.browsingContext?.currentWindowContext;
         if (!currentWindowContext) {
-          return { message: "Cannot access page content. The page may still be loading." };
+          return {
+            message: "Cannot access page content. The page may still be loading."
+          };
         }
         const pageExtractor = currentWindowContext.getActor("PageExtractor");
         if (!pageExtractor) {
@@ -56751,7 +56919,9 @@ ${text2}` };
         }
         content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
         if (!content || content.length < 50) {
-          return { message: "Not enough content found on this page to summarize." };
+          return {
+            message: "Not enough content found on this page to summarize."
+          };
         }
         const maxLength = 12e3;
         if (content.length > maxLength) {
@@ -56788,7 +56958,10 @@ ${content}`
         const snapshot = await bookmarkFolders.getAllReadOnly();
         if (snapshot.ok) {
           const folderToUrls = buildFolderUrlMap(snapshot.folders);
-          const filtered = filterStaleBookmarkFolderResults(results, folderToUrls);
+          const filtered = filterStaleBookmarkFolderResults(
+            results,
+            folderToUrls
+          );
           results = filtered.results;
           if (filtered.dropped > 0) {
             assistantLogger.debug(
@@ -56808,7 +56981,9 @@ ${content}`
       const requiresBookmarkFolderOnly = folderScoped || sourceScope === "bookmark-folder";
       if (requiresBookmarkFolderOnly) {
         const before = results.length;
-        results = results.filter((r) => getMemoryDocSource(r) === "bookmark-folder");
+        results = results.filter(
+          (r) => getMemoryDocSource(r) === "bookmark-folder"
+        );
         if (before !== results.length) {
           assistantLogger.debug(
             "search-memory",
@@ -56878,7 +57053,13 @@ ${content}`
       }
       const sourceCounts = Object.entries(resultsBySource).map(([src, items]) => `${items.length} from ${src}`).join(", ");
       const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
-      return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
+      return {
+        message: JSON.stringify({
+          summary,
+          resultsBySource,
+          results: structured
+        })
+      };
     }
   };
   var GetRecentSearchResultsCommand = class {
@@ -56942,7 +57123,8 @@ ${content}`
         }
       }
       const { topWin, gBrowser, PlacesUtils } = getChrome2();
-      if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn || !gBrowser)
+        return { message: "Browser UI not available." };
       if (bookmarkGuid && PlacesUtils?.bookmarks?.fetch) {
         try {
           const fetched = await PlacesUtils.bookmarks.fetch(bookmarkGuid);
@@ -56976,7 +57158,8 @@ ${content}`
     description = "Show the current subscription plan and usage options.";
     async execute(_args) {
       const { topWin } = getChrome2();
-      if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn)
+        return { message: "Browser UI not available." };
       const stats = await subscriptionService.checkAvailability();
       const url = subscriptionService.getSubscriptionUrl();
       topWin.openTrustedLinkIn(url, "tab");
@@ -57034,14 +57217,16 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           }
         }
         const newTab = gBrowser.addTrustedTab?.(url);
-        if (!newTab) return { message: "Failed to open a tab for the new group." };
+        if (!newTab)
+          return { message: "Failed to open a tab for the new group." };
         tabsToGroup = [newTab];
         createdNewTab = true;
       } else {
         const currentTab = gBrowser.selectedTab || null;
         if (currentTab?.group) {
           const newTab = gBrowser.addTrustedTab?.("about:newtab");
-          if (!newTab) return { message: "Failed to create a tab for the new group." };
+          if (!newTab)
+            return { message: "Failed to create a tab for the new group." };
           tabsToGroup = [newTab];
           createdNewTab = true;
         } else {
@@ -57174,7 +57359,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       } else if (query) {
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
-          return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       } else if (idx != null) {
         const tab = tabByIndex(gBrowser, idx);
@@ -57188,9 +57375,13 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       const groupableTabs = tabsToAdd.filter((tab) => !tab.pinned);
       if (groupableTabs.length === 0) {
-        return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
+        return {
+          message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)."
+        };
       }
-      const tabsInOtherGroups = groupableTabs.filter((tab) => tab.group && tab.group !== group);
+      const tabsInOtherGroups = groupableTabs.filter(
+        (tab) => tab.group && tab.group !== group
+      );
       if (tabsInOtherGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
         const impact = analyzeGroupMoveImpact(tabsInOtherGroups);
         const groupNames = impact.affectedGroups.join(", ");
@@ -57223,7 +57414,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           name: group.label || name
         });
         const titles = groupableTabs.map((tab) => tabTitle(tab)).join(", ");
-        return { message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}` };
+        return {
+          message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}`
+        };
       } catch (e) {
         return { message: `Failed to add tab to group: ${e}` };
       }
@@ -57237,7 +57430,8 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const idx = numberArg3(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       if (!tab.group) {
         return { message: `Tab "${title}" is not in any group.` };
@@ -57306,7 +57500,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
         return { message: "Okay, cancelled that request." };
       }
       if (pending.kind === "close_delete_target") {
-        const allowed = new Set(pending.choices || ["tab", "tab-group", "bookmark-folder"]);
+        const allowed = new Set(
+          pending.choices || ["tab", "tab-group", "bookmark-folder"]
+        );
         if (!target || !allowed.has(target)) {
           const optionLabels = Array.from(allowed).map((opt) => {
             if (opt === "tab-group") return "tab group";
@@ -57367,16 +57563,11 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     description = "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
     async execute(args) {
       const pending = getPendingConfirmation();
-      assistantLogger.debug(
-        "confirm-action",
-        "Received confirmation input",
-        { hasPending: !!pending }
-      );
+      assistantLogger.debug("confirm-action", "Received confirmation input", {
+        hasPending: !!pending
+      });
       if (!pending) {
-        assistantLogger.debug(
-          "confirm-action",
-          "No pending confirmation found"
-        );
+        assistantLogger.debug("confirm-action", "No pending confirmation found");
         clearContinuationQueue();
         return { message: "No pending action to confirm." };
       }
@@ -74535,7 +74726,10 @@ Result: ${toolResult.message}`
     const capability = getAssistCapability(endpointKey);
     if (!shouldAttemptAssist(endpointKey)) {
       if (capability === "unsupported") {
-        assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+        assistantLogger.debug(
+          "router",
+          "Assist endpoint currently cooling down."
+        );
       }
       return { kind: "none" };
     }
@@ -74559,7 +74753,11 @@ Result: ${toolResult.message}`
       const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
       const assistArgs = isRecord(assist?.args) ? assist.args : {};
       if (allowPlanTool && assistNext === PLAN_TOOL_NAME) {
-        const actions = parsePlannedActions(assistArgs, memberNameSet, maxPlanActions);
+        const actions = parsePlannedActions(
+          assistArgs,
+          memberNameSet,
+          maxPlanActions
+        );
         if (actions.length > 0) {
           assistantLogger.debug("router", "Assist returned action plan", {
             count: actions.length
@@ -74569,11 +74767,15 @@ Result: ${toolResult.message}`
         return { kind: "none" };
       }
       if (assistNext && assistNext !== "chat" && !effectiveOptionSet.has(assistNext)) {
-        assistantLogger.debug("router", "Assist route rejected by family policy", {
-          assistNext,
-          family: constrained.family,
-          constrained: constrained.constrained
-        });
+        assistantLogger.debug(
+          "router",
+          "Assist route rejected by family policy",
+          {
+            assistNext,
+            family: constrained.family,
+            constrained: constrained.constrained
+          }
+        );
         return { kind: "none" };
       }
       if (assistNext && assistNext !== "chat" && memberNameSet.has(assistNext)) {
@@ -74592,9 +74794,16 @@ Result: ${toolResult.message}`
       const assistUnsupported = /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
       if (assistUnsupported) {
         markAssistUnsupported(endpointKey);
-        assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
+        assistantLogger.warn(
+          "router",
+          "Assist endpoint unavailable, using fallback."
+        );
       } else {
-        assistantLogger.warn("router", "Assist route failed, using fallback.", error);
+        assistantLogger.warn(
+          "router",
+          "Assist route failed, using fallback.",
+          error
+        );
       }
       return { kind: "none" };
     }
@@ -75276,7 +75485,11 @@ ${message}` : message;
       );
       return createFallbackSessionStore();
     } catch (error) {
-      assistantLogger.error("session", "Failed to import AssistantSession singleton.", error);
+      assistantLogger.error(
+        "session",
+        "Failed to import AssistantSession singleton.",
+        error
+      );
       return createFallbackSessionStore();
     }
   }
@@ -75290,7 +75503,9 @@ ${message}` : message;
         observe: (_subject, topic, _data) => {
           if (topic === "oasis-session-updated") {
             try {
-              assistantWindow2.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+              assistantWindow2.dispatchEvent(
+                new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+              );
             } catch {
             }
           }
@@ -75298,7 +75513,11 @@ ${message}` : message;
       };
       services.obs.addObserver(observer, "oasis-session-updated", false);
     } catch (error) {
-      assistantLogger.error("session", "Failed to install session observer.", error);
+      assistantLogger.error(
+        "session",
+        "Failed to install session observer.",
+        error
+      );
     }
   }
   function hydrateSessionMessages(session) {
@@ -75328,7 +75547,9 @@ ${message}` : message;
     function resetAssistantSession2() {
       session.clear();
       try {
-        assistantWindow2.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+        assistantWindow2.dispatchEvent(
+          new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+        );
       } catch {
       }
     }
@@ -75566,7 +75787,11 @@ ${message}` : message;
             const result = await transcribeAudio(audioBlob);
             resolve(result.transcript || "");
           } catch (error) {
-            assistantLogger.error("voice-input", "Error transcribing audio", error);
+            assistantLogger.error(
+              "voice-input",
+              "Error transcribing audio",
+              error
+            );
             reject(error);
           } finally {
             this.mediaRecorder = null;

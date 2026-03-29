@@ -36,7 +36,10 @@ function firstUrlLike(input: string): string | null {
   return null;
 }
 
-function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null {
+function firstMatch(
+  input: string,
+  patterns: RegExp[]
+): RegExpMatchArray | null {
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
@@ -50,7 +53,8 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
   {
     next: "copy_tab_urls",
     reason: "explicit-copy-tab-urls",
-    resolve: input => (/\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null),
+    resolve: input =>
+      /\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null,
   },
   {
     next: "new_window",
@@ -71,7 +75,9 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     next: "show_subscription",
     reason: "explicit-show-subscription",
     resolve: input =>
-      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input) ? {} : null,
+      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input)
+        ? {}
+        : null,
   },
   {
     next: "show_url",

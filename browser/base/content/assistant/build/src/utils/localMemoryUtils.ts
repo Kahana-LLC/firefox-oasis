@@ -40,7 +40,9 @@ export function isBookmarkFolderType(rawType: string): boolean {
   return BOOKMARK_FOLDER_TYPES.has((rawType || "").toLowerCase());
 }
 
-export function getMemoryDocSource(doc: Pick<MemoryLikeDoc, "metadata">): string {
+export function getMemoryDocSource(
+  doc: Pick<MemoryLikeDoc, "metadata">
+): string {
   const rawType = String(doc?.metadata?.type || "memory").toLowerCase();
   if (isBookmarkFolderType(rawType)) {
     return "bookmark-folder";
@@ -48,13 +50,17 @@ export function getMemoryDocSource(doc: Pick<MemoryLikeDoc, "metadata">): string
   return rawType;
 }
 
-export function getMemoryDocFolderName(doc: Pick<MemoryLikeDoc, "metadata">): string {
+export function getMemoryDocFolderName(
+  doc: Pick<MemoryLikeDoc, "metadata">
+): string {
   return normalizeMemoryName(
     String(doc?.metadata?.folderName || doc?.metadata?.hubName || "")
   );
 }
 
-export function getMemoryDocUrl(doc: Pick<MemoryLikeDoc, "url" | "metadata">): string {
+export function getMemoryDocUrl(
+  doc: Pick<MemoryLikeDoc, "url" | "metadata">
+): string {
   return String(doc?.url || doc?.metadata?.url || "").trim();
 }
 
@@ -62,6 +68,7 @@ export function computeMemoryDedupeKey(doc: MemoryLikeDoc): string {
   const source = getMemoryDocSource(doc);
   const folder = getMemoryDocFolderName(doc);
   const url = getMemoryDocUrl(doc);
-  const contentKey = url || `text:${normalizeTextForKey(String(doc?.text || ""))}`;
+  const contentKey =
+    url || `text:${normalizeTextForKey(String(doc?.text || ""))}`;
   return `${sanitizeKeyPart(source)}|${sanitizeKeyPart(folder)}|${sanitizeKeyPart(contentKey)}`;
 }

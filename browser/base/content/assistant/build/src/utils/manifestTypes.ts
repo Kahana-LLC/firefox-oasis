@@ -1,11 +1,11 @@
 /** Type definitions for the command manifest: slot definitions, condition contexts, command definitions, and resolution results. */
-import type { IntentFamily, RouteArgs, RoutingStateSnapshot } from "./routerTypes.js";
+import type {
+  IntentFamily,
+  RouteArgs,
+  RoutingStateSnapshot,
+} from "./routerTypes.js";
 
-export type ManifestSlotSource =
-  | "rest"
-  | "quoted_or_rest"
-  | "number"
-  | "url";
+export type ManifestSlotSource = "rest" | "quoted_or_rest" | "number" | "url";
 
 export type ManifestSlotType =
   | "string"

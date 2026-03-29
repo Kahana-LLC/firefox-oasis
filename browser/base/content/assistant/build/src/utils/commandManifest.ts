@@ -54,7 +54,14 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     id: "list.container.tabs",
     family: "list",
     commandName: "list_tabs",
-    phrases: ["list tabs in", "show tabs in", "list my", "show my", "list the", "show the"],
+    phrases: [
+      "list tabs in",
+      "show tabs in",
+      "list my",
+      "show my",
+      "list the",
+      "show the",
+    ],
     slots: [
       { name: "name", type: "target_name", source: "rest", optional: true },
       { name: "scope", type: "scope", source: "rest", optional: true },
@@ -87,9 +94,7 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
       "did i read",
       "did i browse",
     ],
-    slots: [
-      { name: "query", type: "string", source: "quoted_or_rest" },
-    ],
+    slots: [{ name: "query", type: "string", source: "quoted_or_rest" }],
   },
   {
     id: "search.memory",
@@ -116,7 +121,12 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     phrases: ["add", "save", "move", "put"],
     slots: [
       { name: "name", type: "target_name", source: "rest", optional: true },
-      { name: "query", type: "string", source: "quoted_or_rest", optional: true },
+      {
+        name: "query",
+        type: "string",
+        source: "quoted_or_rest",
+        optional: true,
+      },
     ],
   },
   {
@@ -124,7 +134,9 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     family: "mutation",
     commandName: "resolve_ambiguity",
     phrases: ["close", "delete", "remove"],
-    slots: [{ name: "target", type: "target_name", source: "rest", optional: true }],
+    slots: [
+      { name: "target", type: "target_name", source: "rest", optional: true },
+    ],
   },
 ] as const;
 
@@ -140,5 +152,8 @@ export function validateCommandManifest(
     }
     seen.add(item.id);
   }
-  return { ok: duplicateIds.size === 0, duplicateIds: Array.from(duplicateIds) };
+  return {
+    ok: duplicateIds.size === 0,
+    duplicateIds: Array.from(duplicateIds),
+  };
 }
