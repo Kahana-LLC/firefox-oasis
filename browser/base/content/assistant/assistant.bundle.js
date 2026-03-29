@@ -50246,7 +50246,9 @@ Content: ${content}`;
   function numberArrayArg(args, key) {
     const value = args[key];
     if (!Array.isArray(value)) return [];
-    return value.map((item) => typeof item === "number" && Number.isFinite(item) ? item : null).filter((item) => item != null);
+    return value.map(
+      (item) => typeof item === "number" && Number.isFinite(item) ? item : null
+    ).filter((item) => item != null);
   }
   function ambiguityTargetArg(args) {
     const value = stringArg(args, "target");
@@ -50269,6 +50271,9 @@ Content: ${content}`;
     if (i > tabs.length) return null;
     return tabs[i - 1] || null;
   }
+  function asTabOps(gBrowser) {
+    return gBrowser;
+  }
   function normalizeQuery(value) {
     return (value || "").trim().toLowerCase();
   }
@@ -50281,7 +50286,9 @@ Content: ${content}`;
       const groupName = group.label || "(unnamed)";
       affectedGroups.add(groupName);
       const groupTabs = group.tabs || [];
-      const movingTabs = groupTabs.filter((groupTab) => tabsToMove.includes(groupTab));
+      const movingTabs = groupTabs.filter(
+        (groupTab) => tabsToMove.includes(groupTab)
+      );
       if (groupTabs.length > 0 && movingTabs.length === groupTabs.length) {
         emptiedGroups.add(groupName);
       }
@@ -50418,7 +50425,8 @@ Content: ${content}`;
     description = "Open a new browser window.";
     async execute(_args) {
       const { topWin } = getChrome2();
-      if (!topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+      if (!topWin?.OpenBrowserWindow)
+        return { message: "Browser UI not available." };
       topWin.OpenBrowserWindow();
       return { message: "Successfully opened a new window." };
     }
@@ -50466,7 +50474,8 @@ Content: ${content}`;
     description = "Open a URL in a new tab.";
     async execute(args) {
       const { topWin } = getChrome2();
-      if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn)
+        return { message: "Browser UI not available." };
       const url = stringArg(args, "url");
       if (!url) return { message: "Missing 'url' argument." };
       topWin.openTrustedLinkIn(url, "tab");
@@ -50505,7 +50514,8 @@ Content: ${content}`;
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const idx = numberArg2(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -50524,6 +50534,358 @@ Content: ${content}`;
       return { message: `Closed tab: ${title}` };
     }
   };
+  var ReloadTabCommand = class {
+    commandName = "reload_tab";
+    description = "Reload the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.reloadTab)
+        return { message: "Browser UI (gBrowser.reloadTab) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      gb.reloadTab(tab);
+      return { message: `Reloaded tab: ${tabTitle(tab)}` };
+    }
+  };
+  var ToggleMuteTabCommand = class {
+    commandName = "toggle_mute_tab";
+    description = "Toggle mute for the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const { gBrowser } = getChrome2();
+      if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gBrowser, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      const toggle = tab.toggleMuteAudio;
+      if (typeof toggle !== "function")
+        return { message: "Mute is not available for this tab." };
+      toggle.call(tab);
+      return { message: `Toggled mute for: ${tabTitle(tab)}` };
+    }
+  };
+  var PinTabCommand = class {
+    commandName = "pin_tab";
+    description = "Pin the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.pinTab)
+        return { message: "Browser UI (gBrowser.pinTab) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (tab.pinned)
+        return { message: `Tab is already pinned: ${tabTitle(tab)}` };
+      gb.pinTab(tab, {});
+      return { message: `Pinned tab: ${tabTitle(tab)}` };
+    }
+  };
+  var UnpinTabCommand = class {
+    commandName = "unpin_tab";
+    description = "Unpin the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.unpinTab)
+        return { message: "Browser UI (gBrowser.unpinTab) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab.pinned) return { message: `Tab is not pinned: ${tabTitle(tab)}` };
+      gb.unpinTab(tab);
+      return { message: `Unpinned tab: ${tabTitle(tab)}` };
+    }
+  };
+  var UnloadTabCommand = class {
+    commandName = "unload_tab";
+    description = "Unload (discard) the current tab or a tab by index to free memory. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.explicitUnloadTabs) {
+        return { message: "Tab unload is not available in this build." };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      await gb.explicitUnloadTabs([tab]);
+      return { message: `Unloaded tab: ${tabTitle(tab)}` };
+    }
+  };
+  var NewTabToRightCommand = class {
+    commandName = "new_tab_to_right";
+    description = "Open a new tab immediately to the right of the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.addAdjacentNewTab) {
+        return {
+          message: "Browser UI (gBrowser.addAdjacentNewTab) not available."
+        };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      gb.addAdjacentNewTab(tab);
+      return { message: `Opened a new tab to the right of: ${tabTitle(tab)}` };
+    }
+  };
+  var DuplicateTabCommand = class {
+    commandName = "duplicate_tab";
+    description = "Duplicate the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.duplicateTab) {
+        return { message: "Browser UI (gBrowser.duplicateTab) not available." };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      gb.duplicateTab(tab);
+      return { message: `Duplicated tab: ${tabTitle(tab)}` };
+    }
+  };
+  var BookmarkTabCommand = class {
+    commandName = "bookmark_tab";
+    description = "Bookmark the current tab or a tab by index (default bookmarks location). Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const { topWin, gBrowser } = getChrome2();
+      const hook = topWin?.PlacesCommandHook?.bookmarkTabs;
+      if (!hook || !gBrowser) return { message: "Bookmarking is not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gBrowser, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      hook([tab]);
+      return { message: `Bookmarked tab: ${tabTitle(tab)}` };
+    }
+  };
+  var MoveTabToStartCommand = class {
+    commandName = "move_tab_to_start";
+    description = "Move the current tab or a tab by index to the start of the tab strip. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.moveTabToStart)
+        return { message: "Browser UI (gBrowser.moveTabToStart) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      gb.moveTabToStart(tab);
+      return { message: `Moved tab to start: ${tabTitle(tab)}` };
+    }
+  };
+  var MoveTabToEndCommand = class {
+    commandName = "move_tab_to_end";
+    description = "Move the current tab or a tab by index to the end of the tab strip. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.moveTabToEnd)
+        return { message: "Browser UI (gBrowser.moveTabToEnd) not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      gb.moveTabToEnd(tab);
+      return { message: `Moved tab to end: ${tabTitle(tab)}` };
+    }
+  };
+  var SelectAllTabsCommand = class {
+    commandName = "select_all_tabs";
+    description = "Select all tabs in the current window for multi-tab actions. Accepts no arguments.";
+    async execute(_args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.selectAllTabs)
+        return { message: "Browser UI (gBrowser.selectAllTabs) not available." };
+      gb.selectAllTabs();
+      return { message: "Selected all tabs in this window." };
+    }
+  };
+  var CloseDuplicateTabsCommand = class {
+    commandName = "close_duplicate_tabs";
+    description = "Close duplicate tabs (same URL) relative to the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.getDuplicateTabsToClose || !gb.removeTabs) {
+        return { message: "Closing duplicate tabs is not available." };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      const dupes = gb.getDuplicateTabsToClose(tab);
+      if (!dupes.length) {
+        return { message: "No duplicate tabs to close for this tab." };
+      }
+      if (booleanArg(args, "confirmed") !== true) {
+        setPendingConfirmation({
+          command: "close_duplicate_tabs",
+          args: { ...args, confirmed: true },
+          description: `Close ${dupes.length} duplicate tab(s)?`
+        });
+        return {
+          message: `Requesting confirmation to close ${dupes.length} duplicate tab(s)...`,
+          requiresConfirmation: true,
+          confirmationData: { count: dupes.length }
+        };
+      }
+      clearPendingConfirmation();
+      gb.removeTabs(dupes, { isUserTriggered: true });
+      return { message: `Closed ${dupes.length} duplicate tab(s).` };
+    }
+  };
+  var CloseTabsToRightCommand = class {
+    commandName = "close_tabs_to_right";
+    description = "Close all tabs to the right of the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?._getTabsToTheEndFrom || !gb.removeTabs) {
+        return { message: "Closing tabs to the right is not available." };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      const toClose = gb._getTabsToTheEndFrom(tab);
+      if (!toClose.length) {
+        return { message: "No tabs to the right to close." };
+      }
+      if (booleanArg(args, "confirmed") !== true) {
+        setPendingConfirmation({
+          command: "close_tabs_to_right",
+          args: { ...args, confirmed: true },
+          description: `Close ${toClose.length} tab(s) to the right?`
+        });
+        return {
+          message: `Requesting confirmation to close ${toClose.length} tab(s) to the right...`,
+          requiresConfirmation: true,
+          confirmationData: { count: toClose.length }
+        };
+      }
+      clearPendingConfirmation();
+      gb.removeTabs(toClose, { isUserTriggered: true });
+      return { message: `Closed ${toClose.length} tab(s) to the right.` };
+    }
+  };
+  var CloseTabsToLeftCommand = class {
+    commandName = "close_tabs_to_left";
+    description = "Close all tabs to the left of the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?._getTabsToTheStartFrom || !gb.removeTabs) {
+        return { message: "Closing tabs to the left is not available." };
+      }
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      const toClose = gb._getTabsToTheStartFrom(tab);
+      if (!toClose.length) {
+        return { message: "No tabs to the left to close." };
+      }
+      if (booleanArg(args, "confirmed") !== true) {
+        setPendingConfirmation({
+          command: "close_tabs_to_left",
+          args: { ...args, confirmed: true },
+          description: `Close ${toClose.length} tab(s) to the left?`
+        });
+        return {
+          message: `Requesting confirmation to close ${toClose.length} tab(s) to the left...`,
+          requiresConfirmation: true,
+          confirmationData: { count: toClose.length }
+        };
+      }
+      clearPendingConfirmation();
+      gb.removeTabs(toClose, { isUserTriggered: true });
+      return { message: `Closed ${toClose.length} tab(s) to the left.` };
+    }
+  };
+  var CloseOtherTabsCommand = class {
+    commandName = "close_other_tabs";
+    description = "Close all tabs except the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      if (!gb?.removeAllTabsBut)
+        return { message: "Closing other tabs is not available." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      const others = getTabs(gb).filter((t) => t !== tab && !t.pinned);
+      if (!others.length) {
+        return { message: "No other unpinned tabs to close." };
+      }
+      if (booleanArg(args, "confirmed") !== true) {
+        setPendingConfirmation({
+          command: "close_other_tabs",
+          args: { ...args, confirmed: true },
+          description: `Close ${others.length} other tab(s) (keeping "${tabTitle(tab)}")?`
+        });
+        return {
+          message: `Requesting confirmation to close ${others.length} other tab(s)...`,
+          requiresConfirmation: true,
+          confirmationData: { count: others.length }
+        };
+      }
+      clearPendingConfirmation();
+      gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
+      return { message: `Closed other tabs (kept: ${tabTitle(tab)}).` };
+    }
+  };
+  var ReopenClosedTabCommand = class {
+    commandName = "reopen_closed_tab";
+    description = "Reopen the most recently closed tab from this window's closed-tab list. Accepts arguments: { index?: number } (0 = most recent).";
+    async execute(args) {
+      const { topWin } = getChrome2();
+      const ss = topWin?.SessionStore;
+      if (!ss?.undoCloseTab)
+        return {
+          message: "Session restore (reopen closed tab) is not available."
+        };
+      const index2 = numberArg2(args, "index");
+      const reopened = ss.undoCloseTab(topWin, index2 ?? 0);
+      if (!reopened) return { message: "No closed tab to reopen." };
+      return { message: "Reopened the last closed tab." };
+    }
+  };
+  var OpenSendTabToDeviceCommand = class {
+    commandName = "open_send_tab_to_device";
+    description = 'Open Firefox Sync "Send Tab to Device" so the user can pick a synced device. Accepts no arguments.';
+    async execute(_args) {
+      const { topWin } = getChrome2();
+      const sync = topWin?.gSync;
+      const anchor = topWin?.document?.getElementById?.(
+        "fxa-toolbar-menu-button"
+      );
+      if (!sync?.showSendToDeviceViewFromFxaMenu || !anchor) {
+        return {
+          message: "Could not open Send Tab to Device. Sign in to Sync and ensure the account toolbar button is visible."
+        };
+      }
+      sync.showSendToDeviceViewFromFxaMenu(anchor);
+      return { message: "Opened Send Tab to Device." };
+    }
+  };
+  var OpenTabNoteCommand = class {
+    commandName = "open_tab_note";
+    description = "Open the tab note editor for the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+    async execute(args) {
+      const gb = asTabOps(getChrome2().gBrowser);
+      const menu = gb?.tabNoteMenu;
+      if (!menu?.openPanel)
+        return { message: "Tab notes are not available in this build." };
+      const idx = numberArg2(args, "index");
+      const tab = tabByIndexOrCurrent(gb, idx);
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      menu.openPanel(tab, {});
+      return { message: `Opened tab note for: ${tabTitle(tab)}` };
+    }
+  };
   var MoveTabToNewWindowCommand = class {
     commandName = "move_tab_to_new_window";
     description = "Move the active tab (or a tab by index) to a new window. Accepts arguments: { index?: number } (1-based).";
@@ -50534,7 +50896,8 @@ Content: ${content}`;
       }
       const idx = numberArg2(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       const newWin = topWin.OpenBrowserWindow();
       await new Promise((r) => setTimeout(r, 250));
@@ -50572,7 +50935,9 @@ ${text2}` };
         entity: "folder",
         name: res.name
       });
-      return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
+      return {
+        message: `Created bookmark folder "${res.name}" with ${res.count} items.`
+      };
     }
   };
   var DeleteBookmarkFolderCommand = class {
@@ -50658,7 +51023,9 @@ ${text2}` };
       } else if (query) {
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
-          return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       } else {
         const current = gBrowser.selectedTab;
@@ -50749,13 +51116,16 @@ ${text2}` };
         } else if (withQuery) {
           tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
           if (!tab2) {
-            return { message: `No tab found matching "${stringArg(args, "withQuery") || ""}".` };
+            return {
+              message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`
+            };
           }
         } else {
           tab2 = gBrowser.addTrustedTab?.("about:newtab") || null;
         }
       }
-      if (!tab1 || !tab2) return { message: "Unable to resolve tabs for split view." };
+      if (!tab1 || !tab2)
+        return { message: "Unable to resolve tabs for split view." };
       if (tab1 === tab2) {
         return { message: "Cannot split a tab with itself." };
       }
@@ -50807,7 +51177,8 @@ ${text2}` };
     description = "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
     async execute(args) {
       const { topWin, gBrowser } = getChrome2();
-      if (!gBrowser || !topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+      if (!gBrowser || !topWin?.OpenBrowserWindow)
+        return { message: "Browser UI not available." };
       const indices = numberArrayArg(args, "indices");
       if (indices.length < 2) {
         return {
@@ -50871,7 +51242,9 @@ ${text2}` };
       if (query && !idx) {
         tab = findTabsByQuery(gBrowser, query)[0] || null;
         if (!tab) {
-          return { message: `No tab found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tab found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       }
       const browser = tab?.linkedBrowser;
@@ -50884,7 +51257,9 @@ ${text2}` };
       try {
         const currentWindowContext = browser.browsingContext?.currentWindowContext;
         if (!currentWindowContext) {
-          return { message: "Cannot access page content. The page may still be loading." };
+          return {
+            message: "Cannot access page content. The page may still be loading."
+          };
         }
         const pageExtractor = currentWindowContext.getActor("PageExtractor");
         if (!pageExtractor) {
@@ -50910,7 +51285,9 @@ ${text2}` };
         }
         content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
         if (!content || content.length < 50) {
-          return { message: "Not enough content found on this page to summarize." };
+          return {
+            message: "Not enough content found on this page to summarize."
+          };
         }
         const maxLength = 12e3;
         if (content.length > maxLength) {
@@ -50947,7 +51324,10 @@ ${content}`
         const snapshot = await bookmarkFolders.getAllReadOnly();
         if (snapshot.ok) {
           const folderToUrls = buildFolderUrlMap(snapshot.folders);
-          const filtered = filterStaleBookmarkFolderResults(results, folderToUrls);
+          const filtered = filterStaleBookmarkFolderResults(
+            results,
+            folderToUrls
+          );
           results = filtered.results;
           if (filtered.dropped > 0) {
             assistantLogger.debug(
@@ -50967,7 +51347,9 @@ ${content}`
       const requiresBookmarkFolderOnly = folderScoped || sourceScope === "bookmark-folder";
       if (requiresBookmarkFolderOnly) {
         const before = results.length;
-        results = results.filter((r) => getMemoryDocSource(r) === "bookmark-folder");
+        results = results.filter(
+          (r) => getMemoryDocSource(r) === "bookmark-folder"
+        );
         if (before !== results.length) {
           assistantLogger.debug(
             "search-memory",
@@ -51023,7 +51405,13 @@ ${content}`
       }
       const sourceCounts = Object.entries(resultsBySource).map(([src, items]) => `${items.length} from ${src}`).join(", ");
       const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
-      return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
+      return {
+        message: JSON.stringify({
+          summary,
+          resultsBySource,
+          results: structured
+        })
+      };
     }
   };
   var OpenSearchResultCommand = class {
@@ -51035,7 +51423,8 @@ ${content}`
       const bookmarkGuid = stringArg(args, "bookmarkGuid");
       if (!url) return { message: "Missing 'url' argument." };
       const { topWin, gBrowser, PlacesUtils } = getChrome2();
-      if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn || !gBrowser)
+        return { message: "Browser UI not available." };
       if (bookmarkGuid && PlacesUtils?.bookmarks?.fetch) {
         try {
           const fetched = await PlacesUtils.bookmarks.fetch(bookmarkGuid);
@@ -51069,7 +51458,8 @@ ${content}`
     description = "Show the current subscription plan and usage options.";
     async execute(_args) {
       const { topWin } = getChrome2();
-      if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+      if (!topWin?.openTrustedLinkIn)
+        return { message: "Browser UI not available." };
       const stats = await subscriptionService.checkAvailability();
       const url = subscriptionService.getSubscriptionUrl();
       topWin.openTrustedLinkIn(url, "tab");
@@ -51127,14 +51517,16 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           }
         }
         const newTab = gBrowser.addTrustedTab?.(url);
-        if (!newTab) return { message: "Failed to open a tab for the new group." };
+        if (!newTab)
+          return { message: "Failed to open a tab for the new group." };
         tabsToGroup = [newTab];
         createdNewTab = true;
       } else {
         const currentTab = gBrowser.selectedTab || null;
         if (currentTab?.group) {
           const newTab = gBrowser.addTrustedTab?.("about:newtab");
-          if (!newTab) return { message: "Failed to create a tab for the new group." };
+          if (!newTab)
+            return { message: "Failed to create a tab for the new group." };
           tabsToGroup = [newTab];
           createdNewTab = true;
         } else {
@@ -51267,7 +51659,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       } else if (query) {
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
-          return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+          return {
+            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+          };
         }
       } else if (idx != null) {
         const tab = tabByIndex(gBrowser, idx);
@@ -51281,9 +51675,13 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       const groupableTabs = tabsToAdd.filter((tab) => !tab.pinned);
       if (groupableTabs.length === 0) {
-        return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
+        return {
+          message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)."
+        };
       }
-      const tabsInOtherGroups = groupableTabs.filter((tab) => tab.group && tab.group !== group);
+      const tabsInOtherGroups = groupableTabs.filter(
+        (tab) => tab.group && tab.group !== group
+      );
       if (tabsInOtherGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
         const impact = analyzeGroupMoveImpact(tabsInOtherGroups);
         const groupNames = impact.affectedGroups.join(", ");
@@ -51316,7 +51714,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           name: group.label || name
         });
         const titles = groupableTabs.map((tab) => tabTitle(tab)).join(", ");
-        return { message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}` };
+        return {
+          message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}`
+        };
       } catch (e) {
         return { message: `Failed to add tab to group: ${e}` };
       }
@@ -51330,7 +51730,8 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const idx = numberArg2(args, "index");
       const tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+      if (!tab)
+        return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const title = tabTitle(tab);
       if (!tab.group) {
         return { message: `Tab "${title}" is not in any group.` };
@@ -51399,7 +51800,9 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
         return { message: "Okay, cancelled that request." };
       }
       if (pending.kind === "close_delete_target") {
-        const allowed = new Set(pending.choices || ["tab", "tab-group", "bookmark-folder"]);
+        const allowed = new Set(
+          pending.choices || ["tab", "tab-group", "bookmark-folder"]
+        );
         if (!target || !allowed.has(target)) {
           const optionLabels = Array.from(allowed).map((opt) => {
             if (opt === "tab-group") return "tab group";
@@ -51460,16 +51863,11 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     description = "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
     async execute(args) {
       const pending = getPendingConfirmation();
-      assistantLogger.debug(
-        "confirm-action",
-        "Received confirmation input",
-        { hasPending: !!pending }
-      );
+      assistantLogger.debug("confirm-action", "Received confirmation input", {
+        hasPending: !!pending
+      });
       if (!pending) {
-        assistantLogger.debug(
-          "confirm-action",
-          "No pending confirmation found"
-        );
+        assistantLogger.debug("confirm-action", "No pending confirmation found");
         return { message: "No pending action to confirm." };
       }
       const confirmed = args?.confirmed;
@@ -51484,6 +51882,10 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       }
       const commandMap = {
         close_tab: new CloseTabCommand(),
+        close_duplicate_tabs: new CloseDuplicateTabsCommand(),
+        close_tabs_to_right: new CloseTabsToRightCommand(),
+        close_tabs_to_left: new CloseTabsToLeftCommand(),
+        close_other_tabs: new CloseOtherTabsCommand(),
         delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
         delete_tab_group: new DeleteTabGroupCommand(),
         create_tab_group: new CreateTabGroupCommand(),
@@ -51504,6 +51906,24 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       new ListTabsCommand(),
       new OpenTabCommand(),
       new CloseTabCommand(),
+      new ReloadTabCommand(),
+      new ToggleMuteTabCommand(),
+      new PinTabCommand(),
+      new UnpinTabCommand(),
+      new UnloadTabCommand(),
+      new NewTabToRightCommand(),
+      new DuplicateTabCommand(),
+      new BookmarkTabCommand(),
+      new MoveTabToStartCommand(),
+      new MoveTabToEndCommand(),
+      new SelectAllTabsCommand(),
+      new CloseDuplicateTabsCommand(),
+      new CloseTabsToRightCommand(),
+      new CloseTabsToLeftCommand(),
+      new CloseOtherTabsCommand(),
+      new ReopenClosedTabCommand(),
+      new OpenSendTabToDeviceCommand(),
+      new OpenTabNoteCommand(),
       new MoveTabToNewWindowCommand(),
       new CopyTabUrlsCommand(),
       new SplitTabsCommand(),
@@ -67708,6 +68128,16 @@ Result: ${JSON.stringify(result)}`);
     });
     return result;
   }
+  async function textToSpeech(text2) {
+    await ensureAuthenticated();
+    const result = await postSigned("tts", { text: text2 });
+    const audioData = atob(result.audio);
+    const arrayBuffer = new Uint8Array(audioData.length);
+    for (let i = 0; i < audioData.length; i++) {
+      arrayBuffer[i] = audioData.charCodeAt(i);
+    }
+    return new Blob([arrayBuffer], { type: result.mimeType || "audio/mpeg" });
+  }
 
   // src/services/assistEndpointState.ts
   var ASSIST_UNSUPPORTED_RETRY_MS = 6e4;
@@ -68627,6 +69057,21 @@ Result: ${toolResult.message}`
     return combinedSessionString || "(no output)";
   }
 
+  // src/prompts/voicePrompt.ts
+  var VOICE_REPLY_ADDENDUM = `You are the user's personal voice assistant in Firefox (Oasis). Be warm, clear, and helpful\u2014like a capable colleague, not a phone tree or a document reader.
+
+You can answer general questions, explain ideas, brainstorm, and help with everyday tasks. Use your tools when they help; for open questions, answer directly from knowledge in a natural way.
+
+Voice and spoken delivery (this will be read by text-to-speech):
+- Sound conversational: vary rhythm, use short and medium sentences, and connect ideas the way people talk ("So the main idea is\u2026", "Here's why that matters\u2026").
+- When explaining something, teach in layers: start with a simple takeaway, then add nuance if useful. Do not sound like you are reading a numbered list aloud unless the user asked for steps.
+- Avoid robotic patterns: do not say "Item one, item two", do not over-use "Additionally" or "Furthermore", and do not read markdown symbols or formatting cues.
+- Do not read bullet characters or headings as words; rephrase as flowing speech.
+- For code, URLs, or file paths: give a short spoken summary unless the user explicitly asked for exact text; spell critical tokens slowly only when needed.
+- Keep answers focused for listening; offer to go deeper if the topic is large.
+
+`;
+
   // src/services/voiceInput.ts
   function eventBlob(event) {
     const data = event.data;
@@ -68712,11 +69157,498 @@ Result: ${toolResult.message}`
   };
   var voiceInput_default = new VoiceInputService();
 
+  // src/services/voiceAgent.ts
+  function eventBlob2(event) {
+    const data = event.data;
+    return data instanceof Blob ? data : null;
+  }
+  var VAD_RMS_THRESHOLD = 0.028;
+  var VAD_SILENCE_MS = 720;
+  var VAD_SPEECH_ON_FRAMES = 4;
+  var VAD_MIN_UTTERANCE_MS = 320;
+  var RECORDER_SLICE_MS = 200;
+  var VoiceAgentService = class {
+    state = "idle";
+    listeners = /* @__PURE__ */ new Set();
+    mediaRecorder = null;
+    audioChunks = [];
+    micStream = null;
+    ttsAudio = null;
+    ttsObjectUrl = null;
+    aborted = false;
+    runAssistant = null;
+    continuousConversation = true;
+    listeningSourceActive = null;
+    audioContext = null;
+    analyser = null;
+    vadData = null;
+    audioLoopId = 0;
+    audioLoopRunning = false;
+    ttsAnalyser = null;
+    ttsAnalyserData = null;
+    mediaElementSource = null;
+    speechActive = false;
+    speechOnFrames = 0;
+    silenceMs = 0;
+    utteranceStartTime = 0;
+    lastVadFrameMs = 0;
+    setRunAssistant(fn) {
+      this.runAssistant = fn;
+    }
+    setContinuousConversation(enabled) {
+      this.continuousConversation = enabled;
+    }
+    getContinuousConversation() {
+      return this.continuousConversation;
+    }
+    getListeningSource() {
+      return this.listeningSourceActive;
+    }
+    getUserSpeaking() {
+      return this.speechActive;
+    }
+    on(listener) {
+      this.listeners.add(listener);
+      return () => {
+        this.listeners.delete(listener);
+      };
+    }
+    getState() {
+      return this.state;
+    }
+    emit(event) {
+      for (const l of this.listeners) {
+        try {
+          l(event);
+        } catch {
+        }
+      }
+    }
+    setState(s, listeningSource) {
+      this.state = s;
+      if (s === "listening" && listeningSource) {
+        this.listeningSourceActive = listeningSource;
+        this.emit({ type: "state", state: s, listeningSource });
+      } else {
+        if (s !== "listening") {
+          this.listeningSourceActive = null;
+        }
+        this.emit({ type: "state", state: s });
+      }
+    }
+    emitVad(userSpeaking) {
+      this.emit({ type: "vad", userSpeaking });
+    }
+    async startConversation() {
+      if (this.state !== "idle") return;
+      this.aborted = false;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        this.emit({
+          type: "error",
+          message: "Microphone is not available in this page."
+        });
+        return;
+      }
+      try {
+        this.micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+      } catch {
+        if (this.aborted) return;
+        this.emit({ type: "error", message: "Microphone access denied." });
+        return;
+      }
+      if (this.aborted) {
+        this.releaseMic();
+        return;
+      }
+      this.setupAnalyser();
+      if (!this.analyser || !this.audioContext) {
+        if (this.audioContext) {
+          try {
+            void this.audioContext.close();
+          } catch {
+          }
+          this.audioContext = null;
+        }
+        this.analyser = null;
+        this.vadData = null;
+        this.releaseMic();
+        this.emit({
+          type: "error",
+          message: "Could not start audio analysis."
+        });
+        return;
+      }
+      if (this.audioContext.state === "suspended") {
+        try {
+          await this.audioContext.resume();
+        } catch (e) {
+          assistantLogger.error("voice-agent", "AudioContext.resume failed", e);
+          this.releaseMic();
+          this.emit({
+            type: "error",
+            message: "Tap the microphone button to enable listening."
+          });
+          return;
+        }
+      }
+      this.setState("listening", "handsfree");
+      this.ensureAudioLoop();
+    }
+    setupAnalyser() {
+      if (!this.micStream) return;
+      try {
+        this.audioContext = new AudioContext();
+        const source = this.audioContext.createMediaStreamSource(this.micStream);
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 1024;
+        this.analyser.smoothingTimeConstant = 0.65;
+        source.connect(this.analyser);
+        this.vadData = new Uint8Array(this.analyser.fftSize);
+      } catch (e) {
+        assistantLogger.error("voice-agent", "Analyser setup failed", e);
+      }
+    }
+    computeRms() {
+      if (!this.analyser || !this.vadData) return 0;
+      this.analyser.getByteTimeDomainData(this.vadData);
+      let sum = 0;
+      for (let i = 0; i < this.vadData.length; i++) {
+        const v2 = (this.vadData[i] - 128) / 128;
+        sum += v2 * v2;
+      }
+      return Math.sqrt(sum / this.vadData.length);
+    }
+    computeRmsFromAnalyser(an, buf) {
+      an.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v2 = (buf[i] - 128) / 128;
+        sum += v2 * v2;
+      }
+      return Math.sqrt(sum / buf.length);
+    }
+    normalizeLevel(rms) {
+      return Math.min(1, Math.max(0, rms * 7));
+    }
+    emitAudioLevels() {
+      let mic = 0;
+      let tts = 0;
+      if (this.state === "listening" && this.analyser) {
+        mic = this.normalizeLevel(this.computeRms());
+      } else if (this.state === "speaking" && this.ttsAnalyser && this.ttsAnalyserData) {
+        tts = this.normalizeLevel(
+          this.computeRmsFromAnalyser(this.ttsAnalyser, this.ttsAnalyserData)
+        );
+      }
+      this.emit({ type: "audio_level", mic, tts });
+    }
+    ensureAudioLoop() {
+      if (this.audioLoopRunning) return;
+      this.audioLoopRunning = true;
+      this.lastVadFrameMs = performance.now();
+      const tick = () => {
+        if (!this.audioLoopRunning || this.aborted) return;
+        this.emitAudioLevels();
+        if (this.state === "listening") {
+          const now = performance.now();
+          const dt = Math.min(120, now - this.lastVadFrameMs);
+          this.lastVadFrameMs = now;
+          const rms = this.computeRms();
+          const speech = rms > VAD_RMS_THRESHOLD;
+          if (speech) {
+            this.silenceMs = 0;
+            this.speechOnFrames += 1;
+            if (!this.speechActive && this.speechOnFrames >= VAD_SPEECH_ON_FRAMES) {
+              this.beginUtteranceRecording();
+            }
+          } else {
+            this.speechOnFrames = 0;
+            if (this.speechActive) {
+              this.silenceMs += dt;
+              if (this.silenceMs >= VAD_SILENCE_MS) {
+                void this.finishUtteranceRecording();
+              }
+            }
+          }
+        }
+        this.audioLoopId = requestAnimationFrame(tick);
+      };
+      this.audioLoopId = requestAnimationFrame(tick);
+    }
+    stopAudioLoop() {
+      this.audioLoopRunning = false;
+      if (this.audioLoopId) {
+        cancelAnimationFrame(this.audioLoopId);
+        this.audioLoopId = 0;
+      }
+    }
+    beginUtteranceRecording() {
+      if (!this.micStream || this.mediaRecorder || this.state !== "listening") return;
+      const mimeType = this.pickMimeType();
+      try {
+        this.mediaRecorder = new MediaRecorder(
+          this.micStream,
+          mimeType ? { mimeType } : {}
+        );
+      } catch (e) {
+        assistantLogger.error("voice-agent", "MediaRecorder failed", e);
+        return;
+      }
+      this.audioChunks = [];
+      this.mediaRecorder.ondataavailable = (event) => {
+        const blob = eventBlob2(event);
+        if (blob && blob.size > 0) this.audioChunks.push(blob);
+      };
+      this.mediaRecorder.start(RECORDER_SLICE_MS);
+      this.speechActive = true;
+      this.utteranceStartTime = performance.now();
+      this.emitVad(true);
+    }
+    async finishUtteranceRecording() {
+      if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") {
+        this.resetUtteranceState();
+        return;
+      }
+      const duration = performance.now() - this.utteranceStartTime;
+      const rec = this.mediaRecorder;
+      this.mediaRecorder = null;
+      return new Promise((resolve) => {
+        rec.onstop = async () => {
+          this.resetUtteranceState();
+          const mime = rec.mimeType || "audio/webm";
+          const audioBlob = new Blob(this.audioChunks, { type: mime });
+          this.audioChunks = [];
+          if (this.aborted) {
+            resolve();
+            return;
+          }
+          if (duration < VAD_MIN_UTTERANCE_MS || audioBlob.size < 800) {
+            resolve();
+            return;
+          }
+          await this.processUtteranceBlob(audioBlob);
+          resolve();
+        };
+        try {
+          rec.stop();
+        } catch {
+          this.resetUtteranceState();
+          resolve();
+        }
+      });
+    }
+    resetUtteranceState() {
+      this.speechActive = false;
+      this.silenceMs = 0;
+      this.speechOnFrames = 0;
+      this.emitVad(false);
+    }
+    async processUtteranceBlob(audioBlob) {
+      if (this.aborted) return;
+      this.setState("transcribing");
+      try {
+        const { transcript } = await transcribeAudio(audioBlob);
+        if (!transcript || this.aborted) {
+          this.resumeListeningAfterTurn();
+          return;
+        }
+        this.emit({ type: "userTranscript", text: transcript });
+        await this.runTurn(transcript);
+      } catch (e) {
+        assistantLogger.error("voice-agent", "Transcription failed", e);
+        this.emit({ type: "error", message: "Could not transcribe audio." });
+        this.resumeListeningAfterTurn();
+      }
+    }
+    async startListening(options) {
+      if (this.state === "idle") {
+        await this.startConversation();
+      }
+    }
+    async finishListening() {
+      if (this.state === "listening" && this.speechActive && this.mediaRecorder) {
+        await this.finishUtteranceRecording();
+      }
+    }
+    resumeListeningAfterTurn() {
+      if (this.aborted) return;
+      this.lastVadFrameMs = performance.now();
+      this.setState("listening", "handsfree");
+      if (this.audioContext?.state === "suspended") {
+        void this.audioContext.resume();
+      }
+      this.ensureAudioLoop();
+    }
+    async runTurn(transcript) {
+      if (!this.runAssistant) {
+        this.emit({ type: "error", message: "Assistant not connected." });
+        this.resumeListeningAfterTurn();
+        return;
+      }
+      this.setState("thinking");
+      let fullResponse = "";
+      try {
+        fullResponse = await this.runAssistant(transcript, () => {
+        }, "voice");
+      } catch (e) {
+        assistantLogger.error("voice-agent", "Assistant failed", e);
+        this.emit({ type: "error", message: "Assistant error." });
+        this.resumeListeningAfterTurn();
+        return;
+      }
+      if (this.aborted || !fullResponse.trim()) {
+        this.emit({ type: "turn_done" });
+        this.resumeListeningAfterTurn();
+        return;
+      }
+      this.setState("speaking");
+      try {
+        await this.speak(fullResponse);
+      } catch (e) {
+        assistantLogger.error("voice-agent", "TTS failed", e);
+      }
+      this.emit({ type: "turn_done" });
+      this.resumeListeningAfterTurn();
+    }
+    async speak(text2) {
+      const plain = text2.replace(/<[^>]*>/g, "").replace(/[#*_`~\[\]()>!|]/g, "").replace(/\n{2,}/g, ". ").replace(/\n/g, " ").trim();
+      if (!plain) return;
+      try {
+        const blob = await textToSpeech(plain);
+        if (this.aborted) return;
+        const url = URL.createObjectURL(blob);
+        this.ttsObjectUrl = url;
+        return new Promise((resolve) => {
+          const audio = new Audio(url);
+          this.ttsAudio = audio;
+          this.disconnectTtsGraph();
+          if (this.audioContext) {
+            try {
+              const src = this.audioContext.createMediaElementSource(audio);
+              const an = this.audioContext.createAnalyser();
+              an.fftSize = 512;
+              an.smoothingTimeConstant = 0.55;
+              src.connect(an);
+              an.connect(this.audioContext.destination);
+              this.mediaElementSource = src;
+              this.ttsAnalyser = an;
+              this.ttsAnalyserData = new Uint8Array(an.fftSize);
+            } catch (e) {
+              assistantLogger.error("voice-agent", "TTS audio graph failed", e);
+              this.disconnectTtsGraph();
+            }
+          }
+          audio.onended = () => {
+            this.cleanupAudio();
+            resolve();
+          };
+          audio.onerror = () => {
+            this.cleanupAudio();
+            resolve();
+          };
+          void audio.play().catch(() => {
+            this.cleanupAudio();
+            resolve();
+          });
+        });
+      } catch {
+        this.cleanupAudio();
+      }
+    }
+    disconnectTtsGraph() {
+      if (this.mediaElementSource) {
+        try {
+          this.mediaElementSource.disconnect();
+        } catch {
+        }
+        this.mediaElementSource = null;
+      }
+      if (this.ttsAnalyser) {
+        try {
+          this.ttsAnalyser.disconnect();
+        } catch {
+        }
+        this.ttsAnalyser = null;
+      }
+      this.ttsAnalyserData = null;
+    }
+    stop() {
+      this.aborted = true;
+      this.stopAudioLoop();
+      if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+        try {
+          this.mediaRecorder.stop();
+        } catch {
+        }
+      }
+      this.mediaRecorder = null;
+      this.audioChunks = [];
+      this.resetUtteranceState();
+      if (this.audioContext) {
+        try {
+          void this.audioContext.close();
+        } catch {
+        }
+        this.audioContext = null;
+      }
+      this.analyser = null;
+      this.vadData = null;
+      this.releaseMic();
+      this.cleanupAudio();
+      this.setState("idle");
+    }
+    stopSpeaking() {
+      this.cleanupAudio();
+      if (this.state === "speaking") {
+        this.emit({ type: "turn_done" });
+        this.resumeListeningAfterTurn();
+      }
+    }
+    releaseMic() {
+      if (this.micStream) {
+        this.micStream.getTracks().forEach((t) => t.stop());
+        this.micStream = null;
+      }
+    }
+    cleanupAudio() {
+      this.disconnectTtsGraph();
+      if (this.ttsAudio) {
+        this.ttsAudio.pause();
+        this.ttsAudio = null;
+      }
+      if (this.ttsObjectUrl) {
+        URL.revokeObjectURL(this.ttsObjectUrl);
+        this.ttsObjectUrl = null;
+      }
+    }
+    pickMimeType() {
+      const types = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4"
+      ];
+      for (const t of types) {
+        if (MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return "";
+    }
+  };
+  var voiceAgent = new VoiceAgentService();
+  var voiceAgent_default = voiceAgent;
+
   // src/assistant.ts
   var supabaseAuth4 = SupabaseAuth.getInstance();
   var assistantWindow = window;
   assistantWindow.supabaseAuth = supabaseAuth4;
   assistantWindow.voiceInputService = voiceInput_default;
+  assistantWindow.textToSpeech = textToSpeech;
   assistantWindow.marked = d;
   assistantWindow.DOMPurify = purify;
   var sessionController = createAssistantSessionController(assistantWindow);
@@ -68742,7 +69674,13 @@ Result: ${toolResult.message}`
     const graph = await buildAssistantGraph(commands, assistantWindow, messageId);
     const sessionHistory = sessionController.getCurrentSessionMessages();
     const stream = await graph.stream(
-      { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
+      {
+        messages: [
+          ...sessionHistory,
+          ...inputType === "voice" ? [new SystemMessage(VOICE_REPLY_ADDENDUM)] : [],
+          new HumanMessage({ content: prompt })
+        ]
+      },
       { recursionLimit: ASSISTANT_RECURSION_LIMIT }
     );
     return consumeAssistantGraphStream({
@@ -68760,6 +69698,8 @@ Result: ${toolResult.message}`
     });
   }
   assistantWindow.runAssistantStream = runAssistantStream;
+  voiceAgent_default.setRunAssistant(runAssistantStream);
+  assistantWindow.voiceAgent = voiceAgent_default;
 })();
 /*! @license DOMPurify 3.3.1 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.3.1/LICENSE */
 /*! Bundled license information:

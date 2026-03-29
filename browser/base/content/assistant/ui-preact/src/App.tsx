@@ -1,5 +1,6 @@
 import { h, Fragment } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { VoiceAuraVisualizer } from './components/VoiceAuraVisualizer';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { Feedback } from './components/Feedback';
@@ -13,6 +14,8 @@ import type {
   SupabaseAuthState,
   ToolAction,
   ToolActionStatus,
+  VoiceAgentEvent,
+  VoiceAgentState,
 } from './types';
 import {
   OASIS_EVENT_AUTH_UPDATE,
@@ -205,6 +208,212 @@ function sanitizeAssistantChunk(raw: string): string {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+function voicePrimaryStatus(
+  state: VoiceAgentState,
+  userSpeaking: boolean
+): string {
+  switch (state) {
+    case "idle":
+      return "Voice ready";
+    case "listening":
+      return userSpeaking ? "Hearing you" : "Listening";
+    case "transcribing":
+      return "Processing speech";
+    case "thinking":
+      return "Assistant is thinking";
+    case "speaking":
+      return "Assistant is speaking";
+    default:
+      return "";
+  }
+}
+
+function voiceStatusHint(state: VoiceAgentState): string {
+  switch (state) {
+    case "idle":
+      return "Tap the microphone below to start";
+    case "listening":
+      return "Speak naturally; pause briefly when you are done";
+    case "transcribing":
+      return "Hang on";
+    case "thinking":
+      return "Please wait";
+    case "speaking":
+      return "Tap the orb to stop playback";
+    default:
+      return "";
+  }
+}
+
+function voicePhaseClass(state: VoiceAgentState): string {
+  if (state === "listening") return "voice-agent-overlay-phase-you";
+  if (state === "transcribing" || state === "thinking" || state === "speaking") {
+    return "voice-agent-overlay-phase-assistant";
+  }
+  return "voice-agent-overlay-phase-idle";
+}
+
+function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
+  const [agentState, setAgentState] = useState<VoiceAgentState>("idle");
+  const [userText, setUserText] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [userSpeaking, setUserSpeaking] = useState(false);
+
+  const agent = oasisWindow.voiceAgent;
+
+  useEffect(() => {
+    if (!agent) return;
+    const unsub = agent.on((event: VoiceAgentEvent) => {
+      switch (event.type) {
+        case "state":
+          setAgentState(event.state);
+          if (event.state === "listening") {
+            setErrorMsg("");
+          }
+          break;
+        case "userTranscript":
+          setUserText(event.text);
+          break;
+        case "error":
+          setErrorMsg(event.message);
+          break;
+        case "vad":
+          setUserSpeaking(event.userSpeaking);
+          break;
+        case "turn_done":
+          break;
+      }
+    });
+    setAgentState(agent.getState() as VoiceAgentState);
+    setUserSpeaking(agent.getUserSpeaking());
+    return () => {
+      unsub();
+      agent.stop();
+    };
+  }, [agent]);
+
+  const handleOrbPointerDown = () => {
+    if (!agent) return;
+    const s = agent.getState();
+    if (s === "speaking") {
+      agent.stopSpeaking();
+      return;
+    }
+    if (s === "idle") {
+      void agent.startConversation();
+    }
+  };
+
+  const handleClose = () => {
+    if (agent) agent.stop();
+    onClose();
+  };
+
+  const isListening = agentState === "listening";
+  const isBusy = agentState === "transcribing" || agentState === "thinking";
+  const isSpeaking = agentState === "speaking";
+
+  if (!agent) {
+    return (
+      <div className="voice-agent-overlay voice-agent-overlay-phase-idle">
+        <button className="voice-agent-close" onClick={onClose} type="button" title="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <div className="voice-agent-content">
+          <div className="voice-agent-transcript voice-agent-error">
+            Voice assistant is not available in this build.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`voice-agent-overlay ${voicePhaseClass(agentState)}`}>
+      <button className="voice-agent-close" onClick={handleClose} title="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+
+      <div className="voice-agent-content">
+        <VoiceAuraVisualizer agent={agent} agentState={agentState} />
+        {isListening && (
+          <div
+            className={
+              userSpeaking
+                ? "voice-agent-recording-pill voice-agent-recording-pill-active"
+                : "voice-agent-recording-pill"
+            }
+            aria-live="polite"
+          >
+            {userSpeaking ? "Picking up speech" : "Mic on"}
+          </div>
+        )}
+        {userText && (
+          <div className="voice-agent-transcript voice-agent-user-text">
+            {userText}
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="voice-agent-transcript voice-agent-error">
+            {errorMsg}
+          </div>
+        )}
+      </div>
+
+      <div className="voice-agent-bottom">
+        <div className="voice-agent-status-block">
+          <div className="voice-agent-status">
+            {voicePrimaryStatus(agentState, userSpeaking)}
+          </div>
+          <div className="voice-agent-hint">
+            {voiceStatusHint(agentState)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className={[
+            "voice-agent-orb",
+            isListening ? "voice-agent-orb-listening" : "",
+            isBusy ? "voice-agent-orb-busy" : "",
+            isSpeaking ? "voice-agent-orb-speaking" : "",
+          ].filter(Boolean).join(" ")}
+          onPointerDown={handleOrbPointerDown}
+          disabled={isBusy}
+        >
+          {isBusy ? (
+            <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 50 50">
+              <circle cx="25" cy="25" r="20" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.3" />
+              <circle cx="25" cy="25" r="20" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
+                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+          ) : isSpeaking ? (
+            <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+          ) : (
+            <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState('');
@@ -215,7 +424,12 @@ export function App() {
   const [view, setView] = useState<'chat' | 'auth'>('chat');
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsObjectUrlRef = useRef<string | null>(null);
 
   const resetAssistantSession = async () => {
     setMessages([]);
@@ -236,6 +450,53 @@ export function App() {
       await setHistory([]);
     }
   };
+
+  const stopSpeaking = useCallback(() => {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    if (ttsObjectUrlRef.current) {
+      URL.revokeObjectURL(ttsObjectUrlRef.current);
+      ttsObjectUrlRef.current = null;
+    }
+    setSpeakingMsgId(null);
+  }, []);
+
+  const speakText = useCallback(async (text: string, messageId: string) => {
+    const ttsFn = oasisWindow.textToSpeech;
+    if (typeof ttsFn !== 'function') return;
+
+    stopSpeaking();
+    setSpeakingMsgId(messageId);
+
+    try {
+      const plainText = text
+        .replace(/<[^>]*>/g, '')
+        .replace(/[#*_`~\[\]()>!|]/g, '')
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ' ')
+        .trim();
+      if (!plainText) return;
+
+      const blob = await ttsFn(plainText);
+      const url = URL.createObjectURL(blob);
+      ttsObjectUrlRef.current = url;
+
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => {
+        stopSpeaking();
+      };
+      audio.onerror = () => {
+        stopSpeaking();
+      };
+      await audio.play();
+    } catch (e) {
+      console.error("TTS playback error:", e);
+      stopSpeaking();
+    }
+  }, [stopSpeaking]);
 
   useEffect(() => {
     recordStartRelay = startToolAction;
@@ -412,7 +673,7 @@ export function App() {
     }
   }, [messages]);
 
-  async function send(textInput?: string) {
+  async function send(textInput?: string, fromVoice = false) {
     const text = textInput || input;
     if (!text.trim()) return;
     if (!auth.isAuthenticated) {
@@ -420,22 +681,25 @@ export function App() {
       return;
     }
 
+    stopSpeaking();
     setInput('');
     setBusy(true);
     setToolActions([]);
     const userMsgId = uuid();
     setMessages((m) => [...m, { id: userMsgId, role: 'user', content: text }]);
 
+    const inputType = fromVoice ? 'voice' : 'text';
+
     try {
       const run = oasisWindow.runAssistantStream;
       if (typeof run === 'function') {
-        // Add empty AI message and get its id
         const aiMsgId = uuid();
 
         setMessages((m) => [...m, { id: aiMsgId, role: 'ai', content: '' }]);
-        
+
+        let fullResponse = '';
         try {
-          await run(text, (chunk: string) => {
+          fullResponse = await run(text, (chunk: string) => {
             const sanitizedChunk = sanitizeAssistantChunk(chunk);
             if (!sanitizedChunk) {
               return;
@@ -449,10 +713,14 @@ export function App() {
               }
               return prev;
             });
-          }, 'text', aiMsgId);
+          }, inputType, aiMsgId);
         } catch (e) {
           console.error("Stream error:", e);
           throw e;
+        }
+
+        if (fromVoice && ttsEnabled && fullResponse) {
+          speakText(fullResponse, aiMsgId);
         }
       } else {
         const aiMsgId = uuid();
@@ -483,7 +751,9 @@ export function App() {
       try {
         const text = await service.stopRecording();
         setIsRecording(false);
-        if (text) setInput(text);
+        if (text) {
+          send(text, true);
+        }
       } catch (e) {
         console.error("Error stopping recording:", e);
         setIsRecording(false);
@@ -579,6 +849,9 @@ export function App() {
 
   return (
     <div className="assistant-container">
+      {voiceAgentOpen && (
+        <VoiceAgentOverlay onClose={() => setVoiceAgentOpen(false)} />
+      )}
       {pendingConfirmation && (
         <ConfirmationModal
           data={pendingConfirmation}
@@ -667,9 +940,48 @@ export function App() {
                           </div>
                         )}
                       </div>
-                      {isLastAI && !busy && (
-                        <Feedback messageId={m.id} />
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {!busy && m.content && (
+                          <button
+                            className="tts-btn"
+                            onClick={() => {
+                              if (speakingMsgId === m.id) {
+                                stopSpeaking();
+                              } else {
+                                speakText(m.content, m.id);
+                              }
+                            }}
+                            title={speakingMsgId === m.id ? "Stop speaking" : "Read aloud"}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '4px',
+                              color: speakingMsgId === m.id ? '#7A9200' : '#999',
+                            }}
+                          >
+                            {speakingMsgId === m.id ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="6" y="4" width="4" height="16" />
+                                <rect x="14" y="4" width="4" height="16" />
+                              </svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                        {isLastAI && !busy && (
+                          <Feedback messageId={m.id} />
+                        )}
+                      </div>
                     </div>
                   </Fragment>
                 );
@@ -750,14 +1062,50 @@ export function App() {
                      </svg>
                    </button>
 
-                   <button 
-                     className="send-btn" 
-                     onClick={toggleRecording} 
-                     disabled={busy || !auth.isAuthenticated} 
-                     title={isRecording ? "Stop Recording" : "Voice Input"}
-                     style={{ 
+                   <button
+                     className="send-btn"
+                     onClick={() => {
+                       if (speakingMsgId) stopSpeaking();
+                       setTtsEnabled(prev => !prev);
+                     }}
+                     title={ttsEnabled ? "Disable auto read-aloud" : "Enable auto read-aloud"}
+                     style={{
+                       background: 'none',
+                       border: 'none',
+                       width: '32px',
+                       height: '32px',
+                       flex: 'none',
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                       padding: 0,
+                       cursor: 'pointer',
+                       color: ttsEnabled ? '#7A9200' : '#999',
+                     }}
+                   >
+                     {ttsEnabled ? (
+                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                         <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                         <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                       </svg>
+                     ) : (
+                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                         <line x1="23" y1="9" x2="17" y2="15" />
+                         <line x1="17" y1="9" x2="23" y2="15" />
+                       </svg>
+                     )}
+                   </button>
+
+                   <button
+                     className="send-btn"
+                     onClick={() => setVoiceAgentOpen(true)}
+                     disabled={busy || !auth.isAuthenticated}
+                     title="Voice Agent"
+                     style={{
                         background: 'transparent',
-                        width: '36px', 
+                        width: '36px',
                         height: '36px',
                         border: 'none',
                         flex: 'none',
@@ -767,17 +1115,13 @@ export function App() {
                         padding: 0
                     }}
                    >
-                     {isRecording ? (
-                       <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                         <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
-                         <path d="M17.945 11.75C16.578 11.75 15.475 11.75 14.608 11.867C13.708 11.987 12.95 12.247 12.348 12.848C11.746 13.45 11.488 14.208 11.367 15.108C11.25 15.975 11.25 17.078 11.25 18.445V18.555C11.25 19.922 11.25 21.025 11.367 21.892C11.487 22.792 11.747 23.55 12.348 24.152C12.95 24.754 13.708 25.012 14.608 25.134C15.475 25.25 16.578 25.25 17.945 25.25H18.055C19.422 25.25 20.525 25.25 21.392 25.134C22.292 25.012 23.05 24.754 23.652 24.152C24.254 23.55 24.512 22.792 24.634 21.892C24.75 21.025 24.75 19.922 24.75 18.555V18.445C24.75 17.078 24.75 15.975 24.634 15.108C24.512 14.208 24.254 13.45 23.652 12.848C23.05 12.246 22.292 11.988 21.392 11.867C20.525 11.75 19.422 11.75 18.055 11.75H17.945Z" fill="#7A9200"/>
-                       </svg>
-                     ) : (
-                       <svg width="36" height="36" viewBox="313 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                         <rect x="313" y="0" width="36" height="36" rx="18" fill="#F8FAF2"/>
-                         <path fillRule="evenodd" clipRule="evenodd" d="M327.958 12.8511C327.958 12.0442 328.278 11.2703 328.849 10.6997C329.419 10.1291 330.193 9.80859 331 9.80859C331.807 9.80859 332.581 10.1291 333.152 10.6997C333.722 11.2703 334.043 12.0442 334.043 12.8511V18.4681C334.043 19.2751 333.722 20.0489 333.152 20.6195C332.581 21.1901 331.807 21.5107 331 21.5107C330.193 21.5107 329.419 21.1901 328.849 20.6195C328.278 20.0489 327.958 19.2751 327.958 18.4681V12.8511ZM331 11.2128C330.566 11.2128 330.149 11.3854 329.842 11.6927C329.534 11.9999 329.362 12.4166 329.362 12.8511V18.4681C329.362 18.9026 329.534 19.3193 329.842 19.6266C330.149 19.9338 330.566 20.1064 331 20.1064C331.435 20.1064 331.851 19.9338 332.159 19.6266C332.466 19.3193 332.638 18.9026 332.638 18.4681V12.8511C332.638 12.4166 332.466 11.9999 332.159 11.6927C331.851 11.3854 331.435 11.2128 331 11.2128ZM326.319 17.766C326.506 17.766 326.684 17.84 326.816 17.9716C326.947 18.1033 327.021 18.2819 327.021 18.4681C327.021 19.5233 327.441 20.5353 328.187 21.2815C328.933 22.0276 329.945 22.4468 331 22.4468C332.055 22.4468 333.067 22.0276 333.814 21.2815C334.56 20.5353 334.979 19.5233 334.979 18.4681C334.979 18.2819 335.053 18.1033 335.184 17.9716C335.316 17.84 335.495 17.766 335.681 17.766C335.867 17.766 336.046 17.84 336.177 17.9716C336.309 18.1033 336.383 18.2819 336.383 18.4681C336.383 19.7742 335.908 21.0357 335.047 22.0176C334.186 22.9995 332.997 23.6348 331.702 23.8052V24.7872H333.809C333.995 24.7872 334.173 24.8612 334.305 24.9929C334.437 25.1246 334.511 25.3031 334.511 25.4894C334.511 25.6756 334.437 25.8542 334.305 25.9858C334.173 26.1175 333.995 26.1915 333.809 26.1915H328.192C328.005 26.1915 327.827 26.1175 327.695 25.9858C327.563 25.8542 327.49 25.6756 327.49 25.4894C327.49 25.3031 327.563 25.1246 327.695 24.9929C327.827 24.8612 328.005 24.7872 328.192 24.7872H330.298V23.8052C329.003 23.6348 327.814 22.9995 326.953 22.0176C326.092 21.0357 325.617 19.7742 325.617 18.4681C325.617 18.2819 325.691 18.1033 325.823 17.9716C325.955 17.84 326.133 17.766 326.319 17.766Z" fill="#94A833"/>
-                       </svg>
-                     )}
+                     <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                       <rect width="36" height="36" rx="18" fill="#F8FAF2"/>
+                       <path d="M18 10a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z" fill="#94A833" />
+                       <path d="M23 17v1a5 5 0 0 1-10 0v-1" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
+                       <line x1="18" y1="23" x2="18" y2="26" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
+                       <line x1="15" y1="26" x2="21" y2="26" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
+                     </svg>
                    </button>
 
                    <button className="send-btn" onClick={() => send()} disabled={busy || !auth.isAuthenticated} title="Send" style={{ width: '36px', height: '36px' }}>

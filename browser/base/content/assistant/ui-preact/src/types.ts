@@ -38,6 +38,27 @@ export interface AuthState {
 }
 
 export type ConfirmationData = PendingConfirmationPayload;
+
+export type VoiceAgentState =
+  | "idle"
+  | "listening"
+  | "transcribing"
+  | "thinking"
+  | "speaking";
+
+export type VoiceAgentListeningSource = "user" | "continuous" | "handsfree";
+
+export type VoiceAgentEvent =
+  | {
+      type: "state";
+      state: VoiceAgentState;
+      listeningSource?: VoiceAgentListeningSource;
+    }
+  | { type: "userTranscript"; text: string }
+  | { type: "error"; message: string }
+  | { type: "turn_done" }
+  | { type: "vad"; userSpeaking: boolean }
+  | { type: "audio_level"; mic: number; tts: number };
 export type AssistantHistoryEntry = AssistantHistoryWireEntry;
 
 export interface SupabaseAuthState {
@@ -50,8 +71,14 @@ export interface SupabaseAuthLike {
   isAuthenticated(): Promise<boolean>;
   getCurrentUser(): Promise<AuthUser | null>;
   signOut(): Promise<void>;
-  signUp(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
-  signInWithEmail(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signUp(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signInWithEmail(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
   onAuthStateChange?(cb: (state: SupabaseAuthState) => void): void;
   currentSession?: { session_id?: string };
   supabase?: {
@@ -66,7 +93,9 @@ export interface SupabaseAuthLike {
 
 export interface AssistantBridgeLike {
   openTab(url: string): boolean;
-  getAssistantHistory?(): AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?():
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?(history: AssistantHistoryEntry[]): Promise<void>;
   getAuthState?(): AuthState;
 }
@@ -88,14 +117,36 @@ export interface OasisWindow extends Window {
     startRecording(): Promise<void>;
     stopRecording(): Promise<string | null>;
   };
-  getAssistantHistory?: () => AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?: () =>
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?: (history: AssistantHistoryEntry[]) => Promise<void>;
   resetAssistantSession?: () => void | Promise<void>;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
-  openWebLinkIn?: (url: string, where: string, options: Record<string, unknown>) => void;
+  textToSpeech?: (text: string) => Promise<Blob>;
+  voiceAgent?: {
+    on(listener: (event: VoiceAgentEvent) => void): () => void;
+    getState(): string;
+    startConversation(): Promise<void>;
+    startListening(opts?: {
+      source?: VoiceAgentListeningSource;
+    }): Promise<void>;
+    finishListening(): Promise<void>;
+    stop(): void;
+    stopSpeaking(): void;
+    setContinuousConversation(enabled: boolean): void;
+    getContinuousConversation(): boolean;
+    getListeningSource(): VoiceAgentListeningSource | null;
+    getUserSpeaking(): boolean;
+  };
+  openWebLinkIn?: (
+    url: string,
+    where: string,
+    options: Record<string, unknown>
+  ) => void;
   mpTrack?: (event: string, props?: Record<string, unknown>) => void;
   marked?: MarkedLike;
   DOMPurify?: DOMPurifyLike;

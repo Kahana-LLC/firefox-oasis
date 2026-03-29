@@ -73,7 +73,9 @@ function stringArg(args: CommandArgs, key: string): string | undefined {
 
 function numberArg(args: CommandArgs, key: string): number | undefined {
   const value = args[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function booleanArg(args: CommandArgs, key: string): boolean | undefined {
@@ -85,7 +87,9 @@ function numberArrayArg(args: CommandArgs, key: string): number[] {
   const value = args[key];
   if (!Array.isArray(value)) return [];
   return value
-    .map(item => (typeof item === "number" && Number.isFinite(item) ? item : null))
+    .map(item =>
+      typeof item === "number" && Number.isFinite(item) ? item : null
+    )
     .filter((item): item is number => item != null);
 }
 
@@ -108,17 +112,54 @@ function ambiguityTargetArg(
   return undefined;
 }
 
-function tabByIndexOrCurrent(gBrowser: GBrowserLike | null, index: number | undefined): BrowserTabLike | null {
+function tabByIndexOrCurrent(
+  gBrowser: GBrowserLike | null,
+  index: number | undefined
+): BrowserTabLike | null {
   if (index == null) return gBrowser?.selectedTab || null;
   return findTabByIndex(gBrowser, index);
 }
 
-function tabByIndex(gBrowser: { tabs: ArrayLike<BrowserTabLike> }, index: number): BrowserTabLike | null {
+function tabByIndex(
+  gBrowser: { tabs: ArrayLike<BrowserTabLike> },
+  index: number
+): BrowserTabLike | null {
   const i = Math.max(1, Math.floor(index));
   const tabs = Array.from(gBrowser.tabs);
   if (i > tabs.length) return null;
   return tabs[i - 1] || null;
 }
+
+type GBrowserTabOps = GBrowserLike & {
+  reloadTab?: (tab: BrowserTabLike) => void;
+  addAdjacentNewTab?: (tab: BrowserTabLike) => void;
+  pinTab?: (tab: BrowserTabLike, opts?: unknown) => void;
+  unpinTab?: (tab: BrowserTabLike) => void;
+  duplicateTab?: (tab: BrowserTabLike, ...rest: unknown[]) => unknown;
+  explicitUnloadTabs?: (tabs: BrowserTabLike[]) => Promise<void>;
+  removeTabs?: (tabs: BrowserTabLike[], opts?: Record<string, unknown>) => void;
+  getDuplicateTabsToClose?: (tab: BrowserTabLike) => BrowserTabLike[];
+  _getTabsToTheEndFrom?: (tab: BrowserTabLike) => BrowserTabLike[];
+  _getTabsToTheStartFrom?: (tab: BrowserTabLike) => BrowserTabLike[];
+  removeAllTabsBut?: (
+    tab: BrowserTabLike,
+    opts?: Record<string, unknown>
+  ) => void;
+  selectAllTabs?: () => void;
+  moveTabToStart?: (tab: BrowserTabLike) => void;
+  moveTabToEnd?: (tab: BrowserTabLike) => void;
+  tabNoteMenu?: { openPanel?: (tab: BrowserTabLike, opts?: unknown) => void };
+};
+
+function asTabOps(gBrowser: GBrowserLike | null): GBrowserTabOps | null {
+  return gBrowser as GBrowserTabOps | null;
+}
+
+type BrowserChromeExtras = BrowserWindowLike & {
+  PlacesCommandHook?: { bookmarkTabs?: (tabs: BrowserTabLike[]) => void };
+  SessionStore?: { undoCloseTab?: (win: Window, index?: number) => unknown };
+  gSync?: { showSendToDeviceViewFromFxaMenu?: (anchor: Element) => void };
+};
 
 function normalizeQuery(value: string | undefined): string {
   return (value || "").trim().toLowerCase();
@@ -139,7 +180,9 @@ function analyzeGroupMoveImpact(tabsToMove: BrowserTabLike[]): {
     affectedGroups.add(groupName);
 
     const groupTabs = group.tabs || [];
-    const movingTabs = groupTabs.filter(groupTab => tabsToMove.includes(groupTab));
+    const movingTabs = groupTabs.filter(groupTab =>
+      tabsToMove.includes(groupTab)
+    );
     if (groupTabs.length > 0 && movingTabs.length === groupTabs.length) {
       emptiedGroups.add(groupName);
     }
@@ -165,7 +208,9 @@ const LIST_WINDOW_SCOPE_ALIASES = new Set([
 ]);
 
 function normalizeListTargetName(value: string): string {
-  let next = String(value || "").replace(/["']/g, " ").trim();
+  let next = String(value || "")
+    .replace(/["']/g, " ")
+    .trim();
   next = next.replace(/^\s*(?:my|the)\s+/i, "");
   next = next.replace(
     /\s+(?:tab\s*group|bookmark\s*folder|folder|group|hub)\s*$/i,
@@ -318,7 +363,8 @@ export class NewWindowCommand implements Command {
   description = "Open a new browser window.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+    if (!topWin?.OpenBrowserWindow)
+      return { message: "Browser UI not available." };
 
     topWin.OpenBrowserWindow();
     return { message: "Successfully opened a new window." };
@@ -382,7 +428,8 @@ export class ShowURLCommand implements Command {
   description = "Open a URL in a new tab.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn)
+      return { message: "Browser UI not available." };
 
     const url = stringArg(args, "url");
     if (!url) return { message: "Missing 'url' argument." };
@@ -435,7 +482,8 @@ export class CloseTabCommand implements Command {
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const title = tabTitle(tab);
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -457,6 +505,405 @@ export class CloseTabCommand implements Command {
   }
 }
 
+export class ReloadTabCommand implements Command {
+  commandName = "reload_tab";
+  description =
+    "Reload the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.reloadTab)
+      return { message: "Browser UI (gBrowser.reloadTab) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    gb.reloadTab(tab);
+    return { message: `Reloaded tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class ToggleMuteTabCommand implements Command {
+  commandName = "toggle_mute_tab";
+  description =
+    "Toggle mute for the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gBrowser, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    const toggle = (tab as BrowserTabLike & { toggleMuteAudio?: () => void })
+      .toggleMuteAudio;
+    if (typeof toggle !== "function")
+      return { message: "Mute is not available for this tab." };
+    toggle.call(tab);
+    return { message: `Toggled mute for: ${tabTitle(tab)}` };
+  }
+}
+
+export class PinTabCommand implements Command {
+  commandName = "pin_tab";
+  description =
+    "Pin the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.pinTab)
+      return { message: "Browser UI (gBrowser.pinTab) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (tab.pinned)
+      return { message: `Tab is already pinned: ${tabTitle(tab)}` };
+    gb.pinTab(tab, {});
+    return { message: `Pinned tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class UnpinTabCommand implements Command {
+  commandName = "unpin_tab";
+  description =
+    "Unpin the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.unpinTab)
+      return { message: "Browser UI (gBrowser.unpinTab) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab.pinned) return { message: `Tab is not pinned: ${tabTitle(tab)}` };
+    gb.unpinTab(tab);
+    return { message: `Unpinned tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class UnloadTabCommand implements Command {
+  commandName = "unload_tab";
+  description =
+    "Unload (discard) the current tab or a tab by index to free memory. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.explicitUnloadTabs) {
+      return { message: "Tab unload is not available in this build." };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    await gb.explicitUnloadTabs([tab]);
+    return { message: `Unloaded tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class NewTabToRightCommand implements Command {
+  commandName = "new_tab_to_right";
+  description =
+    "Open a new tab immediately to the right of the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.addAdjacentNewTab) {
+      return {
+        message: "Browser UI (gBrowser.addAdjacentNewTab) not available.",
+      };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    gb.addAdjacentNewTab(tab);
+    return { message: `Opened a new tab to the right of: ${tabTitle(tab)}` };
+  }
+}
+
+export class DuplicateTabCommand implements Command {
+  commandName = "duplicate_tab";
+  description =
+    "Duplicate the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.duplicateTab) {
+      return { message: "Browser UI (gBrowser.duplicateTab) not available." };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    gb.duplicateTab(tab);
+    return { message: `Duplicated tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class BookmarkTabCommand implements Command {
+  commandName = "bookmark_tab";
+  description =
+    "Bookmark the current tab or a tab by index (default bookmarks location). Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { topWin, gBrowser } = getChrome();
+    const hook = (topWin as BrowserChromeExtras | null)?.PlacesCommandHook
+      ?.bookmarkTabs;
+    if (!hook || !gBrowser) return { message: "Bookmarking is not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gBrowser, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    hook([tab]);
+    return { message: `Bookmarked tab: ${tabTitle(tab)}` };
+  }
+}
+
+export class MoveTabToStartCommand implements Command {
+  commandName = "move_tab_to_start";
+  description =
+    "Move the current tab or a tab by index to the start of the tab strip. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.moveTabToStart)
+      return { message: "Browser UI (gBrowser.moveTabToStart) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    gb.moveTabToStart(tab);
+    return { message: `Moved tab to start: ${tabTitle(tab)}` };
+  }
+}
+
+export class MoveTabToEndCommand implements Command {
+  commandName = "move_tab_to_end";
+  description =
+    "Move the current tab or a tab by index to the end of the tab strip. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.moveTabToEnd)
+      return { message: "Browser UI (gBrowser.moveTabToEnd) not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    gb.moveTabToEnd(tab);
+    return { message: `Moved tab to end: ${tabTitle(tab)}` };
+  }
+}
+
+export class SelectAllTabsCommand implements Command {
+  commandName = "select_all_tabs";
+  description =
+    "Select all tabs in the current window for multi-tab actions. Accepts no arguments.";
+  async execute(_args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.selectAllTabs)
+      return { message: "Browser UI (gBrowser.selectAllTabs) not available." };
+    gb.selectAllTabs();
+    return { message: "Selected all tabs in this window." };
+  }
+}
+
+export class CloseDuplicateTabsCommand implements Command {
+  commandName = "close_duplicate_tabs";
+  description =
+    "Close duplicate tabs (same URL) relative to the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.getDuplicateTabsToClose || !gb.removeTabs) {
+      return { message: "Closing duplicate tabs is not available." };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    const dupes = gb.getDuplicateTabsToClose(tab);
+    if (!dupes.length) {
+      return { message: "No duplicate tabs to close for this tab." };
+    }
+
+    if (booleanArg(args, "confirmed") !== true) {
+      setPendingConfirmation({
+        command: "close_duplicate_tabs",
+        args: { ...args, confirmed: true },
+        description: `Close ${dupes.length} duplicate tab(s)?`,
+      });
+      return {
+        message: `Requesting confirmation to close ${dupes.length} duplicate tab(s)...`,
+        requiresConfirmation: true,
+        confirmationData: { count: dupes.length },
+      };
+    }
+
+    clearPendingConfirmation();
+    gb.removeTabs(dupes, { isUserTriggered: true });
+    return { message: `Closed ${dupes.length} duplicate tab(s).` };
+  }
+}
+
+export class CloseTabsToRightCommand implements Command {
+  commandName = "close_tabs_to_right";
+  description =
+    "Close all tabs to the right of the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?._getTabsToTheEndFrom || !gb.removeTabs) {
+      return { message: "Closing tabs to the right is not available." };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    const toClose = gb._getTabsToTheEndFrom(tab);
+    if (!toClose.length) {
+      return { message: "No tabs to the right to close." };
+    }
+
+    if (booleanArg(args, "confirmed") !== true) {
+      setPendingConfirmation({
+        command: "close_tabs_to_right",
+        args: { ...args, confirmed: true },
+        description: `Close ${toClose.length} tab(s) to the right?`,
+      });
+      return {
+        message: `Requesting confirmation to close ${toClose.length} tab(s) to the right...`,
+        requiresConfirmation: true,
+        confirmationData: { count: toClose.length },
+      };
+    }
+
+    clearPendingConfirmation();
+    gb.removeTabs(toClose, { isUserTriggered: true });
+    return { message: `Closed ${toClose.length} tab(s) to the right.` };
+  }
+}
+
+export class CloseTabsToLeftCommand implements Command {
+  commandName = "close_tabs_to_left";
+  description =
+    "Close all tabs to the left of the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?._getTabsToTheStartFrom || !gb.removeTabs) {
+      return { message: "Closing tabs to the left is not available." };
+    }
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    const toClose = gb._getTabsToTheStartFrom(tab);
+    if (!toClose.length) {
+      return { message: "No tabs to the left to close." };
+    }
+
+    if (booleanArg(args, "confirmed") !== true) {
+      setPendingConfirmation({
+        command: "close_tabs_to_left",
+        args: { ...args, confirmed: true },
+        description: `Close ${toClose.length} tab(s) to the left?`,
+      });
+      return {
+        message: `Requesting confirmation to close ${toClose.length} tab(s) to the left...`,
+        requiresConfirmation: true,
+        confirmationData: { count: toClose.length },
+      };
+    }
+
+    clearPendingConfirmation();
+    gb.removeTabs(toClose, { isUserTriggered: true });
+    return { message: `Closed ${toClose.length} tab(s) to the left.` };
+  }
+}
+
+export class CloseOtherTabsCommand implements Command {
+  commandName = "close_other_tabs";
+  description =
+    "Close all tabs except the current tab or a tab by index. Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    if (!gb?.removeAllTabsBut)
+      return { message: "Closing other tabs is not available." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    const others = getTabs(gb).filter(t => t !== tab && !t.pinned);
+    if (!others.length) {
+      return { message: "No other unpinned tabs to close." };
+    }
+
+    if (booleanArg(args, "confirmed") !== true) {
+      setPendingConfirmation({
+        command: "close_other_tabs",
+        args: { ...args, confirmed: true },
+        description: `Close ${others.length} other tab(s) (keeping "${tabTitle(tab)}")?`,
+      });
+      return {
+        message: `Requesting confirmation to close ${others.length} other tab(s)...`,
+        requiresConfirmation: true,
+        confirmationData: { count: others.length },
+      };
+    }
+
+    clearPendingConfirmation();
+    gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
+    return { message: `Closed other tabs (kept: ${tabTitle(tab)}).` };
+  }
+}
+
+export class ReopenClosedTabCommand implements Command {
+  commandName = "reopen_closed_tab";
+  description =
+    "Reopen the most recently closed tab from this window's closed-tab list. Accepts arguments: { index?: number } (0 = most recent).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    const ss = (topWin as BrowserChromeExtras | null)?.SessionStore;
+    if (!ss?.undoCloseTab)
+      return {
+        message: "Session restore (reopen closed tab) is not available.",
+      };
+    const index = numberArg(args, "index");
+    const reopened = ss.undoCloseTab(topWin as Window, index ?? 0);
+    if (!reopened) return { message: "No closed tab to reopen." };
+    return { message: "Reopened the last closed tab." };
+  }
+}
+
+export class OpenSendTabToDeviceCommand implements Command {
+  commandName = "open_send_tab_to_device";
+  description =
+    'Open Firefox Sync "Send Tab to Device" so the user can pick a synced device. Accepts no arguments.';
+  async execute(_args: CommandArgs): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    const sync = (topWin as BrowserChromeExtras | null)?.gSync;
+    const anchor = topWin?.document?.getElementById?.(
+      "fxa-toolbar-menu-button"
+    );
+    if (!sync?.showSendToDeviceViewFromFxaMenu || !anchor) {
+      return {
+        message:
+          "Could not open Send Tab to Device. Sign in to Sync and ensure the account toolbar button is visible.",
+      };
+    }
+    sync.showSendToDeviceViewFromFxaMenu(anchor);
+    return { message: "Opened Send Tab to Device." };
+  }
+}
+
+export class OpenTabNoteCommand implements Command {
+  commandName = "open_tab_note";
+  description =
+    "Open the tab note editor for the current tab or a tab by index. Accepts arguments: { index?: number } (1-based).";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const gb = asTabOps(getChrome().gBrowser);
+    const menu = gb?.tabNoteMenu;
+    if (!menu?.openPanel)
+      return { message: "Tab notes are not available in this build." };
+    const idx = numberArg(args, "index");
+    const tab = tabByIndexOrCurrent(gb, idx);
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    menu.openPanel(tab, {});
+    return { message: `Opened tab note for: ${tabTitle(tab)}` };
+  }
+}
+
 export class MoveTabToNewWindowCommand implements Command {
   commandName = "move_tab_to_new_window";
   description =
@@ -469,7 +916,8 @@ export class MoveTabToNewWindowCommand implements Command {
 
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
 
     const title = tabTitle(tab);
     const newWin = topWin.OpenBrowserWindow();
@@ -520,7 +968,9 @@ export class CreateBookmarkFolderCommand implements Command {
       entity: "folder",
       name: res.name,
     });
-    return { message: `Created bookmark folder "${res.name}" with ${res.count} items.` };
+    return {
+      message: `Created bookmark folder "${res.name}" with ${res.count} items.`,
+    };
   }
 }
 
@@ -621,7 +1071,9 @@ export class AddTabToBookmarkFolderCommand implements Command {
       tabsToAdd = findTabsByQuery(gBrowser, query);
 
       if (tabsToAdd.length === 0) {
-        return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tabs found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     } else {
       // Default to current tab
@@ -735,14 +1187,17 @@ export class AddSplitViewCommand implements Command {
       } else if (withQuery) {
         tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
         if (!tab2) {
-          return { message: `No tab found matching "${stringArg(args, "withQuery") || ""}".` };
+          return {
+            message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`,
+          };
         }
       } else {
         tab2 = gBrowser.addTrustedTab?.("about:newtab") || null;
       }
     }
 
-    if (!tab1 || !tab2) return { message: "Unable to resolve tabs for split view." };
+    if (!tab1 || !tab2)
+      return { message: "Unable to resolve tabs for split view." };
     if (tab1 === tab2) {
       return { message: "Cannot split a tab with itself." };
     }
@@ -804,7 +1259,8 @@ export class SplitTabsCommand implements Command {
     "Split specified tabs into side-by-side windows. Accepts arguments: { indices: number[] }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin, gBrowser } = getChrome();
-    if (!gBrowser || !topWin?.OpenBrowserWindow) return { message: "Browser UI not available." };
+    if (!gBrowser || !topWin?.OpenBrowserWindow)
+      return { message: "Browser UI not available." };
 
     const indices = numberArrayArg(args, "indices");
     if (indices.length < 2) {
@@ -831,7 +1287,11 @@ export class SplitTabsCommand implements Command {
     const availTop = screen.availTop || 0;
 
     const numTabs = tabs.length;
-    const windows: Array<{ win: BrowserWindowLike; tab: BrowserTabLike; title: string }> = [];
+    const windows: Array<{
+      win: BrowserWindowLike;
+      tab: BrowserTabLike;
+      title: string;
+    }> = [];
 
     // Create windows for each tab
     for (let i = 0; i < numTabs; i++) {
@@ -864,9 +1324,9 @@ export class SplitTabsCommand implements Command {
 
       // Close the sidebar if it's open (since session storage isn't implemented yet)
       try {
-        const sidebar = win.document?.getElementById("sidebar-box") as
-          | { hidden?: boolean }
-          | null;
+        const sidebar = win.document?.getElementById("sidebar-box") as {
+          hidden?: boolean;
+        } | null;
         if (sidebar && !sidebar.hidden) {
           win.SidebarController?.hide?.();
         }
@@ -893,40 +1353,49 @@ export class SummarizePageCommand implements Command {
 
     const idx = numberArg(args, "index");
     let tab = tabByIndexOrCurrent(gBrowser, idx);
-    
+
     // Allow specifying tab by index
     if (idx != null && !tab) return { message: `No tab ${idx}.` };
-    
+
     // Allow specifying tab by query (title/URL match)
     const query = normalizeQuery(stringArg(args, "query"));
     if (query && !idx) {
       tab = findTabsByQuery(gBrowser, query)[0] || null;
       if (!tab) {
-        return { message: `No tab found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tab found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     }
-    
+
     const browser = tab?.linkedBrowser;
     if (!browser) return { message: "No active tab found." };
 
     const url = browser.currentURI?.spec || "";
     const title = tabTitle(tab);
-    
+
     // Skip certain pages that can't be summarized
-    if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
+    if (
+      url.startsWith("about:") ||
+      url.startsWith("chrome://") ||
+      url.startsWith("moz-extension://")
+    ) {
       return { message: "Cannot summarize browser internal pages." };
     }
 
     try {
       // Use PageExtractor actor for Fission-compatible content extraction
-      const currentWindowContext = browser.browsingContext?.currentWindowContext;
-      
+      const currentWindowContext =
+        browser.browsingContext?.currentWindowContext;
+
       if (!currentWindowContext) {
-        return { message: "Cannot access page content. The page may still be loading." };
+        return {
+          message: "Cannot access page content. The page may still be loading.",
+        };
       }
 
       const pageExtractor = currentWindowContext.getActor("PageExtractor");
-      
+
       if (!pageExtractor) {
         return { message: "Page content extractor not available." };
       }
@@ -960,7 +1429,9 @@ export class SummarizePageCommand implements Command {
         .trim();
 
       if (!content || content.length < 50) {
-        return { message: "Not enough content found on this page to summarize." };
+        return {
+          message: "Not enough content found on this page to summarize.",
+        };
       }
 
       // Truncate to reasonable length for LLM (roughly 10k chars ≈ 2.5k tokens)
@@ -991,7 +1462,8 @@ export class SearchMemoryCommand implements Command {
     const query = stringArg(args, "query");
     const folder = stringArg(args, "folder");
     const source = stringArg(args, "source");
-    const sourceScope = source === "bookmark-folder" ? "bookmark-folder" : undefined;
+    const sourceScope =
+      source === "bookmark-folder" ? "bookmark-folder" : undefined;
     if (!query) return { message: "Missing 'query' argument." };
 
     let results = await localMemory.search(
@@ -1004,7 +1476,10 @@ export class SearchMemoryCommand implements Command {
       const snapshot = await bookmarkFolders.getAllReadOnly();
       if (snapshot.ok) {
         const folderToUrls = buildFolderUrlMap(snapshot.folders);
-        const filtered = filterStaleBookmarkFolderResults(results, folderToUrls);
+        const filtered = filterStaleBookmarkFolderResults(
+          results,
+          folderToUrls
+        );
         results = filtered.results;
         if (filtered.dropped > 0) {
           assistantLogger.debug(
@@ -1022,10 +1497,13 @@ export class SearchMemoryCommand implements Command {
     }
 
     const folderScoped = Boolean(folder);
-    const requiresBookmarkFolderOnly = folderScoped || sourceScope === "bookmark-folder";
+    const requiresBookmarkFolderOnly =
+      folderScoped || sourceScope === "bookmark-folder";
     if (requiresBookmarkFolderOnly) {
       const before = results.length;
-      results = results.filter((r) => getMemoryDocSource(r) === "bookmark-folder");
+      results = results.filter(
+        r => getMemoryDocSource(r) === "bookmark-folder"
+      );
       if (before !== results.length) {
         assistantLogger.debug(
           "search-memory",
@@ -1077,13 +1555,19 @@ export class SearchMemoryCommand implements Command {
         bookmarkGuid: r.metadata?.bookmarkGuid || undefined,
         context:
           r.metadata?.context ||
-          (source === "history" ? "Browsing History" :
-           source === "bookmark" ? "Bookmarks" :
-           source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
-           source === "tab" ? "Open Tab" :
-           source === "tab-group" ? "Tab Group" :
-           "Memory"),
-        snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
+          (source === "history"
+            ? "Browsing History"
+            : source === "bookmark"
+              ? "Bookmarks"
+              : source === "bookmark-folder"
+                ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}`
+                : source === "tab"
+                  ? "Open Tab"
+                  : source === "tab-group"
+                    ? "Tab Group"
+                    : "Memory"),
+        snippet:
+          r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
       };
     });
 
@@ -1103,7 +1587,13 @@ export class SearchMemoryCommand implements Command {
       .join(", ");
     const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
 
-    return { message: JSON.stringify({ summary, resultsBySource, results: structured }) };
+    return {
+      message: JSON.stringify({
+        summary,
+        resultsBySource,
+        results: structured,
+      }),
+    };
   }
 }
 
@@ -1115,11 +1605,12 @@ export class OpenSearchResultCommand implements Command {
     let url = stringArg(args, "url");
     const type = stringArg(args, "type");
     const bookmarkGuid = stringArg(args, "bookmarkGuid");
-    
+
     if (!url) return { message: "Missing 'url' argument." };
 
     const { topWin, gBrowser, PlacesUtils } = getChrome();
-    if (!topWin?.openTrustedLinkIn || !gBrowser) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn || !gBrowser)
+      return { message: "Browser UI not available." };
 
     // If we have a bookmark GUID, prefer a fresh URL from Places at open-time.
     if (bookmarkGuid && PlacesUtils?.bookmarks?.fetch) {
@@ -1144,7 +1635,7 @@ export class OpenSearchResultCommand implements Command {
     // If it's an open tab, try to find and switch to it
     if (type === "tab") {
       const foundTab = getTabs(gBrowser).find(tab => tabUrl(tab) === url);
-      
+
       if (foundTab) {
         gBrowser.selectedTab = foundTab;
         return { message: `Switched to tab: ${url}` };
@@ -1162,7 +1653,8 @@ export class ShowSubscriptionCommand implements Command {
   description = "Show the current subscription plan and usage options.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
-    if (!topWin?.openTrustedLinkIn) return { message: "Browser UI not available." };
+    if (!topWin?.openTrustedLinkIn)
+      return { message: "Browser UI not available." };
 
     const stats = await subscriptionService.checkAvailability();
     const url = subscriptionService.getSubscriptionUrl();
@@ -1239,7 +1731,8 @@ export class CreateTabGroupCommand implements Command {
         }
       }
       const newTab = gBrowser.addTrustedTab?.(url);
-      if (!newTab) return { message: "Failed to open a tab for the new group." };
+      if (!newTab)
+        return { message: "Failed to open a tab for the new group." };
       tabsToGroup = [newTab];
       createdNewTab = true;
     } else {
@@ -1247,7 +1740,8 @@ export class CreateTabGroupCommand implements Command {
       // If current tab is already in a group, create a new tab instead of moving it
       if (currentTab?.group) {
         const newTab = gBrowser.addTrustedTab?.("about:newtab");
-        if (!newTab) return { message: "Failed to create a tab for the new group." };
+        if (!newTab)
+          return { message: "Failed to create a tab for the new group." };
         tabsToGroup = [newTab];
         createdNewTab = true;
       } else {
@@ -1406,7 +1900,9 @@ export class AddTabToGroupCommand implements Command {
       tabsToAdd = findTabsByQuery(gBrowser, query);
 
       if (tabsToAdd.length === 0) {
-        return { message: `No tabs found matching "${stringArg(args, "query") || ""}".` };
+        return {
+          message: `No tabs found matching "${stringArg(args, "query") || ""}".`,
+        };
       }
     } else if (idx != null) {
       const tab = tabByIndex(gBrowser, idx);
@@ -1421,12 +1917,20 @@ export class AddTabToGroupCommand implements Command {
 
     const groupableTabs = tabsToAdd.filter(tab => !tab.pinned);
     if (groupableTabs.length === 0) {
-      return { message: "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups)." };
+      return {
+        message:
+          "No groupable tabs found (pinned tabs cannot be grouped, or all tabs are already in groups).",
+      };
     }
 
     // Check if any tabs are already in OTHER groups (not the target group)
-    const tabsInOtherGroups = groupableTabs.filter(tab => tab.group && tab.group !== group);
-    if (tabsInOtherGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
+    const tabsInOtherGroups = groupableTabs.filter(
+      tab => tab.group && tab.group !== group
+    );
+    if (
+      tabsInOtherGroups.length > 0 &&
+      booleanArg(args, "confirmed") !== true
+    ) {
       const impact = analyzeGroupMoveImpact(tabsInOtherGroups);
       const groupNames = impact.affectedGroups.join(", ");
 
@@ -1462,7 +1966,9 @@ export class AddTabToGroupCommand implements Command {
         name: group.label || name,
       });
       const titles = groupableTabs.map(tab => tabTitle(tab)).join(", ");
-      return { message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}` };
+      return {
+        message: `Added ${groupableTabs.length} tab(s) to group "${name}": ${titles}`,
+      };
     } catch (e) {
       return { message: `Failed to add tab to group: ${e}` };
     }
@@ -1479,7 +1985,8 @@ export class RemoveTabFromGroupCommand implements Command {
 
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
-    if (!tab) return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
+    if (!tab)
+      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
 
     const title = tabTitle(tab);
 
@@ -1524,7 +2031,8 @@ export class RenameTabGroupCommand implements Command {
     }
 
     const existingWithNewName = groups.find(
-      existingGroup => normalizeName(existingGroup.label || "") === normalizeName(to)
+      existingGroup =>
+        normalizeName(existingGroup.label || "") === normalizeName(to)
     );
     if (existingWithNewName) {
       return { message: `A tab group named "${to}" already exists.` };
@@ -1563,16 +2071,19 @@ export class ResolveAmbiguityCommand implements Command {
     }
 
     if (pending.kind === "close_delete_target") {
-      const allowed = new Set<AmbiguityTarget>(pending.choices || ["tab", "tab-group", "bookmark-folder"]);
+      const allowed = new Set<AmbiguityTarget>(
+        pending.choices || ["tab", "tab-group", "bookmark-folder"]
+      );
       if (!target || !allowed.has(target as AmbiguityTarget)) {
-        const optionLabels = Array.from(allowed).map((opt) => {
+        const optionLabels = Array.from(allowed).map(opt => {
           if (opt === "tab-group") return "tab group";
           if (opt === "bookmark-folder") return "bookmark folder";
           return "tab";
         });
-        const choicesText = optionLabels.length > 1
-          ? `${optionLabels.slice(0, -1).join(", ")} or ${optionLabels[optionLabels.length - 1]}`
-          : optionLabels[0] || "tab, tab group, or bookmark folder";
+        const choicesText =
+          optionLabels.length > 1
+            ? `${optionLabels.slice(0, -1).join(", ")} or ${optionLabels[optionLabels.length - 1]}`
+            : optionLabels[0] || "tab, tab group, or bookmark folder";
         return {
           message:
             `I found multiple matches for "${pending.name}". ` +
@@ -1638,16 +2149,11 @@ export class ConfirmActionCommand implements Command {
     "Confirm or cancel a pending action. Accepts arguments: { confirmed: boolean }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const pending = getPendingConfirmation();
-    assistantLogger.debug(
-      "confirm-action",
-      "Received confirmation input",
-      { hasPending: !!pending }
-    );
+    assistantLogger.debug("confirm-action", "Received confirmation input", {
+      hasPending: !!pending,
+    });
     if (!pending) {
-      assistantLogger.debug(
-        "confirm-action",
-        "No pending confirmation found"
-      );
+      assistantLogger.debug("confirm-action", "No pending confirmation found");
       return { message: "No pending action to confirm." };
     }
 
@@ -1665,6 +2171,10 @@ export class ConfirmActionCommand implements Command {
 
     const commandMap: Record<string, Command> = {
       close_tab: new CloseTabCommand(),
+      close_duplicate_tabs: new CloseDuplicateTabsCommand(),
+      close_tabs_to_right: new CloseTabsToRightCommand(),
+      close_tabs_to_left: new CloseTabsToLeftCommand(),
+      close_other_tabs: new CloseOtherTabsCommand(),
       delete_bookmark_folder: new DeleteBookmarkFolderCommand(),
       delete_tab_group: new DeleteTabGroupCommand(),
       create_tab_group: new CreateTabGroupCommand(),
