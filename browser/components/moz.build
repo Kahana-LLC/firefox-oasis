@@ -50,7 +50,6 @@ DIRS += [
     "mozcachedohttp",
     "multilineeditor",
     "newtab",
-    "oasiswelcome",
     "originattributes",
     "pagedata",
     "permissions",
