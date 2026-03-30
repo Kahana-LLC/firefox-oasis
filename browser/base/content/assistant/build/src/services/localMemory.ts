@@ -606,13 +606,24 @@ class LocalMemoryService {
 
       for (let i = 0; i < root.childCount; i++) {
         const node = root.getChild(i);
-        if (node.uri) {
-          await this.addDocument(
-            (node.title || "") + " " + node.uri,
-            { type: "history", title: node.title, url: node.uri, timestamp: node.time, context: "Browsing History" },
-            node.uri
-          );
-        }
+        const uri = node.uri ? String(node.uri) : "";
+        if (!uri) continue;
+        const title = node.title != null ? String(node.title) : "";
+        const visitTime =
+          typeof node.time === "number"
+            ? node.time
+            : Number(node.time) || 0;
+        await this.addDocument(
+          `${title} ${uri}`,
+          {
+            type: "history",
+            title,
+            url: uri,
+            timestamp: visitTime,
+            context: "Browsing History",
+          },
+          uri
+        );
       }
       root.containerOpen = false;
       logDebug(`[LocalMemory] Indexed ${root.childCount} history items.`);

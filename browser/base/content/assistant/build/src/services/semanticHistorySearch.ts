@@ -266,13 +266,57 @@ class SemanticHistorySearch {
 
         console.time("[SemanticSearch] Search");
         const queryEmbedding = await embeddingService.embed(query);
-        const results = await historyVectorStore.search(queryEmbedding, limit);
+        let results = await historyVectorStore.search(
+            queryEmbedding,
+            limit,
+            0.35
+        );
+        if (results.length === 0) {
+            results = await historyVectorStore.search(
+                queryEmbedding,
+                limit,
+                0.2
+            );
+        }
+        if (results.length === 0) {
+            results = await historyVectorStore.search(
+                queryEmbedding,
+                limit,
+                0.12
+            );
+        }
+        if (results.length === 0) {
+            results = await this.keywordFallback(query, limit);
+        }
         console.timeEnd("[SemanticSearch] Search");
         console.log(
             `[SemanticSearch] Found ${results.length} results for "${query}"`
         );
 
         return results;
+    }
+
+    private async keywordFallback(
+        query: string,
+        limit: number
+    ): Promise<SearchResult[]> {
+        const q = query.trim().toLowerCase();
+        if (!q) return [];
+        const entries = await fetchRecentHistory(MAX_HISTORY_ENTRIES, false);
+        const hits = entries
+            .filter(
+                e =>
+                    e.title.toLowerCase().includes(q) ||
+                    e.url.toLowerCase().includes(q)
+            )
+            .slice(0, limit);
+        return hits.map(e => ({
+            title: e.title,
+            url: e.url,
+            snippet: e.snippet || e.title,
+            visitDate: e.visitDate,
+            score: 0.99,
+        }));
     }
 
     async reindex(): Promise<void> {

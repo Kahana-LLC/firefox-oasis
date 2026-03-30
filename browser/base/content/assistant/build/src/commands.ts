@@ -13,6 +13,7 @@
 import { bookmarkFolders, CreateFolderOpts } from "./bookmarkFolders";
 import { localMemory } from "./services/localMemory";
 import { subscriptionService } from "./services/subscription";
+import { fetchRecentHistory } from "./services/historyCollector";
 import { semanticHistorySearch } from "./services/semanticHistorySearch";
 import {
   buildFolderUrlMap,
@@ -2324,18 +2325,59 @@ export class ConfirmActionCommand implements Command {
 export class SearchHistorySemanticCommand implements Command {
   commandName = "search_history";
   description =
-    "Semantically search the user's recent browsing history using AI embeddings. Use this when the user asks about pages they visited, articles they read, or wants to find something from their browsing history. Arguments: { query: string }.";
+    "Search the user's recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as \"\" to return recent visits.";
 
   async execute(args: CommandArgs): Promise<CmdResult> {
-    const query = stringArg(args, "query");
-    if (!query) return { message: "Missing 'query' argument." };
+    const qVal = (args as Record<string, unknown>)?.query;
+    const query = typeof qVal === "string" ? qVal.trim() : "";
+
+    if (!query) {
+      try {
+        const entries = await fetchRecentHistory(15, false);
+        if (entries.length === 0) {
+          return {
+            message:
+              "No browsing history found yet, or history could not be read. Open a few websites, then try again.",
+          };
+        }
+        const formatted = entries.map((r, i) => ({
+          index: i + 1,
+          title: r.title,
+          url: r.url,
+          visited: new Date(r.visitDate).toLocaleDateString(),
+        }));
+        return { message: JSON.stringify(formatted) };
+      } catch (e: any) {
+        console.error("[SearchHistorySemantic] Recent list failed:", e);
+        return {
+          message:
+            "Could not read browsing history. If this persists, check the Browser Console for [HistoryCollector] errors.",
+        };
+      }
+    }
 
     try {
       const results = await semanticHistorySearch.search(query, 5);
 
       if (results.length === 0) {
+        let recent: Awaited<ReturnType<typeof fetchRecentHistory>> = [];
+        try {
+          recent = await fetchRecentHistory(50, false);
+        } catch {
+          recent = [];
+        }
+        if (recent.length === 0) {
+          return {
+            message:
+              "No browsing history is available in this profile (0 visits from Places). " +
+              "That usually means Firefox's history database did not load — try ./mach run --temp-profile, or delete obj-*/tmp/profile-default and rebuild, then visit a few https sites and retry. " +
+              `Searched for: "${query}".`,
+          };
+        }
         return {
-          message: `No relevant browsing history found for "${query}".`,
+          message:
+            `No history entries matched "${query}" among recent visits (Places has ${recent.length} recent URLs indexed for lookup). ` +
+            "Try a shorter keyword (e.g. domain name), visit the page again, or check Library → History.",
         };
       }
 

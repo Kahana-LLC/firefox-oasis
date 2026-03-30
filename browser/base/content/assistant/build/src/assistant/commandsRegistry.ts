@@ -106,7 +106,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
   summarize_page: `{"index?":"number","query?":"string"}`,
   show_subscription: `{}`,
-  search_history: `{"query":"string"}`,
+  search_history: `{"query":"string (optional; omit or \"\" for recent visits)"}`,
 };
 
 function toAssistToolDescription(command: Command): string {

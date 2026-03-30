@@ -130,10 +130,24 @@ function parseListTabsTarget(
   return { targetName };
 }
 
+function isBrowsingHistoryListIntent(raw: string): boolean {
+  return /\b(?:list|show)\s+(?:my\s+|the\s+)?(?:recent\s+)?browsing\s+history\b/i.test(
+    String(raw || "").trim()
+  );
+}
+
 export function resolveManifestListRoute(
   input: string,
   snapshot: RoutingStateSnapshot
 ): DeterministicRouteDecision | null {
+  if (isBrowsingHistoryListIntent(input)) {
+    return {
+      type: "tool",
+      next: "search_history",
+      args: { query: "" },
+      reason: "list-phrasing-for-browsing-history",
+    };
+  }
   const topWin = getBrowserWindow();
   const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
   const candidate = resolveManifestCommand(input, {

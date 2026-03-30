@@ -47199,13 +47199,21 @@ Content: ${entry.description || ""}`;
         root2.containerOpen = true;
         for (let i = 0; i < root2.childCount; i++) {
           const node = root2.getChild(i);
-          if (node.uri) {
-            await this.addDocument(
-              (node.title || "") + " " + node.uri,
-              { type: "history", title: node.title, url: node.uri, timestamp: node.time, context: "Browsing History" },
-              node.uri
-            );
-          }
+          const uri2 = node.uri ? String(node.uri) : "";
+          if (!uri2) continue;
+          const title = node.title != null ? String(node.title) : "";
+          const visitTime = typeof node.time === "number" ? node.time : Number(node.time) || 0;
+          await this.addDocument(
+            `${title} ${uri2}`,
+            {
+              type: "history",
+              title,
+              url: uri2,
+              timestamp: visitTime,
+              context: "Browsing History"
+            },
+            uri2
+          );
         }
         root2.containerOpen = false;
         logDebug(`[LocalMemory] Indexed ${root2.childCount} history items.`);
@@ -48546,6 +48554,131 @@ Content: ${content}`;
     }
   };
   var subscriptionService = SubscriptionService.getInstance();
+
+  // src/services/historyCollector.ts
+  function getPlacesUtils() {
+    const topWin = window.top;
+    const Services = topWin?.Services || window.Services;
+    if (Services?.wm) {
+      const browserWin = Services.wm.getMostRecentWindow("navigator:browser");
+      return browserWin?.PlacesUtils;
+    }
+    return topWin?.PlacesUtils;
+  }
+  var EXCLUDED_PREFIXES = [
+    "about:",
+    "chrome://",
+    "moz-extension://",
+    "resource://",
+    "data:",
+    "blob:",
+    "javascript:",
+    "view-source:"
+  ];
+  var SEARCH_ENGINE_PATTERNS = [
+    /^https?:\/\/(www\.)?google\.\w+\/search\?/,
+    /^https?:\/\/(www\.)?bing\.com\/search\?/,
+    /^https?:\/\/(www\.)?duckduckgo\.com\/\?q=/,
+    /^https?:\/\/(www\.)?yahoo\.com\/search/,
+    /^https?:\/\/(www\.)?baidu\.com\/s\?/,
+    /^https?:\/\/(www\.)?search\.yahoo\.com\//
+  ];
+  function isSearchEnginePage(url) {
+    return SEARCH_ENGINE_PATTERNS.some((pattern) => pattern.test(url));
+  }
+  function isUserVisibleUrl(url) {
+    if (!url) return false;
+    if (EXCLUDED_PREFIXES.some((prefix) => url.startsWith(prefix))) return false;
+    if (isSearchEnginePage(url)) return false;
+    return true;
+  }
+  var SNIPPET_MAX_LENGTH = 500;
+  var SNIPPET_FETCH_TIMEOUT = 5e3;
+  async function fetchPageSnippet(url) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { "Accept": "text/html" }
+      });
+      clearTimeout(timeout);
+      if (!response.ok) return "";
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+        return "";
+      }
+      const html2 = await response.text();
+      const textContent = html2.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "").replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "").replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "").replace(/<[^>]+>/g, " ").replace(/&[a-zA-Z]+;/g, " ").replace(/\s+/g, " ").trim().substring(0, SNIPPET_MAX_LENGTH);
+      return textContent;
+    } catch {
+      return "";
+    }
+  }
+  async function fetchRecentHistory(maxResults = 200, includeSnippets = false) {
+    const PlacesUtils = getPlacesUtils();
+    if (!PlacesUtils) {
+      console.warn("[HistoryCollector] PlacesUtils not available");
+      return [];
+    }
+    try {
+      console.time("[HistoryCollector] Fetch history");
+      const options = PlacesUtils.history.getNewQueryOptions();
+      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+      options.maxResults = maxResults * 2;
+      options.includeHidden = false;
+      const query = PlacesUtils.history.getNewQuery();
+      const result = PlacesUtils.history.executeQuery(query, options);
+      const root2 = result.root;
+      root2.containerOpen = true;
+      const entries2 = [];
+      const seenUrls = /* @__PURE__ */ new Set();
+      for (let i = 0; i < root2.childCount && entries2.length < maxResults; i++) {
+        const node = root2.getChild(i);
+        const url = node.uri;
+        if (!isUserVisibleUrl(url)) continue;
+        if (seenUrls.has(url)) continue;
+        seenUrls.add(url);
+        entries2.push({
+          title: node.title || url,
+          // fallback to URL if no title
+          url,
+          // Places stores time in microseconds; convert to ms
+          visitDate: Math.floor(node.time / 1e3),
+          snippet: ""
+          // populated below if includeSnippets=true
+        });
+      }
+      root2.containerOpen = false;
+      console.timeEnd("[HistoryCollector] Fetch history");
+      console.log(
+        `[HistoryCollector] Fetched ${entries2.length} unique history entries`
+      );
+      if (includeSnippets && entries2.length > 0) {
+        console.log(`[HistoryCollector] Fetching snippets for ${entries2.length} entries...`);
+        console.time("[HistoryCollector] Fetch snippets");
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < entries2.length; i += BATCH_SIZE) {
+          const batch = entries2.slice(i, i + BATCH_SIZE);
+          const snippets = await Promise.all(
+            batch.map((e) => fetchPageSnippet(e.url))
+          );
+          batch.forEach((entry, j2) => {
+            entry.snippet = snippets[j2];
+          });
+        }
+        const withSnippets = entries2.filter((e) => e.snippet.length > 0).length;
+        console.timeEnd("[HistoryCollector] Fetch snippets");
+        console.log(
+          `[HistoryCollector] Got snippets for ${withSnippets}/${entries2.length} entries`
+        );
+      }
+      return entries2;
+    } catch (e) {
+      console.error("[HistoryCollector] Failed to fetch history:", e);
+      return [];
+    }
+  }
 
   // src/services/embeddingService.ts
   var VECTOR_DIMENSIONS = 384;
@@ -53259,7 +53392,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         embedding: item.embedding
       });
     }
-    async search(queryEmbedding, limit = 5, minSimilarity = 0.5) {
+    async search(queryEmbedding, limit = 5, minSimilarity = 0.35) {
       await this.init();
       const results = await search2(this.db, {
         mode: "vector",
@@ -53409,131 +53542,6 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     }
   };
   var historyVectorStore = new HistoryVectorStore();
-
-  // src/services/historyCollector.ts
-  function getPlacesUtils() {
-    const topWin = window.top;
-    const Services = topWin?.Services || window.Services;
-    if (Services?.wm) {
-      const browserWin = Services.wm.getMostRecentWindow("navigator:browser");
-      return browserWin?.PlacesUtils;
-    }
-    return topWin?.PlacesUtils;
-  }
-  var EXCLUDED_PREFIXES = [
-    "about:",
-    "chrome://",
-    "moz-extension://",
-    "resource://",
-    "data:",
-    "blob:",
-    "javascript:",
-    "view-source:"
-  ];
-  var SEARCH_ENGINE_PATTERNS = [
-    /^https?:\/\/(www\.)?google\.\w+\/search\?/,
-    /^https?:\/\/(www\.)?bing\.com\/search\?/,
-    /^https?:\/\/(www\.)?duckduckgo\.com\/\?q=/,
-    /^https?:\/\/(www\.)?yahoo\.com\/search/,
-    /^https?:\/\/(www\.)?baidu\.com\/s\?/,
-    /^https?:\/\/(www\.)?search\.yahoo\.com\//
-  ];
-  function isSearchEnginePage(url) {
-    return SEARCH_ENGINE_PATTERNS.some((pattern) => pattern.test(url));
-  }
-  function isUserVisibleUrl(url) {
-    if (!url) return false;
-    if (EXCLUDED_PREFIXES.some((prefix) => url.startsWith(prefix))) return false;
-    if (isSearchEnginePage(url)) return false;
-    return true;
-  }
-  var SNIPPET_MAX_LENGTH = 500;
-  var SNIPPET_FETCH_TIMEOUT = 5e3;
-  async function fetchPageSnippet(url) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), SNIPPET_FETCH_TIMEOUT);
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { "Accept": "text/html" }
-      });
-      clearTimeout(timeout);
-      if (!response.ok) return "";
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-        return "";
-      }
-      const html2 = await response.text();
-      const textContent = html2.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "").replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "").replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "").replace(/<[^>]+>/g, " ").replace(/&[a-zA-Z]+;/g, " ").replace(/\s+/g, " ").trim().substring(0, SNIPPET_MAX_LENGTH);
-      return textContent;
-    } catch {
-      return "";
-    }
-  }
-  async function fetchRecentHistory(maxResults = 200, includeSnippets = false) {
-    const PlacesUtils = getPlacesUtils();
-    if (!PlacesUtils) {
-      console.warn("[HistoryCollector] PlacesUtils not available");
-      return [];
-    }
-    try {
-      console.time("[HistoryCollector] Fetch history");
-      const options = PlacesUtils.history.getNewQueryOptions();
-      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
-      options.maxResults = maxResults * 2;
-      options.includeHidden = false;
-      const query = PlacesUtils.history.getNewQuery();
-      const result = PlacesUtils.history.executeQuery(query, options);
-      const root2 = result.root;
-      root2.containerOpen = true;
-      const entries2 = [];
-      const seenUrls = /* @__PURE__ */ new Set();
-      for (let i = 0; i < root2.childCount && entries2.length < maxResults; i++) {
-        const node = root2.getChild(i);
-        const url = node.uri;
-        if (!isUserVisibleUrl(url)) continue;
-        if (seenUrls.has(url)) continue;
-        seenUrls.add(url);
-        entries2.push({
-          title: node.title || url,
-          // fallback to URL if no title
-          url,
-          // Places stores time in microseconds; convert to ms
-          visitDate: Math.floor(node.time / 1e3),
-          snippet: ""
-          // populated below if includeSnippets=true
-        });
-      }
-      root2.containerOpen = false;
-      console.timeEnd("[HistoryCollector] Fetch history");
-      console.log(
-        `[HistoryCollector] Fetched ${entries2.length} unique history entries`
-      );
-      if (includeSnippets && entries2.length > 0) {
-        console.log(`[HistoryCollector] Fetching snippets for ${entries2.length} entries...`);
-        console.time("[HistoryCollector] Fetch snippets");
-        const BATCH_SIZE = 5;
-        for (let i = 0; i < entries2.length; i += BATCH_SIZE) {
-          const batch = entries2.slice(i, i + BATCH_SIZE);
-          const snippets = await Promise.all(
-            batch.map((e) => fetchPageSnippet(e.url))
-          );
-          batch.forEach((entry, j2) => {
-            entry.snippet = snippets[j2];
-          });
-        }
-        const withSnippets = entries2.filter((e) => e.snippet.length > 0).length;
-        console.timeEnd("[HistoryCollector] Fetch snippets");
-        console.log(
-          `[HistoryCollector] Got snippets for ${withSnippets}/${entries2.length} entries`
-        );
-      }
-      return entries2;
-    } catch (e) {
-      console.error("[HistoryCollector] Failed to fetch history:", e);
-      return [];
-    }
-  }
 
   // src/services/semanticHistorySearch.ts
   var MAX_HISTORY_ENTRIES = 200;
@@ -53725,12 +53733,48 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       await this.ensureIndexed();
       console.time("[SemanticSearch] Search");
       const queryEmbedding = await embeddingService.embed(query);
-      const results = await historyVectorStore.search(queryEmbedding, limit);
+      let results = await historyVectorStore.search(
+        queryEmbedding,
+        limit,
+        0.35
+      );
+      if (results.length === 0) {
+        results = await historyVectorStore.search(
+          queryEmbedding,
+          limit,
+          0.2
+        );
+      }
+      if (results.length === 0) {
+        results = await historyVectorStore.search(
+          queryEmbedding,
+          limit,
+          0.12
+        );
+      }
+      if (results.length === 0) {
+        results = await this.keywordFallback(query, limit);
+      }
       console.timeEnd("[SemanticSearch] Search");
       console.log(
         `[SemanticSearch] Found ${results.length} results for "${query}"`
       );
       return results;
+    }
+    async keywordFallback(query, limit) {
+      const q2 = query.trim().toLowerCase();
+      if (!q2) return [];
+      const entries2 = await fetchRecentHistory(MAX_HISTORY_ENTRIES, false);
+      const hits = entries2.filter(
+        (e) => e.title.toLowerCase().includes(q2) || e.url.toLowerCase().includes(q2)
+      ).slice(0, limit);
+      return hits.map((e) => ({
+        title: e.title,
+        url: e.url,
+        snippet: e.snippet || e.title,
+        visitDate: e.visitDate,
+        score: 0.99
+      }));
     }
     async reindex() {
       this.indexed = false;
@@ -54250,8 +54294,15 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       id: "search.history",
       family: "search",
       commandName: "search_history",
-      priority: 1,
+      priority: 2,
       phrases: [
+        "list my recent browsing history",
+        "list my browsing history",
+        "show my browsing history",
+        "show my recent browsing history",
+        "list recent browsing history",
+        "what is in my browsing history",
+        "whats in my browsing history",
         "what pages did i visit",
         "what did i read",
         "what did i browse",
@@ -54264,6 +54315,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "browsing history",
         "search history",
         "search my history",
+        "search my browser history",
+        "search my browsing history",
         "find in my history",
         "what was that page",
         "what was that site",
@@ -54274,7 +54327,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "did i browse"
       ],
       slots: [
-        { name: "query", type: "string", source: "quoted_or_rest" }
+        {
+          name: "query",
+          type: "string",
+          source: "quoted_or_rest",
+          optional: true
+        }
       ]
     },
     {
@@ -54459,7 +54517,20 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     }
     return { targetName };
   }
+  function isBrowsingHistoryListIntent(raw) {
+    return /\b(?:list|show)\s+(?:my\s+|the\s+)?(?:recent\s+)?browsing\s+history\b/i.test(
+      String(raw || "").trim()
+    );
+  }
   function resolveManifestListRoute(input, snapshot) {
+    if (isBrowsingHistoryListIntent(input)) {
+      return {
+        type: "tool",
+        next: "search_history",
+        args: { query: "" },
+        reason: "list-phrasing-for-browsing-history"
+      };
+    }
     const topWin = getBrowserWindow();
     const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
     const candidate = resolveManifestCommand(input, {
@@ -57511,15 +57582,48 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   };
   var SearchHistorySemanticCommand = class {
     commandName = "search_history";
-    description = "Semantically search the user's recent browsing history using AI embeddings. Use this when the user asks about pages they visited, articles they read, or wants to find something from their browsing history. Arguments: { query: string }.";
+    description = `Search the user's recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as "" to return recent visits.`;
     async execute(args) {
-      const query = stringArg(args, "query");
-      if (!query) return { message: "Missing 'query' argument." };
+      const qVal = args?.query;
+      const query = typeof qVal === "string" ? qVal.trim() : "";
+      if (!query) {
+        try {
+          const entries2 = await fetchRecentHistory(15, false);
+          if (entries2.length === 0) {
+            return {
+              message: "No browsing history found yet, or history could not be read. Open a few websites, then try again."
+            };
+          }
+          const formatted = entries2.map((r, i) => ({
+            index: i + 1,
+            title: r.title,
+            url: r.url,
+            visited: new Date(r.visitDate).toLocaleDateString()
+          }));
+          return { message: JSON.stringify(formatted) };
+        } catch (e) {
+          console.error("[SearchHistorySemantic] Recent list failed:", e);
+          return {
+            message: "Could not read browsing history. If this persists, check the Browser Console for [HistoryCollector] errors."
+          };
+        }
+      }
       try {
         const results = await semanticHistorySearch.search(query, 5);
         if (results.length === 0) {
+          let recent = [];
+          try {
+            recent = await fetchRecentHistory(50, false);
+          } catch {
+            recent = [];
+          }
+          if (recent.length === 0) {
+            return {
+              message: `No browsing history is available in this profile (0 visits from Places). That usually means Firefox's history database did not load \u2014 try ./mach run --temp-profile, or delete obj-*/tmp/profile-default and rebuild, then visit a few https sites and retry. Searched for: "${query}".`
+            };
+          }
           return {
-            message: `No relevant browsing history found for "${query}".`
+            message: `No history entries matched "${query}" among recent visits (Places has ${recent.length} recent URLs indexed for lookup). Try a shorter keyword (e.g. domain name), visit the page again, or check Library \u2192 History.`
           };
         }
         const formatted = results.map((r, i) => ({
@@ -57574,7 +57678,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
     summarize_page: `{"index?":"number","query?":"string"}`,
     show_subscription: `{}`,
-    search_history: `{"query":"string"}`
+    search_history: `{"query":"string (optional; omit or "" for recent visits)"}`
   };
   function toAssistToolDescription(command) {
     const schema = COMMAND_ARG_SCHEMA[command.commandName];

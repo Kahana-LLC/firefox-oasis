@@ -67,7 +67,7 @@ class HistoryVectorStore {
     async search(
         queryEmbedding: number[],
         limit = 5,
-        minSimilarity = 0.5
+        minSimilarity = 0.35
     ): Promise<SearchResult[]> {
         await this.init();
 
