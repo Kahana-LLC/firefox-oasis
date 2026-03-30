@@ -269,3 +269,15 @@ windows-10-eos-sync-callout-primary-advance-button-label = Next
 
 link-preview-onboarding-callout-title = New: Click and hold to preview links
 link-preview-onboarding-callout-description = See a short description, reading time, and more to decide if a link is worth the click. Also available on right-click.
+
+## Oasis AI Chat Feature Tour
+
+oasis-chat-tour-step1-title = Meet your AI assistant
+oasis-chat-tour-step1-subtitle = Click the chat button anytime to get instant help. Ask questions, brainstorm ideas, or get writing assistance — all powered by AI.
+oasis-chat-tour-next-button = Next
+oasis-chat-tour-skip-button = Skip tour
+
+oasis-chat-tour-step2-title = Your AI-powered companion
+oasis-chat-tour-step2-subtitle = Get answers, write better, and work smarter. Your conversations are private and the assistant is always ready to help.
+oasis-chat-tour-try-button = Try it now
+oasis-chat-tour-back-button = Back

@@ -1,0 +1,325 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+:root {
+  --oasis-primary-color: #0060DF;
+  --oasis-primary-hover: #0050C5;
+  --oasis-secondary-color: #F9F9FB;
+  --oasis-text-primary: #15141A;
+  --oasis-text-secondary: #5B5B66;
+  --oasis-border-color: #E0E0E6;
+  --oasis-background: #FFFFFF;
+  --oasis-card-background: #FFFFFF;
+  --oasis-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --oasis-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --oasis-spacing-xs: 8px;
+  --oasis-spacing-sm: 16px;
+  --oasis-spacing-md: 24px;
+  --oasis-spacing-lg: 32px;
+  --oasis-spacing-xl: 48px;
+  --oasis-spacing-xxl: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --oasis-primary-color: #0A84FF;
+    --oasis-primary-hover: #0060DF;
+    --oasis-secondary-color: #2B2A33;
+    --oasis-text-primary: #FBFBFE;
+    --oasis-text-secondary: #CFCFD8;
+    --oasis-border-color: #52525E;
+    --oasis-background: #1C1B22;
+    --oasis-card-background: #2B2A33;
+    --oasis-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+    --oasis-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.48);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  background: var(--oasis-background);
+  color: var(--oasis-text-primary);
+  line-height: 1.6;
+}
+
+.oasis-welcome-container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.oasis-welcome-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0.4s ease, transform 0.4s ease;
+  transform: translateX(100%);
+  padding: var(--oasis-spacing-md);
+}
+
+.oasis-welcome-page.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.oasis-welcome-page.exit-left {
+  transform: translateX(-100%);
+}
+
+.oasis-welcome-content {
+  max-width: 1200px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--oasis-spacing-xl);
+  animation: fadeInUp 0.6s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.oasis-logo-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--oasis-spacing-sm);
+}
+
+.oasis-main-logo {
+  height: 80px;
+  width: auto;
+  filter: drop-shadow(0 4px 12px rgba(0, 96, 223, 0.2));
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.oasis-text-section {
+  text-align: center;
+  max-width: 700px;
+}
+
+.oasis-welcome-title {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: var(--oasis-spacing-sm);
+  color: var(--oasis-text-primary);
+  letter-spacing: -0.5px;
+}
+
+.oasis-welcome-subtitle {
+  font-size: 20px;
+  color: var(--oasis-text-secondary);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.oasis-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--oasis-spacing-md);
+  width: 100%;
+  max-width: 1000px;
+  margin-top: var(--oasis-spacing-sm);
+}
+
+.oasis-feature-card {
+  background: var(--oasis-card-background);
+  border: 1px solid var(--oasis-border-color);
+  border-radius: 12px;
+  padding: var(--oasis-spacing-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: var(--oasis-shadow);
+}
+
+.oasis-feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--oasis-shadow-hover);
+  border-color: var(--oasis-primary-color);
+}
+
+.oasis-feature-icon {
+  margin-bottom: var(--oasis-spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.oasis-feature-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: var(--oasis-spacing-xs);
+  color: var(--oasis-text-primary);
+}
+
+.oasis-feature-description {
+  font-size: 15px;
+  color: var(--oasis-text-secondary);
+  line-height: 1.5;
+}
+
+.oasis-cta-section {
+  display: flex;
+  gap: var(--oasis-spacing-sm);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: var(--oasis-spacing-sm);
+}
+
+.oasis-primary-button,
+.oasis-secondary-button {
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+}
+
+.oasis-primary-button {
+  background: var(--oasis-primary-color);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 96, 223, 0.3);
+}
+
+.oasis-primary-button:hover {
+  background: var(--oasis-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 96, 223, 0.4);
+}
+
+.oasis-primary-button:active {
+  transform: translateY(0);
+}
+
+.oasis-secondary-button {
+  background: transparent;
+  color: var(--oasis-text-secondary);
+  border: 1px solid var(--oasis-border-color);
+}
+
+.oasis-secondary-button:hover {
+  background: var(--oasis-secondary-color);
+  color: var(--oasis-text-primary);
+  border-color: var(--oasis-primary-color);
+}
+
+.oasis-progress-dots {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: var(--oasis-spacing-sm);
+}
+
+.oasis-progress-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--oasis-border-color);
+  transition: all 0.3s ease;
+}
+
+.oasis-progress-dots .dot.active {
+  background: var(--oasis-primary-color);
+  width: 28px;
+  border-radius: 5px;
+}
+
+@media (max-width: 768px) {
+  .oasis-welcome-title {
+    font-size: 32px;
+  }
+
+  .oasis-welcome-subtitle {
+    font-size: 16px;
+  }
+
+  .oasis-features-grid {
+    grid-template-columns: 1fr;
+    gap: var(--oasis-spacing-sm);
+  }
+
+  .oasis-main-logo {
+    height: 60px;
+  }
+
+  .oasis-feature-card {
+    padding: var(--oasis-spacing-md);
+  }
+
+  .oasis-cta-section {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .oasis-primary-button,
+  .oasis-secondary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .oasis-welcome-title {
+    font-size: 28px;
+  }
+
+  .oasis-welcome-subtitle {
+    font-size: 14px;
+  }
+
+  .oasis-main-logo {
+    height: 50px;
+  }
+}
+

@@ -1,0 +1,217 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Oasis Chat Feature Callout Animations
+ * Provides pulsing highlight and smooth animations for the chat button tour
+ */
+
+/* Pulsing animation for the chat button when callout is showing */
+#oasis-chat-button[open],
+#oasis-chat-button.feature-callout-target {
+  position: relative;
+  animation: oasis-chat-pulse 2s ease-in-out infinite;
+  z-index: 999999;
+}
+
+@keyframes oasis-chat-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(122, 146, 0, 0.6),
+                0 0 20px 5px rgba(122, 146, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(122, 146, 0, 0),
+                0 0 30px 8px rgba(122, 146, 0, 0.5);
+  }
+}
+
+/* Add subtle spotlight circle around button */
+#oasis-chat-button[open]::after,
+#oasis-chat-button.feature-callout-target::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(
+    circle,
+    rgba(122, 146, 0, 0.08) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  animation: oasis-spotlight-ring 3s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes oasis-spotlight-ring {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Glow effect on hover during tour */
+#oasis-chat-button[open]:hover,
+#oasis-chat-button.feature-callout-target:hover {
+  box-shadow: 0 0 12px rgba(122, 146, 0, 0.8) !important;
+  animation: oasis-chat-pulse-fast 1s ease-in-out infinite;
+}
+
+@keyframes oasis-chat-pulse-fast {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(122, 146, 0, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(122, 146, 0, 1);
+  }
+}
+
+/* Feature callout container animations */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] {
+  animation: oasis-callout-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10000000 !important; /* Above all overlays - driver.js style */
+  position: relative;
+  box-shadow: 
+    0 0 0 2px rgba(122, 146, 0, 0.3),
+    0 10px 40px rgba(0, 0, 0, 0.4),
+    0 0 60px 10px rgba(122, 146, 0, 0.1);
+}
+
+@keyframes oasis-callout-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Smooth transition between steps */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .screen-container {
+  animation: oasis-screen-slide 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes oasis-screen-slide {
+  from {
+    opacity: 0.5;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Arrow pointer styling - make it prominent like tab groups */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .arrow {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  animation: oasis-arrow-bounce 2s ease-in-out infinite;
+}
+
+@keyframes oasis-arrow-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Primary button pulse animation */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .primary {
+  animation: oasis-button-glow 2s ease-in-out infinite;
+}
+
+@keyframes oasis-button-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(122, 146, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(122, 146, 0, 0.6);
+  }
+}
+
+/* Simple working version - no fancy overlays */
+
+/* Hide progress/pagination dots */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .progress-indicator,
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .screen-indicator,
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .multi-stage-indicator {
+  display: none !important;
+}
+
+/* Progress indicator animation */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .progress-indicator {
+  animation: oasis-progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes oasis-progress-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Title logo animation */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .logo {
+  animation: oasis-logo-bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes oasis-logo-bounce {
+  0% {
+    transform: scale(0.8) rotate(-5deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Dismiss button subtle animation */
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .dismiss-button {
+  transition: all 0.2s ease;
+}
+
+#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .dismiss-button:hover {
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* Keep the URL bar area in front of overlay */
+#browser:has(#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"]) ~ #navigator-toolbox #nav-bar,
+body:has(#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"]) #nav-bar {
+  position: relative;
+  z-index: 999999;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  #oasis-chat-button[open],
+  #oasis-chat-button.feature-callout-target,
+  #oasis-chat-button[open]::after,
+  #oasis-chat-button.feature-callout-target::after,
+  #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"],
+  #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .arrow,
+  #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .primary,
+  #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .logo,
+  #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .dismiss-button,
+  #browser:has(#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"])::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

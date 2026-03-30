@@ -34,6 +34,13 @@ assistantWindow.voiceInputService = voiceInputService;
 assistantWindow.textToSpeech = textToSpeech;
 assistantWindow.marked = marked;
 assistantWindow.DOMPurify = DOMPurify;
+const aw = assistantWindow as AssistantWindowLike & {
+  oasisSetOAuthCallbackBaseUrl?: (url: string) => string;
+  oasisGetOAuthCallbackBaseUrl?: () => string;
+};
+aw.oasisSetOAuthCallbackBaseUrl = (url: string) =>
+  supabaseAuth.setOAuthCallbackBaseUrl(url);
+aw.oasisGetOAuthCallbackBaseUrl = () => supabaseAuth.getOAuthCallbackBaseUrl();
 
 const sessionController = createAssistantSessionController(assistantWindow);
 

@@ -406,3 +406,10 @@ CLAUDE.local.md
 # lint-ignore-next-line: git-only
 /*.json.gz
 \n# Gemini files\ngemini.md\n.gemini/
+
+# Ignore tour directory
+tour/
+
+# Ignore Python profiling files
+*.cProfile
+*.pstats
