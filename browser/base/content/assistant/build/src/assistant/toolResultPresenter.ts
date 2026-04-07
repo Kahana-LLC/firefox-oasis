@@ -150,6 +150,34 @@ function formatSearchResults(message: string): string {
   return formatLines(summary, lines);
 }
 
+type HistorySearchRow = {
+  index?: number;
+  title?: string;
+  url?: string;
+  relevance?: string;
+  visited?: string;
+};
+
+function formatHistorySearchResults(message: string): string {
+  const parsed = safeParseJson(message);
+  const rows = toObjectList<HistorySearchRow>(parsed);
+  if (rows.length === 0) {
+    return message;
+  }
+
+  const lines = rows.map(row => {
+    const idx = typeof row.index === "number" ? `${row.index}. ` : "";
+    const title = typeof row.title === "string" ? row.title : "(untitled)";
+    const url = typeof row.url === "string" ? row.url : "";
+    const relevance = typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
+    const visited = typeof row.visited === "string" ? ` — visited ${row.visited}` : "";
+    return url
+      ? `${idx}**${title}**${relevance}${visited}\n  ${url}`
+      : `${idx}**${title}**${relevance}${visited}`;
+  });
+  return `Here's what I found in your browsing history:\n\n${lines.join("\n\n")}`;
+}
+
 export function presentToolResult(payload: ToolResultPayload): string {
   const message = String(payload.message || "").trim();
   if (!message) {
@@ -166,6 +194,8 @@ export function presentToolResult(payload: ToolResultPayload): string {
     case "search_memory":
     case "get_recent_search_results":
       return formatSearchResults(message);
+    case "search_history":
+      return formatHistorySearchResults(message);
     default:
       return message;
   }

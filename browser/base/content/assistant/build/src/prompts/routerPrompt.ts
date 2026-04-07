@@ -19,7 +19,7 @@ export function buildAssistRouterPrompt(
     "Never invent command names outside the valid list.",
     "For list/show requests, prefer list_* tools and avoid search_memory unless user explicitly asks to search.",
     "For local find/search requests over tabs/bookmarks/folders, prefer search_memory with folder/source args.",
-    "For browsing history queries (pages visited, articles read, sites browsed), prefer search_history which uses AI semantic search.",
+    "For browsing history queries (pages visited, articles read, sites browsed, 'what was that page about X', 'pull that article', 'what did I read/visit/browse'), ALWAYS use search_history — do NOT respond with chat. Extract the topic as the query argument.",
     "For add/remove/delete/move requests, prefer mutation tools and keep destructive actions explicit.",
     "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",
     "For follow-ups like 'open it' after search results, prefer open_search_result with index (default 1).",

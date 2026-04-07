@@ -159,6 +159,40 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       return { query };
     },
   },
+  {
+    next: "search_history",
+    reason: "explicit-history-search",
+    resolve: input => {
+      const patterns: Array<{ re: RegExp; queryGroup?: string }> = [
+        { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
+        { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
+        { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+        { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+        { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
+        { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
+        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+        { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" },
+      ];
+      for (const { re, queryGroup } of patterns) {
+        const match = input.match(re);
+        if (match) {
+          const query = match.groups?.query?.trim() || queryGroup || "";
+          if (query) return { query };
+        }
+      }
+      if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
+        const cleaned = input
+          .replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "")
+          .replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "")
+          .replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "")
+          .replace(/^(?:for|about|on|regarding)\s+/i, "")
+          .trim();
+        return { query: cleaned || "recent browsing history" };
+      }
+      return null;
+    },
+  },
 ];
 
 export function resolveExplicitRoute(

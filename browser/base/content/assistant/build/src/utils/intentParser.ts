@@ -22,7 +22,9 @@ const SHOW_VERB_RE = /^show\b/i;
 const LIST_OBJECT_RE =
   /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
 const SEARCH_FAMILY_RE =
-  /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\b/i;
+  /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked|read|looked\s+at)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+(?:save|read|visit|look\s+at|browse))\s+/i;
+const HISTORY_FAMILY_RE =
+  /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
 const MUTATION_FAMILY_RE =
   /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
 
@@ -89,7 +91,7 @@ export function classifyCommandFamily(commandText: string): IntentFamily {
   if (SHOW_VERB_RE.test(input) && LIST_OBJECT_RE.test(input)) {
     return "list";
   }
-  if (SEARCH_FAMILY_RE.test(input)) {
+  if (SEARCH_FAMILY_RE.test(input) || HISTORY_FAMILY_RE.test(input)) {
     return "search";
   }
   if (MUTATION_FAMILY_RE.test(input)) {
