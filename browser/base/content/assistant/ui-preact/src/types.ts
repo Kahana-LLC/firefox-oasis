@@ -47,6 +47,8 @@ export type VoiceAgentState =
 
 export type VoiceAgentListeningSource = "user" | "continuous" | "handsfree";
 
+export type VoiceCaptureMode = "continuous" | "precise";
+
 export type VoiceAgentEvent =
   | {
       type: "state";
@@ -56,8 +58,10 @@ export type VoiceAgentEvent =
   | { type: "userTranscript"; text: string }
   | { type: "error"; message: string }
   | { type: "turn_done" }
+  | { type: "assistant_reply_text"; text: string }
   | { type: "vad"; userSpeaking: boolean }
-  | { type: "audio_level"; mic: number; tts: number };
+  | { type: "audio_level"; mic: number; tts: number }
+  | { type: "listening_phase"; phase: "echo_guard" | "capturing" };
 export type AssistantHistoryEntry = AssistantHistoryWireEntry;
 
 export interface SupabaseAuthState {
@@ -146,7 +150,17 @@ export type OasisWindow = Window & {
     getContinuousConversation(): boolean;
     getListeningSource(): VoiceAgentListeningSource | null;
     getUserSpeaking(): boolean;
+    getCaptureMode(): VoiceCaptureMode;
+    setCaptureMode(mode: VoiceCaptureMode): void;
+    getVoiceSpokenRepliesEnabled(): boolean;
+    setVoiceSpokenRepliesEnabled(enabled: boolean): void;
   };
+  oasisVoiceAssistantTurnBegin?: (userTranscript: string) => string;
+  oasisVoiceAssistantStreamChunk?: (messageId: string, chunk: string) => void;
+  oasisVoiceSpokenTurnMirror?: (
+    userTranscript: string,
+    assistantText: string
+  ) => void;
   openWebLinkIn?: (
     url: string,
     where: string,

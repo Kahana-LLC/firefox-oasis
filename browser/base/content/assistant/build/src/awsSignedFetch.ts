@@ -1,6 +1,7 @@
-/** AWS-signed HTTP POST client. Sends JSON payloads to the assistant/voice Lambda endpoints with Supabase JWT authentication. Used by proxyClient.ts. */
+/** HTTP client for assist (Supabase) and voice Lambda (IAM SigV4 + JWT in x-oasis-authorization). */
 import SupabaseAuth from "./services/supabase.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
+import { postVoiceLambdaWithIam } from "./voiceLambdaIamFetch.js";
 
 const normalizeEndpoint = (value: string | undefined): string =>
   String(value || "")
@@ -50,14 +51,15 @@ export async function postSigned<TResponse = Record<string, unknown>>(
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
-  
-  // Assist auth is optional; pass JWT if present.
-  // Voice endpoints still require JWT from the client side.
-  if (op === "assist" && token) {
+
+  if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(endpoint, { method: "POST", headers, body });
+  const res =
+    op === "transcribe" || op === "tts"
+      ? await postVoiceLambdaWithIam(endpoint, body, token)
+      : await fetch(endpoint, { method: "POST", headers, body });
 
   if (!res.ok) {
     const errorBody = await res.text();

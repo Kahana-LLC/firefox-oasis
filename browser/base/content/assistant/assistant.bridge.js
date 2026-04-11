@@ -1,6 +1,12 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 // Privileged shim - runs in chrome (privileged) context
-(function(){
-  const Services = window.Services || ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
+(function () {
+  const Services =
+    window.Services ||
+    ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
   window.assistantBridge = {
     openTab(url) {
@@ -18,15 +24,24 @@
             return true;
           }
           if (win?.gBrowser?.addTrustedTab) {
-            win.gBrowser.selectedTab = win.gBrowser.addTrustedTab(fixed);
+            win.gBrowser.selectedTab = win.gBrowser.addTrustedTab(fixed, {
+              inBackground: false,
+            });
             return true;
           }
           if (win?.gBrowser) {
-            win.gBrowser.selectedTab = win.gBrowser.addTab(fixed);
+            win.gBrowser.selectedTab = win.gBrowser.addTab(fixed, {
+              triggeringPrincipal:
+                Services.scriptSecurityManager.getSystemPrincipal(),
+              inBackground: false,
+            });
             return true;
           }
         } catch (e) {
-          console.warn("assistantBridge: failed to open tab via browser window", e);
+          console.warn(
+            "assistantBridge: failed to open tab via browser window",
+            e
+          );
         }
         const opened = window.open(fixed);
         return !!opened;
@@ -37,6 +52,6 @@
     },
     getAuthState() {
       return window.oasisAuthState || { isAuthenticated: false, user: null };
-    }
+    },
   };
 })();

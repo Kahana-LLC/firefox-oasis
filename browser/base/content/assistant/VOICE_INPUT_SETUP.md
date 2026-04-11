@@ -18,7 +18,7 @@ User clicks mic → Records audio → Sends to Lambda → Deepgram/Gemini → Re
 - Sends to the voice Lambda via `transcribeAudio()` in `proxyClient.ts`
 
 ### 2. Proxy Client (`src/proxyClient.ts`)
-- `transcribeAudio(audioBlob)` - Sends audio to the voice endpoint with `op: "transcribe"`
+- `transcribeAudio(audioBlob, meta?)` - Sends audio to the voice endpoint with `op: "transcribe"`. Optional `meta` (`source: "orb" | "composer"`, `utteranceSeq`) is used for console correlation only.
 - Uses the authenticated `postSigned()` method for voice-only operations
 - Includes Supabase JWT token in Authorization header
 
@@ -54,9 +54,12 @@ Set this in `browser/base/content/assistant/build/.env.local` for local override
 ### Response Format
 ```json
 {
-  "transcript": "This is the transcribed text"
+  "transcript": "This is the transcribed text",
+  "confidence": 0.92
 }
 ```
+
+`confidence` is **optional**. When present, the client logs it with transcribe responses; it is reserved for future gating.
 
 ### Supported Audio Formats
 The frontend attempts these MIME types in order:
@@ -72,7 +75,7 @@ Your current lambda already handles the `transcribe` operation correctly:
 1. ✅ Accepts `op: "transcribe"`
 2. ✅ Expects `audio` (base64), `mimeType`, and optional `language`
 3. ✅ Uses Deepgram first, falls back to Gemini
-4. ✅ Returns `{ transcript: "..." }`
+4. ✅ Returns `{ transcript: "..." }` (optional `confidence` number)
 
 ## How to Test
 
@@ -98,6 +101,52 @@ Your current lambda already handles the `transcribe` operation correctly:
    - Click ⏹️ to stop recording
    - Watch the input field populate with transcribed text
 
+## Developer: verbose assistant logs
+
+Voice and assistant code use `assistantLogger`. **`debug` / `info`** lines are hidden unless the Firefox pref **`browser.oasis.assistant.debug`** is **true**.
+
+1. Open `about:config`.
+2. Add or set **`browser.oasis.assistant.debug`** to **true** (Boolean).
+3. Reload the assistant sidebar and watch the **Browser Console** for `[Assistant:voice]` and other scoped messages (including VAD-style diagnostics where implemented).
+
+**Warn** and **error** logs are not gated and appear in normal builds.
+
+### Console scopes (filter in DevTools)
+
+Messages use the prefix `[Assistant:<scope>]`. Common voice-related scopes:
+
+| Scope | What it covers |
+|-------|----------------|
+| `voice` | Segment lifecycle (`segment_started`, `segment_finished`, `arm_next_segment`), transcribe `debug` lines with `source` / `utteranceSeq` |
+| `voice-state` | FSM transitions (`transition`), `listening_phase` (echo guard vs capturing) |
+| `voice-vad` | RMS ticks (throttled), `first_speech_in_segment` (after **3** consecutive above-threshold frames), `silence_window_complete`, precise prime |
+| `voice-mic` | `MediaStreamTrack.enabled` toggles on the capture stream (tracks stay **disabled** while **thinking** and **speaking** on the orb) |
+| `voice-input` | Composer push-to-talk: `recording_started` (device `label` / `deviceId`), `sending_transcribe`, `recording_cancelled` |
+
+### Hands-free orb: spoken replies vs chat-only
+
+In the voice overlay, **Replies** can be **Spoken** (default) or **Chat**. **Chat** turns off text-to-speech for the orb: the assistant still hears you and runs the same pipeline, but answers **stream into the main chat** as text (using the same `runAssistantStream` chunks as typed messages). **Spoken** mode still **appends** the user transcript and final assistant reply to the chat after each TTS turn (for a single auditable timeline). The choice is stored in `localStorage` under **`oasis.voice.orbSpokenReplies`** (`1` / `0`). This is separate from the composer toolbar control that auto-reads aloud after you send from the mic button.
+
+**Auto short transcript discard (orb):** If VAD ends a segment automatically and the transcript is **very short** (under **5** characters) and not on a small allowlist of commands, the client shows an error and does **not** run the assistant (reduces junk ASR → model derailment). **Manual** orb stop does not apply this gate.
+
+### `utteranceSeq` (orb)
+
+For the hands-free orb, **`utteranceSeq` increments each time a new `MediaRecorder` segment starts** (see `segment_started` / `segment_finished` in the console). Use the same number to tie together VAD events, segment end reason (`silence_vad`, `manual_stop`, `discard_too_small`, `aborted`), and `transcribe request` / `transcribe response` lines (with `source: "orb"`).
+
+Composer push-to-talk uses a separate counter in **`voice-input`** logs (`source: "composer"` on transcribe).
+
+### Debugging phantom transcripts
+
+If the assistant reacts to speech you did not say:
+
+1. Set **`browser.oasis.assistant.debug`** to **true** and open the **Browser Console**.
+2. Reproduce the issue; find the **`utteranceSeq`** for the bad turn.
+3. Inspect the sequence for that seq:
+   - **`voice-vad` `first_speech_in_segment`**: note `rms` vs quiet floor (spurious crossing suggests noise or echo).
+   - **`segment_finished`**: check `endReason`, `blobBytes`, and `durationMs` (tiny or odd clips often confuse STT).
+   - **`transcribe response`** / **`transcribe request`**: compare `transcriptPreview` to the audio you expected.
+4. For composer-only issues, filter **`voice-input`** and confirm **`recording_started`** `tracks` match the intended microphone (e.g. laptop vs USB).
+
 ## Troubleshooting
 
 ### "Failed to access microphone"
@@ -110,6 +159,13 @@ Your current lambda already handles the `transcribe` operation correctly:
 - Verify `DEEPGRAM_API_KEY` is set in lambda
 - Check lambda CloudWatch logs
 - Ensure lambda has correct IAM permissions
+
+### Transcribe returns HTTP 403 `{"Message":"Forbidden"}`
+This usually means the **Lambda function URL uses AWS IAM auth**. The client signs requests with **SigV4** using credentials from **`COGNITO_IDENTITY_POOL_ID`** (same values as in `build/.env.defaults` / `build/.env.local`), and sends the Supabase session JWT in the **`x-oasis-authorization: Bearer …`** header (not `Authorization`, which SigV4 uses for the AWS signature).
+
+- In **API Gateway / Lambda URL** console, confirm auth mode (IAM vs NONE).
+- The **Cognito identity pool** must allow **guest (unauthenticated)** identities if you are not wiring logins, and the **guest IAM role** must be allowed to invoke that function URL (resource policy / IAM).
+- In Lambda, read the app JWT from **`event.headers["x-oasis-authorization"]`** (or the lowercased key your runtime exposes) if you still validate Supabase users server-side.
 
 ### "Please sign in to use voice input"
 - User must be authenticated with Supabase

@@ -19,13 +19,17 @@ import { ASSISTANT_RECURSION_LIMIT } from "./assistant/constants.js";
 import { buildAssistantGraph } from "./assistant/graph.js";
 import { createAssistantSessionController } from "./assistant/session.js";
 import { consumeAssistantGraphStream } from "./assistant/stream.js";
-import { VOICE_REPLY_ADDENDUM } from "./prompts/voicePrompt.js";
+import {
+  VOICE_CHAT_TEXT_REPLY_ADDENDUM,
+  VOICE_REPLY_ADDENDUM,
+} from "./prompts/voicePrompt.js";
 import SupabaseAuth from "./services/supabase";
 import { subscriptionService } from "./services/subscription";
 import voiceInputService from "./services/voiceInput";
 import voiceAgent from "./services/voiceAgent";
 import { textToSpeech } from "./proxyClient.js";
 import type { AssistantWindowLike } from "./types/runtime";
+import type { VoiceUiDelivery } from "../../shared/contracts.js";
 
 const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
@@ -58,7 +62,8 @@ export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
   inputType: "text" | "voice" = "text",
-  messageId?: string
+  messageId?: string,
+  voiceDelivery: VoiceUiDelivery = "spoken"
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (isAuthenticated) {
@@ -80,11 +85,20 @@ export async function runAssistantStream(
   );
   const sessionHistory = sessionController.getCurrentSessionMessages();
 
+  const voiceSystemAddendum =
+    inputType === "voice"
+      ? voiceDelivery === "text_chat"
+        ? VOICE_CHAT_TEXT_REPLY_ADDENDUM
+        : VOICE_REPLY_ADDENDUM
+      : null;
+
   const stream = await graph.stream(
     {
       messages: [
         ...sessionHistory,
-        ...(inputType === "voice" ? [new SystemMessage(VOICE_REPLY_ADDENDUM)] : []),
+        ...(voiceSystemAddendum
+          ? [new SystemMessage(voiceSystemAddendum)]
+          : []),
         new HumanMessage({ content: prompt }),
       ],
     },

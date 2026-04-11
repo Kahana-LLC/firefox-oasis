@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "test:reliability": "tsc -p tests/tsconfig.json && node --test tests/dist/build/tests/**/*.test.js"
+    "test:reliability": "tsc -p tests/tsconfig.json && node --test tests/dist/build/tests/**/*.test.js",
+    "test:voice-guards": "esbuild src/utils/voiceUtteranceGuards.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-utterance-guards.mjs && esbuild src/utils/voiceVadDebounce.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-vad-debounce.mjs && node --test tests/tmp-voice-utterance-guards.mjs tests/tmp-voice-vad-debounce.mjs"
   },
   "devDependencies": {
     "dotenv": "^17.2.1",

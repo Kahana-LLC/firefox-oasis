@@ -229,6 +229,10 @@ export type AssistantWindowLike = Window & {
     getContinuousConversation(): boolean;
     getListeningSource(): "user" | "continuous" | "handsfree" | null;
     getUserSpeaking(): boolean;
+    getCaptureMode(): "continuous" | "precise";
+    setCaptureMode(mode: "continuous" | "precise"): void;
+    getVoiceSpokenRepliesEnabled(): boolean;
+    setVoiceSpokenRepliesEnabled(enabled: boolean): void;
   };
   marked?: unknown;
   DOMPurify?: unknown;
@@ -243,6 +247,12 @@ export type AssistantWindowLike = Window & {
   oasisGetPendingConfirmation?: () => PendingConfirmationPayload | null;
   oasisClearPendingConfirmation?: () => void;
   oasisGetPendingAmbiguity?: () => PendingAmbiguityPayload | null;
+  oasisVoiceAssistantTurnBegin?: (userTranscript: string) => string;
+  oasisVoiceAssistantStreamChunk?: (messageId: string, chunk: string) => void;
+  oasisVoiceSpokenTurnMirror?: (
+    userTranscript: string,
+    assistantText: string
+  ) => void;
   Services?: ServicesLike;
   ChromeUtils?: {
     importESModule?: (path: string) => Record<string, unknown>;

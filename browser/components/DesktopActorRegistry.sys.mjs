@@ -229,25 +229,12 @@ let JSWINDOWACTORS = {
         DOMDocElementInserted: {},
       },
     },
-    matches: ["about:welcome*", "chrome://browser/content/oasiswelcome/oasiswelcome.html", "chrome://browser/content/oasiswelcome/oasis-auth.html"],
-    remoteTypes: ["privilegedabout"],
-    includeChrome: true,
-  },
-
-  OasisWelcome: {
-    parent: {
-      esModuleURI: "resource:///actors/OasisWelcomeParent.sys.mjs",
-    },
-    child: {
-      esModuleURI: "resource:///actors/OasisWelcomeChild.sys.mjs",
-      events: {
-        DOMDocElementInserted: {},
-      },
-    },
     matches: [
+      "about:welcome*",
       "chrome://browser/content/oasiswelcome/oasiswelcome.html",
       "chrome://browser/content/oasiswelcome/oasis-auth.html",
     ],
+    remoteTypes: ["privilegedabout"],
     includeChrome: true,
   },
 

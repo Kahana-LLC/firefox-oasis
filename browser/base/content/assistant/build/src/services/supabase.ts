@@ -102,7 +102,7 @@ export default class SupabaseAuth {
       return null;
     }
 
-    if (Date.now() - this.activeOAuthLaunch.startedAt > 15000) {
+    if (Date.now() - this.activeOAuthLaunch.startedAt > 600000) {
       this.activeOAuthLaunch = null;
       return null;
     }

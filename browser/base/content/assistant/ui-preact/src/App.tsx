@@ -15,6 +15,7 @@ import type {
   OasisWindow,
   VoiceAgentEvent,
   VoiceAgentState,
+  VoiceCaptureMode,
 } from './types';
 import './App.css';
 
@@ -43,10 +44,17 @@ function userEmailOf(user: AuthState['user']): string {
   return typeof user.email === 'string' ? user.email : '';
 }
 
+const ECHO_HINT_STORAGE_KEY = 'oasis.voice.echoHintDismissed';
+
 function voicePrimaryStatus(
   state: VoiceAgentState,
-  userSpeaking: boolean
+  userSpeaking: boolean,
+  listeningPhase: 'echo_guard' | 'capturing' | null,
+  spokenRepliesEnabled: boolean
 ): string {
+  if (listeningPhase === 'echo_guard') {
+    return 'Ready in a moment…';
+  }
   switch (state) {
     case 'idle':
       return 'Voice ready';
@@ -55,7 +63,7 @@ function voicePrimaryStatus(
     case 'transcribing':
       return 'Processing speech';
     case 'thinking':
-      return 'Assistant is thinking';
+      return spokenRepliesEnabled ? 'Assistant is thinking' : 'Writing in chat';
     case 'speaking':
       return 'Assistant is speaking';
     default:
@@ -63,16 +71,25 @@ function voicePrimaryStatus(
   }
 }
 
-function voiceStatusHint(state: VoiceAgentState): string {
+function voiceStatusHint(
+  state: VoiceAgentState,
+  listeningPhase: 'echo_guard' | 'capturing' | null,
+  spokenRepliesEnabled: boolean
+): string {
+  if (listeningPhase === 'echo_guard') {
+    return 'Letting the room quiet down so your mic is not picking up the assistant.';
+  }
   switch (state) {
     case 'idle':
       return 'Tap the microphone below to start';
     case 'listening':
       return 'Pause briefly after you speak, or tap the orb to send now';
     case 'transcribing':
-      return 'Hang on';
+      return 'Tap the orb to cancel if this takes too long';
     case 'thinking':
-      return 'Please wait';
+      return spokenRepliesEnabled
+        ? 'Tap the orb to cancel if this takes too long'
+        : 'Watch the chat for the streamed reply; tap the orb to cancel';
     case 'speaking':
       return 'Tap the orb to stop playback';
     default:
@@ -88,26 +105,45 @@ function voicePhaseClass(state: VoiceAgentState): string {
   return 'voice-agent-overlay-phase-idle';
 }
 
+function readEchoHintDismissed(): boolean {
+  try {
+    return localStorage.getItem(ECHO_HINT_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
   const [agentState, setAgentState] = useState<VoiceAgentState>('idle');
   const [userText, setUserText] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [userSpeaking, setUserSpeaking] = useState(false);
+  const [listeningPhase, setListeningPhase] = useState<
+    'echo_guard' | 'capturing' | null
+  >(null);
+  const [captureMode, setCaptureModeState] = useState<VoiceCaptureMode>('continuous');
+  const [spokenRepliesEnabled, setSpokenRepliesEnabledState] = useState(true);
+  const [echoHintDismissed, setEchoHintDismissed] = useState(readEchoHintDismissed);
 
   const agent = oasisWindow.voiceAgent;
 
   useEffect(() => {
     if (!agent) return;
+    setCaptureModeState(agent.getCaptureMode());
+    setSpokenRepliesEnabledState(agent.getVoiceSpokenRepliesEnabled());
     const unsub = agent.on((event: VoiceAgentEvent) => {
       switch (event.type) {
         case 'state':
           setAgentState(event.state);
-          if (event.state === 'listening') {
-            setErrorMsg('');
+          if (event.state === 'idle') {
+            setListeningPhase(null);
           }
           break;
         case 'userTranscript':
           setUserText(event.text);
+          if (event.text.trim()) {
+            setErrorMsg('');
+          }
           break;
         case 'error':
           setErrorMsg(event.message);
@@ -115,7 +151,13 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
         case 'vad':
           setUserSpeaking(event.userSpeaking);
           break;
+        case 'listening_phase':
+          setListeningPhase(event.phase);
+          break;
         case 'turn_done':
+          break;
+        case 'assistant_reply_text':
+        case 'audio_level':
           break;
       }
     });
@@ -130,6 +172,10 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
   const handleOrbPointerDown = () => {
     if (!agent) return;
     const s = agent.getState();
+    if (s === 'transcribing' || s === 'thinking') {
+      agent.stop();
+      return;
+    }
     if (s === 'speaking') {
       agent.stopSpeaking();
       return;
@@ -139,6 +185,7 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
       return;
     }
     if (s === 'idle') {
+      setErrorMsg('');
       void agent.startConversation();
     }
   };
@@ -151,6 +198,31 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
   const isListening = agentState === 'listening';
   const isBusy = agentState === 'transcribing' || agentState === 'thinking';
   const isSpeaking = agentState === 'speaking';
+  const showEchoHint =
+    !echoHintDismissed &&
+    isListening &&
+    listeningPhase === 'capturing';
+
+  const setCaptureMode = (mode: VoiceCaptureMode) => {
+    if (!agent) return;
+    agent.setCaptureMode(mode);
+    setCaptureModeState(mode);
+  };
+
+  const setSpokenRepliesEnabled = (enabled: boolean) => {
+    if (!agent) return;
+    agent.setVoiceSpokenRepliesEnabled(enabled);
+    setSpokenRepliesEnabledState(enabled);
+  };
+
+  const dismissEchoHint = () => {
+    setEchoHintDismissed(true);
+    try {
+      localStorage.setItem(ECHO_HINT_STORAGE_KEY, '1');
+    } catch {
+      // ignore
+    }
+  };
 
   if (!agent) {
     return (
@@ -199,20 +271,88 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {showEchoHint && (
+          <div className="voice-agent-echo-hint" role="status">
+            <span>
+              For best results, use headphones or keep speaker volume low to reduce echo.
+            </span>
+            <button type="button" className="voice-agent-echo-hint-dismiss" onClick={dismissEchoHint}>
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {errorMsg && (
-          <div className="voice-agent-transcript voice-agent-error">
-            {errorMsg}
+          <div className="voice-agent-error-row">
+            <div className="voice-agent-transcript voice-agent-error">{errorMsg}</div>
+            <button
+              type="button"
+              className="voice-agent-error-dismiss"
+              onClick={() => setErrorMsg('')}
+            >
+              Dismiss
+            </button>
           </div>
         )}
       </div>
 
       <div className="voice-agent-bottom">
+        <div className="voice-agent-capture-toggle" role="group" aria-label="Voice capture mode">
+          <span className="voice-agent-capture-label">Capture</span>
+          <button
+            type="button"
+            className={
+              captureMode === 'continuous'
+                ? 'voice-agent-capture-option voice-agent-capture-option-active'
+                : 'voice-agent-capture-option'
+            }
+            onClick={() => setCaptureMode('continuous')}
+          >
+            Continuous
+          </button>
+          <button
+            type="button"
+            className={
+              captureMode === 'precise'
+                ? 'voice-agent-capture-option voice-agent-capture-option-active'
+                : 'voice-agent-capture-option'
+            }
+            onClick={() => setCaptureMode('precise')}
+          >
+            Precise
+          </button>
+        </div>
+        <div className="voice-agent-capture-toggle" role="group" aria-label="Voice reply mode">
+          <span className="voice-agent-capture-label">Replies</span>
+          <button
+            type="button"
+            className={
+              spokenRepliesEnabled
+                ? 'voice-agent-capture-option voice-agent-capture-option-active'
+                : 'voice-agent-capture-option'
+            }
+            onClick={() => setSpokenRepliesEnabled(true)}
+          >
+            Spoken
+          </button>
+          <button
+            type="button"
+            className={
+              !spokenRepliesEnabled
+                ? 'voice-agent-capture-option voice-agent-capture-option-active'
+                : 'voice-agent-capture-option'
+            }
+            onClick={() => setSpokenRepliesEnabled(false)}
+          >
+            Chat
+          </button>
+        </div>
         <div className="voice-agent-status-block">
           <div className="voice-agent-status">
-            {voicePrimaryStatus(agentState, userSpeaking)}
+            {voicePrimaryStatus(agentState, userSpeaking, listeningPhase, spokenRepliesEnabled)}
           </div>
           <div className="voice-agent-hint">
-            {voiceStatusHint(agentState)}
+            {voiceStatusHint(agentState, listeningPhase, spokenRepliesEnabled)}
           </div>
         </div>
 
@@ -225,21 +365,19 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
             isSpeaking ? 'voice-agent-orb-speaking' : '',
           ].filter(Boolean).join(' ')}
           onPointerDown={handleOrbPointerDown}
-          disabled={isBusy}
           title={
-            agentState === 'speaking'
-              ? 'Stop playback'
-              : agentState === 'listening'
-                ? 'Tap to stop listening and send what we heard'
-                : 'Start voice conversation'
+            isBusy
+              ? 'Cancel'
+              : agentState === 'speaking'
+                ? 'Stop playback'
+                : agentState === 'listening'
+                  ? 'Tap to stop listening and send what we heard'
+                  : 'Start voice conversation'
           }
         >
           {isBusy ? (
-            <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 50 50">
-              <circle cx="25" cy="25" r="20" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.3" />
-              <circle cx="25" cy="25" r="20" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="31.4 94.2" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.8s" repeatCount="indefinite" />
-              </circle>
+            <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
           ) : isSpeaking ? (
             <svg className="voice-agent-orb-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -287,6 +425,30 @@ export function App() {
     resetAssistantSession: runtime.resetAssistantSession,
     setPendingConfirmation,
   });
+
+  useEffect(() => {
+    const turnBegin = runtime.voiceTurnBeginForChat;
+    const streamChunk = runtime.voiceStreamChunkForChat;
+    const spokenMirror = runtime.voiceSpokenTurnMirrorForChat;
+    oasisWindow.oasisVoiceAssistantTurnBegin = turnBegin;
+    oasisWindow.oasisVoiceAssistantStreamChunk = streamChunk;
+    oasisWindow.oasisVoiceSpokenTurnMirror = spokenMirror;
+    return () => {
+      if (oasisWindow.oasisVoiceAssistantTurnBegin === turnBegin) {
+        delete oasisWindow.oasisVoiceAssistantTurnBegin;
+      }
+      if (oasisWindow.oasisVoiceAssistantStreamChunk === streamChunk) {
+        delete oasisWindow.oasisVoiceAssistantStreamChunk;
+      }
+      if (oasisWindow.oasisVoiceSpokenTurnMirror === spokenMirror) {
+        delete oasisWindow.oasisVoiceSpokenTurnMirror;
+      }
+    };
+  }, [
+    runtime.voiceTurnBeginForChat,
+    runtime.voiceStreamChunkForChat,
+    runtime.voiceSpokenTurnMirrorForChat,
+  ]);
 
   useAuthSync({
     setAuth,

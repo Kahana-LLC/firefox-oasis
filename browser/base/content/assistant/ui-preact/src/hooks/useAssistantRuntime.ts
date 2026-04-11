@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'preact/hooks';
-import TOOL_LABELS from '../toolLabels';
+import { useCallback, useMemo, useRef, useState } from "preact/hooks";
+import TOOL_LABELS from "../toolLabels";
 import type {
   AssistantHistoryEntry,
   AssistantMessage,
@@ -8,45 +8,53 @@ import type {
   OasisWindow,
   ToolAction,
   ToolActionStatus,
-} from '../types';
+} from "../types";
 
 const oasisWindow: OasisWindow = window;
 
 function uuid() {
   try {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
     }
   } catch {
     // ignore
   }
 
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
     const random = (Math.random() * 16) | 0;
-    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
     return value.toString(16);
   });
 }
 
 function prettifyToolName(name: string): string {
-  if (!name) return '';
-  if (name.includes(' ')) return name;
+  if (!name) return "";
+  if (name.includes(" ")) return name;
   const spaced = name
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function normalizeAssistantChunk(raw: string): string {
-  return String(raw || '');
+  return String(raw || "");
+}
+
+function transcribeFailureUserMessage(error: unknown): string {
+  const s = String(error);
+  if (s.includes("403") || s.includes("Forbidden")) {
+    return "Voice could not reach the transcription service (access denied). See browser/base/content/assistant/VOICE_INPUT_SETUP.md or ask your admin to check AWS IAM and the Lambda URL.";
+  }
+  return "Could not transcribe audio. Check your connection and try again.";
 }
 
 function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
   return (
-    entry.type === 'human' ||
-    entry.id?.includes('Human') ||
-    entry.constructor?.name === 'HumanMessage'
+    entry.type === "human" ||
+    entry.id?.includes("Human") ||
+    entry.constructor?.name === "HumanMessage"
   );
 }
 
@@ -56,13 +64,11 @@ export function mapHistoryEntriesToMessages(
   return history.map((entry, index) => {
     const isHuman = isHumanHistoryEntry(entry);
     const content =
-      entry.content ||
-      (entry.lc_kwargs ? entry.lc_kwargs.content : '') ||
-      '';
+      entry.content || (entry.lc_kwargs ? entry.lc_kwargs.content : "") || "";
 
     return {
-      id: entry.id || `hist-${index}-${entry.role || 'msg'}`,
-      role: isHuman ? 'user' : 'ai',
+      id: entry.id || `hist-${index}-${entry.role || "msg"}`,
+      role: isHuman ? "user" : "ai",
       content,
     };
   });
@@ -73,10 +79,11 @@ export function useAssistantRuntime(params: {
   setPendingConfirmation: (data: ConfirmationData | null) => void;
   originalResetAssistantSession?: (() => void | Promise<void>) | undefined;
 }) {
-  const { auth, setPendingConfirmation, originalResetAssistantSession } = params;
+  const { auth, setPendingConfirmation, originalResetAssistantSession } =
+    params;
 
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
@@ -85,18 +92,21 @@ export function useAssistantRuntime(params: {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
 
-  const appendChunkToMessage = useCallback((messageId: string, chunk: string) => {
-    setMessages((previous) => {
-      const index = previous.findIndex((message) => message.id === messageId);
-      if (index === -1) {
-        return previous;
-      }
-      const updated = [...previous];
-      const current = updated[index];
-      updated[index] = { ...current, content: `${current.content}${chunk}` };
-      return updated;
-    });
-  }, []);
+  const appendChunkToMessage = useCallback(
+    (messageId: string, chunk: string) => {
+      setMessages(previous => {
+        const index = previous.findIndex(message => message.id === messageId);
+        if (index === -1) {
+          return previous;
+        }
+        const updated = [...previous];
+        const current = updated[index];
+        updated[index] = { ...current, content: `${current.content}${chunk}` };
+        return updated;
+      });
+    },
+    []
+  );
 
   const stopSpeaking = useCallback(() => {
     if (ttsAudioRef.current) {
@@ -113,7 +123,7 @@ export function useAssistantRuntime(params: {
   const speakText = useCallback(
     async (text: string, messageId: string) => {
       const ttsFn = oasisWindow.textToSpeech;
-      if (typeof ttsFn !== 'function') {
+      if (typeof ttsFn !== "function") {
         return;
       }
 
@@ -122,10 +132,10 @@ export function useAssistantRuntime(params: {
 
       try {
         const plainText = text
-          .replace(/<[^>]*>/g, '')
-          .replace(/[#*_`~\[\]()>!|]/g, '')
-          .replace(/\n{2,}/g, '. ')
-          .replace(/\n/g, ' ')
+          .replace(/<[^>]*>/g, "")
+          .replace(/[#*_`~\[\]()>!|]/g, "")
+          .replace(/\n{2,}/g, ". ")
+          .replace(/\n/g, " ")
           .trim();
         if (!plainText) {
           return;
@@ -145,7 +155,7 @@ export function useAssistantRuntime(params: {
         };
         await audio.play();
       } catch (error) {
-        console.error('TTS playback error:', error);
+        console.error("TTS playback error:", error);
         stopSpeaking();
       }
     },
@@ -153,18 +163,25 @@ export function useAssistantRuntime(params: {
   );
 
   const runStreamTurn = useCallback(
-    async (prompt: string, inputType: 'text' | 'voice' = 'text') => {
+    async (prompt: string, inputType: "text" | "voice" = "text") => {
       const run = oasisWindow.runAssistantStream;
-      if (typeof run !== 'function') {
-        setMessages((previous) => [
+      if (typeof run !== "function") {
+        setMessages(previous => [
           ...previous,
-          { id: uuid(), role: 'ai', content: '(runAssistantStream not available)' },
+          {
+            id: uuid(),
+            role: "ai",
+            content: "(runAssistantStream not available)",
+          },
         ]);
         return null;
       }
 
       const aiMessageId = uuid();
-      setMessages((previous) => [...previous, { id: aiMessageId, role: 'ai', content: '' }]);
+      setMessages(previous => [
+        ...previous,
+        { id: aiMessageId, role: "ai", content: "" },
+      ]);
 
       const fullText = await run(
         prompt,
@@ -183,28 +200,37 @@ export function useAssistantRuntime(params: {
     [appendChunkToMessage]
   );
 
-  const startToolAction = useCallback((name: string, messageId?: string, label?: string) => {
-    const id = uuid();
-    const display = label || TOOL_LABELS[name] || prettifyToolName(name);
-    setToolActions((previous) => [
-      ...previous,
-      { id, name, status: 'running', messageId, label: display },
-    ]);
-    return id;
-  }, []);
+  const startToolAction = useCallback(
+    (name: string, messageId?: string, label?: string) => {
+      const id = uuid();
+      const display = label || TOOL_LABELS[name] || prettifyToolName(name);
+      setToolActions(previous => [
+        ...previous,
+        { id, name, status: "running", messageId, label: display },
+      ]);
+      return id;
+    },
+    []
+  );
 
-  const updateToolAction = useCallback((id: string, status: ToolActionStatus) => {
-    setToolActions((previous) =>
-      previous.map((action) => (action.id === id ? { ...action, status } : action))
-    );
-  }, []);
+  const updateToolAction = useCallback(
+    (id: string, status: ToolActionStatus) => {
+      setToolActions(previous =>
+        previous.map(action =>
+          action.id === id ? { ...action, status } : action
+        )
+      );
+    },
+    []
+  );
 
   const activeToolAction = useMemo(
     () =>
       [...toolActions]
         .reverse()
-        .find((action) => action.status === 'running' || action.status === 'pending') ||
-      null,
+        .find(
+          action => action.status === "running" || action.status === "pending"
+        ) || null,
     [toolActions]
   );
 
@@ -212,12 +238,12 @@ export function useAssistantRuntime(params: {
     setMessages([]);
     setToolActions([]);
 
-    if (typeof originalResetAssistantSession === 'function') {
+    if (typeof originalResetAssistantSession === "function") {
       await Promise.resolve(originalResetAssistantSession());
     }
 
     const setHistory = oasisWindow.setAssistantHistory;
-    if (typeof setHistory === 'function') {
+    if (typeof setHistory === "function") {
       await setHistory([]);
     }
   }, [originalResetAssistantSession]);
@@ -231,47 +257,54 @@ export function useAssistantRuntime(params: {
       }
 
       if (!auth.isAuthenticated) {
-        setMessages((previous) => [
+        setMessages(previous => [
           ...previous,
           {
             id: uuid(),
-            role: 'ai',
-            content: 'Please sign in to use the assistant.',
+            role: "ai",
+            content: "Please sign in to use the assistant.",
           },
         ]);
         return;
       }
 
       stopSpeaking();
-      setInput('');
+      setInput("");
       setBusy(true);
       setToolActions([]);
       const userMessageId = uuid();
-      setMessages((previous) => [
+      setMessages(previous => [
         ...previous,
-        { id: userMessageId, role: 'user', content: text },
+        { id: userMessageId, role: "user", content: text },
       ]);
 
       try {
-        const result = await runStreamTurn(text, fromVoice ? 'voice' : 'text');
+        const result = await runStreamTurn(text, fromVoice ? "voice" : "text");
         if (fromVoice && ttsEnabled && result?.fullText?.trim()) {
           void speakText(result.fullText, result.aiMessageId);
         }
       } catch (error) {
-        setMessages((previous) => [
+        setMessages(previous => [
           ...previous,
-          { id: uuid(), role: 'ai', content: `Error: ${String(error)}` },
+          { id: uuid(), role: "ai", content: `Error: ${String(error)}` },
         ]);
       } finally {
         setBusy(false);
       }
     },
-    [auth.isAuthenticated, input, runStreamTurn, speakText, stopSpeaking, ttsEnabled]
+    [
+      auth.isAuthenticated,
+      input,
+      runStreamTurn,
+      speakText,
+      stopSpeaking,
+      ttsEnabled,
+    ]
   );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void send();
       }
@@ -282,16 +315,46 @@ export function useAssistantRuntime(params: {
   const toggleRecording = useCallback(async () => {
     const service = oasisWindow.voiceInputService;
     if (!service) {
-      alert('Voice input service not available.');
+      setMessages(previous => [
+        ...previous,
+        {
+          id: uuid(),
+          role: "ai",
+          content: "Voice input is not available in this build.",
+        },
+      ]);
       return;
     }
 
     try {
       if (isRecording) {
-        const text = await service.stopRecording();
-        setIsRecording(false);
-        if (text?.trim()) {
-          void send(text, { fromVoice: true });
+        try {
+          const text = await service.stopRecording();
+          setIsRecording(false);
+          if (text?.trim()) {
+            void send(text, { fromVoice: true });
+          } else {
+            setMessages(previous => [
+              ...previous,
+              {
+                id: uuid(),
+                role: "ai",
+                content:
+                  "Nothing recognized; try again, speak a bit longer, or use the hands-free voice button for different capture settings.",
+              },
+            ]);
+          }
+        } catch (error) {
+          console.error("Voice transcription failed:", error);
+          setIsRecording(false);
+          setMessages(previous => [
+            ...previous,
+            {
+              id: uuid(),
+              role: "ai",
+              content: transcribeFailureUserMessage(error),
+            },
+          ]);
         }
         return;
       }
@@ -299,8 +362,17 @@ export function useAssistantRuntime(params: {
       stopSpeaking();
       await service.startRecording();
       setIsRecording(true);
-    } catch {
+    } catch (error) {
+      console.error("Voice recording failed:", error);
       setIsRecording(false);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not start voice recording.";
+      setMessages(previous => [
+        ...previous,
+        { id: uuid(), role: "ai", content: message },
+      ]);
     }
   }, [isRecording, send, stopSpeaking]);
 
@@ -310,7 +382,7 @@ export function useAssistantRuntime(params: {
     setBusy(true);
     setToolActions([]);
     try {
-      await runStreamTurn('yes', 'text');
+      await runStreamTurn("yes", "text");
     } finally {
       setBusy(false);
     }
@@ -322,15 +394,15 @@ export function useAssistantRuntime(params: {
     setBusy(true);
     setToolActions([]);
     try {
-      await runStreamTurn('no', 'text');
+      await runStreamTurn("no", "text");
     } catch {
       const clearPending = oasisWindow.oasisClearPendingConfirmation;
-      if (typeof clearPending === 'function') {
+      if (typeof clearPending === "function") {
         clearPending();
       }
-      setMessages((previous) => [
+      setMessages(previous => [
         ...previous,
-        { id: uuid(), role: 'ai', content: 'Action cancelled.' },
+        { id: uuid(), role: "ai", content: "Action cancelled." },
       ]);
     } finally {
       setBusy(false);
@@ -338,13 +410,55 @@ export function useAssistantRuntime(params: {
   }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
 
   const toggleTtsEnabled = useCallback(() => {
-    setTtsEnabled((previous) => {
+    setTtsEnabled(previous => {
       if (previous) {
         stopSpeaking();
       }
       return !previous;
     });
   }, [stopSpeaking]);
+
+  const voiceTurnBeginForChat = useCallback((userTranscript: string) => {
+    const userMessageId = uuid();
+    const aiMessageId = uuid();
+    setMessages(previous => [
+      ...previous,
+      { id: userMessageId, role: "user", content: userTranscript },
+      { id: aiMessageId, role: "ai", content: "" },
+    ]);
+    return aiMessageId;
+  }, []);
+
+  const voiceStreamChunkForChat = useCallback(
+    (messageId: string, chunk: string) => {
+      const normalized = normalizeAssistantChunk(chunk);
+      if (!normalized) {
+        return;
+      }
+      appendChunkToMessage(messageId, normalized);
+    },
+    [appendChunkToMessage]
+  );
+
+  const voiceSpokenTurnMirrorForChat = useCallback(
+    (userTranscript: string, assistantText: string) => {
+      const trimmedUser = userTranscript.replace(/\s+/g, " ").trim();
+      const trimmedAi = assistantText.replace(/\s+/g, " ").trim();
+      if (!trimmedUser && !trimmedAi) {
+        return;
+      }
+      setMessages(previous => [
+        ...previous,
+        ...(trimmedUser
+          ? [{ id: uuid(), role: "user" as const, content: trimmedUser }]
+          : []),
+        ...(trimmedAi
+          ? [{ id: uuid(), role: "ai" as const, content: trimmedAi }]
+          : []),
+      ]);
+    },
+    []
+  );
 
   return {
     messages,
@@ -368,5 +482,8 @@ export function useAssistantRuntime(params: {
     speakingMsgId,
     speakText,
     stopSpeaking,
+    voiceTurnBeginForChat,
+    voiceStreamChunkForChat,
+    voiceSpokenTurnMirrorForChat,
   };
 }

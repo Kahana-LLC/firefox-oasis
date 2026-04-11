@@ -35,6 +35,11 @@ export function Composer({
         <div className="voice-input-push-hint" role="status" aria-live="polite">
           Recording — tap the <strong>microphone</strong> button again when you are done speaking.
           Your message will be transcribed and sent automatically.
+          <span className="voice-input-push-hint-sub">
+            Headphones or low speaker volume reduce echo. If transcription fails with “access denied,”
+            see <code className="voice-input-code-hint">browser/base/content/assistant/VOICE_INPUT_SETUP.md</code>{' '}
+            (IAM / Lambda URL).
+          </span>
         </div>
       )}
       <textarea
@@ -173,7 +178,7 @@ export function Composer({
             title={
               isRecording
                 ? 'Tap again to stop recording and send'
-                : 'Voice input: tap to start, tap again to stop and send'
+                : 'Voice input: tap to start, tap again to stop and send (uses the same transcription service as the voice orb)'
             }
             style={{
               background: 'transparent',
