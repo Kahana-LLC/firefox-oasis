@@ -62,10 +62,19 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "new_window",
   "organize_windows",
 ]);
+// const SEARCH_WEB_HINT_RE =
+//   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
+// const SEARCH_LOCAL_HINT_RE =
+//   /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
+
 const SEARCH_WEB_HINT_RE =
   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
 const SEARCH_LOCAL_HINT_RE =
   /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
+const SEARCH_HISTORY_HINT_RE =
+  /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that)\b/i;
+const SEARCH_BOOKMARKS_HINT_RE =
+  /\b(?:bookmark|bookmarks|folder|saved|bookmarked|in\s+(?:my\s+)?(?:bookmark\s+)?folder|what'?s\s+in)\b/i;
 
 function constrainAssistRoutingForFamily(params: {
   activeCommandText: string;
@@ -126,13 +135,49 @@ function constrainAssistRoutingForFamily(params: {
     );
   }
 
+  // if (family === "search") {
+  //   const hasWebHint = SEARCH_WEB_HINT_RE.test(activeCommandText);
+  //   const hasLocalHint = SEARCH_LOCAL_HINT_RE.test(activeCommandText);
+  //   const allowedTools = new Set(SEARCH_FAMILY_TOOLS);
+  //   if (hasWebHint || !hasLocalHint) {
+  //     allowedTools.add(SEARCH_WEB_TOOL);
+  //   }
+  //   return toResult(
+  //     assistOptions.filter(
+  //       option => option === "chat" || allowedTools.has(option)
+  //     )
+  //   );
+  // }
+
   if (family === "search") {
     const hasWebHint = SEARCH_WEB_HINT_RE.test(activeCommandText);
     const hasLocalHint = SEARCH_LOCAL_HINT_RE.test(activeCommandText);
-    const allowedTools = new Set(SEARCH_FAMILY_TOOLS);
+    const hasHistoryHint = SEARCH_HISTORY_HINT_RE.test(activeCommandText);
+    const hasBookmarksHint = SEARCH_BOOKMARKS_HINT_RE.test(activeCommandText);
+
+    const allowedTools = new Set<string>();
+
+    // Strong signals for specific search types
+    if (hasHistoryHint && !hasBookmarksHint) {
+      // Clear history query - only allow search_history
+      allowedTools.add("search_history");
+      allowedTools.add("get_recent_search_results");
+      allowedTools.add("open_search_result");
+    } else if (hasBookmarksHint && !hasHistoryHint) {
+      // Clear bookmarks query - only allow search_memory
+      allowedTools.add("search_memory");
+      allowedTools.add("get_recent_search_results");
+      allowedTools.add("open_search_result");
+    } else {
+      // Ambiguous or no strong hints - allow both
+      SEARCH_FAMILY_TOOLS.forEach(tool => allowedTools.add(tool));
+    }
+
+    // Add web search if web hint present or no local hint
     if (hasWebHint || !hasLocalHint) {
       allowedTools.add(SEARCH_WEB_TOOL);
     }
+
     return toResult(
       assistOptions.filter(
         option => option === "chat" || allowedTools.has(option)
