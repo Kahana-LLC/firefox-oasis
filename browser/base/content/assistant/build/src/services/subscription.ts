@@ -9,6 +9,7 @@
 import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
 import { assistantLogger } from "../utils/assistantLogger.js";
+import type { UsageMeta } from "../assistant/messageUtils.js";
 
 // Plan Limits (Units per month)
 // Plan A ($20): 1500 units
@@ -80,7 +81,7 @@ export class SubscriptionService {
      * @param type 'text' or 'voice'
      * @param model Optional model name for record keeping
      */
-    public async trackUsage(type: 'text' | 'voice', model: string = 'gemini-1.5-flash'): Promise<void> {
+    public async trackUsage(type: 'text' | 'voice', model: string = 'gemini-1.5-flash', meta?: UsageMeta): Promise<void> {
         const user = await supabaseAuth.getCurrentUser();
         if (!user) {
             logWarn("trackUsage: No user found.");
@@ -105,7 +106,11 @@ export class SubscriptionService {
             user_id: user.id,
             usage_count: units, 
             model_used: `${type}:${model}`,
-            success: true
+            success: true,
+            command_type: meta?.command_type ?? null,
+            user_intent: meta?.user_intent ?? null,
+            input_tokens: meta?.input_tokens ?? null,
+            output_tokens: meta?.output_tokens ?? null,
         }).then(({ error }: any) => {
             if (error) logError("Failed to track usage (DB Insert):", error);
             else logDebug("trackUsage: DB insert successful");
