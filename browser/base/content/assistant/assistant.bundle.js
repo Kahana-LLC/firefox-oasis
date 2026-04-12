@@ -75273,6 +75273,20 @@ ${message}` : message;
         if (!text2) {
           continue;
         }
+        const kwargs = msg.additional_kwargs;
+        if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
+          const newMeta = kwargs.oasisUsageMeta;
+          if (!lastUsageMeta) {
+            lastUsageMeta = newMeta;
+          } else {
+            lastUsageMeta = {
+              command_type: lastUsageMeta.command_type !== "other" && newMeta.command_type === "other" ? lastUsageMeta.command_type : newMeta.command_type,
+              user_intent: lastUsageMeta.user_intent !== "other" && newMeta.user_intent === "other" ? lastUsageMeta.user_intent : newMeta.user_intent,
+              input_tokens: newMeta.input_tokens ?? lastUsageMeta.input_tokens,
+              output_tokens: newMeta.output_tokens ?? lastUsageMeta.output_tokens
+            };
+          }
+        }
         const msgName = typeof msg.name === "string" ? msg.name ?? "" : "";
         const toolResult = getToolResultPayload(msg);
         const isToolNodeMessage = toolCommandNames.has(stepName) || toolCommandNames.has(msgName) || !!toolResult;
@@ -75296,10 +75310,6 @@ ${message}` : message;
         );
         if (!sanitizedText) {
           continue;
-        }
-        const kwargs = msg.additional_kwargs;
-        if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
-          lastUsageMeta = kwargs.oasisUsageMeta;
         }
         const newContent = `${sanitizedText}
 `;
