@@ -16,7 +16,43 @@ import { embeddingService } from "./embeddingService";
 import { historyVectorStore, type SearchResult } from "./historyVectorStore";
 import { fetchRecentHistory } from "./historyCollector";
 
-const MAX_HISTORY_ENTRIES = 200;
+const MAX_HISTORY_ENTRIES = 500;
+
+function buildEmbeddingText(title: string, url: string, snippet?: string): string {
+    if (snippet) {
+        return `${title} ${snippet}`;
+    }
+    try {
+        const parsed = new URL(url);
+        const domain = parsed.hostname.replace(/^www\./, "");
+        const pathWords = parsed.pathname
+            .split(/[\/\-_.]/)
+            .filter(w => w.length > 2 && !/^[0-9a-f]{8,}$/i.test(w))
+            .join(" ");
+        const searchParams = parsed.searchParams.get("q")
+            || parsed.searchParams.get("query")
+            || "";
+        return `${title} ${domain} ${pathWords} ${searchParams}`.replace(/\s+/g, " ").trim();
+    } catch {
+        return `${title} ${url}`;
+    }
+}
+
+function mergeSearchResults(
+    primary: SearchResult[],
+    secondary: SearchResult[],
+    limit: number
+): SearchResult[] {
+    const seen = new Set(primary.map(r => r.url));
+    const merged = [...primary];
+    for (const result of secondary) {
+        if (!seen.has(result.url)) {
+            merged.push(result);
+            seen.add(result.url);
+        }
+    }
+    return merged.slice(0, limit);
+}
 
 class SemanticHistorySearch {
     private indexed = false;
@@ -112,10 +148,7 @@ class SemanticHistorySearch {
                 const entry = entries[i];
 
                 try {
-                    // Use snippet for richer embeddings, fall back to title+url
-                    const textToEmbed = entry.snippet
-                        ? `${entry.title} ${entry.snippet}`
-                        : `${entry.title} ${entry.url}`;
+                    const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
                     const embedding = await embeddingService.embed(textToEmbed);
 
                     await historyVectorStore.addItem({
@@ -196,7 +229,7 @@ class SemanticHistorySearch {
                             .replace(/&[a-zA-Z]+;/g, " ")
                             .replace(/\s+/g, " ")
                             .trim()
-                            .substring(0, 500);
+                            .substring(0, 1000);
                     } catch {
                         // Snippet fetch failed — use empty snippet (title+url fallback)
                     }
@@ -211,9 +244,7 @@ class SemanticHistorySearch {
             let successCount = 0;
             for (const entry of newEntries) {
                 try {
-                    const textToEmbed = entry.snippet
-                        ? `${entry.title} ${entry.snippet}`
-                        : `${entry.title} ${entry.url}`;
+                    const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
                     const embedding = await embeddingService.embed(textToEmbed);
 
                     await historyVectorStore.addItem({
@@ -249,7 +280,6 @@ class SemanticHistorySearch {
             // Don't throw — incremental failure shouldn't break search
         }
     }
-
     /**
      * Save current state to IndexedDB for persistence across restarts.
      */
@@ -261,12 +291,25 @@ class SemanticHistorySearch {
         }
     }
 
-    async search(query: string, limit = 5): Promise<SearchResult[]> {
+    async search(query: string, limit = 10): Promise<SearchResult[]> {
         await this.ensureIndexed();
 
         console.time("[SemanticSearch] Search");
         const queryEmbedding = await embeddingService.embed(query);
-        const results = await historyVectorStore.search(queryEmbedding, limit);
+        let results = await historyVectorStore.hybridSearch(query, queryEmbedding, limit);
+
+        if (results.length === 0) {
+            console.log("[SemanticSearch] Hybrid returned 0 — trying keyword fallback");
+            const keywordResults = await historyVectorStore.keywordSearch(query, limit);
+            results = mergeSearchResults(results, keywordResults, limit);
+        }
+
+        if (results.length === 0) {
+            console.log("[SemanticSearch] Still 0 — trying pure vector with low threshold");
+            const vectorResults = await historyVectorStore.search(queryEmbedding, limit, 0.05);
+            results = mergeSearchResults(results, vectorResults, limit);
+        }
+
         console.timeEnd("[SemanticSearch] Search");
         console.log(
             `[SemanticSearch] Found ${results.length} results for "${query}"`

@@ -53255,7 +53255,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         embedding: item.embedding
       });
     }
-    async search(queryEmbedding, limit = 5, minSimilarity = 0.3) {
+    async search(queryEmbedding, limit = 10, minSimilarity = 0.15) {
       await this.init();
       const results = await search2(this.db, {
         mode: "vector",
@@ -53274,6 +53274,57 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         visitDate: hit.document.visitDate,
         score: hit.score
       }));
+    }
+    async hybridSearch(queryText, queryEmbedding, limit = 10) {
+      await this.init();
+      try {
+        const results = await search2(this.db, {
+          mode: "hybrid",
+          term: queryText,
+          vector: {
+            value: queryEmbedding,
+            property: "embedding"
+          },
+          similarity: 0.1,
+          limit,
+          includeVectors: false,
+          hybridWeights: {
+            text: 0.4,
+            vector: 0.6
+          }
+        });
+        return results.hits.map((hit) => ({
+          title: hit.document.title,
+          url: hit.document.url,
+          snippet: hit.document.snippet,
+          visitDate: hit.document.visitDate,
+          score: hit.score
+        }));
+      } catch (err) {
+        console.warn("[HistoryVectorStore] Hybrid search failed, falling back to vector:", err);
+        return this.search(queryEmbedding, limit, 0.1);
+      }
+    }
+    async keywordSearch(queryText, limit = 10) {
+      await this.init();
+      try {
+        const results = await search2(this.db, {
+          mode: "fulltext",
+          term: queryText,
+          limit,
+          includeVectors: false
+        });
+        return results.hits.map((hit) => ({
+          title: hit.document.title,
+          url: hit.document.url,
+          snippet: hit.document.snippet,
+          visitDate: hit.document.visitDate,
+          score: hit.score
+        }));
+      } catch (err) {
+        console.warn("[HistoryVectorStore] Keyword search failed:", err);
+        return [];
+      }
     }
     async getCount() {
       await this.init();
@@ -53532,7 +53583,32 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
 
   // src/services/semanticHistorySearch.ts
-  var MAX_HISTORY_ENTRIES = 200;
+  var MAX_HISTORY_ENTRIES = 500;
+  function buildEmbeddingText(title, url, snippet) {
+    if (snippet) {
+      return `${title} ${snippet}`;
+    }
+    try {
+      const parsed = new URL(url);
+      const domain = parsed.hostname.replace(/^www\./, "");
+      const pathWords = parsed.pathname.split(/[\/\-_.]/).filter((w2) => w2.length > 2 && !/^[0-9a-f]{8,}$/i.test(w2)).join(" ");
+      const searchParams = parsed.searchParams.get("q") || parsed.searchParams.get("query") || "";
+      return `${title} ${domain} ${pathWords} ${searchParams}`.replace(/\s+/g, " ").trim();
+    } catch {
+      return `${title} ${url}`;
+    }
+  }
+  function mergeSearchResults(primary, secondary, limit) {
+    const seen = new Set(primary.map((r) => r.url));
+    const merged = [...primary];
+    for (const result of secondary) {
+      if (!seen.has(result.url)) {
+        merged.push(result);
+        seen.add(result.url);
+      }
+    }
+    return merged.slice(0, limit);
+  }
   var SemanticHistorySearch = class {
     indexed = false;
     indexingPromise = null;
@@ -53607,7 +53683,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         for (let i = 0; i < entries2.length; i++) {
           const entry = entries2[i];
           try {
-            const textToEmbed = entry.snippet ? `${entry.title} ${entry.snippet}` : `${entry.title} ${entry.url}`;
+            const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
             const embedding = await embeddingService.embed(textToEmbed);
             await historyVectorStore.addItem({
               title: entry.title,
@@ -53665,7 +53741,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
               const ct = response.headers.get("content-type") || "";
               if (!ct.includes("text/html")) return entry;
               const html2 = await response.text();
-              entry.snippet = html2.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "").replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "").replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "").replace(/<[^>]+>/g, " ").replace(/&[a-zA-Z]+;/g, " ").replace(/\s+/g, " ").trim().substring(0, 500);
+              entry.snippet = html2.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "").replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "").replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "").replace(/<[^>]+>/g, " ").replace(/&[a-zA-Z]+;/g, " ").replace(/\s+/g, " ").trim().substring(0, 1e3);
             } catch {
             }
             return entry;
@@ -53677,7 +53753,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         let successCount = 0;
         for (const entry of newEntries) {
           try {
-            const textToEmbed = entry.snippet ? `${entry.title} ${entry.snippet}` : `${entry.title} ${entry.url}`;
+            const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
             const embedding = await embeddingService.embed(textToEmbed);
             await historyVectorStore.addItem({
               title: entry.title,
@@ -53717,11 +53793,21 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         console.warn("[SemanticSearch] Failed to persist to storage:", err);
       }
     }
-    async search(query, limit = 5) {
+    async search(query, limit = 10) {
       await this.ensureIndexed();
       console.time("[SemanticSearch] Search");
       const queryEmbedding = await embeddingService.embed(query);
-      const results = await historyVectorStore.search(queryEmbedding, limit);
+      let results = await historyVectorStore.hybridSearch(query, queryEmbedding, limit);
+      if (results.length === 0) {
+        console.log("[SemanticSearch] Hybrid returned 0 \u2014 trying keyword fallback");
+        const keywordResults = await historyVectorStore.keywordSearch(query, limit);
+        results = mergeSearchResults(results, keywordResults, limit);
+      }
+      if (results.length === 0) {
+        console.log("[SemanticSearch] Still 0 \u2014 trying pure vector with low threshold");
+        const vectorResults = await historyVectorStore.search(queryEmbedding, limit, 0.05);
+        results = mergeSearchResults(results, vectorResults, limit);
+      }
       console.timeEnd("[SemanticSearch] Search");
       console.log(
         `[SemanticSearch] Found ${results.length} results for "${query}"`
@@ -53794,7 +53880,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   var LIST_VERB_RE = /^list\b/i;
   var SHOW_VERB_RE = /^show\b/i;
   var LIST_OBJECT_RE = /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
-  var SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\b/i;
+  var SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked|read|looked\s+at)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+(?:save|read|visit|look\s+at|browse))\s+/i;
+  var HISTORY_FAMILY_RE = /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
   var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
   var GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
   var FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
@@ -53850,7 +53937,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     if (SHOW_VERB_RE.test(input) && LIST_OBJECT_RE.test(input)) {
       return "list";
     }
-    if (SEARCH_FAMILY_RE.test(input)) {
+    if (SEARCH_FAMILY_RE.test(input) || HISTORY_FAMILY_RE.test(input)) {
       return "search";
     }
     if (MUTATION_FAMILY_RE.test(input)) {
@@ -54178,6 +54265,35 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         }
         return { query };
       }
+    },
+    {
+      next: "search_history",
+      reason: "explicit-history-search",
+      resolve: (input) => {
+        const patterns = [
+          { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
+          { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
+          { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+          { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+          { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
+          { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
+          { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+          { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+          { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" }
+        ];
+        for (const { re: re2, queryGroup } of patterns) {
+          const match = input.match(re2);
+          if (match) {
+            const query = match.groups?.query?.trim() || queryGroup || "";
+            if (query) return { query };
+          }
+        }
+        if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
+          const cleaned = input.replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "").replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "").replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "").replace(/^(?:for|about|on|regarding)\s+/i, "").trim();
+          return { query: cleaned || "recent browsing history" };
+        }
+        return null;
+      }
     }
   ];
   function resolveExplicitRoute(input) {
@@ -54240,6 +54356,37 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       slots: [
         { name: "name", type: "target_name", source: "rest", optional: true },
         { name: "scope", type: "scope", source: "rest", optional: true }
+      ]
+    },
+    {
+      id: "search.history",
+      family: "search",
+      commandName: "search_history",
+      priority: 1,
+      phrases: [
+        "what pages did i visit",
+        "what did i read",
+        "what did i browse",
+        "find that article",
+        "find that page",
+        "find that site",
+        "what sites did i visit",
+        "pages i visited",
+        "articles i read",
+        "browsing history",
+        "search history",
+        "search my history",
+        "find in my history",
+        "what was that page",
+        "what was that site",
+        "what was that article",
+        "did i visit",
+        "did i look at",
+        "did i read",
+        "did i browse"
+      ],
+      slots: [
+        { name: "query", type: "string", source: "quoted_or_rest" }
       ]
     },
     {
@@ -54665,6 +54812,16 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     });
     if (!candidate || candidate.definition.family !== "search") {
       return null;
+    }
+    if (candidate.definition.commandName === "search_history") {
+      const parsed2 = parseSearchMemoryIntent(input);
+      const query = parsed2?.query || input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
+      return {
+        type: "tool",
+        next: "search_history",
+        args: { query },
+        reason: "search-manifest-history"
+      };
     }
     const missingFolderQuery = parseFolderSearchMissingQuery(input, snapshot);
     if (missingFolderQuery) {
@@ -55265,14 +55422,6 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (familyDecision) {
         return familyDecision;
       }
-      if (family === "list" || family === "search" || family === "mutation") {
-        return {
-          type: "chat",
-          actionable: true,
-          reason: `${family}-family-unresolved`,
-          message: family === "list" ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder." : family === "search" ? "I could not determine what to search. Please specify query and optional folder/source." : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly."
-        };
-      }
     }
     const searchResultExplicit = resolveExplicitSearchResultRoute(input);
     if (searchResultExplicit) {
@@ -55285,6 +55434,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     const explicit = resolveExplicitRoute(input);
     if (explicit) {
       return explicit;
+    }
+    if (family === "list" || family === "search" || family === "mutation") {
+      return {
+        type: "chat",
+        actionable: true,
+        reason: `${family}-family-unresolved`,
+        message: family === "list" ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder." : family === "search" ? "I could not determine what to search. Please specify query and optional folder/source." : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly."
+      };
     }
     const actionable = looksActionableText(input);
     if (actionable) {
@@ -57066,6 +57223,19 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       return await cmd.execute(pending.args);
     }
   };
+  function formatRelativeVisitTime(visitDate) {
+    const diff = Date.now() - visitDate;
+    const minutes = Math.floor(diff / 6e4);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return "yesterday";
+    if (days < 7) return `${days}d ago`;
+    if (days < 30) return `${Math.floor(days / 7)}w ago`;
+    return new Date(visitDate).toLocaleDateString();
+  }
   var SearchHistorySemanticCommand = class {
     commandName = "search_history";
     description = "Semantically search the user's recent browsing history using AI embeddings. Use this when the user asks about pages they visited, articles they read, or wants to find something from their browsing history. Arguments: { query: string }.";
@@ -57073,18 +57243,21 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       const query = stringArg(args, "query");
       if (!query) return { message: "Missing 'query' argument." };
       try {
-        const results = await semanticHistorySearch.search(query, 5);
-        if (results.length === 0) {
+        const results = await semanticHistorySearch.search(query, 10);
+        const MIN_RELEVANCE = 0.3;
+        const MAX_RESULTS = 5;
+        const filtered = results.filter((r) => r.score >= MIN_RELEVANCE).slice(0, MAX_RESULTS);
+        if (filtered.length === 0) {
           return {
             message: `No relevant browsing history found for "${query}".`
           };
         }
-        const formatted = results.map((r, i) => ({
+        const formatted = filtered.map((r, i) => ({
           index: i + 1,
           title: r.title,
           url: r.url,
           relevance: Math.round(r.score * 100) + "%",
-          visited: new Date(r.visitDate).toLocaleDateString()
+          visited: formatRelativeVisitTime(r.visitDate)
         }));
         return { message: JSON.stringify(formatted) };
       } catch (e) {
@@ -73490,7 +73663,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
       "Never invent command names outside the valid list.",
       "For list/show requests, prefer list_* tools and avoid search_memory unless user explicitly asks to search.",
       "For local find/search requests over tabs/bookmarks/folders, prefer search_memory with folder/source args.",
-      "For browsing history queries (pages visited, articles read, sites browsed), prefer search_history which uses AI semantic search.",
+      "For browsing history queries (pages visited, articles read, sites browsed, 'what was that page about X', 'pull that article', 'what did I read/visit/browse'), ALWAYS use search_history \u2014 do NOT respond with chat. Extract the topic as the query argument.",
       "For add/remove/delete/move requests, prefer mutation tools and keep destructive actions explicit.",
       "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",
       "For follow-ups like 'open it' after search results, prefer open_search_result with index (default 1).",
@@ -74173,6 +74346,24 @@ ${lines.map((line) => `- ${line}`).join("\n")}`;
     });
     return formatLines(summary, lines);
   }
+  function formatHistorySearchResults(message) {
+    const parsed = safeParseJson(message);
+    const rows = toObjectList(parsed);
+    if (rows.length === 0) {
+      return message;
+    }
+    const lines = rows.map((row) => {
+      const idx = typeof row.index === "number" ? `${row.index}. ` : "";
+      const title = typeof row.title === "string" ? row.title : "(untitled)";
+      const url = typeof row.url === "string" ? row.url : "";
+      const relevance = typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
+      const visited = typeof row.visited === "string" ? ` \u2014 visited ${row.visited}` : "";
+      return url ? `${idx}[**${title}**](${url})${relevance}${visited}` : `${idx}**${title}**${relevance}${visited}`;
+    });
+    return `Here's what I found in your browsing history:
+
+${lines.join("\n\n")}`;
+  }
   function presentToolResult(payload) {
     const message = String(payload.message || "").trim();
     if (!message) {
@@ -74188,6 +74379,8 @@ ${lines.map((line) => `- ${line}`).join("\n")}`;
       case "search_memory":
       case "get_recent_search_results":
         return formatSearchResults(message);
+      case "search_history":
+        return formatHistorySearchResults(message);
       default:
         return message;
     }

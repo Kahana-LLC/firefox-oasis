@@ -66,8 +66,8 @@ class HistoryVectorStore {
 
     async search(
         queryEmbedding: number[],
-        limit = 5,
-        minSimilarity = 0.5
+        limit = 10,
+        minSimilarity = 0.15
     ): Promise<SearchResult[]> {
         await this.init();
 
@@ -89,6 +89,70 @@ class HistoryVectorStore {
             visitDate: hit.document.visitDate,
             score: hit.score,
         }));
+    }
+
+    async hybridSearch(
+        queryText: string,
+        queryEmbedding: number[],
+        limit = 10
+    ): Promise<SearchResult[]> {
+        await this.init();
+
+        try {
+            const results = await search(this.db, {
+                mode: "hybrid",
+                term: queryText,
+                vector: {
+                    value: queryEmbedding,
+                    property: "embedding",
+                },
+                similarity: 0.1,
+                limit,
+                includeVectors: false,
+                hybridWeights: {
+                    text: 0.4,
+                    vector: 0.6,
+                },
+            });
+
+            return results.hits.map((hit: any) => ({
+                title: hit.document.title,
+                url: hit.document.url,
+                snippet: hit.document.snippet,
+                visitDate: hit.document.visitDate,
+                score: hit.score,
+            }));
+        } catch (err) {
+            console.warn("[HistoryVectorStore] Hybrid search failed, falling back to vector:", err);
+            return this.search(queryEmbedding, limit, 0.1);
+        }
+    }
+
+    async keywordSearch(
+        queryText: string,
+        limit = 10
+    ): Promise<SearchResult[]> {
+        await this.init();
+
+        try {
+            const results = await search(this.db, {
+                mode: "fulltext",
+                term: queryText,
+                limit,
+                includeVectors: false,
+            });
+
+            return results.hits.map((hit: any) => ({
+                title: hit.document.title,
+                url: hit.document.url,
+                snippet: hit.document.snippet,
+                visitDate: hit.document.visitDate,
+                score: hit.score,
+            }));
+        } catch (err) {
+            console.warn("[HistoryVectorStore] Keyword search failed:", err);
+            return [];
+        }
     }
 
     async getCount(): Promise<number> {

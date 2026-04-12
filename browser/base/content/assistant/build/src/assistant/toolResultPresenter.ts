@@ -123,9 +123,9 @@ function formatListTabs(message: string): string {
 function formatSearchResults(message: string): string {
   const parsed = safeParseJson(message) as
     | {
-        summary?: unknown;
-        results?: unknown;
-      }
+      summary?: unknown;
+      results?: unknown;
+    }
     | null;
   if (!parsed || typeof parsed !== "object") {
     return message;
@@ -172,7 +172,7 @@ function formatHistorySearchResults(message: string): string {
     const relevance = typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
     const visited = typeof row.visited === "string" ? ` — visited ${row.visited}` : "";
     return url
-      ? `${idx}**${title}**${relevance}${visited}\n  ${url}`
+      ? `${idx}[**${title}**](${url})${relevance}${visited}`
       : `${idx}**${title}**${relevance}${visited}`;
   });
   return `Here's what I found in your browsing history:\n\n${lines.join("\n\n")}`;
