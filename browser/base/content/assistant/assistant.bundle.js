@@ -73719,7 +73719,8 @@ Do NOT mention that you received page content or reference this instruction. Jus
     list_tab_groups: "info_retrieval",
     search_memory: "search",
     get_recent_search_results: "search",
-    web_search: "search"
+    web_search: "search",
+    search_history: "search"
   };
   function classifyToolAction(commandName) {
     return {
