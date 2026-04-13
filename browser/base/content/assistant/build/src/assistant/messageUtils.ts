@@ -70,6 +70,7 @@ const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {
   search_memory: "search",
   get_recent_search_results: "search",
   web_search: "search",
+  search_history: "search",
 };
 
 export function classifyToolAction(commandName: string): UsageMeta {

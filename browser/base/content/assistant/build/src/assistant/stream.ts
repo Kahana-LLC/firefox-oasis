@@ -140,6 +140,23 @@ export async function consumeAssistantGraphStream(
         continue;
       }
 
+      const kwargs = (msg as { additional_kwargs?: unknown }).additional_kwargs;
+      if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
+        const newMeta = kwargs.oasisUsageMeta as UsageMeta;
+        if (!lastUsageMeta) {
+          lastUsageMeta = newMeta;
+        } else {
+          lastUsageMeta = {
+            command_type: lastUsageMeta.command_type !== "other" && newMeta.command_type === "other"
+              ? lastUsageMeta.command_type : newMeta.command_type,
+            user_intent: lastUsageMeta.user_intent !== "other" && newMeta.user_intent === "other"
+              ? lastUsageMeta.user_intent : newMeta.user_intent,
+            input_tokens: newMeta.input_tokens ?? lastUsageMeta.input_tokens,
+            output_tokens: newMeta.output_tokens ?? lastUsageMeta.output_tokens,
+          };
+        }
+      }
+
       const msgName =
         typeof (msg as { name?: unknown }).name === "string"
           ? ((msg as { name?: string }).name ?? "")
@@ -170,11 +187,6 @@ export async function consumeAssistantGraphStream(
       );
       if (!sanitizedText) {
         continue;
-      }
-
-      const kwargs = (msg as { additional_kwargs?: unknown }).additional_kwargs;
-      if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
-        lastUsageMeta = kwargs.oasisUsageMeta as UsageMeta;
       }
 
       const newContent = `${sanitizedText}\n`;

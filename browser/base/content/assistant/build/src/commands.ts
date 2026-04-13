@@ -2322,6 +2322,20 @@ export class ConfirmActionCommand implements Command {
   }
 }
 
+function formatRelativeVisitTime(visitDate: number): string {
+  const diff = Date.now() - visitDate;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(visitDate).toLocaleDateString();
+}
+
 export class SearchHistorySemanticCommand implements Command {
   commandName = "search_history";
   description =
@@ -2357,9 +2371,15 @@ export class SearchHistorySemanticCommand implements Command {
     }
 
     try {
-      const results = await semanticHistorySearch.search(query, 5);
+      const results = await semanticHistorySearch.search(query, 10);
 
-      if (results.length === 0) {
+      const MIN_RELEVANCE = 0.3;
+      const MAX_RESULTS = 5;
+      const filtered = results
+        .filter(r => r.score >= MIN_RELEVANCE)
+        .slice(0, MAX_RESULTS);
+
+      if (filtered.length === 0) {
         let recent: Awaited<ReturnType<typeof fetchRecentHistory>> = [];
         try {
           recent = await fetchRecentHistory(50, false);
@@ -2381,12 +2401,12 @@ export class SearchHistorySemanticCommand implements Command {
         };
       }
 
-      const formatted = results.map((r, i) => ({
+      const formatted = filtered.map((r, i) => ({
         index: i + 1,
         title: r.title,
         url: r.url,
         relevance: Math.round(r.score * 100) + "%",
-        visited: new Date(r.visitDate).toLocaleDateString(),
+        visited: formatRelativeVisitTime(r.visitDate),
       }));
 
       return { message: JSON.stringify(formatted) };
