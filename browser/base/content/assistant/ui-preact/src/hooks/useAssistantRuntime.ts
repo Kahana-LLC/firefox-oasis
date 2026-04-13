@@ -280,6 +280,12 @@ export function useAssistantRuntime(params: {
 
       try {
         const result = await runStreamTurn(text, fromVoice ? "voice" : "text");
+        if (result) {
+          const st = oasisWindow.assistantBridge?.getOnboardingStatus?.();
+          if (st && !st.firstAiTurnComplete) {
+            oasisWindow.assistantBridge?.markFirstAiTurnComplete?.();
+          }
+        }
         if (fromVoice && ttsEnabled && result?.fullText?.trim()) {
           void speakText(result.fullText, result.aiMessageId);
         }

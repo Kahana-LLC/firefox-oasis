@@ -100,6 +100,17 @@ export interface SupabaseAuthLike {
   };
 }
 
+export type OnboardingStatus = {
+  guidedFlowEnabled: boolean;
+  migrationCompleted: boolean;
+  postMigrationTipShown: boolean;
+  checklistDismissed: boolean;
+  oauthAttemptStarted: boolean;
+  importOptOut: boolean;
+  firstAiTurnComplete: boolean;
+  welcomeCompleted: boolean;
+};
+
 export interface AssistantBridgeLike {
   openTab(url: string): boolean;
   getAssistantHistory?():
@@ -107,6 +118,12 @@ export interface AssistantBridgeLike {
     | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?(history: AssistantHistoryEntry[]): Promise<void>;
   getAuthState?(): AuthState;
+  getOnboardingStatus?(): OnboardingStatus | null;
+  markOauthSignInStarted?(): void;
+  dismissOnboardingChecklist?(): void;
+  markImportOptOut?(): void;
+  markFirstAiTurnComplete?(): void;
+  openImportBrowserData?(): boolean;
 }
 
 type MarkedLike = {

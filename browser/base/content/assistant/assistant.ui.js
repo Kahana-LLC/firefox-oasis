@@ -119,6 +119,132 @@
     getAuthState() {
       return window.oasisAuthState || { isAuthenticated: false, user: null };
     },
+    getOnboardingStatus() {
+      try {
+        return {
+          guidedFlowEnabled: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.guidedFlowEnabled",
+            true
+          ),
+          migrationCompleted: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.migrationCompleted",
+            false
+          ),
+          postMigrationTipShown: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.postMigrationTipShown",
+            false
+          ),
+          checklistDismissed: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.checklistDismissed",
+            false
+          ),
+          oauthAttemptStarted: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.oauthAttemptStarted",
+            false
+          ),
+          importOptOut: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.importOptOut",
+            false
+          ),
+          firstAiTurnComplete: Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.firstAiTurnComplete",
+            false
+          ),
+          welcomeCompleted: Services.prefs.getBoolPref(
+            "browser.oasis.welcome.completed",
+            false
+          ),
+        };
+      } catch (e) {
+        console.error("assistantBridge.getOnboardingStatus error", e);
+        return {
+          guidedFlowEnabled: true,
+          migrationCompleted: false,
+          postMigrationTipShown: false,
+          checklistDismissed: false,
+          oauthAttemptStarted: false,
+          importOptOut: false,
+          firstAiTurnComplete: false,
+          welcomeCompleted: false,
+        };
+      }
+    },
+    markOauthSignInStarted() {
+      try {
+        Services.prefs.setBoolPref(
+          "browser.oasis.onboarding.oauthAttemptStarted",
+          true
+        );
+      } catch (e) {
+        void e;
+      }
+    },
+    dismissOnboardingChecklist() {
+      try {
+        Services.prefs.setBoolPref(
+          "browser.oasis.onboarding.checklistDismissed",
+          true
+        );
+      } catch (e) {
+        void e;
+      }
+    },
+    markImportOptOut() {
+      try {
+        if (
+          Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.importOptOut",
+            false
+          )
+        ) {
+          return;
+        }
+        Services.prefs.setBoolPref(
+          "browser.oasis.onboarding.importOptOut",
+          true
+        );
+        window.dispatchEvent(new CustomEvent("oasis-onboarding-update"));
+      } catch (e) {
+        void e;
+      }
+    },
+    markFirstAiTurnComplete() {
+      try {
+        if (
+          Services.prefs.getBoolPref(
+            "browser.oasis.onboarding.firstAiTurnComplete",
+            false
+          )
+        ) {
+          return;
+        }
+        Services.prefs.setBoolPref(
+          "browser.oasis.onboarding.firstAiTurnComplete",
+          true
+        );
+        window.dispatchEvent(new CustomEvent("oasis-onboarding-update"));
+      } catch (e) {
+        void e;
+      }
+    },
+    openImportBrowserData() {
+      try {
+        const win = Services.wm.getMostRecentWindow("navigator:browser");
+        if (!win) {
+          return false;
+        }
+        const { MigrationUtils } = ChromeUtils.importESModule(
+          "resource:///modules/MigrationUtils.sys.mjs"
+        );
+        void MigrationUtils.showMigrationWizard(win, {
+          entrypoint: MigrationUtils.MIGRATION_ENTRYPOINTS.UNKNOWN,
+        });
+        return true;
+      } catch (e) {
+        console.error("assistantBridge.openImportBrowserData error", e);
+        return false;
+      }
+    },
   };
 })();
 
@@ -152,6 +278,7 @@ try {
       } catch (e) {
         console.error("window.setAssistantHistory error", e);
       }
+      return undefined;
     };
   }
 } catch (e) {
@@ -163,31 +290,18 @@ const MIXPANEL_TOKEN = "4a23d4890cf107ac290b2d5e878e2561";
 // --- Dynamic Loader for Preact Bundle ---
 (function () {
   try {
-    function getBase() {
-      const s = document.currentScript;
-      if (s && s.src) {
-        return s.src.replace(/\/[^/]*$/, "/");
-      }
-      if (location && location.href) {
-        return location.href.replace(/\/[^/]*$/, "/");
-      }
-      return "";
-    }
+    const ASSISTANT_CONTENT_BASE = "chrome://browser/content/assistant/";
+    const bundleSrc = ASSISTANT_CONTENT_BASE + "dist/assistant.ui.bundle.js";
+    const cssSrc = ASSISTANT_CONTENT_BASE + "dist/assistant.ui.bundle.css";
 
-    const base = getBase();
-    const bundleSrc = base + "dist/assistant.ui.bundle.js";
-    const cssSrc = base + "dist/assistant.ui.bundle.css";
-
-    // Load CSS
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = cssSrc;
     document.head.appendChild(link);
 
-    // Load Bundle
     const script = document.createElement("script");
     script.src = bundleSrc;
-    script.defer = true;
+    script.async = false;
     script.onerror = e =>
       console.error("assistant: Failed to load Preact UI bundle", e);
     document.head.appendChild(script);
@@ -355,18 +469,23 @@ function dispatchAssistantAuthError(message) {
 
 function openOasisWelcomeIfNeededAfterAssistantAuth() {
   try {
-    const { OasisWelcomeManager } = ChromeUtils.importESModule(
-      "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs"
-    );
-    if (!OasisWelcomeManager?.shouldShowWelcome?.()) {
+    const { OasisWelcomeManager, navigatePostAuthLanding } =
+      ChromeUtils.importESModule(
+        "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs"
+      );
+    const win = Services.wm.getMostRecentWindow("navigator:browser");
+    if (!win) {
       return;
     }
-    const win = Services.wm.getMostRecentWindow("navigator:browser");
-    if (win) {
+    if (OasisWelcomeManager?.shouldShowAboutWelcomePage?.()) {
       OasisWelcomeManager.openWelcomePage(win);
+      return;
+    }
+    if (typeof navigatePostAuthLanding === "function") {
+      navigatePostAuthLanding(win);
     }
   } catch (e) {
-    console.warn("Assistant: could not open Oasis welcome after sign-in:", e);
+    console.warn("Assistant: could not navigate after sign-in:", e);
   }
 }
 
@@ -431,10 +550,8 @@ async function securelySaveSession(session) {
       null,
       LOGIN_REALM
     );
-    let existingLogin = null;
     for (const login of logins) {
       if (login.username === LOGIN_USERNAME) {
-        existingLogin = login;
         Services.logins.removeLogin(login);
       }
     }

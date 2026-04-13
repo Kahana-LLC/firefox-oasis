@@ -1,11 +1,12 @@
-import { h, Fragment } from 'preact';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { h, createRef } from 'preact';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { VoiceAuraVisualizer } from './components/VoiceAuraVisualizer';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatTimeline } from './components/ChatTimeline';
 import { Composer } from './components/Composer';
+import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
@@ -398,9 +399,21 @@ function VoiceAgentOverlay({ onClose }: { onClose: () => void }) {
   );
 }
 
+function initialAssistantView(): 'chat' | 'auth' {
+  try {
+    if (oasisWindow.oasisAuthState?.isAuthenticated) {
+      return 'chat';
+    }
+  } catch {
+    // ignore
+  }
+  return 'auth';
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ isAuthenticated: false, user: null });
-  const [view, setView] = useState<'chat' | 'auth'>('chat');
+  const [view, setView] = useState<'chat' | 'auth'>(() => initialAssistantView());
+  const composerInputRef = createRef<HTMLTextAreaElement>();
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
@@ -517,6 +530,21 @@ export function App() {
 
   const userEmail = userEmailOf(auth.user);
 
+  const onboardingNavigate = useMemo(
+    () => ({
+      goAuth: () => setView('auth'),
+      goChat: () => setView('chat'),
+      focusComposer: () => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            composerInputRef.current?.focus();
+          });
+        });
+      },
+    }),
+    []
+  );
+
   return (
     <div className="assistant-container">
       {voiceAgentOpen && (
@@ -536,6 +564,64 @@ export function App() {
 
       <Header auth={auth} onShowAuth={() => setView('auth')} />
 
+      <div className="assistant-main">
+        <div className="assistant-scroll">
+          {view === 'auth' ? (
+            <Auth onSuccess={() => setView('chat')} onCancel={() => setView('chat')} />
+          ) : (
+            <div className="assistant-chat-stack">
+              {auth.isAuthenticated && userEmail && bannerVisible && (
+                <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
+              )}
+
+              <ChatTimeline
+                messages={runtime.messages}
+                busy={runtime.busy}
+                activeToolLabel={runtime.activeToolAction?.label || null}
+                onLinkClick={handleLinkClick}
+                speakingMsgId={runtime.speakingMsgId}
+                onTtsClick={handleTtsFromTimeline}
+              />
+
+              <Composer
+                input={runtime.input}
+                isRecording={runtime.isRecording}
+                busy={runtime.busy}
+                isAuthenticated={auth.isAuthenticated}
+                ttsEnabled={runtime.ttsEnabled}
+                inputRef={composerInputRef}
+                onInput={runtime.setInput}
+                onKeyDown={runtime.handleKeyDown}
+                onSend={() => {
+                  void runtime.send();
+                }}
+                onToggleRecording={() => {
+                  void runtime.toggleRecording();
+                }}
+                onResetSession={() => {
+                  void runtime.resetAssistantSession();
+                }}
+                onFeedback={handleFeedback}
+                onToggleTts={() => {
+                  if (runtime.speakingMsgId) {
+                    runtime.stopSpeaking();
+                  }
+                  runtime.toggleTtsEnabled();
+                }}
+                onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
+                onRequestSignIn={() => setView('auth')}
+              />
+            </div>
+          )}
+        </div>
+
+        <OnboardingChecklist
+          auth={auth}
+          view={view}
+          onNavigate={onboardingNavigate}
+        />
+      </div>
+
       <div
         onPointerDown={handleResizeStart}
         style={{
@@ -554,52 +640,6 @@ export function App() {
           <path d="M10 18L18 10" stroke="#000" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </div>
-
-      {view === 'auth' ? (
-        <Auth onSuccess={() => setView('chat')} onCancel={() => setView('chat')} />
-      ) : (
-        <Fragment>
-          {auth.isAuthenticated && userEmail && bannerVisible && (
-            <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
-          )}
-
-          <ChatTimeline
-            messages={runtime.messages}
-            busy={runtime.busy}
-            activeToolLabel={runtime.activeToolAction?.label || null}
-            onLinkClick={handleLinkClick}
-            speakingMsgId={runtime.speakingMsgId}
-            onTtsClick={handleTtsFromTimeline}
-          />
-
-          <Composer
-            input={runtime.input}
-            isRecording={runtime.isRecording}
-            busy={runtime.busy}
-            isAuthenticated={auth.isAuthenticated}
-            ttsEnabled={runtime.ttsEnabled}
-            onInput={runtime.setInput}
-            onKeyDown={runtime.handleKeyDown}
-            onSend={() => {
-              void runtime.send();
-            }}
-            onToggleRecording={() => {
-              void runtime.toggleRecording();
-            }}
-            onResetSession={() => {
-              void runtime.resetAssistantSession();
-            }}
-            onFeedback={handleFeedback}
-            onToggleTts={() => {
-              if (runtime.speakingMsgId) {
-                runtime.stopSpeaking();
-              }
-              runtime.toggleTtsEnabled();
-            }}
-            onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
-          />
-        </Fragment>
-      )}
     </div>
   );
 }

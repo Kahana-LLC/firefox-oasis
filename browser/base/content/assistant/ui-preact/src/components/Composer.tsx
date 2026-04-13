@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import type { Ref } from 'preact';
 
 export function Composer({
   input,
@@ -6,6 +7,7 @@ export function Composer({
   busy,
   isAuthenticated,
   ttsEnabled,
+  inputRef,
   onInput,
   onKeyDown,
   onSend,
@@ -14,12 +16,14 @@ export function Composer({
   onFeedback,
   onToggleTts,
   onOpenVoiceAgent,
+  onRequestSignIn,
 }: {
   input: string;
   isRecording: boolean;
   busy: boolean;
   isAuthenticated: boolean;
   ttsEnabled: boolean;
+  inputRef?: Ref<HTMLTextAreaElement>;
   onInput: (value: string) => void;
   onKeyDown: (event: KeyboardEvent) => void;
   onSend: () => void;
@@ -28,6 +32,7 @@ export function Composer({
   onFeedback: () => void;
   onToggleTts: () => void;
   onOpenVoiceAgent: () => void;
+  onRequestSignIn?: () => void;
 }) {
   return (
     <div className="input-bar">
@@ -42,23 +47,36 @@ export function Composer({
           </span>
         </div>
       )}
-      <textarea
-        className="input-field"
-        value={isRecording ? 'Listening… (tap mic again to stop)' : input}
-        onInput={(event: Event) => {
-          const target = event.currentTarget as HTMLTextAreaElement;
-          onInput(target.value);
-        }}
-        onKeyDown={onKeyDown}
-        placeholder={isAuthenticated ? 'Ask me anything...' : 'Please sign in...'}
-        disabled={busy || !isAuthenticated || isRecording}
-        rows={1}
-        style={{
-          minHeight: '24px',
-          fontSize: '15px',
-          color: '#333',
-        }}
-      />
+      {!isAuthenticated && !isRecording ? (
+        <button
+          type="button"
+          className="input-field input-field-signin-prompt"
+          onClick={() => onRequestSignIn?.()}
+          disabled={busy}
+          aria-label="Sign in or create an account to use the assistant"
+        >
+          Please sign in...
+        </button>
+      ) : (
+        <textarea
+          ref={inputRef}
+          className="input-field"
+          value={isRecording ? 'Listening… (tap mic again to stop)' : input}
+          onInput={(event: Event) => {
+            const target = event.currentTarget as HTMLTextAreaElement;
+            onInput(target.value);
+          }}
+          onKeyDown={onKeyDown}
+          placeholder={isAuthenticated ? 'Ask me anything...' : 'Please sign in...'}
+          disabled={busy || !isAuthenticated || isRecording}
+          rows={1}
+          style={{
+            minHeight: '24px',
+            fontSize: '15px',
+            color: '#333',
+          }}
+        />
+      )}
 
       <div className="input-row" style={{ alignItems: 'center', justifyContent: 'space-between', paddingLeft: '8px' }}>
         <button

@@ -1,7 +1,9 @@
-import { h, Fragment } from 'preact';
+import { h } from 'preact';
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { OasisWindow } from '../types';
+
+const oasisWin = window as unknown as OasisWindow;
 
 interface AuthProps {
   onSuccess: () => void;
@@ -47,6 +49,11 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
+
+  useEffect(() => {
+    setShowEmailPassword(false);
+  }, [mode]);
 
   useEffect(() => {
     const handleAuthError = (event: Event) => {
@@ -75,6 +82,11 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     setError(null);
     setSuccessMessage(null);
     setOauthLoading(true);
+    try {
+      oasisWin.assistantBridge?.markOauthSignInStarted?.();
+    } catch {
+      // ignore
+    }
 
     const authService = (window as any).supabaseAuth;
     if (!authService) {
@@ -87,8 +99,9 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     try {
       const result = await authService[providerMethod]();
       const message = result?.error?.message || '';
-      const prefix = ['GOOGLE_OAUTH_URL:', 'AZURE_OAUTH_URL:', 'APPLE_OAUTH_URL:']
-        .find(value => message.startsWith(value));
+      const prefix = ['GOOGLE_OAUTH_URL:', 'AZURE_OAUTH_URL:', 'APPLE_OAUTH_URL:'].find(
+        value => message.startsWith(value)
+      );
 
       if (prefix) {
         const url = message.slice(prefix.length);
@@ -96,7 +109,9 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
         if (!opened) {
           setError('Failed to open the OAuth tab. Please try again.');
         } else {
-          setSuccessMessage('Finish sign-in in the opened tab. Oasis will complete sign-in automatically.');
+          setSuccessMessage(
+            'Finish sign-in in the opened tab. Oasis will complete sign-in automatically.'
+          );
         }
         setOauthLoading(false);
         return;
@@ -105,7 +120,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
       if (result?.error) {
         const errorMessage = authService.handleAuthError
           ? authService.handleAuthError(result.error)
-          : (result.error.message || "An error occurred");
+          : result.error.message || 'An error occurred';
         setError(errorMessage);
       } else if (result?.user) {
         onSuccess();
@@ -113,7 +128,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     } catch (err: any) {
       const errorMessage = authService.handleAuthError
         ? authService.handleAuthError(err)
-        : (err.message || "An error occurred");
+        : err.message || 'An error occurred';
       setError(errorMessage);
     } finally {
       oauthStartInFlightRef.current = false;
@@ -129,7 +144,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
 
     const authService = (window as OasisWindow).supabaseAuth;
     if (!authService) {
-      setError("Auth service not available");
+      setError('Auth service not available');
       setLoading(false);
       return;
     }
@@ -137,49 +152,40 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     try {
       let result: Awaited<ReturnType<typeof authService.signUp>>;
       if (mode === 'signup') {
-        // wrapper: signUp(email, password, name)
         result = await authService.signUp(email, password);
       } else if (mode === 'signin') {
-        // wrapper: signInWithEmail(email, password)
         result = await authService.signInWithEmail(email, password);
       } else if (mode === 'forgotPassword') {
         result = await authService.resetPasswordForEmail(email);
         if (!result.error) {
-            setSuccessMessage("Password reset email sent. Please check your inbox.");
-            setLoading(false);
-            return;
+          setSuccessMessage('Password reset email sent. Please check your inbox.');
+          setLoading(false);
+          return;
         }
       }
 
       const { user, error: apiError } = result;
 
       if (apiError) {
-        const errorMessage = authService.handleAuthError 
-          ? authService.handleAuthError(apiError) 
-          : (apiError.message || "An error occurred");
+        const errorMessage = authService.handleAuthError
+          ? authService.handleAuthError(apiError)
+          : apiError.message || 'An error occurred';
         setError(errorMessage);
         return;
       }
 
       if (user) {
-        // Successful
         onSuccess();
       } else if (mode === 'signup') {
-        // If no user returned but no error, maybe confirmation needed?
-        // But wrapper usually returns user if successful.
-        // Let's assume if no error, it's okay or check for session?
-        // The wrapper logs "Sign up successful for user:" so user should be there.
-        // If confirmation is required, Supabase might return user with identities but no session?
-        // Let's stick to checking user.
-        setError("Please check your email for a confirmation link.");
+        setError('Please check your email for a confirmation link.');
       }
     } catch (err: unknown) {
       const authService = (window as OasisWindow).supabaseAuth;
       const errorMessage = authService?.handleAuthError
         ? authService.handleAuthError(err)
-        : err && typeof err === "object" && "message" in err
-          ? String((err as { message?: unknown }).message || "An error occurred")
-          : "An error occurred";
+        : err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: unknown }).message || 'An error occurred')
+          : 'An error occurred';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -187,57 +193,70 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
   };
 
   const getTitle = () => {
-      switch (mode) {
-          case 'signup': return 'Create Account';
-          case 'signin': return 'Welcome Back';
-          case 'forgotPassword': return 'Reset Password';
-      }
+    switch (mode) {
+      case 'signup':
+        return 'Create Account';
+      case 'signin':
+        return 'Welcome Back';
+      case 'forgotPassword':
+        return 'Reset Password';
+    }
   };
 
   const getSubtitle = () => {
-      switch (mode) {
-          case 'signup': return 'Sign up to sync your tabs and history.';
-          case 'signin': return 'Sign in to your Oasis account.';
-          case 'forgotPassword': return 'Enter your email to receive a reset link.';
-      }
+    switch (mode) {
+      case 'signup':
+        return null;
+      case 'signin':
+        return 'Sign in to your Oasis account.';
+      case 'forgotPassword':
+        return 'Enter your email to receive a reset link.';
+    }
   };
 
   const getButtonText = () => {
-      if (loading) return 'Processing...';
-      switch (mode) {
-          case 'signup': return 'Sign Up';
-          case 'signin': return 'Sign In';
-          case 'forgotPassword': return 'Send Reset Link';
-      }
+    if (loading) return 'Processing...';
+    switch (mode) {
+      case 'signup':
+        return 'Sign Up';
+      case 'signin':
+        return 'Sign In';
+      case 'forgotPassword':
+        return 'Send Reset Link';
+    }
+  };
+
+  const subtitle = getSubtitle();
+  const showFormFields = mode === 'forgotPassword' || showEmailPassword;
+
+  const oauthButtonStyle: JSX.CSSProperties = {
+    flex: 1,
+    height: '44px',
+    borderRadius: '999px',
+    border: '1px solid #d9dfc8',
+    background: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: oauthLoading ? 'wait' : 'pointer',
+    outlineOffset: '2px',
   };
 
   return (
-    <div style={{ 
-      flex: 1, 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      padding: '24px',
-      gap: '24px'
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#7A9200', margin: '0 0 8px 0' }}>
-          {getTitle()}
-        </h2>
-        <p style={{ color: '#666', margin: 0 }}>
-          {getSubtitle()}
-        </p>
+    <div className="auth-screen">
+      <div className="auth-screen-header">
+        <h2 className="auth-screen-title">{getTitle()}</h2>
+        {subtitle ? <p className="auth-screen-subtitle">{subtitle}</p> : null}
       </div>
 
       {mode !== 'forgotPassword' && (
-        <div style={{ width: '100%', maxWidth: '320px', display: 'flex', gap: '12px' }}>
+        <div className="auth-oauth-row">
           <button
             type="button"
             aria-label="Continue with Google"
             onClick={() => handleOAuthStart('signInWithGoogle')}
             disabled={oauthLoading}
-            style={{ flex: 1, height: '44px', borderRadius: '999px', border: '1px solid #d9dfc8', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: oauthLoading ? 'wait' : 'pointer', outlineOffset: '2px' }}
+            style={oauthButtonStyle}
           >
             <GoogleIcon />
           </button>
@@ -246,7 +265,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
             aria-label="Continue with Apple"
             onClick={() => handleOAuthStart('signInWithApple')}
             disabled={oauthLoading}
-            style={{ flex: 1, height: '44px', borderRadius: '999px', border: '1px solid #d9dfc8', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: oauthLoading ? 'wait' : 'pointer', outlineOffset: '2px' }}
+            style={oauthButtonStyle}
           >
             <AppleIcon />
           </button>
@@ -255,139 +274,124 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
             aria-label="Continue with Microsoft"
             onClick={() => handleOAuthStart('signInWithAzure')}
             disabled={oauthLoading}
-            style={{ flex: 1, height: '44px', borderRadius: '999px', border: '1px solid #d9dfc8', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: oauthLoading ? 'wait' : 'pointer', outlineOffset: '2px' }}
+            style={oauthButtonStyle}
           >
             <MicrosoftIcon />
           </button>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500, color: '#333' }}>Email</label>
-          <input 
-            type="email" 
-            value={email}
-            onInput={(e: JSX.TargetedEvent<HTMLInputElement>) => setEmail(e.currentTarget.value)}
-            required
-            className="input-field" 
-            style={{ width: '100%', boxSizing: 'border-box', background: 'white', border: '1px solid #e0e0e0' }}
-          />
-        </div>
+      {mode !== 'forgotPassword' && !showEmailPassword && (
+        <button
+          type="button"
+          className="auth-email-password-trigger"
+          onClick={() => setShowEmailPassword(true)}
+        >
+          Email and password
+        </button>
+      )}
 
-        {mode !== 'forgotPassword' && (
-          <div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '6px',
-              }}
-            >
-              <label
-                style={{ fontSize: '13px', fontWeight: 500, color: '#333' }}
-              >
-                Password
-              </label>
-              {mode === 'signin' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('forgotPassword');
-                    setError(null);
-                    setSuccessMessage(null);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#7A9200',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  Forgot Password?
-                </button>
-              )}
-            </div>
+      {showFormFields && (
+        <form className="auth-form-minimal" onSubmit={handleSubmit}>
+          <div className="auth-field-minimal">
+            <label className="auth-field-minimal-label" htmlFor="auth-email-input">
+              email
+            </label>
             <input
-              type="password"
-              value={password}
+              id="auth-email-input"
+              type="email"
+              value={email}
               onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
-                setPassword(e.currentTarget.value)
+                setEmail(e.currentTarget.value)
               }
               required
-              className="input-field"
-              style={{
-                width: '100%',
-                boxSizing: 'border-box',
-                background: 'white',
-                border: '1px solid #e0e0e0',
-              }}
+              className="auth-field-minimal-input"
+              autoComplete="email"
             />
           </div>
-        )}
 
-        {error && (
-          <div style={{ color: '#d32f2f', fontSize: '13px', background: '#ffebee', padding: '8px', borderRadius: '8px' }}>
-            {error}
-          </div>
-        )}
+          {mode !== 'forgotPassword' && (
+            <div className="auth-field-minimal">
+              <div className="auth-password-label-row">
+                <label className="auth-field-minimal-label" htmlFor="auth-password-input">
+                  password
+                </label>
+                {mode === 'signin' && (
+                  <button
+                    type="button"
+                    className="auth-link-inline"
+                    onClick={() => {
+                      setMode('forgotPassword');
+                      setError(null);
+                      setSuccessMessage(null);
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <input
+                id="auth-password-input"
+                type="password"
+                value={password}
+                onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
+                  setPassword(e.currentTarget.value)
+                }
+                required
+                className="auth-field-minimal-input"
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              />
+            </div>
+          )}
 
-        {successMessage && (
-          <div style={{ color: '#2e7d32', fontSize: '13px', background: '#e8f5e9', padding: '8px', borderRadius: '8px' }}>
-            {successMessage}
-          </div>
-        )}
+          {error && (
+            <div className="auth-message auth-message-error">{error}</div>
+          )}
 
-        <button 
-          type="submit" 
-          disabled={loading}
-          style={{
-            background: '#7A9200',
-            color: 'white',
-            border: 'none',
-            padding: '12px',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: loading ? 'wait' : 'pointer',
-            opacity: loading ? 0.7 : 1,
-            marginTop: '8px'
-          }}
-        >
-          {getButtonText()}
-        </button>
-      </form>
+          {successMessage && (
+            <div className="auth-message auth-message-success">{successMessage}</div>
+          )}
 
-      <div style={{ fontSize: '13px', color: '#666' }}>
+          <button type="submit" className="auth-submit-btn" disabled={loading}>
+            {getButtonText()}
+          </button>
+        </form>
+      )}
+
+      <div className="auth-footer-links">
         {mode === 'forgotPassword' ? (
-             <button 
-             onClick={() => { setMode('signin'); setError(null); setSuccessMessage(null); }}
-             style={{ background: 'none', border: 'none', color: '#7A9200', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-           >
-             Back to Sign In
-           </button>
+          <button
+            type="button"
+            className="auth-link-standalone"
+            onClick={() => {
+              setMode('signin');
+              setError(null);
+              setSuccessMessage(null);
+            }}
+          >
+            Back to Sign In
+          </button>
         ) : (
-            <>
-                {mode === 'signup' ? "Already have an account? " : "Don't have an account? "}
-                <button 
-                onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); setSuccessMessage(null); }}
-                style={{ background: 'none', border: 'none', color: '#7A9200', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-                >
-                {mode === 'signup' ? 'Sign In' : 'Sign Up'}
-                </button>
-            </>
+          <>
+            {mode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
+            <button
+              type="button"
+              className="auth-link-inline"
+              onClick={() => {
+                setMode(mode === 'signup' ? 'signin' : 'signup');
+                setError(null);
+                setSuccessMessage(null);
+              }}
+            >
+              {mode === 'signup' ? 'Sign In' : 'Sign Up'}
+            </button>
+          </>
         )}
       </div>
 
-       <button 
-          onClick={onCancel}
-          style={{ background: 'none', border: 'none', color: '#999', fontSize: '13px', cursor: 'pointer', padding: 0 }}
-        >
-          Cancel
-        </button>
+      <button type="button" className="auth-cancel" onClick={onCancel}>
+        Cancel
+      </button>
     </div>
   );
 }

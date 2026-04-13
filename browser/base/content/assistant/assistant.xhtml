@@ -1,19 +1,43 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at https://mozilla.org/MPL/2.0/. -->
+
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta charset="utf-8"/>
-  <title>Assistant</title>
-</head>
-<body style="margin: 0; padding: 0; background: transparent; overflow: hidden;">
-  <!-- Root for Preact App -->
-  <div id="assistant-preact-root"></div>
+  <head>
+    <meta charset="utf-8" />
+    <title>Assistant</title>
+  </head>
+  <body
+    style="margin: 0; padding: 0; background: transparent; overflow: hidden"
+  >
+    <div
+      id="assistant-ui-loading"
+      style="
+        box-sizing: border-box;
+        min-height: 120px;
+        padding: 16px;
+        font:
+          14px system-ui,
+          -apple-system,
+          sans-serif;
+        color: #5b6b4b;
+        background: #f8faf2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      Loading assistant…
+    </div>
+    <div id="assistant-preact-root"></div>
 
-  <!-- Core Services -->
-  <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
-  <script src="chrome://browser/content/assistant/auth-guard.js"></script>
-  
-  <!-- UI Shim & Loader -->
-  <script src="chrome://browser/content/assistant/assistant.ui.js"></script>
-</body>
+    <!-- Core Services -->
+    <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
+    <script src="chrome://browser/content/assistant/auth-guard.js"></script>
+
+    <!-- UI Shim & Loader -->
+    <script src="chrome://browser/content/assistant/assistant.ui.js"></script>
+  </body>
 </html>
