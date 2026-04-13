@@ -47,7 +47,16 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     id: "list.window.tabs",
     family: "list",
     commandName: "list_tabs",
-    phrases: ["list tabs", "show tabs", "list my tabs"],
+    phrases: [
+      "list tabs",
+      "show tabs",
+      "list my tabs",
+      "list my open tabs",
+      "what tabs do i have open",
+      "which tabs are open",
+      "what tabs are open",
+      "tabs do i have open",
+    ],
     condition: context => context.hasOpenTabs,
   },
   {

@@ -199,7 +199,7 @@ export function Feedback({ messageId, onClose }: FeedbackProps) {
           <div className="feedback-input-container">
             <textarea 
               className="feedback-textarea"
-              placeholder="Ask me anything..."
+              placeholder="Add optional details about your feedback…"
               value={comment}
               onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => setComment(e.currentTarget.value)}
             />

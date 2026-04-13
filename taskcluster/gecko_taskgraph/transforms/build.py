@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 transforms = TransformSequence()
 
 
+def _head_repo_is_oasis_fork(config):
+    url = config.params.get("head_repository") or ""
+    return "oasis" in url.lower()
+
+
 @transforms.add
 def set_defaults(config, jobs):
     """Set defaults, including those that differ per worker implementation"""
@@ -271,6 +276,8 @@ def add_signing_artifacts(config, jobs):
         elif "mozilla-central" == config.params["project"]:
             # Nightly
             browser_entitlement = "nightly.browser"
+        elif _head_repo_is_oasis_fork(config):
+            browser_entitlement = "oasis.browser"
         else:
             # Release and Beta
             browser_entitlement = "firefox.browser"

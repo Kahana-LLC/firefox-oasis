@@ -19,6 +19,10 @@ tags
 compile_commands.json
 *.env
 
+# Local Apple signing assets (never commit)
+/developer_id.p12
+/p12_password.txt
+
 # emacs backup files in any directory.
 # lint-ignore-next-line: syntax-difference
 [#]*#

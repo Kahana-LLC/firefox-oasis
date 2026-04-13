@@ -581,39 +581,45 @@ export function App() {
                 onLinkClick={handleLinkClick}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
-              />
-
-              <Composer
-                input={runtime.input}
-                isRecording={runtime.isRecording}
-                busy={runtime.busy}
                 isAuthenticated={auth.isAuthenticated}
-                ttsEnabled={runtime.ttsEnabled}
-                inputRef={composerInputRef}
-                onInput={runtime.setInput}
-                onKeyDown={runtime.handleKeyDown}
-                onSend={() => {
-                  void runtime.send();
+                onStarterPrompt={text => {
+                  void runtime.send(text);
                 }}
-                onToggleRecording={() => {
-                  void runtime.toggleRecording();
-                }}
-                onResetSession={() => {
-                  void runtime.resetAssistantSession();
-                }}
-                onFeedback={handleFeedback}
-                onToggleTts={() => {
-                  if (runtime.speakingMsgId) {
-                    runtime.stopSpeaking();
-                  }
-                  runtime.toggleTtsEnabled();
-                }}
-                onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
-                onRequestSignIn={() => setView('auth')}
               />
             </div>
           )}
         </div>
+
+        {view !== 'auth' && (
+          <Composer
+            input={runtime.input}
+            isRecording={runtime.isRecording}
+            busy={runtime.busy}
+            isAuthenticated={auth.isAuthenticated}
+            ttsEnabled={runtime.ttsEnabled}
+            inputRef={composerInputRef}
+            onInput={runtime.setInput}
+            onKeyDown={runtime.handleKeyDown}
+            onSend={() => {
+              void runtime.send();
+            }}
+            onToggleRecording={() => {
+              void runtime.toggleRecording();
+            }}
+            onResetSession={() => {
+              void runtime.resetAssistantSession();
+            }}
+            onFeedback={handleFeedback}
+            onToggleTts={() => {
+              if (runtime.speakingMsgId) {
+                runtime.stopSpeaking();
+              }
+              runtime.toggleTtsEnabled();
+            }}
+            onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
+            onRequestSignIn={() => setView('auth')}
+          />
+        )}
 
         <OnboardingChecklist
           auth={auth}

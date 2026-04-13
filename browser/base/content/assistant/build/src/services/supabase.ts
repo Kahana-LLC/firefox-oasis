@@ -491,6 +491,73 @@ export default class SupabaseAuth {
     return user !== null;
   }
 
+  private normalizeOAuthCallbackPayload(authData: any): {
+    code?: string;
+    access_token?: string;
+    refresh_token?: string;
+  } {
+    const out: {
+      code?: string;
+      access_token?: string;
+      refresh_token?: string;
+    } = {};
+    if (!authData || typeof authData !== "object") {
+      return out;
+    }
+    if (typeof authData.code === "string" && authData.code) {
+      out.code = authData.code;
+    }
+    if (authData.access_token && authData.refresh_token) {
+      out.access_token = authData.access_token;
+      out.refresh_token = authData.refresh_token;
+      return out;
+    }
+
+    const tryParseHash = (raw: string) => {
+      const h = raw.replace(/^#/, "");
+      const params = new URLSearchParams(h);
+      const at = params.get("access_token");
+      const rt = params.get("refresh_token");
+      if (at && rt) {
+        out.access_token = at;
+        out.refresh_token = rt;
+        return true;
+      }
+      return false;
+    };
+
+    const urlLike =
+      typeof authData.redirect_url === "string"
+        ? authData.redirect_url
+        : typeof authData.redirectUrl === "string"
+          ? authData.redirectUrl
+          : typeof authData.url === "string"
+            ? authData.url
+            : typeof authData.callback_url === "string"
+              ? authData.callback_url
+              : null;
+    if (urlLike?.includes("#")) {
+      const frag = urlLike.split("#")[1];
+      if (frag) {
+        tryParseHash(frag);
+      }
+    }
+    if (
+      !out.access_token &&
+      typeof authData.fragment === "string" &&
+      authData.fragment
+    ) {
+      tryParseHash(authData.fragment);
+    }
+    if (authData.access_token) {
+      out.access_token = authData.access_token;
+    }
+    if (authData.refresh_token) {
+      out.refresh_token = authData.refresh_token;
+    }
+    return out;
+  }
+
   /**
    * Handle OAuth callback data (similar to Electron's handleOAuthRedirectCallback)
    * Processes auth data from manual input and exchanges it for a session
@@ -502,13 +569,32 @@ export default class SupabaseAuth {
     try {
       console.log(`[Oasis OAuth][${flowId}] Handling callback data:`, authData);
 
+      const normalized = this.normalizeOAuthCallbackPayload(authData);
+      if (
+        !normalized.code &&
+        !(normalized.access_token && normalized.refresh_token)
+      ) {
+        const safeKeys = Object.keys(authData || {}).filter(
+          k => !/^(access_token|refresh_token|provider_token)$/i.test(k)
+        );
+        console.warn(
+          `[Oasis OAuth][${flowId}] Incomplete handoff (no code or tokens). Keys: ${safeKeys.join(", ")}`
+        );
+        this.clearActiveOAuthLaunch(flowId);
+        return {
+          success: false,
+          error:
+            "Complete sign-in in the browser window that opened, then return here.",
+        };
+      }
+
       // Handle auth code exchange (preferred method)
-      if (authData.code) {
+      if (normalized.code) {
         console.log(
           `[Oasis OAuth][${flowId}] Exchanging auth code for session...`
         );
         const { data, error } = await this.supabase.auth.exchangeCodeForSession(
-          authData.code
+          normalized.code
         );
         if (error) {
           console.error(
@@ -525,6 +611,7 @@ export default class SupabaseAuth {
 
           // Ensure user profile exists
           if (data.user) {
+            await this.rpcEnsureUserProfile(data.user);
             const existingProfile = await this.getUserProfile();
             if (!existingProfile) {
               await this.createUserProfile(
@@ -547,11 +634,11 @@ export default class SupabaseAuth {
       }
 
       // Handle direct token setting (fallback)
-      if (authData.access_token && authData.refresh_token) {
+      if (normalized.access_token && normalized.refresh_token) {
         console.log(`[Oasis OAuth][${flowId}] Setting session from tokens...`);
         const { data, error } = await this.supabase.auth.setSession({
-          access_token: authData.access_token,
-          refresh_token: authData.refresh_token,
+          access_token: normalized.access_token,
+          refresh_token: normalized.refresh_token,
         });
         if (error) {
           console.error(
@@ -568,6 +655,7 @@ export default class SupabaseAuth {
 
           // Ensure user profile exists
           if (data.user) {
+            await this.rpcEnsureUserProfile(data.user);
             const existingProfile = await this.getUserProfile();
             if (!existingProfile) {
               await this.createUserProfile(
@@ -589,9 +677,15 @@ export default class SupabaseAuth {
         }
       }
 
-      console.warn(`[Oasis OAuth][${flowId}] No valid OAuth data found`);
+      console.warn(
+        `[Oasis OAuth][${flowId}] No valid OAuth data after normalization`
+      );
       this.clearActiveOAuthLaunch(flowId);
-      return { success: false, error: "No valid OAuth data" };
+      return {
+        success: false,
+        error:
+          "Complete sign-in in the browser window that opened, then return here.",
+      };
     } catch (error) {
       console.error(
         `[Oasis OAuth][${flowId}] Error handling callback data:`,
@@ -656,6 +750,7 @@ export default class SupabaseAuth {
 
     // Handle session creation/destruction
     if (event === "SIGNED_IN" && user) {
+      await this.rpcEnsureUserProfile(user);
       await this.trackSessionForUser(user.id);
     } else if (event === "SIGNED_OUT" && this.currentSession) {
       this.lastTrackedSessionUserId = null;
@@ -663,6 +758,24 @@ export default class SupabaseAuth {
       this.currentSession = null;
     } else if (event === "SIGNED_OUT") {
       this.lastTrackedSessionUserId = null;
+    }
+  }
+
+  private async rpcEnsureUserProfile(user: User): Promise<void> {
+    try {
+      const meta = user.user_metadata as Record<string, unknown> | undefined;
+      const fullName =
+        typeof meta?.full_name === "string" ? meta.full_name : undefined;
+      const metaName = typeof meta?.name === "string" ? meta.name : undefined;
+      const { error } = await this.supabase.rpc("ensure_user_profile", {
+        p_email: user.email ?? "",
+        p_name: fullName ?? metaName ?? null,
+      });
+      if (error) {
+        console.warn("ensure_user_profile RPC:", error.message);
+      }
+    } catch (error) {
+      console.warn("ensure_user_profile RPC failed:", error);
     }
   }
 
@@ -838,3 +951,7 @@ export default class SupabaseAuth {
 
 // Export singleton instance
 export const supabaseAuth = SupabaseAuth.getInstance();
+if (typeof window !== "undefined") {
+  (window as unknown as { supabaseAuth: typeof supabaseAuth }).supabaseAuth =
+    supabaseAuth;
+}

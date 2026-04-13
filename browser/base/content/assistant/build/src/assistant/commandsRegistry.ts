@@ -99,6 +99,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   resolve_ambiguity: `{"target?":"bookmark-folder|tab-group|tab|cancel"}`,
   confirm_action: `{"confirmed":"boolean"}`,
   new_window: `{}`,
+  new_tab_to_right: `{"index?":"number"}`,
   organize_windows: `{}`,
   show_url: `{"url":"string"}`,
   search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,

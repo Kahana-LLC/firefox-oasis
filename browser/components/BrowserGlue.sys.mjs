@@ -11,7 +11,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AboutHomeStartupCache: "resource:///modules/AboutHomeStartupCache.sys.mjs",
   AWToolbarButton: "resource:///modules/aboutwelcome/AWToolbarUtils.sys.mjs",
   ASRouter: "resource:///modules/asrouter/ASRouter.sys.mjs",
-  OasisWelcomeManager: "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
+  OasisWelcomeManager:
+    "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
+  OasisOnboardingChrome:
+    "resource:///modules/oasiswelcome/OasisOnboardingChrome.sys.mjs",
   ASRouterDefaultConfig:
     "resource:///modules/asrouter/ASRouterDefaultConfig.sys.mjs",
   ASRouterNewTabHook: "resource:///modules/asrouter/ASRouterNewTabHook.sys.mjs",
@@ -46,8 +49,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   OnboardingMessageProvider:
     "resource:///modules/asrouter/OnboardingMessageProvider.sys.mjs",
-  OasisWelcomeManager:
-    "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
   PageDataService:
     "moz-src:///browser/components/pagedata/PageDataService.sys.mjs",
   PdfJs: "resource://pdf.js/PdfJs.sys.mjs",
@@ -799,10 +800,9 @@ BrowserGlue.prototype = {
 
     lazy.OasisWelcomeManager.maybeShowWelcomeOnStartup(aWindow);
 
-    this._firstWindowTelemetry(aWindow);
+    lazy.OasisOnboardingChrome.init();
 
-    // Show Oasis custom welcome page if this is the first run
-    lazy.OasisWelcomeManager.maybeShowWelcomeOnStartup(aWindow);
+    this._firstWindowTelemetry(aWindow);
   },
 
   _maybeOfferProfileReset() {

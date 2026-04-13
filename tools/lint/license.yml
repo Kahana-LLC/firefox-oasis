@@ -45,11 +45,13 @@ license:
         # By design
         - python/mozrelease/mozrelease
         - security/mac/hardenedruntime/developer/browser.xml
+        - security/mac/hardenedruntime/developer/oasis.browser.xml
         - security/mac/hardenedruntime/developer/media-plugin-helper.xml
         - security/mac/hardenedruntime/developer/plugin-container.xml
         - security/mac/hardenedruntime/developer/utility.xml
         - security/mac/hardenedruntime/production/nightly.browser.xml
         - security/mac/hardenedruntime/production/firefox.browser.xml
+        - security/mac/hardenedruntime/production/oasis.browser.xml
         - security/mac/hardenedruntime/production/firefoxdeveloperedition.browser.xml
         - security/mac/hardenedruntime/production/media-plugin-helper.xml
         - security/mac/hardenedruntime/production/plugin-container.xml

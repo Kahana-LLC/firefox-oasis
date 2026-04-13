@@ -9,6 +9,7 @@
  * fail. Called by decisionEngine.ts.
  */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
+import { resolveKnownSiteToUrl } from "./knownSites.js";
 
 type ExplicitRouteRule = {
   next: string;
@@ -36,7 +37,10 @@ function firstUrlLike(input: string): string | null {
   return null;
 }
 
-function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null {
+function firstMatch(
+  input: string,
+  patterns: RegExp[]
+): RegExpMatchArray | null {
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
@@ -46,11 +50,39 @@ function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null 
   return null;
 }
 
+function trimOpenTarget(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+}
+
+function resolveTargetForNewTab(targetRaw: string): RouteArgs | null {
+  const target = trimOpenTarget(targetRaw);
+  if (!target) {
+    return null;
+  }
+  const urlHit = firstUrlLike(target);
+  if (urlHit) {
+    return { url: urlHit };
+  }
+  const siteUrl = resolveKnownSiteToUrl(target);
+  if (siteUrl) {
+    return { url: siteUrl };
+  }
+  return { query: target };
+}
+
+const OPEN_TARGET_IN_NEW_TAB_RE =
+  /^(?:open|visit|go\s+to|launch)\s+(?<target>.+?)\s+in\s+(?:a\s+)?new\s+tab\b/i;
+
 const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
   {
     next: "copy_tab_urls",
     reason: "explicit-copy-tab-urls",
-    resolve: input => (/\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null),
+    resolve: input =>
+      /\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null,
   },
   {
     next: "new_window",
@@ -63,6 +95,25 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
         : null,
   },
   {
+    next: "new_tab_to_right",
+    reason: "explicit-blank-new-tab",
+    resolve: input => {
+      const s = input
+        .trim()
+        .replace(/[.!?]+$/g, "")
+        .trim();
+      if (
+        /^\s*new\s+tab(?:\s+please)?\s*$/i.test(s) ||
+        /^\s*(?:open\s+(?:up\s+)?(?:a\s+)?new\s+tab|(?:create|add)\s+(?:a\s+)?new\s+tab)(?:\s+please)?\s*$/i.test(
+          s
+        )
+      ) {
+        return {};
+      }
+      return null;
+    },
+  },
+  {
     next: "organize_windows",
     reason: "explicit-organize-windows",
     resolve: input => (/\borganize\s+windows?\b/i.test(input) ? {} : null),
@@ -71,7 +122,9 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     next: "show_subscription",
     reason: "explicit-show-subscription",
     resolve: input =>
-      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input) ? {} : null,
+      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input)
+        ? {}
+        : null,
   },
   {
     next: "show_url",
@@ -118,6 +171,34 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       ]);
       const name = match?.groups?.name?.trim();
       return name ? { name } : null;
+    },
+  },
+  {
+    next: "open_url",
+    reason: "explicit-open-target-in-new-tab-url",
+    resolve: input => {
+      const match = input.match(OPEN_TARGET_IN_NEW_TAB_RE);
+      const targetRaw = match?.groups?.target?.trim();
+      if (!targetRaw) {
+        return null;
+      }
+      const args = resolveTargetForNewTab(targetRaw);
+      return args && "url" in args && args.url ? { url: args.url } : null;
+    },
+  },
+  {
+    next: "web_search",
+    reason: "explicit-open-target-in-new-tab-search",
+    resolve: input => {
+      const match = input.match(OPEN_TARGET_IN_NEW_TAB_RE);
+      const targetRaw = match?.groups?.target?.trim();
+      if (!targetRaw) {
+        return null;
+      }
+      const args = resolveTargetForNewTab(targetRaw);
+      return args && "query" in args && args.query
+        ? { query: args.query }
+        : null;
     },
   },
   {

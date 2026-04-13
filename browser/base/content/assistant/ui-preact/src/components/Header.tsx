@@ -10,6 +10,22 @@ interface HeaderProps {
 
 const oasisWindow: OasisWindow = window;
 
+const DOCS_URL = 'https://kahana.co/docs';
+
+function openDocsHelp(event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (typeof oasisWindow.openWebLinkIn === 'function') {
+    oasisWindow.openWebLinkIn(DOCS_URL, 'tab', {});
+    return;
+  }
+  if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === 'function') {
+    (window.top as OasisWindow).openWebLinkIn!(DOCS_URL, 'tab', {});
+    return;
+  }
+  window.open(DOCS_URL, '_blank', 'noopener,noreferrer');
+}
+
 export function Header({ auth, onShowAuth }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -46,26 +62,36 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
   };
 
   return (
-    <div 
+    <div
       onPointerDown={handleDragStart}
       style={{
         height: '48px', // Slightly taller for better touch
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: '8px',
         padding: '0 8px', // Figma has less padding on edges of the internal row
         background: 'transparent',
         cursor: 'grab',
         zIndex: 2147483647,
         boxSizing: 'border-box',
         userSelect: 'none',
-        flexShrink: 0
+        flexShrink: 0,
+        minWidth: 0,
       }}
     >
       {/* Left Container: Sloth + Title + Badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         {/* Sloth Icon */}
-        <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="#978455"/>
                 <ellipse cx="16.5" cy="18" rx="10.5" ry="8.5" fill="#F8FAF2"/>
@@ -77,30 +103,69 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         </div>
         
         {/* Title */}
-        <span style={{ 
-            fontSize: '20px', 
-            fontWeight: 600, 
-            color: '#495800', 
-            fontFamily: 'system-ui, -apple-system, sans-serif' 
-        }}>
+        <span
+          style={{
+            fontSize: '20px',
+            fontWeight: 600,
+            color: '#495800',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+          }}
+        >
             Oasis AI
         </span>
 
         {/* Beta Badge */}
-        <div style={{
+        <div
+          style={{
             background: '#F2F4E5',
             padding: '1px 8px',
             borderRadius: '32px',
             display: 'flex',
-            alignItems: 'center'
-        }}>
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+        >
             <span style={{ fontSize: '12px', color: '#495800' }}>Beta</span>
         </div>
       </div>
 
-      {/* Right Container: Menu + Toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        
+      {/* Right Container: Help + Menu + Toggle + Close */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+        <button
+          type="button"
+          onClick={openDocsHelp}
+          title="Help — Oasis documentation"
+          aria-label="Oasis AI help, opens documentation in a new tab"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            padding: '2px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#7A9200',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
+            (e.currentTarget.style.backgroundColor = 'rgba(122, 146, 0, 0.12)')
+          }
+          onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
+            (e.currentTarget.style.backgroundColor = 'transparent')
+          }
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </button>
+
         <div style={{ position: 'relative' }} ref={menuRef}>
             <HeaderBtn onClick={() => setShowMenu(!showMenu)} title="Menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

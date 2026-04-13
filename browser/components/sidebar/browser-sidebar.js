@@ -2048,8 +2048,8 @@ var SidebarController = {
           bottom: window.innerHeight,
         };
 
-        // Default AI chat dock: size 420×520px, bottom-right of content area, 16px padding
-        const defaultWidth = 420;
+        // Default AI chat dock: size 480×520px, bottom-right of content area, 16px padding
+        const defaultWidth = 480;
         const defaultHeight = 520;
         overlayShell.style.width = `${defaultWidth}px`;
         overlayShell.style.height = `${defaultHeight}px`;

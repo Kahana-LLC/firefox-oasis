@@ -2118,8 +2118,8 @@ pref("browser.newtabpage.trainhopAddon.xpiBaseURL", "https://archive.mozilla.org
 
 pref("browser.newtabpage.sponsor-protection.enabled", true);
 
-// Separate about welcome
-pref("browser.aboutwelcome.enabled", true);
+// Separate about welcome (disabled for Oasis: onboarding uses NTP + docked assistant)
+pref("browser.aboutwelcome.enabled", false);
 // Used to set multistage welcome UX
 pref("browser.aboutwelcome.screens", "");
 
@@ -2127,6 +2127,20 @@ pref("browser.aboutwelcome.screens", "");
 pref("browser.oasis.welcome.enabled", true);
 pref("browser.oasis.welcome.didSee", false);
 pref("browser.oasis.welcome.completed", false);
+pref("browser.oasis.welcome.useAboutWelcomePage", false);
+pref("browser.oasis.welcome.shownNtpAssistantLanding", false);
+pref("browser.oasis.postAuthOpenAssistant", true);
+pref("browser.oasis.onboarding.guidedFlowEnabled", true);
+pref("browser.oasis.onboarding.migrationCompleted", false);
+pref("browser.oasis.onboarding.postMigrationTipShown", false);
+pref("browser.oasis.onboarding.checklistDismissed", false);
+pref("browser.oasis.onboarding.oauthAttemptStarted", false);
+pref("browser.oasis.onboarding.importOptOut", false);
+pref("browser.oasis.onboarding.firstAiTurnComplete", false);
+pref(
+  "datareporting.policy.firstRunURL",
+  "https://kahana.co/privacy-policy#personal-data-collect"
+);
 pref("browser.oasis.user.name", "");
 pref("browser.oasis.import.history", false);
 pref("browser.oasis.import.bookmarks", false);
@@ -2197,8 +2211,8 @@ pref("pdfjs.previousHandler.alwaysAskBeforeHandling", false);
 // Try to convert PDFs sent as octet-stream
 pref("pdfjs.handleOctetStream", true);
 
-// Is the sidebar positioned ahead of the content browser
-pref("sidebar.position_start", true);
+// When true, sidebar is on the start edge (left in LTR); when false, on the end edge (right in LTR).
+pref("sidebar.position_start", false);
 #ifdef NIGHTLY_BUILD
 pref("sidebar.revamp", true);
 // This is nightly only for now, as we need to address bug 1933527 and bug 1934039.

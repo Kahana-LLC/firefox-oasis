@@ -1,5 +1,7 @@
 # Voice Input Setup Guide
 
+**Developer onboarding (clone, branches, bundles, local testing):** [`docs/voice/README.md`](../../../../docs/voice/README.md)
+
 ## Overview
 The voice input feature uses a microphone button in the assistant UI to record audio, send it to your AWS Lambda function for transcription via Deepgram (with Gemini fallback), and populate the input field with the transcribed text.
 

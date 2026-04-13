@@ -121,27 +121,34 @@ class LocalMemoryService {
   private isIndexDirty: boolean = true;
 
   constructor() {
-    this.dbPromise = openDB<MemoryDB>("oasis-memory", 3, {
-      upgrade(db, oldVersion, _newVersion, transaction) {
-        if (oldVersion < 1) {
+    try {
+      this.dbPromise = openDB<MemoryDB>("oasis-memory", 3, {
+        upgrade(db, oldVersion, _newVersion, transaction) {
+          if (oldVersion < 1) {
             const store = db.createObjectStore("documents", {
-            keyPath: "id",
-            autoIncrement: true,
+              keyPath: "id",
+              autoIncrement: true,
             });
             store.createIndex("by-timestamp", "timestamp");
             store.createIndex("by-url", "url", { unique: false });
-        }
-        if (oldVersion < 2) {
-            db.createObjectStore("usage", { keyPath: "userId" });
-        }
-        if (oldVersion < 3) {
-          const docsStore = transaction.objectStore("documents");
-          if (!docsStore.indexNames.contains("by-dedupe-key")) {
-            docsStore.createIndex("by-dedupe-key", "dedupeKey", { unique: true });
           }
-        }
-      },
-    });
+          if (oldVersion < 2) {
+            db.createObjectStore("usage", { keyPath: "userId" });
+          }
+          if (oldVersion < 3) {
+            const docsStore = transaction.objectStore("documents");
+            if (!docsStore.indexNames.contains("by-dedupe-key")) {
+              docsStore.createIndex("by-dedupe-key", "dedupeKey", {
+                unique: true,
+              });
+            }
+          }
+        },
+      });
+    } catch (error) {
+      logError("[LocalMemory] IndexedDB unavailable in this context", error);
+      this.dbPromise = Promise.reject(error);
+    }
 
     this.miniSearch = new MiniSearch<SearchIndexedDoc>({
       fields: ["text", "title", "description"],

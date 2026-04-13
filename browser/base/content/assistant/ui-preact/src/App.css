@@ -69,7 +69,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--space-medium);
 }
 
 .assistant-scroll {
@@ -429,9 +429,9 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-small);
-  padding: var(--space-large);
-  padding-right: var(--space-xlarge);
+  gap: var(--space-xsmall);
+  padding: var(--space-medium) var(--space-large) var(--space-medium) var(--space-large);
+  padding-right: var(--space-large);
   border: 1px solid white;
   background: var(--surface-page);
   border-radius: 20px;
@@ -439,17 +439,76 @@ body {
   z-index: 100;
 }
 
-.input-row {
+.composer-toolbar {
   display: flex;
-  gap: var(--space-small);
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 5px;
   width: 100%;
+  min-height: 32px;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.composer-feedback-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #7a9200;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.composer-feedback-btn:hover {
+  background: var(--primary-50);
+}
+
+.composer-toolbar-spacer {
+  flex: 1;
+  min-width: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.composer-toolbar-wave {
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.composer-toolbar-actions {
+  display: flex;
+  flex-flow: row nowrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.composer-voice-agent-icon,
+.composer-dictation-icon {
+  display: block;
+  flex-shrink: 0;
 }
 
 .input-field {
-  flex: 1;
-  min-width: 200px;
+  flex: 0 1 auto;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
   min-height: var(--icon-size-medium);
   max-height: 120px;
+  box-sizing: border-box;
   padding: var(--space-medium) var(--space-large);
   border: none;
   border-radius: var(--border-radius-lg);
@@ -504,6 +563,48 @@ button.input-field.input-field-signin-prompt:disabled {
 .send-btn:hover {
   transform: translateY(-1px);
   opacity: 0.9;
+}
+
+.send-btn.composer-tool-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+}
+
+.send-btn.composer-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+}
+
+.starter-prompt-cluster {
+  margin: 0 auto;
+}
+
+.starter-prompt-chip {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #495800;
+  background: var(--primary-50);
+  border: 1px solid rgba(122, 146, 0, 0.35);
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+  text-align: center;
+  max-width: 100%;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.starter-prompt-chip:hover {
+  background: #e8ecd4;
+  border-color: rgba(122, 146, 0, 0.55);
+}
+
+.starter-prompt-chip:active {
+  background: #dde2c8;
 }
 
 /* Markdown Styles */

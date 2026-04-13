@@ -6,6 +6,12 @@ import type { AssistantMessage, OasisWindow } from '../types';
 
 const oasisWindow: OasisWindow = window;
 
+const STARTER_PROMPTS = [
+  'Summarize this page',
+  'List my open tabs',
+  "Search the web for today's weather",
+] as const;
+
 export function ChatTimeline({
   messages,
   busy,
@@ -13,6 +19,8 @@ export function ChatTimeline({
   onLinkClick,
   speakingMsgId,
   onTtsClick,
+  isAuthenticated,
+  onStarterPrompt,
 }: {
   messages: AssistantMessage[];
   busy: boolean;
@@ -20,6 +28,8 @@ export function ChatTimeline({
   onLinkClick: (event: MouseEvent) => void;
   speakingMsgId?: string | null;
   onTtsClick?: (messageId: string, content: string) => void;
+  isAuthenticated?: boolean;
+  onStarterPrompt?: (text: string) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -40,7 +50,7 @@ export function ChatTimeline({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '0px',
+            gap: '10px',
             width: '100%',
             padding: '8px',
             boxSizing: 'border-box',
@@ -65,6 +75,31 @@ export function ChatTimeline({
             <br />
             Browse, summarize, or manage your tabs.
           </div>
+          {isAuthenticated && onStarterPrompt && !busy && (
+            <div
+              className="starter-prompt-cluster"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: '5px',
+                maxWidth: '280px',
+                padding: '0 4px',
+                boxSizing: 'border-box',
+              }}
+            >
+              {STARTER_PROMPTS.map(text => (
+                <button
+                  key={text}
+                  type="button"
+                  className="starter-prompt-chip"
+                  onClick={() => onStarterPrompt(text)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

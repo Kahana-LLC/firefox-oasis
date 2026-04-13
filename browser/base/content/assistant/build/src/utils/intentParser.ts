@@ -78,10 +78,16 @@ export function looksActionableText(text: string): boolean {
   return ACTION_WORD_RE.test(input) && ACTION_OBJECT_RE.test(input);
 }
 
+const LIST_OPEN_TABS_QUESTION_RE =
+  /^(?:what|which)\s+tabs\b|\btabs\s+do\s+i\s+have\s+open\b|\btabs\s+are\s+open\b/i;
+
 export function classifyCommandFamily(commandText: string): IntentFamily {
   const input = String(commandText || "").trim();
   if (!input) {
     return "other";
+  }
+  if (LIST_OPEN_TABS_QUESTION_RE.test(input)) {
+    return "list";
   }
   if (LIST_VERB_RE.test(input)) {
     return "list";

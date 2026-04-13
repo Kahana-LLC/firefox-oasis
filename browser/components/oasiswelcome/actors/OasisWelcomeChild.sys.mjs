@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/** JSWindowActor child for Oasis onboarding pages; exports RPMSendAsyncMessage. */
+/** Child side of the OasisWelcome window actor; exposes RPMSendAsyncMessage and RPMQueryAsync. */
 export class OasisWelcomeChild extends JSWindowActorChild {
   actorCreated() {
     this.scheduleExportFunctions();
@@ -36,10 +36,32 @@ export class OasisWelcomeChild extends JSWindowActorChild {
     Cu.exportFunction(this.sendToParent.bind(this), win, {
       defineAs: "RPMSendAsyncMessage",
     });
+    Cu.exportFunction(this.queryParent.bind(this), win, {
+      defineAs: "RPMQueryAsync",
+    });
   }
 
   sendToParent(type, data) {
     this.sendAsyncMessage(type, data);
+  }
+
+  wrapPromise(promise) {
+    return new this.contentWindow.Promise((resolve, reject) =>
+      promise.then(resolve, reject)
+    );
+  }
+
+  queryParent(type, data) {
+    return this.wrapPromise(
+      new Promise((resolve, reject) => {
+        super
+          .sendQuery(type, data)
+          .then(
+            result => resolve(Cu.cloneInto(result, this.contentWindow)),
+            reject
+          );
+      })
+    );
   }
 
   receiveMessage(message) {
