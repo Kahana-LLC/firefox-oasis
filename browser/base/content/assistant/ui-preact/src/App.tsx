@@ -593,7 +593,6 @@ export function App() {
         {view !== 'auth' && (
           <Composer
             input={runtime.input}
-            isRecording={runtime.isRecording}
             busy={runtime.busy}
             isAuthenticated={auth.isAuthenticated}
             ttsEnabled={runtime.ttsEnabled}
@@ -602,9 +601,6 @@ export function App() {
             onKeyDown={runtime.handleKeyDown}
             onSend={() => {
               void runtime.send();
-            }}
-            onToggleRecording={() => {
-              void runtime.toggleRecording();
             }}
             onResetSession={() => {
               void runtime.resetAssistantSession();

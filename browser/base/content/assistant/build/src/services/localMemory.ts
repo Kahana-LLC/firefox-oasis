@@ -107,7 +107,11 @@ interface MemoryDB extends DBSchema {
   documents: {
     key: number;
     value: MemoryDoc;
-    indexes: { "by-timestamp": number; "by-url": string; "by-dedupe-key": string };
+    indexes: {
+      "by-timestamp": number;
+      "by-url": string;
+      "by-dedupe-key": string;
+    };
   };
   usage: {
     key: string;
@@ -158,15 +162,15 @@ class LocalMemoryService {
         if (fieldName === "description") return doc.metadata?.description;
         return doc[fieldName as keyof SearchIndexedDoc];
       },
-      tokenize: (text) => this.tokenize(text),
+      tokenize: text => this.tokenize(text),
       searchOptions: {
         boost: { title: 2 },
         fuzzy: 0.2,
         prefix: true,
-        tokenize: (text) => this.tokenize(text)
-      }
+        tokenize: text => this.tokenize(text),
+      },
     });
-    
+
     this.backfillDedupeKeys()
       .then(() => this.ensureIndex())
       .then(() => {
@@ -183,7 +187,7 @@ class LocalMemoryService {
       .toLowerCase()
       .replace(/[^\w\s]/g, " ") // Replace punctuation with space to preserve words
       .split(/\s+/)
-      .filter((t) => t.length > 2); // Ignore tiny words
+      .filter(t => t.length > 2); // Ignore tiny words
   }
 
   private async backfillDedupeKeys(): Promise<void> {
@@ -235,7 +239,9 @@ class LocalMemoryService {
     }
   }
 
-  private async upsertDocumentByDedupeKey(doc: MemoryDoc): Promise<"inserted" | "updated"> {
+  private async upsertDocumentByDedupeKey(
+    doc: MemoryDoc
+  ): Promise<"inserted" | "updated"> {
     const db = await this.dbPromise;
     const tx = db.transaction("documents", "readwrite");
     const docsStore = tx.store;
@@ -253,7 +259,9 @@ class LocalMemoryService {
     return "inserted";
   }
 
-  private async mutateDocuments(mutator: (doc: MemoryDoc) => MemoryDoc | null): Promise<number> {
+  private async mutateDocuments(
+    mutator: (doc: MemoryDoc) => MemoryDoc | null
+  ): Promise<number> {
     const db = await this.dbPromise;
     const tx = db.transaction("documents", "readwrite");
     let cursor = await tx.store.openCursor();
@@ -281,29 +289,31 @@ class LocalMemoryService {
 
   private async ensureIndex() {
     if (!this.isIndexDirty) return;
-    
+
     const db = await this.dbPromise;
     const docs = await db.getAll("documents");
-    
+
     this.miniSearch.removeAll();
     if (docs.length > 0) {
-      this.miniSearch.addAll(docs.map(d => ({
-        id: d.id!,
-        text: d.text,
-        metadata: d.metadata,
-        url: d.url,
-        timestamp: d.timestamp,
-        dedupeKey: d.dedupeKey,
-      })));
+      this.miniSearch.addAll(
+        docs.map(d => ({
+          id: d.id!,
+          text: d.text,
+          metadata: d.metadata,
+          url: d.url,
+          timestamp: d.timestamp,
+          dedupeKey: d.dedupeKey,
+        }))
+      );
     }
-    
+
     this.isIndexDirty = false;
     logDebug(`[LocalMemory] Index rebuilt with ${docs.length} documents`);
   }
 
   async addDocument(text: string, metadata: MemoryMetadata = {}, url?: string) {
     const tokens = this.tokenize(text);
-    
+
     const doc: MemoryDoc = {
       text,
       tokens,
@@ -340,32 +350,39 @@ class LocalMemoryService {
   async removeBookmarkFolderDocuments(folderName: string): Promise<number> {
     const targetFolder = normalizeMemoryName(folderName);
     if (!targetFolder) return 0;
-    const removed = await this.mutateDocuments((doc) => {
+    const removed = await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
       if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
       return null;
     });
     if (removed > 0) {
-      logDebug(`[LocalMemory] Removed ${removed} documents for folder: ${folderName}`);
+      logDebug(
+        `[LocalMemory] Removed ${removed} documents for folder: ${folderName}`
+      );
     }
     return removed;
   }
 
   async removeAllBookmarkFolderDocuments(): Promise<number> {
-    const removed = await this.mutateDocuments((doc) => {
+    const removed = await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
       return null;
     });
     if (removed > 0) {
-      logDebug(`[LocalMemory] Removed all bookmark-folder documents: ${removed}`);
+      logDebug(
+        `[LocalMemory] Removed all bookmark-folder documents: ${removed}`
+      );
     }
     return removed;
   }
 
-  async removeBookmarkFolderDocumentByUrl(folderName: string, url: string): Promise<number> {
+  async removeBookmarkFolderDocumentByUrl(
+    folderName: string,
+    url: string
+  ): Promise<number> {
     const targetFolder = normalizeMemoryName(folderName);
     if (!targetFolder || !url) return 0;
-    const removed = await this.mutateDocuments((doc) => {
+    const removed = await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
       if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
       const docUrl = getMemoryDocUrl(doc);
@@ -373,30 +390,44 @@ class LocalMemoryService {
       return null;
     });
     if (removed > 0) {
-      logDebug(`[LocalMemory] Removed ${removed} folder documents for URL: ${url}`);
+      logDebug(
+        `[LocalMemory] Removed ${removed} folder documents for URL: ${url}`
+      );
     }
     return removed;
   }
 
-  async renameBookmarkFolderDocuments(oldName: string, newName: string): Promise<number> {
+  async renameBookmarkFolderDocuments(
+    oldName: string,
+    newName: string
+  ): Promise<number> {
     const from = normalizeMemoryName(oldName);
     const to = (newName || "").trim();
     const toNorm = normalizeMemoryName(newName);
     if (!from || !toNorm) return 0;
 
-    const updated = await this.mutateDocuments((doc) => {
+    const updated = await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
       if (getMemoryDocFolderName(doc) !== from) return doc;
       const metadata = { ...(doc.metadata || {}) };
       metadata.folderName = to;
       metadata.hubName = to;
-      if (typeof metadata.context === "string" && metadata.context.toLowerCase().startsWith("bookmark folder:")) {
+      if (
+        typeof metadata.context === "string" &&
+        metadata.context.toLowerCase().startsWith("bookmark folder:")
+      ) {
         metadata.context = `Bookmark Folder: ${to}`;
       }
-      return { ...doc, metadata, dedupeKey: computeMemoryDedupeKey({ ...doc, metadata }) };
+      return {
+        ...doc,
+        metadata,
+        dedupeKey: computeMemoryDedupeKey({ ...doc, metadata }),
+      };
     });
     if (updated > 0) {
-      logDebug(`[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`);
+      logDebug(
+        `[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`
+      );
     }
     return updated;
   }
@@ -417,7 +448,7 @@ class LocalMemoryService {
     let updated = 0;
     let removed = 0;
 
-    await this.mutateDocuments((doc) => {
+    await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
 
       const bookmarkGuid = String(doc.metadata?.bookmarkGuid || "").trim();
@@ -446,9 +477,7 @@ class LocalMemoryService {
         parentGuid: nextEntry.parentGuid,
         context: `Bookmark Folder: ${nextEntry.folderName}`,
         description:
-          nextEntry.description ??
-          previousMetadata.description ??
-          "",
+          nextEntry.description ?? previousMetadata.description ?? "",
       };
       const nextText = `Title: ${nextEntry.title}\nURL: ${nextEntry.url}\nContent: ${nextMetadata.description || ""}`;
       const nextDoc: MemoryDoc = {
@@ -506,21 +535,27 @@ class LocalMemoryService {
     return { added, updated, removed };
   }
 
-  private async removeStaleBookmarkSourceDocuments(validDedupeKeys: Set<string>): Promise<number> {
-    const removed = await this.mutateDocuments((doc) => {
+  private async removeStaleBookmarkSourceDocuments(
+    validDedupeKeys: Set<string>
+  ): Promise<number> {
+    const removed = await this.mutateDocuments(doc => {
       if (getMemoryDocSource(doc) !== "bookmark") return doc;
       const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
       if (validDedupeKeys.has(key)) return doc;
       return null;
     });
     if (removed > 0) {
-      logDebug(`[LocalMemory] Removed stale bookmark-source documents: ${removed}`);
+      logDebug(
+        `[LocalMemory] Removed stale bookmark-source documents: ${removed}`
+      );
     }
     return removed;
   }
 
-  private async removeStaleLiveSourceDocuments(validDedupeKeys: Set<string>): Promise<number> {
-    const removed = await this.mutateDocuments((doc) => {
+  private async removeStaleLiveSourceDocuments(
+    validDedupeKeys: Set<string>
+  ): Promise<number> {
+    const removed = await this.mutateDocuments(doc => {
       const source = getMemoryDocSource(doc);
       if (source !== "tab" && source !== "tab-group") return doc;
       const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
@@ -528,7 +563,9 @@ class LocalMemoryService {
       return null;
     });
     if (removed > 0) {
-      logDebug(`[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`);
+      logDebug(
+        `[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`
+      );
     }
     return removed;
   }
@@ -537,26 +574,30 @@ class LocalMemoryService {
     query: string,
     limit = 5,
     filter?: { hub?: string; folder?: string }
-  ): Promise<{ text: string; score: number; metadata: MemoryMetadata; url?: string }[]> {
+  ): Promise<
+    { text: string; score: number; metadata: MemoryMetadata; url?: string }[]
+  > {
     await this.ensureIndex();
 
     const folderFilter = filter?.folder || filter?.hub;
     const results = this.miniSearch.search(query, {
-      filter: (result) => {
+      filter: result => {
         if (folderFilter) {
           const name = normalizeMemoryName(
-            String(result.metadata?.folderName || result.metadata?.hubName || "")
+            String(
+              result.metadata?.folderName || result.metadata?.hubName || ""
+            )
           );
           return name === normalizeMemoryName(folderFilter);
         }
         return true;
-      }
+      },
     });
 
     // Deduplicate results by URL
     const seenKeys = new Set<string>();
     const uniqueResults: Array<SearchResult & Partial<SearchIndexedDoc>> = [];
-    
+
     for (const r of results) {
       const stored = r as SearchResult & Partial<SearchIndexedDoc>;
       const metadata = (stored.metadata || {}) as MemoryMetadata;
@@ -574,7 +615,7 @@ class LocalMemoryService {
       if (uniqueResults.length >= limit) break;
     }
 
-    return uniqueResults.map((r) => ({
+    return uniqueResults.map(r => ({
       text: r.text || "",
       score: r.score,
       metadata: (r.metadata || {}) as MemoryMetadata,
@@ -597,18 +638,18 @@ class LocalMemoryService {
 
   async indexHistory(maxItems = 1000) {
     const win = window as Window & { PlacesUtils?: PlacesUtilsLike };
-    const PlacesUtils = win.PlacesUtils || getChrome().PlacesUtils;
+    const PlacesUtils = getChrome().PlacesUtils ?? win.PlacesUtils;
     if (!PlacesUtils?.history) return;
 
-    try {
-      const options = PlacesUtils.history.getNewQueryOptions();
-      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
-      options.maxResults = maxItems;
-      options.includeVisits = true;
+    const options = PlacesUtils.history.getNewQueryOptions();
+    options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+    options.maxResults = maxItems;
+    options.includeHidden = false;
 
-      const query = PlacesUtils.history.getNewQuery();
-      const result = PlacesUtils.history.executeQuery(query, options);
-      const root = result.root;
+    const query = PlacesUtils.history.getNewQuery();
+    const result = PlacesUtils.history.executeQuery(query, options);
+    const root = result.root;
+    try {
       root.containerOpen = true;
 
       for (let i = 0; i < root.childCount; i++) {
@@ -616,26 +657,26 @@ class LocalMemoryService {
         const uri = node.uri ? String(node.uri) : "";
         if (!uri) continue;
         const title = node.title != null ? String(node.title) : "";
-        const visitTime =
-          typeof node.time === "number"
-            ? node.time
-            : Number(node.time) || 0;
+        const rawTime =
+          typeof node.time === "number" ? node.time : Number(node.time) || 0;
+        const visitTimeMs = Math.floor(rawTime / 1000);
         await this.addDocument(
           `${title} ${uri}`,
           {
             type: "history",
             title,
             url: uri,
-            timestamp: visitTime,
+            timestamp: visitTimeMs,
             context: "Browsing History",
           },
           uri
         );
       }
-      root.containerOpen = false;
       logDebug(`[LocalMemory] Indexed ${root.childCount} history items.`);
     } catch (e) {
       logError("[LocalMemory] Failed to index history:", e);
+    } finally {
+      root.containerOpen = false;
     }
   }
 
@@ -713,7 +754,9 @@ class LocalMemoryService {
       if (!hadTraversalFailure) {
         await this.removeStaleBookmarkSourceDocuments(validBookmarkKeys);
       } else {
-        logWarn("[LocalMemory] Skipped stale bookmark cleanup due to traversal failures.");
+        logWarn(
+          "[LocalMemory] Skipped stale bookmark cleanup due to traversal failures."
+        );
       }
       logDebug("[LocalMemory] Bookmarks indexed.");
     } catch (e) {
@@ -727,70 +770,64 @@ class LocalMemoryService {
 
     try {
       const validLiveKeys = new Set<string>();
-      const groups = Array.from(gBrowser.tabGroups || []) as BrowserTabGroupLike[];
+      const groups = Array.from(
+        gBrowser.tabGroups || []
+      ) as BrowserTabGroupLike[];
       // Index groups
       for (const group of groups) {
-          const groupName = group.label || "(unnamed group)";
-          const groupMetadata: MemoryMetadata = {
-            type: "tab-group",
-            title: groupName,
-            id: group.id,
-          };
-          const groupUrl = `about:tab-group?id=${group.id}`;
-          const groupText = `Tab Group: ${groupName}`;
-          validLiveKeys.add(
-            computeMemoryDedupeKey({
-              text: groupText,
-              metadata: groupMetadata,
-              url: groupUrl,
-            })
-          );
-          await this.addDocument(
-             groupText,
-             groupMetadata,
-             groupUrl
-          );
+        const groupName = group.label || "(unnamed group)";
+        const groupMetadata: MemoryMetadata = {
+          type: "tab-group",
+          title: groupName,
+          id: group.id,
+        };
+        const groupUrl = `about:tab-group?id=${group.id}`;
+        const groupText = `Tab Group: ${groupName}`;
+        validLiveKeys.add(
+          computeMemoryDedupeKey({
+            text: groupText,
+            metadata: groupMetadata,
+            url: groupUrl,
+          })
+        );
+        await this.addDocument(groupText, groupMetadata, groupUrl);
       }
 
       // Index open tabs with group context
       const tabs = Array.from(gBrowser.tabs || []) as BrowserTabLike[];
       for (const tab of tabs) {
-          const url = tab.linkedBrowser?.currentURI?.spec;
-          const title = tab.label || "(untitled)";
-          
-          let context = "Open Tab";
-          if (tab.group) {
-              const gName = tab.group.label || "Unnamed Group";
-              context = `Tab Group: ${gName}`;
-          }
+        const url = tab.linkedBrowser?.currentURI?.spec;
+        const title = tab.label || "(untitled)";
 
-          if (url && !url.startsWith("about:")) {
-             const tabMetadata: MemoryMetadata = {
-                type: "tab",
-                title,
-                url,
-                timestamp: Date.now(),
-                context: context,
-             };
-             const tabText = title + " " + url;
-             validLiveKeys.add(
-               computeMemoryDedupeKey({
-                 text: tabText,
-                 metadata: tabMetadata,
-                 url,
-               })
-             );
-             await this.addDocument(
-                 tabText,
-                 tabMetadata,
-                 url
-             );
-          }
+        let context = "Open Tab";
+        if (tab.group) {
+          const gName = tab.group.label || "Unnamed Group";
+          context = `Tab Group: ${gName}`;
+        }
+
+        if (url && !url.startsWith("about:")) {
+          const tabMetadata: MemoryMetadata = {
+            type: "tab",
+            title,
+            url,
+            timestamp: Date.now(),
+            context: context,
+          };
+          const tabText = title + " " + url;
+          validLiveKeys.add(
+            computeMemoryDedupeKey({
+              text: tabText,
+              metadata: tabMetadata,
+              url,
+            })
+          );
+          await this.addDocument(tabText, tabMetadata, url);
+        }
       }
       await this.removeStaleLiveSourceDocuments(validLiveKeys);
       logDebug(`[LocalMemory] Indexed tabs and groups.`);
     } catch (e) {
-       logError("[LocalMemory] Failed to index tab groups:", e);
+      logError("[LocalMemory] Failed to index tab groups:", e);
     }
   }
 

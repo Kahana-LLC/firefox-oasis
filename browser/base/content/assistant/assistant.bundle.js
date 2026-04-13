@@ -58619,14 +58619,16 @@ Please report this to https://github.com/markedjs/marked.`, e2) {
       const docs = await db.getAll("documents");
       this.miniSearch.removeAll();
       if (docs.length > 0) {
-        this.miniSearch.addAll(docs.map((d3) => ({
-          id: d3.id,
-          text: d3.text,
-          metadata: d3.metadata,
-          url: d3.url,
-          timestamp: d3.timestamp,
-          dedupeKey: d3.dedupeKey
-        })));
+        this.miniSearch.addAll(
+          docs.map((d3) => ({
+            id: d3.id,
+            text: d3.text,
+            metadata: d3.metadata,
+            url: d3.url,
+            timestamp: d3.timestamp,
+            dedupeKey: d3.dedupeKey
+          }))
+        );
       }
       this.isIndexDirty = false;
       logDebug(`[LocalMemory] Index rebuilt with ${docs.length} documents`);
@@ -58671,7 +58673,9 @@ Please report this to https://github.com/markedjs/marked.`, e2) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed ${removed} documents for folder: ${folderName}`);
+        logDebug(
+          `[LocalMemory] Removed ${removed} documents for folder: ${folderName}`
+        );
       }
       return removed;
     }
@@ -58681,7 +58685,9 @@ Please report this to https://github.com/markedjs/marked.`, e2) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed all bookmark-folder documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed all bookmark-folder documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -58696,7 +58702,9 @@ Please report this to https://github.com/markedjs/marked.`, e2) {
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed ${removed} folder documents for URL: ${url}`);
+        logDebug(
+          `[LocalMemory] Removed ${removed} folder documents for URL: ${url}`
+        );
       }
       return removed;
     }
@@ -58714,10 +58722,16 @@ Please report this to https://github.com/markedjs/marked.`, e2) {
         if (typeof metadata.context === "string" && metadata.context.toLowerCase().startsWith("bookmark folder:")) {
           metadata.context = `Bookmark Folder: ${to}`;
         }
-        return { ...doc, metadata, dedupeKey: computeMemoryDedupeKey({ ...doc, metadata }) };
+        return {
+          ...doc,
+          metadata,
+          dedupeKey: computeMemoryDedupeKey({ ...doc, metadata })
+        };
       });
       if (updated > 0) {
-        logDebug(`[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`);
+        logDebug(
+          `[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`
+        );
       }
       return updated;
     }
@@ -58818,7 +58832,9 @@ Content: ${entry.description || ""}`;
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed stale bookmark-source documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed stale bookmark-source documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -58831,7 +58847,9 @@ Content: ${entry.description || ""}`;
         return null;
       });
       if (removed > 0) {
-        logDebug(`[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`);
+        logDebug(
+          `[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`
+        );
       }
       return removed;
     }
@@ -58842,7 +58860,9 @@ Content: ${entry.description || ""}`;
         filter: (result) => {
           if (folderFilter) {
             const name = normalizeMemoryName(
-              String(result.metadata?.folderName || result.metadata?.hubName || "")
+              String(
+                result.metadata?.folderName || result.metadata?.hubName || ""
+              )
             );
             return name === normalizeMemoryName(folderFilter);
           }
@@ -58886,39 +58906,41 @@ Content: ${entry.description || ""}`;
     // --- Indexing from Browser ---
     async indexHistory(maxItems = 1e3) {
       const win = window;
-      const PlacesUtils = win.PlacesUtils || getChrome().PlacesUtils;
+      const PlacesUtils = getChrome().PlacesUtils ?? win.PlacesUtils;
       if (!PlacesUtils?.history) return;
+      const options = PlacesUtils.history.getNewQueryOptions();
+      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+      options.maxResults = maxItems;
+      options.includeHidden = false;
+      const query = PlacesUtils.history.getNewQuery();
+      const result = PlacesUtils.history.executeQuery(query, options);
+      const root2 = result.root;
       try {
-        const options = PlacesUtils.history.getNewQueryOptions();
-        options.sortingMode = options.SORT_BY_DATE_DESCENDING;
-        options.maxResults = maxItems;
-        options.includeVisits = true;
-        const query = PlacesUtils.history.getNewQuery();
-        const result = PlacesUtils.history.executeQuery(query, options);
-        const root2 = result.root;
         root2.containerOpen = true;
         for (let i2 = 0; i2 < root2.childCount; i2++) {
           const node = root2.getChild(i2);
           const uri2 = node.uri ? String(node.uri) : "";
           if (!uri2) continue;
           const title = node.title != null ? String(node.title) : "";
-          const visitTime = typeof node.time === "number" ? node.time : Number(node.time) || 0;
+          const rawTime = typeof node.time === "number" ? node.time : Number(node.time) || 0;
+          const visitTimeMs = Math.floor(rawTime / 1e3);
           await this.addDocument(
             `${title} ${uri2}`,
             {
               type: "history",
               title,
               url: uri2,
-              timestamp: visitTime,
+              timestamp: visitTimeMs,
               context: "Browsing History"
             },
             uri2
           );
         }
-        root2.containerOpen = false;
         logDebug(`[LocalMemory] Indexed ${root2.childCount} history items.`);
       } catch (e2) {
         logError("[LocalMemory] Failed to index history:", e2);
+      } finally {
+        root2.containerOpen = false;
       }
     }
     async indexBookmarks() {
@@ -58980,7 +59002,9 @@ Content: ${entry.description || ""}`;
         if (!hadTraversalFailure) {
           await this.removeStaleBookmarkSourceDocuments(validBookmarkKeys);
         } else {
-          logWarn("[LocalMemory] Skipped stale bookmark cleanup due to traversal failures.");
+          logWarn(
+            "[LocalMemory] Skipped stale bookmark cleanup due to traversal failures."
+          );
         }
         logDebug("[LocalMemory] Bookmarks indexed.");
       } catch (e2) {
@@ -58992,7 +59016,9 @@ Content: ${entry.description || ""}`;
       if (!gBrowser) return;
       try {
         const validLiveKeys = /* @__PURE__ */ new Set();
-        const groups = Array.from(gBrowser.tabGroups || []);
+        const groups = Array.from(
+          gBrowser.tabGroups || []
+        );
         for (const group of groups) {
           const groupName = group.label || "(unnamed group)";
           const groupMetadata = {
@@ -59009,11 +59035,7 @@ Content: ${entry.description || ""}`;
               url: groupUrl
             })
           );
-          await this.addDocument(
-            groupText,
-            groupMetadata,
-            groupUrl
-          );
+          await this.addDocument(groupText, groupMetadata, groupUrl);
         }
         const tabs = Array.from(gBrowser.tabs || []);
         for (const tab of tabs) {
@@ -59040,11 +59062,7 @@ Content: ${entry.description || ""}`;
                 url
               })
             );
-            await this.addDocument(
-              tabText,
-              tabMetadata,
-              url
-            );
+            await this.addDocument(tabText, tabMetadata, url);
           }
         }
         await this.removeStaleLiveSourceDocuments(validLiveKeys);
@@ -67736,7 +67754,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         type: "chat",
         actionable: true,
         reason: `${family}-family-unresolved`,
-        message: family === "list" ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder." : family === "search" ? "I could not determine what to search. Please specify query and optional folder/source." : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly."
+        message: family === "list" ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)" : family === "search" ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)" : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)"
       };
     }
     const actionable = looksActionableText(input);
@@ -67745,7 +67763,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         type: "chat",
         actionable: true,
         reason: "actionable-but-unsupported",
-        message: "I could not safely map that action to a specific browser command. Please be more explicit about the target."
+        message: "I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](https://kahana.co/docs)"
       };
     }
     return { type: "no_match", actionable: false, reason: "non-actionable" };

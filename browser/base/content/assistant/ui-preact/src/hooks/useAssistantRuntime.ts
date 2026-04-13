@@ -42,14 +42,6 @@ function normalizeAssistantChunk(raw: string): string {
   return String(raw || "");
 }
 
-function transcribeFailureUserMessage(error: unknown): string {
-  const s = String(error);
-  if (s.includes("403") || s.includes("Forbidden")) {
-    return "Voice could not reach the transcription service (access denied). See browser/base/content/assistant/VOICE_INPUT_SETUP.md or ask your admin to check AWS IAM and the Lambda URL.";
-  }
-  return "Could not transcribe audio. Check your connection and try again.";
-}
-
 function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
   return (
     entry.type === "human" ||
@@ -85,7 +77,6 @@ export function useAssistantRuntime(params: {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
@@ -318,70 +309,6 @@ export function useAssistantRuntime(params: {
     [send]
   );
 
-  const toggleRecording = useCallback(async () => {
-    const service = oasisWindow.voiceInputService;
-    if (!service) {
-      setMessages(previous => [
-        ...previous,
-        {
-          id: uuid(),
-          role: "ai",
-          content: "Voice input is not available in this build.",
-        },
-      ]);
-      return;
-    }
-
-    try {
-      if (isRecording) {
-        try {
-          const text = await service.stopRecording();
-          setIsRecording(false);
-          if (text?.trim()) {
-            void send(text, { fromVoice: true });
-          } else {
-            setMessages(previous => [
-              ...previous,
-              {
-                id: uuid(),
-                role: "ai",
-                content:
-                  "Nothing recognized; try again, speak a bit longer, or use the hands-free voice button for different capture settings.",
-              },
-            ]);
-          }
-        } catch (error) {
-          console.error("Voice transcription failed:", error);
-          setIsRecording(false);
-          setMessages(previous => [
-            ...previous,
-            {
-              id: uuid(),
-              role: "ai",
-              content: transcribeFailureUserMessage(error),
-            },
-          ]);
-        }
-        return;
-      }
-
-      stopSpeaking();
-      await service.startRecording();
-      setIsRecording(true);
-    } catch (error) {
-      console.error("Voice recording failed:", error);
-      setIsRecording(false);
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not start voice recording.";
-      setMessages(previous => [
-        ...previous,
-        { id: uuid(), role: "ai", content: message },
-      ]);
-    }
-  }, [isRecording, send, stopSpeaking]);
-
   const handleConfirmationApprove = useCallback(async () => {
     setPendingConfirmation(null);
     stopSpeaking();
@@ -472,12 +399,10 @@ export function useAssistantRuntime(params: {
     input,
     setInput,
     busy,
-    isRecording,
     toolActions,
     activeToolAction,
     send,
     handleKeyDown,
-    toggleRecording,
     handleConfirmationApprove,
     handleConfirmationCancel,
     startToolAction,

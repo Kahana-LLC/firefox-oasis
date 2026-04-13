@@ -29,7 +29,9 @@ type FamilyDecisionHandler = (
   snapshot: RoutingStateSnapshot
 ) => DeterministicRouteDecision | null;
 
-const FAMILY_HANDLERS: Readonly<Record<IntentFamily, FamilyDecisionHandler | null>> = {
+const FAMILY_HANDLERS: Readonly<
+  Record<IntentFamily, FamilyDecisionHandler | null>
+> = {
   list: resolveManifestListRoute,
   search: resolveManifestSearchRoute,
   mutation: resolveManifestMutationRoute,
@@ -76,10 +78,10 @@ export function decideDeterministicRoute(
       reason: `${family}-family-unresolved`,
       message:
         family === "list"
-          ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder."
+          ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)"
           : family === "search"
-            ? "I could not determine what to search. Please specify query and optional folder/source."
-            : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly.",
+            ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)"
+            : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
     };
   }
 
@@ -90,7 +92,7 @@ export function decideDeterministicRoute(
       actionable: true,
       reason: "actionable-but-unsupported",
       message:
-        "I could not safely map that action to a specific browser command. Please be more explicit about the target.",
+        "I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](https://kahana.co/docs)",
     };
   }
 
