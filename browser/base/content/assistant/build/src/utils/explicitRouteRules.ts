@@ -198,6 +198,7 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       return null;
     },
   },
+];
 //   {
 //     next: "search_history",
 //     reason: "explicit-history-search",
@@ -235,8 +236,8 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
 // ];
 
 export function resolveExplicitRoute(
-    input: string
-  ): DeterministicRouteDecision | null {
+  input: string
+): DeterministicRouteDecision | null {
   const lower = input.toLowerCase();
   for (const rule of EXPLICIT_ROUTE_RULES) {
     const args = rule.resolve(input, lower);

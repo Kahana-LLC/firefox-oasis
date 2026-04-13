@@ -7,25 +7,21 @@
   window.assistantBridge = {
     openTab(url) {
       try {
-        // Try to open a tab in the most recent browser window (best-effort)
-        try {
-          const win = Services.wm.getMostRecentWindow('navigator:browser');
-          if (win && win.gBrowser) {
-            const fixed = url && !/^https?:\/\//i.test(url) ? `https://${url}` : url;
-            win.gBrowser.selectedTab = win.gBrowser.addTab(fixed);
-            return true;
-          }
-        } catch (e) {
-          void e;
+        const win = Services.wm.getMostRecentWindow('navigator:browser');
+        if (win && typeof win.openTrustedLinkIn === 'function') {
+          const fixed = url && !/^https?:\/\//i.test(url) ? `https://${url}` : url;
+          win.openTrustedLinkIn(fixed, 'tab');
+          return true;
         }
-
-        // Fallback: try window.open
-        window.open(url);
-        return true;
+        // Fallback: try openWebLinkIn
+        if (win && typeof win.openWebLinkIn === 'function') {
+          win.openWebLinkIn(url, 'tab', {});
+          return true;
+        }
       } catch (e) {
         console.error('assistantBridge.openTab error', e);
-        return false;
       }
+      return false;
     },
     async getAssistantHistory() {
       try {
