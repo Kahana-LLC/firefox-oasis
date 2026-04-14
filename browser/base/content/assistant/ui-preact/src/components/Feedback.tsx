@@ -8,6 +8,13 @@ interface FeedbackProps {
   onClose?: () => void;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuidString(value: string): boolean {
+  return UUID_RE.test(String(value || "").trim());
+}
+
 export function Feedback({ messageId, onClose }: FeedbackProps) {
   const oasisWindow = window as OasisWindow;
   const [showForm, setShowForm] = useState(false);
@@ -63,20 +70,23 @@ export function Feedback({ messageId, onClose }: FeedbackProps) {
         return false;
       }
 
-      const payload = {
+      const payload: Record<string, unknown> = {
         user_id: user.id,
         session_id: sessionId,
-        message_id: messageId,
         reported_at: new Date().toISOString(),
         negative_rating: isNegative,
         category,
-        additional_info: JSON.stringify({
+        additional_info: {
           badges: selectedBadges,
           comment: additionalInfo,
           include_context: includeContext,
-          contact_me: contactMe
-        })
+          contact_me: contactMe,
+          ...(isUuidString(messageId)
+            ? {}
+            : { client_message_id: messageId }),
+        },
       };
+      payload.message_id = isUuidString(messageId) ? messageId : null;
 
       const { error } = await supabase.from("feedback_events").insert(payload);
       if (error) {

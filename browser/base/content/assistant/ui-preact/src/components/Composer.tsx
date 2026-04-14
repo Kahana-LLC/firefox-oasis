@@ -31,7 +31,7 @@ export function Composer({
   onRequestSignIn?: () => void;
 }) {
   return (
-    <div className="input-bar">
+    <div className={`input-bar${busy ? ' input-bar--busy' : ''}`}>
       {!isAuthenticated ? (
         <button
           type="button"
@@ -132,7 +132,8 @@ export function Composer({
           </button>
 
           <button
-            className="send-btn composer-send-btn"
+            type="button"
+            className={`send-btn composer-send-btn${busy ? ' composer-send-btn--busy' : ''}`}
             onClick={onSend}
             disabled={busy || !isAuthenticated}
             title="Send"

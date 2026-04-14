@@ -439,13 +439,80 @@ body {
   z-index: 100;
 }
 
+.input-bar--busy {
+  border-top: 3px solid var(--primary-green);
+  background: linear-gradient(180deg, var(--primary-50) 0%, var(--surface-page) 20px);
+}
+
+.assistant-busy-bar {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--space-small) var(--space-medium);
+  background: var(--surface-page);
+  border: 1px solid rgba(122, 146, 0, 0.25);
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.assistant-busy-bar-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-small);
+}
+
+.assistant-busy-bar-spinner {
+  flex-shrink: 0;
+  margin-top: var(--space-xxsmall);
+}
+
+.assistant-busy-bar-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xsmall);
+}
+
+.assistant-busy-bar-primary {
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-headings);
+  line-height: 1.35;
+}
+
+.assistant-busy-bar-tool {
+  font-size: 12px;
+  color: var(--primary-green);
+  line-height: 1.35;
+}
+
+.assistant-busy-bar-tier {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+@keyframes assistant-send-busy-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.composer-send-btn--busy svg rect {
+  animation: assistant-send-busy-pulse 1s ease-in-out infinite;
+}
+
 .composer-toolbar {
   display: flex;
   flex-flow: row nowrap;
   align-items: center;
   gap: 5px;
   width: 100%;
-  min-height: 32px;
+  min-height: var(--size-item-large);
   min-width: 0;
   box-sizing: border-box;
   overflow-x: auto;
@@ -459,11 +526,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--size-item-large);
+  height: var(--size-item-large);
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--border-radius-circle);
   background: transparent;
   color: #7a9200;
   cursor: pointer;
@@ -484,7 +551,7 @@ body {
 
 .composer-toolbar-wave {
   flex-shrink: 0;
-  margin-right: 2px;
+  margin-right: var(--space-xxsmall);
 }
 
 .composer-toolbar-actions {
@@ -566,9 +633,9 @@ button.input-field.input-field-signin-prompt:disabled {
 }
 
 .send-btn.composer-tool-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
+  width: var(--size-item-large);
+  height: var(--size-item-large);
+  border-radius: var(--border-radius-large);
 }
 
 .send-btn.composer-send-btn {

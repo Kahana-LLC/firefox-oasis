@@ -37,3 +37,21 @@ FROM auth.users au
 WHERE NOT EXISTS (
   SELECT 1 FROM public.users pu WHERE pu.user_id = au.id
 );
+
+-- 7) RPC ensure_user_profile visible to PostgREST (run NOTIFY pgrst, 'reload schema' after deploy)
+SELECT n.nspname AS schema, p.proname AS name, pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public' AND p.proname = 'ensure_user_profile';
+
+-- 8) llm_usage columns used by the browser client (subscription.ts)
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'llm_usage'
+ORDER BY ordinal_position;
+
+-- 9) public.sessions policies (expect insert + select + update for authenticated own rows)
+SELECT policyname, cmd
+FROM pg_policies
+WHERE schemaname = 'public' AND tablename = 'sessions'
+ORDER BY policyname;

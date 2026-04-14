@@ -77,6 +77,7 @@ export function useAssistantRuntime(params: {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [responseStreaming, setResponseStreaming] = useState(false);
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
@@ -174,12 +175,17 @@ export function useAssistantRuntime(params: {
         { id: aiMessageId, role: "ai", content: "" },
       ]);
 
+      let sawContentChunk = false;
       const fullText = await run(
         prompt,
         (chunk: string) => {
           const normalized = normalizeAssistantChunk(chunk);
           if (!normalized) {
             return;
+          }
+          if (!sawContentChunk) {
+            sawContentChunk = true;
+            setResponseStreaming(true);
           }
           appendChunkToMessage(aiMessageId, normalized);
         },
@@ -261,6 +267,7 @@ export function useAssistantRuntime(params: {
 
       stopSpeaking();
       setInput("");
+      setResponseStreaming(false);
       setBusy(true);
       setToolActions([]);
       const userMessageId = uuid();
@@ -286,6 +293,7 @@ export function useAssistantRuntime(params: {
           { id: uuid(), role: "ai", content: `Error: ${String(error)}` },
         ]);
       } finally {
+        setResponseStreaming(false);
         setBusy(false);
       }
     },
@@ -312,11 +320,13 @@ export function useAssistantRuntime(params: {
   const handleConfirmationApprove = useCallback(async () => {
     setPendingConfirmation(null);
     stopSpeaking();
+    setResponseStreaming(false);
     setBusy(true);
     setToolActions([]);
     try {
       await runStreamTurn("yes", "text");
     } finally {
+      setResponseStreaming(false);
       setBusy(false);
     }
   }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
@@ -324,6 +334,7 @@ export function useAssistantRuntime(params: {
   const handleConfirmationCancel = useCallback(async () => {
     setPendingConfirmation(null);
     stopSpeaking();
+    setResponseStreaming(false);
     setBusy(true);
     setToolActions([]);
     try {
@@ -338,6 +349,7 @@ export function useAssistantRuntime(params: {
         { id: uuid(), role: "ai", content: "Action cancelled." },
       ]);
     } finally {
+      setResponseStreaming(false);
       setBusy(false);
     }
   }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
@@ -399,6 +411,7 @@ export function useAssistantRuntime(params: {
     input,
     setInput,
     busy,
+    responseStreaming,
     toolActions,
     activeToolAction,
     send,

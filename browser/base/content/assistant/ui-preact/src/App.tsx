@@ -6,6 +6,7 @@ import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatTimeline } from './components/ChatTimeline';
 import { Composer } from './components/Composer';
+import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
@@ -564,7 +565,10 @@ export function App() {
 
       <Header auth={auth} onShowAuth={() => setView('auth')} />
 
-      <div className="assistant-main">
+      <div
+        className="assistant-main"
+        aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
+      >
         <div className="assistant-scroll">
           {view === 'auth' ? (
             <Auth onSuccess={() => setView('chat')} onCancel={() => setView('chat')} />
@@ -590,6 +594,13 @@ export function App() {
           )}
         </div>
 
+        {view !== 'auth' && (
+          <AssistantBusyBar
+            busy={runtime.busy}
+            activeToolLabel={runtime.activeToolAction?.label || null}
+            responseStreaming={runtime.responseStreaming}
+          />
+        )}
         {view !== 'auth' && (
           <Composer
             input={runtime.input}

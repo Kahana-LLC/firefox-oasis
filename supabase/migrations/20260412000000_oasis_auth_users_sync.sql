@@ -9,6 +9,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  DELETE FROM public.users du
+  WHERE du.user_id IS DISTINCT FROM NEW.id
+    AND NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = du.user_id)
+    AND NULLIF(BTRIM(COALESCE(du.email, '')), '') IS NOT NULL
+    AND NULLIF(BTRIM(COALESCE(NEW.email, '')), '') IS NOT NULL
+    AND LOWER(BTRIM(du.email)) = LOWER(BTRIM(NEW.email));
+
   INSERT INTO public.users (user_id, email, name, password_hash, status)
   VALUES (
     NEW.id,

@@ -58,6 +58,13 @@ BEGIN
     NULLIF(BTRIM(SPLIT_PART(v_email, '@', 1)), '')
   );
 
+  DELETE FROM public.users du
+  WHERE du.user_id IS DISTINCT FROM uid
+    AND NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = du.user_id)
+    AND NULLIF(BTRIM(COALESCE(du.email, '')), '') IS NOT NULL
+    AND v_email IS NOT NULL AND BTRIM(v_email) <> ''
+    AND LOWER(BTRIM(du.email)) = LOWER(BTRIM(v_email));
+
   INSERT INTO public.users (user_id, email, name, password_hash, status)
   VALUES (uid, v_email, COALESCE(v_name, ''), '', 'active')
   ON CONFLICT (user_id) DO UPDATE SET
@@ -78,6 +85,15 @@ GRANT EXECUTE ON FUNCTION public.ensure_user_profile(text, text) TO authenticate
 -- -----------------------------------------------------------------------------
 -- One-time backfill: every auth user gets a public.users row (idempotent)
 -- -----------------------------------------------------------------------------
+DELETE FROM public.users pu
+WHERE NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = pu.user_id)
+  AND NULLIF(BTRIM(COALESCE(pu.email, '')), '') IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM auth.users au2
+    WHERE NULLIF(BTRIM(COALESCE(au2.email, '')), '') IS NOT NULL
+      AND LOWER(BTRIM(au2.email)) = LOWER(BTRIM(pu.email))
+  );
+
 INSERT INTO public.users (user_id, email, name, password_hash, status)
 SELECT
   au.id,
