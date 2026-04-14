@@ -33,6 +33,7 @@ html {
   --neutral-500: #999;
   --border-radius-xlg: 16px;
   --border-radius-lg: 12px;
+  --border-radius-circle: 50%;
 }
 
 body {

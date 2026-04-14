@@ -150,18 +150,24 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     }
 
     try {
-      let result: Awaited<ReturnType<typeof authService.signUp>>;
+      let result: Awaited<ReturnType<typeof authService.signUp>> | null = null;
       if (mode === 'signup') {
         result = await authService.signUp(email, password);
       } else if (mode === 'signin') {
         result = await authService.signInWithEmail(email, password);
       } else if (mode === 'forgotPassword') {
-        result = await authService.resetPasswordForEmail(email);
-        if (!result.error) {
+        const resetResult = await authService.resetPasswordForEmail(email);
+        if (!resetResult.error) {
           setSuccessMessage('Password reset email sent. Please check your inbox.');
           setLoading(false);
           return;
         }
+        result = { user: null, error: resetResult.error };
+      }
+
+      if (!result) {
+        setError('An error occurred');
+        return;
       }
 
       const { user, error: apiError } = result;

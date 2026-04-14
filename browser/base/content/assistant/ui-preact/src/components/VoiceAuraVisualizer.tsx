@@ -16,6 +16,11 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
   const micRef = useRef(0);
   const ttsRef = useRef(0);
   const timeRef = useRef(0);
+  const agentStateRef = useRef(agentState);
+
+  useEffect(() => {
+    agentStateRef.current = agentState;
+  }, [agentState]);
 
   useEffect(() => {
     const unsub = agent.on((event: VoiceAgentEvent) => {
@@ -62,10 +67,12 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
       const h = canvas.clientHeight || 200;
       ctx.clearRect(0, 0, w, h);
 
+      const currentState = agentStateRef.current;
+
       const breathe =
-        agentState === "thinking" || agentState === "transcribing"
+        currentState === "thinking" || currentState === "transcribing"
           ? 0.22 + Math.sin(t * 0.0022) * 0.08
-          : agentState === "idle"
+          : currentState === "idle"
             ? 0.08 + Math.sin(t * 0.0015) * 0.04
             : 0;
 
@@ -91,7 +98,7 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
         ctx.lineCap = "round";
         ctx.shadowBlur = 18 + energy * 28;
         ctx.shadowColor =
-          agentState === "speaking"
+          currentState === "speaking"
             ? `rgba(160, 200, 255, ${0.35 + tts * 0.45})`
             : `rgba(140, 200, 90, ${0.35 + mic * 0.45})`;
         const g = ctx.createLinearGradient(0, 0, w, 0);
@@ -124,7 +131,7 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
       cancelAnimationFrame(raf);
       ro?.disconnect();
     };
-  }, [agentState, agent]);
+  }, [agent]);
 
   return (
     <div className="voice-aura-wrap">

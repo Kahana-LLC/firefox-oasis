@@ -82,6 +82,10 @@ export interface SupabaseAuthLike {
     email: string,
     password: string
   ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  resetPasswordForEmail(
+    email: string
+  ): Promise<{ error?: { message?: string } | null }>;
+  handleAuthError?(error: unknown): string;
   onAuthStateChange?(
     cb: (state: SupabaseAuthState) => void
   ):

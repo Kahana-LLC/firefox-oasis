@@ -73,6 +73,10 @@ how to call
 - build searchTerm as a concise, descriptive query; rewrite vague requests into title-like phrases and do not invent unrelated tokens
 - if the user requests a time period without a topic, call the tool with no searchTerm and only the time filter
 - extract temporal intent if present and map it to concrete ISO 8601 startTs/endTs using the smallest reasonable calendar span; otherwise set both to null
+how to format
+- format retrieved history results clearly using standard Markdown
+- show the match percentage (derived from the relevance score) for each retrieved page
+- provide clickable markdown links to the retrieved URLs
 
 # Tool Call Rules
 

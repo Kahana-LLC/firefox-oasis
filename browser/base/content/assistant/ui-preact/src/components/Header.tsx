@@ -73,7 +73,7 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         padding: '0 8px', // Figma has less padding on edges of the internal row
         background: 'transparent',
         cursor: 'grab',
-        zIndex: 2147483647,
+        zIndex: 1000,
         boxSizing: 'border-box',
         userSelect: 'none',
         flexShrink: 0,
