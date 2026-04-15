@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-sign-release:
-    runs-on: macos-14
+    runs-on: macos-15
     environment: canary-signing
     steps:
       - name: Checkout selected ref
