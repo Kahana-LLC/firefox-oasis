@@ -267,6 +267,7 @@ jobs:
       - name: Build and stage package
         run: |
           set -euo pipefail
+          unset MOZ_AUTOMATION
           # 1. Build binaries
           ./mach build
           
