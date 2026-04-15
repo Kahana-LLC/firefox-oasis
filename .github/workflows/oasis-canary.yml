@@ -264,6 +264,12 @@ jobs:
             -passin "file:${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
             -nokeys -noout >/dev/null
 
+      - name: Probe Apple SDK URL
+        run: |
+          set -euo pipefail
+          URL="https://swcdn.apple.com/content/downloads/60/22/089-71960-A_W8BL1RUJJ6/5zkyplomhk1cm7z6xja2ktgapnhhti6wwd/CLTools_macOSNMOS_SDK.pkg"
+          curl -I -L "${URL}"
+
       - name: Build and stage package
         run: |
           set -euo pipefail
