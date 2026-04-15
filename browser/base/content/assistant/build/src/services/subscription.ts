@@ -318,18 +318,24 @@ export class SubscriptionService {
       );
     }
 
-    if (usageError) {
-      logWarn(
-        "refreshUsageData: DB fetch failed (RLS?), using local only.",
-        usageError.message
-      );
-    }
-
     // 3. Get Local Usage (Fail-safe)
     const localTotal = await localMemory.getUsage(userId);
 
-    // 4. Reconcile: Take the MAX (never go backwards)
-    this.cachedUsage = Math.max(dbTotal, localTotal);
+    // 4. Reconcile: DB is source of truth if fetch succeeds
+    if (!usageError && usageData) {
+      this.cachedUsage = dbTotal;
+      // Sync local down to DB truth (resets at month rollover)
+      localMemory.saveUsage(userId, dbTotal).catch(e => logWarn("refreshUsageData: sync local:", e));
+    } else {
+      if (usageError) {
+        logWarn(
+          "refreshUsageData: DB fetch failed (RLS?), using local only.",
+          usageError.message
+        );
+      }
+      this.cachedUsage = Math.max(dbTotal, localTotal);
+    }
+
     logDebug(
       `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
     );

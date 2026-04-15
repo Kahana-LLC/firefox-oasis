@@ -141,6 +141,9 @@ type DOMPurifyLike = {
 export type OasisWindow = Window & {
   oasisAuthState?: AuthState;
   supabaseAuth?: SupabaseAuthLike;
+  subscriptionService?: {
+    forceRefresh?: () => Promise<void>;
+  };
   assistantBridge?: AssistantBridgeLike;
   runAssistantStream?: RunAssistantStream;
   voiceInputService?: {

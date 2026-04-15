@@ -34,6 +34,7 @@ import type { VoiceUiDelivery } from "../../shared/contracts.js";
 const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
 assistantWindow.supabaseAuth = supabaseAuth;
+assistantWindow.subscriptionService = subscriptionService;
 assistantWindow.voiceInputService = voiceInputService;
 assistantWindow.textToSpeech = textToSpeech;
 assistantWindow.marked = marked;

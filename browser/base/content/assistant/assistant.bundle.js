@@ -60634,14 +60634,19 @@ Content: ${content}`;
           0
         );
       }
-      if (usageError) {
-        logWarn2(
-          "refreshUsageData: DB fetch failed (RLS?), using local only.",
-          usageError.message
-        );
-      }
       const localTotal = await localMemory.getUsage(userId);
-      this.cachedUsage = Math.max(dbTotal, localTotal);
+      if (!usageError && usageData) {
+        this.cachedUsage = dbTotal;
+        localMemory.saveUsage(userId, dbTotal).catch((e2) => logWarn2("refreshUsageData: sync local:", e2));
+      } else {
+        if (usageError) {
+          logWarn2(
+            "refreshUsageData: DB fetch failed (RLS?), using local only.",
+            usageError.message
+          );
+        }
+        this.cachedUsage = Math.max(dbTotal, localTotal);
+      }
       logDebug2(
         `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
       );
@@ -90625,6 +90630,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   var supabaseAuth4 = SupabaseAuth.getInstance();
   var assistantWindow = window;
   assistantWindow.supabaseAuth = supabaseAuth4;
+  assistantWindow.subscriptionService = subscriptionService;
   assistantWindow.voiceInputService = voiceInput_default;
   assistantWindow.textToSpeech = textToSpeech;
   assistantWindow.marked = d;

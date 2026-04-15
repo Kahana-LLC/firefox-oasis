@@ -422,6 +422,7 @@ export function App() {
 
   const originalResetRef = useRef(oasisWindow.resetAssistantSession);
   const handleAuthenticated = useCallback(() => {
+    void oasisWindow.subscriptionService?.forceRefresh?.();
     setView('chat');
   }, []);
   const handleUserChanged = useCallback(() => {
