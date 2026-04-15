@@ -425,15 +425,18 @@ export function App() {
     void oasisWindow.subscriptionService?.forceRefresh?.();
     setView('chat');
   }, []);
-  const handleUserChanged = useCallback(() => {
-    setBannerVisible(true);
-  }, []);
 
   const runtime = useAssistantRuntime({
     auth,
     setPendingConfirmation,
     originalResetAssistantSession: originalResetRef.current,
   });
+
+  const handleUserChanged = useCallback(() => {
+    setBannerVisible(true);
+    void runtime.resetAssistantSession();
+    void oasisWindow.subscriptionService?.forceRefresh?.();
+  }, [runtime.resetAssistantSession]);
 
   useAssistantBridge({
     startToolAction: runtime.startToolAction,
