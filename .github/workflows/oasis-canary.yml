@@ -107,6 +107,18 @@ jobs:
           EOF
           echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
 
+      - name: Select Xcode 26.2
+        run: |
+          set -euo pipefail
+          XCODE_DEVELOPER_DIR="/Applications/Xcode_26.2.app/Contents/Developer"
+          if [ ! -d "${XCODE_DEVELOPER_DIR}" ]; then
+            echo "Missing Xcode 26.2 at ${XCODE_DEVELOPER_DIR}" >&2
+            exit 1
+          fi
+          sudo xcode-select -s "${XCODE_DEVELOPER_DIR}"
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+
       - name: Install rcodesign
         run: |
           set -euo pipefail
@@ -268,27 +280,6 @@ jobs:
         run: |
           set -euo pipefail
           unset MOZ_AUTOMATION
-          SDK_STAGE_DIR="${RUNNER_TEMP}/sdk-stage"
-          SDK_CACHE_DIR="${RUNNER_TEMP}/toolchain-cache"
-          SDK_STATE_DIR="${RUNNER_TEMP}/mozbuild-state"
-          SDK_DIR="${SDK_STAGE_DIR}/MacOSX26.2.sdk"
-
-          rm -rf "${SDK_STAGE_DIR}" "${SDK_CACHE_DIR}" "${SDK_STATE_DIR}"
-          mkdir -p "${SDK_STAGE_DIR}" "${SDK_CACHE_DIR}" "${SDK_STATE_DIR}"
-
-          (
-            cd "${SDK_STAGE_DIR}"
-            MOZBUILD_STATE_PATH="${SDK_STATE_DIR}" \
-              "${GITHUB_WORKSPACE}/mach" artifact toolchain \
-              --from-build macosx64-sdk-26.2 \
-              --cache-dir "${SDK_CACHE_DIR}" \
-              --retry 5
-          )
-
-          test -f "${SDK_DIR}/SDKSettings.json" -o -f "${SDK_DIR}/SDKSettings.plist"
-          printf '\nac_add_options --with-macos-sdk=%s\n' "${SDK_DIR}" >> "${MOZCONFIG}"
-          echo "Using macOS SDK from ${SDK_DIR}"
-
           # 1. Build binaries
           ./mach build
           
