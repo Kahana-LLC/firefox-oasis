@@ -281,7 +281,8 @@ jobs:
             "Library/Developer/CommandLineTools/SDKs/MacOSX26.2.sdk" \
             "${SDK_ROOT}"
 
-          echo "MACOS_SDK_DIR=${SDK_ROOT}/MacOSX26.2.sdk" >> "${GITHUB_ENV}"
+          test -f "${SDK_ROOT}/SDKSettings.json" -o -f "${SDK_ROOT}/SDKSettings.plist"
+          echo "MACOS_SDK_DIR=${SDK_ROOT}" >> "${GITHUB_ENV}"
 
       - name: Build and stage package
         run: |
