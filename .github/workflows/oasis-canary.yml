@@ -264,11 +264,24 @@ jobs:
             -passin "file:${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
             -nokeys -noout >/dev/null
 
-      - name: Probe Apple SDK URL
+      - name: Fetch macOS SDK explicitly
         run: |
           set -euo pipefail
-          URL="https://swcdn.apple.com/content/downloads/60/22/089-71960-A_W8BL1RUJJ6/5zkyplomhk1cm7z6xja2ktgapnhhti6wwd/CLTools_macOSNMOS_SDK.pkg"
-          curl -I -L "${URL}"
+          SDK_URL="https://swcdn.apple.com/content/downloads/60/22/089-71960-A_W8BL1RUJJ6/5zkyplomhk1cm7z6xja2ktgapnhhti6wwd/CLTools_macOSNMOS_SDK.pkg"
+          SDK_SHA="f3785f1bbc3b8323121b66fc28ef59083b4f508c7bdabb9d8d916f142ee89b01cb8030eba469eb9107b416d1c9d523a1d2e009cddb83536a819a3704a5d3ce17"
+          SDK_PKG="${RUNNER_TEMP}/MacOSX26.2.pkg"
+          SDK_ROOT="${RUNNER_TEMP}/sdk"
+
+          curl -fL "${SDK_URL}" -o "${SDK_PKG}"
+          mkdir -p "${SDK_ROOT}"
+
+          python3 taskcluster/scripts/misc/unpack-sdk.py \
+            "file://${SDK_PKG}" \
+            "${SDK_SHA}" \
+            "Library/Developer/CommandLineTools/SDKs/MacOSX26.2.sdk" \
+            "${SDK_ROOT}"
+
+          echo "MACOS_SDK_DIR=${SDK_ROOT}/MacOSX26.2.sdk" >> "${GITHUB_ENV}"
 
       - name: Build and stage package
         run: |
