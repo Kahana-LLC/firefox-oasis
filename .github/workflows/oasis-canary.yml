@@ -268,23 +268,26 @@ jobs:
         run: |
           set -euo pipefail
           unset MOZ_AUTOMATION
-          SDK_URL="https://swcdn.apple.com/content/downloads/60/22/089-71960-A_W8BL1RUJJ6/5zkyplomhk1cm7z6xja2ktgapnhhti6wwd/CLTools_macOSNMOS_SDK.pkg"
-          SDK_SHA="f3785f1bbc3b8323121b66fc28ef59083b4f508c7bdabb9d8d916f142ee89b01cb8030eba469eb9107b416d1c9d523a1d2e009cddb83536a819a3704a5d3ce17"
-          SDK_PKG="${RUNNER_TEMP}/MacOSX26.2.pkg"
-          SDK_ROOT="${RUNNER_TEMP}/sdk"
+          SDK_STAGE_DIR="${RUNNER_TEMP}/sdk-stage"
+          SDK_CACHE_DIR="${RUNNER_TEMP}/toolchain-cache"
+          SDK_STATE_DIR="${RUNNER_TEMP}/mozbuild-state"
+          SDK_DIR="${SDK_STAGE_DIR}/MacOSX26.2.sdk"
 
-          curl -fL "${SDK_URL}" -o "${SDK_PKG}"
-          mkdir -p "${SDK_ROOT}"
+          rm -rf "${SDK_STAGE_DIR}" "${SDK_CACHE_DIR}" "${SDK_STATE_DIR}"
+          mkdir -p "${SDK_STAGE_DIR}" "${SDK_CACHE_DIR}" "${SDK_STATE_DIR}"
 
-          python3 taskcluster/scripts/misc/unpack-sdk.py \
-            "file://${SDK_PKG}" \
-            "${SDK_SHA}" \
-            "Library/Developer/CommandLineTools/SDKs/MacOSX26.2.sdk" \
-            "${SDK_ROOT}"
+          (
+            cd "${SDK_STAGE_DIR}"
+            MOZBUILD_STATE_PATH="${SDK_STATE_DIR}" \
+              "${GITHUB_WORKSPACE}/mach" artifact toolchain \
+              --from-build macosx64-sdk-26.2 \
+              --cache-dir "${SDK_CACHE_DIR}" \
+              --retry 5
+          )
 
-          test -f "${SDK_ROOT}/SDKSettings.json" -o -f "${SDK_ROOT}/SDKSettings.plist"
-          printf '\nac_add_options --with-macos-sdk=%s\n' "${SDK_ROOT}" >> "${MOZCONFIG}"
-          echo "Using macOS SDK from ${SDK_ROOT}"
+          test -f "${SDK_DIR}/SDKSettings.json" -o -f "${SDK_DIR}/SDKSettings.plist"
+          printf '\nac_add_options --with-macos-sdk=%s\n' "${SDK_DIR}" >> "${MOZCONFIG}"
+          echo "Using macOS SDK from ${SDK_DIR}"
 
           # 1. Build binaries
           ./mach build
