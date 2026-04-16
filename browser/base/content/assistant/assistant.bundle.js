@@ -48323,16 +48323,9 @@ Content: ${content}`;
   var supabaseAuth = SupabaseAuth.getInstance();
 
   // src/services/subscription.ts
-  var PLAN_LIMITS = {
-    "free": 50,
-    "basic": 1500,
-    // $20/mo
-    "pro": 3e3
-    // $40/mo
-  };
-  var DEFAULT_LIMIT = 50;
-  var COST_TEXT = 1;
-  var COST_VOICE = 10;
+  var DEFAULT_LIMIT = 1e4;
+  var PAID_FALLBACK_LIMIT = 2e5;
+  var CACHE_TTL = 60 * 1e3;
   var logDebug3 = (message, ...meta) => {
     assistantLogger.debug(
       "subscription",
@@ -48359,9 +48352,8 @@ Content: ${content}`;
     // Cache current plan details to avoid hitting DB on every keystroke
     cachedLimit = null;
     cachedUsage = 0;
+    cachedUsageDate = null;
     lastFetchTime = 0;
-    CACHE_TTL = 60 * 1e3;
-    // 1 minute cache
     constructor() {
     }
     static getInstance() {
@@ -48371,35 +48363,17 @@ Content: ${content}`;
       return _SubscriptionService.instance;
     }
     /**
-     * Track usage for a command
-     * @param type 'text' or 'voice'
-     * @param model Optional model name for record keeping
+     * Backend now records usage authoritatively. Keep this method as a
+     * lightweight cache invalidation hook so existing callers keep working.
      */
-    async trackUsage(type, model = "gemini-1.5-flash", meta) {
+    async trackUsage(_type, _model = "gemini-2.5-flash", _meta) {
       const user = await supabaseAuth.getCurrentUser();
       if (!user) {
         logWarn3("trackUsage: No user found.");
         return;
       }
-      const units = type === "voice" ? COST_VOICE : COST_TEXT;
-      logDebug3(`trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`);
-      this.cachedUsage += units;
-      logDebug3(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
-      localMemory.saveUsage(user.id, this.cachedUsage).catch((e) => logError3("Failed to save local usage:", e));
-      const supabase = supabaseAuth.supabase;
-      supabase.from("llm_usage").insert({
-        user_id: user.id,
-        usage_count: units,
-        model_used: `${type}:${model}`,
-        success: true,
-        command_type: meta?.command_type ?? null,
-        user_intent: meta?.user_intent ?? null,
-        input_tokens: meta?.input_tokens ?? null,
-        output_tokens: meta?.output_tokens ?? null
-      }).then(({ error }) => {
-        if (error) logError3("Failed to track usage (DB Insert):", error);
-        else logDebug3("trackUsage: DB insert successful");
-      });
+      this.lastFetchTime = 0;
+      this.forceRefresh().catch((error) => logError3("trackUsage: Failed to refresh usage:", error));
     }
     /**
      * Check if the user can proceed with a command
@@ -48409,7 +48383,7 @@ Content: ${content}`;
       if (!user) {
         return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
       }
-      if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+      if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > CACHE_TTL) {
         await this.refreshUsageData(user.id);
       }
       const limit = this.cachedLimit ?? DEFAULT_LIMIT;
@@ -48418,7 +48392,8 @@ Content: ${content}`;
         totalUnits: this.cachedUsage,
         limit,
         remaining,
-        isLimitReached: this.cachedUsage >= limit
+        isLimitReached: this.cachedUsage >= limit,
+        usageDate: this.cachedUsageDate ?? void 0
       };
     }
     getSubscriptionUrl() {
@@ -48435,11 +48410,12 @@ Content: ${content}`;
       const supabase = supabaseAuth.supabase;
       logDebug3("refreshUsageData: syncing usage...");
       let limit = DEFAULT_LIMIT;
+      const usageDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       const { data: planData, error: planError } = await supabase.from("user_plans").select(`
                 plan_id,
                 stripe_subscription_id,
                 is_active,
-                plans ( name, llm_call_limit )
+                plans ( daily_token_limit )
             `).eq("user_id", userId).eq("is_active", true).maybeSingle();
       logDebug3(`refreshUsageData: Primary query result:`, {
         planData,
@@ -48448,14 +48424,10 @@ Content: ${content}`;
         userId
       });
       if (planData && planData.plans) {
-        const dbLimit = planData.plans.llm_call_limit;
-        const planName = (planData.plans.name || "").toLowerCase();
+        const dbLimit = planData.plans.daily_token_limit;
         if (dbLimit) {
           limit = dbLimit;
           logDebug3(`refreshUsageData: Using plan limit from DB: ${limit}`);
-        } else if (PLAN_LIMITS[planName]) {
-          limit = PLAN_LIMITS[planName];
-          logDebug3(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
         }
       } else if (planData && planData.is_active) {
         const stripeSubId = planData.stripe_subscription_id;
@@ -48466,8 +48438,8 @@ Content: ${content}`;
           is_active: planData.is_active
         });
         if (hasStripeSubscription) {
-          limit = PLAN_LIMITS["basic"];
-          logDebug3(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+          limit = PAID_FALLBACK_LIMIT;
+          logDebug3(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id from primary query: ${stripeSubId}`);
         } else {
           logWarn3("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
         }
@@ -48492,8 +48464,8 @@ Content: ${content}`;
             type: typeof stripeSubId
           });
           if (hasStripeSubscription) {
-            limit = PLAN_LIMITS["basic"];
-            logDebug3(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+            limit = PAID_FALLBACK_LIMIT;
+            logDebug3(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id: ${stripeSubId}`);
           } else {
             logWarn3("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
           }
@@ -48507,19 +48479,16 @@ Content: ${content}`;
       logDebug3(`refreshUsageData: Final limit set to: ${limit}`);
       this.cachedLimit = limit;
       let dbTotal = 0;
-      const startOfMonth = /* @__PURE__ */ new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const { data: usageData, error: usageError } = await supabase.from("llm_usage").select("usage_count").eq("user_id", userId).gte("timestamp", startOfMonth.toISOString());
+      const { data: usageData, error: usageError } = await supabase.from("llm_daily_usage").select("total_tokens").eq("user_id", userId).eq("usage_date", usageDate).maybeSingle();
       if (usageData) {
-        dbTotal = usageData.reduce((acc, row) => acc + (row.usage_count || 0), 0);
+        dbTotal = Number(usageData.total_tokens || 0);
       }
       if (usageError) {
-        logWarn3("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
+        logWarn3("refreshUsageData: Daily usage fetch failed.", usageError.message);
       }
-      const localTotal = await localMemory.getUsage(userId);
-      this.cachedUsage = Math.max(dbTotal, localTotal);
-      logDebug3(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
+      this.cachedUsage = Math.max(0, dbTotal);
+      this.cachedUsageDate = usageDate;
+      logDebug3(`refreshUsageData: usage_date=${usageDate}, total_tokens=${this.cachedUsage}`);
       this.lastFetchTime = Date.now();
     }
   };
@@ -51423,7 +51392,8 @@ ${content}`
       topWin.openTrustedLinkIn(url, "tab");
       return {
         message: `Opened subscription page.
-Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
+Usage today: ${stats.totalUnits} tokens / ${stats.limit} token limit.
+Resets at midnight UTC.`
       };
     }
   };
@@ -69989,12 +69959,21 @@ ${message}` : message;
     return sessionController.getAssistantHistory();
   }
   assistantWindow.getAssistantHistory = getAssistantHistory;
+  async function getAssistantUsageStats() {
+    return subscriptionService.checkAvailability();
+  }
+  assistantWindow.getAssistantUsageStats = getAssistantUsageStats;
+  async function refreshAssistantUsageStats() {
+    await subscriptionService.forceRefresh();
+    return subscriptionService.checkAvailability();
+  }
+  assistantWindow.refreshAssistantUsageStats = refreshAssistantUsageStats;
   async function runAssistantStream(prompt, onChunk, inputType = "text", messageId) {
     const isAuthenticated = await supabaseAuth4.isAuthenticated();
     if (isAuthenticated) {
       const stats = await subscriptionService.checkAvailability();
       if (stats.isLimitReached) {
-        const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
+        const msg = `Daily token limit reached (${stats.totalUnits}/${stats.limit} tokens). Resets at midnight UTC.`;
         onChunk(msg);
         return msg;
       }

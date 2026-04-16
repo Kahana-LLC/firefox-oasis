@@ -36,6 +36,14 @@ export interface AuthState {
   user: AuthUser | string | null;
 }
 
+export interface AssistantUsageStats {
+  totalUnits: number;
+  limit: number;
+  remaining: number;
+  isLimitReached: boolean;
+  usageDate?: string;
+}
+
 export type ConfirmationData = PendingConfirmationPayload;
 export type AssistantHistoryEntry = AssistantHistoryWireEntry;
 
@@ -88,6 +96,8 @@ export type OasisWindow = Window & {
   oasisAuthState?: AuthState;
   supabaseAuth?: SupabaseAuthLike;
   assistantBridge?: AssistantBridgeLike;
+  getAssistantUsageStats?: () => Promise<AssistantUsageStats>;
+  refreshAssistantUsageStats?: () => Promise<AssistantUsageStats>;
   runAssistantStream?: RunAssistantStream;
   voiceInputService?: {
     startRecording(): Promise<void>;

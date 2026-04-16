@@ -1,5 +1,6 @@
 import type { BaseMessage } from "@langchain/core/messages";
 import type SupabaseAuth from "../services/supabase.js";
+import type { UsageStats as AssistantUsageStats } from "../services/subscription.js";
 import type voiceInputService from "../services/voiceInput.js";
 import type {
   OasisRecordToolActionStart,
@@ -199,6 +200,8 @@ export type AssistantWindowLike = Window & {
   DOMPurify?: unknown;
   resetAssistantSession?: () => void;
   getAssistantHistory?: () => BaseMessage[];
+  getAssistantUsageStats?: () => Promise<AssistantUsageStats>;
+  refreshAssistantUsageStats?: () => Promise<AssistantUsageStats>;
   runAssistantStream?: RunAssistantStream;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;

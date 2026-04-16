@@ -1,4 +1,17 @@
 import { h } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { ProgressRing } from './ProgressRing';
+import type { AssistantUsageStats, OasisWindow } from '../types';
+
+const oasisWindow: OasisWindow = window;
+
+function toUsagePercent(stats: AssistantUsageStats | null): number {
+  if (!stats || !Number.isFinite(stats.limit) || stats.limit <= 0) {
+    return 0;
+  }
+  const used = Number.isFinite(stats.totalUnits) ? stats.totalUnits : 0;
+  return Math.max(0, Math.min((used / stats.limit) * 100, 100));
+}
 
 export function Composer({
   input,
@@ -23,6 +36,56 @@ export function Composer({
   onResetSession: () => void;
   onFeedback: () => void;
 }) {
+  const wasBusyRef = useRef(busy);
+  const [usageStats, setUsageStats] = useState<AssistantUsageStats | null>(null);
+  const usagePercent = toUsagePercent(usageStats);
+
+  const updateUsageStats = (stats: AssistantUsageStats) => {
+    setUsageStats(stats);
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUsageStats(null);
+      return;
+    }
+
+    if (typeof oasisWindow.getAssistantUsageStats !== 'function') {
+      return;
+    }
+
+    oasisWindow
+      .getAssistantUsageStats()
+      .then(updateUsageStats)
+      .catch((error) => {
+        console.error('Composer usage stats failed', error);
+      });
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const wasBusy = wasBusyRef.current;
+    wasBusyRef.current = busy;
+
+    if (!isAuthenticated || wasBusy === false || busy === true) {
+      return;
+    }
+
+    const refreshUsageStats =
+      typeof oasisWindow.refreshAssistantUsageStats === 'function'
+        ? oasisWindow.refreshAssistantUsageStats
+        : oasisWindow.getAssistantUsageStats;
+
+    if (typeof refreshUsageStats !== 'function') {
+      return;
+    }
+
+    refreshUsageStats()
+      .then(updateUsageStats)
+      .catch((error) => {
+        console.error('Composer usage stats refresh failed', error);
+      });
+  }, [busy, isAuthenticated]);
+
   return (
     <div className="input-bar">
       <textarea
@@ -81,6 +144,20 @@ export function Composer({
               ))}
             </div>
           )}
+
+          <div
+            aria-hidden="true"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 'none',
+              width: '32px',
+              height: '32px',
+            }}
+          >
+            <ProgressRing radius={13} stroke={11} progress={usagePercent} />
+          </div>
 
           <button
             className="send-btn"

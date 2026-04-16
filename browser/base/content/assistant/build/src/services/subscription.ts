@@ -1,23 +1,10 @@
 import { supabaseAuth } from "./supabase";
-import { localMemory } from "./localMemory";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import type { UsageMeta } from "../assistant/messageUtils.js";
 
-// Plan Limits (Units per month)
-// Plan A ($20): 1500 units
-// Plan B ($40): 3000 units
-// Default/Free: 50 units (trial)
-const PLAN_LIMITS: Record<string, number> = {
-    "free": 50,
-    "basic": 1500, // $20/mo
-    "pro": 3000    // $40/mo
-};
-
-const DEFAULT_LIMIT = 50;
-
-// Unit Costs
-const COST_TEXT = 1;
-const COST_VOICE = 10;
+const DEFAULT_LIMIT = 10000;
+const PAID_FALLBACK_LIMIT = 200000;
+const CACHE_TTL = 60 * 1000;
 
 const logDebug = (message: unknown, ...meta: unknown[]): void => {
     assistantLogger.debug(
@@ -48,6 +35,7 @@ export interface UsageStats {
     limit: number;
     remaining: number;
     isLimitReached: boolean;
+    usageDate?: string;
 }
 
 export class SubscriptionService {
@@ -56,8 +44,8 @@ export class SubscriptionService {
     // Cache current plan details to avoid hitting DB on every keystroke
     private cachedLimit: number | null = null;
     private cachedUsage: number = 0;
+    private cachedUsageDate: string | null = null;
     private lastFetchTime: number = 0;
-    private readonly CACHE_TTL = 60 * 1000; // 1 minute cache
 
     private constructor() {}
 
@@ -69,44 +57,17 @@ export class SubscriptionService {
     }
 
     /**
-     * Track usage for a command
-     * @param type 'text' or 'voice'
-     * @param model Optional model name for record keeping
+     * Backend now records usage authoritatively. Keep this method as a
+     * lightweight cache invalidation hook so existing callers keep working.
      */
-    public async trackUsage(type: 'text' | 'voice', model: string = 'gemini-1.5-flash', meta?: UsageMeta): Promise<void> {
+    public async trackUsage(_type: 'text' | 'voice', _model: string = 'gemini-2.5-flash', _meta?: UsageMeta): Promise<void> {
         const user = await supabaseAuth.getCurrentUser();
         if (!user) {
             logWarn("trackUsage: No user found.");
             return;
         }
-
-        // Calculate units
-        const units = type === 'voice' ? COST_VOICE : COST_TEXT;
-        logDebug(`trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`);
-
-        // Optimistically update cache
-        this.cachedUsage += units;
-        logDebug(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
-        
-        // Fail-safe: Save to local memory immediately so we don't lose it if DB fails
-        localMemory.saveUsage(user.id, this.cachedUsage).catch(e => logError("Failed to save local usage:", e));
-
-        // Async fire-and-forget insert to not block UI
-        const supabase = (supabaseAuth as any).supabase;
-        
-        supabase.from('llm_usage').insert({
-            user_id: user.id,
-            usage_count: units, 
-            model_used: `${type}:${model}`,
-            success: true,
-            command_type: meta?.command_type ?? null,
-            user_intent: meta?.user_intent ?? null,
-            input_tokens: meta?.input_tokens ?? null,
-            output_tokens: meta?.output_tokens ?? null,
-        }).then(({ error }: any) => {
-            if (error) logError("Failed to track usage (DB Insert):", error);
-            else logDebug("trackUsage: DB insert successful");
-        });
+        this.lastFetchTime = 0;
+        this.forceRefresh().catch(error => logError("trackUsage: Failed to refresh usage:", error));
     }
 
     /**
@@ -122,7 +83,7 @@ export class SubscriptionService {
         }
 
         // Refresh cache if stale or never fetched
-        if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+        if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > CACHE_TTL) {
             await this.refreshUsageData(user.id);
         }
 
@@ -134,7 +95,8 @@ export class SubscriptionService {
             totalUnits: this.cachedUsage,
             limit,
             remaining,
-            isLimitReached: this.cachedUsage >= limit
+            isLimitReached: this.cachedUsage >= limit,
+            usageDate: this.cachedUsageDate ?? undefined,
         };
     }
 
@@ -154,8 +116,8 @@ export class SubscriptionService {
         const supabase = (supabaseAuth as any).supabase;
         logDebug("refreshUsageData: syncing usage...");
 
-        // 1. Get User Plan Limit
         let limit = DEFAULT_LIMIT;
+        const usageDate = new Date().toISOString().slice(0, 10);
 
         const { data: planData, error: planError } = await supabase
             .from('user_plans')
@@ -163,7 +125,7 @@ export class SubscriptionService {
                 plan_id,
                 stripe_subscription_id,
                 is_active,
-                plans ( name, llm_call_limit )
+                plans ( daily_token_limit )
             `)
             .eq('user_id', userId)
             .eq('is_active', true)
@@ -177,14 +139,10 @@ export class SubscriptionService {
         });
 
         if (planData && planData.plans) {
-            const dbLimit = planData.plans.llm_call_limit;
-            const planName = (planData.plans.name || "").toLowerCase();
+            const dbLimit = planData.plans.daily_token_limit;
             if (dbLimit) {
                 limit = dbLimit;
                 logDebug(`refreshUsageData: Using plan limit from DB: ${limit}`);
-            } else if (PLAN_LIMITS[planName]) {
-                limit = PLAN_LIMITS[planName];
-                logDebug(`refreshUsageData: Using plan limit from name mapping: ${limit}`);
             }
         } else if (planData && planData.is_active) {
             const stripeSubId = planData.stripe_subscription_id;
@@ -199,8 +157,8 @@ export class SubscriptionService {
             });
             
             if (hasStripeSubscription) {
-                limit = PLAN_LIMITS["basic"];
-                logDebug(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`);
+                limit = PAID_FALLBACK_LIMIT;
+                logDebug(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id from primary query: ${stripeSubId}`);
             } else {
                 logWarn("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
             }
@@ -238,8 +196,8 @@ export class SubscriptionService {
                 });
                 
                 if (hasStripeSubscription) {
-                    limit = PLAN_LIMITS["basic"];
-                    logDebug(`refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`);
+                    limit = PAID_FALLBACK_LIMIT;
+                    logDebug(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id: ${stripeSubId}`);
                 } else {
                     logWarn("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
                 }
@@ -254,33 +212,26 @@ export class SubscriptionService {
         logDebug(`refreshUsageData: Final limit set to: ${limit}`);
         this.cachedLimit = limit;
 
-        // 2. Get Current Month Usage from DB
         let dbTotal = 0;
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
 
         const { data: usageData, error: usageError } = await supabase
-            .from('llm_usage')
-            .select('usage_count')
+            .from('llm_daily_usage')
+            .select('total_tokens')
             .eq('user_id', userId)
-            .gte('timestamp', startOfMonth.toISOString());
+            .eq('usage_date', usageDate)
+            .maybeSingle();
 
         if (usageData) {
-            dbTotal = usageData.reduce((acc: number, row: any) => acc + (row.usage_count || 0), 0);
+            dbTotal = Number(usageData.total_tokens || 0);
         }
         
         if (usageError) {
-             logWarn("refreshUsageData: DB fetch failed (RLS?), using local only.", usageError.message);
+             logWarn("refreshUsageData: Daily usage fetch failed.", usageError.message);
         }
 
-        // 3. Get Local Usage (Fail-safe)
-        const localTotal = await localMemory.getUsage(userId);
-
-        // 4. Reconcile: Take the MAX (never go backwards)
-        this.cachedUsage = Math.max(dbTotal, localTotal);
-        logDebug(`refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`);
-
+        this.cachedUsage = Math.max(0, dbTotal);
+        this.cachedUsageDate = usageDate;
+        logDebug(`refreshUsageData: usage_date=${usageDate}, total_tokens=${this.cachedUsage}`);
         this.lastFetchTime = Date.now();
     }
 }

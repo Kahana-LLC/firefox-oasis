@@ -1292,7 +1292,10 @@ export class ShowSubscriptionCommand implements Command {
     topWin.openTrustedLinkIn(url, "tab");
 
     return {
-      message: `Opened subscription page.\nUsage this month: ${stats.totalUnits} units / ${stats.limit} limit.`,
+      message:
+        `Opened subscription page.\n` +
+        `Usage today: ${stats.totalUnits} tokens / ${stats.limit} token limit.\n` +
+        "Resets at midnight UTC.",
     };
   }
 }
