@@ -305,26 +305,10 @@ type UsageStats = {
 
 const FREE_DAILY_TOKEN_LIMIT = 10_000;
 const BASIC_DAILY_TOKEN_LIMIT = 200_000;
-const PRO_DAILY_TOKEN_LIMIT = 400_000;
-
-function normalizePlanName(value: unknown): string {
-  return String(value || "").trim().toLowerCase();
-}
 
 function fallbackLimitFromPlan(params: {
-  planName?: unknown;
   stripeSubscriptionId?: unknown;
 }): number {
-  const planName = normalizePlanName(params.planName);
-  if (planName === "pro") {
-    return PRO_DAILY_TOKEN_LIMIT;
-  }
-  if (planName === "basic" || planName === "zen") {
-    return BASIC_DAILY_TOKEN_LIMIT;
-  }
-  if (planName === "free" || planName === "beta") {
-    return FREE_DAILY_TOKEN_LIMIT;
-  }
   const stripeSubscriptionId = String(params.stripeSubscriptionId || "").trim();
   return stripeSubscriptionId ? BASIC_DAILY_TOKEN_LIMIT : FREE_DAILY_TOKEN_LIMIT;
 }
@@ -338,7 +322,7 @@ async function resolveDailyTokenLimit(
     .select(`
       stripe_subscription_id,
       is_active,
-      plans ( name, daily_token_limit )
+      plans ( daily_token_limit )
     `)
     .eq("user_id", userId)
     .eq("is_active", true)
@@ -358,7 +342,6 @@ async function resolveDailyTokenLimit(
   }
 
   return fallbackLimitFromPlan({
-    planName: planRecord?.name,
     stripeSubscriptionId:
       data && typeof data === "object" && "stripe_subscription_id" in data
         ? (data as JsonRecord).stripe_subscription_id
