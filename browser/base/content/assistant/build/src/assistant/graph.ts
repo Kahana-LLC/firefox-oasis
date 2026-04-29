@@ -323,7 +323,15 @@ export async function buildAssistantGraph(
     let res: unknown;
     try {
       res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
-    } catch (error) {
+    } catch (error: any) {
+      if (error && error.isQuotaExceeded) {
+        return {
+          messages: [new AIMessage(error.message || "Usage limit reached. Please upgrade your plan.")],
+          lastWorker: "chat",
+          commandQueue: [],
+        };
+      }
+
       assistantLogger.warn("chat", "Assist chat call failed.", error);
       if (hasToolOutput) {
         const fallback = String(msgText(lastMsg as MessageLike) || "").trim();

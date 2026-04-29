@@ -61,6 +61,28 @@ export async function postSigned<TResponse = Record<string, unknown>>(
 
   if (!res.ok) {
     const errorBody = await res.text();
+    let quota = null;
+    let isQuotaExceeded = false;
+    let message = "Unknown error";
+
+    try {
+      const parsed = JSON.parse(errorBody);
+      if (parsed.quota) quota = parsed.quota;
+      if (res.status === 429 && parsed.error === "quota_exceeded") {
+        isQuotaExceeded = true;
+      }
+      if (parsed.message) message = parsed.message;
+    } catch (e) {
+      // Ignored
+    }
+
+    if (isQuotaExceeded) {
+      const err = new Error(`Usage limit reached: ${message}.`);
+      (err as any).isQuotaExceeded = true;
+      (err as any).quota = quota;
+      throw err;
+    }
+
     assistantLogger.error("transport", "Assistant backend error", {
       op,
       status: res.status,
@@ -68,5 +90,7 @@ export async function postSigned<TResponse = Record<string, unknown>>(
     });
     throw new Error(`Assistant backend ${res.status} ${errorBody}`);
   }
+
+  // On success, we parse JSON and return it
   return res.json() as Promise<TResponse>;
 }

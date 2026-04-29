@@ -1,5 +1,5 @@
 import { h, Fragment } from 'preact';
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useRef, useState, useEffect } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
@@ -34,6 +34,37 @@ function userEmailOf(user: AuthState['user']): string {
   if (!user) return '';
   if (typeof user === 'string') return user;
   return typeof user.email === 'string' ? user.email : '';
+}
+
+function QuotaBar() {
+  const [stats, setStats] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchQuota = () => {
+      if ((oasisWindow as any).subscriptionService) {
+        (oasisWindow as any).subscriptionService.checkAvailability().then((s: any) => setStats(s));
+      }
+    };
+    fetchQuota();
+    const interval = setInterval(fetchQuota, 3000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  if (!stats) return null;
+  
+  const pct = Math.min(100, Math.round((stats.totalUnits / stats.limit) * 100)) || 0;
+  
+  return (
+    <div style={{ padding: '8px 16px', background: '#eef2ff', fontSize: '12px', color: '#333', borderBottom: '1px solid #ddd' }}>
+       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+          <strong>Usage Limit:</strong>
+          <span>{stats.totalUnits} / {stats.limit} units ({pct}%)</span>
+       </div>
+       <div style={{ width: '100%', height: '6px', background: '#cbd5e1', borderRadius: '3px', overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: pct > 90 ? '#ef4444' : '#3b82f6', transition: 'width 0.3s ease' }} />
+       </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -160,6 +191,8 @@ export function App() {
           {auth.isAuthenticated && userEmail && bannerVisible && (
             <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
           )}
+
+          <QuotaBar />
 
           <ChatTimeline
             messages={runtime.messages}

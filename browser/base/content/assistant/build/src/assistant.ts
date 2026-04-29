@@ -16,6 +16,7 @@ const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
 assistantWindow.supabaseAuth = supabaseAuth;
 assistantWindow.voiceInputService = voiceInputService;
+assistantWindow.subscriptionService = subscriptionService;
 assistantWindow.marked = marked;
 assistantWindow.DOMPurify = DOMPurify;
 
@@ -38,14 +39,6 @@ export async function runAssistantStream(
   messageId?: string
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
-  if (isAuthenticated) {
-    const stats = await subscriptionService.checkAvailability();
-    if (stats.isLimitReached) {
-      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
-      onChunk(msg);
-      return msg;
-    }
-  }
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();

@@ -14,6 +14,7 @@ type AssistRequest = {
   messages?: WireMessage[];
   options?: unknown[];
   tools?: AssistTool[];
+  generation_config?: Record<string, unknown>;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -186,6 +187,12 @@ function extractFunctionCall(responseJson: JsonRecord): JsonRecord | null {
   return null;
 }
 
+function extractUsageMetadata(responseJson: JsonRecord): JsonRecord | null {
+  const usage = asObject(responseJson.usageMetadata);
+  if (Object.keys(usage).length > 0) return usage;
+  return null;
+}
+
 function parseFunctionArgs(value: unknown): JsonRecord {
   if (!value) {
     return {};
@@ -241,6 +248,10 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
   const tempRaw = Number(Deno.env.get("TEMP") ?? "0.3");
   const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
 
+  const reqGenConfig = req.generation_config && typeof req.generation_config === "object" && !Array.isArray(req.generation_config) 
+    ? req.generation_config 
+    : {};
+
   const geminiRequest: JsonRecord = {
     system_instruction: {
       parts: [
@@ -257,6 +268,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     contents: toContents(Array.isArray(req.messages) ? req.messages : []),
     generationConfig: {
       temperature,
+      ...reqGenConfig,
     },
   };
 
@@ -301,6 +313,8 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     });
   }
 
+  const usageMetadata = extractUsageMetadata(geminiJson);
+
   if (enableFunctionCalling) {
     const functionCall = extractFunctionCall(geminiJson);
     if (functionCall && String(functionCall.name || "") === "route_command") {
@@ -311,6 +325,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
         return jsonResponse(200, {
           next,
           args,
+          usage_metadata: usageMetadata,
           reason: "native-tool-call",
         });
       }
@@ -322,6 +337,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     return jsonResponse(200, {
       next: "chat",
       content,
+      usage_metadata: usageMetadata,
       reason: "no-tool-call",
     });
   }
@@ -329,6 +345,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
   return jsonResponse(200, {
     next: routeOptions[0],
     args: {},
+    usage_metadata: usageMetadata,
     reason: "no-tool-call-fallback",
   });
 }

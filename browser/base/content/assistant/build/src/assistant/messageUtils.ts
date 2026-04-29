@@ -64,11 +64,12 @@ const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {
 };
 
 export function classifyToolAction(commandName: string): UsageMeta {
+  const typeStr = TOOL_COMMAND_TYPE_MAP[commandName] || "other";
   return {
-    command_type: TOOL_COMMAND_TYPE_MAP[commandName] ?? "other",
+    command_type: typeStr as CommandType,
     user_intent: "other",
-    input_tokens: null,
-    output_tokens: null,
+    input_tokens: 0,
+    output_tokens: 0,
   };
 }
 
@@ -207,16 +208,20 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
     output_tokens: null,
   };
 
-  // Extract token counts from Gemini's usage_metadata
+  // Extract token counts from Gemini's usage_metadata or usageMetadata
   let inputTokens: number | null = null;
   let outputTokens: number | null = null;
   if (isRecord(response)) {
-    const usage = response.usage_metadata;
+    const usage = response.usage_metadata || response.usageMetadata;
     if (isRecord(usage)) {
-      if (typeof usage.prompt_token_count === "number") {
+      if (typeof usage.promptTokenCount === "number") {
+        inputTokens = usage.promptTokenCount;
+      } else if (typeof usage.prompt_token_count === "number") {
         inputTokens = usage.prompt_token_count;
       }
-      if (typeof usage.candidates_token_count === "number") {
+      if (typeof usage.candidatesTokenCount === "number") {
+        outputTokens = usage.candidatesTokenCount;
+      } else if (typeof usage.candidates_token_count === "number") {
         outputTokens = usage.candidates_token_count;
       }
     }

@@ -6,13 +6,27 @@ export type AssistTool = {
   name: string;
   description?: string;
 };
+
+export type QuotaResult = {
+  allowed?: boolean;
+  reason?: string;
+  daily_used?: number;
+  daily_limit?: number;
+  daily_remaining?: number;
+  monthly_used?: number;
+  monthly_limit?: number;
+  monthly_remaining?: number;
+};
+
 export type AssistResponse = {
   next?: string;
   args?: Record<string, unknown>;
   content?: string;
   reason?: string;
+  quota?: QuotaResult;
   [key: string]: unknown;
 };
+
 type TtsResponse = { audio: string; mimeType?: string };
 
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -31,13 +45,30 @@ export async function assistRemote(
   tools: AssistTool[] = [],
   generationConfig?: Record<string, unknown>
 ): Promise<AssistResponse> {
-  return postSigned<AssistResponse>("assist", {
-    system,
-    messages,
-    options,
-    tools,
-    ...(generationConfig ? { generation_config: generationConfig } : {}),
-  });
+  try {
+    const result = await postSigned<AssistResponse>("assist", {
+      system,
+      messages,
+      options,
+      tools,
+      ...(generationConfig ? { generation_config: generationConfig } : {}),
+    });
+    
+    if (result.quota) {
+      import("./services/subscription.js").then(({ subscriptionService }) => {
+        subscriptionService.updateFromQuota(result.quota);
+      });
+    }
+    
+    return result;
+  } catch (error: any) {
+    if (error && error.quota) {
+      import("./services/subscription.js").then(({ subscriptionService }) => {
+        subscriptionService.updateFromQuota(error.quota);
+      });
+    }
+    throw error;
+  }
 }
 
 export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
