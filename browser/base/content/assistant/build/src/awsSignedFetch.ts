@@ -3,6 +3,16 @@ import SupabaseAuth from "./services/supabase.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
 import { postVoiceLambdaWithIam } from "./voiceLambdaIamFetch.js";
 
+export class QuotaExceededError extends Error {
+  quota: any;
+  isQuotaError = true;
+  constructor(message: string, quota: any) {
+    super(message);
+    this.name = "QuotaExceededError";
+    this.quota = quota;
+  }
+}
+
 const normalizeEndpoint = (value: string | undefined): string =>
   String(value || "")
     .trim()
@@ -63,6 +73,16 @@ export async function postSigned<TResponse = Record<string, unknown>>(
 
   if (!res.ok) {
     const errorBody = await res.text();
+    if (res.status === 429 && op === "assist") {
+      try {
+        const parsed = JSON.parse(errorBody);
+        if (parsed.error === "quota_exceeded") {
+          throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+        }
+      } catch (e: any) {
+        if (e.isQuotaError) throw e;
+      }
+    }
     assistantLogger.error("transport", "Assistant backend error", {
       op,
       status: res.status,

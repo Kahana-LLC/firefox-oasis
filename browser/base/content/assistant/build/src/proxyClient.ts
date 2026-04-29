@@ -16,11 +16,23 @@ export type AssistTool = {
   name: string;
   description?: string;
 };
+export type QuotaResult = {
+  allowed?: boolean;
+  reason?: string;
+  daily_used?: number;
+  daily_limit?: number;
+  daily_remaining?: number;
+  monthly_used?: number;
+  monthly_limit?: number;
+  monthly_remaining?: number;
+};
+
 export type AssistResponse = {
   next?: string;
   args?: Record<string, unknown>;
   content?: string;
   reason?: string;
+  quota?: QuotaResult;
   [key: string]: unknown;
 };
 type TtsResponse = { audio: string; mimeType?: string };

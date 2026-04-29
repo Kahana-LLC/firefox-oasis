@@ -67,14 +67,6 @@ export async function runAssistantStream(
   voiceDelivery: VoiceUiDelivery = "spoken"
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
-  if (isAuthenticated) {
-    const stats = await subscriptionService.checkAvailability();
-    if (stats.isLimitReached) {
-      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
-      onChunk(msg);
-      return msg;
-    }
-  }
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();

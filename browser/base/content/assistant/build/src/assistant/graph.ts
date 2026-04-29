@@ -36,8 +36,9 @@ import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 import type { PendingAmbiguityPayload as RouterPendingAmbiguityPayload } from "../utils/routerTypes.js";
-import { getAssistantApiBase } from "../awsSignedFetch.js";
+import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
+import { subscriptionService } from "../services/subscription.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
 import { MAX_NESTED_COMMANDS } from "./constants.js";
@@ -336,8 +337,23 @@ export async function buildAssistantGraph(
     let res: unknown;
     try {
       res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
+      if ((res as any)?.quota) {
+        subscriptionService.updateFromQuota((res as any).quota);
+      }
     } catch (error) {
       assistantLogger.warn("chat", "Assist chat call failed.", error);
+
+      if (error instanceof QuotaExceededError || (error as any).isQuotaError) {
+        if ((error as any).quota) {
+          subscriptionService.updateFromQuota((error as any).quota);
+        }
+        return {
+          messages: [new AIMessage((error as Error).message + " Please upgrade your plan via the menu.")],
+          lastWorker: "chat",
+          commandQueue: [],
+        };
+      }
+
       if (hasToolOutput) {
         const fallback = String(msgText(lastMsg as MessageLike) || "").trim();
         return {
