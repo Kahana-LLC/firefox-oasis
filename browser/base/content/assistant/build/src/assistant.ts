@@ -32,6 +32,17 @@ export function getAssistantHistory() {
 }
 assistantWindow.getAssistantHistory = getAssistantHistory;
 
+export async function getAssistantUsageStats() {
+  return subscriptionService.checkAvailability();
+}
+assistantWindow.getAssistantUsageStats = getAssistantUsageStats;
+
+export async function refreshAssistantUsageStats() {
+  await subscriptionService.forceRefresh();
+  return subscriptionService.checkAvailability();
+}
+assistantWindow.refreshAssistantUsageStats = refreshAssistantUsageStats;
+
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
@@ -39,6 +50,16 @@ export async function runAssistantStream(
   messageId?: string
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
+  if (isAuthenticated) {
+    const stats = await subscriptionService.checkAvailability();
+    if (stats.isLimitReached) {
+      const msg =
+        `Daily token limit reached (${stats.totalUnits}/${stats.limit} tokens). ` +
+        "Resets at midnight UTC.";
+      onChunk(msg);
+      return msg;
+    }
+  }
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();

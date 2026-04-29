@@ -1,3 +1,5 @@
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+
 type WireMessage = {
   role?: string;
   content?: unknown;
@@ -14,7 +16,7 @@ type AssistRequest = {
   messages?: WireMessage[];
   options?: unknown[];
   tools?: AssistTool[];
-  generation_config?: Record<string, unknown>;
+  generation_config?: unknown;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -43,6 +45,28 @@ function safeParseJSON(value: string): JsonRecord | null {
   } catch {
     return null;
   }
+}
+
+function createAnonClient(): SupabaseClient {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY must be configured");
+  }
+  return createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false },
+  });
+}
+
+function createServiceClient(): SupabaseClient {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured");
+  }
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
 }
 
 function toContents(messages: WireMessage[] = []): JsonRecord[] {
@@ -203,6 +227,202 @@ function parseFunctionArgs(value: unknown): JsonRecord {
   return asObject(value);
 }
 
+function parseGenerationConfig(value: unknown): JsonRecord {
+  return asObject(value);
+}
+
+function getBearerToken(req: Request): string | null {
+  const header = req.headers.get("authorization");
+  if (!header) {
+    return null;
+  }
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+async function getAuthenticatedUser(req: Request): Promise<{ id: string } | null> {
+  const token = getBearerToken(req);
+  if (!token) {
+    return null;
+  }
+  const supabase = createAnonClient();
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) {
+    throw new Error(`auth_get_user_failed: ${error.message}`);
+  }
+  return data.user ?? null;
+}
+
+function extractUsageMetadata(responseJson: JsonRecord): JsonRecord | null {
+  const usage = responseJson.usageMetadata ?? responseJson.usage_metadata;
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) {
+    return null;
+  }
+  const usageRecord = usage as JsonRecord;
+  const promptTokenCount = usageRecord.promptTokenCount ?? usageRecord.prompt_token_count;
+  const candidatesTokenCount =
+    usageRecord.candidatesTokenCount ?? usageRecord.candidates_token_count;
+  const totalTokenCount = usageRecord.totalTokenCount ?? usageRecord.total_token_count;
+  const thoughtsTokenCount = usageRecord.thoughtsTokenCount ?? usageRecord.thoughts_token_count;
+  const normalized: JsonRecord = {};
+  if (typeof promptTokenCount === "number") {
+    normalized.prompt_token_count = promptTokenCount;
+  }
+  if (typeof candidatesTokenCount === "number") {
+    normalized.candidates_token_count = candidatesTokenCount;
+  }
+  if (typeof totalTokenCount === "number") {
+    normalized.total_token_count = totalTokenCount;
+  }
+  if (typeof thoughtsTokenCount === "number") {
+    normalized.thoughts_token_count = thoughtsTokenCount;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+type TokenUsage = {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+function extractTokenUsage(responseJson: JsonRecord): TokenUsage {
+  const usageMetadata = extractUsageMetadata(responseJson);
+  const inputTokens = Number(usageMetadata?.prompt_token_count ?? 0);
+  const outputTokens = Number(usageMetadata?.candidates_token_count ?? 0);
+  const totalTokensRaw = Number(usageMetadata?.total_token_count ?? NaN);
+  const totalTokens = Number.isFinite(totalTokensRaw)
+    ? totalTokensRaw
+    : inputTokens + outputTokens;
+  return {
+    input_tokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+    output_tokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+    total_tokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+  };
+}
+
+type UsageStats = {
+  total_tokens: number;
+  limit: number;
+  remaining: number;
+  usage_date: string;
+  is_limit_reached: boolean;
+};
+
+const FREE_DAILY_TOKEN_LIMIT = 10_000;
+const BASIC_DAILY_TOKEN_LIMIT = 200_000;
+
+function fallbackLimitFromPlan(params: {
+  stripeSubscriptionId?: unknown;
+}): number {
+  const stripeSubscriptionId = String(params.stripeSubscriptionId || "").trim();
+  return stripeSubscriptionId ? BASIC_DAILY_TOKEN_LIMIT : FREE_DAILY_TOKEN_LIMIT;
+}
+
+async function resolveDailyTokenLimit(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("user_plans")
+    .select(`
+      stripe_subscription_id,
+      is_active,
+      plans ( daily_token_limit )
+    `)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`resolve_daily_token_limit_failed: ${error.message}`);
+  }
+
+  const planRecord =
+    data && typeof data === "object" && "plans" in data && data.plans && typeof data.plans === "object"
+      ? (data.plans as JsonRecord)
+      : null;
+  const dbLimit = Number(planRecord?.daily_token_limit ?? 0);
+  if (Number.isFinite(dbLimit) && dbLimit > 0) {
+    return dbLimit;
+  }
+
+  return fallbackLimitFromPlan({
+    stripeSubscriptionId:
+      data && typeof data === "object" && "stripe_subscription_id" in data
+        ? (data as JsonRecord).stripe_subscription_id
+        : null,
+  });
+}
+
+function getUtcUsageDateString(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+async function getTodayUsageTotal(
+  supabase: SupabaseClient,
+  userId: string,
+  usageDate: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("llm_daily_usage")
+    .select("total_tokens")
+    .eq("user_id", userId)
+    .eq("usage_date", usageDate)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`get_today_usage_total_failed: ${error.message}`);
+  }
+
+  const totalTokens = Number(data?.total_tokens ?? 0);
+  return Number.isFinite(totalTokens) ? totalTokens : 0;
+}
+
+function buildUsageStats(totalTokens: number, limit: number, usageDate: string): UsageStats {
+  const safeTotal = Math.max(0, totalTokens);
+  const safeLimit = Math.max(0, limit);
+  return {
+    total_tokens: safeTotal,
+    limit: safeLimit,
+    remaining: Math.max(0, safeLimit - safeTotal),
+    usage_date: usageDate,
+    is_limit_reached: safeLimit > 0 ? safeTotal >= safeLimit : false,
+  };
+}
+
+async function recordUsage(
+  supabase: SupabaseClient,
+  params: {
+    userId: string;
+    modelUsed: string;
+    tokenUsage: TokenUsage;
+    commandType?: unknown;
+    userIntent?: unknown;
+    success: boolean;
+  }
+): Promise<void> {
+  const { error } = await supabase.rpc("record_llm_usage", {
+    p_user_id: params.userId,
+    p_model_used: params.modelUsed,
+    p_input_tokens: params.tokenUsage.input_tokens,
+    p_output_tokens: params.tokenUsage.output_tokens,
+    p_success: params.success,
+    p_command_type:
+      typeof params.commandType === "string" && params.commandType.trim()
+        ? params.commandType.trim()
+        : null,
+    p_user_intent:
+      typeof params.userIntent === "string" && params.userIntent.trim()
+        ? params.userIntent.trim()
+        : null,
+  });
+
+  if (error) {
+    throw new Error(`record_llm_usage_failed: ${error.message}`);
+  }
+}
+
 async function callGemini(requestBody: JsonRecord): Promise<JsonRecord> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   const model = Deno.env.get("MODEL") || "gemini-2.5-flash";
@@ -231,12 +451,57 @@ async function callGemini(requestBody: JsonRecord): Promise<JsonRecord> {
   return parsed;
 }
 
-async function handleAssist(req: AssistRequest): Promise<Response> {
-  const validOptions = sanitizeOptions(Array.isArray(req.options) ? req.options : []);
+async function handleAssist(req: Request, payload: AssistRequest): Promise<Response> {
+  let authenticatedUser: { id: string } | null = null;
+  try {
+    authenticatedUser = await getAuthenticatedUser(req);
+  } catch (error) {
+    console.warn("[oasis-assist] invalid auth", String(error));
+    return jsonResponse(401, {
+      error: "invalid_auth",
+      message: String(error),
+    });
+  }
+
+  const db = authenticatedUser ? createServiceClient() : null;
+  const usageDate = getUtcUsageDateString();
+  let dailyTokenLimit: number | null = null;
+  let currentUsageStats: UsageStats | null = null;
+
+  if (db && authenticatedUser) {
+    try {
+      dailyTokenLimit = await resolveDailyTokenLimit(db, authenticatedUser.id);
+      const todayTotal = await getTodayUsageTotal(db, authenticatedUser.id, usageDate);
+      currentUsageStats = buildUsageStats(todayTotal, dailyTokenLimit, usageDate);
+      console.log("[oasis-assist] usage lookup", {
+        userId: authenticatedUser.id,
+        usageDate,
+        currentTotalTokens: currentUsageStats.total_tokens,
+        dailyTokenLimit,
+      });
+      if (currentUsageStats.is_limit_reached) {
+        return jsonResponse(429, {
+          error: "daily_token_limit_reached",
+          message: "Daily token limit reached. Resets at midnight UTC.",
+          usage_stats: currentUsageStats,
+        });
+      }
+    } catch (error) {
+      console.error("[oasis-assist] usage lookup failed", String(error));
+      return jsonResponse(500, {
+        error: "usage_lookup_failed",
+        message: String(error),
+      });
+    }
+  } else {
+    console.log("[oasis-assist] anonymous assist request");
+  }
+
+  const validOptions = sanitizeOptions(Array.isArray(payload.options) ? payload.options : []);
   const canChat = validOptions.includes("chat");
   const routeOptions = validOptions.filter(option => option !== "chat");
   const declaredTools = sanitizeTools(
-    Array.isArray(req.tools) ? req.tools : [],
+    Array.isArray(payload.tools) ? payload.tools : [],
     routeOptions
   );
   const enableFunctionCalling = routeOptions.length > 0 && declaredTools.length > 0;
@@ -247,6 +512,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
 
   const tempRaw = Number(Deno.env.get("TEMP") ?? "0.3");
   const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
+  const callerGenerationConfig = parseGenerationConfig(payload.generation_config);
 
   const reqGenConfig = req.generation_config && typeof req.generation_config === "object" && !Array.isArray(req.generation_config) 
     ? req.generation_config 
@@ -257,7 +523,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
       parts: [
         {
           text: buildAssistSystemPrompt({
-            system: String(req.system || ""),
+            system: String(payload.system || ""),
             routeOptions,
             tools: declaredTools,
             canChat,
@@ -265,10 +531,10 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
         },
       ],
     },
-    contents: toContents(Array.isArray(req.messages) ? req.messages : []),
+    contents: toContents(Array.isArray(payload.messages) ? payload.messages : []),
     generationConfig: {
       temperature,
-      ...reqGenConfig,
+      ...callerGenerationConfig,
     },
   };
 
@@ -314,6 +580,49 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
   }
 
   const usageMetadata = extractUsageMetadata(geminiJson);
+  const tokenUsage = extractTokenUsage(geminiJson);
+  console.log("[oasis-assist] gemini usage", tokenUsage);
+  let finalUsageStats = currentUsageStats;
+
+  if (db && authenticatedUser && tokenUsage.total_tokens > 0) {
+    const responseContent = extractResponseText(geminiJson);
+    let responseCommandType: unknown = null;
+    let responseUserIntent: unknown = null;
+    const parsedResponse = safeParseJSON(responseContent);
+    if (parsedResponse) {
+      responseCommandType = parsedResponse.command_type;
+      responseUserIntent = parsedResponse.user_intent;
+    }
+
+    try {
+      await recordUsage(db, {
+        userId: authenticatedUser.id,
+        modelUsed: Deno.env.get("MODEL") || "gemini-2.5-flash",
+        tokenUsage,
+        commandType: responseCommandType,
+        userIntent: responseUserIntent,
+        success: true,
+      });
+      console.log("[oasis-assist] usage recorded", {
+        userId: authenticatedUser.id,
+        usageDate,
+        recordedTokens: tokenUsage.total_tokens,
+      });
+      if (dailyTokenLimit != null) {
+        finalUsageStats = buildUsageStats(
+          (currentUsageStats?.total_tokens ?? 0) + tokenUsage.total_tokens,
+          dailyTokenLimit,
+          usageDate
+        );
+      }
+    } catch (error) {
+      console.error("[oasis-assist] usage record failed", String(error));
+      return jsonResponse(500, {
+        error: "usage_record_failed",
+        message: String(error),
+      });
+    }
+  }
 
   if (enableFunctionCalling) {
     const functionCall = extractFunctionCall(geminiJson);
@@ -327,6 +636,8 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
           args,
           usage_metadata: usageMetadata,
           reason: "native-tool-call",
+          ...(usageMetadata ? { usage_metadata: usageMetadata } : {}),
+          ...(finalUsageStats ? { usage_stats: finalUsageStats } : {}),
         });
       }
     }
@@ -339,6 +650,8 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
       content,
       usage_metadata: usageMetadata,
       reason: "no-tool-call",
+      ...(usageMetadata ? { usage_metadata: usageMetadata } : {}),
+      ...(finalUsageStats ? { usage_stats: finalUsageStats } : {}),
     });
   }
 
@@ -347,6 +660,8 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     args: {},
     usage_metadata: usageMetadata,
     reason: "no-tool-call-fallback",
+    ...(usageMetadata ? { usage_metadata: usageMetadata } : {}),
+    ...(finalUsageStats ? { usage_stats: finalUsageStats } : {}),
   });
 }
 
@@ -374,5 +689,5 @@ Deno.serve(async req => {
     });
   }
 
-  return handleAssist(payload);
+  return handleAssist(req, payload);
 });

@@ -48466,9 +48466,616 @@ Content: ${content}`;
   };
   var bookmarkFolders = new BookmarkFolderManager();
 
-  // src/commands.ts
-  init_localMemory();
-  init_subscription();
+  // node_modules/@supabase/supabase-js/dist/esm/wrapper.mjs
+  var index = __toESM(require_main5(), 1);
+  var {
+    PostgrestError,
+    FunctionsHttpError,
+    FunctionsFetchError,
+    FunctionsRelayError,
+    FunctionsError,
+    FunctionRegion,
+    SupabaseClient,
+    createClient,
+    GoTrueAdminApi,
+    GoTrueClient,
+    AuthAdminApi,
+    AuthClient,
+    navigatorLock,
+    NavigatorLockAcquireTimeoutError,
+    lockInternals,
+    processLock,
+    SIGN_OUT_SCOPES,
+    AuthError,
+    AuthApiError,
+    AuthUnknownError,
+    CustomAuthError,
+    AuthSessionMissingError,
+    AuthInvalidTokenResponseError,
+    AuthInvalidCredentialsError,
+    AuthImplicitGrantRedirectError,
+    AuthPKCEGrantCodeExchangeError,
+    AuthRetryableFetchError,
+    AuthWeakPasswordError,
+    AuthInvalidJwtError,
+    isAuthError,
+    isAuthApiError,
+    isAuthSessionMissingError,
+    isAuthImplicitGrantRedirectError,
+    isAuthRetryableFetchError,
+    isAuthWeakPasswordError,
+    RealtimePresence,
+    RealtimeChannel,
+    RealtimeClient,
+    REALTIME_LISTEN_TYPES,
+    REALTIME_POSTGRES_CHANGES_LISTEN_EVENT,
+    REALTIME_PRESENCE_LISTEN_EVENTS,
+    REALTIME_SUBSCRIBE_STATES,
+    REALTIME_CHANNEL_STATES
+  } = index.default || index;
+
+  // src/config/env.ts
+  var ENV = {
+    SUPABASE_URL: "https://wvclepquxxczgrukfqyr.supabase.co",
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY",
+    APP_VERSION: "1.0.0",
+    LOG_LEVEL: "info",
+    validate() {
+      if (!this.SUPABASE_URL) {
+        throw new Error("SUPABASE_URL is required");
+      }
+      if (!this.SUPABASE_ANON_KEY) {
+        throw new Error("SUPABASE_ANON_KEY is required");
+      }
+    }
+  };
+
+  // src/services/supabase.ts
+  var logDebug2 = (message, ...meta) => {
+    assistantLogger.debug(
+      "supabase",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var logWarn2 = (message, ...meta) => {
+    assistantLogger.warn(
+      "supabase",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var logError2 = (message, ...meta) => {
+    assistantLogger.error(
+      "supabase",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var SupabaseAuth = class _SupabaseAuth {
+    static instance;
+    supabase;
+    currentSession = null;
+    authStateCallbacks = [];
+    constructor() {
+      this.supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
+      this.supabase.auth.onAuthStateChange((event, session) => {
+        logDebug2("Auth state changed:", event);
+        this.handleAuthStateChange(event, session);
+      });
+    }
+    static getInstance() {
+      if (!_SupabaseAuth.instance) {
+        _SupabaseAuth.instance = new _SupabaseAuth();
+      }
+      return _SupabaseAuth.instance;
+    }
+    // Google OAuth Authentication
+    async signInWithGoogle() {
+      try {
+        logDebug2("Attempting Google sign in with manual URL approach");
+        const currentUser = await this.getCurrentUser();
+        if (currentUser) {
+          logDebug2("User already authenticated:", currentUser.id);
+          return { user: currentUser, error: null };
+        }
+        const { data, error } = await this.supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            skipBrowserRedirect: true,
+            // Use Kahana's official domain for OAuth callback
+            redirectTo: "https://kahana.co/oauth-callback",
+            // Request consent prompt and offline access for refresh token
+            queryParams: {
+              prompt: "select_account",
+              access_type: "offline",
+              include_granted_scopes: "true",
+              response_type: "code"
+            }
+          }
+        });
+        if (error || !data.url) {
+          logError2("Failed to generate OAuth URL:", error);
+          return { user: null, error: error || { message: "Failed to generate OAuth URL", status: 500 } };
+        }
+        logDebug2("Generated OAuth URL:", data.url);
+        return {
+          user: null,
+          error: new Error(`GOOGLE_OAUTH_URL:${data.url}`)
+        };
+      } catch (error) {
+        logError2("Google sign in error:", error);
+        return { user: null, error };
+      }
+    }
+    // Email/Password Authentication
+    async signInWithEmail(email, password) {
+      try {
+        logDebug2("Attempting email sign in for:", email);
+        const { data, error } = await this.supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          logError2("Email sign in error:", error.message);
+          return { user: null, error };
+        }
+        if (data.user) {
+          await this.updateLastLogin(data.user.id);
+          await this.createSession(data.user.id);
+          logDebug2("Email sign in successful for user:", data.user.id);
+        }
+        return { user: data.user, error: null };
+      } catch (error) {
+        logError2("Sign in error:", error);
+        return { user: null, error };
+      }
+    }
+    async signUp(email, password, name) {
+      try {
+        logDebug2("Attempting sign up for:", email);
+        const { data, error } = await this.supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name || email.split("@")[0]
+            }
+          }
+        });
+        if (error) {
+          logError2("Sign up error:", error.message);
+          return { user: null, error };
+        }
+        if (data.user) {
+          await this.createUserProfile(data.user, name);
+          logDebug2("Sign up successful for user:", data.user.id);
+        }
+        return { user: data.user, error: null };
+      } catch (error) {
+        logError2("Sign up error:", error);
+        return { user: null, error };
+      }
+    }
+    async signOut() {
+      try {
+        logDebug2("Attempting sign out");
+        if (this.currentSession) {
+          await this.endSession(this.currentSession.session_id);
+        }
+        const { error } = await this.supabase.auth.signOut();
+        if (error) {
+          logError2("Sign out error:", error.message);
+          return { error };
+        }
+        this.currentSession = null;
+        logDebug2("Sign out successful");
+        return { error: null };
+      } catch (error) {
+        logError2("Sign out error:", error);
+        return { error };
+      }
+    }
+    // Session Management
+    async getCurrentUser() {
+      const { data: { user } } = await this.supabase.auth.getUser();
+      return user;
+    }
+    async getSession() {
+      const { data: { session } } = await this.supabase.auth.getSession();
+      return session;
+    }
+    async isAuthenticated() {
+      const user = await this.getCurrentUser();
+      return user !== null;
+    }
+    /**
+     * Handle OAuth callback data (similar to Electron's handleOAuthRedirectCallback)
+     * Processes auth data from manual input and exchanges it for a session
+     */
+    async handleOAuthCallbackData(authData) {
+      try {
+        const parsedData = this.parseOAuthCallbackData(authData);
+        logDebug2("Handling OAuth callback data:", parsedData);
+        if (parsedData.code) {
+          logDebug2("Exchanging auth code for session...");
+          const { data, error } = await this.supabase.auth.exchangeCodeForSession(parsedData.code);
+          if (error) {
+            logError2("Failed to exchange code for session:", error.message);
+            return { success: false, error: error.message };
+          } else {
+            logDebug2("Exchanged code for session for user:", data.user?.id);
+            if (data.user) {
+              const existingProfile = await this.getUserProfile();
+              if (!existingProfile) {
+                await this.createUserProfile(data.user, data.user.user_metadata?.name);
+                logDebug2("Created user profile from OAuth callback");
+              }
+              await this.updateLastLogin(data.user.id);
+              await this.createSession(data.user.id);
+            }
+            return { success: true };
+          }
+        }
+        if (parsedData.access_token && parsedData.refresh_token) {
+          logDebug2("Setting session from tokens...");
+          const { data, error } = await this.supabase.auth.setSession({
+            access_token: parsedData.access_token,
+            refresh_token: parsedData.refresh_token
+          });
+          if (error) {
+            logError2("Failed to set session from tokens:", error.message);
+            return { success: false, error: error.message };
+          } else {
+            logDebug2("Set session from tokens for user:", data.user?.id);
+            if (data.user) {
+              const existingProfile = await this.getUserProfile();
+              if (!existingProfile) {
+                await this.createUserProfile(data.user, data.user.user_metadata?.name);
+                logDebug2("Created user profile from tokens");
+              }
+              await this.updateLastLogin(data.user.id);
+              await this.createSession(data.user.id);
+            }
+            return { success: true };
+          }
+        }
+        logWarn2("No valid OAuth data found");
+        return { success: false, error: "No valid OAuth data" };
+      } catch (error) {
+        logError2("Error handling OAuth callback data:", error);
+        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      }
+    }
+    // User Profile Management
+    async getUserProfile() {
+      try {
+        const user = await this.getCurrentUser();
+        if (!user) return null;
+        const { data, error } = await this.supabase.from("users").select("*").eq("user_id", user.id).single();
+        if (error) {
+          logError2("Error fetching user profile:", error.message);
+          return null;
+        }
+        return data;
+      } catch (error) {
+        logError2("Error fetching user profile:", error);
+        return null;
+      }
+    }
+    // Auth State Management
+    onAuthStateChange(callback) {
+      this.authStateCallbacks.push(callback);
+    }
+    async handleAuthStateChange(event, session) {
+      const user = session?.user || null;
+      const authState = {
+        user,
+        session,
+        isAuthenticated: user !== null
+      };
+      this.authStateCallbacks.forEach((callback) => {
+        try {
+          callback(authState);
+        } catch (error) {
+          logError2("Error in auth state callback:", error);
+        }
+      });
+      if (event === "SIGNED_IN" && user) {
+        await this.createSession(user.id);
+      } else if (event === "SIGNED_OUT" && this.currentSession) {
+        await this.endSession(this.currentSession.session_id);
+        this.currentSession = null;
+      }
+    }
+    // Database Operations
+    async createUserProfile(user, name) {
+      try {
+        const { error } = await this.supabase.from("users").insert({
+          user_id: user.id,
+          email: user.email,
+          name: name || user.user_metadata?.name || user.email.split("@")[0],
+          password_hash: "",
+          // Supabase handles this
+          status: "active"
+        });
+        if (error) {
+          logError2("Error creating user profile:", error.message);
+        } else {
+          logDebug2("User profile created successfully");
+        }
+      } catch (error) {
+        logError2("Error creating user profile:", error);
+      }
+    }
+    async updateLastLogin(userId) {
+      try {
+        const { error } = await this.supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("user_id", userId);
+        if (error) {
+          logError2("Error updating last login:", error.message);
+        }
+      } catch (error) {
+        logError2("Error updating last login:", error);
+      }
+    }
+    async createSession(userId) {
+      try {
+        const deviceInfo = {
+          platform: "browser",
+          version: ENV.APP_VERSION,
+          userAgent: window.navigator.userAgent
+        };
+        const { data, error } = await this.supabase.from("sessions").insert({
+          user_id: userId,
+          device_info: deviceInfo
+        }).select().single();
+        if (error) {
+          if (error.message.includes("row-level security policy")) {
+            logWarn2("Session tracking skipped due to RLS policy (non-critical):", error.message);
+          } else {
+            logError2("Error creating session:", error.message);
+          }
+        } else if (data) {
+          this.currentSession = data;
+          logDebug2("Session created:", data.session_id);
+        }
+      } catch (error) {
+        logError2("Error creating session:", error);
+      }
+    }
+    async endSession(sessionId) {
+      try {
+        const { error } = await this.supabase.from("sessions").update({ ended_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("session_id", sessionId);
+        if (error) {
+          logError2("Error ending session:", error.message);
+        } else {
+          logDebug2("Session ended:", sessionId);
+        }
+      } catch (error) {
+        logError2("Error ending session:", error);
+      }
+    }
+    parseOAuthCallbackData(authData) {
+      if (!authData || typeof authData !== "object") {
+        return {};
+      }
+      const raw = authData;
+      return {
+        code: typeof raw.code === "string" ? raw.code : void 0,
+        access_token: typeof raw.access_token === "string" ? raw.access_token : void 0,
+        refresh_token: typeof raw.refresh_token === "string" ? raw.refresh_token : void 0
+      };
+    }
+    // Utility Methods
+    handleAuthError(error) {
+      if (error.message && error.message.startsWith("GOOGLE_OAUTH_URL:")) {
+        return error.message;
+      }
+      switch (error.message) {
+        case "Invalid login credentials":
+          return "Invalid email or password. Please try again.";
+        case "Email not confirmed":
+          return "Please check your email and click the confirmation link.";
+        case "User already registered":
+          return "An account with this email already exists.";
+        case "Password should be at least 6 characters":
+          return "Password must be at least 6 characters long.";
+        case "Unable to validate email address: invalid format":
+          return "Please enter a valid email address.";
+        case "OAuth provider not found":
+          return "Google sign-in is not configured. Please contact support.";
+        case "OAuth account not linked":
+          return "This Google account is not linked to an existing account.";
+        case "Google sign-in is blocked by browser security. Please use email/password authentication instead.":
+          return "Google sign-in is blocked by browser security. Please use email/password authentication instead.";
+        case "Popup blocked. Please allow popups for this site and try again.":
+          return "Popup blocked. Please allow popups for this site and try again.";
+        case "Google sign-in was cancelled or failed. Please try again.":
+          return "Google sign-in was cancelled or failed. Please try again.";
+        case "Google sign-in timed out. Please try again.":
+          return "Google sign-in timed out. Please try again.";
+        case "Failed to generate OAuth URL":
+          return "Failed to generate OAuth URL. Please try again.";
+        case "Failed to open OAuth URL. Please allow popups and try again.":
+          return "Failed to open OAuth URL. Please allow popups and try again.";
+        default:
+          return error.message || "An unexpected error occurred. Please try again.";
+      }
+    }
+  };
+  var supabaseAuth = SupabaseAuth.getInstance();
+
+  // src/services/subscription.ts
+  var DEFAULT_LIMIT = 1e4;
+  var PAID_FALLBACK_LIMIT = 2e5;
+  var CACHE_TTL = 60 * 1e3;
+  var logDebug3 = (message, ...meta) => {
+    assistantLogger.debug(
+      "subscription",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var logWarn3 = (message, ...meta) => {
+    assistantLogger.warn(
+      "subscription",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var logError3 = (message, ...meta) => {
+    assistantLogger.error(
+      "subscription",
+      String(message ?? ""),
+      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+    );
+  };
+  var SubscriptionService = class _SubscriptionService {
+    static instance;
+    // Cache current plan details to avoid hitting DB on every keystroke
+    cachedLimit = null;
+    cachedUsage = 0;
+    cachedUsageDate = null;
+    lastFetchTime = 0;
+    constructor() {
+    }
+    static getInstance() {
+      if (!_SubscriptionService.instance) {
+        _SubscriptionService.instance = new _SubscriptionService();
+      }
+      return _SubscriptionService.instance;
+    }
+    /**
+     * Backend now records usage authoritatively. Keep this method as a
+     * lightweight cache invalidation hook so existing callers keep working.
+     */
+    async trackUsage(_type, _model = "gemini-2.5-flash", _meta) {
+      const user = await supabaseAuth.getCurrentUser();
+      if (!user) {
+        logWarn3("trackUsage: No user found.");
+        return;
+      }
+      this.lastFetchTime = 0;
+      this.forceRefresh().catch((error) => logError3("trackUsage: Failed to refresh usage:", error));
+    }
+    /**
+     * Check if the user can proceed with a command
+     */
+    async checkAvailability() {
+      const user = await supabaseAuth.getCurrentUser();
+      if (!user) {
+        return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
+      }
+      if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > CACHE_TTL) {
+        await this.refreshUsageData(user.id);
+      }
+      const limit = this.cachedLimit ?? DEFAULT_LIMIT;
+      const remaining = Math.max(0, limit - this.cachedUsage);
+      return {
+        totalUnits: this.cachedUsage,
+        limit,
+        remaining,
+        isLimitReached: this.cachedUsage >= limit,
+        usageDate: this.cachedUsageDate ?? void 0
+      };
+    }
+    getSubscriptionUrl() {
+      return "https://kahana.co/oasis-pricing";
+    }
+    async forceRefresh() {
+      const user = await supabaseAuth.getCurrentUser();
+      if (user) {
+        this.lastFetchTime = 0;
+        await this.refreshUsageData(user.id);
+      }
+    }
+    async refreshUsageData(userId) {
+      const supabase = supabaseAuth.supabase;
+      logDebug3("refreshUsageData: syncing usage...");
+      let limit = DEFAULT_LIMIT;
+      const usageDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const { data: planData, error: planError } = await supabase.from("user_plans").select(`
+                plan_id,
+                stripe_subscription_id,
+                is_active,
+                plans ( daily_token_limit )
+            `).eq("user_id", userId).eq("is_active", true).maybeSingle();
+      logDebug3(`refreshUsageData: Primary query result:`, {
+        planData,
+        planError,
+        hasPlansJoin: planData && planData.plans ? true : false,
+        userId
+      });
+      if (planData && planData.plans) {
+        const dbLimit = planData.plans.daily_token_limit;
+        if (dbLimit) {
+          limit = dbLimit;
+          logDebug3(`refreshUsageData: Using plan limit from DB: ${limit}`);
+        }
+      } else if (planData && planData.is_active) {
+        const stripeSubId = planData.stripe_subscription_id;
+        const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+        logDebug3(`refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`, {
+          stripeSubId,
+          hasStripeSubscription,
+          is_active: planData.is_active
+        });
+        if (hasStripeSubscription) {
+          limit = PAID_FALLBACK_LIMIT;
+          logDebug3(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id from primary query: ${stripeSubId}`);
+        } else {
+          logWarn3("refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query");
+        }
+      }
+      if (limit === DEFAULT_LIMIT) {
+        logWarn3("refreshUsageData: Limit still at default, trying fallback query without join");
+        const { data: fallbackData, error: fallbackError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
+        logDebug3(`refreshUsageData: Fallback query result:`, {
+          fallbackData,
+          fallbackError,
+          userId
+        });
+        if (fallbackError) {
+          logError3("refreshUsageData: Fallback query error:", fallbackError);
+        }
+        if (fallbackData && fallbackData.is_active) {
+          const stripeSubId = fallbackData.stripe_subscription_id;
+          const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+          logDebug3(`refreshUsageData: Checking stripe_subscription_id:`, {
+            stripeSubId,
+            hasStripeSubscription,
+            type: typeof stripeSubId
+          });
+          if (hasStripeSubscription) {
+            limit = PAID_FALLBACK_LIMIT;
+            logDebug3(`refreshUsageData: Using Basic plan token limit based on stripe_subscription_id: ${stripeSubId}`);
+          } else {
+            logWarn3("refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit");
+          }
+        } else {
+          logWarn3("refreshUsageData: No active plan found for user, using free plan limit", {
+            fallbackData,
+            userId
+          });
+        }
+      }
+      logDebug3(`refreshUsageData: Final limit set to: ${limit}`);
+      this.cachedLimit = limit;
+      let dbTotal = 0;
+      const { data: usageData, error: usageError } = await supabase.from("llm_daily_usage").select("total_tokens").eq("user_id", userId).eq("usage_date", usageDate).maybeSingle();
+      if (usageData) {
+        dbTotal = Number(usageData.total_tokens || 0);
+      }
+      if (usageError) {
+        logWarn3("refreshUsageData: Daily usage fetch failed.", usageError.message);
+      }
+      this.cachedUsage = Math.max(0, dbTotal);
+      this.cachedUsageDate = usageDate;
+      logDebug3(`refreshUsageData: usage_date=${usageDate}, total_tokens=${this.cachedUsage}`);
+      this.lastFetchTime = Date.now();
+    }
+  };
+  var subscriptionService = SubscriptionService.getInstance();
 
   // src/utils/searchMemoryUtils.ts
   init_localMemoryUtils();
@@ -51379,7 +51986,8 @@ ${content}`
       topWin.openTrustedLinkIn(url, "tab");
       return {
         message: `Opened subscription page.
-Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
+Usage today: ${stats.totalUnits} tokens / ${stats.limit} token limit.
+Resets at midnight UTC.`
       };
     }
   };
@@ -70007,8 +70615,25 @@ ${message}` : message;
     return sessionController.getAssistantHistory();
   }
   assistantWindow.getAssistantHistory = getAssistantHistory;
+  async function getAssistantUsageStats() {
+    return subscriptionService.checkAvailability();
+  }
+  assistantWindow.getAssistantUsageStats = getAssistantUsageStats;
+  async function refreshAssistantUsageStats() {
+    await subscriptionService.forceRefresh();
+    return subscriptionService.checkAvailability();
+  }
+  assistantWindow.refreshAssistantUsageStats = refreshAssistantUsageStats;
   async function runAssistantStream(prompt, onChunk, inputType = "text", messageId) {
-    const isAuthenticated = await supabaseAuth5.isAuthenticated();
+    const isAuthenticated = await supabaseAuth4.isAuthenticated();
+    if (isAuthenticated) {
+      const stats = await subscriptionService.checkAvailability();
+      if (stats.isLimitReached) {
+        const msg = `Daily token limit reached (${stats.totalUnits}/${stats.limit} tokens). Resets at midnight UTC.`;
+        onChunk(msg);
+        return msg;
+      }
+    }
     const { commands, toolCommandNames, assistTools } = createAssistantCommandsRegistry();
     const graph = await buildAssistantGraph(
       commands,
