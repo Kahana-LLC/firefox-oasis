@@ -10,6 +10,7 @@ import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import type { UsageMeta } from "../assistant/messageUtils.js";
+import type { QuotaResult } from "../proxyClient.js";
 
 // Plan Limits (Units per month)
 // Plan A ($20): 1500 units
@@ -76,6 +77,18 @@ export class SubscriptionService {
     return SubscriptionService.instance;
   }
 
+  public updateFromQuota(quota: QuotaResult | undefined | null): void {
+    if (!quota) return;
+    if (quota.monthly_limit !== undefined) {
+      this.cachedLimit = quota.monthly_limit;
+    }
+    if (quota.monthly_used !== undefined) {
+      this.cachedUsage = quota.monthly_used;
+    }
+    this.lastFetchTime = Date.now();
+    logDebug(`updateFromQuota: Updated cached limit to ${this.cachedLimit} and usage to ${this.cachedUsage}`);
+  }
+
   /**
    * Track usage for a command
    * @param type 'text' or 'voice'
@@ -120,8 +133,8 @@ export class SubscriptionService {
         success: true,
         command_type: meta?.command_type ?? null,
         user_intent: meta?.user_intent ?? null,
-        input_tokens: meta?.input_tokens ?? null,
-        output_tokens: meta?.output_tokens ?? null,
+        input_tokens: meta?.input_tokens ?? 0,
+        output_tokens: meta?.output_tokens ?? 0,
       })
       .then(({ error }: any) => {
         if (error) logError("Failed to track usage (DB Insert):", error);

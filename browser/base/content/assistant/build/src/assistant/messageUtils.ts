@@ -240,9 +240,14 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
     if (isRecord(usage)) {
       if (typeof usage.prompt_token_count === "number") {
         inputTokens = usage.prompt_token_count;
+      } else if (typeof usage.promptTokenCount === "number") {
+        inputTokens = usage.promptTokenCount;
       }
+      
       if (typeof usage.candidates_token_count === "number") {
         outputTokens = usage.candidates_token_count;
+      } else if (typeof usage.candidatesTokenCount === "number") {
+        outputTokens = usage.candidatesTokenCount;
       }
     }
   }

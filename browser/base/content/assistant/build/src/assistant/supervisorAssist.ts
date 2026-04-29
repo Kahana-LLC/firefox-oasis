@@ -26,6 +26,8 @@ import type { IntentFamily } from "../utils/routerTypes.js";
 import { isRecord, toWire } from "./messageUtils.js";
 import { parsePlannedActions, type PlannedAction } from "./plannedActions.js";
 import { looksLikeCommandChain } from "./commandChain.js";
+import { QuotaExceededError } from "../awsSignedFetch.js";
+import { subscriptionService } from "../services/subscription.js";
 
 const PLAN_TOOL_NAME = "route_action_plan";
 const LIST_FAMILY_TOOLS = new Set([
@@ -277,6 +279,9 @@ export async function tryResolveAssistRoute(params: {
       optionsForAssist,
       toolsForAssist
     );
+    if ((assist as any)?.quota) {
+      subscriptionService.updateFromQuota((assist as any).quota);
+    }
     markAssistSupported(endpointKey);
 
     const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
@@ -320,6 +325,13 @@ export async function tryResolveAssistRoute(params: {
 
     return { kind: "none" };
   } catch (error) {
+    if (error instanceof QuotaExceededError || (error as any).isQuotaError) {
+      if ((error as any).quota) {
+        subscriptionService.updateFromQuota((error as any).quota);
+      }
+      return { kind: "chat", content: (error as Error).message + " Please upgrade your plan via the menu." };
+    }
+
     const message = String(error || "");
     const assistUnsupported =
       /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);

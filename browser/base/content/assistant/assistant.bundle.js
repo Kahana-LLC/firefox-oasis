@@ -60464,6 +60464,17 @@ Content: ${content}`;
       }
       return _SubscriptionService.instance;
     }
+    updateFromQuota(quota) {
+      if (!quota) return;
+      if (quota.monthly_limit !== void 0) {
+        this.cachedLimit = quota.monthly_limit;
+      }
+      if (quota.monthly_used !== void 0) {
+        this.cachedUsage = quota.monthly_used;
+      }
+      this.lastFetchTime = Date.now();
+      logDebug2(`updateFromQuota: Updated cached limit to ${this.cachedLimit} and usage to ${this.cachedUsage}`);
+    }
     /**
      * Track usage for a command
      * @param type 'text' or 'voice'
@@ -60491,8 +60502,8 @@ Content: ${content}`;
         success: true,
         command_type: meta?.command_type ?? null,
         user_intent: meta?.user_intent ?? null,
-        input_tokens: meta?.input_tokens ?? null,
-        output_tokens: meta?.output_tokens ?? null
+        input_tokens: meta?.input_tokens ?? 0,
+        output_tokens: meta?.output_tokens ?? 0
       }).then(({ error }) => {
         if (error) logError2("Failed to track usage (DB Insert):", error);
         else logDebug2("trackUsage: DB insert successful");
@@ -87196,8 +87207,17 @@ ${toHex2(hashedRequest)}`;
   }
 
   // src/awsSignedFetch.ts
+  var QuotaExceededError = class extends Error {
+    quota;
+    isQuotaError = true;
+    constructor(message, quota) {
+      super(message);
+      this.name = "QuotaExceededError";
+      this.quota = quota;
+    }
+  };
   var normalizeEndpoint = (value) => String(value || "").trim().replace(/\/+$/, "");
-  var assistantUrl = normalizeEndpoint("https://wvclepquxxczgrukfqyr.supabase.co/functions/v1/oasis-assist");
+  var assistantUrl = normalizeEndpoint("https://wvclepquxxczgrukfqyr.supabase.co/functions/v1/oasis-assist-test");
   var transcribeUrl = normalizeEndpoint("https://ic3fypkh4rz24odos4m3u5xsma0edmnn.lambda-url.us-east-2.on.aws/");
   var supabaseAuth2 = SupabaseAuth.getInstance();
   var endpointByOperation = {
@@ -87236,6 +87256,16 @@ ${toHex2(hashedRequest)}`;
     const res = op === "transcribe" || op === "tts" ? await postVoiceLambdaWithIam(endpoint, body, token) : await fetch(endpoint, { method: "POST", headers, body });
     if (!res.ok) {
       const errorBody = await res.text();
+      if (res.status === 429 && op === "assist") {
+        try {
+          const parsed = JSON.parse(errorBody);
+          if (parsed.error === "quota_exceeded") {
+            throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+          }
+        } catch (e2) {
+          if (e2.isQuotaError) throw e2;
+        }
+      }
       assistantLogger.error("transport", "Assistant backend error", {
         op,
         status: res.status,
@@ -87600,9 +87630,13 @@ Result: ${toolResult.message}`
       if (isRecord(usage)) {
         if (typeof usage.prompt_token_count === "number") {
           inputTokens = usage.prompt_token_count;
+        } else if (typeof usage.promptTokenCount === "number") {
+          inputTokens = usage.promptTokenCount;
         }
         if (typeof usage.candidates_token_count === "number") {
           outputTokens = usage.candidates_token_count;
+        } else if (typeof usage.candidatesTokenCount === "number") {
+          outputTokens = usage.candidatesTokenCount;
         }
       }
     }
@@ -88155,6 +88189,9 @@ Result: ${toolResult.message}`
         optionsForAssist,
         toolsForAssist
       );
+      if (assist?.quota) {
+        subscriptionService.updateFromQuota(assist.quota);
+      }
       markAssistSupported(endpointKey);
       const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
       const assistArgs = isRecord(assist?.args) ? assist.args : {};
@@ -88188,6 +88225,12 @@ Result: ${toolResult.message}`
       }
       return { kind: "none" };
     } catch (error) {
+      if (error instanceof QuotaExceededError || error.isQuotaError) {
+        if (error.quota) {
+          subscriptionService.updateFromQuota(error.quota);
+        }
+        return { kind: "chat", content: error.message + " Please upgrade your plan via the menu." };
+      }
       const message = String(error || "");
       const assistUnsupported = /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
       if (assistUnsupported) {
@@ -88577,8 +88620,21 @@ ${result.message}` : result.message;
       let res;
       try {
         res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
+        if (res?.quota) {
+          subscriptionService.updateFromQuota(res.quota);
+        }
       } catch (error) {
         assistantLogger.warn("chat", "Assist chat call failed.", error);
+        if (error instanceof QuotaExceededError || error.isQuotaError) {
+          if (error.quota) {
+            subscriptionService.updateFromQuota(error.quota);
+          }
+          return {
+            messages: [new AIMessage(error.message + " Please upgrade your plan via the menu.")],
+            lastWorker: "chat",
+            commandQueue: []
+          };
+        }
         if (hasToolOutput) {
           const fallback = String(msgText(lastMsg) || "").trim();
           return {
@@ -90649,14 +90705,6 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   assistantWindow.getAssistantHistory = getAssistantHistory;
   async function runAssistantStream(prompt, onChunk, inputType = "text", messageId, voiceDelivery = "spoken") {
     const isAuthenticated = await supabaseAuth4.isAuthenticated();
-    if (isAuthenticated) {
-      const stats = await subscriptionService.checkAvailability();
-      if (stats.isLimitReached) {
-        const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
-        onChunk(msg);
-        return msg;
-      }
-    }
     const { commands: commands2, toolCommandNames, assistTools } = createAssistantCommandsRegistry();
     const graph = await buildAssistantGraph(
       commands2,
