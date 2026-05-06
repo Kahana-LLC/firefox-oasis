@@ -45,7 +45,6 @@ html {
   --composer-action-gap: 11px;
   --composer-bar-bg: var(--surface-default);
   --composer-dock-bg: var(--assistant-sidebar-bg);
-  --composer-field-bg: color-mix(in srgb, var(--composer-dock-bg) 68%, var(--primary-green) 26%);
   --composer-dock-radius: var(--border-radius-large);
   --composer-invite-sun-a: rgba(255, 250, 230, 0.52);
   --composer-invite-sun-b: rgba(255, 255, 255, 0.28);
@@ -54,7 +53,6 @@ html {
   --composer-input-bg: color-mix(in srgb, var(--surface-default) 78%, #3d4a2a 14%);
   --composer-input-text: #1a1f14;
   --composer-placeholder: #5a6350;
-  --composer-typewriter-hint: color-mix(in srgb, var(--composer-input-text) 78%, var(--text-secondary) 22%);
 }
 
 body {
@@ -849,17 +847,18 @@ body {
   right: 0;
   top: 0;
   padding: var(--space-medium) var(--space-large);
-  font-size: 13px;
-  line-height: 1.45;
-  font-weight: 500;
-  color: var(--composer-typewriter-hint);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--composer-placeholder);
   opacity: 1;
   pointer-events: none;
   user-select: none;
   white-space: pre-wrap;
   word-break: break-word;
   text-align: left;
-  z-index: 0;
+  z-index: 2;
 }
 
 .composer-input-wrap .input-field {
@@ -963,7 +962,7 @@ body {
 
 .composer-typewriter-caret {
   margin-left: 1px;
-  opacity: 0.55;
+  opacity: 0.75;
   animation: composer-caret-blink 1.4s step-end infinite;
 }
 
@@ -1083,27 +1082,13 @@ body {
 }
 
 .composer-dock .composer-input-wrap .input-field {
-  background: var(--composer-field-bg);
-  border-color: rgba(122, 146, 0, 0.2);
-  border-radius: var(--border-radius-large);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-.composer-dock .composer-input-wrap .input-field:focus {
-  border-color: rgba(122, 146, 0, 0.45);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.06),
-    0 0 0 2px rgba(122, 146, 0, 0.22);
-  outline: none;
-}
-
-.composer-dock.composer-dock--thread .composer-input-wrap .input-field {
   background: var(--composer-dock-bg);
   border-color: transparent;
+  border-radius: var(--border-radius-large);
   box-shadow: none;
 }
 
-.composer-dock.composer-dock--thread .composer-input-wrap .input-field:focus {
+.composer-dock .composer-input-wrap .input-field:focus {
   border-color: rgba(122, 146, 0, 0.22);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.28),

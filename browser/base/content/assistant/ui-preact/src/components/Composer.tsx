@@ -5,7 +5,7 @@ import { TokenUsageBar } from './TokenUsageBar';
 import { EXAMPLE_COMMANDS_ROTATION } from '../utils/exampleCommands';
 import { useReducedMotionPreference, useTypewriterCycle } from '../hooks/useTypewriterCycle';
 
-const COMPOSER_PLACEHOLDER = 'Ask Oasis anything…';
+const COMPOSER_PLACEHOLDER = 'Send follow-up';
 
 const COMPOSER_INPUT_ARIA =
   'Message composer. Type a request, use the Up arrow to recall previous commands, or tap a suggestion chip.';
@@ -87,12 +87,11 @@ export function Composer({
   };
 
   const emptySignedChat = isAuthenticated && chatIsEmpty;
-  const threadActive = isAuthenticated && !chatIsEmpty;
 
   return (
     <div
       id="oasis-assistant-composer"
-      className={`input-bar composer-dock${busy ? ' input-bar--busy' : ''}${emptySignedChat ? ' input-bar--empty-signed-chat' : ''}${threadActive ? ' composer-dock--thread' : ''}`}
+      className={`input-bar composer-dock${busy ? ' input-bar--busy' : ''}${emptySignedChat ? ' input-bar--empty-signed-chat' : ''}`}
     >
       {isAuthenticated && <TokenUsageBar isAuthenticated embedded />}
       {!isAuthenticated ? (
