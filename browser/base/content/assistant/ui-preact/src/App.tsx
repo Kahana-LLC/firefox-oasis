@@ -731,6 +731,10 @@ export function App() {
             }}
             onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
             onRequestSignIn={() => setView('auth')}
+            onOpenTraining={handleOpenTrainingGallery}
+            onInsertCapabilities={() => {
+              runtime.insertCapabilitiesOverview();
+            }}
           />
         )}
       </div>

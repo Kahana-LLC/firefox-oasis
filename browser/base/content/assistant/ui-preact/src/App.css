@@ -102,14 +102,6 @@ body {
   box-sizing: border-box;
 }
 
-.assistant-main--empty-signed-chat .assistant-scroll {
-  flex: 0 0 auto;
-}
-
-.assistant-main--empty-signed-chat .assistant-chat-stack {
-  flex: 0 0 auto;
-}
-
 .assistant-main--empty-signed-chat .chat-log--empty-signed-in {
   flex: 0 0 auto;
   min-height: 0;
@@ -119,8 +111,6 @@ body {
 
 /* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- empty-chat composer glow */
 .assistant-main--empty-signed-chat .input-bar--empty-signed-chat {
-  flex: 1 1 0;
-  min-height: 0;
   box-shadow:
     0 4px 18px rgba(0, 0, 0, 0.06),
     0 0 40px var(--composer-invite-sun-a),
@@ -128,13 +118,7 @@ body {
     0 0 1px rgba(122, 146, 0, 0.08);
 }
 
-.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-prompt-stack {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
 .assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-input-wrap {
-  flex: 1 1 0;
   /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
   min-height: 120px;
 }
@@ -1155,7 +1139,17 @@ body {
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--primary-green), #94a833);
-  transition: width 0.35s ease;
+  transition:
+    width 0.35s ease,
+    background 0.25s ease;
+}
+
+.token-usage-bar__fill--warn {
+  background: linear-gradient(90deg, #9a8b00, #c4a000);
+}
+
+.token-usage-bar__fill--high {
+  background: linear-gradient(90deg, #b35c00, #c9781a);
 }
 
 .token-usage-bar__stats {
@@ -1178,6 +1172,44 @@ body {
   font-size: 11px;
   line-height: 1.35;
   color: var(--text-secondary);
+}
+
+.token-usage-bar__reassurance {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-body);
+}
+
+.token-usage-bar__earn-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.token-usage-bar__training-cta {
+  align-self: flex-start;
+  margin: var(--space-xxsmall) 0 0;
+  padding: var(--space-xsmall) var(--space-medium);
+  border: 1px solid rgba(122, 146, 0, 0.45);
+  border-radius: var(--border-radius-large);
+  background: rgba(122, 146, 0, 0.08);
+  color: var(--text-headings);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.token-usage-bar__training-cta:hover {
+  background: rgba(122, 146, 0, 0.14);
+  border-color: rgba(122, 146, 0, 0.55);
+}
+
+.token-usage-bar__training-cta:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(122, 146, 0, 0.25);
 }
 
 .token-usage-bar__collapse-toggle {
@@ -1210,11 +1242,34 @@ body {
   font-size: 12px;
   font-weight: 600;
   flex: 1;
+  min-width: 0;
+}
+
+.token-usage-bar__collapsed-metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .token-usage-bar__collapsed-pct {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  color: var(--primary-green);
+}
+
+.token-usage-bar__collapsed-used-word {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.token-usage-bar__collapsed-bonus {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(122, 146, 0, 0.12);
   color: var(--primary-green);
 }
 
@@ -1699,11 +1754,44 @@ button.input-field.input-field-signin-prompt:disabled {
   color: #666;
 }
 
+.markdown-body.capabilities-markdown ul {
+  list-style-type: disc;
+  padding-left: 1.25em;
+}
+
+.markdown-body.capabilities-markdown li {
+  margin-bottom: var(--space-xsmall);
+}
+
+.markdown-body.capabilities-markdown :not(pre) > code {
+  background-color: rgba(0, 0, 0, 0.08);
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  font-size: 0.88em;
+}
+
+.markdown-body.capabilities-markdown a {
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Feedback Component */
 .feedback-container {
   margin-top: var(--space-xsmall);
   width: 100%;
   animation: fadeIn 0.22s ease-in;
+}
+
+.capabilities-overview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-small);
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.capabilities-overview-stack .capabilities-block {
+  margin: 0;
+  max-width: 100%;
 }
 
 .ai-message-wrapper {

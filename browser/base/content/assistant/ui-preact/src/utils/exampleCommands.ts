@@ -1,13 +1,14 @@
-export const EXAMPLE_COMMANDS_ROTATION: readonly string[] = [
-  "What can the Oasis assistant do?",
-  "Open YouTube in a new tab",
-  "Search for yummy recipes on Google",
-  "Create a tab group called Research",
+export const CAPABILITIES_CHIP_LABEL = "What can Oasis do?";
+
+export type ComposerInlineSuggestion =
+  | { label: string; message: string }
+  | { label: string; action: "capabilities" };
+
+export const COMPOSER_INLINE_SUGGESTIONS: readonly ComposerInlineSuggestion[] = [
+  { label: CAPABILITIES_CHIP_LABEL, action: "capabilities" },
 ];
 
-export const COMPOSER_INLINE_SUGGESTIONS: readonly string[] = [
-  "What can the Oasis assistant do?",
-  "Open YouTube in a new tab",
-  "Search for yummy recipes on Google",
-  "Create a tab group called Research",
+export const EXAMPLE_COMMANDS_ROTATION: readonly string[] = [
+  CAPABILITIES_CHIP_LABEL,
+  "Ask in plain English",
 ];

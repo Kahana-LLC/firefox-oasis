@@ -2,7 +2,10 @@ import { h } from 'preact';
 import type { Ref } from 'preact';
 import { useState } from 'preact/hooks';
 import { TokenUsageBar } from './TokenUsageBar';
-import { EXAMPLE_COMMANDS_ROTATION } from '../utils/exampleCommands';
+import {
+  EXAMPLE_COMMANDS_ROTATION,
+  type ComposerInlineSuggestion,
+} from '../utils/exampleCommands';
 import { useReducedMotionPreference, useTypewriterCycle } from '../hooks/useTypewriterCycle';
 
 const COMPOSER_PLACEHOLDER = 'Send follow-up';
@@ -29,6 +32,8 @@ export function Composer({
   onToggleTts,
   onOpenVoiceAgent,
   onRequestSignIn,
+  onOpenTraining,
+  onInsertCapabilities,
 }: {
   input: string;
   busy: boolean;
@@ -37,7 +42,7 @@ export function Composer({
   ttsEnabled: boolean;
   inputRef?: Ref<HTMLTextAreaElement>;
   showInlineChips?: boolean;
-  inlineSuggestions?: readonly string[];
+  inlineSuggestions?: readonly ComposerInlineSuggestion[];
   highlightInlineChips?: boolean;
   onInlineSuggestionSend?: (text: string) => void;
   onInput: (value: string) => void;
@@ -48,6 +53,8 @@ export function Composer({
   onToggleTts: () => void;
   onOpenVoiceAgent: () => void;
   onRequestSignIn?: () => void;
+  onOpenTraining?: () => void;
+  onInsertCapabilities?: () => void;
 }) {
   const [inputFocused, setInputFocused] = useState(false);
   const reducedMotion = useReducedMotionPreference();
@@ -93,7 +100,9 @@ export function Composer({
       id="oasis-assistant-composer"
       className={`input-bar composer-dock${busy ? ' input-bar--busy' : ''}${emptySignedChat ? ' input-bar--empty-signed-chat' : ''}`}
     >
-      {isAuthenticated && <TokenUsageBar isAuthenticated embedded />}
+      {isAuthenticated && (
+        <TokenUsageBar isAuthenticated embedded onOpenTraining={onOpenTraining} />
+      )}
       {!isAuthenticated ? (
         <div className="composer-guest-signin">
           <button
@@ -163,15 +172,23 @@ export function Composer({
             <div
               className={`composer-inline-chips${highlightInlineChips ? ' composer-inline-chips--pulse' : ''}`}
             >
-              {inlineSuggestions!.map(text => (
+              {inlineSuggestions!.map(s => (
                 <button
-                  key={text}
+                  key={s.label}
                   type="button"
                   className="composer-inline-chip"
                   disabled={busy}
-                  onClick={() => onInlineChipClick(text)}
+                  onClick={() => {
+                    if ("action" in s && s.action === "capabilities") {
+                      onInsertCapabilities?.();
+                      return;
+                    }
+                    if ("message" in s) {
+                      onInlineChipClick(s.message);
+                    }
+                  }}
                 >
-                  {text}
+                  {s.label}
                 </button>
               ))}
             </div>

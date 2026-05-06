@@ -238,6 +238,8 @@ export type AssistantWindowLike = Window & {
   DOMPurify?: unknown;
   resetAssistantSession?: () => void;
   getAssistantHistory?: () => BaseMessage[];
+  getOasisCapabilitiesMarkdown?: () => string;
+  oasisPushLocalChatTurn?: (userText: string, assistantMarkdown: string) => void;
   runAssistantStream?: RunAssistantStream;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;

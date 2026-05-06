@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { OasisWindow } from '../types';
+import { FEEDBACK_BONUS_TOKENS } from '../utils/trainingRewards';
 
 const oasisWindow: OasisWindow = window;
 
@@ -32,12 +33,37 @@ function persistCollapsed(collapsed: boolean) {
   }
 }
 
+function fillClassName(percentUsed: number): string {
+  if (percentUsed >= 85) {
+    return 'token-usage-bar__fill token-usage-bar__fill--high';
+  }
+  if (percentUsed >= 65) {
+    return 'token-usage-bar__fill token-usage-bar__fill--warn';
+  }
+  return 'token-usage-bar__fill';
+}
+
+function tieredReassurance(percentUsed: number, remaining: number): string {
+  if (remaining <= 0 || percentUsed >= 100) {
+    return "You've used today's allowance. Qualifying training feedback can add bonus tokens—use Training below when you're ready.";
+  }
+  if (percentUsed >= 85) {
+    return "You're running low on tokens today. Thoughtful training feedback can earn bonus allowance.";
+  }
+  if (percentUsed >= 55) {
+    return "You've used a good portion of today's allowance. Bonus tokens from training can add more headroom.";
+  }
+  return "You're in good shape today. You can still earn bonus tokens from training feedback when you like.";
+}
+
 export function TokenUsageBar({
   isAuthenticated,
   embedded,
+  onOpenTraining,
 }: {
   isAuthenticated: boolean;
   embedded?: boolean;
+  onOpenTraining?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [data, setData] = useState<UsagePayload | null>(null);
@@ -103,30 +129,47 @@ export function TokenUsageBar({
   }
 
   const hasSvc = Boolean(oasisWindow.subscriptionService?.getUsageBarData);
-  const collapsedPct =
-    data != null && !loading ? Math.round(data.percentOfBase) : null;
+  const pctUsedRounded =
+    data != null && !loading ? Math.min(100, Math.round(data.percentUsed)) : null;
   const collapsedPctClass =
     loading || !data || !hasSvc
       ? 'token-usage-bar__collapsed-pct token-usage-bar__collapsed-pct--muted'
       : 'token-usage-bar__collapsed-pct';
-  const collapsedPctText = !hasSvc
+  const collapsedMainText = !hasSvc
     ? '—'
     : loading
       ? '…'
       : data
-        ? String(collapsedPct)
+        ? `${pctUsedRounded}%`
         : '—';
+
+  const collapsedAriaLabel =
+    !hasSvc || loading || !data
+      ? 'Daily tokens, show usage details'
+      : `Daily tokens, ${pctUsedRounded} percent of today's allowance used. Show details.`;
 
   const barFillPct =
     data != null && data.limit > 0
       ? Math.min(100, (data.used / data.limit) * 100)
       : 0;
-  const ariaPct =
-    data != null && data.baseLimit > 0
-      ? Math.min(1000, Math.round(data.percentOfBase))
-      : 0;
+  const ariaNow =
+    data != null ? Math.min(100, Math.round(data.percentUsed)) : 0;
+  const ariaValueText =
+    data != null
+      ? `${Math.round(data.percentUsed)} percent of today's token allowance used, ${data.remaining.toLocaleString()} tokens remaining`
+      : '';
 
   const embeddedClass = embedded ? ' token-usage-bar--embedded' : '';
+
+  const onTrainingClick = () => {
+    if (data && oasisWindow.mpTrack) {
+      oasisWindow.mpTrack('token_usage_training_click', {
+        percentUsed: data.percentUsed,
+        bonusTokens: data.bonusTokens,
+      });
+    }
+    onOpenTraining?.();
+  };
 
   if (collapsed) {
     return (
@@ -136,12 +179,18 @@ export function TokenUsageBar({
           className="token-usage-bar__collapse-toggle"
           onClick={toggle}
           aria-expanded="false"
+          aria-label={collapsedAriaLabel}
           title="Show daily token usage"
         >
           <span className="token-usage-bar__collapsed-label">Daily tokens</span>
-          <span className={collapsedPctClass}>
-            {collapsedPctText}
-            {data != null && !loading ? '%' : ''}
+          <span className="token-usage-bar__collapsed-metrics">
+            <span className={collapsedPctClass}>{collapsedMainText}</span>
+            {data != null && !loading && hasSvc ? (
+              <span className="token-usage-bar__collapsed-used-word">used</span>
+            ) : null}
+            {data != null && !loading && data.bonusTokens > 0 ? (
+              <span className="token-usage-bar__collapsed-bonus">+bonus</span>
+            ) : null}
           </span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path
@@ -207,17 +256,25 @@ export function TokenUsageBar({
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={ariaPct}
-              aria-valuetext={`${ariaPct} percent of base daily token limit used`}
+              aria-valuenow={ariaNow}
+              aria-valuetext={ariaValueText}
             >
               <div
-                className="token-usage-bar__fill"
+                className={fillClassName(data.percentUsed)}
                 style={{ width: `${barFillPct}%` }}
               />
             </div>
             <p className="token-usage-bar__stats" aria-live="polite">
               {data.used.toLocaleString()} / {data.limit.toLocaleString()} used (
               {data.remaining.toLocaleString()} left)
+            </p>
+            <p className="token-usage-bar__reassurance">
+              {tieredReassurance(data.percentUsed, data.remaining)}
+            </p>
+            <p className="token-usage-bar__earn-hint">
+              Each qualifying training submission can add up to{' '}
+              {FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens to today's limit (see
+              Training for requirements).
             </p>
             <p className="token-usage-bar__plan-note">
               Daily limit follows your Oasis plan.
@@ -227,6 +284,15 @@ export function TokenUsageBar({
                 Includes {data.bonusTokens.toLocaleString()} bonus from training feedback today
                 (base {data.baseLimit.toLocaleString()}).
               </p>
+            ) : null}
+            {onOpenTraining ? (
+              <button
+                type="button"
+                className="token-usage-bar__training-cta"
+                onClick={onTrainingClick}
+              >
+                Open training
+              </button>
             ) : null}
           </>
         )}

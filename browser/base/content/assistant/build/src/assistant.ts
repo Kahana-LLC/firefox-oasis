@@ -14,6 +14,7 @@ import { marked } from "../../../../../../toolkit/content/vendor/marked/marked.m
 import DOMPurify from "../../../../../../toolkit/content/vendor/dompurify/dompurify.mjs";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
+import { buildCapabilitiesOverviewMarkdown } from "./assistant/capabilitiesOverview.js";
 import { createAssistantCommandsRegistry } from "./assistant/commandsRegistry.js";
 import { ASSISTANT_RECURSION_LIMIT } from "./assistant/constants.js";
 import { buildAssistantGraph } from "./assistant/graph.js";
@@ -29,7 +30,10 @@ import voiceInputService from "./services/voiceInput";
 import voiceAgent from "./services/voiceAgent";
 import { textToSpeech } from "./proxyClient.js";
 import type { AssistantWindowLike } from "./types/runtime";
-import type { VoiceUiDelivery } from "../../shared/contracts.js";
+import {
+  OASIS_EVENT_HISTORY_UPDATE,
+  type VoiceUiDelivery,
+} from "../../shared/contracts.js";
 
 const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
@@ -48,6 +52,27 @@ aw.oasisSetOAuthCallbackBaseUrl = (url: string) =>
 aw.oasisGetOAuthCallbackBaseUrl = () => supabaseAuth.getOAuthCallbackBaseUrl();
 
 const sessionController = createAssistantSessionController(assistantWindow);
+
+let oasisCapabilitiesMarkdownCache: string | null = null;
+function getOasisCapabilitiesMarkdown(): string {
+  if (oasisCapabilitiesMarkdownCache == null) {
+    const { assistTools } = createAssistantCommandsRegistry();
+    oasisCapabilitiesMarkdownCache =
+      buildCapabilitiesOverviewMarkdown(assistTools);
+  }
+  return oasisCapabilitiesMarkdownCache;
+}
+assistantWindow.getOasisCapabilitiesMarkdown = getOasisCapabilitiesMarkdown;
+
+function oasisPushLocalChatTurn(userText: string, assistantMarkdown: string): void {
+  sessionController.pushCurrentTurn(userText, assistantMarkdown);
+  try {
+    assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+  } catch {
+    void 0;
+  }
+}
+assistantWindow.oasisPushLocalChatTurn = oasisPushLocalChatTurn;
 
 export function resetAssistantSession() {
   sessionController.resetAssistantSession();

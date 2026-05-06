@@ -1,4 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from "preact/hooks";
+import { CAPABILITIES_CHIP_LABEL } from "../utils/exampleCommands";
+import {
+  CAPABILITIES_OVERVIEW_FIRST_LINE,
+  OASIS_CAPABILITIES_FEATURES_URL,
+  OASIS_CAPABILITIES_LINK_LABEL,
+  OASIS_CAPABILITIES_FEEDBACK_URL,
+  OASIS_CAPABILITIES_FEEDBACK_LINK_LABEL,
+} from "../../../shared/capabilitiesOverviewConstants.js";
 import TOOL_LABELS from "../toolLabels";
 import type {
   AssistantHistoryEntry,
@@ -58,7 +66,7 @@ function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
   );
 }
 
-const COMPOSER_INLINE_CHIPS_MAX_SENDS = 4;
+const COMPOSER_INLINE_CHIPS_MAX_SENDS = 1;
 const LS_COMPOSER_CHIPS_COUNT = "oasis.assistant.composerInlineChipsSendCount";
 const LS_COMPOSER_CHIPS_RETIRED = "oasis.assistant.composerInlineChipsRetired";
 const COMMAND_HISTORY_CAP = 50;
@@ -303,8 +311,9 @@ export function useAssistantRuntime(params: {
   const showComposerInlineChips = useMemo(
     () =>
       auth.isAuthenticated &&
-      composerInlineSends < COMPOSER_INLINE_CHIPS_MAX_SENDS,
-    [auth.isAuthenticated, composerInlineSends]
+      (messages.length === 0 ||
+        composerInlineSends < COMPOSER_INLINE_CHIPS_MAX_SENDS),
+    [auth.isAuthenticated, messages.length, composerInlineSends]
   );
 
   const handleComposerInput = useCallback((value: string) => {
@@ -315,6 +324,13 @@ export function useAssistantRuntime(params: {
   const resetAssistantSession = useCallback(async () => {
     setMessages([]);
     setToolActions([]);
+    setComposerInlineSends(0);
+    try {
+      localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
+      localStorage.removeItem(LS_COMPOSER_CHIPS_RETIRED);
+    } catch {
+      void 0;
+    }
 
     if (typeof originalResetAssistantSession === "function") {
       await Promise.resolve(originalResetAssistantSession());
@@ -325,6 +341,59 @@ export function useAssistantRuntime(params: {
       await setHistory([]);
     }
   }, [originalResetAssistantSession]);
+
+  const CAPABILITIES_FALLBACK_MARKDOWN = [
+    CAPABILITIES_OVERVIEW_FIRST_LINE,
+    "",
+    "Oasis assistant capabilities are not available in this build.",
+    "",
+    "You can still describe what you wanted in plain English. When something is wrong or missing, use the feedback link below or the thumbs up and thumbs down on assistant replies (training) so we can widen what Oasis supports.",
+    "",
+    "### Support and feedback",
+    "",
+    "Kahana lists commands in depth; the feedback form captures suggestions. Thumbs on each reply add training signal so we can expand supported behavior quickly.",
+    "",
+    `- [${OASIS_CAPABILITIES_LINK_LABEL}](${OASIS_CAPABILITIES_FEATURES_URL})`,
+    `- [${OASIS_CAPABILITIES_FEEDBACK_LINK_LABEL}](${OASIS_CAPABILITIES_FEEDBACK_URL})`,
+  ].join("\n");
+
+  const insertCapabilitiesOverview = useCallback(() => {
+    if (!auth.isAuthenticated) {
+      setMessages(previous => [
+        ...previous,
+        {
+          id: uuid(),
+          role: "ai",
+          content: "Please sign in to use the assistant.",
+        },
+      ]);
+      return;
+    }
+    stopSpeaking();
+    setComposerInlineSends(bumpComposerInlineSends());
+    let aiContent = CAPABILITIES_FALLBACK_MARKDOWN;
+    try {
+      const raw = oasisWindow.getOasisCapabilitiesMarkdown?.();
+      if (raw && raw.replace(/\s+/g, "").length > 0) {
+        aiContent = raw;
+      }
+    } catch {
+      aiContent = CAPABILITIES_FALLBACK_MARKDOWN;
+    }
+    oasisWindow.oasisPushLocalChatTurn?.(CAPABILITIES_CHIP_LABEL, aiContent);
+    const userId = uuid();
+    const aiId = uuid();
+    setMessages(previous => [
+      ...previous,
+      { id: userId, role: "user", content: CAPABILITIES_CHIP_LABEL },
+      { id: aiId, role: "ai", content: aiContent },
+    ]);
+    const st = oasisWindow.assistantBridge?.getOnboardingStatus?.();
+    if (st && !st.firstAiTurnComplete) {
+      oasisWindow.assistantBridge?.markFirstAiTurnComplete?.();
+    }
+    dispatchOasisUsageUpdate();
+  }, [auth.isAuthenticated, stopSpeaking]);
 
   const send = useCallback(
     async (textInput?: string, options?: { fromVoice?: boolean }) => {
@@ -558,6 +627,7 @@ export function useAssistantRuntime(params: {
     toolActions,
     activeToolAction,
     send,
+    insertCapabilitiesOverview,
     handleKeyDown,
     showComposerInlineChips,
     handleConfirmationApprove,
