@@ -209,6 +209,31 @@ function levelForValue(value: number, milestones: number[]): number {
   return level;
 }
 
+export function trainingProgressFromMetrics(
+  totalQualifying: number,
+  currentStreakDays: number,
+  longestStreakDays: number,
+  lastUtcGrantDate: string | null
+): TrainingProgress {
+  const badgeLevels = emptyBadgeLevels();
+  for (const badge of TRAINING_BADGES) {
+    const value =
+      badge.track === "streak" ? currentStreakDays : totalQualifying;
+    badgeLevels[badge.id] = levelForValue(value, [...badge.milestones]);
+  }
+  const earnedBadgeIds = (Object.keys(badgeLevels) as BadgeId[]).filter(
+    id => badgeLevels[id] > 0
+  );
+  return {
+    totalSubmissions: Math.max(0, Math.floor(totalQualifying)),
+    currentStreakDays: Math.max(0, Math.floor(currentStreakDays)),
+    longestStreakDays: Math.max(0, Math.floor(longestStreakDays)),
+    lastSubmissionDate: lastUtcGrantDate,
+    earnedBadgeIds,
+    badgeLevels,
+  };
+}
+
 export function computeNewUnlocks(
   progress: TrainingProgress
 ): TrainingBadgeUnlock[] {

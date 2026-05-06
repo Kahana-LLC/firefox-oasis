@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "preact/hooks";
-import { CAPABILITIES_CHIP_LABEL } from "../utils/exampleCommands";
+import { HOW_OASIS_WORKS_CHIP_LABEL } from "../utils/exampleCommands";
 import {
   CAPABILITIES_OVERVIEW_FIRST_LINE,
   OASIS_CAPABILITIES_FEATURES_URL,
@@ -380,12 +380,12 @@ export function useAssistantRuntime(params: {
     } catch {
       aiContent = CAPABILITIES_FALLBACK_MARKDOWN;
     }
-    oasisWindow.oasisPushLocalChatTurn?.(CAPABILITIES_CHIP_LABEL, aiContent);
+    oasisWindow.oasisPushLocalChatTurn?.(HOW_OASIS_WORKS_CHIP_LABEL, aiContent);
     const userId = uuid();
     const aiId = uuid();
     setMessages(previous => [
       ...previous,
-      { id: userId, role: "user", content: CAPABILITIES_CHIP_LABEL },
+      { id: userId, role: "user", content: HOW_OASIS_WORKS_CHIP_LABEL },
       { id: aiId, role: "ai", content: aiContent },
     ]);
     const st = oasisWindow.assistantBridge?.getOnboardingStatus?.();

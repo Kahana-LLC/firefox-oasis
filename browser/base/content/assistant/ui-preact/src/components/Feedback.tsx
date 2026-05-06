@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact';
 import type { JSX } from 'preact';
 import { createPortal } from 'preact/compat';
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import type { OasisWindow } from '../types';
 import { playTrainingConfetti } from '../utils/confetti';
 import {
@@ -12,8 +12,10 @@ import {
 import {
   FEEDBACK_BONUS_TOKENS,
   FEEDBACK_MIN_DETAIL_CHARS,
+  OASIS_AMPLIFIER_TRAINING_URL,
   OASIS_PRICING_URL,
 } from '../utils/trainingRewards';
+import { invalidateTrainingGalleryMetrics } from '../utils/trainingMetrics';
 
 export interface TrainingSubmittedPayload {
   messageId: string;
@@ -29,12 +31,20 @@ interface FeedbackProps {
   onClose?: () => void;
   /** When backend returns token grants, extend payload and show toast / bonus confetti here. */
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
+  inlineAutofocusTick?: number;
 }
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TRAINING_HINT_SEEN_KEY = 'oasis_training_hint_seen_count';
-const TRAINING_HINT_EXPOSURE_LIMIT = 3;
+const EARN_CHIP_DISMISSED_KEY = 'oasis_training_earn_chip_dismissed_v1';
+
+function readEarnChipDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(EARN_CHIP_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function isUuidString(value: string): boolean {
   return UUID_RE.test(String(value || '').trim());
@@ -66,8 +76,10 @@ export function Feedback({
   assistantReply,
   onClose,
   onTrainingSubmitted,
+  inlineAutofocusTick = 0,
 }: FeedbackProps) {
   const oasisWindow = window as OasisWindow;
+  const thumbUpRef = useRef<HTMLButtonElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [sentiment, setSentiment] = useState<'up' | 'down' | null>(null);
   const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
@@ -78,8 +90,7 @@ export function Feedback({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [thanksInline, setThanksInline] = useState(false);
   const [showSubmitHint, setShowSubmitHint] = useState(false);
-  const [trainingHintSeenCount, setTrainingHintSeenCount] = useState(0);
-  const [trainingHintDismissed, setTrainingHintDismissed] = useState(false);
+  const [earnChipDismissed, setEarnChipDismissed] = useState(readEarnChipDismissed);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -110,26 +121,22 @@ export function Feedback({
   }, [modalOpen, closeModal]);
 
   useEffect(() => {
+    if (!inlineAutofocusTick || modalOpen) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      thumbUpRef.current?.focus();
+    });
+  }, [inlineAutofocusTick, modalOpen]);
+
+  const dismissEarnChip = useCallback(() => {
+    setEarnChipDismissed(true);
     try {
-      const raw = window.localStorage.getItem(TRAINING_HINT_SEEN_KEY);
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed) && parsed >= 0) {
-        setTrainingHintSeenCount(Math.min(parsed, TRAINING_HINT_EXPOSURE_LIMIT));
-      }
+      window.localStorage.setItem(EARN_CHIP_DISMISSED_KEY, '1');
     } catch {
-      // Ignore localStorage read failures.
+      void 0;
     }
   }, []);
-
-  const persistTrainingHintSeenCount = (count: number) => {
-    const next = Math.min(Math.max(count, 0), TRAINING_HINT_EXPOSURE_LIMIT);
-    setTrainingHintSeenCount(next);
-    try {
-      window.localStorage.setItem(TRAINING_HINT_SEEN_KEY, String(next));
-    } catch {
-      // Ignore localStorage write failures.
-    }
-  };
 
   const toggleBadge = (badge: string) => {
     setSelectedBadges(prev =>
@@ -154,6 +161,31 @@ export function Feedback({
       return;
     }
     window.open(OASIS_PRICING_URL, '_blank');
+  };
+
+  const openAmplifierTrainingDoc = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = OASIS_AMPLIFIER_TRAINING_URL;
+    if (oasisWindow.assistantBridge?.openTab) {
+      const opened = oasisWindow.assistantBridge.openTab(url);
+      if (opened) {
+        mpTrack('training_amplifier_doc_click', {});
+        return;
+      }
+    }
+    if (typeof oasisWindow.openWebLinkIn === 'function') {
+      oasisWindow.openWebLinkIn(url, 'tab', {});
+      mpTrack('training_amplifier_doc_click', {});
+      return;
+    }
+    if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === 'function') {
+      (window.top as OasisWindow).openWebLinkIn!(url, 'tab', {});
+      mpTrack('training_amplifier_doc_click', {});
+      return;
+    }
+    window.open(url, '_blank');
+    mpTrack('training_amplifier_doc_click', {});
   };
 
   const showFeedbackMessage = (message: string, isError = false) => {
@@ -227,10 +259,6 @@ export function Feedback({
     setSubmitted(false);
     setShowSubmitHint(false);
     setModalOpen(true);
-    if (trainingHintSeenCount < TRAINING_HINT_EXPOSURE_LIMIT) {
-      persistTrainingHintSeenCount(trainingHintSeenCount + 1);
-    }
-    setTrainingHintDismissed(true);
     if (next === 'up') {
       mpTrack('feedback_thumb_up', { messageId });
     } else {
@@ -286,6 +314,7 @@ export function Feedback({
       });
       void oasisWindow.subscriptionService?.forceRefresh?.();
       window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+      invalidateTrainingGalleryMetrics();
       setSubmitted(true);
       setTimeout(() => {
         if (onClose) {
@@ -300,8 +329,8 @@ export function Feedback({
   };
 
   const userDisplay = userPrompt.trim() || 'Not available';
-  const showTrainingHint =
-    !trainingHintDismissed && trainingHintSeenCount < TRAINING_HINT_EXPOSURE_LIMIT;
+  const earnChipText = `Earn ${FEEDBACK_BONUS_TOKENS.toLocaleString()} tokens each time you train.`;
+  const showInlineEarnChip = !earnChipDismissed && !modalOpen;
   const submitDisabled =
     isSubmitting ||
     selectedBadges.length < 1 ||
@@ -571,69 +600,113 @@ export function Feedback({
     <div className="feedback-container">
       {overlay}
       <div className="feedback-options">
-        <div className="feedback-train-badge" role="presentation">
-          <span className="feedback-train-label">Train</span>
-          <button
-            type="button"
-            className="feedback-btn thumbs-up"
-            onClick={() => openModal('up')}
-            disabled={isSubmitting}
-            title="Train on a good answer"
-            aria-label="Mark as helpful for training"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="feedback-btn thumbs-down"
-            onClick={() => openModal('down')}
-            disabled={isSubmitting}
-            title="Train on a miss"
-            aria-label="Mark as not helpful for training"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-            </svg>
-          </button>
-        </div>
-        {showTrainingHint ? (
-          <div className="training-hint-bubble" role="note" aria-live="polite">
-            <span>Train Oasis with a quick thumbs vote.</span>
-            <button
-              type="button"
-              className="training-hint-close"
-              aria-label="Dismiss training hint"
-              onClick={() => {
-                setTrainingHintDismissed(true);
-                persistTrainingHintSeenCount(TRAINING_HINT_EXPOSURE_LIMIT);
-              }}
-            >
-              ×
-            </button>
+        <div className="feedback-train-hover-zone">
+          <div className="feedback-train-row" role="presentation">
+            <div className="feedback-train-label-pill">
+              <span className="feedback-train-label">Train</span>
+            </div>
+            <div className="feedback-train-hover-group feedback-train-badge">
+              <div className="feedback-train-actions">
+                <button
+                  type="button"
+                  className="feedback-training-learn-btn"
+                  onClick={openAmplifierTrainingDoc}
+                  aria-label="Learn more about training (opens in a new tab)"
+                  title="Learn more about training"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  ref={thumbUpRef}
+                  className="feedback-btn thumbs-up"
+                  onClick={() => openModal('up')}
+                  disabled={isSubmitting}
+                  title={`Train on a good answer — earn up to ${FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens`}
+                  aria-label="Mark as helpful for training"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="feedback-btn thumbs-down"
+                  onClick={() => openModal('down')}
+                  disabled={isSubmitting}
+                  title={`Train on a miss — earn up to ${FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens`}
+                  aria-label="Mark as not helpful for training"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
-        ) : null}
+          {showInlineEarnChip ? (
+            <div
+              className="training-hint-bubble training-hint-bubble--promo"
+              role="note"
+              aria-live="polite"
+            >
+              <span>
+                Earn{' '}
+                <strong className="training-hint-bubble__amount">
+                  {FEEDBACK_BONUS_TOKENS.toLocaleString()}
+                </strong>{' '}
+                tokens each time you train.
+              </span>
+              <button
+                type="button"
+                className="training-hint-close"
+                aria-label="Dismiss"
+                onClick={dismissEarnChip}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          {earnChipDismissed ? (
+            <span className="feedback-train-earn-hover-hint" aria-hidden="true">
+              {earnChipText}
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

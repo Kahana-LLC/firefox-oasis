@@ -14,10 +14,7 @@ import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
-import {
-  loadTrainingProgress,
-  type TrainingProgress,
-} from './utils/trainingProgress';
+import { invalidateTrainingGalleryMetrics } from './utils/trainingMetrics';
 import type {
   AuthState,
   ConfirmationData,
@@ -429,9 +426,9 @@ export function App() {
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
   const [trainingGalleryOpen, setTrainingGalleryOpen] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress>(
-    () => loadTrainingProgress()
-  );
+  const [trainingFocusTick, setTrainingFocusTick] = useState(0);
+  const [trainingFocusMessageId, setTrainingFocusMessageId] = useState('');
+  const [trainLatestComposerHint, setTrainLatestComposerHint] = useState(false);
   const [starterChipsHighlight, setStarterChipsHighlight] = useState(false);
   const [onboardingCollapseTick, setOnboardingCollapseTick] = useState(0);
 
@@ -522,12 +519,44 @@ export function App() {
     window.open(feedbackUrl, '_blank');
   };
 
-  const handleTrainingSubmitted = useCallback((payload: TrainingSubmittedPayload) => {
-    setTrainingProgress(payload.progress);
+  const handleTrainingSubmitted = useCallback((_payload: TrainingSubmittedPayload) => {
+    invalidateTrainingGalleryMetrics();
   }, []);
 
+  const handleGoToTrainingFromUsageBar = useCallback(() => {
+    setView('chat');
+    let lastId: string | null = null;
+    for (let i = runtime.messages.length - 1; i >= 0; i--) {
+      const m = runtime.messages[i];
+      if (m.role === 'ai' && m.content?.trim()) {
+        lastId = m.id;
+        break;
+      }
+    }
+    const hadTarget = Boolean(lastId);
+    if (oasisWindow.mpTrack) {
+      oasisWindow.mpTrack('token_usage_go_to_training', { hadTarget });
+    }
+    if (hadTarget && lastId) {
+      setTrainingFocusMessageId(lastId);
+      setTrainingFocusTick(t => t + 1);
+    } else {
+      setTrainingFocusMessageId('');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById('oasis-assistant-composer')?.scrollIntoView({
+            block: 'center',
+            behavior: 'smooth',
+          });
+          composerInputRef.current?.focus();
+        });
+      });
+      setTrainLatestComposerHint(true);
+      window.setTimeout(() => setTrainLatestComposerHint(false), 6000);
+    }
+  }, [runtime.messages]);
+
   const handleOpenTrainingGallery = useCallback(() => {
-    setTrainingProgress(loadTrainingProgress());
     setTrainingGalleryOpen(true);
     if (oasisWindow.mpTrack) {
       oasisWindow.mpTrack('training_gallery_opened', {});
@@ -621,7 +650,6 @@ export function App() {
       {trainingGalleryOpen && (
         <TrainingGallery
           open={trainingGalleryOpen}
-          progress={trainingProgress}
           onClose={() => setTrainingGalleryOpen(false)}
         />
       )}
@@ -688,6 +716,8 @@ export function App() {
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
                 onTrainingSubmitted={handleTrainingSubmitted}
+                trainingFocusTick={trainingFocusTick}
+                trainingFocusMessageId={trainingFocusMessageId}
               />
             </div>
           )}
@@ -731,7 +761,9 @@ export function App() {
             }}
             onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
             onRequestSignIn={() => setView('auth')}
-            onOpenTraining={handleOpenTrainingGallery}
+            onOpenTraining={handleGoToTrainingFromUsageBar}
+            showTrainLatestComposerHint={trainLatestComposerHint}
+            onDismissTrainLatestHint={() => setTrainLatestComposerHint(false)}
             onInsertCapabilities={() => {
               runtime.insertCapabilitiesOverview();
             }}

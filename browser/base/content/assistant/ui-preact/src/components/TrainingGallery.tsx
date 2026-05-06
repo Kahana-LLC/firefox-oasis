@@ -1,17 +1,21 @@
 import { h } from "preact";
-import { useEffect } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import {
   nextMilestone,
   STREAK_MILESTONES,
   SUBMISSION_MILESTONES,
   TRAINING_BADGES,
+  defaultTrainingProgress,
   type TrainingProgress,
 } from "../utils/trainingProgress";
+import {
+  OASIS_TRAINING_METRICS_INVALIDATE,
+  fetchTrainingProgressFromGrants,
+} from "../utils/trainingMetrics";
 
 interface TrainingGalleryProps {
   open: boolean;
-  progress: TrainingProgress;
   onClose: () => void;
 }
 
@@ -28,7 +32,45 @@ function progressPercent(value: number, currentThreshold: number, nextThreshold:
   return Math.round((done / span) * 100);
 }
 
-export function TrainingGallery({ open, progress, onClose }: TrainingGalleryProps) {
+export function TrainingGallery({ open, onClose }: TrainingGalleryProps) {
+  const [progress, setProgress] = useState<TrainingProgress>(() => defaultTrainingProgress());
+  const [loading, setLoading] = useState(false);
+  const [fetchErr, setFetchErr] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setFetchErr(false);
+    try {
+      const next = await fetchTrainingProgressFromGrants();
+      if (next) {
+        setProgress(next);
+      } else {
+        setFetchErr(true);
+        setProgress(defaultTrainingProgress());
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    void load();
+  }, [open, load]);
+
+  useEffect(() => {
+    const onInv = () => {
+      if (!open) {
+        return;
+      }
+      void load();
+    };
+    window.addEventListener(OASIS_TRAINING_METRICS_INVALIDATE, onInv);
+    return () => window.removeEventListener(OASIS_TRAINING_METRICS_INVALIDATE, onInv);
+  }, [open, load]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -92,24 +134,36 @@ export function TrainingGallery({ open, progress, onClose }: TrainingGalleryProp
           </button>
         </div>
 
-        <div className="training-gallery-stats">
+        {fetchErr ? (
+          <p className="training-gallery-fetch-err" role="status">
+            Could not load training stats. Check your connection and try again.
+          </p>
+        ) : null}
+
+        <div className="training-gallery-stats" aria-busy={loading}>
           <div className="training-stat-card">
             <span className="training-stat-label">Current streak</span>
-            <strong className="training-stat-value">{progress.currentStreakDays} days</strong>
+            <strong className="training-stat-value">
+              {loading ? "…" : `${progress.currentStreakDays} days`}
+            </strong>
           </div>
           <div className="training-stat-card">
             <span className="training-stat-label">Longest streak</span>
-            <strong className="training-stat-value">{progress.longestStreakDays} days</strong>
+            <strong className="training-stat-value">
+              {loading ? "…" : `${progress.longestStreakDays} days`}
+            </strong>
           </div>
           <div className="training-stat-card">
             <span className="training-stat-label">Total trainings</span>
-            <strong className="training-stat-value">{progress.totalSubmissions}</strong>
+            <strong className="training-stat-value">
+              {loading ? "…" : progress.totalSubmissions}
+            </strong>
           </div>
         </div>
 
         <p className="training-gallery-streak-note">
-          Streak counts consecutive calendar days with at least one saved training. More trainings the
-          same day still add to total trainings above.
+          Streak counts consecutive UTC calendar days with at least one qualifying training (same rules
+          as bonus tokens). Multiple trainings the same UTC day still add to total trainings above.
         </p>
 
         <div className="training-gallery-milestones">
@@ -194,4 +248,3 @@ export function TrainingGallery({ open, progress, onClose }: TrainingGalleryProp
     </div>
   );
 }
-

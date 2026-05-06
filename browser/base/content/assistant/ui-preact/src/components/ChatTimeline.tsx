@@ -70,6 +70,8 @@ export function ChatTimeline({
   speakingMsgId,
   onTtsClick,
   onTrainingSubmitted,
+  trainingFocusTick,
+  trainingFocusMessageId,
 }: {
   messages: AssistantMessage[];
   isAuthenticated: boolean;
@@ -80,6 +82,8 @@ export function ChatTimeline({
   speakingMsgId?: string | null;
   onTtsClick?: (messageId: string, content: string) => void;
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
+  trainingFocusTick?: number;
+  trainingFocusMessageId?: string;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
   const lastAiRef = useRef<HTMLDivElement | null>(null);
@@ -105,6 +109,32 @@ export function ChatTimeline({
     }
     log.scrollTop = log.scrollHeight;
   }, [messages, busy, activeToolLabel, responseStreaming]);
+
+  useEffect(() => {
+    const tick = trainingFocusTick ?? 0;
+    const mid = trainingFocusMessageId ?? '';
+    if (tick === 0 || !mid) {
+      return;
+    }
+    const raf = requestAnimationFrame(() => {
+      const safe =
+        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(mid)
+          : mid.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const el = document.querySelector(`[data-oasis-assistant-msg="${safe}"]`);
+      if (!el || !(el instanceof HTMLElement)) {
+        return;
+      }
+      const log = logRef.current;
+      el.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
+      requestAnimationFrame(() => {
+        log?.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, [trainingFocusTick, trainingFocusMessageId]);
 
   const emptySignedIn = messages.length === 0 && isAuthenticated;
 
@@ -149,6 +179,7 @@ export function ChatTimeline({
                 <div
                   ref={isLast ? lastAiRef : undefined}
                   className="ai-message-wrapper"
+                  data-oasis-assistant-msg={message.id}
                 >
                   <div className="ai-response-container" onClick={onLinkClick}>
                     <QuotaLimitCallout variant={quotaVariant} />
@@ -193,6 +224,7 @@ export function ChatTimeline({
               <div
                 ref={isLast ? lastAiRef : undefined}
                 className="ai-message-wrapper"
+                data-oasis-assistant-msg={message.id}
               >
                 <div className="ai-response-container" onClick={onLinkClick}>
                   {useMarkdownHtml && htmlContent ? (
@@ -311,6 +343,11 @@ export function ChatTimeline({
                       userPrompt={userPromptBefore(messages, index)}
                       assistantReply={message.content}
                       onTrainingSubmitted={onTrainingSubmitted}
+                      inlineAutofocusTick={
+                        trainingFocusMessageId === message.id
+                          ? trainingFocusTick ?? 0
+                          : 0
+                      }
                     />
                   ) : null}
                 </div>

@@ -33,6 +33,8 @@ export function Composer({
   onOpenVoiceAgent,
   onRequestSignIn,
   onOpenTraining,
+  showTrainLatestComposerHint,
+  onDismissTrainLatestHint,
   onInsertCapabilities,
 }: {
   input: string;
@@ -54,6 +56,8 @@ export function Composer({
   onOpenVoiceAgent: () => void;
   onRequestSignIn?: () => void;
   onOpenTraining?: () => void;
+  showTrainLatestComposerHint?: boolean;
+  onDismissTrainLatestHint?: () => void;
   onInsertCapabilities?: () => void;
 }) {
   const [inputFocused, setInputFocused] = useState(false);
@@ -100,6 +104,21 @@ export function Composer({
       id="oasis-assistant-composer"
       className={`input-bar composer-dock${busy ? ' input-bar--busy' : ''}${emptySignedChat ? ' input-bar--empty-signed-chat' : ''}`}
     >
+      {showTrainLatestComposerHint ? (
+        <div className="composer-train-latest-hint" role="status">
+          <span>
+            Ask Oasis something first, then use Train on the reply to earn bonus tokens.
+          </span>
+          <button
+            type="button"
+            className="composer-train-latest-hint-dismiss"
+            onClick={() => onDismissTrainLatestHint?.()}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       {isAuthenticated && (
         <TokenUsageBar isAuthenticated embedded onOpenTraining={onOpenTraining} />
       )}
@@ -179,7 +198,7 @@ export function Composer({
                   className="composer-inline-chip"
                   disabled={busy}
                   onClick={() => {
-                    if ("action" in s && s.action === "capabilities") {
+                    if ("action" in s && s.action === "commandReferenceMarkdown") {
                       onInsertCapabilities?.();
                       return;
                     }

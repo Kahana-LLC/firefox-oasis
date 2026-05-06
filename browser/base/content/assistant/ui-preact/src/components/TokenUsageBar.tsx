@@ -45,15 +45,15 @@ function fillClassName(percentUsed: number): string {
 
 function tieredReassurance(percentUsed: number, remaining: number): string {
   if (remaining <= 0 || percentUsed >= 100) {
-    return "You've used today's allowance. Qualifying training feedback can add bonus tokens—use Training below when you're ready.";
+    return "Today's allowance is used up. Qualifying training can still add bonus tokens.";
   }
   if (percentUsed >= 85) {
-    return "You're running low on tokens today. Thoughtful training feedback can earn bonus allowance.";
+    return "Running low on tokens today.";
   }
   if (percentUsed >= 55) {
-    return "You've used a good portion of today's allowance. Bonus tokens from training can add more headroom.";
+    return "You have used a solid share of today's allowance.";
   }
-  return "You're in good shape today. You can still earn bonus tokens from training feedback when you like.";
+  return "You're in good shape today.";
 }
 
 export function TokenUsageBar({
@@ -162,12 +162,8 @@ export function TokenUsageBar({
   const embeddedClass = embedded ? ' token-usage-bar--embedded' : '';
 
   const onTrainingClick = () => {
-    if (data && oasisWindow.mpTrack) {
-      oasisWindow.mpTrack('token_usage_training_click', {
-        percentUsed: data.percentUsed,
-        bonusTokens: data.bonusTokens,
-      });
-    }
+    setCollapsed(true);
+    persistCollapsed(true);
     onOpenTraining?.();
   };
 
@@ -272,12 +268,9 @@ export function TokenUsageBar({
               {tieredReassurance(data.percentUsed, data.remaining)}
             </p>
             <p className="token-usage-bar__earn-hint">
-              Each qualifying training submission can add up to{' '}
-              {FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens to today's limit (see
-              Training for requirements).
-            </p>
-            <p className="token-usage-bar__plan-note">
-              Daily limit follows your Oasis plan.
+              Up to {FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens per qualifying training
+              (see Training). Be specific about what worked or missed; daily limits follow your Oasis
+              plan.
             </p>
             {data.bonusTokens > 0 ? (
               <p className="token-usage-bar__bonus-note">
@@ -291,7 +284,7 @@ export function TokenUsageBar({
                 className="token-usage-bar__training-cta"
                 onClick={onTrainingClick}
               >
-                Open training
+                Train latest reply
               </button>
             ) : null}
           </>
