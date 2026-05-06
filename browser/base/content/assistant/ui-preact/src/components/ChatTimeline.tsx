@@ -1,6 +1,7 @@
 import { h, Fragment } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { Feedback } from './Feedback';
+import type { TrainingSubmittedPayload } from './Feedback';
 import { ActiveToolIndicator } from './ActiveToolIndicator';
 import type { AssistantMessage, OasisWindow } from '../types';
 
@@ -31,6 +32,7 @@ export function ChatTimeline({
   isAuthenticated,
   onStarterPrompt,
   highlightStarterChips,
+  onTrainingSubmitted,
 }: {
   messages: AssistantMessage[];
   busy: boolean;
@@ -41,6 +43,7 @@ export function ChatTimeline({
   isAuthenticated?: boolean;
   onStarterPrompt?: (text: string) => void;
   highlightStarterChips?: boolean;
+  onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +203,7 @@ export function ChatTimeline({
                       messageId={message.id}
                       userPrompt={userPromptBefore(messages, index)}
                       assistantReply={message.content}
+                      onTrainingSubmitted={onTrainingSubmitted}
                     />
                   ) : null}
                 </div>

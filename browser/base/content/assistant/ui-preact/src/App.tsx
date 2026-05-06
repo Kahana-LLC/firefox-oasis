@@ -5,12 +5,18 @@ import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatTimeline } from './components/ChatTimeline';
+import type { TrainingSubmittedPayload } from './components/Feedback';
 import { Composer } from './components/Composer';
+import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
+import {
+  loadTrainingProgress,
+  type TrainingProgress,
+} from './utils/trainingProgress';
 import type {
   AuthState,
   ConfirmationData,
@@ -419,6 +425,10 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
+  const [trainingGalleryOpen, setTrainingGalleryOpen] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress>(
+    () => loadTrainingProgress()
+  );
   const [starterChipsHighlight, setStarterChipsHighlight] = useState(false);
   const [onboardingCollapseTick, setOnboardingCollapseTick] = useState(0);
 
@@ -509,6 +519,18 @@ export function App() {
     window.open(feedbackUrl, '_blank');
   };
 
+  const handleTrainingSubmitted = useCallback((payload: TrainingSubmittedPayload) => {
+    setTrainingProgress(payload.progress);
+  }, []);
+
+  const handleOpenTrainingGallery = useCallback(() => {
+    setTrainingProgress(loadTrainingProgress());
+    setTrainingGalleryOpen(true);
+    if (oasisWindow.mpTrack) {
+      oasisWindow.mpTrack('training_gallery_opened', {});
+    }
+  }, []);
+
   const handleLinkClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
     const anchor = target.closest('a') as HTMLAnchorElement | null;
@@ -583,6 +605,13 @@ export function App() {
       {voiceAgentOpen && (
         <VoiceAgentOverlay onClose={() => setVoiceAgentOpen(false)} />
       )}
+      {trainingGalleryOpen && (
+        <TrainingGallery
+          open={trainingGalleryOpen}
+          progress={trainingProgress}
+          onClose={() => setTrainingGalleryOpen(false)}
+        />
+      )}
       {pendingConfirmation && (
         <ConfirmationModal
           data={pendingConfirmation}
@@ -595,7 +624,11 @@ export function App() {
         />
       )}
 
-      <Header auth={auth} onShowAuth={() => setView('auth')} />
+      <Header
+        auth={auth}
+        onShowAuth={() => setView('auth')}
+        onOpenTrainingGallery={handleOpenTrainingGallery}
+      />
 
       <div
         className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}`}
@@ -630,6 +663,7 @@ export function App() {
                 onTtsClick={handleTtsFromTimeline}
                 isAuthenticated={auth.isAuthenticated}
                 highlightStarterChips={starterChipsHighlight}
+                onTrainingSubmitted={handleTrainingSubmitted}
                 onStarterPrompt={text => {
                   void runtime.send(text);
                 }}

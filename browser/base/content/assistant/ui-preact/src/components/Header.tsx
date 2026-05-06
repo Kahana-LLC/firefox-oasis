@@ -6,6 +6,7 @@ import type { AuthState, OasisWindow } from '../types';
 interface HeaderProps {
   auth: AuthState;
   onShowAuth: () => void;
+  onOpenTrainingGallery: () => void;
 }
 
 const oasisWindow: OasisWindow = window;
@@ -26,7 +27,7 @@ function openDocsHelp(event: MouseEvent) {
   window.open(DOCS_URL, '_blank', 'noopener,noreferrer');
 }
 
-export function Header({ auth, onShowAuth }: HeaderProps) {
+export function Header({ auth, onShowAuth, onOpenTrainingGallery }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const userEmail =
@@ -91,16 +92,44 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
         }}
       >
         {/* Sloth Icon */}
-        <div style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="#978455"/>
-                <ellipse cx="16.5" cy="18" rx="10.5" ry="8.5" fill="#F8FAF2"/>
-                <ellipse cx="10.3268" cy="18.7453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 18.7453)" fill="#978455"/>
-                <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 12 17.5)" fill="#F8FAF2"/>
-                <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7329 13.5)" fill="#978455"/>
-                <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 17.5)" fill="#F8FAF2"/>
-             </svg>
-        </div>
+        <button
+          type="button"
+          title="Training progress"
+          aria-label="Open training badges and streak progress"
+          onClick={(e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenTrainingGallery();
+          }}
+          style={{
+            width: 32,
+            height: 32,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            borderRadius: '50%',
+            padding: 0,
+          }}
+          onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
+            (e.currentTarget.style.backgroundColor = 'rgba(122, 146, 0, 0.12)')
+          }
+          onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
+            (e.currentTarget.style.backgroundColor = 'transparent')
+          }
+        >
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="#978455"/>
+            <ellipse cx="16.5" cy="18" rx="10.5" ry="8.5" fill="#F8FAF2"/>
+            <ellipse cx="10.3268" cy="18.7453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 18.7453)" fill="#978455"/>
+            <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 12 17.5)" fill="#F8FAF2"/>
+            <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7329 13.5)" fill="#978455"/>
+            <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 17.5)" fill="#F8FAF2"/>
+          </svg>
+        </button>
         
         {/* Title */}
         <span
