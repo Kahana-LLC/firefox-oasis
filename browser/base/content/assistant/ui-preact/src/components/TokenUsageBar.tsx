@@ -211,6 +211,9 @@ export function TokenUsageBar({ isAuthenticated }: { isAuthenticated: boolean })
               {data.used.toLocaleString()} / {data.limit.toLocaleString()} used (
               {data.remaining.toLocaleString()} left)
             </p>
+            <p className="token-usage-bar__plan-note">
+              Daily limit follows your Oasis plan.
+            </p>
             {data.bonusTokens > 0 ? (
               <p className="token-usage-bar__bonus-note">
                 Includes {data.bonusTokens.toLocaleString()} bonus from training feedback today

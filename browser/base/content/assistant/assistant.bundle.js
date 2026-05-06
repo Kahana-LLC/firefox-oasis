@@ -60466,6 +60466,7 @@ Content: ${content}`;
     cachedDailyUsedFromApi = null;
     cachedDailyRemainingFromApi = null;
     cachedDailyTokensFromDb = 0;
+    cachedDailyTokensFromDbOk = false;
     cachedDailyTokenLimitSupabase = null;
     cachedFeedbackBonusTokensToday = 0;
     constructor() {
@@ -60498,18 +60499,21 @@ Content: ${content}`;
         `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
       );
     }
+    /** Bar limit is Supabase plan (+ bonus); not Lambda `quota.daily_limit`. */
     getDailyTokenUsageForDisplay() {
-      const fromApiLimit = this.cachedDailyLimit !== null && this.cachedDailyLimit > 0 ? this.cachedDailyLimit : null;
       const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
       const baseLimit = Math.max(
         1,
-        fromApiLimit ?? fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
+        fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
       );
       const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
       const limit = baseLimit + bonusTokens;
       const fromApi = this.cachedDailyUsedFromApi ?? 0;
       const fromDb = this.cachedDailyTokensFromDb;
-      const used = Math.max(0, Math.max(fromApi, fromDb));
+      const used = Math.max(
+        0,
+        this.cachedDailyTokensFromDbOk ? fromDb : Math.max(fromApi, fromDb)
+      );
       const remaining = Math.max(0, limit - used);
       const percentOfBase = baseLimit > 0 ? Math.min(9999, Math.round(used / baseLimit * 1e3) / 10) : 0;
       const percentUsed = limit > 0 ? Math.min(9999, Math.round(used / limit * 1e3) / 10) : 0;
@@ -60758,8 +60762,10 @@ Content: ${content}`;
         }
         this.cachedFeedbackBonusTokensToday = 0;
       }
+      this.cachedDailyTokensFromDbOk = false;
       const { data: dayRows, error: dayErr } = await supabase.from("llm_usage").select("input_tokens, output_tokens").eq("user_id", userId).gte("created_at", startOfUtcDay.toISOString());
       if (!dayErr && dayRows) {
+        this.cachedDailyTokensFromDbOk = true;
         this.cachedDailyTokensFromDb = dayRows.reduce(
           (acc, row) => acc + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
           0

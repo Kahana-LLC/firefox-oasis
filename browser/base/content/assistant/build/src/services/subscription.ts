@@ -8,6 +8,8 @@
  *
  * Feedback bonus tokens: public.feedback_token_grants (UTC day). Quota APIs should add
  * public.sum_feedback_bonus_tokens_for_user(user_id) to base daily_limit / remaining.
+ *
+ * Daily token usage bar: base limit comes from Supabase (plans + fallbacks), not quota.daily_limit.
  */
 import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
@@ -92,6 +94,7 @@ export class SubscriptionService {
   private cachedDailyUsedFromApi: number | null = null;
   private cachedDailyRemainingFromApi: number | null = null;
   private cachedDailyTokensFromDb: number = 0;
+  private cachedDailyTokensFromDbOk: boolean = false;
   private cachedDailyTokenLimitSupabase: number | null = null;
   private cachedFeedbackBonusTokensToday: number = 0;
 
@@ -127,11 +130,8 @@ export class SubscriptionService {
     );
   }
 
+  /** Bar limit is Supabase plan (+ bonus); not Lambda `quota.daily_limit`. */
   public getDailyTokenUsageForDisplay(): DailyTokenUsageDisplay {
-    const fromApiLimit =
-      this.cachedDailyLimit !== null && this.cachedDailyLimit > 0
-        ? this.cachedDailyLimit
-        : null;
     const fromSupabaseLimit =
       this.cachedDailyTokenLimitSupabase !== null &&
       this.cachedDailyTokenLimitSupabase > 0
@@ -139,13 +139,18 @@ export class SubscriptionService {
         : null;
     const baseLimit = Math.max(
       1,
-      fromApiLimit ?? fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
+      fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
     );
     const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
     const limit = baseLimit + bonusTokens;
     const fromApi = this.cachedDailyUsedFromApi ?? 0;
     const fromDb = this.cachedDailyTokensFromDb;
-    const used = Math.max(0, Math.max(fromApi, fromDb));
+    const used = Math.max(
+      0,
+      this.cachedDailyTokensFromDbOk
+        ? fromDb
+        : Math.max(fromApi, fromDb)
+    );
     const remaining = Math.max(0, limit - used);
     const percentOfBase =
       baseLimit > 0
@@ -499,6 +504,7 @@ export class SubscriptionService {
       this.cachedFeedbackBonusTokensToday = 0;
     }
 
+    this.cachedDailyTokensFromDbOk = false;
     const { data: dayRows, error: dayErr } = await supabase
       .from("llm_usage")
       .select("input_tokens, output_tokens")
@@ -506,6 +512,7 @@ export class SubscriptionService {
       .gte("created_at", startOfUtcDay.toISOString());
 
     if (!dayErr && dayRows) {
+      this.cachedDailyTokensFromDbOk = true;
       this.cachedDailyTokensFromDb = dayRows.reduce(
         (acc: number, row: { input_tokens?: number; output_tokens?: number }) =>
           acc +
