@@ -32,7 +32,13 @@ function persistCollapsed(collapsed: boolean) {
   }
 }
 
-export function TokenUsageBar({ isAuthenticated }: { isAuthenticated: boolean }) {
+export function TokenUsageBar({
+  isAuthenticated,
+  embedded,
+}: {
+  isAuthenticated: boolean;
+  embedded?: boolean;
+}) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [data, setData] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(isAuthenticated);
@@ -120,9 +126,11 @@ export function TokenUsageBar({ isAuthenticated }: { isAuthenticated: boolean })
       ? Math.min(1000, Math.round(data.percentOfBase))
       : 0;
 
+  const embeddedClass = embedded ? ' token-usage-bar--embedded' : '';
+
   if (collapsed) {
     return (
-      <div className="token-usage-bar token-usage-bar--collapsed">
+      <div className={`token-usage-bar token-usage-bar--collapsed${embeddedClass}`}>
         <button
           type="button"
           className="token-usage-bar__collapse-toggle"
@@ -150,7 +158,7 @@ export function TokenUsageBar({ isAuthenticated }: { isAuthenticated: boolean })
   }
 
   return (
-    <div className="token-usage-bar">
+    <div className={`token-usage-bar${embeddedClass}`}>
       <div className="token-usage-bar__header">
         <span className="token-usage-bar__title" id="token-usage-bar-label">
           Daily tokens

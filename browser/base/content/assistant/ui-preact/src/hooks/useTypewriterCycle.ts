@@ -96,7 +96,7 @@ export function useTypewriterCycle(
 
     charCount = 0;
     setText("");
-    schedule(TYPE_MS, step);
+    schedule(0, step);
 
     return () => {
       cancelled = true;

@@ -4,6 +4,7 @@
 
 html {
   height: 100%;
+  background: var(--assistant-sidebar-bg);
 }
 
 #assistant-preact-root {
@@ -11,6 +12,7 @@ html {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--assistant-sidebar-bg);
 }
 
 :root {
@@ -25,6 +27,7 @@ html {
   --surface-default: #f8faf2;
   --surface-page: #ffffff;
   --primary-green: #7a9200;
+  --assistant-sidebar-bg: color-mix(in srgb, var(--surface-default) 92%, var(--primary-green) 8%);
   --primary-light: #f8faf2;
   --primary-50: #f2f4e5;
   --text-body: #666;
@@ -41,9 +44,17 @@ html {
   --composer-toolbar-gap: var(--space-small);
   --composer-action-gap: 11px;
   --composer-bar-bg: var(--surface-default);
+  --composer-dock-bg: var(--assistant-sidebar-bg);
+  --composer-field-bg: color-mix(in srgb, var(--composer-dock-bg) 68%, var(--primary-green) 26%);
+  --composer-dock-radius: var(--border-radius-large);
+  --composer-invite-sun-a: rgba(255, 250, 230, 0.52);
+  --composer-invite-sun-b: rgba(255, 255, 255, 0.28);
+  --composer-invite-sun-c: rgba(255, 248, 220, 0.38);
+  --composer-invite-sun-focus: rgba(255, 252, 235, 0.75);
   --composer-input-bg: color-mix(in srgb, var(--surface-default) 78%, #3d4a2a 14%);
   --composer-input-text: #1a1f14;
   --composer-placeholder: #5a6350;
+  --composer-typewriter-hint: color-mix(in srgb, var(--composer-input-text) 78%, var(--text-secondary) 22%);
 }
 
 body {
@@ -54,7 +65,7 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
-  background: var(--surface-default);
+  background: var(--assistant-sidebar-bg);
   color: var(--text-body);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -67,7 +78,7 @@ body {
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--surface-default);
+  background: var(--assistant-sidebar-bg);
   padding: var(--space-large);
   gap: var(--space-large);
   box-sizing: border-box;
@@ -87,6 +98,77 @@ body {
   gap: var(--space-large);
 }
 
+.assistant-onboarding-top {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.assistant-main--empty-signed-chat .assistant-scroll {
+  flex: 0 0 auto;
+}
+
+.assistant-main--empty-signed-chat .assistant-chat-stack {
+  flex: 0 0 auto;
+}
+
+.assistant-main--empty-signed-chat .chat-log--empty-signed-in {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: var(--space-small) var(--space-large);
+  gap: 0;
+}
+
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- empty-chat composer glow */
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat {
+  flex: 1 1 0;
+  min-height: 0;
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.06),
+    0 0 40px var(--composer-invite-sun-a),
+    0 0 72px var(--composer-invite-sun-b),
+    0 0 1px rgba(122, 146, 0, 0.08);
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-prompt-stack {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-input-wrap {
+  flex: 1 1 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  min-height: 120px;
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-input-wrap .input-field {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  min-height: 120px;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.05),
+    0 0 28px var(--composer-invite-sun-c),
+    0 0 52px var(--composer-invite-sun-b),
+    0 0 0 1px rgba(122, 146, 0, 0.06);
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-input-wrap .input-field:focus {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.05),
+    0 0 0 2px rgba(122, 146, 0, 0.14),
+    0 0 32px var(--composer-invite-sun-a),
+    0 0 56px var(--composer-invite-sun-b);
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-inline-chip {
+  box-shadow: 0 0 14px var(--composer-invite-sun-c), 0 0 28px var(--composer-invite-sun-b);
+}
+
+.assistant-main--empty-signed-chat .input-bar--empty-signed-chat .composer-inline-chip:hover:not(:disabled) {
+  box-shadow: 0 0 18px var(--composer-invite-sun-a), 0 0 36px var(--composer-invite-sun-b);
+}
+
+/* stylelint-enable stylelint-plugin-mozilla/use-design-tokens */
+
 .assistant-scroll {
   flex: 1;
   min-height: 0;
@@ -94,6 +176,7 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background: transparent;
 }
 
 .assistant-scroll--auth {
@@ -768,8 +851,9 @@ body {
   padding: var(--space-medium) var(--space-large);
   font-size: 13px;
   line-height: 1.45;
-  color: var(--composer-input-text);
-  opacity: 0.5;
+  font-weight: 500;
+  color: var(--composer-typewriter-hint);
+  opacity: 1;
   pointer-events: none;
   user-select: none;
   white-space: pre-wrap;
@@ -813,6 +897,45 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- warm invite pulse */
+.composer-inline-chips--pulse {
+  padding: var(--space-xsmall);
+  margin: calc(-1 * var(--space-xsmall)) 0 0;
+  border-radius: var(--border-radius-lg);
+  outline: 2px solid var(--composer-invite-sun-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 20px var(--composer-invite-sun-c);
+}
+
+.composer-inline-chips--pulse .composer-inline-chip {
+  animation: composer-invite-chip-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes composer-invite-chip-pulse {
+  0%,
+  100% {
+    border-color: rgba(255, 248, 220, 0.45);
+    box-shadow: 0 0 0 0 var(--composer-invite-sun-b);
+  }
+
+  50% {
+    border-color: rgba(255, 252, 235, 0.75);
+    box-shadow: 0 0 10px 1px var(--composer-invite-sun-c);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-inline-chips--pulse .composer-inline-chip {
+    animation: none;
+  }
+
+  .composer-inline-chips--pulse {
+    outline-width: 2px;
+  }
+}
+
+/* stylelint-enable stylelint-plugin-mozilla/use-design-tokens */
 
 .composer-inline-chip {
   max-width: 100%;
@@ -938,23 +1061,82 @@ body {
   z-index: 100;
 }
 
+.input-bar.composer-dock {
+  background: var(--composer-dock-bg);
+  overflow: hidden;
+  border: 1px solid rgba(122, 146, 0, 0.22);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+  border-radius: var(--composer-dock-radius);
+  padding-top: var(--space-xsmall);
+  padding-left: var(--space-large);
+  padding-right: var(--space-large);
+  padding-bottom: var(--space-medium);
+}
+
 .input-bar--busy {
   border-top: 3px solid var(--primary-green);
   background: linear-gradient(180deg, var(--primary-50) 0%, var(--composer-bar-bg) 20px);
+}
+
+.input-bar.composer-dock.input-bar--busy {
+  background: linear-gradient(180deg, var(--primary-50) 0%, var(--composer-dock-bg) 22px);
+}
+
+.composer-dock .composer-input-wrap .input-field {
+  background: var(--composer-field-bg);
+  border-color: rgba(122, 146, 0, 0.2);
+  border-radius: var(--border-radius-large);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.composer-dock .composer-input-wrap .input-field:focus {
+  border-color: rgba(122, 146, 0, 0.45);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.06),
+    0 0 0 2px rgba(122, 146, 0, 0.22);
+  outline: none;
+}
+
+.composer-dock.composer-dock--thread .composer-input-wrap .input-field {
+  background: var(--composer-dock-bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.composer-dock.composer-dock--thread .composer-input-wrap .input-field:focus {
+  border-color: rgba(122, 146, 0, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 0 0 2px rgba(122, 146, 0, 0.12);
+  outline: none;
 }
 
 .token-usage-bar {
   flex-shrink: 0;
   margin: 0;
   padding: var(--space-small) var(--space-medium);
-  background: color-mix(in srgb, var(--surface-default) 92%, var(--primary-green) 8%);
+  background: var(--assistant-sidebar-bg);
   border: 1px solid rgba(122, 146, 0, 0.22);
   border-radius: var(--border-radius-lg);
   box-sizing: border-box;
 }
 
+.token-usage-bar--embedded {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(122, 146, 0, 0.18);
+  padding-inline: 0;
+  padding-block: var(--space-xsmall);
+}
+
 .token-usage-bar--collapsed {
   padding: var(--space-xsmall) var(--space-small);
+}
+
+.token-usage-bar--embedded.token-usage-bar--collapsed {
+  padding-block: var(--space-xsmall);
+  padding-inline: 0;
 }
 
 .token-usage-bar__header {
@@ -1121,9 +1303,10 @@ body {
   display: flex;
   flex-flow: row nowrap;
   align-items: center;
-  gap: var(--composer-toolbar-gap);
+  gap: var(--space-xsmall);
   width: 100%;
-  min-height: var(--size-item-large);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  min-height: 28px;
   min-width: 0;
   box-sizing: border-box;
   padding-block: var(--space-xsmall);
@@ -1138,13 +1321,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-item-large);
-  height: var(--size-item-large);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  width: 28px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  height: 28px;
   padding: 0;
   border: none;
   border-radius: var(--border-radius-circle);
   background: transparent;
-  color: #7a9200;
+  color: var(--primary-green);
   cursor: pointer;
   transition: background 0.15s ease;
 }
@@ -1177,7 +1362,7 @@ body {
   flex-flow: row nowrap;
   flex-shrink: 0;
   align-items: center;
-  gap: var(--composer-action-gap);
+  gap: 8px;
 }
 
 .composer-voice-agent-icon,
@@ -1266,9 +1451,11 @@ button.input-field.input-field-signin-prompt:disabled {
 
 .send-btn {
   padding: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  width: 28px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  height: 28px;
+  border-radius: var(--border-radius-large);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -1284,14 +1471,18 @@ button.input-field.input-field-signin-prompt:disabled {
 }
 
 .send-btn.composer-tool-btn {
-  width: var(--size-item-large);
-  height: var(--size-item-large);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  width: 28px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  height: 28px;
   border-radius: var(--border-radius-large);
 }
 
 .send-btn.composer-send-btn {
-  width: var(--size-item-large);
-  height: var(--size-item-large);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  width: 28px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */
+  height: 28px;
   border-radius: var(--border-radius-large);
   margin-inline-start: var(--space-small);
   flex-shrink: 0;

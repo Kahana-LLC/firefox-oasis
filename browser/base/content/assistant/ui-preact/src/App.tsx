@@ -10,7 +10,6 @@ import { Composer } from './components/Composer';
 import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
-import { TokenUsageBar } from './components/TokenUsageBar';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
@@ -600,11 +599,8 @@ export function App() {
         setView('chat');
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            document
-              .querySelector('.starter-prompt-cluster')
-              ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             document.getElementById('oasis-assistant-composer')?.scrollIntoView({
-              block: 'nearest',
+              block: 'center',
               behavior: 'smooth',
             });
             composerInputRef.current?.focus();
@@ -648,9 +644,20 @@ export function App() {
       />
 
       <div
-        className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}`}
+        className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}${view !== 'auth' && auth.isAuthenticated && runtime.messages.length === 0 ? ' assistant-main--empty-signed-chat' : ''}`}
         aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
       >
+        {view !== 'auth' && (
+          <div className="assistant-onboarding-top">
+            <OnboardingChecklist
+              auth={auth}
+              view={view}
+              onNavigate={onboardingNavigate}
+              onCollapseRequest={onboardingCollapseTick}
+            />
+          </div>
+        )}
+
         <div className={`assistant-scroll${view === 'auth' ? ' assistant-scroll--auth' : ''}`}>
           {view === 'auth' ? (
             <>
@@ -673,18 +680,14 @@ export function App() {
 
               <ChatTimeline
                 messages={runtime.messages}
+                isAuthenticated={auth.isAuthenticated}
                 busy={runtime.busy}
                 activeToolLabel={runtime.activeToolAction?.label || null}
                 responseStreaming={runtime.responseStreaming}
                 onLinkClick={handleLinkClick}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
-                isAuthenticated={auth.isAuthenticated}
-                highlightStarterChips={starterChipsHighlight}
                 onTrainingSubmitted={handleTrainingSubmitted}
-                onStarterPrompt={text => {
-                  void runtime.send(text);
-                }}
               />
             </div>
           )}
@@ -707,6 +710,10 @@ export function App() {
             inputRef={composerInputRef}
             showInlineChips={runtime.showComposerInlineChips}
             inlineSuggestions={COMPOSER_INLINE_SUGGESTIONS}
+            highlightInlineChips={starterChipsHighlight}
+            onInlineSuggestionSend={text => {
+              void runtime.send(text);
+            }}
             onInput={runtime.handleComposerInput}
             onKeyDown={runtime.handleKeyDown}
             onSend={() => {
@@ -724,17 +731,6 @@ export function App() {
             }}
             onOpenVoiceAgent={() => setVoiceAgentOpen(true)}
             onRequestSignIn={() => setView('auth')}
-          />
-        )}
-
-        {view !== 'auth' && <TokenUsageBar isAuthenticated={auth.isAuthenticated} />}
-
-        {view !== 'auth' && (
-          <OnboardingChecklist
-            auth={auth}
-            view={view}
-            onNavigate={onboardingNavigate}
-            onCollapseRequest={onboardingCollapseTick}
           />
         )}
       </div>

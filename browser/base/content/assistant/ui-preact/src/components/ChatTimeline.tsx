@@ -6,7 +6,6 @@ import { ActiveToolIndicator } from './ActiveToolIndicator';
 import { QuotaLimitCallout } from './QuotaLimitCallout';
 import type { AssistantMessage, OasisWindow } from '../types';
 import { detectQuotaLimitMessage } from '../utils/quotaLimitUi';
-import { STARTER_PROMPTS } from '../utils/exampleCommands';
 
 const oasisWindow: OasisWindow = window;
 
@@ -21,27 +20,23 @@ function userPromptBefore(messages: AssistantMessage[], aiIndex: number): string
 
 export function ChatTimeline({
   messages,
+  isAuthenticated,
   busy,
   activeToolLabel,
   responseStreaming,
   onLinkClick,
   speakingMsgId,
   onTtsClick,
-  isAuthenticated,
-  onStarterPrompt,
-  highlightStarterChips,
   onTrainingSubmitted,
 }: {
   messages: AssistantMessage[];
+  isAuthenticated: boolean;
   busy: boolean;
   activeToolLabel: string | null;
   responseStreaming: boolean;
   onLinkClick: (event: MouseEvent) => void;
   speakingMsgId?: string | null;
   onTtsClick?: (messageId: string, content: string) => void;
-  isAuthenticated?: boolean;
-  onStarterPrompt?: (text: string) => void;
-  highlightStarterChips?: boolean;
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
@@ -69,31 +64,18 @@ export function ChatTimeline({
     log.scrollTop = log.scrollHeight;
   }, [messages, busy, activeToolLabel, responseStreaming]);
 
+  const emptySignedIn = messages.length === 0 && isAuthenticated;
+
   return (
-    <div className="chat-log" ref={logRef}>
-      {messages.length === 0 && (
+    <div
+      className={`chat-log${emptySignedIn ? ' chat-log--empty-signed-in' : ''}`}
+      ref={logRef}
+    >
+      {messages.length === 0 && !isAuthenticated && (
         <div className="chat-empty-state">
           <p className="chat-empty-state__welcome">
-            Get started with these example commands
-            <br />
-            or type in your own below.
+            Try a suggestion in the box below, or type your own request.
           </p>
-          {isAuthenticated && onStarterPrompt && !busy && (
-            <div
-              className={`starter-prompt-cluster chat-empty-state__chips${highlightStarterChips ? ' starter-prompt-cluster--pulse' : ''}`}
-            >
-              {STARTER_PROMPTS.map(text => (
-                <button
-                  key={text}
-                  type="button"
-                  className="starter-prompt-chip"
-                  onClick={() => onStarterPrompt(text)}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="chat-empty-state__art">
             <img
               src="chrome://browser/content/assistant/images/empty-state-bg.png"

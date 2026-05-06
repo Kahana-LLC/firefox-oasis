@@ -58,7 +58,7 @@ function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
   );
 }
 
-const COMPOSER_INLINE_CHIPS_MAX_SENDS = 3;
+const COMPOSER_INLINE_CHIPS_MAX_SENDS = 4;
 const LS_COMPOSER_CHIPS_COUNT = "oasis.assistant.composerInlineChipsSendCount";
 const LS_COMPOSER_CHIPS_RETIRED = "oasis.assistant.composerInlineChipsRetired";
 const COMMAND_HISTORY_CAP = 50;
