@@ -10,11 +10,23 @@
     window.Services ||
     ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
 
+  function normalizeAssistantOpenTabUrl(url) {
+    if (!url) {
+      return url;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      return url;
+    }
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    return `https://${url}`;
+  }
+
   window.assistantBridge = {
     openTab(url) {
       try {
-        const fixed =
-          url && !/^https?:\/\//i.test(url) ? `https://${url}` : url;
+        const fixed = normalizeAssistantOpenTabUrl(url);
         try {
           const win = Services.wm.getMostRecentWindow("navigator:browser");
           if (win?.openTrustedLinkIn) {

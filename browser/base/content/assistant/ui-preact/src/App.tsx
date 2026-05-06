@@ -419,6 +419,8 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
+  const [starterChipsHighlight, setStarterChipsHighlight] = useState(false);
+  const [onboardingCollapseTick, setOnboardingCollapseTick] = useState(0);
 
   const originalResetRef = useRef(oasisWindow.resetAssistantSession);
   const handleAuthenticated = useCallback(() => {
@@ -547,6 +549,31 @@ export function App() {
           });
         });
       },
+      scrollToAuthPanel: () => {
+        setView('auth');
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            document.getElementById('oasis-auth-panel')?.scrollIntoView({
+              block: 'start',
+              behavior: 'smooth',
+            });
+          });
+        });
+      },
+      snapToComposer: () => {
+        setView('chat');
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            document.getElementById('oasis-assistant-composer')?.scrollIntoView({
+              block: 'nearest',
+              behavior: 'smooth',
+            });
+            composerInputRef.current?.focus();
+            setStarterChipsHighlight(true);
+            window.setTimeout(() => setStarterChipsHighlight(false), 3200);
+          });
+        });
+      },
     }),
     []
   );
@@ -571,12 +598,23 @@ export function App() {
       <Header auth={auth} onShowAuth={() => setView('auth')} />
 
       <div
-        className="assistant-main"
+        className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}`}
         aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
       >
-        <div className="assistant-scroll">
+        <div className={`assistant-scroll${view === 'auth' ? ' assistant-scroll--auth' : ''}`}>
           {view === 'auth' ? (
-            <Auth onSuccess={() => setView('chat')} onCancel={() => setView('chat')} />
+            <>
+              <Auth
+                onSuccess={() => setView('chat')}
+                onEmailPasswordOpen={() => setOnboardingCollapseTick(t => t + 1)}
+              />
+              <OnboardingChecklist
+                auth={auth}
+                view={view}
+                onNavigate={onboardingNavigate}
+                onCollapseRequest={onboardingCollapseTick}
+              />
+            </>
           ) : (
             <div className="assistant-chat-stack">
               {auth.isAuthenticated && userEmail && bannerVisible && (
@@ -591,6 +629,7 @@ export function App() {
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
                 isAuthenticated={auth.isAuthenticated}
+                highlightStarterChips={starterChipsHighlight}
                 onStarterPrompt={text => {
                   void runtime.send(text);
                 }}
@@ -633,11 +672,14 @@ export function App() {
           />
         )}
 
-        <OnboardingChecklist
-          auth={auth}
-          view={view}
-          onNavigate={onboardingNavigate}
-        />
+        {view !== 'auth' && (
+          <OnboardingChecklist
+            auth={auth}
+            view={view}
+            onNavigate={onboardingNavigate}
+            onCollapseRequest={onboardingCollapseTick}
+          />
+        )}
       </div>
 
       <div

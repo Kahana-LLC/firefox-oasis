@@ -31,17 +31,27 @@ export function Composer({
   onRequestSignIn?: () => void;
 }) {
   return (
-    <div className={`input-bar${busy ? ' input-bar--busy' : ''}`}>
+    <div id="oasis-assistant-composer" className={`input-bar${busy ? ' input-bar--busy' : ''}`}>
       {!isAuthenticated ? (
-        <button
-          type="button"
-          className="input-field input-field-signin-prompt"
-          onClick={() => onRequestSignIn?.()}
-          disabled={busy}
-          aria-label="Sign in or create an account to use the assistant"
-        >
-          Please sign in...
-        </button>
+        <div className="composer-guest-signin">
+          <button
+            type="button"
+            className="input-field input-field-signin-prompt"
+            onClick={() => onRequestSignIn?.()}
+            disabled={busy}
+            aria-label="Sign in or create an account to use the assistant"
+          >
+            Please sign in...
+          </button>
+          <button
+            type="button"
+            className="composer-full-signin-link"
+            onClick={() => onRequestSignIn?.()}
+            disabled={busy}
+          >
+            Full sign-in screen
+          </button>
+        </div>
       ) : (
         <textarea
           ref={inputRef}
@@ -122,7 +132,7 @@ export function Composer({
             disabled={busy || !isAuthenticated}
             title="Voice conversation (hands-free)"
           >
-            <svg className="composer-voice-agent-icon" width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <svg className="composer-voice-agent-icon" width="28" height="28" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
               <rect width="36" height="36" rx="18" fill="#F8FAF2" />
               <path d="M18 10a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z" fill="#94A833" />
               <path d="M23 17v1a5 5 0 0 1-10 0v-1" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
@@ -139,11 +149,11 @@ export function Composer({
             title="Send"
           >
             {busy ? (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2">
                 <rect x="9" y="9" width="6" height="6" />
               </svg>
             ) : (
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <svg width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                 <circle cx="18" cy="18" r="18" fill="#7A9200" />
                 <path d="M18 24V12M18 12L24 18M18 12L12 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

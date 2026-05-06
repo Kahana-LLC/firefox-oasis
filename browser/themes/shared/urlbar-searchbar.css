@@ -905,6 +905,23 @@ toolbar[inactive="true"] .urlbar,
   margin-inline: 4px;
 }
 
+#oasis-chat-button.oasis-chat-button {
+  box-sizing: border-box;
+  height: calc(var(--urlbar-min-height) - 2 * var(--urlbar-container-border-padding));
+  max-height: calc(var(--urlbar-min-height) - 2 * var(--urlbar-container-border-padding));
+  justify-content: center;
+  padding-block: 2px;
+  padding-inline: 6px;
+}
+
+.oasis-chat-wordmark {
+  display: block;
+  height: 20px;
+  width: auto;
+  max-width: min(112px, 28vw);
+  object-fit: contain;
+}
+
 .oasis-chat-button:hover {
   background-color: #e8ebdb;
 }

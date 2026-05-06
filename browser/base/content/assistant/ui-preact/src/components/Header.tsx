@@ -65,7 +65,7 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
     <div
       onPointerDown={handleDragStart}
       style={{
-        height: '48px', // Slightly taller for better touch
+        height: '44px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -159,26 +159,29 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
             (e.currentTarget.style.backgroundColor = 'transparent')
           }
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" />
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
+            <circle cx="12" cy="17" r="1.35" fill="currentColor" stroke="none" />
           </svg>
         </button>
 
         <div style={{ position: 'relative' }} ref={menuRef}>
-            <HeaderBtn onClick={() => setShowMenu(!showMenu)} title="Menu">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <circle cx="5" cy="12" r="2" fill="#7A9200"/>
-                    <circle cx="12" cy="12" r="2" fill="#7A9200"/>
-                    <circle cx="19" cy="12" r="2" fill="#7A9200"/>
-                </svg>
+            <HeaderBtn
+              onClick={() => setShowMenu(!showMenu)}
+              title="Account"
+              ariaLabel="Account menu, sign in or sign up"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="12" cy="8" r="4" />
+                <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+              </svg>
             </HeaderBtn>
 
              {showMenu && (
                 <div className="dropdown-menu" style={{
                     position: 'absolute',
-                    top: '36px',
+                    top: '32px',
                     right: '0',
                     background: 'white',
                     border: '1px solid #eee',
@@ -211,14 +214,14 @@ export function Header({ auth, onShowAuth }: HeaderProps) {
             e.preventDefault(); e.stopPropagation();
             try { window.parent.postMessage({ type: "oasisOverlayToggleSidebar" }, "*"); } catch (err) {}
         }} title="Toggle Sidebar">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 21C5.20435 21 4.44129 20.6839 3.87868 20.1213C3.31607 19.5587 3 18.7956 3 18V6C3 5.20435 3.31607 4.44129 3.87868 3.87868C4.44129 3.31607 5.20435 3 6 3H18C18.7956 3 19.5587 3.31607 20.1213 3.87868C20.6839 4.44129 21 5.20435 21 6V18C21 18.7956 20.6839 19.5587 20.1213 20.1213C19.5587 20.6839 18.7956 21 18 21H6ZM18 5H10V19H18C18.2652 19 18.5196 18.8946 18.7071 18.7071C18.8946 18.5196 19 18.2652 19 18V6C19 5.73478 18.8946 5.48043 18.7071 5.29289C18.5196 5.10536 18.2652 5 18 5Z" fill="#7A9200"/>
             </svg>
         </HeaderBtn>
         
         {/* Close Button (Figma doesn't show it but it's essential, styling it cleanly) */}
          <HeaderBtn onClick={handleClose} title="Close" hoverColor="#ffecec">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -234,20 +237,22 @@ type HeaderBtnProps = {
   title: string;
   children: ComponentChildren;
   hoverColor?: string;
+  ariaLabel?: string;
 };
 
-function HeaderBtn({ onClick, title, children, hoverColor }: HeaderBtnProps) {
+function HeaderBtn({ onClick, title, children, hoverColor, ariaLabel }: HeaderBtnProps) {
   return (
     <button
       onClick={onClick}
       title={title}
+      aria-label={ariaLabel ?? title}
       style={{
         border: 0,
         background: 'transparent',
         cursor: 'pointer',
         borderRadius: '50%',
-        width: '32px',
-        height: '32px',
+        width: '28px',
+        height: '28px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

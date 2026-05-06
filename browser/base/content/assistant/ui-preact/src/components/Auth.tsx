@@ -7,7 +7,7 @@ const oasisWin = window as unknown as OasisWindow;
 
 interface AuthProps {
   onSuccess: () => void;
-  onCancel: () => void;
+  onEmailPasswordOpen?: () => void;
 }
 
 function GoogleIcon() {
@@ -40,9 +40,9 @@ function MicrosoftIcon() {
   );
 }
 
-export function Auth({ onSuccess, onCancel }: AuthProps) {
+export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
   const oauthStartInFlightRef = useRef(false);
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgotPassword'>('signup');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgotPassword'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [oauthLoading, setOauthLoading] = useState(false);
@@ -54,6 +54,22 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
   useEffect(() => {
     setShowEmailPassword(false);
   }, [mode]);
+
+  const emailFocusLayout = showEmailPassword && mode !== 'forgotPassword';
+
+  useEffect(() => {
+    if (!emailFocusLayout) {
+      return;
+    }
+    const id = window.requestAnimationFrame(() => {
+      document.getElementById('auth-email-input')?.focus();
+      document.getElementById('oasis-auth-email-form')?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [emailFocusLayout]);
 
   useEffect(() => {
     const handleAuthError = (event: Event) => {
@@ -212,12 +228,18 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
   const getSubtitle = () => {
     switch (mode) {
       case 'signup':
-        return null;
+        return 'Create a new Oasis account.';
       case 'signin':
         return 'Sign in to your Oasis account.';
       case 'forgotPassword':
         return 'Enter your email to receive a reset link.';
     }
+  };
+
+  const switchAuthMode = (next: 'signin' | 'signup') => {
+    setMode(next);
+    setError(null);
+    setSuccessMessage(null);
   };
 
   const getButtonText = () => {
@@ -237,7 +259,7 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
 
   const oauthButtonStyle: JSX.CSSProperties = {
     flex: 1,
-    height: '44px',
+    height: '36px',
     borderRadius: '999px',
     border: '1px solid #d9dfc8',
     background: '#fff',
@@ -248,57 +270,144 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
     outlineOffset: '2px',
   };
 
-  return (
-    <div className="auth-screen">
-      <div className="auth-screen-header">
-        <h2 className="auth-screen-title">{getTitle()}</h2>
-        {subtitle ? <p className="auth-screen-subtitle">{subtitle}</p> : null}
-      </div>
+  const authScreenClass =
+    (mode === 'forgotPassword'
+      ? 'auth-screen'
+      : mode === 'signup'
+        ? 'auth-screen auth-screen--signup'
+        : 'auth-screen auth-screen--signin') +
+    (emailFocusLayout ? ' auth-screen--email-focus' : '');
 
+  const oauthRow = (
+    <div className="auth-oauth-row">
+      <button
+        type="button"
+        aria-label="Continue with Google"
+        onClick={() => handleOAuthStart('signInWithGoogle')}
+        disabled={oauthLoading}
+        style={oauthButtonStyle}
+      >
+        <GoogleIcon />
+      </button>
+      <button
+        type="button"
+        aria-label="Continue with Microsoft"
+        onClick={() => handleOAuthStart('signInWithAzure')}
+        disabled={oauthLoading}
+        style={oauthButtonStyle}
+      >
+        <MicrosoftIcon />
+      </button>
+      <button
+        type="button"
+        aria-label="Continue with Apple"
+        onClick={() => handleOAuthStart('signInWithApple')}
+        disabled={oauthLoading}
+        style={oauthButtonStyle}
+      >
+        <AppleIcon />
+      </button>
+    </div>
+  );
+
+  const oauthDetailsSummaryLabel =
+    (mode === 'signup' ? 'Sign up' : 'Sign in') + ' with Google, Microsoft, or Apple';
+
+  return (
+    <div id="oasis-auth-panel" className={authScreenClass}>
       {mode !== 'forgotPassword' && (
-        <div className="auth-oauth-row">
+        <div className="auth-mode-tablist" role="tablist" aria-label="Sign in or create account">
           <button
             type="button"
-            aria-label="Continue with Google"
-            onClick={() => handleOAuthStart('signInWithGoogle')}
-            disabled={oauthLoading}
-            style={oauthButtonStyle}
+            role="tab"
+            className={`auth-mode-tab${mode === 'signin' ? ' auth-mode-tab--active' : ''}`}
+            aria-selected={mode === 'signin'}
+            aria-controls="auth-tabpanel"
+            id="auth-tab-signin"
+            onClick={() => switchAuthMode('signin')}
           >
-            <GoogleIcon />
+            Sign In
           </button>
           <button
             type="button"
-            aria-label="Continue with Apple"
-            onClick={() => handleOAuthStart('signInWithApple')}
-            disabled={oauthLoading}
-            style={oauthButtonStyle}
+            role="tab"
+            className={`auth-mode-tab${mode === 'signup' ? ' auth-mode-tab--active' : ''}`}
+            aria-selected={mode === 'signup'}
+            aria-controls="auth-tabpanel"
+            id="auth-tab-signup"
+            onClick={() => switchAuthMode('signup')}
           >
-            <AppleIcon />
-          </button>
-          <button
-            type="button"
-            aria-label="Continue with Microsoft"
-            onClick={() => handleOAuthStart('signInWithAzure')}
-            disabled={oauthLoading}
-            style={oauthButtonStyle}
-          >
-            <MicrosoftIcon />
+            Create account
           </button>
         </div>
       )}
+      <div
+        className="auth-tabpanel-stack"
+        role={mode === 'forgotPassword' ? undefined : 'tabpanel'}
+        id={mode === 'forgotPassword' ? undefined : 'auth-tabpanel'}
+        aria-labelledby={
+          mode === 'forgotPassword'
+            ? undefined
+            : mode === 'signup'
+              ? 'auth-tab-signup'
+              : 'auth-tab-signin'
+        }
+      >
+      <div className="auth-screen-header">
+        <h2 className="auth-screen-title" id="auth-screen-heading">
+          {getTitle()}
+        </h2>
+        {subtitle ? (
+          <p className="auth-screen-subtitle" id="auth-screen-subtitle">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+
+      {mode !== 'forgotPassword' &&
+        (showEmailPassword ? (
+          <details className="auth-oauth-details">
+            <summary className="auth-oauth-details-summary">
+              <span className="auth-oauth-details-summary-inner">
+                <span className="auth-oauth-details-summary-icons" aria-hidden="true">
+                  <span className="auth-oauth-details-summary-icon-wrap">
+                    <GoogleIcon />
+                  </span>
+                  <span className="auth-oauth-details-summary-icon-wrap">
+                    <MicrosoftIcon />
+                  </span>
+                  <span className="auth-oauth-details-summary-icon-wrap">
+                    <AppleIcon />
+                  </span>
+                </span>
+                <span className="auth-oauth-details-summary-label">{oauthDetailsSummaryLabel}</span>
+              </span>
+            </summary>
+            {oauthRow}
+          </details>
+        ) : (
+          oauthRow
+        ))}
 
       {mode !== 'forgotPassword' && !showEmailPassword && (
         <button
           type="button"
           className="auth-email-password-trigger"
-          onClick={() => setShowEmailPassword(true)}
+          onClick={() => {
+            onEmailPasswordOpen?.();
+            setShowEmailPassword(true);
+          }}
         >
           Email and password
         </button>
       )}
 
       {showFormFields && (
-        <form className="auth-form-minimal" onSubmit={handleSubmit}>
+        <form
+          id="oasis-auth-email-form"
+          className="auth-form-minimal"
+          onSubmit={handleSubmit}
+        >
           <div className="auth-field-minimal">
             <label className="auth-field-minimal-label" htmlFor="auth-email-input">
               email
@@ -364,40 +473,18 @@ export function Auth({ onSuccess, onCancel }: AuthProps) {
         </form>
       )}
 
-      <div className="auth-footer-links">
-        {mode === 'forgotPassword' ? (
+      {mode === 'forgotPassword' && (
+        <div className="auth-footer-links">
           <button
             type="button"
             className="auth-link-standalone"
-            onClick={() => {
-              setMode('signin');
-              setError(null);
-              setSuccessMessage(null);
-            }}
+            onClick={() => switchAuthMode('signin')}
           >
             Back to Sign In
           </button>
-        ) : (
-          <>
-            {mode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
-            <button
-              type="button"
-              className="auth-link-inline"
-              onClick={() => {
-                setMode(mode === 'signup' ? 'signin' : 'signup');
-                setError(null);
-                setSuccessMessage(null);
-              }}
-            >
-              {mode === 'signup' ? 'Sign In' : 'Sign Up'}
-            </button>
-          </>
-        )}
+        </div>
+      )}
       </div>
-
-      <button type="button" className="auth-cancel" onClick={onCancel}>
-        Cancel
-      </button>
     </div>
   );
 }

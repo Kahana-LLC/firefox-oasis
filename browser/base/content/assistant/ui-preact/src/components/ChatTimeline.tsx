@@ -6,6 +6,15 @@ import type { AssistantMessage, OasisWindow } from '../types';
 
 const oasisWindow: OasisWindow = window;
 
+function userPromptBefore(messages: AssistantMessage[], aiIndex: number): string {
+  for (let i = aiIndex - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      return messages[i].content;
+    }
+  }
+  return '';
+}
+
 const STARTER_PROMPTS = [
   'Summarize this page',
   'List my open tabs',
@@ -21,6 +30,7 @@ export function ChatTimeline({
   onTtsClick,
   isAuthenticated,
   onStarterPrompt,
+  highlightStarterChips,
 }: {
   messages: AssistantMessage[];
   busy: boolean;
@@ -30,6 +40,7 @@ export function ChatTimeline({
   onTtsClick?: (messageId: string, content: string) => void;
   isAuthenticated?: boolean;
   onStarterPrompt?: (text: string) => void;
+  highlightStarterChips?: boolean;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -77,7 +88,7 @@ export function ChatTimeline({
           </div>
           {isAuthenticated && onStarterPrompt && !busy && (
             <div
-              className="starter-prompt-cluster"
+              className={`starter-prompt-cluster${highlightStarterChips ? ' starter-prompt-cluster--pulse' : ''}`}
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -105,7 +116,6 @@ export function ChatTimeline({
 
       {messages.map((message, index) => {
         const isLast = index === messages.length - 1;
-        const isLastAI = isLast && message.role === 'ai';
 
         if (message.role === 'user') {
           return (
@@ -185,7 +195,13 @@ export function ChatTimeline({
                       )}
                     </button>
                   )}
-                  {isLastAI && !busy && <Feedback messageId={message.id} />}
+                  {message.content && (!isLast || !busy) ? (
+                    <Feedback
+                      messageId={message.id}
+                      userPrompt={userPromptBefore(messages, index)}
+                      assistantReply={message.content}
+                    />
+                  ) : null}
                 </div>
               </div>
             </Fragment>
