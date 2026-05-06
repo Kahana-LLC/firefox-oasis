@@ -143,6 +143,24 @@ export type OasisWindow = Window & {
   supabaseAuth?: SupabaseAuthLike;
   subscriptionService?: {
     forceRefresh?: () => Promise<void>;
+    getUsageBarData?: () => Promise<{
+      used: number;
+      limit: number;
+      baseLimit: number;
+      bonusTokens: number;
+      remaining: number;
+      percentUsed: number;
+      percentOfBase: number;
+    }>;
+    getDailyTokenUsageForDisplay?: () => {
+      used: number;
+      limit: number;
+      baseLimit: number;
+      bonusTokens: number;
+      remaining: number;
+      percentUsed: number;
+      percentOfBase: number;
+    };
   };
   assistantBridge?: AssistantBridgeLike;
   runAssistantStream?: RunAssistantStream;

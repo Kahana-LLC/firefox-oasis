@@ -10,9 +10,11 @@ import { Composer } from './components/Composer';
 import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
+import { TokenUsageBar } from './components/TokenUsageBar';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
+import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import {
   loadTrainingProgress,
   type TrainingProgress,
@@ -28,6 +30,8 @@ import type {
 import './App.css';
 
 const oasisWindow: OasisWindow = window;
+
+const SIGNED_IN_BANNER_AUTO_DISMISS_MS = 5000;
 
 function Banner({ email, onClose }: { email: string; onClose: () => void }) {
   return (
@@ -560,6 +564,16 @@ export function App() {
 
   const userEmail = userEmailOf(auth.user);
 
+  useEffect(() => {
+    if (!auth.isAuthenticated || !userEmail || !bannerVisible) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setBannerVisible(false);
+    }, SIGNED_IN_BANNER_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(id);
+  }, [auth.isAuthenticated, userEmail, bannerVisible]);
+
   const onboardingNavigate = useMemo(
     () => ({
       goAuth: () => setView('auth'),
@@ -586,6 +600,9 @@ export function App() {
         setView('chat');
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
+            document
+              .querySelector('.starter-prompt-cluster')
+              ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             document.getElementById('oasis-assistant-composer')?.scrollIntoView({
               block: 'nearest',
               behavior: 'smooth',
@@ -658,6 +675,7 @@ export function App() {
                 messages={runtime.messages}
                 busy={runtime.busy}
                 activeToolLabel={runtime.activeToolAction?.label || null}
+                responseStreaming={runtime.responseStreaming}
                 onLinkClick={handleLinkClick}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
@@ -684,9 +702,12 @@ export function App() {
             input={runtime.input}
             busy={runtime.busy}
             isAuthenticated={auth.isAuthenticated}
+            chatIsEmpty={runtime.messages.length === 0}
             ttsEnabled={runtime.ttsEnabled}
             inputRef={composerInputRef}
-            onInput={runtime.setInput}
+            showInlineChips={runtime.showComposerInlineChips}
+            inlineSuggestions={COMPOSER_INLINE_SUGGESTIONS}
+            onInput={runtime.handleComposerInput}
             onKeyDown={runtime.handleKeyDown}
             onSend={() => {
               void runtime.send();
@@ -705,6 +726,8 @@ export function App() {
             onRequestSignIn={() => setView('auth')}
           />
         )}
+
+        {view !== 'auth' && <TokenUsageBar isAuthenticated={auth.isAuthenticated} />}
 
         {view !== 'auth' && (
           <OnboardingChecklist

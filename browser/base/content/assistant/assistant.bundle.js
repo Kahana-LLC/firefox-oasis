@@ -60424,7 +60424,13 @@ Content: ${content}`;
     pro: 3e3
     // $40/mo
   };
+  var PLAN_DAILY_TOKEN_LIMITS = {
+    free: 1e5,
+    basic: 1e6,
+    pro: 2e6
+  };
   var DEFAULT_LIMIT = 50;
+  var DEFAULT_DAILY_TOKEN_LIMIT = 1e5;
   var COST_TEXT = 1;
   var COST_VOICE = 10;
   var logDebug2 = (message, ...meta) => {
@@ -60456,6 +60462,12 @@ Content: ${content}`;
     lastFetchTime = 0;
     CACHE_TTL = 60 * 1e3;
     // 1 minute cache
+    cachedDailyLimit = null;
+    cachedDailyUsedFromApi = null;
+    cachedDailyRemainingFromApi = null;
+    cachedDailyTokensFromDb = 0;
+    cachedDailyTokenLimitSupabase = null;
+    cachedFeedbackBonusTokensToday = 0;
     constructor() {
     }
     static getInstance() {
@@ -60472,8 +60484,48 @@ Content: ${content}`;
       if (quota.monthly_used !== void 0) {
         this.cachedUsage = quota.monthly_used;
       }
+      if (quota.daily_limit !== void 0) {
+        this.cachedDailyLimit = quota.daily_limit;
+      }
+      if (quota.daily_used !== void 0) {
+        this.cachedDailyUsedFromApi = quota.daily_used;
+      }
+      if (quota.daily_remaining !== void 0) {
+        this.cachedDailyRemainingFromApi = quota.daily_remaining;
+      }
       this.lastFetchTime = Date.now();
-      logDebug2(`updateFromQuota: Updated cached limit to ${this.cachedLimit} and usage to ${this.cachedUsage}`);
+      logDebug2(
+        `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
+      );
+    }
+    getDailyTokenUsageForDisplay() {
+      const fromApiLimit = this.cachedDailyLimit !== null && this.cachedDailyLimit > 0 ? this.cachedDailyLimit : null;
+      const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
+      const baseLimit = Math.max(
+        1,
+        fromApiLimit ?? fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
+      );
+      const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
+      const limit = baseLimit + bonusTokens;
+      const fromApi = this.cachedDailyUsedFromApi ?? 0;
+      const fromDb = this.cachedDailyTokensFromDb;
+      const used = Math.max(0, Math.max(fromApi, fromDb));
+      const remaining = Math.max(0, limit - used);
+      const percentOfBase = baseLimit > 0 ? Math.min(9999, Math.round(used / baseLimit * 1e3) / 10) : 0;
+      const percentUsed = limit > 0 ? Math.min(9999, Math.round(used / limit * 1e3) / 10) : 0;
+      return {
+        used,
+        limit,
+        baseLimit,
+        bonusTokens,
+        remaining,
+        percentUsed,
+        percentOfBase
+      };
+    }
+    async getUsageBarData() {
+      await this.forceRefresh();
+      return this.getDailyTokenUsageForDisplay();
     }
     /**
      * Track usage for a command
@@ -60557,6 +60609,17 @@ Content: ${content}`;
         hasPlansJoin: planData && planData.plans ? true : false,
         userId
       });
+      let planNameKey = "free";
+      let planIdForDaily = null;
+      if (planData) {
+        if (planData.plan_id != null) {
+          planIdForDaily = String(planData.plan_id);
+        }
+        const joined = planData.plans;
+        if (joined && typeof joined.name === "string" && joined.name) {
+          planNameKey = joined.name.toLowerCase();
+        }
+      }
       if (planData && planData.plans) {
         const dbLimit = planData.plans.llm_call_limit;
         const planName = (planData.plans.name || "").toLowerCase();
@@ -60582,6 +60645,7 @@ Content: ${content}`;
         );
         if (hasStripeSubscription) {
           limit = PLAN_LIMITS["basic"];
+          planNameKey = "basic";
           logDebug2(
             `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`
           );
@@ -60605,6 +60669,9 @@ Content: ${content}`;
           logError2("refreshUsageData: Fallback query error:", fallbackError);
         }
         if (fallbackData && fallbackData.is_active) {
+          if (planIdForDaily === null && fallbackData.plan_id != null) {
+            planIdForDaily = String(fallbackData.plan_id);
+          }
           const stripeSubId = fallbackData.stripe_subscription_id;
           const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
           logDebug2(`refreshUsageData: Checking stripe_subscription_id:`, {
@@ -60614,6 +60681,7 @@ Content: ${content}`;
           });
           if (hasStripeSubscription) {
             limit = PLAN_LIMITS["basic"];
+            planNameKey = "basic";
             logDebug2(
               `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`
             );
@@ -60661,6 +60729,49 @@ Content: ${content}`;
       logDebug2(
         `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
       );
+      let dailyTokLimit = null;
+      if (planIdForDaily) {
+        const { data: planRow, error: planRowErr } = await supabase.from("plans").select("daily_token_limit").eq("id", planIdForDaily).maybeSingle();
+        if (!planRowErr && planRow && planRow.daily_token_limit != null) {
+          const n3 = Number(planRow.daily_token_limit);
+          if (Number.isFinite(n3) && n3 > 0) {
+            dailyTokLimit = n3;
+          }
+        }
+      }
+      this.cachedDailyTokenLimitSupabase = dailyTokLimit ?? PLAN_DAILY_TOKEN_LIMITS[planNameKey] ?? DEFAULT_DAILY_TOKEN_LIMIT;
+      const startOfUtcDay = /* @__PURE__ */ new Date();
+      startOfUtcDay.setUTCHours(0, 0, 0, 0);
+      const utcGrantDate = startOfUtcDay.toISOString().slice(0, 10);
+      const { data: grantRows, error: grantErr } = await supabase.from("feedback_token_grants").select("tokens").eq("user_id", userId).eq("grant_date_utc", utcGrantDate);
+      if (!grantErr && grantRows) {
+        this.cachedFeedbackBonusTokensToday = grantRows.reduce(
+          (acc, row) => acc + (Number(row.tokens) || 0),
+          0
+        );
+      } else {
+        if (grantErr) {
+          logWarn2(
+            "refreshUsageData: feedback_token_grants fetch failed",
+            grantErr.message
+          );
+        }
+        this.cachedFeedbackBonusTokensToday = 0;
+      }
+      const { data: dayRows, error: dayErr } = await supabase.from("llm_usage").select("input_tokens, output_tokens").eq("user_id", userId).gte("created_at", startOfUtcDay.toISOString());
+      if (!dayErr && dayRows) {
+        this.cachedDailyTokensFromDb = dayRows.reduce(
+          (acc, row) => acc + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
+          0
+        );
+      } else {
+        if (dayErr) {
+          logWarn2(
+            "refreshUsageData: daily token aggregate failed",
+            dayErr.message
+          );
+        }
+      }
       this.lastFetchTime = Date.now();
     }
   };
@@ -67268,6 +67379,22 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     },
     {
       next: "add_split_view",
+      reason: "mutation-explicit-add-split-view-colloquial",
+      resolve: (input) => {
+        const lower = input.toLowerCase();
+        if (/\b(remove|disable|close|unsplit|don't|do not)\b/.test(lower)) {
+          return null;
+        }
+        if (/\b(?:two|2)\s+tabs?\s+(?:side\s*by\s*side|at\s+once)\b/i.test(input) || /\bshow\s+(?:two|2)\s+tabs?\s+(?:side\s*by\s*side|at\s+once)\b/i.test(
+          input
+        ) || /\bopen\s+.{0,40}\bsplit\s*view\b/i.test(input) || /\bsplitview\b/i.test(input)) {
+          return {};
+        }
+        return null;
+      }
+    },
+    {
+      next: "add_split_view",
       reason: "mutation-explicit-add-split-view",
       resolve: (input) => {
         if (!/(?:add|create|enable)\s+split\s*view|split\s+(?:this\s+)?(?:tab|view)/i.test(
@@ -67275,7 +67402,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         )) {
           return null;
         }
-        const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
+        const withTabMatch = input.match(
+          /(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i
+        );
         const withIndex = numberArg(withTabMatch?.groups?.index);
         if (withIndex != null) {
           return { withIndex };
@@ -87354,7 +87483,9 @@ ${toHex2(hashedRequest)}`;
   }
 
   // src/prompts/chatPrompt.ts
-  var CHAT_SYSTEM_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into Firefox. You can help with ANYTHING - not just browser tasks.
+  var CHAT_SYSTEM_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into the Oasis browser. You can help with ANYTHING - not just browser tasks.
+
+**Product naming:** The browser is Oasis (or Oasis Browser). Do not call it Firefox or imply the user is in Firefox unless you are quoting an external site or add-on name.
 
 **Your Capabilities:**
 - Answer ANY question on any topic (science, history, coding, math, writing, etc.)
@@ -87469,6 +87600,9 @@ Do NOT mention that you received page content or reference this instruction. Jus
       "- search_memory does NOT search browsing history \u2014 use search_history instead.",
       "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) \u2192 search_history.",
       "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' \u2192 search_memory.",
+      "SPLIT VIEW:",
+      "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
+      "- For removing split view or unsplitting, prefer remove_split_view.",
       "For list/show requests, prefer list_* tools and avoid search_memory unless user explicitly asks to search.",
       "For add/remove/delete/move requests, prefer mutation tools and keep destructive actions explicit.",
       "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",
@@ -87476,6 +87610,63 @@ Do NOT mention that you received page content or reference this instruction. Jus
       "If the user asks to inspect previous search results, use get_recent_search_results.",
       "For ambiguous destructive/container targets, prefer safe commands like resolve_ambiguity instead of guessing."
     ].join(" ");
+  }
+
+  // src/utils/quotaUserMessage.ts
+  function formatQuotaExceededMessage(raw) {
+    const s2 = String(raw || "").trim().toLowerCase();
+    if (!s2) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    if (s2.includes("daily_limit") || s2 === "daily_limit_exceeded") {
+      return "You have reached your daily AI usage limit. Your allocation resets every day.";
+    }
+    if (s2.includes("monthly_limit") || s2 === "monthly_limit_exceeded") {
+      return "You have reached your monthly AI usage limit. Your allocation resets at the start of your next billing cycle.";
+    }
+    if (s2.includes("quota_exceeded") || s2.includes("quota exceeded")) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    if (/^[a-z0-9_]+$/.test(String(raw || "").trim())) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    return String(raw || "").trim();
+  }
+
+  // src/utils/oasisCapabilitiesFaq.ts
+  var OASIS_CAPABILITIES_REPLY = `I'm Oasis AI, your assistant in this browser. Here's what I focus on:
+
+**Browser tasks (first and foremost)**
+- **Tabs and navigation:** Open sites in new tabs, run web searches, and move around your windows.
+- **Organization:** Create and manage tab groups, and work with your tabs in bulk when you ask.
+- **Your data:** Search your browsing history and bookmarks.
+- **The page you're reading:** Summarize, translate, or rework text on normal web pages you have open. (Built-in pages like the new tab page can't be summarized the same way\u2014open a regular website first.)
+
+**General help**
+- Answer questions, brainstorm, explain ideas in plain language, and help you phrase something clearly.
+
+I don't take the place of a coding debugger or deep technical support. If you want something done in the browser, say what you're trying to do and I'll walk you through it.
+
+What would you like to try first?`;
+  function getOasisCapabilitiesReply(userText) {
+    const t2 = userText.trim().toLowerCase();
+    if (t2.length < 12 || t2.length > 220) {
+      return null;
+    }
+    if (!/\bwhat\b/.test(t2)) {
+      return null;
+    }
+    if (!t2.includes("oasis") && !t2.includes("assistant")) {
+      return null;
+    }
+    const asksScope = /\bcan\b/.test(t2) || /\bdo\b/.test(t2) || /\bcapabilities\b/.test(t2) || /\bhelp (with|me)\b/.test(t2);
+    if (!asksScope) {
+      return null;
+    }
+    if (/\bwhat can i\b/.test(t2) && !t2.includes("you") && !t2.includes("assistant")) {
+      return null;
+    }
+    return OASIS_CAPABILITIES_REPLY;
   }
 
   // src/assistant/messageUtils.ts
@@ -88169,7 +88360,10 @@ Result: ${toolResult.message}`
     const capability = getAssistCapability(endpointKey);
     if (!shouldAttemptAssist(endpointKey)) {
       if (capability === "unsupported") {
-        assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+        assistantLogger.debug(
+          "router",
+          "Assist endpoint currently cooling down."
+        );
       }
       return { kind: "none" };
     }
@@ -88196,7 +88390,11 @@ Result: ${toolResult.message}`
       const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
       const assistArgs = isRecord(assist?.args) ? assist.args : {};
       if (allowPlanTool && assistNext === PLAN_TOOL_NAME) {
-        const actions = parsePlannedActions(assistArgs, memberNameSet, maxPlanActions);
+        const actions = parsePlannedActions(
+          assistArgs,
+          memberNameSet,
+          maxPlanActions
+        );
         if (actions.length > 0) {
           assistantLogger.debug("router", "Assist returned action plan", {
             count: actions.length
@@ -88206,11 +88404,15 @@ Result: ${toolResult.message}`
         return { kind: "none" };
       }
       if (assistNext && assistNext !== "chat" && !effectiveOptionSet.has(assistNext)) {
-        assistantLogger.debug("router", "Assist route rejected by family policy", {
-          assistNext,
-          family: constrained.family,
-          constrained: constrained.constrained
-        });
+        assistantLogger.debug(
+          "router",
+          "Assist route rejected by family policy",
+          {
+            assistNext,
+            family: constrained.family,
+            constrained: constrained.constrained
+          }
+        );
         return { kind: "none" };
       }
       if (assistNext && assistNext !== "chat" && memberNameSet.has(assistNext)) {
@@ -88229,15 +88431,25 @@ Result: ${toolResult.message}`
         if (error.quota) {
           subscriptionService.updateFromQuota(error.quota);
         }
-        return { kind: "chat", content: error.message + " Please upgrade your plan via the menu." };
+        return {
+          kind: "chat",
+          content: formatQuotaExceededMessage(error.message)
+        };
       }
       const message = String(error || "");
       const assistUnsupported = /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
       if (assistUnsupported) {
         markAssistUnsupported(endpointKey);
-        assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
+        assistantLogger.warn(
+          "router",
+          "Assist endpoint unavailable, using fallback."
+        );
       } else {
-        assistantLogger.warn("router", "Assist route failed, using fallback.", error);
+        assistantLogger.warn(
+          "router",
+          "Assist route failed, using fallback.",
+          error
+        );
       }
       return { kind: "none" };
     }
@@ -88602,9 +88814,19 @@ ${result.message}` : result.message;
           messages: [
             new AIMessage({
               content: presentToolResult(toolPayload),
-              additional_kwargs: { oasisUsageMeta: classifyToolAction(toolPayload.commandName) }
+              additional_kwargs: {
+                oasisUsageMeta: classifyToolAction(toolPayload.commandName)
+              }
             })
           ],
+          lastWorker: "chat",
+          commandQueue: []
+        };
+      }
+      const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
+      if (capabilitiesReply) {
+        return {
+          messages: [new AIMessage(capabilitiesReply)],
           lastWorker: "chat",
           commandQueue: []
         };
@@ -88619,7 +88841,13 @@ ${result.message}` : result.message;
       ];
       let res;
       try {
-        res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"], [], CHAT_GENERATION_CONFIG);
+        res = await assistRemote(
+          CHAT_SYSTEM_PROMPT,
+          toWire(messagesWithPrompt),
+          ["chat"],
+          [],
+          CHAT_GENERATION_CONFIG
+        );
         if (res?.quota) {
           subscriptionService.updateFromQuota(res.quota);
         }
@@ -88630,7 +88858,9 @@ ${result.message}` : result.message;
             subscriptionService.updateFromQuota(error.quota);
           }
           return {
-            messages: [new AIMessage(error.message + " Please upgrade your plan via the menu.")],
+            messages: [
+              new AIMessage(formatQuotaExceededMessage(error.message))
+            ],
             lastWorker: "chat",
             commandQueue: []
           };
@@ -88665,7 +88895,9 @@ ${result.message}` : result.message;
           };
         }
         return {
-          messages: [new AIMessage("I couldn't generate a response. Please try again.")],
+          messages: [
+            new AIMessage("I couldn't generate a response. Please try again.")
+          ],
           lastWorker: "chat",
           commandQueue: []
         };
@@ -88833,7 +89065,11 @@ ${message}` : message;
       if (assistRoute.kind === "tool") {
         if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
-          return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+          return {
+            next: route.next,
+            args: applyNoticeToArgs(route.args),
+            commandQueue
+          };
         }
         return {
           next: assistRoute.next,
@@ -88859,7 +89095,11 @@ ${message}` : message;
         if (route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
         }
-        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+        return {
+          next: route.next,
+          args: applyNoticeToArgs(route.args),
+          commandQueue
+        };
       }
       if (route.type === "chat") {
         return {
@@ -89193,12 +89433,13 @@ ${message}` : message;
 
   // src/prompts/voicePrompt.ts
   var VOICE_SCOPE_AND_RECOVERY = `Scope and recovery (voice input \u2014 applies to every reply):
-- You are primarily a Firefox (Oasis) browsing assistant. Treat what you heard as a command or question about tabs, windows, search, navigation, or page content unless the user clearly asks for general conversation with no browser angle.
+- You are primarily an Oasis browsing assistant. Treat what you heard as a command or question about tabs, windows, search, navigation, or page content unless the user clearly asks for general conversation with no browser angle.
+- Do not refer to the product as Firefox; the browser is Oasis.
 - If a request does not map safely to a browser action or tool, give ONE short clarification (for example: "Say the site name to open, or say 'search X on Google'"). Do not pivot into long empathy, therapy-style, or storytelling replies.
 - If the transcript looks fragmentary, nonsensical, or unrelated to browsing, do not invent a personal situation or backstory. Ask them to repeat, or suggest one concrete browser-focused phrase they can try.
 `;
   var VOICE_REPLY_ADDENDUM = `${VOICE_SCOPE_AND_RECOVERY}
-You are the user's personal voice assistant in Firefox (Oasis). Be warm and clear, but stay task-oriented.
+You are the user's personal voice assistant in Oasis. Be warm and clear, but stay task-oriented.
 
 Voice and spoken delivery (this will be read by text-to-speech):
 - Sound conversational: vary rhythm, use short and medium sentences, and connect ideas the way people talk ("So the main idea is\u2026", "Here's why that matters\u2026").

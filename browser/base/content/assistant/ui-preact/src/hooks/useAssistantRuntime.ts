@@ -28,6 +28,14 @@ function uuid() {
   });
 }
 
+function dispatchOasisUsageUpdate() {
+  try {
+    window.dispatchEvent(new CustomEvent("oasis-usage-update"));
+  } catch {
+    void 0;
+  }
+}
+
 function prettifyToolName(name: string): string {
   if (!name) return "";
   if (name.includes(" ")) return name;
@@ -48,6 +56,61 @@ function isHumanHistoryEntry(entry: AssistantHistoryEntry): boolean {
     entry.id?.includes("Human") ||
     entry.constructor?.name === "HumanMessage"
   );
+}
+
+const COMPOSER_INLINE_CHIPS_MAX_SENDS = 3;
+const LS_COMPOSER_CHIPS_COUNT = "oasis.assistant.composerInlineChipsSendCount";
+const LS_COMPOSER_CHIPS_RETIRED = "oasis.assistant.composerInlineChipsRetired";
+const COMMAND_HISTORY_CAP = 50;
+
+function readInitialComposerInlineSends(): number {
+  try {
+    if (localStorage.getItem(LS_COMPOSER_CHIPS_RETIRED) === "1") {
+      return COMPOSER_INLINE_CHIPS_MAX_SENDS;
+    }
+    const n = parseInt(
+      localStorage.getItem(LS_COMPOSER_CHIPS_COUNT) || "0",
+      10
+    );
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function bumpComposerInlineSends(): number {
+  try {
+    if (localStorage.getItem(LS_COMPOSER_CHIPS_RETIRED) === "1") {
+      return COMPOSER_INLINE_CHIPS_MAX_SENDS;
+    }
+    const raw = parseInt(
+      localStorage.getItem(LS_COMPOSER_CHIPS_COUNT) || "0",
+      10
+    );
+    const cur = Number.isFinite(raw) && raw >= 0 ? raw : 0;
+    const next = cur + 1;
+    localStorage.setItem(LS_COMPOSER_CHIPS_COUNT, String(next));
+    if (next >= COMPOSER_INLINE_CHIPS_MAX_SENDS) {
+      localStorage.setItem(LS_COMPOSER_CHIPS_RETIRED, "1");
+    }
+    return next;
+  } catch {
+    return COMPOSER_INLINE_CHIPS_MAX_SENDS;
+  }
+}
+
+function appendCommandHistoryLine(store: string[], line: string) {
+  const t = line.replace(/\s+/g, " ").trim();
+  if (!t) {
+    return;
+  }
+  if (store.length > 0 && store[store.length - 1] === t) {
+    return;
+  }
+  store.push(t);
+  if (store.length > COMMAND_HISTORY_CAP) {
+    store.splice(0, store.length - COMMAND_HISTORY_CAP);
+  }
 }
 
 export function mapHistoryEntriesToMessages(
@@ -81,8 +144,14 @@ export function useAssistantRuntime(params: {
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [composerInlineSends, setComposerInlineSends] = useState(
+    readInitialComposerInlineSends
+  );
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
+  const commandHistoryRef = useRef<string[]>([]);
+  const historyNavIndexRef = useRef(-1);
+  const draftBeforeHistoryRef = useRef("");
 
   const appendChunkToMessage = useCallback(
     (messageId: string, chunk: string) => {
@@ -231,6 +300,18 @@ export function useAssistantRuntime(params: {
     [toolActions]
   );
 
+  const showComposerInlineChips = useMemo(
+    () =>
+      auth.isAuthenticated &&
+      composerInlineSends < COMPOSER_INLINE_CHIPS_MAX_SENDS,
+    [auth.isAuthenticated, composerInlineSends]
+  );
+
+  const handleComposerInput = useCallback((value: string) => {
+    historyNavIndexRef.current = -1;
+    setInput(value);
+  }, []);
+
   const resetAssistantSession = useCallback(async () => {
     setMessages([]);
     setToolActions([]);
@@ -266,6 +347,11 @@ export function useAssistantRuntime(params: {
       }
 
       stopSpeaking();
+      if (!fromVoice) {
+        appendCommandHistoryLine(commandHistoryRef.current, text);
+        historyNavIndexRef.current = -1;
+        setComposerInlineSends(bumpComposerInlineSends());
+      }
       setInput("");
       setResponseStreaming(false);
       setBusy(true);
@@ -295,6 +381,7 @@ export function useAssistantRuntime(params: {
       } finally {
         setResponseStreaming(false);
         setBusy(false);
+        dispatchOasisUsageUpdate();
       }
     },
     [
@@ -311,10 +398,63 @@ export function useAssistantRuntime(params: {
     (event: KeyboardEvent) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
+        historyNavIndexRef.current = -1;
         void send();
+        return;
       }
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+        return;
+      }
+      if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const ta = event.target as HTMLTextAreaElement | null;
+      if (!ta || ta.tagName !== "TEXTAREA") {
+        return;
+      }
+      const value = ta.value;
+      const sel = ta.selectionStart ?? 0;
+      const history = commandHistoryRef.current;
+      if (history.length === 0) {
+        return;
+      }
+      const firstNl = value.indexOf("\n");
+      const onFirstLine = firstNl === -1 || sel <= firstNl;
+      if (event.key === "ArrowUp") {
+        let idx = historyNavIndexRef.current;
+        if (idx < 0) {
+          if (!onFirstLine) {
+            return;
+          }
+          draftBeforeHistoryRef.current = value;
+          idx = 0;
+        } else {
+          if (idx >= history.length - 1) {
+            return;
+          }
+          idx += 1;
+        }
+        historyNavIndexRef.current = idx;
+        const line = history[history.length - 1 - idx];
+        event.preventDefault();
+        setInput(line);
+        return;
+      }
+      const idx = historyNavIndexRef.current;
+      if (idx < 0) {
+        return;
+      }
+      event.preventDefault();
+      if (idx === 0) {
+        historyNavIndexRef.current = -1;
+        setInput(draftBeforeHistoryRef.current);
+        return;
+      }
+      const nextIdx = idx - 1;
+      historyNavIndexRef.current = nextIdx;
+      setInput(history[history.length - 1 - nextIdx]);
     },
-    [send]
+    [send, setInput]
   );
 
   const handleConfirmationApprove = useCallback(async () => {
@@ -328,6 +468,7 @@ export function useAssistantRuntime(params: {
     } finally {
       setResponseStreaming(false);
       setBusy(false);
+      dispatchOasisUsageUpdate();
     }
   }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
 
@@ -351,6 +492,7 @@ export function useAssistantRuntime(params: {
     } finally {
       setResponseStreaming(false);
       setBusy(false);
+      dispatchOasisUsageUpdate();
     }
   }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
 
@@ -410,12 +552,14 @@ export function useAssistantRuntime(params: {
     setMessages,
     input,
     setInput,
+    handleComposerInput,
     busy,
     responseStreaming,
     toolActions,
     activeToolAction,
     send,
     handleKeyDown,
+    showComposerInlineChips,
     handleConfirmationApprove,
     handleConfirmationCancel,
     startToolAction,

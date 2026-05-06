@@ -47,6 +47,10 @@ export function buildAssistRouterPrompt(
     "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) → search_history.",
     "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' → search_memory.",
 
+    "SPLIT VIEW:",
+    "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
+    "- For removing split view or unsplitting, prefer remove_split_view.",
+
     "For list/show requests, prefer list_* tools and avoid search_memory unless user explicitly asks to search.",
     "For add/remove/delete/move requests, prefer mutation tools and keep destructive actions explicit.",
     "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",

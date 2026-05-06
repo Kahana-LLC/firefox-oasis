@@ -3,7 +3,10 @@ import { useEffect, useRef } from 'preact/hooks';
 import { Feedback } from './Feedback';
 import type { TrainingSubmittedPayload } from './Feedback';
 import { ActiveToolIndicator } from './ActiveToolIndicator';
+import { QuotaLimitCallout } from './QuotaLimitCallout';
 import type { AssistantMessage, OasisWindow } from '../types';
+import { detectQuotaLimitMessage } from '../utils/quotaLimitUi';
+import { STARTER_PROMPTS } from '../utils/exampleCommands';
 
 const oasisWindow: OasisWindow = window;
 
@@ -16,16 +19,11 @@ function userPromptBefore(messages: AssistantMessage[], aiIndex: number): string
   return '';
 }
 
-const STARTER_PROMPTS = [
-  'Summarize this page',
-  'List my open tabs',
-  "Search the web for today's weather",
-] as const;
-
 export function ChatTimeline({
   messages,
   busy,
   activeToolLabel,
+  responseStreaming,
   onLinkClick,
   speakingMsgId,
   onTtsClick,
@@ -37,6 +35,7 @@ export function ChatTimeline({
   messages: AssistantMessage[];
   busy: boolean;
   activeToolLabel: string | null;
+  responseStreaming: boolean;
   onLinkClick: (event: MouseEvent) => void;
   speakingMsgId?: string | null;
   onTtsClick?: (messageId: string, content: string) => void;
@@ -46,61 +45,42 @@ export function ChatTimeline({
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
+  const lastAiRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
+    const log = logRef.current;
+    if (!log) {
+      return;
     }
-  }, [messages, busy, activeToolLabel]);
+    const last = messages[messages.length - 1];
+    const shouldSnapToTopOfLastAi =
+      !busy &&
+      !responseStreaming &&
+      !activeToolLabel &&
+      last?.role === 'ai' &&
+      last.content.length > 0;
+
+    if (shouldSnapToTopOfLastAi) {
+      requestAnimationFrame(() => {
+        lastAiRef.current?.scrollIntoView({ block: 'start', behavior: 'auto', inline: 'nearest' });
+      });
+      return;
+    }
+    log.scrollTop = log.scrollHeight;
+  }, [messages, busy, activeToolLabel, responseStreaming]);
 
   return (
     <div className="chat-log" ref={logRef}>
       {messages.length === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: '8px',
-            marginBottom: '8px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '10px',
-            width: '100%',
-            padding: '8px',
-            boxSizing: 'border-box',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ width: '75%', maxWidth: '260px', minWidth: '100px', flexShrink: 0 }}>
-            <img
-              src="chrome://browser/content/assistant/images/empty-state-bg.png"
-              alt=""
-              style={{
-                width: '100%',
-                height: 'auto',
-                maxHeight: '200px',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-          </div>
-          <div style={{ color: '#999', fontSize: '13px', lineHeight: '1.4' }}>
-            Welcome to Oasis AI
+        <div className="chat-empty-state">
+          <p className="chat-empty-state__welcome">
+            Get started with these example commands
             <br />
-            Browse, summarize, or manage your tabs.
-          </div>
+            or type in your own below.
+          </p>
           {isAuthenticated && onStarterPrompt && !busy && (
             <div
-              className={`starter-prompt-cluster${highlightStarterChips ? ' starter-prompt-cluster--pulse' : ''}`}
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: '5px',
-                maxWidth: '280px',
-                padding: '0 4px',
-                boxSizing: 'border-box',
-              }}
+              className={`starter-prompt-cluster chat-empty-state__chips${highlightStarterChips ? ' starter-prompt-cluster--pulse' : ''}`}
             >
               {STARTER_PROMPTS.map(text => (
                 <button
@@ -114,6 +94,13 @@ export function ChatTimeline({
               ))}
             </div>
           )}
+          <div className="chat-empty-state__art">
+            <img
+              src="chrome://browser/content/assistant/images/empty-state-bg.png"
+              alt=""
+              decoding="async"
+            />
+          </div>
         </div>
       )}
 
@@ -131,6 +118,22 @@ export function ChatTimeline({
         }
 
         if (message.role === 'ai') {
+          const quotaVariant = detectQuotaLimitMessage(message.content);
+          if (quotaVariant) {
+            return (
+              <Fragment key={message.id}>
+                <div
+                  ref={isLast ? lastAiRef : undefined}
+                  className="ai-message-wrapper"
+                >
+                  <div className="ai-response-container" onClick={onLinkClick}>
+                    <QuotaLimitCallout variant={quotaVariant} />
+                  </div>
+                </div>
+              </Fragment>
+            );
+          }
+
           let htmlContent = message.content;
           try {
             if (oasisWindow.marked && oasisWindow.DOMPurify) {
@@ -143,7 +146,10 @@ export function ChatTimeline({
 
           return (
             <Fragment key={message.id}>
-              <div className="ai-message-wrapper">
+              <div
+                ref={isLast ? lastAiRef : undefined}
+                className="ai-message-wrapper"
+              >
                 <div className="ai-response-container" onClick={onLinkClick}>
                   {oasisWindow.marked ? (
                     <div

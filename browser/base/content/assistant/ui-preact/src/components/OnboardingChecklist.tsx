@@ -261,6 +261,13 @@ export function OnboardingChecklist({
     color: '#333',
   };
 
+  const rowDoneShell: JSX.CSSProperties = {
+    ...rowBtn,
+    cursor: 'default',
+    opacity: 0.72,
+    color: '#9ca3af',
+  };
+
   if (collapsed) {
     return (
       <div className="assistant-onboarding-dock assistant-onboarding-dock--collapsed">
@@ -446,69 +453,123 @@ export function OnboardingChecklist({
           )}
         </div>
 
-        <button
-          type="button"
-          style={rowBtn}
-          onClick={() => {
-            onNavigate.scrollToAuthPanel();
-          }}
-        >
-          <StepIcon done={accountDone} />
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-              Sign in to Oasis AI
+        {accountDone ? (
+          <div
+            role="status"
+            aria-label="Completed: Sign in to Oasis AI"
+            style={rowDoneShell}
+          >
+            <StepIcon done />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                Sign in to Oasis AI
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: '#9ca3af',
+                  display: 'block',
+                  marginTop: '2px',
+                }}
+              >
+                {view === 'auth'
+                  ? 'Use Google, Apple, Microsoft, or email.'
+                  : 'Open sign-in to create an account or log in.'}
+              </span>
             </span>
-            <span
-              style={{
-                fontSize: '12px',
-                color: '#6b7280',
-                display: 'block',
-                marginTop: '2px',
-              }}
-            >
-              {view === 'auth'
-                ? 'Use Google, Apple, Microsoft, or email.'
-                : 'Open sign-in to create an account or log in.'}
-            </span>
-          </span>
-          <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
-            &#8250;
-          </span>
-        </button>
-
-        <button
-          type="button"
-          style={rowBtn}
-          onClick={() => {
-            if (!auth.isAuthenticated) {
+          </div>
+        ) : (
+          <button
+            type="button"
+            style={rowBtn}
+            onClick={() => {
               onNavigate.scrollToAuthPanel();
-              return;
-            }
-            onNavigate.snapToComposer();
-          }}
-        >
-          <StepIcon done={firstAiDone} />
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-              Run your first AI command
+            }}
+          >
+            <StepIcon done={false} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                Sign in to Oasis AI
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  display: 'block',
+                  marginTop: '2px',
+                }}
+              >
+                {view === 'auth'
+                  ? 'Use Google, Apple, Microsoft, or email.'
+                  : 'Open sign-in to create an account or log in.'}
+              </span>
             </span>
-            <span
-              style={{
-                fontSize: '12px',
-                color: '#6b7280',
-                display: 'block',
-                marginTop: '2px',
-              }}
-            >
-              {auth.isAuthenticated
-                ? 'Ask a question or use voice after you are signed in.'
-                : 'Use the composer and start chatting to run a command.'}
+            <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
+              &#8250;
             </span>
-          </span>
-          <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
-            &#8250;
-          </span>
-        </button>
+          </button>
+        )}
+
+        {firstAiDone ? (
+          <div
+            role="status"
+            aria-label="Completed: Run your first AI command"
+            style={rowDoneShell}
+          >
+            <StepIcon done />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                Run your first AI command
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: '#9ca3af',
+                  display: 'block',
+                  marginTop: '2px',
+                }}
+              >
+                {auth.isAuthenticated
+                  ? 'Ask a question or use voice after you are signed in.'
+                  : 'Use the composer and start chatting to run a command.'}
+              </span>
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            style={rowBtn}
+            onClick={() => {
+              if (!auth.isAuthenticated) {
+                onNavigate.scrollToAuthPanel();
+                return;
+              }
+              onNavigate.snapToComposer();
+            }}
+          >
+            <StepIcon done={false} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                Run your first AI command
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  display: 'block',
+                  marginTop: '2px',
+                }}
+              >
+                {auth.isAuthenticated
+                  ? 'Ask a question or use voice after you are signed in.'
+                  : 'Use the composer and start chatting to run a command.'}
+              </span>
+            </span>
+            <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
+              &#8250;
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

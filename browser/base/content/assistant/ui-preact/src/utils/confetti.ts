@@ -17,7 +17,8 @@ export function playTrainingConfetti(): void {
   if (typeof document === "undefined" || typeof window === "undefined") {
     return;
   }
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+  const motionMq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  if (motionMq?.matches) {
     return;
   }
 
@@ -26,18 +27,19 @@ export function playTrainingConfetti(): void {
   canvas.style.cssText =
     "position:fixed;inset:0;pointer-events:none;z-index:20001;width:100%;height:100%";
   document.body.appendChild(canvas);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
+  const context = canvas.getContext("2d");
+  if (!context) {
     canvas.remove();
     return;
   }
+  const draw = context;
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = window.innerWidth;
   const h = window.innerHeight;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
-  ctx.scale(dpr, dpr);
+  draw.scale(dpr, dpr);
 
   const colors = [
     "#7a9200",
@@ -89,7 +91,7 @@ export function playTrainingConfetti(): void {
       start = ts;
     }
     const elapsed = ts - start;
-    ctx.clearRect(0, 0, w, h);
+    draw.clearRect(0, 0, w, h);
     let alive = false;
     for (const p of particles) {
       if (p.life >= p.max) {
@@ -102,19 +104,19 @@ export function playTrainingConfetti(): void {
       p.y += p.vy;
       p.rot += p.vr;
       const alpha = 1 - p.life / p.max;
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, alpha * 0.95);
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.fillStyle = p.color;
+      draw.save();
+      draw.globalAlpha = Math.max(0, alpha * 0.95);
+      draw.translate(p.x, p.y);
+      draw.rotate(p.rot);
+      draw.fillStyle = p.color;
       if (p.shape === "dot") {
-        ctx.beginPath();
-        ctx.arc(0, 0, p.r * 0.48, 0, Math.PI * 2);
-        ctx.fill();
+        draw.beginPath();
+        draw.arc(0, 0, p.r * 0.48, 0, Math.PI * 2);
+        draw.fill();
       } else {
-        ctx.fillRect(-p.r * 0.65, -p.r * 0.25, p.r * 1.3, p.r * 0.5);
+        draw.fillRect(-p.r * 0.65, -p.r * 0.25, p.r * 1.3, p.r * 0.5);
       }
-      ctx.restore();
+      draw.restore();
     }
     if (alive && elapsed < maxMs) {
       requestAnimationFrame(frame);

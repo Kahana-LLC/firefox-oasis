@@ -1,12 +1,23 @@
 import { h } from 'preact';
 import type { Ref } from 'preact';
+import { useState } from 'preact/hooks';
+import { EXAMPLE_COMMANDS_ROTATION } from '../utils/exampleCommands';
+import { useReducedMotionPreference, useTypewriterCycle } from '../hooks/useTypewriterCycle';
+
+const COMPOSER_PLACEHOLDER = 'Ask Oasis anything…';
+
+const COMPOSER_INPUT_ARIA =
+  'Message composer. Type a request, use the Up arrow to recall previous commands, or tap a suggestion chip.';
 
 export function Composer({
   input,
   busy,
   isAuthenticated,
+  chatIsEmpty,
   ttsEnabled,
   inputRef,
+  showInlineChips,
+  inlineSuggestions,
   onInput,
   onKeyDown,
   onSend,
@@ -19,8 +30,11 @@ export function Composer({
   input: string;
   busy: boolean;
   isAuthenticated: boolean;
+  chatIsEmpty: boolean;
   ttsEnabled: boolean;
   inputRef?: Ref<HTMLTextAreaElement>;
+  showInlineChips?: boolean;
+  inlineSuggestions?: readonly string[];
   onInput: (value: string) => void;
   onKeyDown: (event: KeyboardEvent) => void;
   onSend: () => void;
@@ -30,6 +44,40 @@ export function Composer({
   onOpenVoiceAgent: () => void;
   onRequestSignIn?: () => void;
 }) {
+  const [inputFocused, setInputFocused] = useState(false);
+  const reducedMotion = useReducedMotionPreference();
+  const typewriterActive =
+    chatIsEmpty &&
+    isAuthenticated &&
+    !busy &&
+    input === '' &&
+    !inputFocused;
+  const typewriterText = useTypewriterCycle(
+    EXAMPLE_COMMANDS_ROTATION,
+    typewriterActive,
+    reducedMotion
+  );
+  const showTypewriter = typewriterActive && typewriterText.length > 0;
+  const placeholderText = showTypewriter ? '' : COMPOSER_PLACEHOLDER;
+  const chipsVisible =
+    isAuthenticated &&
+    !!showInlineChips &&
+    !busy &&
+    inlineSuggestions &&
+    inlineSuggestions.length > 0;
+
+  const onInlineChip = (text: string) => {
+    onInput(text);
+    requestAnimationFrame(() => {
+      if (inputRef && typeof inputRef === 'object' && 'current' in inputRef) {
+        const ta = inputRef.current;
+        if (ta) {
+          ta.focus();
+        }
+      }
+    });
+  };
+
   return (
     <div id="oasis-assistant-composer" className={`input-bar${busy ? ' input-bar--busy' : ''}`}>
       {!isAuthenticated ? (
@@ -53,24 +101,65 @@ export function Composer({
           </button>
         </div>
       ) : (
-        <textarea
-          ref={inputRef}
-          className="input-field"
-          value={input}
-          onInput={(event: Event) => {
-            const target = event.currentTarget as HTMLTextAreaElement;
-            onInput(target.value);
+        <div
+          className="composer-prompt-stack"
+          onMouseDown={(event: MouseEvent) => {
+            if (busy) {
+              return;
+            }
+            const t = event.target as HTMLElement | null;
+            if (!t || t.closest('button') || t.closest('textarea')) {
+              return;
+            }
+            if (inputRef && typeof inputRef === 'object' && 'current' in inputRef) {
+              inputRef.current?.focus();
+            }
           }}
-          onKeyDown={onKeyDown}
-          placeholder={isAuthenticated ? 'Ask Oasis…' : 'Please sign in...'}
-          disabled={busy || !isAuthenticated}
-          rows={1}
-          style={{
-            minHeight: '24px',
-            fontSize: '14px',
-            color: '#333',
-          }}
-        />
+        >
+          <div className="composer-input-wrap">
+            {showTypewriter && (
+              <div className="composer-typewriter-hint" aria-hidden="true">
+                {typewriterText}
+                {!reducedMotion && <span className="composer-typewriter-caret">|</span>}
+              </div>
+            )}
+            <textarea
+              ref={inputRef}
+              className="input-field"
+              value={input}
+              onInput={(event: Event) => {
+                const target = event.currentTarget as HTMLTextAreaElement;
+                onInput(target.value);
+              }}
+              onKeyDown={onKeyDown}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              placeholder={placeholderText}
+              aria-label={COMPOSER_INPUT_ARIA}
+              disabled={busy || !isAuthenticated}
+              rows={1}
+            style={{
+              minHeight: '88px',
+              fontSize: '14px',
+            }}
+            />
+          </div>
+
+          {chipsVisible && (
+            <div className="composer-inline-chips">
+              {inlineSuggestions!.map(text => (
+                <button
+                  key={text}
+                  type="button"
+                  className="composer-inline-chip"
+                  onClick={() => onInlineChip(text)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       <div className="composer-toolbar">

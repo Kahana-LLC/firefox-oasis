@@ -5,6 +5,9 @@
  * limits based on the user's plan (free=50, basic=1500, pro=3000),
  * persists to both Supabase and local IndexedDB (fail-safe).
  * Called before each assistant run to check availability.
+ *
+ * Feedback bonus tokens: public.feedback_token_grants (UTC day). Quota APIs should add
+ * public.sum_feedback_bonus_tokens_for_user(user_id) to base daily_limit / remaining.
  */
 import { supabaseAuth } from "./supabase";
 import { localMemory } from "./localMemory";
@@ -22,7 +25,14 @@ const PLAN_LIMITS: Record<string, number> = {
   pro: 3000, // $40/mo
 };
 
+const PLAN_DAILY_TOKEN_LIMITS: Record<string, number> = {
+  free: 100_000,
+  basic: 1_000_000,
+  pro: 2_000_000,
+};
+
 const DEFAULT_LIMIT = 50;
+const DEFAULT_DAILY_TOKEN_LIMIT = 100_000;
 
 // Unit Costs
 const COST_TEXT = 1;
@@ -59,6 +69,16 @@ export interface UsageStats {
   isLimitReached: boolean;
 }
 
+export type DailyTokenUsageDisplay = {
+  used: number;
+  limit: number;
+  baseLimit: number;
+  bonusTokens: number;
+  remaining: number;
+  percentUsed: number;
+  percentOfBase: number;
+};
+
 export class SubscriptionService {
   private static instance: SubscriptionService;
 
@@ -67,6 +87,13 @@ export class SubscriptionService {
   private cachedUsage: number = 0;
   private lastFetchTime: number = 0;
   private readonly CACHE_TTL = 60 * 1000; // 1 minute cache
+
+  private cachedDailyLimit: number | null = null;
+  private cachedDailyUsedFromApi: number | null = null;
+  private cachedDailyRemainingFromApi: number | null = null;
+  private cachedDailyTokensFromDb: number = 0;
+  private cachedDailyTokenLimitSupabase: number | null = null;
+  private cachedFeedbackBonusTokensToday: number = 0;
 
   private constructor() {}
 
@@ -85,8 +112,63 @@ export class SubscriptionService {
     if (quota.monthly_used !== undefined) {
       this.cachedUsage = quota.monthly_used;
     }
+    if (quota.daily_limit !== undefined) {
+      this.cachedDailyLimit = quota.daily_limit;
+    }
+    if (quota.daily_used !== undefined) {
+      this.cachedDailyUsedFromApi = quota.daily_used;
+    }
+    if (quota.daily_remaining !== undefined) {
+      this.cachedDailyRemainingFromApi = quota.daily_remaining;
+    }
     this.lastFetchTime = Date.now();
-    logDebug(`updateFromQuota: Updated cached limit to ${this.cachedLimit} and usage to ${this.cachedUsage}`);
+    logDebug(
+      `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
+    );
+  }
+
+  public getDailyTokenUsageForDisplay(): DailyTokenUsageDisplay {
+    const fromApiLimit =
+      this.cachedDailyLimit !== null && this.cachedDailyLimit > 0
+        ? this.cachedDailyLimit
+        : null;
+    const fromSupabaseLimit =
+      this.cachedDailyTokenLimitSupabase !== null &&
+      this.cachedDailyTokenLimitSupabase > 0
+        ? this.cachedDailyTokenLimitSupabase
+        : null;
+    const baseLimit = Math.max(
+      1,
+      fromApiLimit ?? fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
+    );
+    const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
+    const limit = baseLimit + bonusTokens;
+    const fromApi = this.cachedDailyUsedFromApi ?? 0;
+    const fromDb = this.cachedDailyTokensFromDb;
+    const used = Math.max(0, Math.max(fromApi, fromDb));
+    const remaining = Math.max(0, limit - used);
+    const percentOfBase =
+      baseLimit > 0
+        ? Math.min(9999, Math.round((used / baseLimit) * 1000) / 10)
+        : 0;
+    const percentUsed =
+      limit > 0
+        ? Math.min(9999, Math.round((used / limit) * 1000) / 10)
+        : 0;
+    return {
+      used,
+      limit,
+      baseLimit,
+      bonusTokens,
+      remaining,
+      percentUsed,
+      percentOfBase,
+    };
+  }
+
+  public async getUsageBarData(): Promise<DailyTokenUsageDisplay> {
+    await this.forceRefresh();
+    return this.getDailyTokenUsageForDisplay();
   }
 
   /**
@@ -214,6 +296,18 @@ export class SubscriptionService {
       userId,
     });
 
+    let planNameKey = "free";
+    let planIdForDaily: string | null = null;
+    if (planData) {
+      if (planData.plan_id != null) {
+        planIdForDaily = String(planData.plan_id);
+      }
+      const joined = planData.plans as { name?: string } | null | undefined;
+      if (joined && typeof joined.name === "string" && joined.name) {
+        planNameKey = joined.name.toLowerCase();
+      }
+    }
+
     if (planData && planData.plans) {
       const dbLimit = planData.plans.llm_call_limit;
       const planName = (planData.plans.name || "").toLowerCase();
@@ -244,6 +338,7 @@ export class SubscriptionService {
 
       if (hasStripeSubscription) {
         limit = PLAN_LIMITS["basic"];
+        planNameKey = "basic";
         logDebug(
           `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`
         );
@@ -276,6 +371,9 @@ export class SubscriptionService {
       }
 
       if (fallbackData && fallbackData.is_active) {
+        if (planIdForDaily === null && fallbackData.plan_id != null) {
+          planIdForDaily = String(fallbackData.plan_id);
+        }
         const stripeSubId = fallbackData.stripe_subscription_id;
         const hasStripeSubscription =
           stripeSubId &&
@@ -290,6 +388,7 @@ export class SubscriptionService {
 
         if (hasStripeSubscription) {
           limit = PLAN_LIMITS["basic"];
+          planNameKey = "basic";
           logDebug(
             `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`
           );
@@ -338,7 +437,9 @@ export class SubscriptionService {
     if (!usageError && usageData) {
       this.cachedUsage = dbTotal;
       // Sync local down to DB truth (resets at month rollover)
-      localMemory.saveUsage(userId, dbTotal).catch(e => logWarn("refreshUsageData: sync local:", e));
+      localMemory
+        .saveUsage(userId, dbTotal)
+        .catch(e => logWarn("refreshUsageData: sync local:", e));
     } else {
       if (usageError) {
         logWarn(
@@ -352,6 +453,74 @@ export class SubscriptionService {
     logDebug(
       `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
     );
+
+    let dailyTokLimit: number | null = null;
+    if (planIdForDaily) {
+      const { data: planRow, error: planRowErr } = await supabase
+        .from("plans")
+        .select("daily_token_limit")
+        .eq("id", planIdForDaily)
+        .maybeSingle();
+      if (!planRowErr && planRow && planRow.daily_token_limit != null) {
+        const n = Number(planRow.daily_token_limit);
+        if (Number.isFinite(n) && n > 0) {
+          dailyTokLimit = n;
+        }
+      }
+    }
+    this.cachedDailyTokenLimitSupabase =
+      dailyTokLimit ??
+      PLAN_DAILY_TOKEN_LIMITS[planNameKey] ??
+      DEFAULT_DAILY_TOKEN_LIMIT;
+
+    const startOfUtcDay = new Date();
+    startOfUtcDay.setUTCHours(0, 0, 0, 0);
+    const utcGrantDate = startOfUtcDay.toISOString().slice(0, 10);
+
+    const { data: grantRows, error: grantErr } = await supabase
+      .from("feedback_token_grants")
+      .select("tokens")
+      .eq("user_id", userId)
+      .eq("grant_date_utc", utcGrantDate);
+
+    if (!grantErr && grantRows) {
+      this.cachedFeedbackBonusTokensToday = grantRows.reduce(
+        (acc: number, row: { tokens?: number }) =>
+          acc + (Number(row.tokens) || 0),
+        0
+      );
+    } else {
+      if (grantErr) {
+        logWarn(
+          "refreshUsageData: feedback_token_grants fetch failed",
+          grantErr.message
+        );
+      }
+      this.cachedFeedbackBonusTokensToday = 0;
+    }
+
+    const { data: dayRows, error: dayErr } = await supabase
+      .from("llm_usage")
+      .select("input_tokens, output_tokens")
+      .eq("user_id", userId)
+      .gte("created_at", startOfUtcDay.toISOString());
+
+    if (!dayErr && dayRows) {
+      this.cachedDailyTokensFromDb = dayRows.reduce(
+        (acc: number, row: { input_tokens?: number; output_tokens?: number }) =>
+          acc +
+          (Number(row.input_tokens) || 0) +
+          (Number(row.output_tokens) || 0),
+        0
+      );
+    } else {
+      if (dayErr) {
+        logWarn(
+          "refreshUsageData: daily token aggregate failed",
+          dayErr.message
+        );
+      }
+    }
 
     this.lastFetchTime = Date.now();
   }

@@ -9,7 +9,11 @@ import {
   type TrainingBadgeUnlock,
   type TrainingProgress,
 } from '../utils/trainingProgress';
-import { OASIS_PRICING_URL, TRAINING_BONUS_COMMANDS } from '../utils/trainingRewards';
+import {
+  FEEDBACK_BONUS_TOKENS,
+  FEEDBACK_MIN_DETAIL_CHARS,
+  OASIS_PRICING_URL,
+} from '../utils/trainingRewards';
 
 export interface TrainingSubmittedPayload {
   messageId: string;
@@ -73,7 +77,7 @@ export function Feedback({
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [thanksInline, setThanksInline] = useState(false);
-  const [showDownHint, setShowDownHint] = useState(false);
+  const [showSubmitHint, setShowSubmitHint] = useState(false);
   const [trainingHintSeenCount, setTrainingHintSeenCount] = useState(0);
   const [trainingHintDismissed, setTrainingHintDismissed] = useState(false);
 
@@ -83,7 +87,7 @@ export function Feedback({
     setSelectedBadges([]);
     setComment('');
     setSubmitted(false);
-    setShowDownHint(false);
+    setShowSubmitHint(false);
   }, []);
 
   useEffect(() => {
@@ -131,7 +135,7 @@ export function Feedback({
     setSelectedBadges(prev =>
       prev.includes(badge) ? prev.filter(b => b !== badge) : [...prev, badge]
     );
-    setShowDownHint(false);
+    setShowSubmitHint(false);
   };
 
   const mpTrack = (event: string, props: Record<string, unknown> = {}) => {
@@ -221,7 +225,7 @@ export function Feedback({
     setSelectedBadges([]);
     setComment('');
     setSubmitted(false);
-    setShowDownHint(false);
+    setShowSubmitHint(false);
     setModalOpen(true);
     if (trainingHintSeenCount < TRAINING_HINT_EXPOSURE_LIMIT) {
       persistTrainingHintSeenCount(trainingHintSeenCount + 1);
@@ -238,10 +242,8 @@ export function Feedback({
     if (!sentiment) {
       return;
     }
-    if (sentiment === 'down') {
-      if (selectedBadges.length === 0 && !comment.trim()) {
-        return;
-      }
+    if (selectedBadges.length < 1 || comment.trim().length < FEEDBACK_MIN_DETAIL_CHARS) {
+      return;
     }
 
     setIsSubmitting(true);
@@ -282,6 +284,8 @@ export function Feedback({
         progress: progressUpdate.progress,
         unlockedBadges: progressUpdate.unlockedBadges,
       });
+      void oasisWindow.subscriptionService?.forceRefresh?.();
+      window.dispatchEvent(new CustomEvent('oasis-usage-update'));
       setSubmitted(true);
       setTimeout(() => {
         if (onClose) {
@@ -300,16 +304,15 @@ export function Feedback({
     !trainingHintDismissed && trainingHintSeenCount < TRAINING_HINT_EXPOSURE_LIMIT;
   const submitDisabled =
     isSubmitting ||
-    (sentiment === 'down' && selectedBadges.length === 0 && !comment.trim());
+    selectedBadges.length < 1 ||
+    comment.trim().length < FEEDBACK_MIN_DETAIL_CHARS;
 
   const onSubmitClick = () => {
     if (isSubmitting) {
       return;
     }
     if (submitDisabled) {
-      if (sentiment === 'down') {
-        setShowDownHint(true);
-      }
+      setShowSubmitHint(true);
       return;
     }
     void handleModalSubmit();
@@ -338,8 +341,8 @@ export function Feedback({
             <div className="feedback-overlay-thanks">
               <p className="feedback-overlay-thanks-text">Thanks — your training was saved!</p>
               <p className="feedback-overlay-thanks-bonus">
-                +{TRAINING_BONUS_COMMANDS} bonus AI commands have been credited toward your daily
-                allowance.
+                +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens have been added to your daily
+                token allowance (UTC day).
               </p>
               <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
                 View plans and limits
@@ -381,8 +384,8 @@ export function Feedback({
                 </p>
                 <div className="feedback-training-reward">
                   <span>
-                    Each saved training earns +{TRAINING_BONUS_COMMANDS} bonus AI commands toward your
-                    daily allowance.
+                    Each qualifying training submission earns +{FEEDBACK_BONUS_TOKENS.toLocaleString()}{' '}
+                    bonus tokens for today (UTC). Unused bonus allowance does not roll over.
                   </span>
                   <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
                     View plans and limits
@@ -405,7 +408,7 @@ export function Feedback({
                 {sentiment === 'down' ? (
                   <Fragment>
                     <p className="feedback-badges-lead" id="feedback-badges-label-down">
-                      What went wrong?
+                      What went wrong? (choose one or more)
                     </p>
                     <div
                       className="feedback-badges"
@@ -445,7 +448,7 @@ export function Feedback({
                 ) : (
                   <Fragment>
                     <p className="feedback-badges-lead" id="feedback-badges-label-up">
-                      What stood out? (optional)
+                      What stood out?
                     </p>
                     <div className="feedback-badges" role="group" aria-labelledby="feedback-badges-label-up">
                       {BADGES_POSITIVE.map(badge => (
@@ -480,30 +483,35 @@ export function Feedback({
                   </Fragment>
                 )}
 
-                <div
-                  className="feedback-validation-slot"
-                  aria-live="polite"
-                  aria-relevant="additions text"
-                >
-                  {showDownHint ? (
-                    <p className="feedback-validation-hint">Pick a tag or add a short note to continue.</p>
-                  ) : null}
-                </div>
-
                 <div className="feedback-input-container">
                   <textarea
                     className="feedback-textarea"
                     placeholder={
                       sentiment === 'up'
-                        ? 'What worked well, or any suggestions? (optional)'
-                        : 'What did you expect, or how could this answer be better?'
+                        ? 'What worked well, what could be even better? (required, min. ' +
+                          FEEDBACK_MIN_DETAIL_CHARS +
+                          ' characters)'
+                        : 'What did you expect, or how could this answer be better? (required)'
                     }
                     value={comment}
                     onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => {
                       setComment(e.currentTarget.value);
-                      setShowDownHint(false);
+                      setShowSubmitHint(false);
                     }}
                   />
+                </div>
+
+                <div
+                  className="feedback-validation-slot"
+                  aria-live="polite"
+                  aria-relevant="additions text"
+                >
+                  {showSubmitHint ? (
+                    <p className="feedback-validation-hint">
+                      Choose at least one category and write at least {FEEDBACK_MIN_DETAIL_CHARS}{' '}
+                      characters about what you expected or what could be better.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="feedback-checkboxes">
@@ -549,7 +557,7 @@ export function Feedback({
         <div className="feedback-submitted">
           <span className="feedback-submitted-line">Thanks — your training was saved!</span>
           <span className="feedback-submitted-bonus">
-            +{TRAINING_BONUS_COMMANDS} bonus AI commands credited toward your daily allowance.
+            +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens added to your daily allowance (UTC).
           </span>
           <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
             View plans and limits

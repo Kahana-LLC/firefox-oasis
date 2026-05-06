@@ -16,10 +16,17 @@ export type AssistTool = {
   name: string;
   description?: string;
 };
+
+/**
+ * Lambda should enforce daily tokens using an effective cap:
+ * daily_limit_base + sum_feedback_bonus_tokens_for_user(user_id) (UTC day, Supabase RPC).
+ * Return that sum in daily_limit / daily_remaining, or the client bar and server may disagree.
+ */
 export type QuotaResult = {
   allowed?: boolean;
   reason?: string;
   daily_used?: number;
+  /** Base daily token cap before feedback bonuses unless backend already folds them in. */
   daily_limit?: number;
   daily_remaining?: number;
   monthly_used?: number;
