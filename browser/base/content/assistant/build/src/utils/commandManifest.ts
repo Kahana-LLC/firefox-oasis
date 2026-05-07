@@ -1,3 +1,13 @@
+/**
+ * Command manifest — static phrase-to-command mapping.
+ *
+ * Maps known natural language phrases to command names and families.
+ * E.g., "list bookmark folders" -> list_bookmark_folders (family: list).
+ * Each entry defines: id, family, commandName, phrases[], and optional
+ * slots[] and conditions.
+ *
+ * Used by manifestResolver.ts for fast phrase-based matching.
+ */
 import type { ManifestCommandDefinition } from "./manifestTypes.js";
 
 export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
@@ -37,7 +47,16 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     id: "list.window.tabs",
     family: "list",
     commandName: "list_tabs",
-    phrases: ["list tabs", "show tabs", "list my tabs"],
+    phrases: [
+      "list tabs",
+      "show tabs",
+      "list my tabs",
+      "list my open tabs",
+      "what tabs do i have open",
+      "which tabs are open",
+      "what tabs are open",
+      "tabs do i have open",
+    ],
     condition: context => context.hasOpenTabs,
   },
   {
@@ -48,6 +67,51 @@ export const COMMAND_MANIFEST: readonly ManifestCommandDefinition[] = [
     slots: [
       { name: "name", type: "target_name", source: "rest", optional: true },
       { name: "scope", type: "scope", source: "rest", optional: true },
+    ],
+  },
+  {
+    id: "search.history",
+    family: "search",
+    commandName: "search_history",
+    priority: 2,
+    phrases: [
+      "list my recent browsing history",
+      "list my browsing history",
+      "show my browsing history",
+      "show my recent browsing history",
+      "list recent browsing history",
+      "what is in my browsing history",
+      "whats in my browsing history",
+      "what pages did i visit",
+      "what did i read",
+      "what did i browse",
+      "find that article",
+      "find that page",
+      "find that site",
+      "what sites did i visit",
+      "pages i visited",
+      "articles i read",
+      "browsing history",
+      "search history",
+      "search my history",
+      "search my browser history",
+      "search my browsing history",
+      "find in my history",
+      "what was that page",
+      "what was that site",
+      "what was that article",
+      "did i visit",
+      "did i look at",
+      "did i read",
+      "did i browse",
+    ],
+    slots: [
+      {
+        name: "query",
+        type: "string",
+        source: "quoted_or_rest",
+        optional: true,
+      },
     ],
   },
   {

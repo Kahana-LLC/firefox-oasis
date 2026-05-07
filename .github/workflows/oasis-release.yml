@@ -389,7 +389,7 @@ jobs:
             -r \
             -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH}" \
             -p "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
-            -e production-without-restricted \
+            -e production \
             -c release \
             -v
 

@@ -198,25 +198,26 @@ let JSWINDOWACTORS = {
     matches: ["about:tabcrashed*"],
   },
 
-  AboutWelcome: {
-    parent: {
-      esModuleURI: "resource:///actors/AboutWelcomeParent.sys.mjs",
-    },
-    child: {
-      esModuleURI: "resource:///actors/AboutWelcomeChild.sys.mjs",
-      events: {
-        // This is added so the actor instantiates immediately and makes
-        // methods available to the page js on load.
-        DOMDocElementInserted: {},
-      },
-    },
-    matches: ["about:welcome"],
-    remoteTypes: ["privilegedabout"],
+  // Disabled - replaced with OasisWelcome custom onboarding
+  // AboutWelcome: {
+  //   parent: {
+  //     esModuleURI: "resource:///actors/AboutWelcomeParent.sys.mjs",
+  //   },
+  //   child: {
+  //     esModuleURI: "resource:///actors/AboutWelcomeChild.sys.mjs",
+  //     events: {
+  //       // This is added so the actor instantiates immediately and makes
+  //       // methods available to the page js on load.
+  //       DOMDocElementInserted: {},
+  //     },
+  //   },
+  //   matches: ["about:welcome"],
+  //   remoteTypes: ["privilegedabout"],
 
-    // See Bug 1618306
-    // Remove this preference check when we turn on separate about:welcome for all users.
-    enablePreference: "browser.aboutwelcome.enabled",
-  },
+  //   // See Bug 1618306
+  //   // Remove this preference check when we turn on separate about:welcome for all users.
+  //   enablePreference: "browser.aboutwelcome.enabled",
+  // },
 
   OasisWelcome: {
     parent: {
@@ -229,9 +230,11 @@ let JSWINDOWACTORS = {
       },
     },
     matches: [
+      "about:welcome*",
       "chrome://browser/content/oasiswelcome/oasiswelcome.html",
       "chrome://browser/content/oasiswelcome/oasis-auth.html",
     ],
+    remoteTypes: ["privilegedabout"],
     includeChrome: true,
   },
 

@@ -1,3 +1,9 @@
+/**
+ * Extracts the latest user message from the conversation history
+ * and identifies the most actionable line (one containing both
+ * a verb like "open"/"close" and an object like "tab"/"folder").
+ * Used by the supervisor node to get the text for routing.
+ */
 import type { BaseMessage } from "@langchain/core/messages";
 
 import { msgText } from "./messageUtils.js";

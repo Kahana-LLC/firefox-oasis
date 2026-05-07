@@ -1,3 +1,13 @@
+/**
+ * Routing helpers — small utilities for routing decisions.
+ *
+ * - parseAmbiguityResolution(): parses "tab group" / "folder" / "cancel"
+ *   from user responses to ambiguity prompts
+ * - looksLikeNewActionCommand(): detects if text has an action verb
+ *   + a browser object (used to decide if a new routing cycle is needed)
+ */
+import { KNOWN_SITES_HINT_RE } from "./knownSites.js";
+
 const CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
 
 export function parseAmbiguityResolution(
@@ -29,13 +39,17 @@ export function parseAmbiguityResolution(
 
 export function looksLikeNewActionCommand(text: string): boolean {
   const input = String(text || "");
-  const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split)\b/i.test(
-    input
-  );
+  const hasAction =
+    /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit)\b/i.test(
+      input
+    );
   const hasObjectOrTarget =
-    /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page)\b/i.test(
+    /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
       input
     ) ||
-    /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(input);
+    /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(
+      input
+    ) ||
+    KNOWN_SITES_HINT_RE.test(input);
   return hasAction && hasObjectOrTarget;
 }

@@ -19,6 +19,10 @@ tags
 compile_commands.json
 *.env
 
+# Local Apple signing assets (never commit)
+/developer_id.p12
+/p12_password.txt
+
 # emacs backup files in any directory.
 # lint-ignore-next-line: syntax-difference
 [#]*#
@@ -105,6 +109,17 @@ tools/lint/stylelint/stylelint-plugin-mozilla/node_modules/
 tools/terser/node_modules/
 browser/components/asrouter/node_modules/
 browser/components/aboutwelcome/node_modules/
+
+# Oasis assistant: local-only npm artifacts (platform esbuild, devDependencies, Lambda deps)
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/darwin-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/linux-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/freebsd-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/android-*/
+browser/base/content/assistant/ui-preact/node_modules/typescript/
+browser/base/content/assistant/ui-preact/node_modules/.bin/tsc
+browser/base/content/assistant/ui-preact/node_modules/.bin/tsserver
+browser/base/content/assistant/lambda/voice-runtime/node_modules/
+
 browser/extensions/newtab/node_modules/
 tools/ts/node_modules/
 testing/xpcshell/moz-http2/node_modules/
@@ -406,3 +421,10 @@ CLAUDE.local.md
 # lint-ignore-next-line: git-only
 /*.json.gz
 \n# Gemini files\ngemini.md\n.gemini/
+
+# Ignore tour directory
+tour/
+
+# Ignore Python profiling files
+*.cProfile
+*.pstats

@@ -1,6 +1,22 @@
+/**
+ * LLM-based routing — asks the remote Assist API which command to run.
+ *
+ * Called by the supervisor node when it needs to route a user request.
+ * 1. Classifies the command family (list/search/mutation/other)
+ * 2. Constrains the available tools to the relevant family
+ * 3. Sends the router prompt + tools + conversation history to the LLM
+ * 4. Parses the LLM response into a tool route, chat decision, or action plan
+ *
+ * Falls through to deterministic routing (decisionEngine.ts) if the
+ * Assist API is unavailable or returns an error.
+ */
 import type { BaseMessage } from "@langchain/core/messages";
 
-import { assistRemote, type AssistTool } from "../proxyClient.js";
+import {
+  assistRemote,
+  type AssistResponse,
+  type AssistTool,
+} from "../proxyClient.js";
 import {
   getAssistCapability,
   markAssistSupported,
@@ -14,6 +30,9 @@ import type { IntentFamily } from "../utils/routerTypes.js";
 import { isRecord, toWire } from "./messageUtils.js";
 import { parsePlannedActions, type PlannedAction } from "./plannedActions.js";
 import { looksLikeCommandChain } from "./commandChain.js";
+import { QuotaExceededError } from "../awsSignedFetch.js";
+import { subscriptionService } from "../services/subscription.js";
+import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
 
 const PLAN_TOOL_NAME = "route_action_plan";
 const LIST_FAMILY_TOOLS = new Set([
@@ -23,6 +42,7 @@ const LIST_FAMILY_TOOLS = new Set([
 ]);
 const SEARCH_FAMILY_TOOLS = new Set([
   "search_memory",
+  "search_history",
   "get_recent_search_results",
   "open_search_result",
 ]);
@@ -49,10 +69,19 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "new_window",
   "organize_windows",
 ]);
+// const SEARCH_WEB_HINT_RE =
+//   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
+// const SEARCH_LOCAL_HINT_RE =
+//   /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
+
 const SEARCH_WEB_HINT_RE =
   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
 const SEARCH_LOCAL_HINT_RE =
   /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
+const SEARCH_HISTORY_HINT_RE =
+  /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that)\b/i;
+const SEARCH_BOOKMARKS_HINT_RE =
+  /\b(?:bookmark|bookmarks|folder|saved|bookmarked|in\s+(?:my\s+)?(?:bookmark\s+)?folder|what'?s\s+in)\b/i;
 
 function constrainAssistRoutingForFamily(params: {
   activeCommandText: string;
@@ -113,13 +142,49 @@ function constrainAssistRoutingForFamily(params: {
     );
   }
 
+  // if (family === "search") {
+  //   const hasWebHint = SEARCH_WEB_HINT_RE.test(activeCommandText);
+  //   const hasLocalHint = SEARCH_LOCAL_HINT_RE.test(activeCommandText);
+  //   const allowedTools = new Set(SEARCH_FAMILY_TOOLS);
+  //   if (hasWebHint || !hasLocalHint) {
+  //     allowedTools.add(SEARCH_WEB_TOOL);
+  //   }
+  //   return toResult(
+  //     assistOptions.filter(
+  //       option => option === "chat" || allowedTools.has(option)
+  //     )
+  //   );
+  // }
+
   if (family === "search") {
     const hasWebHint = SEARCH_WEB_HINT_RE.test(activeCommandText);
     const hasLocalHint = SEARCH_LOCAL_HINT_RE.test(activeCommandText);
-    const allowedTools = new Set(SEARCH_FAMILY_TOOLS);
+    const hasHistoryHint = SEARCH_HISTORY_HINT_RE.test(activeCommandText);
+    const hasBookmarksHint = SEARCH_BOOKMARKS_HINT_RE.test(activeCommandText);
+
+    const allowedTools = new Set<string>();
+
+    // Strong signals for specific search types
+    if (hasHistoryHint && !hasBookmarksHint) {
+      // Clear history query - only allow search_history
+      allowedTools.add("search_history");
+      allowedTools.add("get_recent_search_results");
+      allowedTools.add("open_search_result");
+    } else if (hasBookmarksHint && !hasHistoryHint) {
+      // Clear bookmarks query - only allow search_memory
+      allowedTools.add("search_memory");
+      allowedTools.add("get_recent_search_results");
+      allowedTools.add("open_search_result");
+    } else {
+      // Ambiguous or no strong hints - allow both
+      SEARCH_FAMILY_TOOLS.forEach(tool => allowedTools.add(tool));
+    }
+
+    // Add web search if web hint present or no local hint
     if (hasWebHint || !hasLocalHint) {
       allowedTools.add(SEARCH_WEB_TOOL);
     }
+
     return toResult(
       assistOptions.filter(
         option => option === "chat" || allowedTools.has(option)
@@ -192,7 +257,10 @@ export async function tryResolveAssistRoute(params: {
   const capability = getAssistCapability(endpointKey);
   if (!shouldAttemptAssist(endpointKey)) {
     if (capability === "unsupported") {
-      assistantLogger.debug("router", "Assist endpoint currently cooling down.");
+      assistantLogger.debug(
+        "router",
+        "Assist endpoint currently cooling down."
+      );
     }
     return { kind: "none" };
   }
@@ -219,13 +287,21 @@ export async function tryResolveAssistRoute(params: {
       optionsForAssist,
       toolsForAssist
     );
+    if ((assist as any)?.quota) {
+      subscriptionService.updateFromQuota((assist as any).quota);
+    }
     markAssistSupported(endpointKey);
 
-    const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
+    const assistNext =
+      typeof assist?.next === "string" ? assist.next.trim() : "";
     const assistArgs = isRecord(assist?.args) ? assist.args : {};
 
     if (allowPlanTool && assistNext === PLAN_TOOL_NAME) {
-      const actions = parsePlannedActions(assistArgs, memberNameSet, maxPlanActions);
+      const actions = parsePlannedActions(
+        assistArgs,
+        memberNameSet,
+        maxPlanActions
+      );
       if (actions.length > 0) {
         assistantLogger.debug("router", "Assist returned action plan", {
           count: actions.length,
@@ -240,11 +316,15 @@ export async function tryResolveAssistRoute(params: {
       assistNext !== "chat" &&
       !effectiveOptionSet.has(assistNext)
     ) {
-      assistantLogger.debug("router", "Assist route rejected by family policy", {
-        assistNext,
-        family: constrained.family,
-        constrained: constrained.constrained,
-      });
+      assistantLogger.debug(
+        "router",
+        "Assist route rejected by family policy",
+        {
+          assistNext,
+          family: constrained.family,
+          constrained: constrained.constrained,
+        }
+      );
       return { kind: "none" };
     }
 
@@ -254,7 +334,8 @@ export async function tryResolveAssistRoute(params: {
     }
 
     if (assistNext === "chat") {
-      const content = typeof assist?.content === "string" ? assist.content.trim() : "";
+      const content =
+        typeof assist?.content === "string" ? assist.content.trim() : "";
       if (content) {
         return { kind: "chat", content };
       }
@@ -262,14 +343,31 @@ export async function tryResolveAssistRoute(params: {
 
     return { kind: "none" };
   } catch (error) {
+    if (error instanceof QuotaExceededError || (error as any).isQuotaError) {
+      if ((error as any).quota) {
+        subscriptionService.updateFromQuota((error as any).quota);
+      }
+      return {
+        kind: "chat",
+        content: formatQuotaExceededMessage((error as Error).message),
+      };
+    }
+
     const message = String(error || "");
     const assistUnsupported =
       /\b404\b|not found|post with\s*\{op:\s*"?assist"?\}/i.test(message);
     if (assistUnsupported) {
       markAssistUnsupported(endpointKey);
-      assistantLogger.warn("router", "Assist endpoint unavailable, using fallback.");
+      assistantLogger.warn(
+        "router",
+        "Assist endpoint unavailable, using fallback."
+      );
     } else {
-      assistantLogger.warn("router", "Assist route failed, using fallback.", error);
+      assistantLogger.warn(
+        "router",
+        "Assist route failed, using fallback.",
+        error
+      );
     }
     return { kind: "none" };
   }

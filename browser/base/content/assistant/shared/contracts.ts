@@ -44,11 +44,14 @@ export type AssistantHistoryWireEntry = {
   constructor?: { name?: string };
 };
 
+export type VoiceUiDelivery = "spoken" | "text_chat";
+
 export type RunAssistantStream = (
   prompt: string,
   onChunk: (chunk: string) => void,
   inputType?: AssistantInputType,
-  messageId?: string
+  messageId?: string,
+  voiceDelivery?: VoiceUiDelivery
 ) => Promise<string>;
 
 export const OASIS_EVENT_AUTH_UPDATE = "oasis-auth-update" as const;

@@ -1,8 +1,24 @@
+/**
+ * Command registry — instantiates all commands and builds tool definitions.
+ *
+ * Creates instances of all 30+ Command classes and generates the
+ * tool definitions (name + description + JSON arg schema) that are
+ * sent to the remote LLM for routing decisions.
+ *
+ * COMMAND_ARG_SCHEMA defines the argument shape for each command.
+ * These schemas are appended to each tool's description so the LLM
+ * knows what arguments to extract from the user's message.
+ */
 import {
   AddSplitViewCommand,
   AddTabToBookmarkFolderCommand,
   AddTabToGroupCommand,
+  BookmarkTabCommand,
+  CloseDuplicateTabsCommand,
+  CloseOtherTabsCommand,
   CloseTabCommand,
+  CloseTabsToLeftCommand,
+  CloseTabsToRightCommand,
   Command,
   ConfirmActionCommand,
   CopyTabUrlsCommand,
@@ -10,28 +26,42 @@ import {
   CreateTabGroupCommand,
   DeleteBookmarkFolderCommand,
   DeleteTabGroupCommand,
+  DuplicateTabCommand,
   ListBookmarkFoldersCommand,
   ListTabGroupsCommand,
   ListTabsCommand,
+  MoveTabToEndCommand,
   MoveTabToNewWindowCommand,
+  MoveTabToStartCommand,
+  NewTabToRightCommand,
   NewWindowCommand,
   OpenBookmarkFolderCommand,
   GetRecentSearchResultsCommand,
   OpenSearchResultCommand,
+  OpenSendTabToDeviceCommand,
   OpenUrlCommand,
   OpenTabCommand,
+  OpenTabNoteCommand,
   OrganizeWindowsCommand,
+  PinTabCommand,
+  ReloadTabCommand,
   RemoveSplitViewCommand,
   RemoveTabFromBookmarkFolderCommand,
   RemoveTabFromGroupCommand,
   RenameBookmarkFolderCommand,
   RenameTabGroupCommand,
+  ReopenClosedTabCommand,
   ResolveAmbiguityCommand,
   SearchMemoryCommand,
+  SearchHistorySemanticCommand,
+  SelectAllTabsCommand,
   ShowSubscriptionCommand,
   ShowURLCommand,
   SplitTabsCommand,
   SummarizePageCommand,
+  ToggleMuteTabCommand,
+  UnloadTabCommand,
+  UnpinTabCommand,
   WebSearchCommand,
 } from "../commands.js";
 import { registerCommandExecutors } from "../services/commandExecutionRegistry.js";
@@ -69,6 +99,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   resolve_ambiguity: `{"target?":"bookmark-folder|tab-group|tab|cancel"}`,
   confirm_action: `{"confirmed":"boolean"}`,
   new_window: `{}`,
+  new_tab_to_right: `{"index?":"number"}`,
   organize_windows: `{}`,
   show_url: `{"url":"string"}`,
   search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
@@ -76,6 +107,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
   summarize_page: `{"index?":"number","query?":"string"}`,
   show_subscription: `{}`,
+  search_history: `{"query":"string (optional; omit or \"\" for recent visits)"}`,
 };
 
 function toAssistToolDescription(command: Command): string {
@@ -93,6 +125,24 @@ export function createAssistantCommandsRegistry(): AssistantCommandsRegistry {
     new WebSearchCommand(),
     new OpenTabCommand(),
     new CloseTabCommand(),
+    new ReloadTabCommand(),
+    new ToggleMuteTabCommand(),
+    new PinTabCommand(),
+    new UnpinTabCommand(),
+    new UnloadTabCommand(),
+    new NewTabToRightCommand(),
+    new DuplicateTabCommand(),
+    new BookmarkTabCommand(),
+    new MoveTabToStartCommand(),
+    new MoveTabToEndCommand(),
+    new SelectAllTabsCommand(),
+    new CloseDuplicateTabsCommand(),
+    new CloseTabsToRightCommand(),
+    new CloseTabsToLeftCommand(),
+    new CloseOtherTabsCommand(),
+    new ReopenClosedTabCommand(),
+    new OpenSendTabToDeviceCommand(),
+    new OpenTabNoteCommand(),
     new MoveTabToNewWindowCommand(),
     new CopyTabUrlsCommand(),
     new SplitTabsCommand(),
@@ -121,6 +171,8 @@ export function createAssistantCommandsRegistry(): AssistantCommandsRegistry {
     new OpenSearchResultCommand(),
     new SummarizePageCommand(),
     new ShowSubscriptionCommand(),
+    // Semantic history search (local embeddings + vector DB)
+    new SearchHistorySemanticCommand(),
   ];
   registerCommandExecutors(commands);
 

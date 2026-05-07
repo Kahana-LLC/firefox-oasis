@@ -1,3 +1,11 @@
+/**
+ * Command queue management for chained requests.
+ *
+ * Handles "do X and then Y" by maintaining a queue of commands.
+ * Decides which command to execute next, resumes continuation
+ * queues after confirmations, and enforces the max of 3 commands
+ * per chain. Called by the supervisor node on each iteration.
+ */
 import { splitCommandChain } from "./commandChain.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 

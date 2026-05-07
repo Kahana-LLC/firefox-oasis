@@ -1,3 +1,4 @@
+/** Helpers for localMemory.ts: dedupe key computation, source/folder extraction, and type detection for memory documents. */
 export type MemoryMetadata = {
   type?: string;
   title?: string;

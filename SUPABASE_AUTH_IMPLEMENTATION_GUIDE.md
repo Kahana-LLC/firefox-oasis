@@ -106,7 +106,42 @@ CREATE POLICY "Users can view own profile" ON users
 
 CREATE POLICY "Users can update own profile" ON users
     FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own profile" ON users
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 ```
+
+After OAuth, a row must exist in `public.users` with `user_id = auth.uid()` so `llm_usage` and other foreign keys succeed. Prefer an `AFTER INSERT` trigger on `auth.users` (security definer) that upserts into `public.users`; see [`supabase/migrations/20260412000000_oasis_auth_users_sync.sql`](supabase/migrations/20260412000000_oasis_auth_users_sync.sql). Deploy [`supabase/migrations/20260412100000_oasis_assist_chain_complete.sql`](supabase/migrations/20260412100000_oasis_assist_chain_complete.sql) for grants, missing RLS policies, `sessions` UPDATE, `ensure_user_profile` RPC, backfill, and `llm_usage` column fixes. Read-only checks: [`supabase/verify_assist_chain.sql`](supabase/verify_assist_chain.sql).
+
+The browser calls `ensure_user_profile` after sign-in so a profile row exists even if client-side `INSERT` into `users` is blocked by RLS during rollout.
+
+Idempotent backfill (also included in the migration above):
+
+```sql
+INSERT INTO public.users (user_id, email, name, password_hash, status)
+SELECT
+  au.id,
+  COALESCE(au.email, ''),
+  COALESCE(
+    NULLIF(BTRIM(au.raw_user_meta_data->>'full_name'), ''),
+    NULLIF(BTRIM(au.raw_user_meta_data->>'name'), ''),
+    NULLIF(BTRIM(SPLIT_PART(COALESCE(au.email, ''), '@', 1)), '')
+  ),
+  '',
+  'active'
+FROM auth.users au
+ON CONFLICT (user_id) DO UPDATE SET
+  email = CASE
+    WHEN EXCLUDED.email IS NOT NULL AND BTRIM(EXCLUDED.email) <> '' THEN EXCLUDED.email
+    ELSE public.users.email
+  END,
+  name = COALESCE(
+    NULLIF(BTRIM(EXCLUDED.name), ''),
+    public.users.name
+  );
+```
+
+**Manual E2E after deploy:** sign in, confirm a row in `public.users` for your UUID, run an assist chat request, and confirm no HTTP500 with `usage_record_failed` in the network log.
 
 #### 2. Sessions Table
 
@@ -132,6 +167,9 @@ CREATE POLICY "Users can view own sessions" ON sessions
 
 CREATE POLICY "Users can insert own sessions" ON sessions
     FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own sessions" ON sessions
+    FOR UPDATE USING (auth.uid() = user_id);
 ```
 
 #### 3. LLM Usage Table (Optional - for AI features)
@@ -141,12 +179,16 @@ CREATE POLICY "Users can insert own sessions" ON sessions
 CREATE TABLE llm_usage (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
-    tokens_used INTEGER NOT NULL,
+    tokens_used INTEGER NOT NULL DEFAULT 0,
     usage_count INTEGER DEFAULT 1,
     prompt_summary TEXT,
     model_used TEXT,
     success BOOLEAN DEFAULT true,
     latency_ms INTEGER,
+    command_type TEXT,
+    user_intent TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

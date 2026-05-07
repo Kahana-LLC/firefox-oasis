@@ -1,3 +1,13 @@
+/**
+ * Search-family resolver — handles "search/find" commands deterministically.
+ *
+ * Extracts query and optional folder scope from inputs like
+ * "search python in my Docs folder" or "find amazon in Deals".
+ * Validates folder names against the routing state snapshot.
+ *
+ * Returns: search_memory (with query + folder args), search_history,
+ * or null if no match. Called by decisionEngine.ts for search-family.
+ */
 import { normalizeRouteName, parseSearchMemoryIntent } from "./intentParser.js";
 import { resolveManifestCommand } from "./manifestResolver.js";
 import type { DeterministicRouteDecision, RouteArgs, RoutingStateSnapshot } from "./routerTypes.js";
@@ -149,6 +159,18 @@ export function resolveManifestSearchRoute(
   });
   if (!candidate || candidate.definition.family !== "search") {
     return null;
+  }
+
+  // If the manifest resolved to search_history, route directly
+  if (candidate.definition.commandName === "search_history") {
+    const parsed = parseSearchMemoryIntent(input);
+    const query = parsed?.query || input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
+    return {
+      type: "tool",
+      next: "search_history",
+      args: { query },
+      reason: "search-manifest-history",
+    };
   }
 
   const missingFolderQuery = parseFolderSearchMissingQuery(input, snapshot);

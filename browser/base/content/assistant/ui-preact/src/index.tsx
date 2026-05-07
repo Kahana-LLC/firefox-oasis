@@ -19,4 +19,5 @@ function ensureRoot() {
 }
 
 const root = ensureRoot();
+document.getElementById('assistant-ui-loading')?.remove();
 render(h(App, {}), root);

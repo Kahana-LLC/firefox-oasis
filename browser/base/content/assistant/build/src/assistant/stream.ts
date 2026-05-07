@@ -1,3 +1,15 @@
+/**
+ * Graph output stream consumer.
+ *
+ * Iterates over the async output of `graph.stream()`, filters out
+ * internal tool messages, strips echoed payloads, and sends clean
+ * text to the UI via `onChunk()`. Also:
+ * - Saves completed turns to session history
+ * - Tracks usage for subscription limits
+ * - Detects infinite loops via stream guards
+ *
+ * Called from assistant.ts after the graph is built.
+ */
 import type { AssistantInputType } from "../../../shared/contracts.js";
 import {
   advanceStreamGuard,
@@ -9,8 +21,10 @@ import { assistantLogger } from "../utils/assistantLogger.js";
 import {
   getToolResultPayload,
   hasMessages,
+  isRecord,
   stripLeadingEchoedPayload,
   type MessageLike,
+  type UsageMeta,
 } from "./messageUtils.js";
 import { STREAM_GUARD_MESSAGE } from "./constants.js";
 
@@ -21,7 +35,7 @@ type ConsumeAssistantStreamArgs = {
   inputType: AssistantInputType;
   toolCommandNames: Set<string>;
   pushCurrentTurn: (user: string, assistant: string) => void;
-  trackUsage: (inputType: AssistantInputType) => void;
+  trackUsage: (inputType: AssistantInputType, meta?: UsageMeta) => void;
 };
 
 function extractMessageText(msg: MessageLike): string {
@@ -80,6 +94,7 @@ export async function consumeAssistantGraphStream(
   let toolMessageCount = 0;
   let emittedChars = 0;
   let guardTriggered = false;
+  let lastUsageMeta: UsageMeta | undefined;
 
   let streamGuardState = createStreamGuardState();
 
@@ -87,7 +102,7 @@ export async function consumeAssistantGraphStream(
     if ("__end__" in state) {
       if (combinedSessionString && !isSaved) {
         pushCurrentTurn(prompt, combinedSessionString);
-        trackUsage(inputType);
+        trackUsage(inputType, lastUsageMeta);
         isSaved = true;
       }
       break;
@@ -123,6 +138,23 @@ export async function consumeAssistantGraphStream(
       const text = extractMessageText(msg);
       if (!text) {
         continue;
+      }
+
+      const kwargs = (msg as { additional_kwargs?: unknown }).additional_kwargs;
+      if (isRecord(kwargs) && isRecord(kwargs.oasisUsageMeta)) {
+        const newMeta = kwargs.oasisUsageMeta as UsageMeta;
+        if (!lastUsageMeta) {
+          lastUsageMeta = newMeta;
+        } else {
+          lastUsageMeta = {
+            command_type: lastUsageMeta.command_type !== "other" && newMeta.command_type === "other"
+              ? lastUsageMeta.command_type : newMeta.command_type,
+            user_intent: lastUsageMeta.user_intent !== "other" && newMeta.user_intent === "other"
+              ? lastUsageMeta.user_intent : newMeta.user_intent,
+            input_tokens: newMeta.input_tokens ?? lastUsageMeta.input_tokens,
+            output_tokens: newMeta.output_tokens ?? lastUsageMeta.output_tokens,
+          };
+        }
       }
 
       const msgName =
@@ -183,7 +215,7 @@ export async function consumeAssistantGraphStream(
 
   if (combinedSessionString && !isSaved) {
     pushCurrentTurn(prompt, combinedSessionString);
-    trackUsage(inputType);
+    trackUsage(inputType, lastUsageMeta);
   }
 
   assistantLogger.debug("stream", "Run summary", {

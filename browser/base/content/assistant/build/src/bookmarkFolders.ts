@@ -1,3 +1,11 @@
+/**
+ * Bookmark folder manager — CRUD operations for managed bookmark folders.
+ *
+ * Creates/deletes/renames bookmark folders under a root "Oasis Hubs" folder
+ * in Firefox's bookmarks system (PlacesUtils). Handles tab-to-bookmark
+ * operations, content extraction, and syncs changes to localMemory.
+ * Listens for Places events to keep the routing state cache in sync.
+ */
 import {
   localMemory,
   type BookmarkFolderMemoryEntry,

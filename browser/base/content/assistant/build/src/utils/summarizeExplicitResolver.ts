@@ -1,3 +1,4 @@
+/** Routes "summarize this page" / "summarize tab N" commands to summarize_page. Supports current tab, tab index, tab query, and generic summarize patterns. */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type SummarizeRoute = {

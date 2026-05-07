@@ -3044,7 +3044,7 @@ const PREONBOARDING_MESSAGES = () => [
     requireAction: true,
     currentVersion: 4,
     minimumVersion: 4,
-    firstRunURL: "https://www.mozilla.org/privacy/firefox/",
+    firstRunURL: "https://kahana.co/privacy-policy#personal-data-collect",
     screens: [
       {
         id: "TOU_ONBOARDING",
@@ -3098,7 +3098,7 @@ const PREONBOARDING_MESSAGES = () => [
                   width: "100%",
                   height: "200px",
                 },
-                url: "https://mozilla.org/privacy/firefox/?v=product",
+                url: "https://kahana.co/privacy-policy#personal-data-collect",
               },
             },
             {

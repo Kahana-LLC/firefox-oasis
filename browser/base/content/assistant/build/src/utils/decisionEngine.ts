@@ -1,3 +1,16 @@
+/**
+ * Decision engine — orchestrator for deterministic routing.
+ *
+ * Tries resolvers in this order:
+ * 1. Classify command family (list/search/mutation/other)
+ * 2. Run the matching family resolver (manifestList/Search/Mutation)
+ * 3. Try explicit route rules (regex patterns for URLs, commands)
+ * 4. Try search result and summarize resolvers
+ * 5. Check if text looks actionable but unrecognized
+ * 6. Return no_match (falls through to chat)
+ *
+ * Called by deterministicRouter.ts.
+ */
 import { classifyCommandFamily, looksActionableText } from "./intentParser.js";
 import { resolveExplicitRoute } from "./explicitRouteRules.js";
 import { resolveManifestListRoute } from "./manifestListResolver.js";
@@ -16,7 +29,9 @@ type FamilyDecisionHandler = (
   snapshot: RoutingStateSnapshot
 ) => DeterministicRouteDecision | null;
 
-const FAMILY_HANDLERS: Readonly<Record<IntentFamily, FamilyDecisionHandler | null>> = {
+const FAMILY_HANDLERS: Readonly<
+  Record<IntentFamily, FamilyDecisionHandler | null>
+> = {
   list: resolveManifestListRoute,
   search: resolveManifestSearchRoute,
   mutation: resolveManifestMutationRoute,
@@ -39,19 +54,6 @@ export function decideDeterministicRoute(
     if (familyDecision) {
       return familyDecision;
     }
-    if (family === "list" || family === "search" || family === "mutation") {
-      return {
-        type: "chat",
-        actionable: true,
-        reason: `${family}-family-unresolved`,
-        message:
-          family === "list"
-            ? "I could not determine what list target you meant. Please specify tabs, tab group, or bookmark folder."
-            : family === "search"
-              ? "I could not determine what to search. Please specify query and optional folder/source."
-              : "I could not safely map that mutation request to one command. Please specify the target and action more explicitly.",
-      };
-    }
   }
 
   const searchResultExplicit = resolveExplicitSearchResultRoute(input);
@@ -69,6 +71,20 @@ export function decideDeterministicRoute(
     return explicit;
   }
 
+  if (family === "list" || family === "search" || family === "mutation") {
+    return {
+      type: "chat",
+      actionable: true,
+      reason: `${family}-family-unresolved`,
+      message:
+        family === "list"
+          ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)"
+          : family === "search"
+            ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)"
+            : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
+    };
+  }
+
   const actionable = looksActionableText(input);
   if (actionable) {
     return {
@@ -76,7 +92,7 @@ export function decideDeterministicRoute(
       actionable: true,
       reason: "actionable-but-unsupported",
       message:
-        "I could not safely map that action to a specific browser command. Please be more explicit about the target.",
+        "I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](https://kahana.co/docs)",
     };
   }
 

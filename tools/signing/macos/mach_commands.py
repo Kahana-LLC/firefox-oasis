@@ -370,6 +370,34 @@ def macos_sign(
     verify_result(command_context, app, verbose_arg)
 
 
+OASIS_BUNDLE_ID = "com.oasis.browser"
+
+
+def cf_bundle_identifier(app):
+    info_plist = os.path.join(app, "Contents/Info.plist")
+    proc = subprocess.run(
+        ["defaults", "read", info_plist, "CFBundleIdentifier"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return ""
+    return proc.stdout.strip()
+
+
+def remap_entitlements_for_oasis_browser(app, entitlements_key, entitlement_file):
+    if cf_bundle_identifier(app) != OASIS_BUNDLE_ID:
+        return entitlement_file
+    leaf = os.path.basename(entitlement_file)
+    parent = os.path.dirname(entitlement_file)
+    if entitlements_key == "production" and leaf == "firefox.browser.xml":
+        return os.path.join(parent, "oasis.browser.xml")
+    if entitlements_key == "default" and leaf == "browser.xml":
+        return os.path.join(parent, "oasis.browser.xml")
+    return entitlement_file
+
+
 def entitlement_repo_path(entitlements_key, entitlement_file):
     """Translates an entitlement file path from the config to a path
     in the repo.
@@ -413,6 +441,7 @@ def auto_detect_channel(ctx, app):
     DEVEDITION_BUNDLEID = "org.mozilla.firefoxdeveloperedition"
     # BETA uses the same bundle ID as Release
     RELEASE_BUNDLEID = "org.mozilla.firefox"
+    OASIS_BUNDLEID = OASIS_BUNDLE_ID
 
     info_plist = os.path.join(app, "Contents/Info.plist")
 
@@ -441,6 +470,8 @@ def auto_detect_channel(ctx, app):
         return "devedition"
     elif bundleid == RELEASE_BUNDLEID:
         return "release"
+    elif bundleid == OASIS_BUNDLEID:
+        return "release"
     else:
         # Couldn't determine the channel from <info_plist>.
         # Unrecognized bundle ID <bundleID>.
@@ -452,7 +483,7 @@ def auto_detect_channel(ctx, app):
             (
                 "Couldn't read bundle ID from {plist} or bundle ID "
                 f"({bundleid}) not in [{NIGHTLY_BUNDLEID}, {DEVEDITION_BUNDLEID}"
-                f", {RELEASE_BUNDLEID}]. You can try to specify the channel"
+                f", {RELEASE_BUNDLEID}, {OASIS_BUNDLEID}]. You can try to specify the channel"
                 " manually with -c $CHANNEL"
             ),
         )
@@ -522,6 +553,9 @@ def sign_with_codesign(
                     raise ("Unexpected channel")
 
             # Get a path to the entitlement file in the repo
+            entitlement_file = remap_entitlements_for_oasis_browser(
+                app, entitlements_key, entitlement_file
+            )
             entitlement_file = entitlement_repo_path(entitlements_key, entitlement_file)
 
             # We now have an entitlement file for this signing group.
@@ -659,6 +693,9 @@ def sign_with_rcodesign(
                     raise ("Unexpected channel")
 
             # Get a path to the entitlement file in the repo
+            entitlement_file = remap_entitlements_for_oasis_browser(
+                app, entitlements_key, entitlement_file
+            )
             entitlement_file = entitlement_repo_path(entitlements_key, entitlement_file)
 
             # We now have an entitlement file for this signing group.
@@ -703,9 +740,7 @@ def sign_with_rcodesign(
 def rcodesign_entitlements_arg_name(ctx):
     help_cmd = ["rcodesign", "sign", "--help"]
     try:
-        process = subprocess.run(
-            help_cmd, check=True, capture_output=True, text=True
-        )
+        process = subprocess.run(help_cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         ctx.log(
             logging.ERROR,

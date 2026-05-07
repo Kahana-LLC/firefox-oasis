@@ -13,6 +13,8 @@ Release model:
 
 ## Required GitHub Secrets
 
+For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **App ID** `com.oasis.browser` must include the **Passkeys (web-browser.public-key-credential)** capability, and release signing must use `./mach macos-sign -e production` so restricted entitlements are not stripped. After signing, confirm with `codesign -d --entitlements :- --xml Path/To/Oasis.app` that `com.apple.developer.web-browser.public-key-credential` and `com.apple.application-identifier` are present. Diagnose missing entitlement with `MOZ_LOG=macoswebauthnservice:5` (see `MacOSWebAuthnService.mm`).
+
 - `OASIS_UPDATE_SERVICE_URL`: Supabase function base URL, for example `https://<project>.supabase.co/functions/v1/oasis-update`
 - `OASIS_UPDATE_ADMIN_TOKEN`: bearer token used by `/admin/*` endpoints
 - `OASIS_APPLE_DEVELOPER_ID_P12_B64`: base64-encoded `Developer ID Application` PKCS#12 for macOS codesigning

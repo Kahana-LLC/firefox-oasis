@@ -1,3 +1,16 @@
+/**
+ * LangGraph state machine — the core execution engine.
+ *
+ * Defines a supervisor-worker graph with three node types:
+ * - Supervisor: central routing hub that decides tool vs. chat
+ * - Tool nodes: one per registered Command, executes browser actions
+ * - Chat node: calls the remote LLM for natural language responses
+ *
+ * Flow: START → supervisor → tool/chat → supervisor → ... → END
+ * Recursion limit: 24 steps. Max 3 chained commands per request.
+ *
+ * Called from assistant.ts via `buildAssistantGraph()`.
+ */
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
 
@@ -23,11 +36,63 @@ import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 import type { PendingAmbiguityPayload as RouterPendingAmbiguityPayload } from "../utils/routerTypes.js";
-import { getAssistantApiBase } from "../awsSignedFetch.js";
+import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
+import { subscriptionService } from "../services/subscription.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
 import { MAX_NESTED_COMMANDS } from "./constants.js";
+import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
+import { getOasisCapabilitiesReply } from "../utils/oasisCapabilitiesFaq.js";
+
+const CHAT_GENERATION_CONFIG = {
+  responseMimeType: "application/json",
+  responseJsonSchema: {
+    type: "object",
+    properties: {
+      response: {
+        type: "string",
+        description:
+          "The assistant's complete reply to the user. Use Markdown formatting: **bold**, bullet lists, `code blocks`, headings. Do NOT include raw JSON or internal data dumps.",
+      },
+      command_type: {
+        type: "string",
+        enum: [
+          "info_retrieval",
+          "navigation",
+          "organization",
+          "content_transform",
+          "content_create",
+          "search",
+          "automation",
+          "system",
+          "help",
+          "other",
+        ],
+        description:
+          "The action category: info_retrieval=answer a factual question, navigation=open/visit a URL or site, organization=manage tabs/bookmarks/groups, content_transform=summarize/translate/rewrite, content_create=write/generate new content, search=find in history/memory/web, automation=multi-step browser task, system=browser settings or preferences, help=how-to question about the assistant, other=none of the above.",
+      },
+      user_intent: {
+        type: "string",
+        enum: [
+          "learning",
+          "research",
+          "work",
+          "dev",
+          "marketing",
+          "shopping",
+          "personal",
+          "entertainment",
+          "meta",
+          "other",
+        ],
+        description:
+          "The user's underlying goal: learning=understand a topic, research=gather info for a decision, work=professional/business task, dev=coding or technical task, marketing=content or growth, shopping=buy or find products, personal=personal life task, entertainment=leisure/media/fun, meta=asking about the AI itself, other=none of the above.",
+      },
+    },
+    required: ["response", "command_type", "user_intent"],
+  },
+};
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
 import {
   resolvePendingAmbiguityGate,
@@ -41,9 +106,11 @@ import { tryResolveAssistRoute } from "./supervisorAssist.js";
 import { decodePlannedAction, encodePlannedAction } from "./plannedActions.js";
 import { presentToolResult } from "./toolResultPresenter.js";
 import {
+  classifyToolAction,
   extractChatContent,
   getToolResultPayload,
   msgText,
+  parseChatEnvelope,
   toWire,
   type GraphArgs,
   type MessageLike,
@@ -75,9 +142,10 @@ const GraphState = Annotation.Root({
 
 const INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
 
-function splitInternalArgs(
-  args: GraphArgs
-): { commandArgs: GraphArgs; chainNotice: string | null } {
+function splitInternalArgs(args: GraphArgs): {
+  commandArgs: GraphArgs;
+  chainNotice: string | null;
+} {
   const commandArgs: GraphArgs = {};
   let chainNotice: string | null = null;
 
@@ -264,7 +332,23 @@ export async function buildAssistantGraph(
 
     if (toolPayload && !hasSummarizeRequest) {
       return {
-        messages: [new AIMessage(presentToolResult(toolPayload))],
+        messages: [
+          new AIMessage({
+            content: presentToolResult(toolPayload),
+            additional_kwargs: {
+              oasisUsageMeta: classifyToolAction(toolPayload.commandName),
+            },
+          }),
+        ],
+        lastWorker: "chat",
+        commandQueue: [],
+      };
+    }
+
+    const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
+    if (capabilitiesReply) {
+      return {
+        messages: [new AIMessage(capabilitiesReply)],
         lastWorker: "chat",
         commandQueue: [],
       };
@@ -282,9 +366,32 @@ export async function buildAssistantGraph(
 
     let res: unknown;
     try {
-      res = await assistRemote(CHAT_SYSTEM_PROMPT, toWire(messagesWithPrompt), ["chat"]);
+      res = await assistRemote(
+        CHAT_SYSTEM_PROMPT,
+        toWire(messagesWithPrompt),
+        ["chat"],
+        [],
+        CHAT_GENERATION_CONFIG
+      );
+      if ((res as any)?.quota) {
+        subscriptionService.updateFromQuota((res as any).quota);
+      }
     } catch (error) {
       assistantLogger.warn("chat", "Assist chat call failed.", error);
+
+      if (error instanceof QuotaExceededError || (error as any).isQuotaError) {
+        if ((error as any).quota) {
+          subscriptionService.updateFromQuota((error as any).quota);
+        }
+        return {
+          messages: [
+            new AIMessage(formatQuotaExceededMessage((error as Error).message)),
+          ],
+          lastWorker: "chat",
+          commandQueue: [],
+        };
+      }
+
       if (hasToolOutput) {
         const fallback = String(msgText(lastMsg as MessageLike) || "").trim();
         return {
@@ -304,8 +411,9 @@ export async function buildAssistantGraph(
       };
     }
 
-    const chatText = extractChatContent(res).trim();
-    if (!chatText) {
+    const { text: chatText, meta: usageMeta } = parseChatEnvelope(res);
+    const trimmedText = chatText.trim();
+    if (!trimmedText) {
       if (hasToolOutput) {
         const fallback = String(msgText(lastMsg as MessageLike) || "").trim();
         return {
@@ -315,14 +423,21 @@ export async function buildAssistantGraph(
         };
       }
       return {
-        messages: [new AIMessage("I couldn't generate a response. Please try again.")],
+        messages: [
+          new AIMessage("I couldn't generate a response. Please try again."),
+        ],
         lastWorker: "chat",
         commandQueue: [],
       };
     }
 
     return {
-      messages: [new AIMessage(chatText)],
+      messages: [
+        new AIMessage({
+          content: trimmedText,
+          additional_kwargs: { oasisUsageMeta: usageMeta },
+        }),
+      ],
       lastWorker: "chat",
       commandQueue: [],
     };
@@ -515,7 +630,11 @@ export async function buildAssistantGraph(
         route.pendingAmbiguity
       ) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
-        return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+        return {
+          next: route.next,
+          args: applyNoticeToArgs(route.args),
+          commandQueue,
+        };
       }
       return {
         next: assistRoute.next,
@@ -542,7 +661,11 @@ export async function buildAssistantGraph(
       if (route.pendingAmbiguity) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
       }
-      return { next: route.next, args: applyNoticeToArgs(route.args), commandQueue };
+      return {
+        next: route.next,
+        args: applyNoticeToArgs(route.args),
+        commandQueue,
+      };
     }
 
     if (route.type === "chat") {

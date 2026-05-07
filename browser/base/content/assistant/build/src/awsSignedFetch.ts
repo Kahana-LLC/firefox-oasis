@@ -1,6 +1,17 @@
-// Sends POSTs to assistant/voice backends with Supabase JWT
+/** HTTP client for assist (Supabase) and voice Lambda (IAM SigV4 + JWT in x-oasis-authorization). */
 import SupabaseAuth from "./services/supabase.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
+import { postVoiceLambdaWithIam } from "./voiceLambdaIamFetch.js";
+
+export class QuotaExceededError extends Error {
+  quota: any;
+  isQuotaError = true;
+  constructor(message: string, quota: any) {
+    super(message);
+    this.name = "QuotaExceededError";
+    this.quota = quota;
+  }
+}
 
 const normalizeEndpoint = (value: string | undefined): string =>
   String(value || "")
@@ -50,17 +61,28 @@ export async function postSigned<TResponse = Record<string, unknown>>(
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
-  
-  // Assist auth is optional; pass JWT if present.
-  // Voice endpoints still require JWT from the client side.
-  if (op === "assist" && token) {
+
+  if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(endpoint, { method: "POST", headers, body });
+  const res =
+    op === "transcribe" || op === "tts"
+      ? await postVoiceLambdaWithIam(endpoint, body, token)
+      : await fetch(endpoint, { method: "POST", headers, body });
 
   if (!res.ok) {
     const errorBody = await res.text();
+    if (res.status === 429 && op === "assist") {
+      try {
+        const parsed = JSON.parse(errorBody);
+        if (parsed.error === "quota_exceeded") {
+          throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+        }
+      } catch (e: any) {
+        if (e.isQuotaError) throw e;
+      }
+    }
     assistantLogger.error("transport", "Assistant backend error", {
       op,
       status: res.status,

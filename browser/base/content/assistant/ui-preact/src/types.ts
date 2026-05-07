@@ -37,6 +37,31 @@ export interface AuthState {
 }
 
 export type ConfirmationData = PendingConfirmationPayload;
+
+export type VoiceAgentState =
+  | "idle"
+  | "listening"
+  | "transcribing"
+  | "thinking"
+  | "speaking";
+
+export type VoiceAgentListeningSource = "user" | "continuous" | "handsfree";
+
+export type VoiceCaptureMode = "continuous" | "precise";
+
+export type VoiceAgentEvent =
+  | {
+      type: "state";
+      state: VoiceAgentState;
+      listeningSource?: VoiceAgentListeningSource;
+    }
+  | { type: "userTranscript"; text: string }
+  | { type: "error"; message: string }
+  | { type: "turn_done" }
+  | { type: "assistant_reply_text"; text: string }
+  | { type: "vad"; userSpeaking: boolean }
+  | { type: "audio_level"; mic: number; tts: number }
+  | { type: "listening_phase"; phase: "echo_guard" | "capturing" };
 export type AssistantHistoryEntry = AssistantHistoryWireEntry;
 
 export interface SupabaseAuthState {
@@ -49,8 +74,18 @@ export interface SupabaseAuthLike {
   isAuthenticated(): Promise<boolean>;
   getCurrentUser(): Promise<AuthUser | null>;
   signOut(): Promise<void>;
-  signUp(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
-  signInWithEmail(email: string, password: string): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signUp(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  signInWithEmail(
+    email: string,
+    password: string
+  ): Promise<{ user: AuthUser | null; error?: { message?: string } | null }>;
+  resetPasswordForEmail(
+    email: string
+  ): Promise<{ error?: { message?: string } | null }>;
+  handleAuthError?(error: unknown): string;
   onAuthStateChange?(
     cb: (state: SupabaseAuthState) => void
   ):
@@ -66,14 +101,40 @@ export interface SupabaseAuthLike {
     from(table: string): {
       insert(payload: unknown): Promise<{ error: { message?: string } | null }>;
     };
+    rpc(
+      fn: string,
+      args?: Record<string, unknown>
+    ): Promise<{
+      data: unknown;
+      error: { message?: string } | null;
+    }>;
   };
 }
 
+export type OnboardingStatus = {
+  guidedFlowEnabled: boolean;
+  migrationCompleted: boolean;
+  postMigrationTipShown: boolean;
+  checklistDismissed: boolean;
+  oauthAttemptStarted: boolean;
+  importOptOut: boolean;
+  firstAiTurnComplete: boolean;
+  welcomeCompleted: boolean;
+};
+
 export interface AssistantBridgeLike {
   openTab(url: string): boolean;
-  getAssistantHistory?(): AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?():
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?(history: AssistantHistoryEntry[]): Promise<void>;
   getAuthState?(): AuthState;
+  getOnboardingStatus?(): OnboardingStatus | null;
+  markOauthSignInStarted?(): void;
+  dismissOnboardingChecklist?(): void;
+  markImportOptOut?(): void;
+  markFirstAiTurnComplete?(): void;
+  openImportBrowserData?(): boolean;
 }
 
 type MarkedLike = {
@@ -87,20 +148,81 @@ type DOMPurifyLike = {
 export type OasisWindow = Window & {
   oasisAuthState?: AuthState;
   supabaseAuth?: SupabaseAuthLike;
+  subscriptionService?: {
+    forceRefresh?: () => Promise<void>;
+    getUsageBarData?: () => Promise<{
+      used: number;
+      limit: number;
+      baseLimit: number;
+      bonusTokens: number;
+      remaining: number;
+      percentUsed: number;
+      percentOfBase: number;
+    }>;
+    getDailyTokenUsageForDisplay?: () => {
+      used: number;
+      limit: number;
+      baseLimit: number;
+      bonusTokens: number;
+      remaining: number;
+      percentUsed: number;
+      percentOfBase: number;
+    };
+  };
   assistantBridge?: AssistantBridgeLike;
   runAssistantStream?: RunAssistantStream;
   voiceInputService?: {
     startRecording(): Promise<void>;
     stopRecording(): Promise<string | null>;
   };
-  getAssistantHistory?: () => AssistantHistoryEntry[] | Promise<AssistantHistoryEntry[]>;
+  getAssistantHistory?: () =>
+    | AssistantHistoryEntry[]
+    | Promise<AssistantHistoryEntry[]>;
   setAssistantHistory?: (history: AssistantHistoryEntry[]) => Promise<void>;
   resetAssistantSession?: () => void | Promise<void>;
+  getOasisCapabilitiesMarkdown?: () => string;
+  oasisPushLocalChatTurn?: (
+    userText: string,
+    assistantMarkdown: string
+  ) => void;
+  oasisSyncSessionFromPlainTurns?: (
+    turns: Array<{ type: "human" | "ai"; content: string }>
+  ) => void;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
-  openWebLinkIn?: (url: string, where: string, options: Record<string, unknown>) => void;
+  textToSpeech?: (text: string) => Promise<Blob>;
+  voiceAgent?: {
+    on(listener: (event: VoiceAgentEvent) => void): () => void;
+    getState(): string;
+    startConversation(): Promise<void>;
+    startListening(opts?: {
+      source?: VoiceAgentListeningSource;
+    }): Promise<void>;
+    finishListening(): Promise<void>;
+    stop(): void;
+    stopSpeaking(): void;
+    setContinuousConversation(enabled: boolean): void;
+    getContinuousConversation(): boolean;
+    getListeningSource(): VoiceAgentListeningSource | null;
+    getUserSpeaking(): boolean;
+    getCaptureMode(): VoiceCaptureMode;
+    setCaptureMode(mode: VoiceCaptureMode): void;
+    getVoiceSpokenRepliesEnabled(): boolean;
+    setVoiceSpokenRepliesEnabled(enabled: boolean): void;
+  };
+  oasisVoiceAssistantTurnBegin?: (userTranscript: string) => string;
+  oasisVoiceAssistantStreamChunk?: (messageId: string, chunk: string) => void;
+  oasisVoiceSpokenTurnMirror?: (
+    userTranscript: string,
+    assistantText: string
+  ) => void;
+  openWebLinkIn?: (
+    url: string,
+    where: string,
+    options: Record<string, unknown>
+  ) => void;
   mpTrack?: (event: string, props?: Record<string, unknown>) => void;
   marked?: MarkedLike;
   DOMPurify?: DOMPurifyLike;

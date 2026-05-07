@@ -4,6 +4,10 @@
 
 // This file contains branding-specific prefs.
 
+// Oasis: disable macOS platform passkeys until signed builds include
+// com.apple.developer.web-browser.public-key-credential; set true when ready.
+pref("security.webauthn.enable_macos_passkeys", false);
+
 pref("startup.homepage_override_url", "");
 pref("startup.homepage_welcome_url", "");
 pref("startup.homepage_welcome_url.additional", "");

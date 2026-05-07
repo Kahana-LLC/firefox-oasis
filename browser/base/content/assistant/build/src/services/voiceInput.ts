@@ -1,3 +1,4 @@
+/** Voice input service — microphone recording, audio blob creation, and transcription via the remote Lambda. */
 import { transcribeAudio } from "../proxyClient.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 
@@ -10,25 +11,50 @@ export class VoiceInputService {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
   private stream: MediaStream | null = null;
+  private composerUtteranceSeq = 0;
+  private activeComposerSeq = 0;
 
   async startRecording(): Promise<void> {
     try {
-      // Request microphone access
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Create MediaRecorder with appropriate MIME type
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      this.composerUtteranceSeq += 1;
+      this.activeComposerSeq = this.composerUtteranceSeq;
+      const audioTracks = this.stream.getAudioTracks();
       const mimeType = this.getSupportedMimeType();
-      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
-      
+      assistantLogger.debug("voice-input", "recording_started", {
+        utteranceSeq: this.activeComposerSeq,
+        mimeType: mimeType || "(browser default)",
+        tracks: audioTracks.map(t => {
+          let deviceId = "";
+          try {
+            deviceId = t.getSettings?.().deviceId ?? "";
+          } catch {
+            // ignore
+          }
+          return { label: t.label || "", deviceId };
+        }),
+      });
+
+      this.mediaRecorder = mimeType
+        ? new MediaRecorder(this.stream, { mimeType })
+        : new MediaRecorder(this.stream);
+
       this.audioChunks = [];
-      
+
       this.mediaRecorder.ondataavailable = (event: Event) => {
         const blob = eventBlob(event);
         if (blob && blob.size > 0) {
           this.audioChunks.push(blob);
         }
       };
-      
+
       this.mediaRecorder.start();
     } catch (error) {
       assistantLogger.error("voice-input", "Error starting recording", error);
@@ -43,24 +69,37 @@ export class VoiceInputService {
         return;
       }
 
+      const seq = this.activeComposerSeq;
+
       this.mediaRecorder.onstop = async () => {
         try {
-          // Stop all tracks in the stream
           if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
           }
 
-          // Create audio blob from chunks
-          const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+          const mimeType = this.mediaRecorder?.mimeType || "audio/webm";
           const audioBlob = new Blob(this.audioChunks, { type: mimeType });
-          
-          // Send to Deepgram via lambda
-          const result = await transcribeAudio(audioBlob);
-          
+
+          assistantLogger.debug("voice-input", "sending_transcribe", {
+            utteranceSeq: seq,
+            chunkCount: this.audioChunks.length,
+            blobBytes: audioBlob.size,
+            mimeType,
+          });
+
+          const result = await transcribeAudio(audioBlob, {
+            source: "composer",
+            utteranceSeq: seq,
+          });
+
           // Lambda returns { transcript: "..." }
-          resolve(result.transcript || '');
+          resolve(result.transcript || "");
         } catch (error) {
-          assistantLogger.error("voice-input", "Error transcribing audio", error);
+          assistantLogger.error(
+            "voice-input",
+            "Error transcribing audio",
+            error
+          );
           reject(error);
         } finally {
           this.mediaRecorder = null;
@@ -78,6 +117,9 @@ export class VoiceInputService {
   }
 
   cancelRecording(): void {
+    assistantLogger.debug("voice-input", "recording_cancelled", {
+      utteranceSeq: this.activeComposerSeq,
+    });
     if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
       this.mediaRecorder.stop();
     }
@@ -91,10 +133,10 @@ export class VoiceInputService {
 
   private getSupportedMimeType(): string {
     const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4",
     ];
 
     for (const type of types) {
@@ -103,7 +145,7 @@ export class VoiceInputService {
       }
     }
 
-    return ''; // Let browser choose default
+    return "";
   }
 }
 

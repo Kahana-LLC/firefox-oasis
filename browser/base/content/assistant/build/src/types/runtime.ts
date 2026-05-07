@@ -1,3 +1,4 @@
+/** Type definitions for Firefox's privileged runtime objects: gBrowser, tabs, tab groups, PlacesUtils, Services, and the assistant's window interface. */
 import type { BaseMessage } from "@langchain/core/messages";
 import type SupabaseAuth from "../services/supabase.js";
 import type voiceInputService from "../services/voiceInput.js";
@@ -60,7 +61,9 @@ export type GBrowserLike = {
   tabs: ArrayLike<BrowserTabLike> | BrowserTabLike[];
   selectedTab?: BrowserTabLike;
   tabGroups?: ArrayLike<BrowserTabGroupLike> | BrowserTabGroupLike[];
-  getAllTabGroups?: () => ArrayLike<BrowserTabGroupLike> | BrowserTabGroupLike[];
+  getAllTabGroups?: () =>
+    | ArrayLike<BrowserTabGroupLike>
+    | BrowserTabGroupLike[];
   adoptTab?: (tab: BrowserTabLike, index: number) => void;
   removeTab?: (tab: BrowserTabLike) => void;
   addTrustedTab?: (
@@ -71,7 +74,10 @@ export type GBrowserLike = {
     tabs: BrowserTabLike[],
     options?: { insertBefore?: BrowserTabLike }
   ) => void;
-  addTabGroup?: (tabs: BrowserTabLike[], options?: { label?: string }) => BrowserTabGroupLike;
+  addTabGroup?: (
+    tabs: BrowserTabLike[],
+    options?: { label?: string }
+  ) => BrowserTabGroupLike;
   ungroupTab?: (tab: BrowserTabLike) => void;
   [key: string]: unknown;
 };
@@ -91,7 +97,11 @@ type ObserverLike = {
 export type ServicesLike = {
   wm?: WindowMediatorLike;
   obs?: {
-    addObserver: (observer: ObserverLike, topic: string, ownsWeak?: boolean) => void;
+    addObserver: (
+      observer: ObserverLike,
+      topic: string,
+      ownsWeak?: boolean
+    ) => void;
   };
   prefs?: {
     getBoolPref?: (name: string, defaultValue?: boolean) => boolean;
@@ -137,7 +147,10 @@ export type PlacesBookmarksLike = {
     url?: string;
   }) => Promise<PlacesBookmarkEntry>;
   remove?: (guid: string) => Promise<void>;
-  update?: (changes: { guid: string; title?: string }) => Promise<PlacesBookmarkEntry>;
+  update?: (changes: {
+    guid: string;
+    title?: string;
+  }) => Promise<PlacesBookmarkEntry>;
 };
 
 export type PlacesHistoryResultRoot = {
@@ -155,19 +168,26 @@ export type PlacesHistoryOptions = {
   sortingMode?: number;
   maxResults?: number;
   includeVisits?: boolean;
+  includeHidden?: boolean;
 };
 
 export type PlacesHistoryLike = {
   getNewQueryOptions: () => PlacesHistoryOptions;
   getNewQuery: () => unknown;
-  executeQuery: (query: unknown, options: unknown) => { root: PlacesHistoryResultRoot };
+  executeQuery: (
+    query: unknown,
+    options: unknown
+  ) => { root: PlacesHistoryResultRoot };
 };
 
 export type PlacesUtilsLike = {
   bookmarks?: PlacesBookmarksLike;
   history?: PlacesHistoryLike;
   observers?: {
-    addListener?: (topics: string[], listener: (events: unknown[]) => void) => void;
+    addListener?: (
+      topics: string[],
+      listener: (events: unknown[]) => void
+    ) => void;
   };
 };
 
@@ -185,7 +205,7 @@ export type BrowserWindowLike = Window & {
 
 export type AssistantSessionLike = {
   readonly messages: unknown[];
-  addTurn: (user: BaseMessage, assistant: BaseMessage) => void;
+  addTurn: (user: unknown, assistant: unknown) => void;
   clear: () => void;
   setSession: (messages: unknown[]) => void;
 };
@@ -195,10 +215,37 @@ export type { OasisRecordToolActionStart, OasisRecordToolActionUpdate };
 export type AssistantWindowLike = Window & {
   supabaseAuth?: ReturnType<typeof SupabaseAuth.getInstance>;
   voiceInputService?: typeof voiceInputService;
+  textToSpeech?: (text: string) => Promise<Blob>;
+  voiceAgent?: {
+    on(listener: (event: unknown) => void): () => void;
+    getState(): string;
+    startConversation(): Promise<void>;
+    startListening(opts?: {
+      source?: "user" | "continuous" | "handsfree";
+    }): Promise<void>;
+    finishListening(): Promise<void>;
+    stop(): void;
+    stopSpeaking(): void;
+    setRunAssistant(fn: RunAssistantStream): void;
+    getListeningSource(): "user" | "continuous" | "handsfree" | null;
+    getUserSpeaking(): boolean;
+    getCaptureMode(): "continuous" | "precise";
+    setCaptureMode(mode: "continuous" | "precise"): void;
+    getVoiceSpokenRepliesEnabled(): boolean;
+    setVoiceSpokenRepliesEnabled(enabled: boolean): void;
+  };
   marked?: unknown;
   DOMPurify?: unknown;
   resetAssistantSession?: () => void;
   getAssistantHistory?: () => BaseMessage[];
+  getOasisCapabilitiesMarkdown?: () => string;
+  oasisPushLocalChatTurn?: (
+    userText: string,
+    assistantMarkdown: string
+  ) => void;
+  oasisSyncSessionFromPlainTurns?: (
+    turns: Array<{ type: "human" | "ai"; content: string }>
+  ) => void;
   runAssistantStream?: RunAssistantStream;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
@@ -208,6 +255,12 @@ export type AssistantWindowLike = Window & {
   oasisGetPendingConfirmation?: () => PendingConfirmationPayload | null;
   oasisClearPendingConfirmation?: () => void;
   oasisGetPendingAmbiguity?: () => PendingAmbiguityPayload | null;
+  oasisVoiceAssistantTurnBegin?: (userTranscript: string) => string;
+  oasisVoiceAssistantStreamChunk?: (messageId: string, chunk: string) => void;
+  oasisVoiceSpokenTurnMirror?: (
+    userTranscript: string,
+    assistantText: string
+  ) => void;
   Services?: ServicesLike;
   ChromeUtils?: {
     importESModule?: (path: string) => Record<string, unknown>;
@@ -221,7 +274,8 @@ export function getBrowserWindow(
 ): BrowserWindowLike | null {
   const maybeWindow = (globalRef as { window?: AssistantWindowLike }).window;
   const win = maybeWindow || (globalRef as unknown as AssistantWindowLike);
-  const services = win.Services || (win.top as AssistantWindowLike | undefined)?.Services;
+  const services =
+    win.Services || (win.top as AssistantWindowLike | undefined)?.Services;
   if (services?.wm) {
     return services.wm.getMostRecentWindow("navigator:browser");
   }

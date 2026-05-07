@@ -1,3 +1,13 @@
+/**
+ * Mutation explicit resolver — regex rules for destructive/creative commands.
+ *
+ * Array of regex patterns that extract args from mutation commands:
+ * split tabs, close tab, create/delete/rename bookmark folders and
+ * tab groups, move tab to window, remove split view, etc.
+ *
+ * Each rule produces { next, args } directly from named capture groups.
+ * Called by manifestMutationResolver.ts.
+ */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type MutationRoute = {
@@ -14,7 +24,10 @@ function toolDecision(
   return { type: "tool", next, args, reason };
 }
 
-function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null {
+function firstMatch(
+  input: string,
+  patterns: RegExp[]
+): RegExpMatchArray | null {
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
@@ -80,6 +93,27 @@ const MUTATION_EXPLICIT_ROUTES: MutationRoute[] = [
   },
   {
     next: "add_split_view",
+    reason: "mutation-explicit-add-split-view-colloquial",
+    resolve: input => {
+      const lower = input.toLowerCase();
+      if (/\b(remove|disable|close|unsplit|don't|do not)\b/.test(lower)) {
+        return null;
+      }
+      if (
+        /\b(?:two|2)\s+tabs?\s+(?:side\s*by\s*side|at\s+once)\b/i.test(input) ||
+        /\bshow\s+(?:two|2)\s+tabs?\s+(?:side\s*by\s*side|at\s+once)\b/i.test(
+          input
+        ) ||
+        /\bopen\s+.{0,40}\bsplit\s*view\b/i.test(input) ||
+        /\bsplitview\b/i.test(input)
+      ) {
+        return {};
+      }
+      return null;
+    },
+  },
+  {
+    next: "add_split_view",
     reason: "mutation-explicit-add-split-view",
     resolve: input => {
       if (
@@ -89,7 +123,9 @@ const MUTATION_EXPLICIT_ROUTES: MutationRoute[] = [
       ) {
         return null;
       }
-      const withTabMatch = input.match(/(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i);
+      const withTabMatch = input.match(
+        /(?:with|and)\s+(?:tab\s+)?(?<index>\d+)/i
+      );
       const withIndex = numberArg(withTabMatch?.groups?.index);
       if (withIndex != null) {
         return { withIndex };

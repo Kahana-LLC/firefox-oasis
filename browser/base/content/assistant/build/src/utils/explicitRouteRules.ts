@@ -1,4 +1,15 @@
+/**
+ * Explicit route rules — regex patterns for non-family-specific commands.
+ *
+ * Catches commands that don't fit neatly into list/search/mutation:
+ * "open <url>", "new window", "copy tab urls", "show subscription",
+ * "open bookmark folder X as tab group", etc.
+ *
+ * Each rule has a regex + arg extractor. Tried after family resolvers
+ * fail. Called by decisionEngine.ts.
+ */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
+import { resolveKnownSiteToUrl } from "./knownSites.js";
 
 type ExplicitRouteRule = {
   next: string;
@@ -26,7 +37,10 @@ function firstUrlLike(input: string): string | null {
   return null;
 }
 
-function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null {
+function firstMatch(
+  input: string,
+  patterns: RegExp[]
+): RegExpMatchArray | null {
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
@@ -36,11 +50,39 @@ function firstMatch(input: string, patterns: RegExp[]): RegExpMatchArray | null 
   return null;
 }
 
+function trimOpenTarget(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+}
+
+function resolveTargetForNewTab(targetRaw: string): RouteArgs | null {
+  const target = trimOpenTarget(targetRaw);
+  if (!target) {
+    return null;
+  }
+  const urlHit = firstUrlLike(target);
+  if (urlHit) {
+    return { url: urlHit };
+  }
+  const siteUrl = resolveKnownSiteToUrl(target);
+  if (siteUrl) {
+    return { url: siteUrl };
+  }
+  return { query: target };
+}
+
+const OPEN_TARGET_IN_NEW_TAB_RE =
+  /^(?:open|visit|go\s+to|launch)\s+(?<target>.+?)\s+in\s+(?:a\s+)?new\s+tab\b/i;
+
 const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
   {
     next: "copy_tab_urls",
     reason: "explicit-copy-tab-urls",
-    resolve: input => (/\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null),
+    resolve: input =>
+      /\bcopy\s+(?:all\s+)?tab\s+urls?\b/i.test(input) ? {} : null,
   },
   {
     next: "new_window",
@@ -53,6 +95,25 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
         : null,
   },
   {
+    next: "new_tab_to_right",
+    reason: "explicit-blank-new-tab",
+    resolve: input => {
+      const s = input
+        .trim()
+        .replace(/[.!?]+$/g, "")
+        .trim();
+      if (
+        /^\s*new\s+tab(?:\s+please)?\s*$/i.test(s) ||
+        /^\s*(?:open\s+(?:up\s+)?(?:a\s+)?new\s+tab|(?:create|add)\s+(?:a\s+)?new\s+tab)(?:\s+please)?\s*$/i.test(
+          s
+        )
+      ) {
+        return {};
+      }
+      return null;
+    },
+  },
+  {
     next: "organize_windows",
     reason: "explicit-organize-windows",
     resolve: input => (/\borganize\s+windows?\b/i.test(input) ? {} : null),
@@ -61,7 +122,9 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     next: "show_subscription",
     reason: "explicit-show-subscription",
     resolve: input =>
-      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input) ? {} : null,
+      /\b(?:show|check|view)\s+(?:my\s+)?subscription\b/i.test(input)
+        ? {}
+        : null,
   },
   {
     next: "show_url",
@@ -112,6 +175,34 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
   },
   {
     next: "open_url",
+    reason: "explicit-open-target-in-new-tab-url",
+    resolve: input => {
+      const match = input.match(OPEN_TARGET_IN_NEW_TAB_RE);
+      const targetRaw = match?.groups?.target?.trim();
+      if (!targetRaw) {
+        return null;
+      }
+      const args = resolveTargetForNewTab(targetRaw);
+      return args && "url" in args && args.url ? { url: args.url } : null;
+    },
+  },
+  {
+    next: "web_search",
+    reason: "explicit-open-target-in-new-tab-search",
+    resolve: input => {
+      const match = input.match(OPEN_TARGET_IN_NEW_TAB_RE);
+      const targetRaw = match?.groups?.target?.trim();
+      if (!targetRaw) {
+        return null;
+      }
+      const args = resolveTargetForNewTab(targetRaw);
+      return args && "query" in args && args.query
+        ? { query: args.query }
+        : null;
+    },
+  },
+  {
+    next: "open_url",
     reason: "explicit-open-url",
     resolve: input => {
       const match = input.match(
@@ -149,7 +240,81 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       return { query };
     },
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  // BROWSING HISTORY SEARCH (search_history)
+  // Matches queries about pages the user VISITED (not bookmarked)
+  // Examples: "what did I read about X", "find that article I visited"
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    next: "search_history",
+    reason: "explicit-history-search",
+    resolve: input => {
+      const patterns: Array<{ re: RegExp; queryGroup?: string }> = [
+        { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
+        { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
+        { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+        { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+        { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
+        { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
+        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+        { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" },
+      ];
+      for (const { re, queryGroup } of patterns) {
+        const match = input.match(re);
+        if (match) {
+          const query = match.groups?.query?.trim() || queryGroup || "";
+          if (query) return { query };
+        }
+      }
+      if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
+        const cleaned = input
+          .replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "")
+          .replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "")
+          .replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "")
+          .replace(/^(?:for|about|on|regarding)\s+/i, "")
+          .trim();
+        return { query: cleaned || "recent browsing history" };
+      }
+      return null;
+    },
+  },
 ];
+//   {
+//     next: "search_history",
+//     reason: "explicit-history-search",
+//     resolve: input => {
+//       const patterns: Array<{ re: RegExp; queryGroup?: string }> = [
+//         { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
+//         { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
+//         { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+//         { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
+//         { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
+//         { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
+//         { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+//         { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
+//         { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" },
+//       ];
+//       for (const { re, queryGroup } of patterns) {
+//         const match = input.match(re);
+//         if (match) {
+//           const query = match.groups?.query?.trim() || queryGroup || "";
+//           if (query) return { query };
+//         }
+//       }
+//       if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
+//         const cleaned = input
+//           .replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "")
+//           .replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "")
+//           .replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "")
+//           .replace(/^(?:for|about|on|regarding)\s+/i, "")
+//           .trim();
+//         return { query: cleaned || "recent browsing history" };
+//       }
+//       return null;
+//     },
+//   },
+// ];
 
 export function resolveExplicitRoute(
   input: string

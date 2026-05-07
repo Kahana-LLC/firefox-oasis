@@ -1,610 +1,720 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oasis - Sign In</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #f5f5dc 0%, #ffffff 50%, #e8f5e9 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-
-    .auth-container {
-      background: white;
-      border-radius: 24px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-      padding: 48px;
-      width: 100%;
-      max-width: 440px;
-      animation: slideUp 0.4s ease;
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oasis - Sign In</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
-      to {
+
+      body {
+        font-family:
+          "Geist",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        background: linear-gradient(
+          135deg,
+          #f5f5dc 0%,
+          #ffffff 50%,
+          #e8f5e9 100%
+        );
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .auth-container {
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        padding: 48px;
+        width: 100%;
+        max-width: 440px;
+        animation: slideUp 0.4s ease;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .auth-header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+
+      .logo {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .logo svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .auth-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #1a1a1a;
+        margin-bottom: 8px;
+      }
+
+      .auth-subtitle {
+        font-size: 15px;
+        color: #666;
+      }
+
+      .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .form-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+      }
+
+      .form-input {
+        padding: 12px 16px;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 12px;
+        font-size: 15px;
+        font-family: inherit;
+        transition: all 0.2s ease;
+        background: white;
+        color: #1a1a1a;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: #7a9200;
+        box-shadow: 0 0 0 3px rgba(122, 146, 0, 0.1);
+      }
+
+      .form-input::placeholder {
+        color: #999;
         opacity: 1;
+      }
+
+      .error-message {
+        padding: 12px 16px;
+        background: #ffebee;
+        color: #d32f2f;
+        border-radius: 12px;
+        font-size: 14px;
+        display: none;
+      }
+
+      .error-message.visible {
+        display: block;
+      }
+
+      .success-message {
+        padding: 12px 16px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        border-radius: 12px;
+        font-size: 14px;
+        display: none;
+      }
+
+      .success-message.visible {
+        display: block;
+      }
+
+      .submit-button {
+        padding: 14px 24px;
+        background: #7a9200;
+        color: white;
+        border: none;
+        border-radius: 64px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 8px;
+      }
+
+      .submit-button:hover:not(:disabled) {
+        background: #6a8000;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(122, 146, 0, 0.3);
+      }
+
+      .submit-button:active:not(:disabled) {
         transform: translateY(0);
       }
-    }
 
-    .auth-header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
+      .submit-button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
 
-    .logo {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+      .auth-toggle {
+        text-align: center;
+        font-size: 14px;
+        color: #666;
+        margin-top: 24px;
+      }
 
-    .logo svg {
-      width: 100%;
-      height: 100%;
-    }
+      .auth-toggle-link {
+        color: #7a9200;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+      }
 
-    .auth-title {
-      font-size: 28px;
-      font-weight: 600;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-    }
+      .auth-toggle-link:hover {
+        text-decoration: underline;
+      }
 
-    .auth-subtitle {
-      font-size: 15px;
-      color: #666;
-    }
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
 
-    .auth-form {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .form-field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .form-label {
-      font-size: 14px;
-      font-weight: 500;
-      color: #333;
-    }
-
-    .form-input {
-      padding: 12px 16px;
-      border: 1.5px solid #e0e0e0;
-      border-radius: 12px;
-      font-size: 15px;
-      font-family: inherit;
-      transition: all 0.2s ease;
-      background: white;
-      color: #1a1a1a;
-    }
-
-    .form-input:focus {
-      outline: none;
-      border-color: #7a9200;
-      box-shadow: 0 0 0 3px rgba(122, 146, 0, 0.1);
-    }
-
-    .form-input::placeholder {
-      color: #999;
-      opacity: 1;
-    }
-
-    .error-message {
-      padding: 12px 16px;
-      background: #ffebee;
-      color: #d32f2f;
-      border-radius: 12px;
-      font-size: 14px;
-      display: none;
-    }
-
-    .error-message.visible {
-      display: block;
-    }
-
-    .success-message {
-      padding: 12px 16px;
-      background: #e8f5e9;
-      color: #2e7d32;
-      border-radius: 12px;
-      font-size: 14px;
-      display: none;
-    }
-
-    .success-message.visible {
-      display: block;
-    }
-
-    .submit-button {
-      padding: 14px 24px;
-      background: #7a9200;
-      color: white;
-      border: none;
-      border-radius: 64px;
-      font-size: 16px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-top: 8px;
-    }
-
-    .submit-button:hover:not(:disabled) {
-      background: #6a8000;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(122, 146, 0, 0.3);
-    }
-
-    .submit-button:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    .submit-button:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
-
-    .auth-toggle {
-      text-align: center;
-      font-size: 14px;
-      color: #666;
-      margin-top: 24px;
-    }
-
-    .auth-toggle-link {
-      color: #7a9200;
-      font-weight: 600;
-      text-decoration: none;
-      cursor: pointer;
-    }
-
-    .auth-toggle-link:hover {
-      text-decoration: underline;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .loading-indicator {
-      text-align: center;
-      padding: 20px;
-      color: #666;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <div class="auth-container">
-    <div class="auth-header">
-      <div class="logo">
-        <svg width="64" height="64" viewBox="0 0 210 210" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <g clip-path="url(#clip0_oasis_auth)">
-            <mask id="mask0_oasis_auth" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="210" height="210">
-              <path d="M210 0H0V210H210V0Z" fill="white"/>
-              <path d="M105.003 166.523C138.982 166.523 166.527 138.978 166.527 105C166.527 71.0211 138.982 43.4761 105.003 43.4761C71.025 43.4761 43.48 71.0211 43.48 105C43.48 138.978 71.025 166.523 105.003 166.523Z" fill="black"/>
-            </mask>
-            <g mask="url(#mask0_oasis_auth)">
-              <path d="M105.027 189.638C151.757 189.638 189.638 151.757 189.638 105.027C189.638 58.2981 151.757 20.4165 105.027 20.4165C58.2981 20.4165 20.4165 58.2981 20.4165 105.027C20.4165 151.757 58.2981 189.638 105.027 189.638Z" fill="url(#paint0_linear_oasis_auth)"/>
-            </g>
-            <mask id="mask1_oasis_auth" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="49" y="34" width="112" height="123">
-              <path d="M105.001 156.813C135.797 156.813 160.762 129.352 160.762 95.4769C160.762 61.6021 135.797 34.1411 105.001 34.1411C74.2052 34.1411 49.2402 61.6021 49.2402 95.4769C49.2402 129.352 74.2052 156.813 105.001 156.813Z" fill="white"/>
-            </mask>
-            <g mask="url(#mask1_oasis_auth)">
-              <path d="M-44.5454 124.441C-0.134132 95.326 36.8753 124.441 61.3015 124.441C85.7277 124.441 122.737 95.326 167.148 124.441V168.113H-44.5454V124.441Z" fill="url(#paint1_linear_oasis_auth)"/>
-              <path d="M-32.894 127.583C11.5172 103.412 48.5266 127.583 72.9528 127.583C97.379 127.583 134.388 103.412 178.8 127.583V163.839H-32.894V127.583Z" fill="url(#paint2_linear_oasis_auth)"/>
-            </g>
-          </g>
-          <defs>
-            <linearGradient id="paint0_linear_oasis_auth" x1="105.027" y1="20.4165" x2="105.027" y2="189.638" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#788046"/>
-              <stop offset="1" stop-color="#FFD779"/>
-            </linearGradient>
-            <linearGradient id="paint1_linear_oasis_auth" x1="-44.5454" y1="111.501" x2="-44.5454" y2="5772.75" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#BEEEFF"/>
-            </linearGradient>
-            <linearGradient id="paint2_linear_oasis_auth" x1="83.8768" y1="113.849" x2="168.886" y2="163.794" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#98CFE3"/>
-              <stop offset="0.801794" stop-color="#EDF5F8"/>
-            </linearGradient>
-            <clipPath id="clip0_oasis_auth">
-              <rect width="210" height="210" fill="white"/>
-            </clipPath>
-          </defs>
-        </svg>
-      </div>
-      <h1 class="auth-title" id="auth-title">Create Account</h1>
-      <p class="auth-subtitle" id="auth-subtitle">Sign up to sync your tabs and access AI assistant</p>
-    </div>
-
-    <div id="loading-indicator" class="loading-indicator" style="display: none;">
-      <div class="spinner"></div>
-      <span>Loading authentication service...</span>
-    </div>
-
-    <form class="auth-form" id="auth-form">
-      <div class="form-field">
-        <label class="form-label" for="email">Email</label>
-        <input
-          type="email"
-          id="email"
-          class="form-input"
-          placeholder="your@email.com"
-          required
-          autocomplete="email"
-        />
-      </div>
-
-      <div class="form-field">
-        <label class="form-label" for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          class="form-input"
-          placeholder="Enter your password"
-          required
-          autocomplete="current-password"
-        />
-      </div>
-
-      <div class="error-message" id="error-message"></div>
-      <div class="success-message" id="success-message"></div>
-
-      <button type="submit" class="submit-button" id="submit-button">
-        <span id="submit-text">Sign Up</span>
-      </button>
-    </form>
-
-    <div class="auth-toggle" id="auth-toggle">
-      <span id="toggle-text">Already have an account?</span>
-      <a class="auth-toggle-link" id="toggle-link">Sign In</a>
-    </div>
-
-    <!-- Success State -->
-    <div id="success-state" style="display: none; text-align: center; padding: 20px 0;">
-      <div class="success-message" style="display: block; margin-bottom: 24px;" id="final-success-message"></div>
-      <p style="color: #666; font-size: 14px; margin-bottom: 24px;">You can close this page or click Done to continue browsing.</p>
-      <button class="submit-button" id="done-button" style="min-width: 200px;">
-        Done
-      </button>
-    </div>
-  </div>
-
-  <!-- Load Supabase Auth from Assistant Bundle -->
-  <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
-
-  <script>
-    "use strict";
-
-    let authMode = 'signup';
-    const LOGIN_HOSTNAME = "https://kahana.co";
-    const LOGIN_REALM = "Oasis Assistant";
-    const LOGIN_USERNAME = "oasis_assistant_session";
-
-    const authForm = document.getElementById('auth-form');
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    const submitButton = document.getElementById('submit-button');
-    const submitText = document.getElementById('submit-text');
-    const errorMessage = document.getElementById('error-message');
-    const successMessage = document.getElementById('success-message');
-    const authTitle = document.getElementById('auth-title');
-    const authSubtitle = document.getElementById('auth-subtitle');
-    const toggleText = document.getElementById('toggle-text');
-    const toggleLink = document.getElementById('toggle-link');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const authToggle = document.getElementById('auth-toggle');
-    const successState = document.getElementById('success-state');
-    const finalSuccessMessage = document.getElementById('final-success-message');
-    const doneButton = document.getElementById('done-button');
-
-    async function securelySaveSession(session) {
-      if (!session || !session.access_token) return;
-      try {
-        const logins = Services.logins.findLogins(LOGIN_HOSTNAME, null, LOGIN_REALM);
-        for (const login of logins) {
-          if (login.username === LOGIN_USERNAME) {
-            Services.logins.removeLogin(login);
-          }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
         }
-
-        const loginInfo = new Components.Constructor(
-          "@mozilla.org/login-manager/loginInfo;1",
-          Ci.nsILoginInfo,
-          "init"
-        )(
-          LOGIN_HOSTNAME,
-          null,
-          LOGIN_REALM,
-          LOGIN_USERNAME,
-          JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            expires_at: session.expires_at,
-            user: session.user
-          }),
-          "",
-          ""
-        );
-        await Services.logins.addLoginAsync(loginInfo);
-      } catch (e) {
-        console.error("Oasis Auth: Failed to save session:", e);
       }
-    }
 
-    function updateAuthUI() {
-      if (authMode === 'signup') {
-        authTitle.textContent = 'Create Account';
-        authSubtitle.textContent = 'Sign up to sync your tabs and access AI assistant';
-        submitText.textContent = 'Sign Up';
-        toggleText.textContent = 'Already have an account?';
-        toggleLink.textContent = 'Sign In';
-      } else {
-        authTitle.textContent = 'Welcome Back';
-        authSubtitle.textContent = 'Sign in to your Oasis account';
-        submitText.textContent = 'Sign In';
-        toggleText.textContent = "Don't have an account?";
-        toggleLink.textContent = 'Sign Up';
+      .loading-indicator {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 14px;
       }
-      errorMessage.classList.remove('visible');
-      successMessage.classList.remove('visible');
-    }
+    </style>
+  </head>
+  <body>
+    <div class="auth-container">
+      <div class="auth-header">
+        <div class="logo">
+          <svg
+            width="64"
+            height="64"
+            viewBox="0 0 210 210"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g clip-path="url(#clip0_oasis_auth)">
+              <mask
+                id="mask0_oasis_auth"
+                style="mask-type: luminance"
+                maskUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width="210"
+                height="210"
+              >
+                <path d="M210 0H0V210H210V0Z" fill="white" />
+                <path
+                  d="M105.003 166.523C138.982 166.523 166.527 138.978 166.527 105C166.527 71.0211 138.982 43.4761 105.003 43.4761C71.025 43.4761 43.48 71.0211 43.48 105C43.48 138.978 71.025 166.523 105.003 166.523Z"
+                  fill="black"
+                />
+              </mask>
+              <g mask="url(#mask0_oasis_auth)">
+                <path
+                  d="M105.027 189.638C151.757 189.638 189.638 151.757 189.638 105.027C189.638 58.2981 151.757 20.4165 105.027 20.4165C58.2981 20.4165 20.4165 58.2981 20.4165 105.027C20.4165 151.757 58.2981 189.638 105.027 189.638Z"
+                  fill="url(#paint0_linear_oasis_auth)"
+                />
+              </g>
+              <mask
+                id="mask1_oasis_auth"
+                style="mask-type: luminance"
+                maskUnits="userSpaceOnUse"
+                x="49"
+                y="34"
+                width="112"
+                height="123"
+              >
+                <path
+                  d="M105.001 156.813C135.797 156.813 160.762 129.352 160.762 95.4769C160.762 61.6021 135.797 34.1411 105.001 34.1411C74.2052 34.1411 49.2402 61.6021 49.2402 95.4769C49.2402 129.352 74.2052 156.813 105.001 156.813Z"
+                  fill="white"
+                />
+              </mask>
+              <g mask="url(#mask1_oasis_auth)">
+                <path
+                  d="M-44.5454 124.441C-0.134132 95.326 36.8753 124.441 61.3015 124.441C85.7277 124.441 122.737 95.326 167.148 124.441V168.113H-44.5454V124.441Z"
+                  fill="url(#paint1_linear_oasis_auth)"
+                />
+                <path
+                  d="M-32.894 127.583C11.5172 103.412 48.5266 127.583 72.9528 127.583C97.379 127.583 134.388 103.412 178.8 127.583V163.839H-32.894V127.583Z"
+                  fill="url(#paint2_linear_oasis_auth)"
+                />
+              </g>
+            </g>
+            <defs>
+              <linearGradient
+                id="paint0_linear_oasis_auth"
+                x1="105.027"
+                y1="20.4165"
+                x2="105.027"
+                y2="189.638"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#788046" />
+                <stop offset="1" stop-color="#FFD779" />
+              </linearGradient>
+              <linearGradient
+                id="paint1_linear_oasis_auth"
+                x1="-44.5454"
+                y1="111.501"
+                x2="-44.5454"
+                y2="5772.75"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#BEEEFF" />
+              </linearGradient>
+              <linearGradient
+                id="paint2_linear_oasis_auth"
+                x1="83.8768"
+                y1="113.849"
+                x2="168.886"
+                y2="163.794"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#98CFE3" />
+                <stop offset="0.801794" stop-color="#EDF5F8" />
+              </linearGradient>
+              <clipPath id="clip0_oasis_auth">
+                <rect width="210" height="210" fill="white" />
+              </clipPath>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="auth-title" id="auth-title">Create Account</h1>
+        <p class="auth-subtitle" id="auth-subtitle">
+          Sign up to sync your tabs and access AI assistant
+        </p>
+      </div>
 
-    function showError(message) {
-      errorMessage.textContent = message;
-      errorMessage.classList.add('visible');
-      successMessage.classList.remove('visible');
-    }
+      <div
+        id="loading-indicator"
+        class="loading-indicator"
+        style="display: none"
+      >
+        <div class="spinner"></div>
+        <span>Loading authentication service...</span>
+      </div>
 
-    function showSuccess(message) {
-      successMessage.textContent = message;
-      successMessage.classList.add('visible');
-      errorMessage.classList.remove('visible');
-    }
+      <form class="auth-form" id="auth-form">
+        <div class="form-field">
+          <label class="form-label" for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            class="form-input"
+            placeholder="your@email.com"
+            required
+            autocomplete="email"
+          />
+        </div>
 
-    async function waitForSupabaseAuth() {
-      let attempts = 0;
-      while (!window.supabaseAuth && attempts < 100) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-      return window.supabaseAuth;
-    }
+        <div class="form-field">
+          <label class="form-label" for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            class="form-input"
+            placeholder="Enter your password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
 
-    // Handle window/tab close - open new tab with default page
-    let isDoneButtonClicked = false;
+        <div class="error-message" id="error-message"></div>
+        <div class="success-message" id="success-message"></div>
 
-    // Handle window close
-    window.addEventListener('beforeunload', (e) => {
-      // Only open new tab if user is closing the window (not clicking Done)
-      if (!isDoneButtonClicked && typeof Services !== 'undefined' && Services.wm) {
+        <button type="submit" class="submit-button" id="submit-button">
+          <span id="submit-text">Sign Up</span>
+        </button>
+      </form>
+
+      <div class="auth-toggle" id="auth-toggle">
+        <span id="toggle-text">Already have an account?</span>
+        <a class="auth-toggle-link" id="toggle-link">Sign In</a>
+      </div>
+
+      <!-- Success State -->
+      <div
+        id="success-state"
+        style="display: none; text-align: center; padding: 20px 0"
+      >
+        <div
+          class="success-message"
+          style="display: block; margin-bottom: 24px"
+          id="final-success-message"
+        ></div>
+        <p style="color: #666; font-size: 14px; margin-bottom: 24px">
+          You can close this page or click Done to continue browsing.
+        </p>
+        <button class="submit-button" id="done-button" style="min-width: 200px">
+          Done
+        </button>
+      </div>
+    </div>
+
+    <!-- Load Supabase Auth from Assistant Bundle -->
+    <script src="chrome://browser/content/assistant/assistant.bundle.js"></script>
+
+    <script>
+      "use strict";
+
+      let authMode = "signup";
+      const LOGIN_HOSTNAME = "https://kahana.co";
+      const LOGIN_REALM = "Oasis Assistant";
+      const LOGIN_USERNAME = "oasis_assistant_session";
+
+      const authForm = document.getElementById("auth-form");
+      const emailInput = document.getElementById("email");
+      const passwordInput = document.getElementById("password");
+      const submitButton = document.getElementById("submit-button");
+      const submitText = document.getElementById("submit-text");
+      const errorMessage = document.getElementById("error-message");
+      const successMessage = document.getElementById("success-message");
+      const authTitle = document.getElementById("auth-title");
+      const authSubtitle = document.getElementById("auth-subtitle");
+      const toggleText = document.getElementById("toggle-text");
+      const toggleLink = document.getElementById("toggle-link");
+      const loadingIndicator = document.getElementById("loading-indicator");
+      const authToggle = document.getElementById("auth-toggle");
+      const successState = document.getElementById("success-state");
+      const finalSuccessMessage = document.getElementById(
+        "final-success-message"
+      );
+      const doneButton = document.getElementById("done-button");
+
+      async function securelySaveSession(session) {
+        if (!session || !session.access_token) return;
         try {
-          const win = Services.wm.getMostRecentWindow('navigator:browser');
-          if (win && win.gBrowser) {
-            // Open about:home in a new tab
-            win.gBrowser.addTrustedTab('about:home', {
-              triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
-              inBackground: false,
-            });
+          const logins = Services.logins.findLogins(
+            LOGIN_HOSTNAME,
+            null,
+            LOGIN_REALM
+          );
+          for (const login of logins) {
+            if (login.username === LOGIN_USERNAME) {
+              Services.logins.removeLogin(login);
+            }
           }
-        } catch (err) {
+
+          const loginInfo = new Components.Constructor(
+            "@mozilla.org/login-manager/loginInfo;1",
+            Ci.nsILoginInfo,
+            "init"
+          )(
+            LOGIN_HOSTNAME,
+            null,
+            LOGIN_REALM,
+            LOGIN_USERNAME,
+            JSON.stringify({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+              expires_at: session.expires_at,
+              user: session.user,
+            }),
+            "",
+            ""
+          );
+          await Services.logins.addLoginAsync(loginInfo);
+        } catch (e) {
+          console.error("Oasis Auth: Failed to save session:", e);
         }
       }
-    });
 
-    toggleLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      authMode = authMode === 'signup' ? 'signin' : 'signup';
-      updateAuthUI();
-    });
+      function updateAuthUI() {
+        if (authMode === "signup") {
+          authTitle.textContent = "Create Account";
+          authSubtitle.textContent =
+            "Sign up to sync your tabs and access AI assistant";
+          submitText.textContent = "Sign Up";
+          toggleText.textContent = "Already have an account?";
+          toggleLink.textContent = "Sign In";
+        } else {
+          authTitle.textContent = "Welcome Back";
+          authSubtitle.textContent = "Sign in to your Oasis account";
+          submitText.textContent = "Sign In";
+          toggleText.textContent = "Don't have an account?";
+          toggleLink.textContent = "Sign Up";
+        }
+        errorMessage.classList.remove("visible");
+        successMessage.classList.remove("visible");
+      }
 
-    doneButton.addEventListener('click', () => {
-      isDoneButtonClicked = true; // Mark that Done button was clicked
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.classList.add("visible");
+        successMessage.classList.remove("visible");
+      }
 
-      try {
-        if (typeof Services !== 'undefined' && Services.wm) {
-          const win = Services.wm.getMostRecentWindow('navigator:browser');
-          if (win && win.gBrowser) {
-            // Open about:home in a new tab first
-            const newTab = win.gBrowser.addTrustedTab('about:home', {
-              triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
-              inBackground: false,
-            });
-            win.gBrowser.selectedTab = newTab;
+      function showSuccess(message) {
+        successMessage.textContent = message;
+        successMessage.classList.add("visible");
+        errorMessage.classList.remove("visible");
+      }
 
-            // Close the auth tab after opening new tab
-            setTimeout(() => {
-              try {
-                // Find the auth tab by URL
-                const tabs = win.gBrowser.tabs;
-                for (let i = 0; i < tabs.length; i++) {
-                  const tab = tabs[i];
-                  const browser = tab.linkedBrowser;
-                  if (browser && browser.currentURI &&
-                      browser.currentURI.spec.includes('oasis-auth.html')) {
-                    win.gBrowser.removeTab(tab);
-                    break;
+      async function waitForSupabaseAuth() {
+        let attempts = 0;
+        while (!window.supabaseAuth && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        return window.supabaseAuth;
+      }
+
+      // Handle window/tab close - open new tab with default page
+      let isDoneButtonClicked = false;
+
+      // Handle window close
+      window.addEventListener("beforeunload", e => {
+        // Only open new tab if user is closing the window (not clicking Done)
+        if (
+          !isDoneButtonClicked &&
+          typeof Services !== "undefined" &&
+          Services.wm
+        ) {
+          try {
+            const win = Services.wm.getMostRecentWindow("navigator:browser");
+            if (win && win.gBrowser) {
+              // Open about:home in a new tab
+              win.gBrowser.addTrustedTab("about:home", {
+                triggeringPrincipal:
+                  Services.scriptSecurityManager.getSystemPrincipal(),
+                inBackground: false,
+              });
+            }
+          } catch (err) {}
+        }
+      });
+
+      toggleLink.addEventListener("click", e => {
+        e.preventDefault();
+        authMode = authMode === "signup" ? "signin" : "signup";
+        updateAuthUI();
+      });
+
+      doneButton.addEventListener("click", () => {
+        isDoneButtonClicked = true; // Mark that Done button was clicked
+
+        try {
+          if (typeof Services !== "undefined" && Services.wm) {
+            const win = Services.wm.getMostRecentWindow("navigator:browser");
+            if (win && win.gBrowser) {
+              // Open about:home in a new tab first
+              const newTab = win.gBrowser.addTrustedTab("about:home", {
+                triggeringPrincipal:
+                  Services.scriptSecurityManager.getSystemPrincipal(),
+                inBackground: false,
+              });
+              win.gBrowser.selectedTab = newTab;
+
+              // Close the auth tab after opening new tab
+              setTimeout(() => {
+                try {
+                  // Find the auth tab by URL
+                  const tabs = win.gBrowser.tabs;
+                  for (let i = 0; i < tabs.length; i++) {
+                    const tab = tabs[i];
+                    const browser = tab.linkedBrowser;
+                    if (
+                      browser &&
+                      browser.currentURI &&
+                      browser.currentURI.spec.includes("oasis-auth.html")
+                    ) {
+                      win.gBrowser.removeTab(tab);
+                      break;
+                    }
                   }
-                }
-              } catch (e) {
-              }
-            }, 150);
-            return;
+                } catch (e) {}
+              }, 150);
+              return;
+            }
           }
+          // Fallback: open in new tab and close current
+          window.open("about:home", "_blank");
+          setTimeout(() => {
+            try {
+              window.close();
+            } catch (e) {
+              void e;
+            }
+          }, 200);
+        } catch (e) {
+          console.error("Failed to handle Done button:", e);
+          // Fallback: open in new tab and close current
+          window.open("about:home", "_blank");
+          setTimeout(() => {
+            try {
+              window.close();
+            } catch (e) {
+              void e;
+            }
+          }, 200);
         }
-        // Fallback: open in new tab and close current
-        window.open('about:home', '_blank');
-        setTimeout(() => {
-          try {
-            window.close();
-          } catch (e) {
-            void e;
+      });
+
+      authForm.addEventListener("submit", async e => {
+        e.preventDefault();
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!email || !password) {
+          showError("Please enter both email and password");
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitText.innerHTML = '<span class="spinner"></span>Processing...';
+        errorMessage.classList.remove("visible");
+        successMessage.classList.remove("visible");
+
+        try {
+          const supabaseAuth = await waitForSupabaseAuth();
+
+          if (!supabaseAuth) {
+            throw new Error("Authentication service not available");
           }
-        }, 200);
-      } catch (e) {
-        console.error('Failed to handle Done button:', e);
-        // Fallback: open in new tab and close current
-        window.open('about:home', '_blank');
-        setTimeout(() => {
-          try {
-            window.close();
-          } catch (e) {
-            void e;
+
+          let result;
+          if (authMode === "signup") {
+            result = await supabaseAuth.signUp(
+              email,
+              password,
+              email.split("@")[0]
+            );
+          } else {
+            result = await supabaseAuth.signInWithEmail(email, password);
           }
-        }, 200);
-      }
-    });
 
-    authForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+          const { user, error } = result;
 
-      const email = emailInput.value.trim();
-      const password = passwordInput.value;
+          if (error) {
+            throw error;
+          }
 
-      if (!email || !password) {
-        showError('Please enter both email and password');
-        return;
-      }
+          if (user) {
+            const session = await supabaseAuth.getSession();
+            if (session) {
+              await securelySaveSession(session);
+            }
 
-      submitButton.disabled = true;
-      submitText.innerHTML = '<span class="spinner"></span>Processing...';
-      errorMessage.classList.remove('visible');
-      successMessage.classList.remove('visible');
+            // Update auth state on current window
+            window.oasisAuthState = {
+              isAuthenticated: true,
+              user: user,
+            };
 
-      try {
+            // Also update auth state on main browser window and dispatch event there
+            try {
+              if (typeof Services !== "undefined" && Services.wm) {
+                const win =
+                  Services.wm.getMostRecentWindow("navigator:browser");
+                if (win) {
+                  // Update global auth state on main browser window
+                  win.oasisAuthState = {
+                    isAuthenticated: true,
+                    user: user,
+                  };
+
+                  // Dispatch event on main browser window so AI Assistant can receive it
+                  win.dispatchEvent(
+                    new win.CustomEvent("oasis-auth-update", {
+                      detail: win.oasisAuthState,
+                    })
+                  );
+                }
+              }
+            } catch (e) {}
+
+            // Also dispatch on current window (auth page)
+            try {
+              window.dispatchEvent(
+                new CustomEvent("oasis-auth-update", {
+                  detail: window.oasisAuthState,
+                })
+              );
+            } catch (e) {}
+
+            // Finalize onboarding via parent actor (close auth tab, return to browser, and trigger tour)
+            if (typeof RPMSendAsyncMessage !== "undefined") {
+              RPMSendAsyncMessage("OasisWelcome:Finished");
+              return;
+            }
+
+            // Fallback when actor bridge is unavailable
+            authForm.style.display = "none";
+            authToggle.style.display = "none";
+            successMessage.classList.remove("visible");
+            successState.style.display = "block";
+            finalSuccessMessage.textContent = `✓ Signed in as ${user.email || user.id}`;
+            finalSuccessMessage.style.display = "block";
+          } else {
+            showError("Authentication failed. Please try again.");
+            submitButton.disabled = false;
+            submitText.textContent =
+              authMode === "signup" ? "Sign Up" : "Sign In";
+          }
+        } catch (error) {
+          console.error("Auth error:", error);
+          showError(error.message || "An error occurred during authentication");
+          submitButton.disabled = false;
+          submitText.textContent =
+            authMode === "signup" ? "Sign Up" : "Sign In";
+        }
+      });
+
+      (async function init() {
+        loadingIndicator.style.display = "block";
+        authForm.style.display = "none";
+
         const supabaseAuth = await waitForSupabaseAuth();
 
-        if (!supabaseAuth) {
-          throw new Error('Authentication service not available');
-        }
-
-        let result;
-        if (authMode === 'signup') {
-          result = await supabaseAuth.signUp(email, password, email.split('@')[0]);
+        if (supabaseAuth) {
+          loadingIndicator.style.display = "none";
+          authForm.style.display = "flex";
         } else {
-          result = await supabaseAuth.signInWithEmail(email, password);
+          loadingIndicator.innerHTML =
+            '<div style="color: #d32f2f;">Failed to load authentication service. Please refresh the page.</div>';
         }
-
-        const { user, error } = result;
-
-        if (error) {
-          throw error;
-        }
-
-        if (user) {
-          const session = await supabaseAuth.getSession();
-          if (session) {
-            await securelySaveSession(session);
-          }
-
-          // Update auth state on current window
-          window.oasisAuthState = {
-            isAuthenticated: true,
-            user: user
-          };
-
-          // Also update auth state on main browser window and dispatch event there
-          try {
-            if (typeof Services !== 'undefined' && Services.wm) {
-              const win = Services.wm.getMostRecentWindow('navigator:browser');
-              if (win) {
-                // Update global auth state on main browser window
-                win.oasisAuthState = {
-                  isAuthenticated: true,
-                  user: user
-                };
-
-                // Dispatch event on main browser window so AI Assistant can receive it
-                win.dispatchEvent(new win.CustomEvent('oasis-auth-update', {
-                  detail: win.oasisAuthState
-                }));
-              }
-            }
-          } catch (e) {
-          }
-
-          // Also dispatch on current window (auth page)
-          try {
-            window.dispatchEvent(new CustomEvent('oasis-auth-update', {
-              detail: window.oasisAuthState
-            }));
-          } catch (e) {
-          }
-
-          // Finalize onboarding via parent actor (close auth tab, return to browser, and trigger tour)
-          if (typeof RPMSendAsyncMessage !== 'undefined') {
-            RPMSendAsyncMessage("OasisWelcome:Finished");
-            return;
-          }
-
-          // Fallback when actor bridge is unavailable
-          authForm.style.display = 'none';
-          authToggle.style.display = 'none';
-          successMessage.classList.remove('visible');
-          successState.style.display = 'block';
-          finalSuccessMessage.textContent = `✓ Signed in as ${user.email || user.id}`;
-          finalSuccessMessage.style.display = 'block';
-        } else {
-          showError('Authentication failed. Please try again.');
-          submitButton.disabled = false;
-          submitText.textContent = authMode === 'signup' ? 'Sign Up' : 'Sign In';
-        }
-      } catch (error) {
-        console.error('Auth error:', error);
-        showError(error.message || 'An error occurred during authentication');
-        submitButton.disabled = false;
-        submitText.textContent = authMode === 'signup' ? 'Sign Up' : 'Sign In';
-      }
-    });
-
-    (async function init() {
-      loadingIndicator.style.display = 'block';
-      authForm.style.display = 'none';
-
-      const supabaseAuth = await waitForSupabaseAuth();
-
-      if (supabaseAuth) {
-        loadingIndicator.style.display = 'none';
-        authForm.style.display = 'flex';
-      } else {
-        loadingIndicator.innerHTML = '<div style="color: #d32f2f;">Failed to load authentication service. Please refresh the page.</div>';
-      }
-    })();
-  </script>
-</body>
+      })();
+    </script>
+  </body>
 </html>

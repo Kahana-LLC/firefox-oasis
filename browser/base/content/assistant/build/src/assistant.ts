@@ -1,25 +1,84 @@
+/**
+ * Entry point for the Oasis AI Assistant.
+ *
+ * Called by the UI when the user sends a message. Orchestrates:
+ * 1. Auth & subscription checks
+ * 2. Command registry creation (all 30+ browser commands)
+ * 3. LangGraph state machine construction
+ * 4. Streaming graph execution back to the UI
+ *
+ * Exports `runAssistantStream` and `resetAssistantSession` onto
+ * the browser's window object for the privileged shim to call.
+ */
 import { marked } from "../../../../../../toolkit/content/vendor/marked/marked.mjs";
 import DOMPurify from "../../../../../../toolkit/content/vendor/dompurify/dompurify.mjs";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
+import { buildCapabilitiesOverviewMarkdown } from "./assistant/capabilitiesOverview.js";
 import { createAssistantCommandsRegistry } from "./assistant/commandsRegistry.js";
 import { ASSISTANT_RECURSION_LIMIT } from "./assistant/constants.js";
 import { buildAssistantGraph } from "./assistant/graph.js";
-import { createAssistantSessionController } from "./assistant/session.js";
+import {
+  createAssistantSessionController,
+  type PlainSessionTurn,
+} from "./assistant/session.js";
 import { consumeAssistantGraphStream } from "./assistant/stream.js";
+import {
+  VOICE_CHAT_TEXT_REPLY_ADDENDUM,
+  VOICE_REPLY_ADDENDUM,
+} from "./prompts/voicePrompt.js";
 import SupabaseAuth from "./services/supabase";
 import { subscriptionService } from "./services/subscription";
 import voiceInputService from "./services/voiceInput";
+import voiceAgent from "./services/voiceAgent";
+import { textToSpeech } from "./proxyClient.js";
 import type { AssistantWindowLike } from "./types/runtime";
+import {
+  OASIS_EVENT_HISTORY_UPDATE,
+  type VoiceUiDelivery,
+} from "../../shared/contracts.js";
 
 const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
 assistantWindow.supabaseAuth = supabaseAuth;
+assistantWindow.subscriptionService = subscriptionService;
 assistantWindow.voiceInputService = voiceInputService;
+assistantWindow.textToSpeech = textToSpeech;
 assistantWindow.marked = marked;
 assistantWindow.DOMPurify = DOMPurify;
+const aw = assistantWindow as AssistantWindowLike & {
+  oasisSetOAuthCallbackBaseUrl?: (url: string) => string;
+  oasisGetOAuthCallbackBaseUrl?: () => string;
+};
+aw.oasisSetOAuthCallbackBaseUrl = (url: string) =>
+  supabaseAuth.setOAuthCallbackBaseUrl(url);
+aw.oasisGetOAuthCallbackBaseUrl = () => supabaseAuth.getOAuthCallbackBaseUrl();
 
 const sessionController = createAssistantSessionController(assistantWindow);
+
+let oasisCapabilitiesMarkdownCache: string | null = null;
+function getOasisCapabilitiesMarkdown(): string {
+  if (oasisCapabilitiesMarkdownCache == null) {
+    const { assistTools } = createAssistantCommandsRegistry();
+    oasisCapabilitiesMarkdownCache =
+      buildCapabilitiesOverviewMarkdown(assistTools);
+  }
+  return oasisCapabilitiesMarkdownCache;
+}
+assistantWindow.getOasisCapabilitiesMarkdown = getOasisCapabilitiesMarkdown;
+
+function oasisPushLocalChatTurn(
+  userText: string,
+  assistantMarkdown: string
+): void {
+  sessionController.pushCurrentTurn(userText, assistantMarkdown);
+  try {
+    assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+  } catch {
+    void 0;
+  }
+}
+assistantWindow.oasisPushLocalChatTurn = oasisPushLocalChatTurn;
 
 export function resetAssistantSession() {
   sessionController.resetAssistantSession();
@@ -31,21 +90,19 @@ export function getAssistantHistory() {
 }
 assistantWindow.getAssistantHistory = getAssistantHistory;
 
+function oasisSyncSessionFromPlainTurns(turns: PlainSessionTurn[]): void {
+  sessionController.syncSessionFromPlainTurns(turns);
+}
+assistantWindow.oasisSyncSessionFromPlainTurns = oasisSyncSessionFromPlainTurns;
+
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
   inputType: "text" | "voice" = "text",
-  messageId?: string
+  messageId?: string,
+  voiceDelivery: VoiceUiDelivery = "spoken"
 ): Promise<string> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
-  if (isAuthenticated) {
-    const stats = await subscriptionService.checkAvailability();
-    if (stats.isLimitReached) {
-      const msg = `Usage limit reached (${stats.totalUnits}/${stats.limit} units). Please upgrade your plan via the menu.`;
-      onChunk(msg);
-      return msg;
-    }
-  }
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();
@@ -57,8 +114,23 @@ export async function runAssistantStream(
   );
   const sessionHistory = sessionController.getCurrentSessionMessages();
 
+  const voiceSystemAddendum =
+    inputType === "voice"
+      ? voiceDelivery === "text_chat"
+        ? VOICE_CHAT_TEXT_REPLY_ADDENDUM
+        : VOICE_REPLY_ADDENDUM
+      : null;
+
   const stream = await graph.stream(
-    { messages: [...sessionHistory, new HumanMessage({ content: prompt })] },
+    {
+      messages: [
+        ...sessionHistory,
+        ...(voiceSystemAddendum
+          ? [new SystemMessage(voiceSystemAddendum)]
+          : []),
+        new HumanMessage({ content: prompt }),
+      ],
+    },
     { recursionLimit: ASSISTANT_RECURSION_LIMIT }
   );
 
@@ -69,11 +141,14 @@ export async function runAssistantStream(
     inputType,
     toolCommandNames,
     pushCurrentTurn: sessionController.pushCurrentTurn,
-    trackUsage: nextInputType => {
+    trackUsage: (nextInputType, meta) => {
       if (isAuthenticated) {
-        subscriptionService.trackUsage(nextInputType);
+        subscriptionService.trackUsage(nextInputType, undefined, meta);
       }
     },
   });
 }
 assistantWindow.runAssistantStream = runAssistantStream;
+
+voiceAgent.setRunAssistant(runAssistantStream);
+assistantWindow.voiceAgent = voiceAgent;
