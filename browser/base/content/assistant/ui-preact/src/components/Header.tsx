@@ -2,11 +2,21 @@ import { h } from 'preact';
 import type { ComponentChildren, JSX } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import type { AuthState, OasisWindow } from '../types';
+import type { ChatConversationRow } from '../chatStore/index';
+import { ChatHistoryPopover } from './ChatHistoryPopover';
+
+export type HeaderChatHistoryProps = {
+  conversations: ChatConversationRow[];
+  activeId: string | null;
+  onSelectConversation: (id: string) => void;
+  onNewChat: () => void;
+};
 
 interface HeaderProps {
   auth: AuthState;
   onShowAuth: () => void;
   onOpenTrainingGallery: () => void;
+  chatHistory?: HeaderChatHistoryProps | null;
 }
 
 const oasisWindow: OasisWindow = window;
@@ -27,7 +37,12 @@ function openDocsHelp(event: MouseEvent) {
   window.open(DOCS_URL, '_blank', 'noopener,noreferrer');
 }
 
-export function Header({ auth, onShowAuth, onOpenTrainingGallery }: HeaderProps) {
+export function Header({
+  auth,
+  onShowAuth,
+  onOpenTrainingGallery,
+  chatHistory = null,
+}: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const userEmail =
@@ -49,7 +64,14 @@ export function Header({ auth, onShowAuth, onOpenTrainingGallery }: HeaderProps)
   };
 
   const handleDragStart = (e: PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.dropdown-menu')) return;
+    const t = e.target as HTMLElement;
+    if (
+      t.closest('button') ||
+      t.closest('.dropdown-menu') ||
+      t.closest('.oasis-chat-history-wrap')
+    ) {
+      return;
+    }
     if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     window.parent.postMessage({ type: "oasisOverlayDragStart", screenX: e.screenX, screenY: e.screenY }, "*");
@@ -194,6 +216,15 @@ export function Header({ auth, onShowAuth, onOpenTrainingGallery }: HeaderProps)
             <circle cx="12" cy="17" r="1.35" fill="currentColor" stroke="none" />
           </svg>
         </button>
+
+        {chatHistory ? (
+          <ChatHistoryPopover
+            conversations={chatHistory.conversations}
+            activeId={chatHistory.activeId}
+            onSelectConversation={chatHistory.onSelectConversation}
+            onNewChat={chatHistory.onNewChat}
+          />
+        ) : null}
 
         <div style={{ position: 'relative' }} ref={menuRef}>
             <HeaderBtn

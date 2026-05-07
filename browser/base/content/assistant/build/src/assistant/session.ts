@@ -12,34 +12,47 @@ import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 import { OASIS_EVENT_HISTORY_UPDATE } from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
-import type { AssistantSessionLike, AssistantWindowLike } from "../types/runtime.js";
+import type {
+  AssistantSessionLike,
+  AssistantWindowLike,
+} from "../types/runtime.js";
 import { msgText, type MessageLike } from "./messageUtils.js";
 
 type SessionObserver = {
   observe: (subject: unknown, topic: string, data: string | null) => void;
 };
 
+export type PlainSessionTurn = { type: "human" | "ai"; content: string };
+
 export type AssistantSessionController = {
   getCurrentSessionMessages: () => BaseMessage[];
   pushCurrentTurn: (user: string, assistant: string) => void;
   resetAssistantSession: () => void;
   getAssistantHistory: () => BaseMessage[];
+  syncSessionFromPlainTurns: (turns: PlainSessionTurn[]) => void;
 };
 
 function createFallbackSessionStore(): AssistantSessionLike {
   let messages: unknown[] = [];
+  const CAP = 24;
   return {
     get messages() {
       return [...messages];
     },
-    addTurn(user: BaseMessage, assistant: BaseMessage) {
+    addTurn(user: unknown, assistant: unknown) {
       messages.push(user, assistant);
+      if (messages.length > CAP) {
+        messages.splice(0, messages.length - CAP);
+      }
     },
     clear() {
       messages = [];
     },
     setSession(nextMessages: unknown[]) {
       messages = [...nextMessages];
+      if (messages.length > CAP) {
+        messages.splice(0, messages.length - CAP);
+      }
     },
   };
 }
@@ -59,7 +72,9 @@ function importAssistantSession(
     const mod = assistantWindow.ChromeUtils.importESModule(
       "chrome://browser/content/assistant/AssistantSession.sys.mjs"
     );
-    const importedSession = mod.AssistantSession as AssistantSessionLike | undefined;
+    const importedSession = mod.AssistantSession as
+      | AssistantSessionLike
+      | undefined;
     if (importedSession) {
       assistantLogger.info("session", "Imported AssistantSession singleton.");
       return importedSession;
@@ -70,7 +85,11 @@ function importAssistantSession(
     );
     return createFallbackSessionStore();
   } catch (error) {
-    assistantLogger.error("session", "Failed to import AssistantSession singleton.", error);
+    assistantLogger.error(
+      "session",
+      "Failed to import AssistantSession singleton.",
+      error
+    );
     return createFallbackSessionStore();
   }
 }
@@ -85,7 +104,9 @@ function installSessionObserver(assistantWindow: AssistantWindowLike): void {
       observe: (_subject: unknown, topic: string, _data: string | null) => {
         if (topic === "oasis-session-updated") {
           try {
-            assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+            assistantWindow.dispatchEvent(
+              new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+            );
           } catch {
             // no-op
           }
@@ -94,7 +115,11 @@ function installSessionObserver(assistantWindow: AssistantWindowLike): void {
     };
     services.obs.addObserver(observer, "oasis-session-updated", false);
   } catch (error) {
-    assistantLogger.error("session", "Failed to install session observer.", error);
+    assistantLogger.error(
+      "session",
+      "Failed to install session observer.",
+      error
+    );
   }
 }
 
@@ -125,13 +150,27 @@ export function createAssistantSessionController(
   }
 
   function pushCurrentTurn(user: string, assistant: string): void {
-    session.addTurn(new HumanMessage(user), new AIMessage(assistant));
+    session.addTurn(
+      { type: "human", content: user },
+      { type: "ai", content: assistant }
+    );
+  }
+
+  function syncSessionFromPlainTurns(turns: PlainSessionTurn[]): void {
+    session.setSession(
+      turns.map(t => ({
+        type: t.type,
+        content: t.content,
+      }))
+    );
   }
 
   function resetAssistantSession(): void {
     session.clear();
     try {
-      assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+      assistantWindow.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+      );
     } catch {
       // no-op
     }
@@ -146,5 +185,6 @@ export function createAssistantSessionController(
     pushCurrentTurn,
     resetAssistantSession,
     getAssistantHistory,
+    syncSessionFromPlainTurns,
   };
 }

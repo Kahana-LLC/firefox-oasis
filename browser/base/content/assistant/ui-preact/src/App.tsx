@@ -483,7 +483,6 @@ export function App() {
 
   useAuthSync({
     setAuth,
-    setMessages: runtime.setMessages,
     setPendingConfirmation,
     onAuthenticated: handleAuthenticated,
     onUserChanged: handleUserChanged,
@@ -669,6 +668,20 @@ export function App() {
         auth={auth}
         onShowAuth={() => setView('auth')}
         onOpenTrainingGallery={handleOpenTrainingGallery}
+        chatHistory={
+          auth.isAuthenticated && view === 'chat'
+            ? {
+                conversations: runtime.chatConversations,
+                activeId: runtime.activeChatId,
+                onSelectConversation: id => {
+                  void runtime.openConversation(id);
+                },
+                onNewChat: () => {
+                  void runtime.startNewChat();
+                },
+              }
+            : null
+        }
       />
 
       <div
@@ -750,7 +763,7 @@ export function App() {
               void runtime.send();
             }}
             onResetSession={() => {
-              void runtime.resetAssistantSession();
+              void runtime.startNewChat();
             }}
             onFeedback={handleFeedback}
             onToggleTts={() => {

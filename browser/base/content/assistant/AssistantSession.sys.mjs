@@ -1,6 +1,70 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 /* eslint-env mozilla/sys.mjs */
 
 const MAX_TURNS = 12;
+const CAP = MAX_TURNS * 2;
+
+function contentOf(msg) {
+  if (msg == null) {
+    return "";
+  }
+  if (typeof msg === "string") {
+    return msg;
+  }
+  const c = msg.content;
+  if (typeof c === "string") {
+    return c;
+  }
+  if (Array.isArray(c)) {
+    return c
+      .map(part => {
+        if (typeof part === "string") {
+          return part;
+        }
+        if (part && typeof part === "object" && "text" in part) {
+          return String(part.text ?? "");
+        }
+        return "";
+      })
+      .join("");
+  }
+  return String(c ?? "");
+}
+
+function normalizeTurn(msg, defaultType) {
+  const text = contentOf(msg);
+  let t = defaultType;
+  if (msg && typeof msg === "object") {
+    if (msg.type === "human" || msg.type === "ai") {
+      t = msg.type;
+    } else if (typeof msg._getType === "function") {
+      const gt = msg._getType();
+      if (gt === "human" || gt === "ai") {
+        t = gt;
+      }
+    }
+  }
+  return { type: t, content: text };
+}
+
+function normalizePlainList(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  const out = [];
+  for (const m of list) {
+    const role =
+      m && typeof m === "object" && (m.type === "ai" || m.type === "human")
+        ? m.type
+        : "human";
+    out.push(normalizeTurn(m, role));
+  }
+  if (out.length > CAP) {
+    out.splice(0, out.length - CAP);
+  }
+  return out;
+}
 
 export const AssistantSession = {
   _messages: [],
@@ -10,26 +74,22 @@ export const AssistantSession = {
   },
 
   addTurn(userMsg, aiMsg) {
-    // We expect raw objects or LangChain message objects. 
-    // We store them as simple objects to avoid instance issues across realms,
-    // or we just store what is passed if we trust the consumer.
-    // Ideally, store simple objects: { type: 'human'|'ai', content: '...' }
-    // But the consumer (assistant.ts) expects LangChain objects.
-    // Since this is a singleton, objects stored here stay alive.
-    
-    this._messages.push(userMsg);
-    this._messages.push(aiMsg);
+    const human = normalizeTurn(userMsg, "human");
+    const ai = normalizeTurn(aiMsg, "ai");
+    this._messages.push(
+      { type: "human", content: human.content },
+      { type: "ai", content: ai.content }
+    );
 
-    const cap = MAX_TURNS * 2;
-    if (this._messages.length > cap) {
-      this._messages.splice(0, this._messages.length - cap);
+    if (this._messages.length > CAP) {
+      this._messages.splice(0, this._messages.length - CAP);
     }
 
     this._notify();
   },
 
   setSession(messages) {
-    this._messages = [...messages];
+    this._messages = normalizePlainList(messages);
     this._notify();
   },
 
@@ -41,10 +101,10 @@ export const AssistantSession = {
   _notify() {
     try {
       if (Services.obs) {
-        Services.obs.notifyObservers(null, "oasis-session-updated", null);
+        Services.obs.notifyObservers(null, "oasis-session-updated");
       }
     } catch (e) {
       console.error("AssistantSession: Failed to notify observers", e);
     }
-  }
+  },
 };

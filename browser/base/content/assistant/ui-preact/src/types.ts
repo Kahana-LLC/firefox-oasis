@@ -181,7 +181,13 @@ export type OasisWindow = Window & {
   setAssistantHistory?: (history: AssistantHistoryEntry[]) => Promise<void>;
   resetAssistantSession?: () => void | Promise<void>;
   getOasisCapabilitiesMarkdown?: () => string;
-  oasisPushLocalChatTurn?: (userText: string, assistantMarkdown: string) => void;
+  oasisPushLocalChatTurn?: (
+    userText: string,
+    assistantMarkdown: string
+  ) => void;
+  oasisSyncSessionFromPlainTurns?: (
+    turns: Array<{ type: "human" | "ai"; content: string }>
+  ) => void;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;

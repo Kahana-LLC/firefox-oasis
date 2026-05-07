@@ -89249,18 +89249,25 @@ ${message}` : message;
   // src/assistant/session.ts
   function createFallbackSessionStore() {
     let messages = [];
+    const CAP = 24;
     return {
       get messages() {
         return [...messages];
       },
       addTurn(user, assistant) {
         messages.push(user, assistant);
+        if (messages.length > CAP) {
+          messages.splice(0, messages.length - CAP);
+        }
       },
       clear() {
         messages = [];
       },
       setSession(nextMessages) {
         messages = [...nextMessages];
+        if (messages.length > CAP) {
+          messages.splice(0, messages.length - CAP);
+        }
       }
     };
   }
@@ -89287,7 +89294,11 @@ ${message}` : message;
       );
       return createFallbackSessionStore();
     } catch (error) {
-      assistantLogger.error("session", "Failed to import AssistantSession singleton.", error);
+      assistantLogger.error(
+        "session",
+        "Failed to import AssistantSession singleton.",
+        error
+      );
       return createFallbackSessionStore();
     }
   }
@@ -89301,7 +89312,9 @@ ${message}` : message;
         observe: (_subject, topic, _data2) => {
           if (topic === "oasis-session-updated") {
             try {
-              assistantWindow2.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+              assistantWindow2.dispatchEvent(
+                new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+              );
             } catch {
             }
           }
@@ -89309,7 +89322,11 @@ ${message}` : message;
       };
       services.obs.addObserver(observer, "oasis-session-updated", false);
     } catch (error) {
-      assistantLogger.error("session", "Failed to install session observer.", error);
+      assistantLogger.error(
+        "session",
+        "Failed to install session observer.",
+        error
+      );
     }
   }
   function hydrateSessionMessages(session) {
@@ -89334,12 +89351,25 @@ ${message}` : message;
       return hydrateSessionMessages(session);
     }
     function pushCurrentTurn(user, assistant) {
-      session.addTurn(new HumanMessage(user), new AIMessage(assistant));
+      session.addTurn(
+        { type: "human", content: user },
+        { type: "ai", content: assistant }
+      );
+    }
+    function syncSessionFromPlainTurns(turns) {
+      session.setSession(
+        turns.map((t2) => ({
+          type: t2.type,
+          content: t2.content
+        }))
+      );
     }
     function resetAssistantSession2() {
       session.clear();
       try {
-        assistantWindow2.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
+        assistantWindow2.dispatchEvent(
+          new CustomEvent(OASIS_EVENT_HISTORY_UPDATE)
+        );
       } catch {
       }
     }
@@ -89350,7 +89380,8 @@ ${message}` : message;
       getCurrentSessionMessages,
       pushCurrentTurn,
       resetAssistantSession: resetAssistantSession2,
-      getAssistantHistory: getAssistantHistory2
+      getAssistantHistory: getAssistantHistory2,
+      syncSessionFromPlainTurns
     };
   }
 
@@ -91078,6 +91109,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     return sessionController.getAssistantHistory();
   }
   assistantWindow.getAssistantHistory = getAssistantHistory;
+  function oasisSyncSessionFromPlainTurns(turns) {
+    sessionController.syncSessionFromPlainTurns(turns);
+  }
+  assistantWindow.oasisSyncSessionFromPlainTurns = oasisSyncSessionFromPlainTurns;
   async function runAssistantStream(prompt, onChunk, inputType = "text", messageId, voiceDelivery = "spoken") {
     const isAuthenticated = await supabaseAuth4.isAuthenticated();
     const { commands: commands2, toolCommandNames, assistTools } = createAssistantCommandsRegistry();

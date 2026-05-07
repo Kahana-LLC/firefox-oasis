@@ -18,7 +18,10 @@ import { buildCapabilitiesOverviewMarkdown } from "./assistant/capabilitiesOverv
 import { createAssistantCommandsRegistry } from "./assistant/commandsRegistry.js";
 import { ASSISTANT_RECURSION_LIMIT } from "./assistant/constants.js";
 import { buildAssistantGraph } from "./assistant/graph.js";
-import { createAssistantSessionController } from "./assistant/session.js";
+import {
+  createAssistantSessionController,
+  type PlainSessionTurn,
+} from "./assistant/session.js";
 import { consumeAssistantGraphStream } from "./assistant/stream.js";
 import {
   VOICE_CHAT_TEXT_REPLY_ADDENDUM,
@@ -64,7 +67,10 @@ function getOasisCapabilitiesMarkdown(): string {
 }
 assistantWindow.getOasisCapabilitiesMarkdown = getOasisCapabilitiesMarkdown;
 
-function oasisPushLocalChatTurn(userText: string, assistantMarkdown: string): void {
+function oasisPushLocalChatTurn(
+  userText: string,
+  assistantMarkdown: string
+): void {
   sessionController.pushCurrentTurn(userText, assistantMarkdown);
   try {
     assistantWindow.dispatchEvent(new CustomEvent(OASIS_EVENT_HISTORY_UPDATE));
@@ -83,6 +89,11 @@ export function getAssistantHistory() {
   return sessionController.getAssistantHistory();
 }
 assistantWindow.getAssistantHistory = getAssistantHistory;
+
+function oasisSyncSessionFromPlainTurns(turns: PlainSessionTurn[]): void {
+  sessionController.syncSessionFromPlainTurns(turns);
+}
+assistantWindow.oasisSyncSessionFromPlainTurns = oasisSyncSessionFromPlainTurns;
 
 export async function runAssistantStream(
   prompt: string,

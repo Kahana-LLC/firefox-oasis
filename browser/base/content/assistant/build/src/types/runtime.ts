@@ -205,7 +205,7 @@ export type BrowserWindowLike = Window & {
 
 export type AssistantSessionLike = {
   readonly messages: unknown[];
-  addTurn: (user: BaseMessage, assistant: BaseMessage) => void;
+  addTurn: (user: unknown, assistant: unknown) => void;
   clear: () => void;
   setSession: (messages: unknown[]) => void;
 };
@@ -239,7 +239,13 @@ export type AssistantWindowLike = Window & {
   resetAssistantSession?: () => void;
   getAssistantHistory?: () => BaseMessage[];
   getOasisCapabilitiesMarkdown?: () => string;
-  oasisPushLocalChatTurn?: (userText: string, assistantMarkdown: string) => void;
+  oasisPushLocalChatTurn?: (
+    userText: string,
+    assistantMarkdown: string
+  ) => void;
+  oasisSyncSessionFromPlainTurns?: (
+    turns: Array<{ type: "human" | "ai"; content: string }>
+  ) => void;
   runAssistantStream?: RunAssistantStream;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;

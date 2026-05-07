@@ -1,4 +1,24 @@
-import { useCallback, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
+import {
+  bootstrapUserChats,
+  createConversation,
+  getMessages,
+  importHistoryIfEmpty,
+  listConversations,
+  replaceMessages,
+  rowsToAssistantMessages,
+  setActiveConversationId,
+  titleFromFirstUserMessage,
+  updateConversationMeta,
+  type ChatConversationRow,
+} from "../chatStore/index";
+import { messagesToPlainSessionTurns } from "../chatStore/sessionTurns";
 import { HOW_OASIS_WORKS_CHIP_LABEL } from "../utils/exampleCommands";
 import {
   CAPABILITIES_OVERVIEW_FIRST_LINE,
@@ -17,6 +37,19 @@ import type {
   ToolAction,
   ToolActionStatus,
 } from "../types";
+
+function chatUserKey(user: AuthState["user"]): string | null {
+  if (!user || typeof user === "string") {
+    return null;
+  }
+  if (typeof user.id === "string" && user.id.length > 0) {
+    return user.id;
+  }
+  if (typeof user.email === "string" && user.email.length > 0) {
+    return `email:${user.email}`;
+  }
+  return null;
+}
 
 const oasisWindow: OasisWindow = window;
 
@@ -155,11 +188,125 @@ export function useAssistantRuntime(params: {
   const [composerInlineSends, setComposerInlineSends] = useState(
     readInitialComposerInlineSends
   );
+  const [chatBootstrapNonce, setChatBootstrapNonce] = useState(0);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [chatConversations, setChatConversations] = useState<
+    ChatConversationRow[]
+  >([]);
+  const messagesRef = useRef<AssistantMessage[]>([]);
+  const activeChatIdRef = useRef<string | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const commandHistoryRef = useRef<string[]>([]);
   const historyNavIndexRef = useRef(-1);
   const draftBeforeHistoryRef = useRef("");
+
+  const chatUid = useMemo(
+    () => (auth.isAuthenticated ? chatUserKey(auth.user) : null),
+    [auth.isAuthenticated, auth.user]
+  );
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+
+  const flushChatPersistence = useCallback(async () => {
+    const uid = chatUserKey(auth.user);
+    const cid = activeChatIdRef.current;
+    if (!uid || !cid || !auth.isAuthenticated) {
+      return;
+    }
+    const snapshot = messagesRef.current;
+    try {
+      await replaceMessages(cid, snapshot);
+      await updateConversationMeta(cid, {
+        title: titleFromFirstUserMessage(snapshot),
+        updatedAt: Date.now(),
+      });
+      oasisWindow.oasisSyncSessionFromPlainTurns?.(
+        messagesToPlainSessionTurns(snapshot)
+      );
+      setChatConversations(await listConversations(uid));
+    } catch (e) {
+      console.error("oasis chat persist", e);
+    }
+  }, [auth.isAuthenticated, auth.user]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !chatUid) {
+      setActiveChatId(null);
+      activeChatIdRef.current = null;
+      setChatConversations([]);
+      setMessages([]);
+      messagesRef.current = [];
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const boot = await bootstrapUserChats(chatUid);
+        if (cancelled) {
+          return;
+        }
+        let activeId = boot.activeId;
+        await importHistoryIfEmpty(chatUid, activeId, async () => {
+          const getHistory = oasisWindow.getAssistantHistory;
+          if (typeof getHistory !== "function") {
+            return [];
+          }
+          const history = await Promise.resolve(getHistory());
+          if (!Array.isArray(history)) {
+            return [];
+          }
+          return mapHistoryEntriesToMessages(
+            history as AssistantHistoryEntry[]
+          );
+        });
+        const rows = await getMessages(activeId);
+        const loaded = rowsToAssistantMessages(rows);
+        if (cancelled) {
+          return;
+        }
+        activeChatIdRef.current = activeId;
+        setActiveChatId(activeId);
+        setMessages(loaded);
+        messagesRef.current = loaded;
+        const list = await listConversations(chatUid);
+        if (cancelled) {
+          return;
+        }
+        setChatConversations(list);
+        oasisWindow.oasisSyncSessionFromPlainTurns?.(
+          messagesToPlainSessionTurns(loaded)
+        );
+      } catch (e) {
+        console.error("oasis chat init", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, chatUid, chatBootstrapNonce]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !chatUid || !activeChatId) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void flushChatPersistence();
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [
+    messages,
+    activeChatId,
+    chatUid,
+    auth.isAuthenticated,
+    flushChatPersistence,
+  ]);
 
   const appendChunkToMessage = useCallback(
     (messageId: string, chunk: string) => {
@@ -323,8 +470,13 @@ export function useAssistantRuntime(params: {
 
   const resetAssistantSession = useCallback(async () => {
     setMessages([]);
+    messagesRef.current = [];
     setToolActions([]);
     setComposerInlineSends(0);
+    setActiveChatId(null);
+    activeChatIdRef.current = null;
+    setChatConversations([]);
+    setChatBootstrapNonce(n => n + 1);
     try {
       localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
       localStorage.removeItem(LS_COMPOSER_CHIPS_RETIRED);
@@ -341,6 +493,67 @@ export function useAssistantRuntime(params: {
       await setHistory([]);
     }
   }, [originalResetAssistantSession]);
+
+  const startNewChat = useCallback(async () => {
+    const uid = chatUserKey(auth.user);
+    if (!uid || !auth.isAuthenticated) {
+      return;
+    }
+    stopSpeaking();
+    setToolActions([]);
+    setComposerInlineSends(0);
+    try {
+      localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
+      localStorage.removeItem(LS_COMPOSER_CHIPS_RETIRED);
+    } catch {
+      void 0;
+    }
+    await flushChatPersistence();
+    if (typeof originalResetAssistantSession === "function") {
+      await Promise.resolve(originalResetAssistantSession());
+    }
+    const id = await createConversation(uid);
+    messagesRef.current = [];
+    setMessages([]);
+    activeChatIdRef.current = id;
+    setActiveChatId(id);
+    setInput("");
+    setChatConversations(await listConversations(uid));
+  }, [
+    auth.isAuthenticated,
+    auth.user,
+    flushChatPersistence,
+    originalResetAssistantSession,
+    stopSpeaking,
+  ]);
+
+  const openConversation = useCallback(
+    async (conversationId: string) => {
+      const uid = chatUserKey(auth.user);
+      if (
+        !uid ||
+        !auth.isAuthenticated ||
+        conversationId === activeChatIdRef.current
+      ) {
+        return;
+      }
+      stopSpeaking();
+      setToolActions([]);
+      await flushChatPersistence();
+      const rows = await getMessages(conversationId);
+      const loaded = rowsToAssistantMessages(rows);
+      await setActiveConversationId(uid, conversationId);
+      messagesRef.current = loaded;
+      setMessages(loaded);
+      activeChatIdRef.current = conversationId;
+      setActiveChatId(conversationId);
+      oasisWindow.oasisSyncSessionFromPlainTurns?.(
+        messagesToPlainSessionTurns(loaded)
+      );
+      setChatConversations(await listConversations(uid));
+    },
+    [auth.isAuthenticated, auth.user, flushChatPersistence, stopSpeaking]
+  );
 
   const CAPABILITIES_FALLBACK_MARKDOWN = [
     CAPABILITIES_OVERVIEW_FIRST_LINE,
@@ -450,11 +663,13 @@ export function useAssistantRuntime(params: {
       } finally {
         setResponseStreaming(false);
         setBusy(false);
+        void flushChatPersistence();
         dispatchOasisUsageUpdate();
       }
     },
     [
       auth.isAuthenticated,
+      flushChatPersistence,
       input,
       runStreamTurn,
       speakText,
@@ -537,9 +752,15 @@ export function useAssistantRuntime(params: {
     } finally {
       setResponseStreaming(false);
       setBusy(false);
+      void flushChatPersistence();
       dispatchOasisUsageUpdate();
     }
-  }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
+  }, [
+    flushChatPersistence,
+    runStreamTurn,
+    setPendingConfirmation,
+    stopSpeaking,
+  ]);
 
   const handleConfirmationCancel = useCallback(async () => {
     setPendingConfirmation(null);
@@ -561,9 +782,15 @@ export function useAssistantRuntime(params: {
     } finally {
       setResponseStreaming(false);
       setBusy(false);
+      void flushChatPersistence();
       dispatchOasisUsageUpdate();
     }
-  }, [runStreamTurn, setPendingConfirmation, stopSpeaking]);
+  }, [
+    flushChatPersistence,
+    runStreamTurn,
+    setPendingConfirmation,
+    stopSpeaking,
+  ]);
 
   const toggleTtsEnabled = useCallback(() => {
     setTtsEnabled(previous => {
@@ -635,6 +862,10 @@ export function useAssistantRuntime(params: {
     startToolAction,
     updateToolAction,
     resetAssistantSession,
+    startNewChat,
+    openConversation,
+    activeChatId,
+    chatConversations,
     ttsEnabled,
     toggleTtsEnabled,
     speakingMsgId,
