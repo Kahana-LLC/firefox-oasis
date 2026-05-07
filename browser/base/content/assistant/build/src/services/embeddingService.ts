@@ -3,7 +3,8 @@
  *
  * Creates a hidden <browser type="content" remote="true"> that loads
  * chrome://browser/content/assistant/embedding-worker.html, which runs
- * the packaged embedding-worker.bundle.js (Transformers.js + ONNX, no CDN).
+ * embedding-worker.bundle.js with local ORT WASM + MiniLM weights under
+ * chrome://browser/content/assistant/embedding-assets/ (no remote hub/CDN).
  * The frame script relays CustomEvents between that document and chrome.
  */
 

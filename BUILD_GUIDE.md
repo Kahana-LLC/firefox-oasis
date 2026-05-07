@@ -48,6 +48,8 @@ npm run build
 
 This runs `node esbuild.config.mjs`, compiles `src/`, and writes **`../assistant.bundle.js`** (parent directory is `browser/base/content/assistant/`).
 
+**Embedding assets (ORT WASM + local MiniLM weights)** are vendored under `browser/base/content/assistant/embedding-assets/` and packaged via `browser/base/jar.mn`. After upgrading `@huggingface/transformers`, run `npm run sync-embedding-assets` then `npm run build:embedding-worker`, and update `jar.mn` if the sync script adds or renames files.
+
 You should see output similar to:
 
 ```

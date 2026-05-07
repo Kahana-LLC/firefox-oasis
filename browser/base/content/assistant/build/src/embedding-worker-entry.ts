@@ -16,11 +16,18 @@
 
 import { pipeline, env, type FeatureExtractionPipeline } from "@huggingface/transformers";
 
-// Configure WASM for single-threaded mode
-const wasmConfig = env.backends.onnx.wasm!;
-wasmConfig.numThreads = 1;
-wasmConfig.proxy = false;
-env.allowLocalModels = false;
+const EMBEDDING_CHROME_BASE =
+  "chrome://browser/content/assistant/embedding-assets";
+
+env.allowRemoteModels = false;
+env.allowLocalModels = true;
+env.useBrowserCache = false;
+env.localModelPath = `${EMBEDDING_CHROME_BASE}/models`;
+
+const onnxWasm = env.backends.onnx.wasm!;
+onnxWasm.numThreads = 1;
+onnxWasm.proxy = false;
+onnxWasm.wasmPaths = `${EMBEDDING_CHROME_BASE}/ort/`;
 
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 

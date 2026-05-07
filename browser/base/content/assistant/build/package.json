@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "build:embedding-worker": "esbuild src/embedding-worker-entry.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=../embedding-worker.bundle.js",
+    "sync-embedding-assets": "node scripts/sync-embedding-assets.mjs",
     "test:reliability": "tsc -p tests/tsconfig.json && node --test tests/dist/build/tests/**/*.test.js",
     "test:voice-guards": "esbuild src/utils/voiceUtteranceGuards.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-utterance-guards.mjs && esbuild src/utils/voiceVadDebounce.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-vad-debounce.mjs && node --test tests/tmp-voice-utterance-guards.mjs tests/tmp-voice-vad-debounce.mjs",
     "test:explicit-routes": "esbuild tests/explicitRouteRules.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-explicit-route.mjs && node --test tests/tmp-explicit-route.mjs",

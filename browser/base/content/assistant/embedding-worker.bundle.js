@@ -47959,10 +47959,15 @@ ${fake_token_around_image}${global_img_token}` + image_token.repeat(image_seq_le
   var __webpack_exports__zeros_like = __webpack_exports__.zeros_like;
 
   // src/embedding-worker-entry.ts
-  var wasmConfig = __webpack_exports__env.backends.onnx.wasm;
-  wasmConfig.numThreads = 1;
-  wasmConfig.proxy = false;
-  __webpack_exports__env.allowLocalModels = false;
+  var EMBEDDING_CHROME_BASE = "chrome://browser/content/assistant/embedding-assets";
+  __webpack_exports__env.allowRemoteModels = false;
+  __webpack_exports__env.allowLocalModels = true;
+  __webpack_exports__env.useBrowserCache = false;
+  __webpack_exports__env.localModelPath = `${EMBEDDING_CHROME_BASE}/models`;
+  var onnxWasm = __webpack_exports__env.backends.onnx.wasm;
+  onnxWasm.numThreads = 1;
+  onnxWasm.proxy = false;
+  onnxWasm.wasmPaths = `${EMBEDDING_CHROME_BASE}/ort/`;
   var MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
   var rootDoc = (() => {
     const d = globalThis.document;
