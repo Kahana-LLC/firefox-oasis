@@ -54,6 +54,8 @@ export type TranscribeAudioCaptureMeta = {
 export type TranscribeAudioOptions = {
   language?: string;
   captureMeta?: TranscribeAudioCaptureMeta;
+  source?: string;
+  utteranceSeq?: number;
 };
 
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -101,6 +103,8 @@ export async function transcribeAudio(
     mimeType: audioBlob.type,
     ...(options.language ? { language: options.language } : {}),
     ...(options.captureMeta ? { captureMeta: options.captureMeta } : {}),
+    ...(options.source != null ? { source: options.source } : {}),
+    ...(options.utteranceSeq != null ? { utteranceSeq: options.utteranceSeq } : {}),
   });
   
   // Backend returns { transcript: "..." }

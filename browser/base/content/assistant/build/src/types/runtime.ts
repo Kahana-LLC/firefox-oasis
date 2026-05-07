@@ -168,6 +168,7 @@ export type PlacesHistoryOptions = {
   sortingMode?: number;
   maxResults?: number;
   includeVisits?: boolean;
+  includeHidden?: boolean;
 };
 
 export type PlacesHistoryLike = {
@@ -225,8 +226,7 @@ export type AssistantWindowLike = Window & {
     finishListening(): Promise<void>;
     stop(): void;
     stopSpeaking(): void;
-    setContinuousConversation(enabled: boolean): void;
-    getContinuousConversation(): boolean;
+    setRunAssistant(fn: RunAssistantStream): void;
     getListeningSource(): "user" | "continuous" | "handsfree" | null;
     getUserSpeaking(): boolean;
     getCaptureMode(): "continuous" | "precise";

@@ -1993,7 +1993,9 @@ var SidebarController = {
           this._oasisForceSidebar = !this._oasisForceSidebar;
           // Close current view
           const overlayShell = document.getElementById("oasis-assistant-shell");
-          if (overlayShell) overlayShell.hidden = true;
+          if (overlayShell) {
+            overlayShell.hidden = true;
+          }
           this.hide({ dismissPanel: false });
           // Re-open with new mode
           setTimeout(() => {
@@ -2032,7 +2034,9 @@ var SidebarController = {
 
         const { url } = this.sidebars.get(commandID);
         overlay.hidden = false;
-        if (overlayShell) overlayShell.hidden = false; // Ensure shell is visible
+        if (overlayShell) {
+          overlayShell.hidden = false;
+        }
         // Load assistant into overlay browser
         overlayBrowser.setAttribute("transparent", "true");
         if (overlayBrowser.getAttribute("src") !== url) {
@@ -2076,6 +2080,7 @@ var SidebarController = {
             "style",
             "display:none; width:100%; height:100%; border-radius:50%; overflow:hidden; align-items:center; justify-content:center;"
           );
+          // eslint-disable-next-line no-unsanitized/property -- static SVG logo markup
           minimizedIcon.innerHTML = `<svg width="${svgSizePx}" height="${svgSizePx}" viewBox="0 0 210 210" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><g clip-path="url(#oasis_clip0)"><circle cx="105" cy="105" r="61.5" fill="white"/><mask id="oasis_mask0" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="210" height="210"><path d="M210 0H0V210H210V0Z" fill="white"/><path d="M105.003 166.523C138.982 166.523 166.527 138.978 166.527 105C166.527 71.0211 138.982 43.4761 105.003 43.4761C71.025 43.4761 43.48 71.0211 43.48 105C43.48 138.978 71.025 166.523 105.003 166.523Z" fill="black"/></mask><g mask="url(#oasis_mask0)"><path d="M105.027 189.638C151.757 189.638 189.638 151.757 189.638 105.027C189.638 58.2981 151.757 20.4165 105.027 20.4165C58.2981 20.4165 20.4165 58.2981 20.4165 105.027C20.4165 151.757 58.2981 189.638 105.027 189.638Z" fill="url(#oasis_paint0)"/></g><mask id="oasis_mask1" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="49" y="34" width="112" height="123"><path d="M105.001 156.813C135.797 156.813 160.762 129.352 160.762 95.4769C160.762 61.6021 135.797 34.1411 105.001 34.1411C74.2052 34.1411 49.2402 61.6021 49.2402 95.4769C49.2402 129.352 74.2052 156.813 105.001 156.813Z" fill="white"/></mask><g mask="url(#oasis_mask1)"><path d="M-44.5454 124.441C-0.134134 95.326 36.8753 124.441 61.3015 124.441C85.7277 124.441 122.737 95.326 167.148 124.441V168.113H-44.5454V124.441Z" fill="url(#oasis_paint1)"/><path d="M-32.894 127.583C11.5172 103.412 48.5266 127.583 72.9528 127.583C97.379 127.583 134.388 103.412 178.8 127.583V163.839H-32.894V127.583Z" fill="url(#oasis_paint2)"/></g></g><defs><linearGradient id="oasis_paint0" x1="105.027" y1="20.4165" x2="105.027" y2="189.638" gradientUnits="userSpaceOnUse"><stop stop-color="#788046"/><stop offset="1" stop-color="#FFD779"/></linearGradient><linearGradient id="oasis_paint1" x1="-44.5454" y1="111.501" x2="-44.5454" y2="5772.75" gradientUnits="userSpaceOnUse"><stop stop-color="#BEEEFF"/></linearGradient><linearGradient id="oasis_paint2" x1="83.8768" y1="113.849" x2="168.886" y2="163.794" gradientUnits="userSpaceOnUse"><stop stop-color="#98CFE3"/><stop offset="0.801794" stop-color="#EDF5F8"/></linearGradient><clipPath id="oasis_clip0"><rect width="210" height="210" fill="white"/></clipPath></defs></svg>`;
           overlayShell.appendChild(minimizedIcon);
         }
@@ -2134,7 +2139,9 @@ var SidebarController = {
         );
 
         this._oasisOverlayMinimizedMousedownHandler = e => {
-          if (!this._oasisOverlayMinimizedToCircle) return;
+          if (!this._oasisOverlayMinimizedToCircle) {
+            return;
+          }
           e.preventDefault();
           dragState = {
             lastX: e.screenX,
@@ -2154,7 +2161,9 @@ var SidebarController = {
         let dragState = null;
 
         const handleDragMove = e => {
-          if (!dragState) return;
+          if (!dragState) {
+            return;
+          }
 
           const deltaX = e.screenX - dragState.lastX;
           const deltaY = e.screenY - dragState.lastY;
@@ -2165,7 +2174,7 @@ var SidebarController = {
           dragState.totalDeltaY += deltaY;
 
           const rect = overlayShell.getBoundingClientRect();
-          const contentBounds = contentArea?.getBoundingClientRect() || {
+          const dragBounds = contentArea?.getBoundingClientRect() || {
             left: 0,
             top: 0,
             right: window.innerWidth,
@@ -2176,12 +2185,12 @@ var SidebarController = {
           let newTop = rect.top + deltaY;
 
           newLeft = Math.max(
-            contentBounds.left,
-            Math.min(newLeft, contentBounds.right - rect.width)
+            dragBounds.left,
+            Math.min(newLeft, dragBounds.right - rect.width)
           );
           newTop = Math.max(
-            contentBounds.top,
-            Math.min(newTop, contentBounds.bottom - rect.height)
+            dragBounds.top,
+            Math.min(newTop, dragBounds.bottom - rect.height)
           );
 
           overlayShell.style.left = `${newLeft}px`;
@@ -2189,7 +2198,9 @@ var SidebarController = {
         };
 
         const handleDragEnd = () => {
-          if (!dragState) return;
+          if (!dragState) {
+            return;
+          }
 
           const totalDeltaX = dragState.totalDeltaX;
           const totalDeltaY = dragState.totalDeltaY;
@@ -2211,10 +2222,35 @@ var SidebarController = {
         };
 
         // Listen for position/size changes requested by assistant inner UI
+        if (this._oasisOverlayMessageHandler) {
+          window.removeEventListener(
+            "message",
+            this._oasisOverlayMessageHandler
+          );
+          this._oasisOverlayMessageHandler = null;
+        }
         let lastButtonAction = { type: "", time: 0 };
         this._oasisOverlayMessageHandler = evt => {
           const data = evt?.data;
-          if (!data || typeof data !== "object") return;
+          if (!data || typeof data !== "object") {
+            return;
+          }
+
+          const overlayCw = overlayBrowser.contentWindow;
+          if (evt.source !== overlayCw) {
+            return;
+          }
+          if (overlayCw) {
+            let expectedOrigin;
+            try {
+              expectedOrigin = overlayCw.location.origin;
+            } catch (e) {
+              return;
+            }
+            if (expectedOrigin && evt.origin !== expectedOrigin) {
+              return;
+            }
+          }
 
           // Only prevent duplicate BUTTON messages (not drag), within 50ms
           const now = Date.now();
@@ -2247,10 +2283,12 @@ var SidebarController = {
             document.addEventListener("mousemove", handleDragMove, true);
             document.addEventListener("mouseup", handleDragEnd, true);
           } else if (data.type === "oasisOverlayMove") {
-            if (Number.isFinite(data.left))
+            if (Number.isFinite(data.left)) {
               overlayShell.style.left = `${data.left}px`;
-            if (Number.isFinite(data.top))
+            }
+            if (Number.isFinite(data.top)) {
               overlayShell.style.top = `${data.top}px`;
+            }
           } else if (data.type === "oasisOverlayMoveRelative") {
             const currentLeft = parseFloat(overlayShell.style.left) || 0;
             const currentTop = parseFloat(overlayShell.style.top) || 0;
@@ -2278,10 +2316,12 @@ var SidebarController = {
             overlayShell.style.left = `${newLeft}px`;
             overlayShell.style.top = `${newTop}px`;
           } else if (data.type === "oasisOverlayResize") {
-            if (Number.isFinite(data.width))
+            if (Number.isFinite(data.width)) {
               overlayShell.style.width = `${data.width}px`;
-            if (Number.isFinite(data.height))
+            }
+            if (Number.isFinite(data.height)) {
               overlayShell.style.height = `${data.height}px`;
+            }
           } else if (data.type === "oasisOverlayExpand") {
             this._overlayDocked = false;
             // Expand to 75% of screen size (centered)
@@ -2330,7 +2370,9 @@ var SidebarController = {
           startY = 0;
 
         const onResizeMove = e => {
-          if (!resizing) return;
+          if (!resizing) {
+            return;
+          }
           const dx = e.screenX - startX;
           const dy = e.screenY - startY;
           const newW = clamp(startW + dx, 300, window.innerWidth);
@@ -2505,7 +2547,7 @@ var SidebarController = {
             "message",
             this._oasisOverlayMessageHandler
           );
-          delete this._oasisOverlayMessageHandler;
+          this._oasisOverlayMessageHandler = null;
         }
       } else {
         // Temporary hide: keep iframe loaded to preserve chat state.

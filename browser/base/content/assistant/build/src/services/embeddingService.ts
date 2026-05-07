@@ -1,17 +1,15 @@
 /**
- * Embedding Service — Content Process with Script Injection
- * 
+ * Embedding Service — Content process worker page
+ *
  * Creates a hidden <browser type="content" remote="true"> that loads
- * about:blank, then the frame script injects Transformers.js as an
- * ES module that imports from CDN.
- * 
- * This gives us:
- * 1. Content process isolation → WASM doesn't crash the browser
- * 2. Frame script injection → no separate HTML page needed
- * 3. ES module import from CDN → ONNX backend resolves correctly
+ * chrome://browser/content/assistant/embedding-worker.html, which runs
+ * the packaged embedding-worker.bundle.js (Transformers.js + ONNX, no CDN).
+ * The frame script relays CustomEvents between that document and chrome.
  */
 
 const VECTOR_DIMENSIONS = 384;
+const EMBEDDING_WORKER_PAGE_URL =
+    "chrome://browser/content/assistant/embedding-worker.html";
 const FRAME_SCRIPT_URL = "chrome://browser/content/assistant/embedding-frame-script.js";
 
 interface PendingRequest {
@@ -52,7 +50,7 @@ class EmbeddingService {
                 this.browser = browserWin.document.createXULElement("browser");
                 this.browser.setAttribute("type", "content");
                 this.browser.setAttribute("remote", "true");
-                this.browser.setAttribute("src", "about:blank");
+                this.browser.setAttribute("src", EMBEDDING_WORKER_PAGE_URL);
                 this.browser.style.cssText = "display:none; width:0; height:0; position:fixed; visibility:hidden;";
 
                 browserWin.document.documentElement.appendChild(this.browser);

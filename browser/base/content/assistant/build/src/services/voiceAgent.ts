@@ -117,7 +117,9 @@ export const VOICE_SPOKEN_REPLIES_STORAGE_KEY = "oasis.voice.orbSpokenReplies";
 
 function readStoredCaptureMode(): VoiceCaptureMode {
   try {
-    const v = localStorage.getItem(VOICE_CAPTURE_MODE_STORAGE_KEY);
+    const ls = globalThis.localStorage;
+    if (!ls) return "continuous";
+    const v = ls.getItem(VOICE_CAPTURE_MODE_STORAGE_KEY);
     if (v === "precise") return "precise";
   } catch {
     // ignore
@@ -127,7 +129,9 @@ function readStoredCaptureMode(): VoiceCaptureMode {
 
 function readStoredVoiceSpokenReplies(): boolean {
   try {
-    const v = localStorage.getItem(VOICE_SPOKEN_REPLIES_STORAGE_KEY);
+    const ls = globalThis.localStorage;
+    if (!ls) return true;
+    const v = ls.getItem(VOICE_SPOKEN_REPLIES_STORAGE_KEY);
     if (v === "0" || v === "false") return false;
   } catch {
     // ignore
@@ -342,7 +346,7 @@ export class VoiceAgentService {
   setCaptureMode(mode: VoiceCaptureMode): void {
     this.captureMode = mode;
     try {
-      localStorage.setItem(VOICE_CAPTURE_MODE_STORAGE_KEY, mode);
+      globalThis.localStorage?.setItem(VOICE_CAPTURE_MODE_STORAGE_KEY, mode);
     } catch {
       // ignore
     }
@@ -356,7 +360,7 @@ export class VoiceAgentService {
   setVoiceSpokenRepliesEnabled(enabled: boolean): void {
     this.voiceSpokenRepliesEnabled = enabled;
     try {
-      localStorage.setItem(
+      globalThis.localStorage?.setItem(
         VOICE_SPOKEN_REPLIES_STORAGE_KEY,
         enabled ? "1" : "0"
       );

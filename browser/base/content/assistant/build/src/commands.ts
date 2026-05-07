@@ -1643,11 +1643,11 @@ export class SearchMemoryCommand implements Command {
 
     const resultsBySource: Record<string, SearchResultItem[]> = {};
     for (const r of structured) {
-      if (!resultsBySource[r.source]) resultsBySource[r.source] = [];
-      resultsBySource[r.source].push({
+      const bucket = (resultsBySource[r.source] ??= []);
+      bucket.push({
         title: r.title,
         url: r.url,
-        snippet: r.snippet,
+        snippet: r.snippet ?? "",
         bookmarkGuid: r.bookmarkGuid,
       });
     }

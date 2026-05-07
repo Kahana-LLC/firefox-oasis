@@ -61014,6 +61014,7 @@ Content: ${content}`;
 
   // src/services/embeddingService.ts
   var VECTOR_DIMENSIONS = 384;
+  var EMBEDDING_WORKER_PAGE_URL = "chrome://browser/content/assistant/embedding-worker.html";
   var FRAME_SCRIPT_URL = "chrome://browser/content/assistant/embedding-frame-script.js";
   var EmbeddingService = class {
     browser = null;
@@ -61040,7 +61041,7 @@ Content: ${content}`;
           this.browser = browserWin.document.createXULElement("browser");
           this.browser.setAttribute("type", "content");
           this.browser.setAttribute("remote", "true");
-          this.browser.setAttribute("src", "about:blank");
+          this.browser.setAttribute("src", EMBEDDING_WORKER_PAGE_URL);
           this.browser.style.cssText = "display:none; width:0; height:0; position:fixed; visibility:hidden;";
           browserWin.document.documentElement.appendChild(this.browser);
           console.log("[EmbeddingService] Browser element appended, waiting for init...");
@@ -66569,11 +66570,13 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     youtub: "youtube"
   };
   var LOOKUP = new Map([
-    ...Object.entries(DEFAULT_URLS).map(([k3, v7]) => [k3, v7]),
-    ...Object.entries(TYPO_ALIASES).map(([typo, canon]) => [
-      typo,
-      DEFAULT_URLS[canon] ?? `https://www.${canon}.com`
-    ])
+    ...Object.entries(DEFAULT_URLS),
+    ...Object.entries(TYPO_ALIASES).map(
+      ([typo, canon]) => [
+        typo,
+        DEFAULT_URLS[canon] ?? `https://www.${canon}.com`
+      ]
+    )
   ]);
   function resolveKnownSiteToUrl(raw) {
     const key = String(raw || "").trim().toLowerCase().replace(/^["']|["']$/g, "");
@@ -69632,11 +69635,11 @@ ${content}`
       setRecentSearchResults(structured);
       const resultsBySource = {};
       for (const r2 of structured) {
-        if (!resultsBySource[r2.source]) resultsBySource[r2.source] = [];
-        resultsBySource[r2.source].push({
+        const bucket = resultsBySource[r2.source] ??= [];
+        bucket.push({
           title: r2.title,
           url: r2.url,
-          snippet: r2.snippet,
+          snippet: r2.snippet ?? "",
           bookmarkGuid: r2.bookmarkGuid
         });
       }
@@ -86620,7 +86623,7 @@ Result: ${JSON.stringify(result)}`);
 
   // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/localStorage.js
   var inMemoryStorage = new InMemoryStorage();
-  function localStorage2() {
+  function localStorage() {
     if (typeof self === "object" && self.indexedDB) {
       return new IndexedDbStorage();
     }
@@ -86631,7 +86634,7 @@ Result: ${JSON.stringify(result)}`);
   }
 
   // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js
-  function fromCognitoIdentityPool({ accountId, cache: cache3 = localStorage2(), client: client2, clientConfig, customRoleArn, identityPoolId: identityPoolId2, logins, userIdentifier = !logins || Object.keys(logins).length === 0 ? "ANONYMOUS" : void 0, logger: logger2, parentClientConfig }) {
+  function fromCognitoIdentityPool({ accountId, cache: cache3 = localStorage(), client: client2, clientConfig, customRoleArn, identityPoolId: identityPoolId2, logins, userIdentifier = !logins || Object.keys(logins).length === 0 ? "ANONYMOUS" : void 0, logger: logger2, parentClientConfig }) {
     logger2?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
     const cacheKey = userIdentifier ? `aws:cognito-identity-credentials:${identityPoolId2}:${userIdentifier}` : void 0;
     let provider = async (awsIdentityProperties) => {
@@ -87540,7 +87543,9 @@ ${toHex2(hashedRequest)}`;
       audio: base64Audio,
       mimeType: audioBlob.type,
       ...options.language ? { language: options.language } : {},
-      ...options.captureMeta ? { captureMeta: options.captureMeta } : {}
+      ...options.captureMeta ? { captureMeta: options.captureMeta } : {},
+      ...options.source != null ? { source: options.source } : {},
+      ...options.utteranceSeq != null ? { utteranceSeq: options.utteranceSeq } : {}
     });
     return result;
   }
@@ -89761,7 +89766,9 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   var VOICE_SPOKEN_REPLIES_STORAGE_KEY = "oasis.voice.orbSpokenReplies";
   function readStoredCaptureMode() {
     try {
-      const v7 = localStorage.getItem(VOICE_CAPTURE_MODE_STORAGE_KEY);
+      const ls = globalThis.localStorage;
+      if (!ls) return "continuous";
+      const v7 = ls.getItem(VOICE_CAPTURE_MODE_STORAGE_KEY);
       if (v7 === "precise") return "precise";
     } catch {
     }
@@ -89769,7 +89776,9 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   }
   function readStoredVoiceSpokenReplies() {
     try {
-      const v7 = localStorage.getItem(VOICE_SPOKEN_REPLIES_STORAGE_KEY);
+      const ls = globalThis.localStorage;
+      if (!ls) return true;
+      const v7 = ls.getItem(VOICE_SPOKEN_REPLIES_STORAGE_KEY);
       if (v7 === "0" || v7 === "false") return false;
     } catch {
     }
@@ -89943,7 +89952,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     setCaptureMode(mode) {
       this.captureMode = mode;
       try {
-        localStorage.setItem(VOICE_CAPTURE_MODE_STORAGE_KEY, mode);
+        globalThis.localStorage?.setItem(VOICE_CAPTURE_MODE_STORAGE_KEY, mode);
       } catch {
       }
       assistantLogger.warn("voice", "capture mode set", { mode });
@@ -89954,7 +89963,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     setVoiceSpokenRepliesEnabled(enabled) {
       this.voiceSpokenRepliesEnabled = enabled;
       try {
-        localStorage.setItem(
+        globalThis.localStorage?.setItem(
           VOICE_SPOKEN_REPLIES_STORAGE_KEY,
           enabled ? "1" : "0"
         );

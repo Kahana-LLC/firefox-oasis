@@ -24,6 +24,14 @@ env.allowLocalModels = false;
 
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 
+const rootDoc: Document = (() => {
+  const d = globalThis.document;
+  if (!d) {
+    throw new Error("[EmbeddingWorker] document is not available");
+  }
+  return d;
+})();
+
 let extractor: FeatureExtractionPipeline | null = null;
 let loadingPromise: Promise<FeatureExtractionPipeline> | null = null;
 
@@ -36,13 +44,13 @@ async function ensureModel(): Promise<FeatureExtractionPipeline> {
 
     loadingPromise = pipeline("feature-extraction", MODEL_NAME, {
         dtype: "q8",
-    }) as Promise<FeatureExtractionPipeline>;
+    }) as unknown as Promise<FeatureExtractionPipeline>;
 
     try {
         extractor = await loadingPromise;
         console.timeEnd("[EmbeddingWorker] Model load");
         console.log("[EmbeddingWorker] Model loaded successfully");
-        document.dispatchEvent(new CustomEvent("embed-model-loaded"));
+        rootDoc.dispatchEvent(new CustomEvent("embed-model-loaded"));
         return extractor;
     } catch (err) {
         loadingPromise = null;
@@ -59,18 +67,20 @@ async function embed(text: string): Promise<number[]> {
 }
 
 // Listen for embedding requests from frame script (via CustomEvent)
-document.addEventListener("embed-request", async (event: any) => {
-    const { id, text } = event.detail;
+rootDoc.addEventListener("embed-request", async (event: Event) => {
+    const detail = (event as CustomEvent<{ id: string; text: string }>).detail;
+    const { id, text } = detail;
     console.log("[EmbeddingWorker] Received embed request, id:", id);
 
     try {
         const embedding = await embed(text);
-        document.dispatchEvent(new CustomEvent("embed-result", {
+        rootDoc.dispatchEvent(new CustomEvent("embed-result", {
             detail: { id, embedding },
         }));
-    } catch (err: any) {
-        document.dispatchEvent(new CustomEvent("embed-error", {
-            detail: { id, error: err.message || String(err) },
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        rootDoc.dispatchEvent(new CustomEvent("embed-error", {
+            detail: { id, error: message },
         }));
     }
 });
@@ -78,7 +88,7 @@ document.addEventListener("embed-request", async (event: any) => {
 // Signal ready — dispatched multiple times to handle timing
 function signalReady() {
     console.log("[EmbeddingWorker] Dispatching embed-ready event");
-    document.dispatchEvent(new CustomEvent("embed-ready"));
+    rootDoc.dispatchEvent(new CustomEvent("embed-ready"));
 }
 
 // Signal immediately

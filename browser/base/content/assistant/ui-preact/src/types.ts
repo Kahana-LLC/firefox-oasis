@@ -101,6 +101,13 @@ export interface SupabaseAuthLike {
     from(table: string): {
       insert(payload: unknown): Promise<{ error: { message?: string } | null }>;
     };
+    rpc(
+      fn: string,
+      args?: Record<string, unknown>
+    ): Promise<{
+      data: unknown;
+      error: { message?: string } | null;
+    }>;
   };
 }
 

@@ -47964,6 +47964,13 @@ ${fake_token_around_image}${global_img_token}` + image_token.repeat(image_seq_le
   wasmConfig.proxy = false;
   __webpack_exports__env.allowLocalModels = false;
   var MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
+  var rootDoc = (() => {
+    const d = globalThis.document;
+    if (!d) {
+      throw new Error("[EmbeddingWorker] document is not available");
+    }
+    return d;
+  })();
   var extractor = null;
   var loadingPromise = null;
   async function ensureModel() {
@@ -47978,7 +47985,7 @@ ${fake_token_around_image}${global_img_token}` + image_token.repeat(image_seq_le
       extractor = await loadingPromise;
       console.timeEnd("[EmbeddingWorker] Model load");
       console.log("[EmbeddingWorker] Model loaded successfully");
-      document.dispatchEvent(new CustomEvent("embed-model-loaded"));
+      rootDoc.dispatchEvent(new CustomEvent("embed-model-loaded"));
       return extractor;
     } catch (err) {
       loadingPromise = null;
@@ -47992,23 +47999,25 @@ ${fake_token_around_image}${global_img_token}` + image_token.repeat(image_seq_le
     const output = await model(truncated, { pooling: "mean", normalize: true });
     return Array.from(output.data);
   }
-  document.addEventListener("embed-request", async (event) => {
-    const { id: id2, text } = event.detail;
+  rootDoc.addEventListener("embed-request", async (event) => {
+    const detail = event.detail;
+    const { id: id2, text } = detail;
     console.log("[EmbeddingWorker] Received embed request, id:", id2);
     try {
       const embedding = await embed(text);
-      document.dispatchEvent(new CustomEvent("embed-result", {
+      rootDoc.dispatchEvent(new CustomEvent("embed-result", {
         detail: { id: id2, embedding }
       }));
     } catch (err) {
-      document.dispatchEvent(new CustomEvent("embed-error", {
-        detail: { id: id2, error: err.message || String(err) }
+      const message = err instanceof Error ? err.message : String(err);
+      rootDoc.dispatchEvent(new CustomEvent("embed-error", {
+        detail: { id: id2, error: message }
       }));
     }
   });
   function signalReady() {
     console.log("[EmbeddingWorker] Dispatching embed-ready event");
-    document.dispatchEvent(new CustomEvent("embed-ready"));
+    rootDoc.dispatchEvent(new CustomEvent("embed-ready"));
   }
   signalReady();
   setTimeout(signalReady, 100);
