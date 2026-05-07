@@ -109,6 +109,17 @@ tools/lint/stylelint/stylelint-plugin-mozilla/node_modules/
 tools/terser/node_modules/
 browser/components/asrouter/node_modules/
 browser/components/aboutwelcome/node_modules/
+
+# Oasis assistant: local-only npm artifacts (platform esbuild, devDependencies, Lambda deps)
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/darwin-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/linux-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/freebsd-*/
+browser/base/content/assistant/ui-preact/node_modules/@esbuild/android-*/
+browser/base/content/assistant/ui-preact/node_modules/typescript/
+browser/base/content/assistant/ui-preact/node_modules/.bin/tsc
+browser/base/content/assistant/ui-preact/node_modules/.bin/tsserver
+browser/base/content/assistant/lambda/voice-runtime/node_modules/
+
 browser/extensions/newtab/node_modules/
 tools/ts/node_modules/
 testing/xpcshell/moz-http2/node_modules/
