@@ -14,6 +14,10 @@ type AssistRequest = {
   messages?: WireMessage[];
   options?: unknown[];
   tools?: AssistTool[];
+  /** Client may send snake_case (see assistant proxy). */
+  max_inner_rounds?: unknown;
+  refine_after_route?: unknown;
+  generation_config?: unknown;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -138,7 +142,7 @@ function buildAssistSystemPrompt(args: {
 
   return [
     system || "",
-    "You are a strict browser command router.",
+    "\nYou are a strict browser command router.",
     optionLine,
     toolLines ? `Available tools:\n${toolLines}` : "",
     "If the latest user message is a browser action, call route_command with the best command and args.",
@@ -196,6 +200,194 @@ function parseFunctionArgs(value: unknown): JsonRecord {
   return asObject(value);
 }
 
+function clampAssistInnerRounds(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return 1;
+  }
+  return Math.min(8, Math.max(1, Math.floor(n)));
+}
+
+function appendModelFunctionCallTurn(
+  contents: JsonRecord[],
+  functionCall: JsonRecord
+): void {
+  const fc: JsonRecord = {
+    name: functionCall.name,
+    args: functionCall.args && typeof functionCall.args === "object"
+      ? functionCall.args
+      : parseFunctionArgs(functionCall.args),
+  };
+  if (functionCall.id != null && String(functionCall.id) !== "") {
+    fc.id = functionCall.id;
+  }
+  contents.push({
+    role: "model",
+    parts: [{ functionCall: fc }],
+  });
+}
+
+function appendFunctionResponseTurn(
+  contents: JsonRecord[],
+  functionCall: JsonRecord,
+  resultPayload: JsonRecord
+): void {
+  const part: JsonRecord = {
+    name: String(functionCall.name || ""),
+    response: { result: resultPayload },
+  };
+  if (functionCall.id != null && String(functionCall.id) !== "") {
+    part.id = functionCall.id;
+  }
+  contents.push({
+    role: "user",
+    parts: [{ functionResponse: part }],
+  });
+}
+
+function mergeClientGenerationConfig(
+  base: JsonRecord,
+  req: AssistRequest
+): void {
+  const extra = asObject(req.generation_config);
+  if (Object.keys(extra).length === 0) {
+    return;
+  }
+  const gen = asObject(base.generationConfig);
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined) {
+      gen[key] = value;
+    }
+  }
+  base.generationConfig = gen;
+}
+
+/**
+ * Multi-turn route_command loop (matches Lambda native-assist): synthetic
+ * functionResponse turns until final route or chat text.
+ */
+async function runAssistRoutingLoop(params: {
+  geminiBase: JsonRecord;
+  contents: JsonRecord[];
+  routeOptions: string[];
+  canChat: boolean;
+  enableFunctionCalling: boolean;
+  maxInnerRounds: number;
+  refineAfterRoute: boolean;
+}): Promise<Response> {
+  const {
+    geminiBase,
+    contents,
+    routeOptions,
+    canChat,
+    enableFunctionCalling,
+    maxInnerRounds,
+    refineAfterRoute,
+  } = params;
+
+  let lastValidRoute: { next: string; args: JsonRecord } | null = null;
+  let roundCount = 0;
+
+  for (let i = 0; i < maxInnerRounds; i++) {
+    const requestBody: JsonRecord = { ...geminiBase, contents: [...contents] };
+    let geminiJson: JsonRecord;
+    try {
+      geminiJson = await callGemini(requestBody);
+    } catch (error) {
+      return jsonResponse(502, {
+        error: "gemini_request_failed",
+        message: String(error),
+      });
+    }
+    roundCount += 1;
+
+    if (enableFunctionCalling) {
+      const fc = extractFunctionCall(geminiJson);
+      if (fc && String(fc.name || "") === "route_command") {
+        const callArgs = parseFunctionArgs(fc.args);
+        const next = String(callArgs.next || "").trim();
+        const args = asObject(callArgs.args);
+        if (routeOptions.includes(next)) {
+          lastValidRoute = { next, args };
+          const canRefineMore = refineAfterRoute && i + 1 < maxInnerRounds;
+          if (!canRefineMore) {
+            return jsonResponse(200, {
+              next,
+              args,
+              reason: "native-tool-call",
+              inner_rounds: roundCount,
+            });
+          }
+          appendModelFunctionCallTurn(contents, fc);
+          appendFunctionResponseTurn(contents, fc, {
+            ok: true,
+            routedCommand: next,
+            message:
+              "Route accepted by host. Call route_command again only if correcting the choice; otherwise respond with the single word DONE.",
+          });
+          continue;
+        }
+        if (i + 1 < maxInnerRounds) {
+          appendModelFunctionCallTurn(contents, fc);
+          appendFunctionResponseTurn(contents, fc, {
+            ok: false,
+            error: "invalid_command",
+            validCommands: routeOptions,
+          });
+          continue;
+        }
+      }
+    }
+
+    const text = extractResponseText(geminiJson);
+
+    if (lastValidRoute) {
+      const payload: JsonRecord = {
+        next: lastValidRoute.next,
+        args: lastValidRoute.args,
+        reason: "multi-turn-route",
+        inner_rounds: roundCount,
+      };
+      if (text && text.toUpperCase() !== "DONE") {
+        payload.content = text;
+      }
+      return jsonResponse(200, payload);
+    }
+
+    if (canChat) {
+      return jsonResponse(200, {
+        next: "chat",
+        content: text,
+        reason: "no-tool-call",
+        inner_rounds: roundCount,
+      });
+    }
+
+    return jsonResponse(200, {
+      next: routeOptions[0],
+      args: {},
+      reason: "no-tool-call-fallback",
+      inner_rounds: roundCount,
+    });
+  }
+
+  if (lastValidRoute) {
+    return jsonResponse(200, {
+      next: lastValidRoute.next,
+      args: lastValidRoute.args,
+      reason: "multi-turn-max-rounds",
+      inner_rounds: roundCount,
+    });
+  }
+
+  return jsonResponse(200, {
+    next: routeOptions[0],
+    args: {},
+    reason: "no-tool-call-fallback",
+    inner_rounds: roundCount,
+  });
+}
+
 async function callGemini(requestBody: JsonRecord): Promise<JsonRecord> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   const model = Deno.env.get("MODEL") || "gemini-2.5-flash";
@@ -241,7 +433,12 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
   const tempRaw = Number(Deno.env.get("TEMP") ?? "0.3");
   const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
 
-  const geminiRequest: JsonRecord = {
+  const maxInnerRounds = clampAssistInnerRounds(
+    req.max_inner_rounds ?? Deno.env.get("ASSIST_MAX_INNER_ROUNDS") ?? 1
+  );
+  const refineAfterRoute = Boolean(req.refine_after_route);
+
+  const geminiBase: JsonRecord = {
     system_instruction: {
       parts: [
         {
@@ -254,14 +451,15 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
         },
       ],
     },
-    contents: toContents(Array.isArray(req.messages) ? req.messages : []),
     generationConfig: {
       temperature,
     },
   };
 
+  mergeClientGenerationConfig(geminiBase, req);
+
   if (enableFunctionCalling) {
-    geminiRequest.tools = [
+    geminiBase.tools = [
       {
         functionDeclarations: [
           {
@@ -286,10 +484,26 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
         ],
       },
     ];
-    geminiRequest.toolConfig = {
+    geminiBase.toolConfig = {
       functionCallingConfig: { mode: "AUTO" },
     };
+
+    const contents = toContents(Array.isArray(req.messages) ? req.messages : []);
+    return await runAssistRoutingLoop({
+      geminiBase,
+      contents,
+      routeOptions,
+      canChat,
+      enableFunctionCalling,
+      maxInnerRounds,
+      refineAfterRoute,
+    });
   }
+
+  const geminiRequest: JsonRecord = {
+    ...geminiBase,
+    contents: toContents(Array.isArray(req.messages) ? req.messages : []),
+  };
 
   let geminiJson: JsonRecord;
   try {
@@ -301,28 +515,13 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     });
   }
 
-  if (enableFunctionCalling) {
-    const functionCall = extractFunctionCall(geminiJson);
-    if (functionCall && String(functionCall.name || "") === "route_command") {
-      const callArgs = parseFunctionArgs(functionCall.args);
-      const next = String(callArgs.next || "").trim();
-      const args = asObject(callArgs.args);
-      if (routeOptions.includes(next)) {
-        return jsonResponse(200, {
-          next,
-          args,
-          reason: "native-tool-call",
-        });
-      }
-    }
-  }
-
   const content = extractResponseText(geminiJson);
   if (canChat) {
     return jsonResponse(200, {
       next: "chat",
       content,
       reason: "no-tool-call",
+      inner_rounds: 1,
     });
   }
 
@@ -330,6 +529,7 @@ async function handleAssist(req: AssistRequest): Promise<Response> {
     next: routeOptions[0],
     args: {},
     reason: "no-tool-call-fallback",
+    inner_rounds: 1,
   });
 }
 

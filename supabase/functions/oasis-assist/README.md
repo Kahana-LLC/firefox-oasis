@@ -9,11 +9,18 @@ Set these in Supabase project secrets:
 - `GEMINI_API_KEY`
 - `MODEL` (optional, default `gemini-2.5-flash`)
 - `TEMP` (optional, default `0.3`)
+- `ASSIST_MAX_INNER_ROUNDS` (optional, default `1`; max `8` for multi-turn `route_command` in one request)
 
 ## Deploy
 
+The folder name is `oasis-assist`. Your project may expose it under a different
+URL slug (for example `oasis-assist-test`); deploy the slug that matches
+`OASIS_ASSIST_URL` in the assistant build.
+
 ```bash
 supabase functions deploy oasis-assist
+# or, if the remote function name differs:
+supabase functions deploy oasis-assist-test
 ```
 
 This function is configured with `verify_jwt = false` in `supabase/config.toml`,
