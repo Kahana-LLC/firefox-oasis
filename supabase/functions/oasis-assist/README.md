@@ -10,6 +10,21 @@ Set these in Supabase project secrets:
 - `MODEL` (optional, default `gemini-2.5-flash`)
 - `TEMP` (optional, default `0.3`)
 - `ASSIST_MAX_INNER_ROUNDS` (optional, default `1`; max `8` for multi-turn `route_command` in one request)
+- `SUPABASE_SERVICE_ROLE_KEY` (required for **authenticated** requests so the function can read plans / record usage; anonymous calls skip DB usage)
+
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are provided automatically to Edge Functions.
+
+## Authenticated usage and billing
+
+When the client sends `Authorization: Bearer <user_jwt>`, the function:
+
+1. Resolves the user via `auth.getUser`
+2. Loads daily limits from `user_plans` / `plans`
+3. Reads today’s total from `llm_daily_usage`
+4. Returns **429** if the daily limit is reached
+5. After a successful Gemini response, calls RPC **`record_llm_usage`** with summed token usage (multi-turn assist sums all inner rounds)
+
+Anonymous requests skip those steps and omit `usage_stats` in the JSON body.
 
 ## Deploy
 
