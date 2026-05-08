@@ -168,6 +168,55 @@ function clampAssistInnerRounds(raw) {
   return Math.min(8, Math.max(1, Math.floor(n)));
 }
 
+/** @typedef {{ input_tokens: number; output_tokens: number; total_tokens: number }} UsageTriple */
+
+/** @param {unknown} response */
+function extractTokenTripleFromGenAiResponse(response) {
+  const u = response?.usageMetadata ?? response?.usage_metadata;
+  if (!u || typeof u !== "object") {
+    return { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  }
+  const input = Number(u.promptTokenCount ?? u.prompt_token_count ?? 0);
+  const output = Number(u.candidatesTokenCount ?? u.candidates_token_count ?? 0);
+  const totalRaw = Number(u.totalTokenCount ?? u.total_token_count ?? NaN);
+  const total = Number.isFinite(totalRaw) ? totalRaw : input + output;
+  return {
+    input_tokens: Number.isFinite(input) ? input : 0,
+    output_tokens: Number.isFinite(output) ? output : 0,
+    total_tokens: Number.isFinite(total) ? total : 0,
+  };
+}
+
+/** @param {UsageTriple} a @param {UsageTriple} b */
+function addUsageTriple(a, b) {
+  return {
+    input_tokens: a.input_tokens + b.input_tokens,
+    output_tokens: a.output_tokens + b.output_tokens,
+    total_tokens: a.total_tokens + b.total_tokens,
+  };
+}
+
+/** Gemini REST / client-style snake_case for subscription + UI. */
+function usageMetadataSnakeFromTriple(agg) {
+  return {
+    prompt_token_count: agg.input_tokens,
+    candidates_token_count: agg.output_tokens,
+    total_token_count: agg.total_tokens,
+  };
+}
+
+/** @param {Record<string, unknown>} body @param {UsageTriple} agg */
+function withAssistUsageMetadata(body, agg) {
+  if (
+    agg.input_tokens === 0 &&
+    agg.output_tokens === 0 &&
+    agg.total_tokens === 0
+  ) {
+    return body;
+  }
+  return { ...body, usage_metadata: usageMetadataSnakeFromTriple(agg) };
+}
+
 function appendModelFunctionCallTurn(contents, functionCall) {
   const fc = {
     name: functionCall.name,
@@ -214,6 +263,8 @@ async function runAssistRoutingLoop({
   const contents = toContents(messages);
   let lastValidRoute = null;
   let roundCount = 0;
+  /** @type {UsageTriple} */
+  let usageAgg = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
   for (let i = 0; i < maxInnerRounds; i++) {
     const response = await ai.models.generateContent({
@@ -221,6 +272,7 @@ async function runAssistRoutingLoop({
       config,
       contents,
     });
+    usageAgg = addUsageTriple(usageAgg, extractTokenTripleFromGenAiResponse(response));
     roundCount += 1;
 
     if (enableFunctionCalling) {
@@ -234,12 +286,18 @@ async function runAssistRoutingLoop({
           lastValidRoute = { next, args };
           const canRefineMore = refineAfterRoute && i + 1 < maxInnerRounds;
           if (!canRefineMore) {
-            return cors(200, {
-              next,
-              args,
-              reason: "native-tool-call",
-              inner_rounds: roundCount,
-            });
+            return cors(
+              200,
+              withAssistUsageMetadata(
+                {
+                  next,
+                  args,
+                  reason: "native-tool-call",
+                  inner_rounds: roundCount,
+                },
+                usageAgg
+              )
+            );
           }
           appendModelFunctionCallTurn(contents, fc);
           appendFunctionResponseTurn(contents, fc, {
@@ -266,47 +324,77 @@ async function runAssistRoutingLoop({
     const text = String(extractResponseText(response) || "").trim();
 
     if (lastValidRoute) {
-      return cors(200, {
-        next: lastValidRoute.next,
-        args: lastValidRoute.args,
-        ...(text && text.toUpperCase() !== "DONE" ? { content: text } : {}),
-        reason: "multi-turn-route",
-        inner_rounds: roundCount,
-      });
+      return cors(
+        200,
+        withAssistUsageMetadata(
+          {
+            next: lastValidRoute.next,
+            args: lastValidRoute.args,
+            ...(text && text.toUpperCase() !== "DONE" ? { content: text } : {}),
+            reason: "multi-turn-route",
+            inner_rounds: roundCount,
+          },
+          usageAgg
+        )
+      );
     }
 
     if (canChat) {
-      return cors(200, {
-        next: "chat",
-        content: text,
-        reason: "no-tool-call",
-        inner_rounds: roundCount,
-      });
+      return cors(
+        200,
+        withAssistUsageMetadata(
+          {
+            next: "chat",
+            content: text,
+            reason: "no-tool-call",
+            inner_rounds: roundCount,
+          },
+          usageAgg
+        )
+      );
     }
 
-    return cors(200, {
-      next: routeOptions[0],
-      args: {},
-      reason: "no-tool-call-fallback",
-      inner_rounds: roundCount,
-    });
+    return cors(
+      200,
+      withAssistUsageMetadata(
+        {
+          next: routeOptions[0],
+          args: {},
+          reason: "no-tool-call-fallback",
+          inner_rounds: roundCount,
+        },
+        usageAgg
+      )
+    );
   }
 
   if (lastValidRoute) {
-    return cors(200, {
-      next: lastValidRoute.next,
-      args: lastValidRoute.args,
-      reason: "multi-turn-max-rounds",
-      inner_rounds: roundCount,
-    });
+    return cors(
+      200,
+      withAssistUsageMetadata(
+        {
+          next: lastValidRoute.next,
+          args: lastValidRoute.args,
+          reason: "multi-turn-max-rounds",
+          inner_rounds: roundCount,
+        },
+        usageAgg
+      )
+    );
   }
 
-  return cors(200, {
-    next: routeOptions[0],
-    args: {},
-    reason: "no-tool-call-fallback",
-    inner_rounds: roundCount,
-  });
+  return cors(
+    200,
+    withAssistUsageMetadata(
+      {
+        next: routeOptions[0],
+        args: {},
+        reason: "no-tool-call-fallback",
+        inner_rounds: roundCount,
+      },
+      usageAgg
+    )
+  );
 }
 
 function safeJsonObject(value) {
@@ -495,22 +583,35 @@ async function handleAssist(req) {
     contents: toContents(messages),
   });
 
+  const usageAgg = extractTokenTripleFromGenAiResponse(response);
   const content = String(extractResponseText(response) || "").trim();
   if (canChat) {
-    return cors(200, {
-      next: "chat",
-      content,
-      reason: "no-tool-call",
-      inner_rounds: 1,
-    });
+    return cors(
+      200,
+      withAssistUsageMetadata(
+        {
+          next: "chat",
+          content,
+          reason: "no-tool-call",
+          inner_rounds: 1,
+        },
+        usageAgg
+      )
+    );
   }
 
-  return cors(200, {
-    next: routeOptions[0],
-    args: {},
-    reason: "no-tool-call-fallback",
-    inner_rounds: 1,
-  });
+  return cors(
+    200,
+    withAssistUsageMetadata(
+      {
+        next: routeOptions[0],
+        args: {},
+        reason: "no-tool-call-fallback",
+        inner_rounds: 1,
+      },
+      usageAgg
+    )
+  );
 }
 
 function getMethod(event) {

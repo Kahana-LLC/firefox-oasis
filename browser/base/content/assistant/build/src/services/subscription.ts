@@ -6,6 +6,13 @@
  * persists to both Supabase and local IndexedDB (fail-safe).
  * Called before each assistant run to check availability.
  *
+ * **Assist tokens (router + inner rounds):** Supabase Edge `oasis-assist` returns
+ * `usage_stats` after `record_llm_usage` — call `updateFromAssistUsageStats` so the
+ * daily bar matches the server without a second `llm_usage` row. Lambda (and
+ * anonymous Edge) return `usage_metadata` only; the router calls
+ * `recordAssistRoutingTokens` (token row only, no monthly `usage_count` bump) so
+ * `llm_usage` reflects Gemini totals including multi-turn aggregation on the server.
+ *
  * Feedback bonus tokens: public.feedback_token_grants (UTC day). Quota APIs should add
  * public.sum_feedback_bonus_tokens_for_user(user_id) to base daily_limit / remaining.
  *
@@ -130,6 +137,37 @@ export class SubscriptionService {
     );
   }
 
+  /**
+   * Apply `usage_stats` from Supabase Edge assist (post-`record_llm_usage`).
+   * Avoid calling `trackUsage` for the same request when this object is present.
+   */
+  public updateFromAssistUsageStats(
+    stats: Record<string, unknown> | null | undefined
+  ): void {
+    if (!stats || typeof stats !== "object") {
+      return;
+    }
+    const patch: QuotaResult = {};
+    if (
+      typeof stats.total_tokens === "number" &&
+      Number.isFinite(stats.total_tokens)
+    ) {
+      patch.daily_used = stats.total_tokens;
+    }
+    if (typeof stats.limit === "number" && Number.isFinite(stats.limit)) {
+      patch.daily_limit = stats.limit;
+    }
+    if (
+      typeof stats.remaining === "number" &&
+      Number.isFinite(stats.remaining)
+    ) {
+      patch.daily_remaining = stats.remaining;
+    }
+    if (Object.keys(patch).length > 0) {
+      this.updateFromQuota(patch);
+    }
+  }
+
   /** Bar limit is Supabase plan (+ bonus); not Lambda `quota.daily_limit`. */
   public getDailyTokenUsageForDisplay(): DailyTokenUsageDisplay {
     const fromSupabaseLimit =
@@ -181,6 +219,51 @@ export class SubscriptionService {
    * @param type 'text' or 'voice'
    * @param model Optional model name for record keeping
    */
+  /**
+   * Log Gemini tokens for assist **routing** only (`usage_count` / monthly units stay 0).
+   * Final assistant turns still use `trackUsage` from the graph stream.
+   */
+  public recordAssistRoutingTokens(meta: UsageMeta): void {
+    void this.recordAssistRoutingTokensAsync(meta);
+  }
+
+  private async recordAssistRoutingTokensAsync(meta: UsageMeta): Promise<void> {
+    const user = await supabaseAuth.getCurrentUser();
+    if (!user) {
+      logWarn("recordAssistRoutingTokens: No user found.");
+      return;
+    }
+    const input = Number(meta.input_tokens ?? 0);
+    const output = Number(meta.output_tokens ?? 0);
+    if (
+      !Number.isFinite(input) ||
+      !Number.isFinite(output) ||
+      (input <= 0 && output <= 0)
+    ) {
+      return;
+    }
+    const supabase = (supabaseAuth as any).supabase;
+    const { error } = await supabase.from("llm_usage").insert({
+      user_id: user.id,
+      tokens_used: 0,
+      usage_count: 0,
+      model_used: "assist-router",
+      success: true,
+      command_type: meta.command_type ?? null,
+      user_intent: meta.user_intent ?? null,
+      input_tokens: input,
+      output_tokens: output,
+    });
+    if (error) {
+      logError("recordAssistRoutingTokens: DB insert failed", error);
+    } else {
+      logDebug("recordAssistRoutingTokens: logged routing tokens", {
+        input,
+        output,
+      });
+    }
+  }
+
   public async trackUsage(
     type: "text" | "voice",
     model: string = "gemini-1.5-flash",

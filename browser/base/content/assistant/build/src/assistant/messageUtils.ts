@@ -224,6 +224,40 @@ export type ParsedChatEnvelope = {
   meta: UsageMeta;
 };
 
+/**
+ * Token counts from a Gemini `usage_metadata` object (snake_case REST or camelCase SDK).
+ */
+export function extractTokenCountsFromUsageMetadata(
+  usage: unknown
+): { input_tokens: number | null; output_tokens: number | null } {
+  let inputTokens: number | null = null;
+  let outputTokens: number | null = null;
+  if (!isRecord(usage)) {
+    return { input_tokens: null, output_tokens: null };
+  }
+  if (typeof usage.prompt_token_count === "number") {
+    inputTokens = usage.prompt_token_count;
+  } else if (typeof usage.promptTokenCount === "number") {
+    inputTokens = usage.promptTokenCount;
+  }
+  if (typeof usage.candidates_token_count === "number") {
+    outputTokens = usage.candidates_token_count;
+  } else if (typeof usage.candidatesTokenCount === "number") {
+    outputTokens = usage.candidatesTokenCount;
+  }
+  return { input_tokens: inputTokens, output_tokens: outputTokens };
+}
+
+/** Reads `usage_metadata` from an assist or chat API payload. */
+export function extractTokenCountsFromAssistPayload(
+  payload: unknown
+): { input_tokens: number | null; output_tokens: number | null } {
+  if (!isRecord(payload)) {
+    return { input_tokens: null, output_tokens: null };
+  }
+  return extractTokenCountsFromUsageMetadata(payload.usage_metadata);
+}
+
 export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
   const defaultMeta: UsageMeta = {
     command_type: "other",
@@ -232,27 +266,11 @@ export function parseChatEnvelope(response: unknown): ParsedChatEnvelope {
     output_tokens: null,
   };
 
-  // Extract token counts from Gemini's usage_metadata
-  let inputTokens: number | null = null;
-  let outputTokens: number | null = null;
-  if (isRecord(response)) {
-    const usage = response.usage_metadata;
-    if (isRecord(usage)) {
-      if (typeof usage.prompt_token_count === "number") {
-        inputTokens = usage.prompt_token_count;
-      } else if (typeof usage.promptTokenCount === "number") {
-        inputTokens = usage.promptTokenCount;
-      }
-      
-      if (typeof usage.candidates_token_count === "number") {
-        outputTokens = usage.candidates_token_count;
-      } else if (typeof usage.candidatesTokenCount === "number") {
-        outputTokens = usage.candidatesTokenCount;
-      }
-    }
-  }
-
-  const tokenMeta = { input_tokens: inputTokens, output_tokens: outputTokens };
+  const tokenCounts = extractTokenCountsFromAssistPayload(response);
+  const tokenMeta = {
+    input_tokens: tokenCounts.input_tokens,
+    output_tokens: tokenCounts.output_tokens,
+  };
 
   // The content field may already be a parsed JSON object (Gemini structured output)
   // or a JSON string we need to parse ourselves.

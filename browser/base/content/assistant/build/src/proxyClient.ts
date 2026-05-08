@@ -41,6 +41,10 @@ export type AssistResponse = {
   reason?: string;
   /** Number of model calls used for this assist request (native-assist multi-turn routing). */
   inner_rounds?: number;
+  /** Gemini usage for this assist (Lambda aggregate or Edge last round); snake_case counts. */
+  usage_metadata?: Record<string, unknown>;
+  /** Present on authenticated Supabase Edge responses after `record_llm_usage`. */
+  usage_stats?: Record<string, unknown>;
   quota?: QuotaResult;
   [key: string]: unknown;
 };

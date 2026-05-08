@@ -28,7 +28,11 @@ import { assistantLogger } from "../utils/assistantLogger.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 import { classifyCommandFamily } from "../utils/intentParser.js";
 import type { IntentFamily } from "../utils/routerTypes.js";
-import { isRecord, toWire } from "./messageUtils.js";
+import {
+  extractTokenCountsFromAssistPayload,
+  isRecord,
+  toWire,
+} from "./messageUtils.js";
 import { parsePlannedActions, type PlannedAction } from "./plannedActions.js";
 import { looksLikeCommandChain } from "./commandChain.js";
 import { QuotaExceededError } from "../awsSignedFetch.js";
@@ -216,6 +220,34 @@ export type AssistRouteResult =
   | { kind: "plan"; actions: PlannedAction[] }
   | { kind: "chat"; content: string };
 
+/**
+ * Keeps subscription / daily token bar in sync with assist routing:
+ * Edge (authenticated) sends `usage_stats` after server-side RPC — update cache only.
+ * Lambda (or anonymous) sends `usage_metadata` — insert `llm_usage` row with real tokens.
+ */
+function syncSubscriptionFromAssistRouterResponse(assist: AssistResponse): void {
+  const raw = assist as Record<string, unknown>;
+  if (isRecord(raw.usage_stats)) {
+    subscriptionService.updateFromAssistUsageStats(
+      raw.usage_stats as Record<string, unknown>
+    );
+    return;
+  }
+  const tokens = extractTokenCountsFromAssistPayload(assist);
+  const hasTokens =
+    (tokens.input_tokens != null && tokens.input_tokens > 0) ||
+    (tokens.output_tokens != null && tokens.output_tokens > 0);
+  if (!hasTokens) {
+    return;
+  }
+  subscriptionService.recordAssistRoutingTokens({
+    command_type: "system",
+    user_intent: "other",
+    input_tokens: tokens.input_tokens,
+    output_tokens: tokens.output_tokens,
+  });
+}
+
 export async function tryResolveAssistRoute(params: {
   endpointKey: string;
   activeCommandText: string;
@@ -305,6 +337,7 @@ export async function tryResolveAssistRoute(params: {
     if ((assist as any)?.quota) {
       subscriptionService.updateFromQuota((assist as any).quota);
     }
+    syncSubscriptionFromAssistRouterResponse(assist);
     markAssistSupported(endpointKey);
 
     const assistNext =
