@@ -14,6 +14,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 
 import {
   assistRemote,
+  getAssistLoopOptionsFromBuildEnv,
   type AssistResponse,
   type AssistTool,
 } from "../proxyClient.js";
@@ -225,6 +226,8 @@ export async function tryResolveAssistRoute(params: {
   assistTools: AssistTool[];
   memberNameSet: ReadonlySet<string>;
   maxPlanActions: number;
+  /** Appended to router system prompt (e.g. Railroad getPrunedPrompt). */
+  railroadMemoryBlock?: string;
 }): Promise<AssistRouteResult> {
   const {
     endpointKey,
@@ -236,6 +239,7 @@ export async function tryResolveAssistRoute(params: {
     assistTools,
     memberNameSet,
     maxPlanActions,
+    railroadMemoryBlock = "",
   } = params;
 
   const shouldTryAssistRouting =
@@ -281,12 +285,23 @@ export async function tryResolveAssistRoute(params: {
           },
         ]
       : effectiveTools;
+    const assistLoop = getAssistLoopOptionsFromBuildEnv();
+    const routerSystem =
+      assistRouterPrompt +
+      (typeof railroadMemoryBlock === "string" ? railroadMemoryBlock : "");
     const assist = await assistRemote(
-      assistRouterPrompt,
+      routerSystem,
       assistMessages,
       optionsForAssist,
-      toolsForAssist
+      toolsForAssist,
+      undefined,
+      assistLoop
     );
+    const innerRounds =
+      typeof assist?.inner_rounds === "number" ? assist.inner_rounds : undefined;
+    if (innerRounds != null && innerRounds > 1) {
+      assistantLogger.debug("router", "Assist inner rounds", { innerRounds });
+    }
     if ((assist as any)?.quota) {
       subscriptionService.updateFromQuota((assist as any).quota);
     }

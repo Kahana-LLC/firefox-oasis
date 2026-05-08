@@ -1,18 +1,15 @@
 /**
- * LangGraph state machine — the core execution engine.
+ * Assistant agent graph — supervisor, per-command tool nodes, and chat.
  *
- * Defines a supervisor-worker graph with three node types:
- * - Supervisor: central routing hub that decides tool vs. chat
- * - Tool nodes: one per registered Command, executes browser actions
- * - Chat node: calls the remote LLM for natural language responses
- *
- * Flow: START → supervisor → tool/chat → supervisor → ... → END
+ * Execution uses {@link streamAgentLoop} (explicit driver) instead of LangGraph.
+ * Flow: supervisor → tool or chat → supervisor → … → END
  * Recursion limit: 24 steps. Max 3 chained commands per request.
  *
  * Called from assistant.ts via `buildAssistantGraph()`.
  */
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph/web";
+
+import { AGENT_END, streamAgentLoop, type AgentState } from "./agentLoopDriver.js";
 
 import type { PendingAmbiguityPayload } from "../../../shared/contracts.js";
 import type { Command, CmdResult } from "../commands.js";
@@ -41,7 +38,10 @@ import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
 import { subscriptionService } from "../services/subscription.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
-import { MAX_NESTED_COMMANDS } from "./constants.js";
+import {
+  ASSISTANT_RECURSION_LIMIT,
+  MAX_NESTED_COMMANDS,
+} from "./constants.js";
 import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
 import { getOasisCapabilitiesReply } from "../utils/oasisCapabilitiesFaq.js";
 
@@ -117,29 +117,6 @@ import {
   type ToolResultPayload,
 } from "./messageUtils.js";
 
-const GraphState = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    reducer: (x, y) => x.concat(y),
-    default: () => [],
-  }),
-  next: Annotation<string>({
-    reducer: (_, y) => y ?? END,
-    default: () => END,
-  }),
-  lastWorker: Annotation<string>({
-    reducer: (x, y) => y ?? x ?? "",
-    default: () => "",
-  }),
-  args: Annotation<GraphArgs>({
-    reducer: (_, y) => y ?? {},
-    default: () => ({}),
-  }),
-  commandQueue: Annotation<string[]>({
-    reducer: (x, y) => y ?? x ?? [],
-    default: () => [],
-  }),
-});
-
 const INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
 
 function splitInternalArgs(args: GraphArgs): {
@@ -194,22 +171,22 @@ function setRoutePendingAmbiguity(
   });
 }
 
-type GraphStateType = typeof GraphState.State;
-
-export async function buildAssistantGraph(
+export function buildAssistantGraph(
   commands: Command[],
   assistantWindow: AssistantWindowLike,
   messageId?: string,
-  assistToolDefs: AssistTool[] = []
+  assistToolDefs: AssistTool[] = [],
+  options?: { railroadMemoryBlock?: string }
 ) {
+  const railroadMemoryBlock = String(options?.railroadMemoryBlock || "");
   const toolAgents: Record<
     string,
-    (state: GraphStateType) => Promise<Partial<GraphStateType>>
+    (state: AgentState) => Promise<Partial<AgentState>>
   > = {};
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    const node = async (state: GraphStateType) => {
+    const node = async (state: AgentState) => {
       const recordStart = assistantWindow.oasisRecordToolActionStart as
         | OasisRecordToolActionStart
         | undefined;
@@ -268,7 +245,7 @@ export async function buildAssistantGraph(
             }),
           ],
           lastWorker: command.commandName,
-          next: END,
+          next: AGENT_END,
           args: {},
           commandQueue: state.commandQueue,
         };
@@ -314,7 +291,7 @@ export async function buildAssistantGraph(
   const assistRouterPrompt = buildAssistRouterPrompt(memberNames);
   const endpointKey = getAssistantApiBase();
 
-  const chatNode = async (state: GraphStateType) => {
+  const chatNode = async (state: AgentState) => {
     const routerMessage = state.args?.routerMessage;
     if (typeof routerMessage === "string" && routerMessage.trim()) {
       return {
@@ -367,7 +344,7 @@ export async function buildAssistantGraph(
     let res: unknown;
     try {
       res = await assistRemote(
-        CHAT_SYSTEM_PROMPT,
+        CHAT_SYSTEM_PROMPT + railroadMemoryBlock,
         toWire(messagesWithPrompt),
         ["chat"],
         [],
@@ -443,7 +420,7 @@ export async function buildAssistantGraph(
     };
   };
 
-  const supervisorNode = async (state: GraphStateType) => {
+  const supervisorNode = async (state: AgentState) => {
     const { latestTextRaw, commandLine, commandText, confirmationText } =
       extractLatestActionableText(state.messages);
 
@@ -459,7 +436,7 @@ export async function buildAssistantGraph(
       return { next: confirmationGate.next, args: confirmationGate.args };
     }
     if (confirmationGate.kind === "end") {
-      return { next: END, args: {} };
+      return { next: AGENT_END, args: {} };
     }
 
     const pendingAmbiguity = getPendingAmbiguity();
@@ -518,6 +495,7 @@ export async function buildAssistantGraph(
         assistTools,
         memberNameSet,
         maxPlanActions: MAX_NESTED_COMMANDS,
+        railroadMemoryBlock,
       });
 
       if (topLevelAssist.kind === "plan") {
@@ -606,6 +584,7 @@ export async function buildAssistantGraph(
       assistTools,
       memberNameSet,
       maxPlanActions: MAX_NESTED_COMMANDS,
+      railroadMemoryBlock,
     });
 
     if (assistRoute.kind === "plan") {
@@ -683,22 +662,20 @@ export async function buildAssistantGraph(
     };
   };
 
-  const workflow = new StateGraph(GraphState);
-  for (const name of memberNames) {
-    workflow.addNode(name, toolAgents[name]);
-    workflow.addConditionalEdges(
-      name as never,
-      (x: GraphStateType) => x.next || "supervisor"
-    );
-  }
-  workflow.addNode("chat", chatNode);
-  workflow.addEdge("chat" as never, END as never);
-  workflow.addNode("supervisor", supervisorNode);
-  workflow.addConditionalEdges(
-    "supervisor" as never,
-    (x: GraphStateType) => x.next
-  );
-  workflow.addEdge(START as never, "supervisor" as never);
-
-  return workflow.compile();
+  return {
+    stream(
+      input: { messages: BaseMessage[] },
+      options?: { recursionLimit?: number }
+    ) {
+      const maxSteps = options?.recursionLimit ?? ASSISTANT_RECURSION_LIMIT;
+      return streamAgentLoop({
+        initialMessages: input.messages,
+        maxSteps,
+        supervisorNode,
+        chatNode,
+        toolAgents,
+        memberNames,
+      });
+    },
+  };
 }

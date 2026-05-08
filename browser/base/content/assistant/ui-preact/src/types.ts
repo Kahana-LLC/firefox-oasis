@@ -170,6 +170,8 @@ export type OasisWindow = Window & {
     };
   };
   assistantBridge?: AssistantBridgeLike;
+  oasisRailroadSessionKey?: string;
+  oasisSetRailroadSessionKey?: (key: string | null) => void;
   runAssistantStream?: RunAssistantStream;
   voiceInputService?: {
     startRecording(): Promise<void>;

@@ -39,9 +39,61 @@ export type AssistResponse = {
   args?: Record<string, unknown>;
   content?: string;
   reason?: string;
+  /** Number of model calls used for this assist request (native-assist multi-turn routing). */
+  inner_rounds?: number;
   quota?: QuotaResult;
   [key: string]: unknown;
 };
+
+/** Optional native-assist routing loop controls (Claude-style inner tool loop). */
+export type AssistRemoteOptions = {
+  max_inner_rounds?: number;
+  refine_after_route?: boolean;
+};
+
+/**
+ * Reads optional build-time env for multi-turn native assist routing.
+ * Set in `build/.env.local`: OASIS_ASSIST_MAX_INNER_ROUNDS=1..8,
+ * OASIS_ASSIST_REFINE_AFTER_ROUTE=1 (requires at least 2 inner rounds; defaults to 3 if max unset).
+ */
+export function getAssistLoopOptionsFromBuildEnv():
+  | AssistRemoteOptions
+  | undefined {
+  const rawMax = String(
+    typeof process.env.OASIS_ASSIST_MAX_INNER_ROUNDS === "string"
+      ? process.env.OASIS_ASSIST_MAX_INNER_ROUNDS
+      : ""
+  ).trim();
+  const rawRefine = String(
+    typeof process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE === "string"
+      ? process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE
+      : ""
+  ).trim();
+  const refine =
+    rawRefine === "1" || /^true$/i.test(rawRefine);
+
+  let max: number | undefined;
+  if (rawMax !== "") {
+    const n = parseInt(rawMax, 10);
+    if (Number.isFinite(n) && n >= 1) {
+      max = Math.min(8, n);
+    }
+  }
+  if (refine && (max == null || max < 2)) {
+    max = 3;
+  }
+  if (max == null && !refine) {
+    return undefined;
+  }
+  const out: AssistRemoteOptions = {};
+  if (max != null) {
+    out.max_inner_rounds = max;
+  }
+  if (refine) {
+    out.refine_after_route = true;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 type TtsResponse = { audio: string; mimeType?: string };
 export type TranscribeAudioCaptureMeta = {
   preprocessed: boolean;
@@ -74,7 +126,8 @@ export async function assistRemote(
   messages: WireMsg[],
   options: string[],
   tools: AssistTool[] = [],
-  generationConfig?: Record<string, unknown>
+  generationConfig?: Record<string, unknown>,
+  assistLoop?: AssistRemoteOptions
 ): Promise<AssistResponse> {
   return postSigned<AssistResponse>("assist", {
     system,
@@ -82,6 +135,10 @@ export async function assistRemote(
     options,
     tools,
     ...(generationConfig ? { generation_config: generationConfig } : {}),
+    ...(assistLoop?.max_inner_rounds != null
+      ? { max_inner_rounds: assistLoop.max_inner_rounds }
+      : {}),
+    ...(assistLoop?.refine_after_route ? { refine_after_route: true } : {}),
   });
 }
 

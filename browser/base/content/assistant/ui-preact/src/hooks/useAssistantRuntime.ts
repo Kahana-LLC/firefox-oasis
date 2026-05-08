@@ -214,6 +214,18 @@ export function useAssistantRuntime(params: {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
 
+  useEffect(() => {
+    const setKey = oasisWindow.oasisSetRailroadSessionKey;
+    if (typeof setKey !== "function") {
+      return;
+    }
+    if (!auth.isAuthenticated || !chatUid || !activeChatId) {
+      setKey(null);
+      return;
+    }
+    setKey(`${chatUid}:${activeChatId}`);
+  }, [auth.isAuthenticated, chatUid, activeChatId]);
+
   const flushChatPersistence = useCallback(async () => {
     const uid = chatUserKey(auth.user);
     const cid = activeChatIdRef.current;

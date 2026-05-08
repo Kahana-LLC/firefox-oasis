@@ -159,6 +159,156 @@ function extractFirstFunctionCall(response) {
   return null;
 }
 
+/** Max inner model↔tool rounds (invalid-route retries + optional refine). */
+function clampAssistInnerRounds(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return 1;
+  }
+  return Math.min(8, Math.max(1, Math.floor(n)));
+}
+
+function appendModelFunctionCallTurn(contents, functionCall) {
+  const fc = {
+    name: functionCall.name,
+    args: functionCall.args || {},
+  };
+  if (functionCall.id != null && functionCall.id !== "") {
+    fc.id = functionCall.id;
+  }
+  contents.push({
+    role: "model",
+    parts: [{ functionCall: fc }],
+  });
+}
+
+function appendFunctionResponseTurn(contents, functionCall, resultPayload) {
+  const part = {
+    name: functionCall.name,
+    response: { result: resultPayload },
+  };
+  if (functionCall.id != null && functionCall.id !== "") {
+    part.id = functionCall.id;
+  }
+  contents.push({
+    role: "user",
+    parts: [{ functionResponse: part }],
+  });
+}
+
+/**
+ * Claude-style routing loop: repeated generateContent until a final route,
+ * chat text, or max rounds. Tool "results" are synthetic (browser does not
+ * execute inside Lambda); invalid route_command gets an error functionResponse.
+ */
+async function runAssistRoutingLoop({
+  ai,
+  messages,
+  routeOptions,
+  canChat,
+  enableFunctionCalling,
+  maxInnerRounds,
+  refineAfterRoute,
+  config,
+}) {
+  const contents = toContents(messages);
+  let lastValidRoute = null;
+  let roundCount = 0;
+
+  for (let i = 0; i < maxInnerRounds; i++) {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      config,
+      contents,
+    });
+    roundCount += 1;
+
+    if (enableFunctionCalling) {
+      const fc = extractFirstFunctionCall(response);
+      if (fc?.name === "route_command") {
+        const callArgs = safeJsonObject(fc.args);
+        const next = String(callArgs.next || "").trim();
+        const args = safeJsonObject(callArgs.args);
+
+        if (routeOptions.includes(next)) {
+          lastValidRoute = { next, args };
+          const canRefineMore = refineAfterRoute && i + 1 < maxInnerRounds;
+          if (!canRefineMore) {
+            return cors(200, {
+              next,
+              args,
+              reason: "native-tool-call",
+              inner_rounds: roundCount,
+            });
+          }
+          appendModelFunctionCallTurn(contents, fc);
+          appendFunctionResponseTurn(contents, fc, {
+            ok: true,
+            routedCommand: next,
+            message:
+              "Route accepted by host. Call route_command again only if correcting the choice; otherwise respond with the single word DONE.",
+          });
+          continue;
+        }
+
+        if (i + 1 < maxInnerRounds) {
+          appendModelFunctionCallTurn(contents, fc);
+          appendFunctionResponseTurn(contents, fc, {
+            ok: false,
+            error: "invalid_command",
+            validCommands: routeOptions,
+          });
+          continue;
+        }
+      }
+    }
+
+    const text = String(extractResponseText(response) || "").trim();
+
+    if (lastValidRoute) {
+      return cors(200, {
+        next: lastValidRoute.next,
+        args: lastValidRoute.args,
+        ...(text && text.toUpperCase() !== "DONE" ? { content: text } : {}),
+        reason: "multi-turn-route",
+        inner_rounds: roundCount,
+      });
+    }
+
+    if (canChat) {
+      return cors(200, {
+        next: "chat",
+        content: text,
+        reason: "no-tool-call",
+        inner_rounds: roundCount,
+      });
+    }
+
+    return cors(200, {
+      next: routeOptions[0],
+      args: {},
+      reason: "no-tool-call-fallback",
+      inner_rounds: roundCount,
+    });
+  }
+
+  if (lastValidRoute) {
+    return cors(200, {
+      next: lastValidRoute.next,
+      args: lastValidRoute.args,
+      reason: "multi-turn-max-rounds",
+      inner_rounds: roundCount,
+    });
+  }
+
+  return cors(200, {
+    next: routeOptions[0],
+    args: {},
+    reason: "no-tool-call-fallback",
+    inner_rounds: roundCount,
+  });
+}
+
 function safeJsonObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -259,7 +409,14 @@ function buildAssistSystemPrompt({ system, routeOptions, tools, canChat }) {
 }
 
 async function handleAssist(req) {
-  const { system, messages = [], options = [], tools = [] } = req || {};
+  const {
+    system,
+    messages = [],
+    options = [],
+    tools = [],
+    max_inner_rounds: maxInnerRaw,
+    refine_after_route: refineRaw,
+  } = req || {};
   const validOptions = sanitizeOptions(options);
   const canChat = validOptions.includes("chat");
   const routeOptions = validOptions.filter((opt) => opt !== "chat");
@@ -269,6 +426,11 @@ async function handleAssist(req) {
   if (validOptions.length === 0) {
     return cors(400, { error: "assist requires non-empty options" });
   }
+
+  const maxInnerRounds = clampAssistInnerRounds(
+    maxInnerRaw ?? process.env.ASSIST_MAX_INNER_ROUNDS ?? 1
+  );
+  const refineAfterRoute = Boolean(refineRaw);
 
   const ai = await getGeminiClient();
   const systemInstruction = buildAssistSystemPrompt({
@@ -314,6 +476,17 @@ async function handleAssist(req) {
         mode: "AUTO",
       },
     };
+
+    return runAssistRoutingLoop({
+      ai,
+      messages,
+      routeOptions,
+      canChat,
+      enableFunctionCalling,
+      maxInnerRounds,
+      refineAfterRoute,
+      config,
+    });
   }
 
   const response = await ai.models.generateContent({
@@ -322,29 +495,13 @@ async function handleAssist(req) {
     contents: toContents(messages),
   });
 
-  if (enableFunctionCalling) {
-    const functionCall = extractFirstFunctionCall(response);
-    if (functionCall?.name === "route_command") {
-      const callArgs = safeJsonObject(functionCall.args);
-      const next = String(callArgs.next || "").trim();
-      const args = safeJsonObject(callArgs.args);
-
-      if (routeOptions.includes(next)) {
-        return cors(200, {
-          next,
-          args,
-          reason: "native-tool-call",
-        });
-      }
-    }
-  }
-
   const content = String(extractResponseText(response) || "").trim();
   if (canChat) {
     return cors(200, {
       next: "chat",
       content,
       reason: "no-tool-call",
+      inner_rounds: 1,
     });
   }
 
@@ -352,6 +509,7 @@ async function handleAssist(req) {
     next: routeOptions[0],
     args: {},
     reason: "no-tool-call-fallback",
+    inner_rounds: 1,
   });
 }
 

@@ -4,8 +4,8 @@
  * Called by the UI when the user sends a message. Orchestrates:
  * 1. Auth & subscription checks
  * 2. Command registry creation (all 30+ browser commands)
- * 3. LangGraph state machine construction
- * 4. Streaming graph execution back to the UI
+ * 3. Agent stream runner (supervisor / tools / chat via agentLoopDriver)
+ * 4. Streaming execution back to the UI
  *
  * Exports `runAssistantStream` and `resetAssistantSession` onto
  * the browser's window object for the privileged shim to call.
@@ -18,6 +18,11 @@ import { buildCapabilitiesOverviewMarkdown } from "./assistant/capabilitiesOverv
 import { createAssistantCommandsRegistry } from "./assistant/commandsRegistry.js";
 import { ASSISTANT_RECURSION_LIMIT } from "./assistant/constants.js";
 import { buildAssistantGraph } from "./assistant/graph.js";
+import {
+  getRailroadMemoryPromptBlock,
+  invalidateRailroadSessionCache,
+  recordRailroadTurn,
+} from "./services/railroadMemory.js";
 import {
   createAssistantSessionController,
   type PlainSessionTurn,
@@ -95,6 +100,16 @@ function oasisSyncSessionFromPlainTurns(turns: PlainSessionTurn[]): void {
 }
 assistantWindow.oasisSyncSessionFromPlainTurns = oasisSyncSessionFromPlainTurns;
 
+function oasisSetRailroadSessionKey(key: string | null) {
+  if (key == null || key === "") {
+    assistantWindow.oasisRailroadSessionKey = undefined;
+  } else {
+    assistantWindow.oasisRailroadSessionKey = key;
+  }
+  invalidateRailroadSessionCache();
+}
+assistantWindow.oasisSetRailroadSessionKey = oasisSetRailroadSessionKey;
+
 export async function runAssistantStream(
   prompt: string,
   onChunk: (text: string) => void,
@@ -106,11 +121,14 @@ export async function runAssistantStream(
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();
-  const graph = await buildAssistantGraph(
+  const railroadMemoryBlock =
+    await getRailroadMemoryPromptBlock(assistantWindow);
+  const graph = buildAssistantGraph(
     commands,
     assistantWindow,
     messageId,
-    assistTools
+    assistTools,
+    { railroadMemoryBlock }
   );
   const sessionHistory = sessionController.getCurrentSessionMessages();
 
@@ -134,7 +152,7 @@ export async function runAssistantStream(
     { recursionLimit: ASSISTANT_RECURSION_LIMIT }
   );
 
-  return consumeAssistantGraphStream({
+  const combined = await consumeAssistantGraphStream({
     stream,
     prompt,
     onChunk,
@@ -147,6 +165,8 @@ export async function runAssistantStream(
       }
     },
   });
+  void recordRailroadTurn(assistantWindow, prompt, combined);
+  return combined;
 }
 assistantWindow.runAssistantStream = runAssistantStream;
 
