@@ -10,7 +10,8 @@
     "test:voice-guards": "esbuild src/utils/voiceUtteranceGuards.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-utterance-guards.mjs && esbuild src/utils/voiceVadDebounce.test.ts --bundle --platform=node --packages=external --format=esm --outfile=tests/tmp-voice-vad-debounce.mjs && node --test tests/tmp-voice-utterance-guards.mjs tests/tmp-voice-vad-debounce.mjs",
     "test:explicit-routes": "esbuild tests/explicitRouteRules.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-explicit-route.mjs && node --test tests/tmp-explicit-route.mjs",
     "test:capabilities-overview": "esbuild tests/capabilitiesOverview.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-capabilities-overview.mjs && node --test tests/tmp-capabilities-overview.mjs",
-    "test:assist-usage": "esbuild tests/assistUsageMeta.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-assist-usage.mjs && node --test tests/tmp-assist-usage.mjs"
+    "test:assist-usage": "esbuild tests/assistUsageMeta.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-assist-usage.mjs && node --test tests/tmp-assist-usage.mjs",
+    "eval:agent-loop": "esbuild tests/agentLoopEval.test.ts --bundle --platform=node --format=esm --outfile=tests/tmp-agent-loop-eval.mjs && node --test tests/tmp-agent-loop-eval.mjs"
   },
   "devDependencies": {
     "dotenv": "^17.2.1",

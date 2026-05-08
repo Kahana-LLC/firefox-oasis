@@ -43592,6 +43592,28 @@ Content: ${content}`;
         `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
       );
     }
+    /**
+     * Apply `usage_stats` from Supabase Edge assist (post-`record_llm_usage`).
+     * Avoid calling `trackUsage` for the same request when this object is present.
+     */
+    updateFromAssistUsageStats(stats) {
+      if (!stats || typeof stats !== "object") {
+        return;
+      }
+      const patch = {};
+      if (typeof stats.total_tokens === "number" && Number.isFinite(stats.total_tokens)) {
+        patch.daily_used = stats.total_tokens;
+      }
+      if (typeof stats.limit === "number" && Number.isFinite(stats.limit)) {
+        patch.daily_limit = stats.limit;
+      }
+      if (typeof stats.remaining === "number" && Number.isFinite(stats.remaining)) {
+        patch.daily_remaining = stats.remaining;
+      }
+      if (Object.keys(patch).length > 0) {
+        this.updateFromQuota(patch);
+      }
+    }
     /** Bar limit is Supabase plan (+ bonus); not Lambda `quota.daily_limit`. */
     getDailyTokenUsageForDisplay() {
       const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
@@ -43629,6 +43651,45 @@ Content: ${content}`;
      * @param type 'text' or 'voice'
      * @param model Optional model name for record keeping
      */
+    /**
+     * Log Gemini tokens for assist **routing** only (`usage_count` / monthly units stay 0).
+     * Final assistant turns still use `trackUsage` from the graph stream.
+     */
+    recordAssistRoutingTokens(meta) {
+      void this.recordAssistRoutingTokensAsync(meta);
+    }
+    async recordAssistRoutingTokensAsync(meta) {
+      const user = await supabaseAuth.getCurrentUser();
+      if (!user) {
+        logWarn2("recordAssistRoutingTokens: No user found.");
+        return;
+      }
+      const input = Number(meta.input_tokens ?? 0);
+      const output = Number(meta.output_tokens ?? 0);
+      if (!Number.isFinite(input) || !Number.isFinite(output) || input <= 0 && output <= 0) {
+        return;
+      }
+      const supabase = supabaseAuth.supabase;
+      const { error } = await supabase.from("llm_usage").insert({
+        user_id: user.id,
+        tokens_used: 0,
+        usage_count: 0,
+        model_used: "assist-router",
+        success: true,
+        command_type: meta.command_type ?? null,
+        user_intent: meta.user_intent ?? null,
+        input_tokens: input,
+        output_tokens: output
+      });
+      if (error) {
+        logError2("recordAssistRoutingTokens: DB insert failed", error);
+      } else {
+        logDebug2("recordAssistRoutingTokens: logged routing tokens", {
+          input,
+          output
+        });
+      }
+    }
     async trackUsage(type, model = "gemini-1.5-flash", meta) {
       const user = await supabaseAuth.getCurrentUser();
       if (!user) {
@@ -53376,6 +53437,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
   // src/assistant/constants.ts
   var ASSISTANT_RECURSION_LIMIT = 24;
   var MAX_NESTED_COMMANDS = 3;
+  var INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
   var STREAM_GUARD_MESSAGE = "I stopped this request to avoid a routing loop. Please rephrase and try again.";
 
   // src/assistant/agentLoopDriver.ts
@@ -54734,6 +54796,127 @@ Do NOT mention that you received page content or reference this instruction. Jus
     ].join(" ");
   }
 
+  // src/assistant/agentGraphSupport.ts
+  function splitInternalArgs(args) {
+    const commandArgs = {};
+    let chainNotice = null;
+    for (const [key, value] of Object.entries(args || {})) {
+      if (key === INTERNAL_CHAIN_NOTICE_ARG && typeof value === "string") {
+        chainNotice = value.trim() || null;
+        continue;
+      }
+      if (key.startsWith("__oasis")) {
+        continue;
+      }
+      commandArgs[key] = value;
+    }
+    return { commandArgs, chainNotice };
+  }
+  function toAmbiguityPayload(routePending) {
+    return {
+      kind: routePending.kind || "container_target",
+      name: routePending.name,
+      query: routePending.query,
+      all: routePending.all,
+      choices: routePending.choices,
+      tabIndex: routePending.tabIndex,
+      verb: routePending.verb,
+      originalText: routePending.originalText,
+      description: routePending.kind === "close_delete_target" ? `Ambiguous close/delete target for "${routePending.name}"` : `Ambiguous container target for "${routePending.name}"`
+    };
+  }
+  function setRoutePendingAmbiguity(routePending) {
+    setPendingAmbiguity(toAmbiguityPayload(routePending));
+    assistantLogger.debug("router", "Ambiguity detected", {
+      name: routePending.name,
+      query: routePending.query || "",
+      all: !!routePending.all,
+      kind: routePending.kind || "container_target"
+    });
+  }
+
+  // src/assistant/agentSteps.ts
+  function createCommandToolAgent(command, deps) {
+    const { assistantWindow: assistantWindow2, messageId } = deps;
+    return async (state) => {
+      const recordStart = assistantWindow2.oasisRecordToolActionStart;
+      const recordUpdate = assistantWindow2.oasisRecordToolActionUpdate;
+      let actionId;
+      if (typeof recordStart === "function") {
+        actionId = recordStart(command.commandName, messageId);
+      }
+      const { commandArgs, chainNotice } = splitInternalArgs(state.args);
+      let result;
+      try {
+        result = await command.execute(commandArgs);
+        if (typeof recordUpdate === "function" && actionId) {
+          recordUpdate(actionId, "done");
+        }
+      } catch (error) {
+        if (typeof recordUpdate === "function" && actionId) {
+          recordUpdate(actionId, "error");
+        }
+        assistantLogger.error(
+          "graph",
+          `Command execution failed: ${command.commandName}`,
+          error
+        );
+        result = { message: String(error) };
+      }
+      if (result.requiresConfirmation) {
+        const remainingQueue = state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [];
+        if (remainingQueue.length > 0) {
+          setContinuationQueue(remainingQueue);
+        } else {
+          clearContinuationQueue();
+        }
+        assistantLogger.debug(
+          "graph",
+          `Command requires confirmation: ${command.commandName}`
+        );
+        const confirmationMessage = String(result.message || "").trim();
+        const toolResultPayload2 = {
+          kind: "tool_result",
+          commandName: command.commandName,
+          message: confirmationMessage
+        };
+        return {
+          messages: [
+            new AIMessage({
+              content: confirmationMessage,
+              name: command.commandName,
+              additional_kwargs: { oasisToolResult: toolResultPayload2 }
+            })
+          ],
+          lastWorker: command.commandName,
+          next: AGENT_END,
+          args: {},
+          commandQueue: state.commandQueue
+        };
+      }
+      const resultMessage = chainNotice ? `${chainNotice}
+${result.message}` : result.message;
+      const toolResultPayload = {
+        kind: "tool_result",
+        commandName: command.commandName,
+        message: resultMessage
+      };
+      return {
+        messages: [
+          new AIMessage({
+            content: resultMessage,
+            name: command.commandName,
+            additional_kwargs: { oasisToolResult: toolResultPayload }
+          })
+        ],
+        lastWorker: command.commandName,
+        next: "supervisor",
+        args: {},
+        commandQueue: state.commandQueue
+      };
+    };
+  }
+
   // src/utils/quotaUserMessage.ts
   function formatQuotaExceededMessage(raw) {
     const s2 = String(raw || "").trim().toLowerCase();
@@ -54929,6 +55112,30 @@ Result: ${toolResult.message}`
     "meta",
     "other"
   ]);
+  function extractTokenCountsFromUsageMetadata(usage) {
+    let inputTokens = null;
+    let outputTokens = null;
+    if (!isRecord(usage)) {
+      return { input_tokens: null, output_tokens: null };
+    }
+    if (typeof usage.prompt_token_count === "number") {
+      inputTokens = usage.prompt_token_count;
+    } else if (typeof usage.promptTokenCount === "number") {
+      inputTokens = usage.promptTokenCount;
+    }
+    if (typeof usage.candidates_token_count === "number") {
+      outputTokens = usage.candidates_token_count;
+    } else if (typeof usage.candidatesTokenCount === "number") {
+      outputTokens = usage.candidatesTokenCount;
+    }
+    return { input_tokens: inputTokens, output_tokens: outputTokens };
+  }
+  function extractTokenCountsFromAssistPayload(payload) {
+    if (!isRecord(payload)) {
+      return { input_tokens: null, output_tokens: null };
+    }
+    return extractTokenCountsFromUsageMetadata(payload.usage_metadata);
+  }
   function parseChatEnvelope(response) {
     const defaultMeta = {
       command_type: "other",
@@ -54936,24 +55143,11 @@ Result: ${toolResult.message}`
       input_tokens: null,
       output_tokens: null
     };
-    let inputTokens = null;
-    let outputTokens = null;
-    if (isRecord(response)) {
-      const usage = response.usage_metadata;
-      if (isRecord(usage)) {
-        if (typeof usage.prompt_token_count === "number") {
-          inputTokens = usage.prompt_token_count;
-        } else if (typeof usage.promptTokenCount === "number") {
-          inputTokens = usage.promptTokenCount;
-        }
-        if (typeof usage.candidates_token_count === "number") {
-          outputTokens = usage.candidates_token_count;
-        } else if (typeof usage.candidatesTokenCount === "number") {
-          outputTokens = usage.candidatesTokenCount;
-        }
-      }
-    }
-    const tokenMeta = { input_tokens: inputTokens, output_tokens: outputTokens };
+    const tokenCounts = extractTokenCountsFromAssistPayload(response);
+    const tokenMeta = {
+      input_tokens: tokenCounts.input_tokens,
+      output_tokens: tokenCounts.output_tokens
+    };
     if (!isRecord(response)) {
       return {
         text: extractChatContent(response),
@@ -55454,6 +55648,26 @@ Result: ${toolResult.message}`
       allowPlanTool
     };
   }
+  function syncSubscriptionFromAssistRouterResponse(assist) {
+    const raw = assist;
+    if (isRecord(raw.usage_stats)) {
+      subscriptionService.updateFromAssistUsageStats(
+        raw.usage_stats
+      );
+      return;
+    }
+    const tokens = extractTokenCountsFromAssistPayload(assist);
+    const hasTokens = tokens.input_tokens != null && tokens.input_tokens > 0 || tokens.output_tokens != null && tokens.output_tokens > 0;
+    if (!hasTokens) {
+      return;
+    }
+    subscriptionService.recordAssistRoutingTokens({
+      command_type: "system",
+      user_intent: "other",
+      input_tokens: tokens.input_tokens,
+      output_tokens: tokens.output_tokens
+    });
+  }
   async function tryResolveAssistRoute(params) {
     const {
       endpointKey,
@@ -55517,6 +55731,7 @@ Result: ${toolResult.message}`
       if (assist?.quota) {
         subscriptionService.updateFromQuota(assist.quota);
       }
+      syncSubscriptionFromAssistRouterResponse(assist);
       markAssistSupported(endpointKey);
       const assistNext = typeof assist?.next === "string" ? assist.next.trim() : "";
       const assistArgs = isRecord(assist?.args) ? assist.args : {};
@@ -55774,127 +55989,15 @@ ${lines.join("\n\n")}`;
       required: ["response", "command_type", "user_intent"]
     }
   };
-  var INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
-  function splitInternalArgs(args) {
-    const commandArgs = {};
-    let chainNotice = null;
-    for (const [key, value] of Object.entries(args || {})) {
-      if (key === INTERNAL_CHAIN_NOTICE_ARG && typeof value === "string") {
-        chainNotice = value.trim() || null;
-        continue;
-      }
-      if (key.startsWith("__oasis")) {
-        continue;
-      }
-      commandArgs[key] = value;
-    }
-    return { commandArgs, chainNotice };
-  }
-  function toAmbiguityPayload(routePending) {
-    return {
-      kind: routePending.kind || "container_target",
-      name: routePending.name,
-      query: routePending.query,
-      all: routePending.all,
-      choices: routePending.choices,
-      tabIndex: routePending.tabIndex,
-      verb: routePending.verb,
-      originalText: routePending.originalText,
-      description: routePending.kind === "close_delete_target" ? `Ambiguous close/delete target for "${routePending.name}"` : `Ambiguous container target for "${routePending.name}"`
-    };
-  }
-  function setRoutePendingAmbiguity(routePending) {
-    setPendingAmbiguity(toAmbiguityPayload(routePending));
-    assistantLogger.debug("router", "Ambiguity detected", {
-      name: routePending.name,
-      query: routePending.query || "",
-      all: !!routePending.all,
-      kind: routePending.kind || "container_target"
-    });
-  }
   function buildAssistantGraph(commands2, assistantWindow2, messageId, assistToolDefs = [], options) {
     const railroadMemoryBlock = String(options?.railroadMemoryBlock || "");
     const toolAgents = {};
     const memberNames = [];
     for (const command of commands2) {
-      const node = async (state) => {
-        const recordStart = assistantWindow2.oasisRecordToolActionStart;
-        const recordUpdate = assistantWindow2.oasisRecordToolActionUpdate;
-        let actionId;
-        if (typeof recordStart === "function") {
-          actionId = recordStart(command.commandName, messageId);
-        }
-        const { commandArgs, chainNotice } = splitInternalArgs(state.args);
-        let result;
-        try {
-          result = await command.execute(commandArgs);
-          if (typeof recordUpdate === "function" && actionId) {
-            recordUpdate(actionId, "done");
-          }
-        } catch (error) {
-          if (typeof recordUpdate === "function" && actionId) {
-            recordUpdate(actionId, "error");
-          }
-          assistantLogger.error(
-            "graph",
-            `Command execution failed: ${command.commandName}`,
-            error
-          );
-          result = { message: String(error) };
-        }
-        if (result.requiresConfirmation) {
-          const remainingQueue = state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [];
-          if (remainingQueue.length > 0) {
-            setContinuationQueue(remainingQueue);
-          } else {
-            clearContinuationQueue();
-          }
-          assistantLogger.debug(
-            "graph",
-            `Command requires confirmation: ${command.commandName}`
-          );
-          const confirmationMessage = String(result.message || "").trim();
-          const toolResultPayload2 = {
-            kind: "tool_result",
-            commandName: command.commandName,
-            message: confirmationMessage
-          };
-          return {
-            messages: [
-              new AIMessage({
-                content: confirmationMessage,
-                name: command.commandName,
-                additional_kwargs: { oasisToolResult: toolResultPayload2 }
-              })
-            ],
-            lastWorker: command.commandName,
-            next: AGENT_END,
-            args: {},
-            commandQueue: state.commandQueue
-          };
-        }
-        const resultMessage = chainNotice ? `${chainNotice}
-${result.message}` : result.message;
-        const toolResultPayload = {
-          kind: "tool_result",
-          commandName: command.commandName,
-          message: resultMessage
-        };
-        return {
-          messages: [
-            new AIMessage({
-              content: resultMessage,
-              name: command.commandName,
-              additional_kwargs: { oasisToolResult: toolResultPayload }
-            })
-          ],
-          lastWorker: command.commandName,
-          next: "supervisor",
-          args: {},
-          commandQueue: state.commandQueue
-        };
-      };
-      toolAgents[command.commandName] = node;
+      toolAgents[command.commandName] = createCommandToolAgent(command, {
+        assistantWindow: assistantWindow2,
+        messageId
+      });
       memberNames.push(command.commandName);
     }
     const memberNameSet = new Set(memberNames);
@@ -63790,6 +63893,61 @@ Answer:`;
 
   // src/services/railroadMemory.ts
   var sessionCache = /* @__PURE__ */ new Map();
+  var extractionTurnCounts = /* @__PURE__ */ new Map();
+  var RAILROAD_EXTRACTION_GEN_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        response: {
+          type: "string",
+          description: "Brief acknowledgment; may be empty."
+        },
+        newMemories: {
+          type: "array",
+          items: { type: "string" },
+          description: "Standalone facts to remember for future turns."
+        },
+        newDecisions: {
+          type: "array",
+          items: { type: "string" }
+        },
+        currentContext: { type: "string" },
+        userUpdates: { type: "object" }
+      },
+      required: ["response"]
+    }
+  };
+  function railroadExtractionInterval() {
+    const raw = String(
+      true ? "" : ""
+    ).trim();
+    if (raw === "0") {
+      return 0;
+    }
+    if (raw === "") {
+      return 4;
+    }
+    const n2 = parseInt(raw, 10);
+    if (!Number.isFinite(n2) || n2 < 1) {
+      return 4;
+    }
+    return Math.min(64, n2);
+  }
+  function parseExtractionObject(text2) {
+    const t2 = text2.trim();
+    if (!t2) {
+      return null;
+    }
+    try {
+      const o2 = JSON.parse(t2);
+      if (o2 && typeof o2 === "object" && !Array.isArray(o2)) {
+        return o2;
+      }
+    } catch {
+    }
+    return null;
+  }
   function sessionKeyFromWindow(win) {
     const raw = win.oasisRailroadSessionKey;
     if (typeof raw !== "string") {
@@ -63800,6 +63958,7 @@ Answer:`;
   }
   function invalidateRailroadSessionCache() {
     sessionCache.clear();
+    extractionTurnCounts.clear();
   }
   async function getOrCreateSession(key) {
     let p2 = sessionCache.get(key);
@@ -63861,6 +64020,65 @@ ${a2}`);
       await rr.incrementMessageCount();
     } catch (e2) {
       assistantLogger.warn("railroad", "addRawSession failed", e2);
+    }
+  }
+  function maybeRunRailroadStructuredExtraction(win, userText, assistantMarkdown) {
+    void runRailroadStructuredExtractionMaybe(win, userText, assistantMarkdown);
+  }
+  async function runRailroadStructuredExtractionMaybe(win, userText, assistantMarkdown) {
+    const interval = railroadExtractionInterval();
+    if (interval === 0) {
+      return;
+    }
+    const key = sessionKeyFromWindow(win);
+    if (!key) {
+      return;
+    }
+    const rr = await getRailroadForWindow(win);
+    if (!rr) {
+      return;
+    }
+    const prev = extractionTurnCounts.get(key) ?? 0;
+    const next = prev + 1;
+    extractionTurnCounts.set(key, next);
+    if (next % interval !== 0) {
+      return;
+    }
+    const u4 = String(userText || "").trim();
+    const a2 = String(assistantMarkdown || "").trim();
+    if (!u4 && !a2) {
+      return;
+    }
+    const block = `USER:
+${u4}
+
+ASSISTANT:
+${a2}`.slice(0, 12e4);
+    try {
+      const system = Railroad.getExtractionPrompt();
+      const res = await assistRemote(
+        system,
+        [{ role: "user", content: block }],
+        ["chat"],
+        [],
+        RAILROAD_EXTRACTION_GEN_CONFIG
+      );
+      const { text: text2 } = parseChatEnvelope(res);
+      const parsed = parseExtractionObject(text2);
+      if (!parsed || typeof parsed.response !== "string") {
+        assistantLogger.debug("railroad", "extraction: no valid JSON payload");
+        return;
+      }
+      await rr.processExtraction({
+        response: parsed.response,
+        newMemories: Array.isArray(parsed.newMemories) ? parsed.newMemories.filter((x3) => typeof x3 === "string") : void 0,
+        newDecisions: Array.isArray(parsed.newDecisions) ? parsed.newDecisions.filter((x3) => typeof x3 === "string") : void 0,
+        currentContext: typeof parsed.currentContext === "string" ? parsed.currentContext : void 0,
+        userUpdates: parsed.userUpdates && typeof parsed.userUpdates === "object" && !Array.isArray(parsed.userUpdates) ? parsed.userUpdates : void 0
+      });
+      assistantLogger.debug("railroad", "extraction: processExtraction applied");
+    } catch (e2) {
+      assistantLogger.warn("railroad", "structured extraction failed", e2);
     }
   }
 
@@ -65777,6 +65995,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
       }
     });
     void recordRailroadTurn(assistantWindow, prompt, combined);
+    maybeRunRailroadStructuredExtraction(assistantWindow, prompt, combined);
     return combined;
   }
   assistantWindow.runAssistantStream = runAssistantStream;

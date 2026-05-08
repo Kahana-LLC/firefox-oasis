@@ -11,8 +11,7 @@ import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 import { AGENT_END, streamAgentLoop, type AgentState } from "./agentLoopDriver.js";
 
-import type { PendingAmbiguityPayload } from "../../../shared/contracts.js";
-import type { Command, CmdResult } from "../commands.js";
+import type { Command } from "../commands.js";
 import { assistRemote, type AssistTool } from "../proxyClient.js";
 import {
   clearContinuationQueue,
@@ -20,19 +19,12 @@ import {
   getContinuationQueue,
   getPendingAmbiguity,
   getPendingConfirmation,
-  setContinuationQueue,
-  setPendingAmbiguity,
   takeContinuationQueue,
 } from "../services/interactionState.js";
-import type {
-  AssistantWindowLike,
-  OasisRecordToolActionStart,
-  OasisRecordToolActionUpdate,
-} from "../types/runtime.js";
+import type { AssistantWindowLike } from "../types/runtime.js";
 import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
-import type { PendingAmbiguityPayload as RouterPendingAmbiguityPayload } from "../utils/routerTypes.js";
 import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
 import { subscriptionService } from "../services/subscription.js";
@@ -40,8 +32,11 @@ import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
 import {
   ASSISTANT_RECURSION_LIMIT,
+  INTERNAL_CHAIN_NOTICE_ARG,
   MAX_NESTED_COMMANDS,
 } from "./constants.js";
+import { setRoutePendingAmbiguity } from "./agentGraphSupport.js";
+import { createCommandToolAgent } from "./agentSteps.js";
 import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
 import { getOasisCapabilitiesReply } from "../utils/oasisCapabilitiesFaq.js";
 
@@ -114,62 +109,7 @@ import {
   toWire,
   type GraphArgs,
   type MessageLike,
-  type ToolResultPayload,
 } from "./messageUtils.js";
-
-const INTERNAL_CHAIN_NOTICE_ARG = "__oasisChainNotice";
-
-function splitInternalArgs(args: GraphArgs): {
-  commandArgs: GraphArgs;
-  chainNotice: string | null;
-} {
-  const commandArgs: GraphArgs = {};
-  let chainNotice: string | null = null;
-
-  for (const [key, value] of Object.entries(args || {})) {
-    if (key === INTERNAL_CHAIN_NOTICE_ARG && typeof value === "string") {
-      chainNotice = value.trim() || null;
-      continue;
-    }
-    if (key.startsWith("__oasis")) {
-      continue;
-    }
-    commandArgs[key] = value;
-  }
-
-  return { commandArgs, chainNotice };
-}
-
-function toAmbiguityPayload(
-  routePending: RouterPendingAmbiguityPayload
-): PendingAmbiguityPayload {
-  return {
-    kind: routePending.kind || "container_target",
-    name: routePending.name,
-    query: routePending.query,
-    all: routePending.all,
-    choices: routePending.choices,
-    tabIndex: routePending.tabIndex,
-    verb: routePending.verb,
-    originalText: routePending.originalText,
-    description:
-      routePending.kind === "close_delete_target"
-        ? `Ambiguous close/delete target for "${routePending.name}"`
-        : `Ambiguous container target for "${routePending.name}"`,
-  };
-}
-
-function setRoutePendingAmbiguity(
-  routePending: RouterPendingAmbiguityPayload
-): void {
-  setPendingAmbiguity(toAmbiguityPayload(routePending));
-  assistantLogger.debug("router", "Ambiguity detected", {
-    name: routePending.name,
-    query: routePending.query || "",
-    all: !!routePending.all,
-    kind: routePending.kind || "container_target",
-  });
-}
 
 export function buildAssistantGraph(
   commands: Command[],
@@ -186,96 +126,10 @@ export function buildAssistantGraph(
   const memberNames: string[] = [];
 
   for (const command of commands) {
-    const node = async (state: AgentState) => {
-      const recordStart = assistantWindow.oasisRecordToolActionStart as
-        | OasisRecordToolActionStart
-        | undefined;
-      const recordUpdate = assistantWindow.oasisRecordToolActionUpdate as
-        | OasisRecordToolActionUpdate
-        | undefined;
-      let actionId: string | undefined;
-
-      if (typeof recordStart === "function") {
-        actionId = recordStart(command.commandName, messageId);
-      }
-
-      const { commandArgs, chainNotice } = splitInternalArgs(state.args);
-      let result: CmdResult;
-      try {
-        result = await command.execute(commandArgs);
-        if (typeof recordUpdate === "function" && actionId) {
-          recordUpdate(actionId, "done");
-        }
-      } catch (error) {
-        if (typeof recordUpdate === "function" && actionId) {
-          recordUpdate(actionId, "error");
-        }
-        assistantLogger.error(
-          "graph",
-          `Command execution failed: ${command.commandName}`,
-          error
-        );
-        result = { message: String(error) };
-      }
-
-      if (result.requiresConfirmation) {
-        const remainingQueue =
-          state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [];
-        if (remainingQueue.length > 0) {
-          setContinuationQueue(remainingQueue);
-        } else {
-          clearContinuationQueue();
-        }
-        assistantLogger.debug(
-          "graph",
-          `Command requires confirmation: ${command.commandName}`
-        );
-        const confirmationMessage = String(result.message || "").trim();
-        const toolResultPayload: ToolResultPayload = {
-          kind: "tool_result",
-          commandName: command.commandName,
-          message: confirmationMessage,
-        };
-        return {
-          messages: [
-            new AIMessage({
-              content: confirmationMessage,
-              name: command.commandName,
-              additional_kwargs: { oasisToolResult: toolResultPayload },
-            }),
-          ],
-          lastWorker: command.commandName,
-          next: AGENT_END,
-          args: {},
-          commandQueue: state.commandQueue,
-        };
-      }
-
-      const resultMessage = chainNotice
-        ? `${chainNotice}\n${result.message}`
-        : result.message;
-      const toolResultPayload: ToolResultPayload = {
-        kind: "tool_result",
-        commandName: command.commandName,
-        message: resultMessage,
-      };
-
-      return {
-        messages: [
-          new AIMessage({
-            content: resultMessage,
-            name: command.commandName,
-            additional_kwargs: { oasisToolResult: toolResultPayload },
-          }),
-        ],
-        lastWorker: command.commandName,
-        next: "supervisor",
-        args: {},
-        commandQueue: state.commandQueue,
-      };
-    };
-
-    toolAgents[command.commandName] = node;
+    toolAgents[command.commandName] = createCommandToolAgent(command, {
+      assistantWindow,
+      messageId,
+    });
     memberNames.push(command.commandName);
   }
   const memberNameSet = new Set(memberNames);

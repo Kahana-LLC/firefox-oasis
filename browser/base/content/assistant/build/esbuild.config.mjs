@@ -51,5 +51,8 @@ await esbuild.build({
     "process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE": JSON.stringify(
       process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE || ""
     ),
+    "process.env.OASIS_RAILROAD_EXTRACTION_INTERVAL": JSON.stringify(
+      process.env.OASIS_RAILROAD_EXTRACTION_INTERVAL || ""
+    ),
   },
 });

@@ -21,6 +21,7 @@ import { buildAssistantGraph } from "./assistant/graph.js";
 import {
   getRailroadMemoryPromptBlock,
   invalidateRailroadSessionCache,
+  maybeRunRailroadStructuredExtraction,
   recordRailroadTurn,
 } from "./services/railroadMemory.js";
 import {
@@ -166,6 +167,7 @@ export async function runAssistantStream(
     },
   });
   void recordRailroadTurn(assistantWindow, prompt, combined);
+  maybeRunRailroadStructuredExtraction(assistantWindow, prompt, combined);
   return combined;
 }
 assistantWindow.runAssistantStream = runAssistantStream;
