@@ -102,6 +102,17 @@ body {
   box-sizing: border-box;
 }
 
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- chat history header trigger focus */
+.oasis-chat-history-trigger:focus {
+  outline: 2px solid var(--primary-green);
+  outline-offset: 2px;
+}
+
+.oasis-chat-history-trigger:focus:not(:focus-visible) {
+  outline-color: color-mix(in srgb, var(--primary-green) 58%, transparent);
+}
+/* stylelint-enable stylelint-plugin-mozilla/use-design-tokens */
+
 .assistant-main--empty-signed-chat .chat-log--empty-signed-in {
   flex: 0 0 auto;
   min-height: 0;

@@ -10,6 +10,7 @@ export type HeaderChatHistoryProps = {
   activeId: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
+  onDeleteConversation: (id: string) => void | Promise<void>;
 };
 
 interface HeaderProps {
@@ -262,6 +263,7 @@ export function Header({
             activeId={chatHistory.activeId}
             onSelectConversation={chatHistory.onSelectConversation}
             onNewChat={chatHistory.onNewChat}
+            onDeleteConversation={chatHistory.onDeleteConversation}
           />
         ) : null}
 

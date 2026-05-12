@@ -689,6 +689,9 @@ export function App() {
                 onNewChat: () => {
                   void runtime.startNewChat();
                 },
+                onDeleteConversation: id => {
+                  void runtime.deleteChatConversation(id);
+                },
               }
             : null
         }

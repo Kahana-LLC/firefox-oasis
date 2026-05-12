@@ -8,6 +8,7 @@ import {
 import {
   bootstrapUserChats,
   createConversation,
+  deleteConversation,
   getMessages,
   importHistoryIfEmpty,
   listConversations,
@@ -567,6 +568,69 @@ export function useAssistantRuntime(params: {
     [auth.isAuthenticated, auth.user, flushChatPersistence, stopSpeaking]
   );
 
+  const deleteChatConversation = useCallback(
+    async (conversationId: string) => {
+      const uid = chatUserKey(auth.user);
+      if (!uid || !auth.isAuthenticated) {
+        return;
+      }
+      const wasActive = activeChatIdRef.current === conversationId;
+      if (!wasActive) {
+        await flushChatPersistence();
+      } else {
+        stopSpeaking();
+        setToolActions([]);
+      }
+      await deleteConversation(uid, conversationId);
+      const list = await listConversations(uid);
+      setChatConversations(list);
+      if (!wasActive) {
+        return;
+      }
+      if (list.length === 0) {
+        try {
+          localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
+          localStorage.removeItem(LS_COMPOSER_CHIPS_RETIRED);
+        } catch {
+          void 0;
+        }
+        setComposerInlineSends(0);
+        if (typeof originalResetAssistantSession === "function") {
+          await Promise.resolve(originalResetAssistantSession());
+        }
+        const newId = await createConversation(uid);
+        messagesRef.current = [];
+        setMessages([]);
+        activeChatIdRef.current = newId;
+        setActiveChatId(newId);
+        setInput("");
+        oasisWindow.oasisSyncSessionFromPlainTurns?.(
+          messagesToPlainSessionTurns([])
+        );
+        setChatConversations(await listConversations(uid));
+        return;
+      }
+      const nextId = list[0].id;
+      const rows = await getMessages(nextId);
+      const loaded = rowsToAssistantMessages(rows);
+      await setActiveConversationId(uid, nextId);
+      messagesRef.current = loaded;
+      setMessages(loaded);
+      activeChatIdRef.current = nextId;
+      setActiveChatId(nextId);
+      oasisWindow.oasisSyncSessionFromPlainTurns?.(
+        messagesToPlainSessionTurns(loaded)
+      );
+    },
+    [
+      auth.isAuthenticated,
+      auth.user,
+      flushChatPersistence,
+      originalResetAssistantSession,
+      stopSpeaking,
+    ]
+  );
+
   const CAPABILITIES_FALLBACK_MARKDOWN = [
     CAPABILITIES_OVERVIEW_FIRST_LINE,
     "",
@@ -876,6 +940,7 @@ export function useAssistantRuntime(params: {
     resetAssistantSession,
     startNewChat,
     openConversation,
+    deleteChatConversation,
     activeChatId,
     chatConversations,
     ttsEnabled,
