@@ -488,6 +488,16 @@ export function App() {
     onUserChanged: handleUserChanged,
   });
 
+  const prevAuthenticatedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = prevAuthenticatedRef.current;
+    const next = auth.isAuthenticated;
+    if (prev === true && next === false) {
+      setView('auth');
+    }
+    prevAuthenticatedRef.current = next;
+  }, [auth.isAuthenticated]);
+
   const handleResizeStart = (event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
