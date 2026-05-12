@@ -149,7 +149,17 @@ export type OasisWindow = Window & {
   oasisAuthState?: AuthState;
   supabaseAuth?: SupabaseAuthLike;
   subscriptionService?: {
+    appendOptimisticTrainingBonus?: (amount: number) => void;
     forceRefresh?: () => Promise<void>;
+    getUsageBarSnapshot?: () => {
+      used: number;
+      limit: number;
+      baseLimit: number;
+      bonusTokens: number;
+      remaining: number;
+      percentUsed: number;
+      percentOfBase: number;
+    };
     getUsageBarData?: () => Promise<{
       used: number;
       limit: number;

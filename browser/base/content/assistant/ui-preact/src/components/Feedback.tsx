@@ -312,8 +312,33 @@ export function Feedback({
         progress: progressUpdate.progress,
         unlockedBadges: progressUpdate.unlockedBadges,
       });
-      void oasisWindow.subscriptionService?.forceRefresh?.();
-      window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+      oasisWindow.subscriptionService?.appendOptimisticTrainingBonus?.(
+        FEEDBACK_BONUS_TOKENS
+      );
+      window.dispatchEvent(
+        new CustomEvent('oasis-usage-update', {
+          bubbles: true,
+          detail: { immediate: true },
+        })
+      );
+      void (async () => {
+        try {
+          await oasisWindow.subscriptionService?.forceRefresh?.();
+        } catch {
+          void 0;
+        }
+        window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+      })();
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            await oasisWindow.subscriptionService?.forceRefresh?.();
+          } catch {
+            void 0;
+          }
+          window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+        })();
+      }, 400);
       invalidateTrainingGalleryMetrics();
       setSubmitted(true);
       setTimeout(() => {

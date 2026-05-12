@@ -43547,6 +43547,32 @@ Content: ${content}`;
       meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
     );
   };
+  var OPTIMISTIC_FEEDBACK_BONUS_KEY = "oasis.daily_training_bonus.verified.";
+  function utcCalendarDateString() {
+    const d3 = /* @__PURE__ */ new Date();
+    d3.setUTCHours(0, 0, 0, 0);
+    return d3.toISOString().slice(0, 10);
+  }
+  function readOptimisticFeedbackBonusTokensToday() {
+    try {
+      const raw = sessionStorage.getItem(
+        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString()
+      );
+      const n2 = parseInt(String(raw || "0"), 10);
+      return Number.isFinite(n2) && n2 >= 0 ? n2 : 0;
+    } catch {
+      return 0;
+    }
+  }
+  function writeOptimisticFeedbackBonusTokensToday(total) {
+    try {
+      sessionStorage.setItem(
+        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString(),
+        String(Math.max(0, Math.floor(total)))
+      );
+    } catch {
+    }
+  }
   var SubscriptionService = class _SubscriptionService {
     static instance;
     // Cache current plan details to avoid hitting DB on every keystroke
@@ -43569,6 +43595,28 @@ Content: ${content}`;
         _SubscriptionService.instance = new _SubscriptionService();
       }
       return _SubscriptionService.instance;
+    }
+    /**
+     * Call after a qualifying training save succeeds so the daily bar reflects bonus tokens
+     * even when `feedback_token_grants` is unavailable. Persists for the current UTC calendar day.
+     */
+    appendOptimisticTrainingBonus(amount) {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+      const add = Math.floor(amount);
+      const prevCached = this.cachedFeedbackBonusTokensToday;
+      writeOptimisticFeedbackBonusTokensToday(
+        readOptimisticFeedbackBonusTokensToday() + add
+      );
+      const fromStorage = readOptimisticFeedbackBonusTokensToday();
+      this.cachedFeedbackBonusTokensToday = Math.max(
+        prevCached + add,
+        fromStorage
+      );
+    }
+    getUsageBarSnapshot() {
+      return this.getDailyTokenUsageForDisplay();
     }
     updateFromQuota(quota) {
       if (!quota) return;
@@ -43614,7 +43662,6 @@ Content: ${content}`;
         this.updateFromQuota(patch);
       }
     }
-    /** Bar limit is Supabase plan (+ bonus); not Lambda `quota.daily_limit`. */
     getDailyTokenUsageForDisplay() {
       const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
       const baseLimit = Math.max(
@@ -43632,7 +43679,7 @@ Content: ${content}`;
       const remaining = Math.max(0, limit - used);
       const percentOfBase = baseLimit > 0 ? Math.min(9999, Math.round(used / baseLimit * 1e3) / 10) : 0;
       const percentUsed = limit > 0 ? Math.min(9999, Math.round(used / limit * 1e3) / 10) : 0;
-      return {
+      const local = {
         used,
         limit,
         baseLimit,
@@ -43641,10 +43688,28 @@ Content: ${content}`;
         percentUsed,
         percentOfBase
       };
+      const qLimit = this.cachedDailyLimit;
+      const qUsed = this.cachedDailyUsedFromApi;
+      const qRem = this.cachedDailyRemainingFromApi;
+      if (qLimit != null && qLimit > 0 && qUsed != null && qRem != null && Number.isFinite(qUsed) && Number.isFinite(qRem) && Math.abs(qUsed + qRem - qLimit) <= 2 && qLimit >= local.limit) {
+        const qBonus = Math.max(0, qLimit - local.baseLimit);
+        const qPercentOfBase = local.baseLimit > 0 ? Math.min(9999, Math.round(qUsed / local.baseLimit * 1e3) / 10) : 0;
+        const qPercentUsed = qLimit > 0 ? Math.min(9999, Math.round(qUsed / qLimit * 1e3) / 10) : 0;
+        return {
+          used: qUsed,
+          limit: qLimit,
+          baseLimit: local.baseLimit,
+          bonusTokens: qBonus,
+          remaining: qRem,
+          percentUsed: qPercentUsed,
+          percentOfBase: qPercentOfBase
+        };
+      }
+      return local;
     }
     async getUsageBarData() {
       await this.forceRefresh();
-      return this.getDailyTokenUsageForDisplay();
+      return this.getUsageBarSnapshot();
     }
     /**
      * Track usage for a command
@@ -43901,21 +43966,25 @@ Content: ${content}`;
       const startOfUtcDay = /* @__PURE__ */ new Date();
       startOfUtcDay.setUTCHours(0, 0, 0, 0);
       const utcGrantDate = startOfUtcDay.toISOString().slice(0, 10);
+      let grantSum = 0;
       const { data: grantRows, error: grantErr } = await supabase.from("feedback_token_grants").select("tokens").eq("user_id", userId).eq("grant_date_utc", utcGrantDate);
       if (!grantErr && grantRows) {
-        this.cachedFeedbackBonusTokensToday = grantRows.reduce(
+        grantSum = grantRows.reduce(
           (acc, row) => acc + (Number(row.tokens) || 0),
           0
         );
-      } else {
-        if (grantErr) {
-          logWarn2(
-            "refreshUsageData: feedback_token_grants fetch failed",
-            grantErr.message
-          );
-        }
-        this.cachedFeedbackBonusTokensToday = 0;
+      } else if (grantErr) {
+        logDebug2(
+          "refreshUsageData: feedback_token_grants unavailable or error",
+          grantErr.message
+        );
       }
+      const optimistic = readOptimisticFeedbackBonusTokensToday();
+      this.cachedFeedbackBonusTokensToday = Math.max(
+        grantSum,
+        optimistic,
+        this.cachedFeedbackBonusTokensToday
+      );
       this.cachedDailyTokensFromDbOk = false;
       const { data: dayRows, error: dayErr } = await supabase.from("llm_usage").select("input_tokens, output_tokens").eq("user_id", userId).gte("created_at", startOfUtcDay.toISOString());
       if (!dayErr && dayRows) {
