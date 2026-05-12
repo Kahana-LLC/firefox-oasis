@@ -1,6 +1,13 @@
 import { h } from "preact";
 import type { JSX } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import type { ChatConversationRow } from "../chatStore/index";
 
 export type ChatHistoryPopoverProps = {
@@ -43,6 +50,14 @@ function groupConversationsByRecency(
 
 const PANEL_ID = "oasis-chat-history-panel";
 
+type HistoryPanelLayout = {
+  top: number;
+  right: number;
+  width: number;
+  maxHeight: string;
+  transform?: string;
+};
+
 export function ChatHistoryPopover({
   conversations,
   activeId,
@@ -53,8 +68,14 @@ export function ChatHistoryPopover({
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [panelLayout, setPanelLayout] = useState<HistoryPanelLayout | null>(
+    null
+  );
+  const lastAppliedKeyRef = useRef("");
+  const rafRef = useRef(0);
 
   const filtered = useMemo(() => {
     const q = query.replace(/\s+/g, " ").trim().toLowerCase();
@@ -98,6 +119,88 @@ export function ChatHistoryPopover({
     }, 0);
     return () => window.clearTimeout(t);
   }, [open]);
+
+  const applyPanelLayout = useCallback(() => {
+    const wrap = wrapRef.current;
+    const trigger = triggerRef.current;
+    if (!wrap || !trigger) {
+      return;
+    }
+    const container = wrap.closest(".assistant-container");
+    if (!container) {
+      lastAppliedKeyRef.current = "";
+      setPanelLayout(null);
+      return;
+    }
+    const edge = 8;
+    const cr = container.getBoundingClientRect();
+    const tr = trigger.getBoundingClientRect();
+    const width = Math.max(
+      160,
+      Math.min(280, Math.floor(cr.width - edge * 2))
+    );
+    const right = Math.round(window.innerWidth - cr.right + edge);
+    const top = Math.round(tr.bottom + 6);
+    const innerW = window.innerWidth;
+    const leftEdge = innerW - right - width;
+    const minLeft = cr.left + edge;
+    const translateX =
+      leftEdge < minLeft ? Math.round(minLeft - leftEdge) : 0;
+    const transform = translateX
+      ? `translateX(${translateX}px)`
+      : undefined;
+    const key = `${top}|${right}|${width}|${translateX}`;
+    if (key === lastAppliedKeyRef.current) {
+      return;
+    }
+    lastAppliedKeyRef.current = key;
+    setPanelLayout({
+      top,
+      right,
+      width,
+      maxHeight: "min(320px, 55vh)",
+      transform,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      lastAppliedKeyRef.current = "";
+      setPanelLayout(null);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      return;
+    }
+    const schedule = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = 0;
+        applyPanelLayout();
+      });
+    };
+    applyPanelLayout();
+    const wrap = wrapRef.current;
+    const container = wrap?.closest(".assistant-container");
+    const ro = new ResizeObserver(() => {
+      schedule();
+    });
+    if (container) {
+      ro.observe(container);
+    }
+    window.addEventListener("resize", schedule);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", schedule);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+  }, [open, applyPanelLayout]);
 
   useEffect(() => {
     if (!open) {
@@ -291,17 +394,17 @@ export function ChatHistoryPopover({
 
       {open ? (
         <div
+          ref={panelRef}
           id={PANEL_ID}
           role="dialog"
           aria-label="Chat history"
           className="oasis-chat-history-panel dropdown-menu"
           style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "6px",
-            width: "min(280px, calc(100vw - 24px))",
-            maxHeight: "min(320px, 55vh)",
+            position: "fixed",
+            top: panelLayout ? `${panelLayout.top}px` : 0,
+            right: panelLayout ? `${panelLayout.right}px` : 0,
+            width: panelLayout ? `${panelLayout.width}px` : 260,
+            maxHeight: panelLayout?.maxHeight ?? "min(320px, 55vh)",
             display: "flex",
             flexDirection: "column",
             background: "var(--surface-page)",
@@ -310,6 +413,9 @@ export function ChatHistoryPopover({
             boxShadow: "0 8px 28px rgba(0, 0, 0, 0.12)",
             zIndex: 1001,
             overflow: "hidden",
+            transform: panelLayout?.transform,
+            opacity: panelLayout ? 1 : 0,
+            pointerEvents: panelLayout ? "auto" : "none",
           }}
           onMouseDown={(e: JSX.TargetedMouseEvent<HTMLDivElement>) =>
             e.stopPropagation()

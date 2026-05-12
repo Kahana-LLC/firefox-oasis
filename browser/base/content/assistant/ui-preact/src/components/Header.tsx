@@ -1,6 +1,6 @@
 import { h } from 'preact';
 import type { ComponentChildren, JSX } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useLayoutEffect } from 'preact/hooks';
 import type { AuthState, OasisWindow } from '../types';
 import type { ChatConversationRow } from '../chatStore/index';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
@@ -22,6 +22,7 @@ interface HeaderProps {
 const oasisWindow: OasisWindow = window;
 
 const DOCS_URL = 'https://kahana.co/docs';
+const HEADER_COMPACT_WIDTH_PX = 380;
 
 function openDocsHelp(event: MouseEvent) {
   event.preventDefault();
@@ -44,6 +45,8 @@ export function Header({
   chatHistory = null,
 }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [compactHeader, setCompactHeader] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const userEmail =
     auth.user && typeof auth.user !== "string" ? auth.user.email : undefined;
@@ -56,6 +59,19 @@ export function Header({
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      setCompactHeader(el.getBoundingClientRect().width < HEADER_COMPACT_WIDTH_PX);
+    });
+    ro.observe(el);
+    setCompactHeader(el.getBoundingClientRect().width < HEADER_COMPACT_WIDTH_PX);
+    return () => ro.disconnect();
   }, []);
 
   const handleClose = (e: MouseEvent) => {
@@ -84,15 +100,19 @@ export function Header({
     }
   };
 
+  const headerGap = compactHeader ? 6 : 8;
+  const leftGap = compactHeader ? 6 : 8;
+
   return (
     <div
+      ref={headerRef}
       onPointerDown={handleDragStart}
       style={{
         height: '44px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        gap: '8px',
+        gap: `${headerGap}px`,
         padding: '0 8px', // Figma has less padding on edges of the internal row
         background: 'transparent',
         cursor: 'grab',
@@ -108,15 +128,20 @@ export function Header({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: `${leftGap}px`,
           flex: 1,
           minWidth: 0,
+          overflow: 'hidden',
         }}
       >
         {/* Sloth Icon */}
         <button
           type="button"
-          title="Training progress"
+          title={
+            compactHeader
+              ? 'Training progress — Oasis Beta'
+              : 'Training progress'
+          }
           aria-label="Open training badges and streak progress"
           onClick={(e: MouseEvent) => {
             e.preventDefault();
@@ -166,22 +191,36 @@ export function Header({
             minWidth: 0,
           }}
         >
-            Oasis AI
+            {compactHeader ? 'Oasis' : 'Oasis AI'}
         </span>
 
         {/* Beta Badge */}
-        <div
-          style={{
-            background: '#F2F4E5',
-            padding: '1px 8px',
-            borderRadius: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            flexShrink: 0,
-          }}
-        >
-            <span style={{ fontSize: '12px', color: '#495800' }}>Beta</span>
-        </div>
+        {!compactHeader ? (
+          <div
+            style={{
+              background: '#F2F4E5',
+              padding: '1px 8px',
+              borderRadius: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '12px',
+                color: '#495800',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Beta
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* Right Container: Help + Menu + Toggle + Close */}
