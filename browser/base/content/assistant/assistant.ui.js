@@ -64,6 +64,78 @@
         return false;
       }
     },
+    postOasisOverlayChromeMessage(data) {
+      try {
+        if (!data || typeof data !== "object") {
+          return false;
+        }
+        const win = Services.wm.getMostRecentWindow("navigator:browser");
+        if (!win) {
+          return false;
+        }
+        const overlayBrowser = win.document.getElementById(
+          "oasis-assistant-overlay-browser"
+        );
+        const sidebarBrowser = win.SidebarController?.browser;
+        const isOverlayChild =
+          overlayBrowser?.contentWindow &&
+          overlayBrowser.contentWindow === window;
+        const isSidebarChild =
+          sidebarBrowser?.contentWindow &&
+          sidebarBrowser.contentWindow === window;
+        if (!isOverlayChild && !isSidebarChild) {
+          return false;
+        }
+        let origin = "";
+        try {
+          origin = String(window.location.origin || "");
+        } catch (e) {
+          void e;
+        }
+        const ev = new win.MessageEvent("message", {
+          bubbles: false,
+          cancelable: false,
+          data,
+          origin,
+          source: window,
+          ports: [],
+        });
+        win.dispatchEvent(ev);
+        return true;
+      } catch (e) {
+        console.warn("assistantBridge.postOasisOverlayChromeMessage", e);
+        return false;
+      }
+    },
+    runOasisAssistantLayoutToggle() {
+      try {
+        const win = Services.wm.getMostRecentWindow("navigator:browser");
+        const sc = win?.SidebarController;
+        if (!win || !sc || typeof sc.show !== "function") {
+          return false;
+        }
+        const overlayBrowser = win.document.getElementById(
+          "oasis-assistant-overlay-browser"
+        );
+        const sidebarBrowser = sc.browser;
+        const inOverlay =
+          overlayBrowser?.contentWindow &&
+          overlayBrowser.contentWindow === window;
+        const inSidebar =
+          sidebarBrowser?.contentWindow &&
+          sidebarBrowser.contentWindow === window;
+        if (!inOverlay && !inSidebar) {
+          return false;
+        }
+        if (typeof sc._switchOasisAssistantLayout !== "function") {
+          return false;
+        }
+        return sc._switchOasisAssistantLayout();
+      } catch (e) {
+        console.warn("assistantBridge.runOasisAssistantLayoutToggle", e);
+        return false;
+      }
+    },
     async getAssistantHistory() {
       try {
         const HIST_USERNAME = "oasis_assistant_history";
@@ -332,6 +404,14 @@ const MIXPANEL_TOKEN = "4a23d4890cf107ac290b2d5e878e2561";
 
 // --- Mixpanel Tracking ---
 let __oasisAnonId = null;
+function oasisAnalyticsDisabled() {
+  try {
+    return typeof Cu !== "undefined" && Cu.isInAutomation;
+  } catch (e) {
+    void e;
+    return false;
+  }
+}
 function getDistinctId() {
   try {
     const key = "oasis_anon_distinct_id";
@@ -354,6 +434,9 @@ function getDistinctId() {
   }
 }
 function mpTrack(event, props = {}) {
+  if (oasisAnalyticsDisabled()) {
+    return;
+  }
   const distinct =
     window.oasisAuthState?.user?.id ||
     window.oasisAuthState?.user?.email ||
@@ -384,6 +467,9 @@ function mpTrack(event, props = {}) {
   }
 }
 function mpIdentify(user) {
+  if (oasisAnalyticsDisabled()) {
+    return;
+  }
   const distinct = user?.id || user?.email || getDistinctId();
   const body = [
     {
