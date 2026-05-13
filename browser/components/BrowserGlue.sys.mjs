@@ -15,6 +15,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "resource:///modules/oasiswelcome/OasisWelcomeManager.sys.mjs",
   OasisOnboardingChrome:
     "resource:///modules/oasiswelcome/OasisOnboardingChrome.sys.mjs",
+  OasisNavBarPill: "resource:///modules/oasiswelcome/OasisNavBarPill.sys.mjs",
   ASRouterDefaultConfig:
     "resource:///modules/asrouter/ASRouterDefaultConfig.sys.mjs",
   ASRouterNewTabHook: "resource:///modules/asrouter/ASRouterNewTabHook.sys.mjs",
@@ -801,6 +802,8 @@ BrowserGlue.prototype = {
     lazy.OasisWelcomeManager.maybeShowWelcomeOnStartup(aWindow);
 
     lazy.OasisOnboardingChrome.init();
+
+    lazy.OasisNavBarPill.schedulePlacement(aWindow);
 
     this._firstWindowTelemetry(aWindow);
   },

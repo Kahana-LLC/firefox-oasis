@@ -20,6 +20,9 @@ const DEFAULT_DESCRIPTION = gSync.fluentStrings.formatValueSync(
 );
 
 add_setup(async () => {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.oasis.hideFxAccountsNavbarButton", false]],
+  });
   gSync.init();
 });
 

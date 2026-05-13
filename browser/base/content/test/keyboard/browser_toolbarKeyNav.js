@@ -18,7 +18,7 @@ let gCUITestUtils = new CustomizableUITestUtils(window);
 
 const PERMISSIONS_PAGE =
   "https://example.com/browser/browser/base/content/test/permissions/permissions.html";
-const afterUrlBarButton = "fxa-toolbar-menu-button";
+const afterUrlBarButton = "oasis-navbar-pill";
 const sidebarRevampEnabled = Services.prefs.getBoolPref(
   "sidebar.revamp",
   false
@@ -352,7 +352,7 @@ add_task(async function testArrowsToolbarbuttons() {
       await expectFocusAfterKey("ArrowRight", "sidebar-button");
     }
     await expectFocusAfterKey("ArrowRight", "unified-extensions-button");
-    await expectFocusAfterKey("ArrowRight", "fxa-toolbar-menu-button");
+    await expectFocusAfterKey("ArrowRight", "oasis-navbar-pill");
     // This next check also confirms that the overflow menu button is skipped,
     // since it is currently invisible.
     await expectFocusAfterKey("ArrowRight", "PanelUI-menu-button");
@@ -362,7 +362,7 @@ add_task(async function testArrowsToolbarbuttons() {
       "PanelUI-menu-button",
       "ArrowRight at end of button group does nothing"
     );
-    await expectFocusAfterKey("ArrowLeft", "fxa-toolbar-menu-button");
+    await expectFocusAfterKey("ArrowLeft", "oasis-navbar-pill");
     await expectFocusAfterKey("ArrowLeft", "unified-extensions-button");
     if (!sidebarRevampEnabled) {
       await expectFocusAfterKey("ArrowLeft", "sidebar-button");
@@ -454,7 +454,7 @@ add_task(async function testArrowsOverflowButton() {
       await expectFocusAfterKey("ArrowRight", "sidebar-button");
     }
     await expectFocusAfterKey("ArrowRight", "unified-extensions-button");
-    await expectFocusAfterKey("ArrowRight", "fxa-toolbar-menu-button");
+    await expectFocusAfterKey("ArrowRight", "oasis-navbar-pill");
     await expectFocusAfterKey("ArrowRight", "nav-bar-overflow-button");
     // Make sure the button is not reachable once it is invisible again.
     await expectFocusAfterKey("ArrowRight", "PanelUI-menu-button");
@@ -464,7 +464,7 @@ add_task(async function testArrowsOverflowButton() {
     // We reset the toolbar above so the unified extensions button is now the
     // "last" button.
     await expectFocusAfterKey("ArrowLeft", "unified-extensions-button");
-    await expectFocusAfterKey("ArrowLeft", "fxa-toolbar-menu-button");
+    await expectFocusAfterKey("ArrowLeft", "oasis-navbar-pill");
   });
   RemoveOldMenuSideButtons();
 });
