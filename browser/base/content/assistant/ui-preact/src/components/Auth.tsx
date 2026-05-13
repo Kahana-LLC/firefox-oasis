@@ -257,19 +257,6 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
   const subtitle = getSubtitle();
   const showFormFields = mode === 'forgotPassword' || showEmailPassword;
 
-  const oauthButtonStyle: JSX.CSSProperties = {
-    flex: 1,
-    height: '36px',
-    borderRadius: '999px',
-    border: '1px solid #d9dfc8',
-    background: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: oauthLoading ? 'wait' : 'pointer',
-    outlineOffset: '2px',
-  };
-
   const authScreenClass =
     (mode === 'forgotPassword'
       ? 'auth-screen'
@@ -285,7 +272,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Google"
         onClick={() => handleOAuthStart('signInWithGoogle')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <GoogleIcon />
       </button>
@@ -294,7 +281,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Microsoft"
         onClick={() => handleOAuthStart('signInWithAzure')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <MicrosoftIcon />
       </button>
@@ -303,7 +290,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Apple"
         onClick={() => handleOAuthStart('signInWithApple')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <AppleIcon />
       </button>
