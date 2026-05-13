@@ -11,6 +11,7 @@ import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
+import { postOasisOverlayChromeMessage } from './utils/postOasisOverlayChrome';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
@@ -24,6 +25,9 @@ import type {
   VoiceCaptureMode,
 } from './types';
 import './App.css';
+import './themes.css';
+
+import { applyAssistantThemeToDocument } from './utils/applyAssistantTheme';
 
 const oasisWindow: OasisWindow = window;
 
@@ -488,6 +492,17 @@ export function App() {
     onUserChanged: handleUserChanged,
   });
 
+  useEffect(() => {
+    try {
+      const id = oasisWindow.assistantBridge?.getAssistantTheme?.();
+      applyAssistantThemeToDocument(
+        typeof id === "string" ? id : "default"
+      );
+    } catch {
+      applyAssistantThemeToDocument("default");
+    }
+  }, []);
+
   const prevAuthenticatedRef = useRef<boolean | null>(null);
   useEffect(() => {
     const prev = prevAuthenticatedRef.current;
@@ -501,18 +516,11 @@ export function App() {
   const handleResizeStart = (event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    try {
-      window.parent.postMessage(
-        {
-          type: 'oasisOverlayResizeStart',
-          screenX: event.screenX,
-          screenY: event.screenY,
-        },
-        '*'
-      );
-    } catch {
-      // ignore
-    }
+    postOasisOverlayChromeMessage({
+      type: 'oasisOverlayResizeStart',
+      screenX: event.screenX,
+      screenY: event.screenY,
+    });
   };
 
   const handleFeedback = () => {

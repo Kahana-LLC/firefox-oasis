@@ -23,6 +23,40 @@
     return `https://${url}`;
   }
 
+  const OASIS_ASSISTANT_THEME_PREF = "browser.oasis.assistant.theme";
+  const OASIS_ASSISTANT_THEME_IDS = new Set([
+    "default",
+    "traditional-light",
+    "neutral-light",
+    "clean-light",
+    "warm-light",
+    "ide-light",
+    "vs-light",
+    "light-modern",
+    "light-plus",
+    "quiet-light",
+    "solarized-light",
+    "traditional-dark",
+    "violet-dark",
+    "forest-dark",
+    "slate-dark",
+    "high-contrast",
+    "cool-dark",
+    "midnight-dark",
+    "vs-dark",
+    "dark-modern",
+    "dark-plus",
+    "abyss",
+    "kimbie-dark",
+    "monokai",
+  ]);
+
+  function normalizeAssistantThemeId(id) {
+    return typeof id === "string" && OASIS_ASSISTANT_THEME_IDS.has(id)
+      ? id
+      : "default";
+  }
+
   window.assistantBridge = {
     openTab(url) {
       try {
@@ -134,6 +168,26 @@
       } catch (e) {
         console.warn("assistantBridge.runOasisAssistantLayoutToggle", e);
         return false;
+      }
+    },
+    getAssistantTheme() {
+      try {
+        const v = Services.prefs.getStringPref(
+          OASIS_ASSISTANT_THEME_PREF,
+          "default"
+        );
+        return normalizeAssistantThemeId(v);
+      } catch (e) {
+        void e;
+        return "default";
+      }
+    },
+    setAssistantTheme(id) {
+      try {
+        const next = normalizeAssistantThemeId(id);
+        Services.prefs.setStringPref(OASIS_ASSISTANT_THEME_PREF, next);
+      } catch (e) {
+        void e;
       }
     },
     async getAssistantHistory() {
