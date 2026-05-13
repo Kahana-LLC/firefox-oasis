@@ -892,61 +892,6 @@ toolbar[inactive="true"] .urlbar,
   transform: scaleX(-1);
 }
 
-/* Oasis Chat button - pill-shaped button with icon and text */
-
-.oasis-chat-button {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
-  border-radius: 64px;
-  background-color: #f2f4e5;
-  cursor: pointer;
-  margin-inline: 4px;
-}
-
-#oasis-chat-button.oasis-chat-button {
-  box-sizing: border-box;
-  height: calc(var(--urlbar-min-height) - 2 * var(--urlbar-container-border-padding));
-  max-height: calc(var(--urlbar-min-height) - 2 * var(--urlbar-container-border-padding));
-  justify-content: center;
-  padding-block: 2px;
-  padding-inline: 6px;
-}
-
-.oasis-chat-wordmark {
-  display: block;
-  height: 20px;
-  width: auto;
-  max-width: min(112px, 28vw);
-  object-fit: contain;
-}
-
-.oasis-chat-button:hover {
-  background-color: #e8ebdb;
-}
-
-:root[oasis-assistant-overlay="true"] .oasis-chat-button {
-  background-color: #e0e4cc;
-}
-
-.oasis-chat-icon {
-  width: 12px;
-  height: 12px;
-  list-style-image: url(chrome://browser/skin/oasis-chat-sparkle.svg);
-  -moz-context-properties: fill;
-  fill: #7a9200;
-}
-
-#oasis-chat-button-label {
-  font-size: 12px;
-  font-weight: 400;
-  color: #7a9200;
-  line-height: 20px;
-  margin: 0;
-  padding: 0;
-}
-
 /* Legacy Oasis Assistant button (fallback) */
 
 #oasis-assistant-button-icon {

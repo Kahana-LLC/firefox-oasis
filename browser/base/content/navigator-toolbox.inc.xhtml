@@ -406,15 +406,6 @@
                   hidden="true">
               <image class="urlbar-icon" id="split-view-button-icon" />
             </hbox>
-            <hbox id="oasis-chat-button"
-                  class="oasis-chat-button"
-                  role="button"
-                  title="Oasis AI">
-              <html:img class="oasis-chat-wordmark"
-                        src="chrome://branding/content/logo-oasis.svg"
-                        alt=""
-                        aria-label="Oasis AI"/>
-            </hbox>
             <hbox id="pageActionButton"
                   class="urlbar-page-action"
                   role="button"
@@ -477,14 +468,19 @@
                   </hbox>
       </toolbarbutton>
 
-      <toolbarbutton id="assistant-button"
-                     class="toolbarbutton-1 chromeclass-toolbar-additional"
-                     data-l10n-id="oasis-assistant"
-                     removable="true"
-                     cui-areatype="toolbar"
-                     tooltiptext="Oasis Assistant">
-        <image class="toolbarbutton-icon" src="chrome://browser/content/assistant/logos/logo.svg"/>
-      </toolbarbutton>
+      <toolbaritem id="oasis-navbar-pill"
+                   class="chromeclass-toolbar-additional"
+                   removable="true"
+                   cui-areatype="toolbar">
+        <hbox id="oasis-navbar-pill-inner"
+              role="button"
+              title="Oasis AI">
+          <html:img class="oasis-navbar-pill-icon"
+                    src="chrome://browser/skin/oasis-assistant-launcher.svg"
+                    alt=""
+                    aria-label="Oasis AI"/>
+        </hbox>
+      </toolbaritem>
 
       <toolbarbutton id="unified-extensions-button"
                      class="toolbarbutton-1 chromeclass-toolbar-additional"
