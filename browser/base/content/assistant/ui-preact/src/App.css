@@ -132,7 +132,24 @@ body {
   box-sizing: border-box;
 }
 
-/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- chat history header trigger focus */
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- chat history header trigger uses assistant theme variables */
+.oasis-chat-history-trigger {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--icon-accent-color);
+  flex-shrink: 0;
+}
+
+.oasis-chat-history-trigger:hover {
+  background: var(--icon-accent-hover-bg);
+}
+
 .oasis-chat-history-trigger:focus {
   outline: 2px solid var(--primary-green);
   outline-offset: 2px;
@@ -1608,6 +1625,20 @@ button.input-field.input-field-signin-prompt:disabled {
   height: 28px;
   border-radius: var(--border-radius-large);
 }
+
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens -- composer toolbar icon colors use assistant theme variables */
+.send-btn.composer-tool-btn.composer-tool-btn--muted {
+  color: var(--text-secondary);
+}
+
+.send-btn.composer-tool-btn.composer-tool-btn--tts-on {
+  color: var(--icon-accent-color);
+}
+
+.send-btn.composer-tool-btn.composer-tool-btn--tts-off {
+  color: var(--neutral-500);
+}
+/* stylelint-enable stylelint-plugin-mozilla/use-design-tokens */
 
 .send-btn.composer-send-btn {
   /* stylelint-disable-next-line stylelint-plugin-mozilla/use-size-tokens */

@@ -449,24 +449,6 @@ export function ChatHistoryPopover({
         aria-controls={PANEL_ID}
         aria-haspopup="dialog"
         onClick={toggle}
-        style={{
-          border: "none",
-          background: "transparent",
-          cursor: "pointer",
-          padding: "2px",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#7A9200",
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-          (e.currentTarget.style.backgroundColor = "rgba(122, 146, 0, 0.12)")
-        }
-        onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-          (e.currentTarget.style.backgroundColor = "transparent")
-        }
       >
         <svg
           width="18"
