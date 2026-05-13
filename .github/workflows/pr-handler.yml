@@ -36,7 +36,7 @@ jobs:
       # We use the Lando Web App to obtain a token with sufficient permissions.
       - name: Generate a Lando Web token
         id: generate-lando-web-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         continue-on-error: true
         with:
           app-id: ${{ vars.LANDO_WEB_APP_ID }}

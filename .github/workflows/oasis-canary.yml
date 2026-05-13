@@ -25,7 +25,7 @@ jobs:
     environment: canary-signing
     steps:
       - name: Checkout selected ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
@@ -66,16 +66,16 @@ jobs:
           echo "MOZ_APPUPDATE_URL=${UPDATE_URL}" >> "${GITHUB_ENV}"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: |
             browser/base/content/assistant/build/package-lock.json
             browser/base/content/assistant/ui-preact/package-lock.json
 
       - name: Restore rcodesign cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.local/rcodesign
           key: ${{ runner.os }}-${{ runner.arch }}-rcodesign-${{ env.OASIS_RCODESIGN_VERSION }}-v1
