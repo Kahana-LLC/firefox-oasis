@@ -1354,7 +1354,7 @@ const MESSAGES = () => {
             progress_bar: false,
             anchors: [
               {
-                selector: "#oasis-chat-button",
+                selector: "#oasis-navbar-pill",
                 panel_position: {
                   anchor_attachment: "bottomcenter",
                   callout_attachment: "topright",
@@ -1371,7 +1371,7 @@ const MESSAGES = () => {
                 {
                   params: {
                     type: "click",
-                    selectors: "#oasis-chat-button",
+                    selectors: "#oasis-navbar-pill, #oasis-navbar-pill-inner",
                   },
                   action: {
                     type: "SET_PREF",
@@ -1389,8 +1389,7 @@ const MESSAGES = () => {
                 },
               ],
               logo: {
-                imageURL:
-                  "chrome://browser/skin/oasis-chat-sparkle.svg",
+                imageURL: "chrome://browser/skin/oasis-chat-sparkle.svg",
                 height: "48px",
                 width: "48px",
                 marginBlock: "0 16px",
@@ -1414,7 +1413,7 @@ const MESSAGES = () => {
                       {
                         type: "CLICK_ELEMENT",
                         data: {
-                          selector: "#oasis-chat-button",
+                          selector: "#oasis-navbar-pill",
                         },
                       },
                       {

@@ -187,7 +187,8 @@ document.addEventListener(
         #picture-in-picture-button,
         #urlbar-zoom-button,
         #star-button-box,
-        #oasis-chat-button,
+        #oasis-navbar-pill,
+        #oasis-navbar-pill-inner,
         #personal-toolbar-empty-description,
         #home-button,
         #PlacesToolbar,
@@ -242,8 +243,8 @@ document.addEventListener(
           );
           break;
 
-        case "oasis-assistant-button":
-        case "oasis-chat-button":
+        case "oasis-navbar-pill-inner":
+        case "oasis-navbar-pill":
           if (isLeftClick) {
             SidebarController.toggle("viewOasisAssistantSidebar");
           }
@@ -315,8 +316,8 @@ document.addEventListener(
         #picture-in-picture-button,
         #urlbar-zoom-button,
         #star-button-box,
-        #oasis-chat-button,
-        #oasis-assistant-button,
+        #oasis-navbar-pill,
+        #oasis-navbar-pill-inner,
         #personal-toolbar-empty-description,
         #home-button,
         #tracking-protection-icon-container,
@@ -363,8 +364,8 @@ document.addEventListener(
           );
           break;
 
-        case "oasis-assistant-button":
-        case "oasis-chat-button":
+        case "oasis-navbar-pill-inner":
+        case "oasis-navbar-pill":
           if (isLikeLeftClick) {
             SidebarController.toggle("viewOasisAssistantSidebar");
           }

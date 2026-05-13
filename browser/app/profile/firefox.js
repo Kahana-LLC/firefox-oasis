@@ -2137,6 +2137,9 @@ pref("browser.oasis.onboarding.checklistDismissed", false);
 pref("browser.oasis.onboarding.oauthAttemptStarted", false);
 pref("browser.oasis.onboarding.importOptOut", false);
 pref("browser.oasis.onboarding.firstAiTurnComplete", false);
+pref("browser.oasis.assistant.theme", "default");
+pref("browser.oasis.navbarPill.placedNextToVpn", false);
+pref("browser.oasis.hideFxAccountsNavbarButton", true);
 pref(
   "datareporting.policy.firstRunURL",
   "https://kahana.co/privacy-policy#personal-data-collect"

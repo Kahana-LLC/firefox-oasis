@@ -34,6 +34,7 @@ add_setup(async function () {
     set: [
       ["browser.urlbar.trustPanel.featureGate", false],
       ["identity.fxaccounts.toolbar.accessed", true],
+      ["browser.oasis.hideFxAccountsNavbarButton", false],
     ],
   });
 });

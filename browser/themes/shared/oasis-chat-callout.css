@@ -2,52 +2,54 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens, stylelint-plugin-mozilla/use-size-tokens, stylelint-plugin-mozilla/use-space-tokens */
+
 /**
  * Oasis Chat Feature Callout Animations
  * Provides pulsing highlight and smooth animations for the chat button tour
  */
 
 /* Pulsing animation for the chat button when callout is showing */
-#oasis-chat-button[open],
-#oasis-chat-button.feature-callout-target {
+#oasis-navbar-pill[open],
+#oasis-navbar-pill.feature-callout-target {
   position: relative;
   animation: oasis-chat-pulse 2s ease-in-out infinite;
   z-index: 999999;
 }
 
 @keyframes oasis-chat-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(122, 146, 0, 0.6),
-                0 0 20px 5px rgba(122, 146, 0, 0.3);
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(122, 146, 0, 0.6),
+      0 0 20px 5px rgba(122, 146, 0, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(122, 146, 0, 0),
-                0 0 30px 8px rgba(122, 146, 0, 0.5);
+    box-shadow:
+      0 0 0 6px rgba(122, 146, 0, 0),
+      0 0 30px 8px rgba(122, 146, 0, 0.5);
   }
 }
 
 /* Add subtle spotlight circle around button */
-#oasis-chat-button[open]::after,
-#oasis-chat-button.feature-callout-target::after {
-  content: '';
+#oasis-navbar-pill[open]::after,
+#oasis-navbar-pill.feature-callout-target::after {
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 150px;
   height: 150px;
-  background: radial-gradient(
-    circle,
-    rgba(122, 146, 0, 0.08) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(122, 146, 0, 0.08) 0%, transparent 70%);
   pointer-events: none;
   animation: oasis-spotlight-ring 3s ease-in-out infinite;
   z-index: -1;
 }
 
 @keyframes oasis-spotlight-ring {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate(-50%, -50%) scale(1);
     opacity: 0.6;
   }
@@ -58,14 +60,15 @@
 }
 
 /* Glow effect on hover during tour */
-#oasis-chat-button[open]:hover,
-#oasis-chat-button.feature-callout-target:hover {
+#oasis-navbar-pill[open]:hover,
+#oasis-navbar-pill.feature-callout-target:hover {
   box-shadow: 0 0 12px rgba(122, 146, 0, 0.8) !important;
   animation: oasis-chat-pulse-fast 1s ease-in-out infinite;
 }
 
 @keyframes oasis-chat-pulse-fast {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 12px rgba(122, 146, 0, 0.8);
   }
   50% {
@@ -78,7 +81,7 @@
   animation: oasis-callout-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 10000000 !important; /* Above all overlays - driver.js style */
   position: relative;
-  box-shadow: 
+  box-shadow:
     0 0 0 2px rgba(122, 146, 0, 0.3),
     0 10px 40px rgba(0, 0, 0, 0.4),
     0 0 60px 10px rgba(122, 146, 0, 0.1);
@@ -118,7 +121,8 @@
 }
 
 @keyframes oasis-arrow-bounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -132,7 +136,8 @@
 }
 
 @keyframes oasis-button-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(122, 146, 0, 0.4);
   }
   50% {
@@ -155,7 +160,8 @@
 }
 
 @keyframes oasis-progress-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.6;
   }
   50% {
@@ -200,10 +206,10 @@ body:has(#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"]) #nav-bar {
 
 /* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
-  #oasis-chat-button[open],
-  #oasis-chat-button.feature-callout-target,
-  #oasis-chat-button[open]::after,
-  #oasis-chat-button.feature-callout-target::after,
+  #oasis-navbar-pill[open],
+  #oasis-navbar-pill.feature-callout-target,
+  #oasis-navbar-pill[open]::after,
+  #oasis-navbar-pill.feature-callout-target::after,
   #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"],
   #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .arrow,
   #feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"] .primary,
@@ -214,4 +220,3 @@ body:has(#feature-callout[message-id="OASIS_CHAT_FEATURE_TOUR"]) #nav-bar {
     transition: none !important;
   }
 }
-
