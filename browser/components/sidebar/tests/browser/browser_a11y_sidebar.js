@@ -23,7 +23,7 @@ add_setup(async () => {
   await SpecialPowers.pushPrefEnv({
     set: [
       ["browser.ml.chat.enabled", true],
-      ["sidebar.main.tools", "aichat,syncedtabs,history,bookmarks"],
+      ["sidebar.main.tools", "oasis-assistant,history,bookmarks"],
     ],
   });
 

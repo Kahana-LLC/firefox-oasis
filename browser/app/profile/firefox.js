@@ -2032,7 +2032,7 @@ pref("browser.newtabpage.activity-stream.discoverystream.sections.personalizatio
 // List of locales that use inferred personalization.
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.locale-config", "en-US,en-GB,en-CA");
 
-pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.user.enabled", true);
+pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.user.enabled", false);
 
 // Override inferred personalization model JSON string that typically comes from rec API. Or "TEST" for a test model.
 pref("browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.model.override", "");
@@ -2098,7 +2098,7 @@ pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.searchTops
 pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", true);
 
 // User pref to show stories on newtab (feeds.system.topstories has to be set to true as well)
-pref("browser.newtabpage.activity-stream.feeds.section.topstories", true);
+pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
 
 pref("browser.newtabpage.activity-stream.logowordmark.alwaysVisible", true);
 

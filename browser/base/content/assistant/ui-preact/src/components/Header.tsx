@@ -1,6 +1,6 @@
 import { h } from 'preact';
-import type { ComponentChildren, JSX } from 'preact';
-import { useState, useEffect, useRef, useLayoutEffect } from 'preact/hooks';
+import type { ComponentChildren, JSX, Ref } from 'preact';
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'preact/hooks';
 import type { AuthState, OasisWindow } from '../types';
 import type { ChatConversationRow } from '../chatStore/index';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
@@ -13,6 +13,11 @@ import {
   getAssistantThemeScheme,
 } from '../utils/themes';
 import { applyAssistantThemeToDocument } from '../utils/applyAssistantTheme';
+import {
+  layoutFixedPanelBelowTrigger,
+  layoutKeyForPanel,
+  type AssistantFixedPanelLayout,
+} from '../utils/assistantPanelLayout';
 
 export type HeaderChatHistoryProps = {
   conversations: ChatConversationRow[];
@@ -74,6 +79,11 @@ export function Header({
   const headerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const themePanelRef = useRef<HTMLDivElement>(null);
+  const themeTriggerRef = useRef<HTMLButtonElement>(null);
+  const [themePanelLayout, setThemePanelLayout] =
+    useState<AssistantFixedPanelLayout | null>(null);
+  const themeLayoutKeyRef = useRef('');
+  const themeLayoutRafRef = useRef(0);
   const userEmail =
     auth.user && typeof auth.user !== "string" ? auth.user.email : undefined;
 
@@ -111,6 +121,71 @@ export function Header({
     setCompactHeader(el.getBoundingClientRect().width < HEADER_COMPACT_WIDTH_PX);
     return () => ro.disconnect();
   }, []);
+
+  const applyThemePanelLayout = useCallback(() => {
+    const next = layoutFixedPanelBelowTrigger(
+      themePanelRef.current,
+      themeTriggerRef.current,
+      {
+        minWidth: 200,
+        maxWidth: 300,
+        gapBelowTrigger: 6,
+        maxHeight: 'min(420px, 58vh)',
+        maxHeightPxCap: 420,
+        minHeightPxFloor: 120,
+      }
+    );
+    if (!next) {
+      themeLayoutKeyRef.current = '';
+      setThemePanelLayout(null);
+      return;
+    }
+    const key = layoutKeyForPanel(next);
+    if (key === themeLayoutKeyRef.current) {
+      return;
+    }
+    themeLayoutKeyRef.current = key;
+    setThemePanelLayout(next);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showThemePanel) {
+      themeLayoutKeyRef.current = '';
+      setThemePanelLayout(null);
+      if (themeLayoutRafRef.current) {
+        cancelAnimationFrame(themeLayoutRafRef.current);
+        themeLayoutRafRef.current = 0;
+      }
+      return;
+    }
+    const schedule = () => {
+      if (themeLayoutRafRef.current) {
+        cancelAnimationFrame(themeLayoutRafRef.current);
+      }
+      themeLayoutRafRef.current = requestAnimationFrame(() => {
+        themeLayoutRafRef.current = 0;
+        applyThemePanelLayout();
+      });
+    };
+    applyThemePanelLayout();
+    const wrap = themePanelRef.current;
+    const container = wrap?.closest('.assistant-container');
+    const ro = new ResizeObserver(() => {
+      schedule();
+    });
+    if (container) {
+      ro.observe(container);
+    }
+    window.addEventListener('resize', schedule);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', schedule);
+      if (themeLayoutRafRef.current) {
+        cancelAnimationFrame(themeLayoutRafRef.current);
+        themeLayoutRafRef.current = 0;
+      }
+    };
+  }, [showThemePanel, applyThemePanelLayout]);
 
   const handleDragStart = (e: PointerEvent) => {
     const t = e.target as HTMLElement;
@@ -308,6 +383,7 @@ export function Header({
 
         <div style={{ position: 'relative' }} ref={themePanelRef}>
           <HeaderBtn
+            btnRef={themeTriggerRef}
             onClick={(e: MouseEvent) => {
               e.preventDefault();
               e.stopPropagation();
@@ -328,11 +404,11 @@ export function Header({
             <div
               className="assistant-theme-picker dropdown-menu"
               style={{
-                position: 'absolute',
-                top: '32px',
-                right: '0',
-                width: 'min(300px, 78vw)',
-                maxHeight: 'min(420px, 58vh)',
+                position: 'fixed',
+                top: themePanelLayout ? `${themePanelLayout.top}px` : 0,
+                right: themePanelLayout ? `${themePanelLayout.right}px` : 0,
+                width: themePanelLayout ? `${themePanelLayout.width}px` : 280,
+                maxHeight: themePanelLayout?.maxHeight ?? 'min(420px, 58vh)',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -342,6 +418,9 @@ export function Header({
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
                 zIndex: 1001,
                 padding: '8px 0 0',
+                transform: themePanelLayout?.transform,
+                opacity: themePanelLayout ? 1 : 0,
+                pointerEvents: themePanelLayout ? 'auto' : 'none',
               }}
             >
               <div
@@ -352,6 +431,7 @@ export function Header({
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   color: 'var(--dropdown-muted-text)',
+                  flexShrink: 0,
                 }}
               >
                 Color theme
@@ -365,6 +445,7 @@ export function Header({
                   borderRadius: '8px',
                   border: '1px solid var(--dropdown-border-color)',
                   overflow: 'hidden',
+                  flexShrink: 0,
                 }}
               >
                 <button
@@ -381,6 +462,7 @@ export function Header({
                     font: 'inherit',
                     fontSize: '12px',
                     fontWeight: 600,
+                    lineHeight: 1.25,
                     cursor: 'pointer',
                     background:
                       themePickerScheme === 'light'
@@ -407,6 +489,7 @@ export function Header({
                     font: 'inherit',
                     fontSize: '12px',
                     fontWeight: 600,
+                    lineHeight: 1.25,
                     cursor: 'pointer',
                     background:
                       themePickerScheme === 'dark'
@@ -423,7 +506,6 @@ export function Header({
                 style={{
                   flex: 1,
                   minHeight: 0,
-                  maxHeight: 'min(320px, 50vh)',
                   overflowY: 'auto',
                   paddingBottom: '8px',
                 }}
@@ -562,11 +644,20 @@ type HeaderBtnProps = {
   children: ComponentChildren;
   hoverColor?: string;
   ariaLabel?: string;
+  btnRef?: Ref<HTMLButtonElement>;
 };
 
-function HeaderBtn({ onClick, title, children, hoverColor, ariaLabel }: HeaderBtnProps) {
+function HeaderBtn({
+  onClick,
+  title,
+  children,
+  hoverColor,
+  ariaLabel,
+  btnRef,
+}: HeaderBtnProps) {
   return (
     <button
+      ref={btnRef}
       onClick={onClick}
       title={title}
       aria-label={ariaLabel ?? title}

@@ -9,6 +9,11 @@ import {
   useState,
 } from "preact/hooks";
 import type { ChatConversationRow } from "../chatStore/index";
+import {
+  layoutFixedPanelBelowTrigger,
+  layoutKeyForPanel,
+  type AssistantFixedPanelLayout,
+} from "../utils/assistantPanelLayout";
 
 export type ChatHistoryPopoverProps = {
   conversations: ChatConversationRow[];
@@ -51,14 +56,6 @@ function groupConversationsByRecency(
 
 const PANEL_ID = "oasis-chat-history-panel";
 
-type HistoryPanelLayout = {
-  top: number;
-  right: number;
-  width: number;
-  maxHeight: string;
-  transform?: string;
-};
-
 export function ChatHistoryPopover({
   conversations,
   activeId,
@@ -77,7 +74,7 @@ export function ChatHistoryPopover({
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [panelLayout, setPanelLayout] = useState<HistoryPanelLayout | null>(
+  const [panelLayout, setPanelLayout] = useState<AssistantFixedPanelLayout | null>(
     null
   );
   const lastAppliedKeyRef = useRef("");
@@ -141,46 +138,27 @@ export function ChatHistoryPopover({
   }, [open]);
 
   const applyPanelLayout = useCallback(() => {
-    const wrap = wrapRef.current;
-    const trigger = triggerRef.current;
-    if (!wrap || !trigger) {
-      return;
-    }
-    const container = wrap.closest(".assistant-container");
-    if (!container) {
+    const next = layoutFixedPanelBelowTrigger(
+      wrapRef.current,
+      triggerRef.current,
+      {
+        minWidth: 160,
+        maxWidth: 280,
+        gapBelowTrigger: 6,
+        maxHeight: "min(320px, 55vh)",
+      }
+    );
+    if (!next) {
       lastAppliedKeyRef.current = "";
       setPanelLayout(null);
       return;
     }
-    const edge = 8;
-    const cr = container.getBoundingClientRect();
-    const tr = trigger.getBoundingClientRect();
-    const width = Math.max(
-      160,
-      Math.min(280, Math.floor(cr.width - edge * 2))
-    );
-    const right = Math.round(window.innerWidth - cr.right + edge);
-    const top = Math.round(tr.bottom + 6);
-    const innerW = window.innerWidth;
-    const leftEdge = innerW - right - width;
-    const minLeft = cr.left + edge;
-    const translateX =
-      leftEdge < minLeft ? Math.round(minLeft - leftEdge) : 0;
-    const transform = translateX
-      ? `translateX(${translateX}px)`
-      : undefined;
-    const key = `${top}|${right}|${width}|${translateX}`;
+    const key = layoutKeyForPanel(next);
     if (key === lastAppliedKeyRef.current) {
       return;
     }
     lastAppliedKeyRef.current = key;
-    setPanelLayout({
-      top,
-      right,
-      width,
-      maxHeight: "min(320px, 55vh)",
-      transform,
-    });
+    setPanelLayout(next);
   }, []);
 
   useLayoutEffect(() => {

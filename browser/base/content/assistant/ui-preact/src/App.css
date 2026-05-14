@@ -574,7 +574,7 @@ body {
   padding: 10px var(--space-small);
   margin: 0;
   box-sizing: border-box;
-  background: #fafcf5;
+  background: color-mix(in srgb, var(--surface-default) 88%, var(--primary-green) 8%);
 }
 
 .onboarding-import-step-header--done {
@@ -594,14 +594,14 @@ body {
 .onboarding-import-card-from {
   font-size: 13px;
   font-weight: var(--font-weight-semibold);
-  color: #333;
+  color: var(--text-headings);
   line-height: 1.3;
 }
 
 .onboarding-import-done-label {
   font-size: 13px;
   font-weight: var(--font-weight-semibold);
-  color: #3d4a2f;
+  color: var(--text-headings);
   line-height: 1.3;
 }
 
@@ -647,8 +647,8 @@ body {
   padding: var(--space-small);
   margin-bottom: var(--space-small);
   border-radius: var(--border-radius-lg);
-  border: 1px solid #d4e0c0;
-  background: linear-gradient(135deg, #f4f8ec 0%, #eef3e4 100%);
+  border: 1px solid color-mix(in srgb, var(--primary-green) 28%, var(--dropdown-border-color));
+  background: color-mix(in srgb, var(--surface-default) 78%, var(--primary-green) 10%);
   box-sizing: border-box;
 }
 
@@ -667,7 +667,7 @@ body {
   margin: 0 0 var(--space-xsmall);
   font-size: 12px;
   font-weight: var(--font-weight-semibold);
-  color: #3d4a2f;
+  color: var(--text-body);
   line-height: 1.4;
 }
 
@@ -675,7 +675,7 @@ body {
   display: inline-block;
   font-size: 11px;
   font-weight: var(--font-weight-semibold);
-  color: #5a7000;
+  color: var(--primary-green);
   text-decoration: underline;
   text-underline-offset: 2px;
   font-family: inherit;
@@ -683,7 +683,7 @@ body {
 }
 
 .onboarding-import-learn-more:hover {
-  color: #3d4a00;
+  color: color-mix(in srgb, var(--primary-green) 72%, var(--text-headings));
 }
 
 .quota-limit-callout {
@@ -750,7 +750,7 @@ body {
   flex-shrink: 0;
   padding-top: var(--space-xsmall);
   margin-top: var(--space-xxsmall);
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid color-mix(in srgb, var(--text-body) 12%, transparent);
 }
 
 .assistant-onboarding-dock--collapsed {
@@ -765,9 +765,9 @@ body {
   width: 100%;
   margin: 0;
   padding: var(--space-small) 10px;
-  border: 1px solid #e2e8d0;
+  border: 1px solid var(--dropdown-border-color);
   border-radius: 10px;
-  background: #f6f8ef;
+  background: var(--surface-page);
   box-sizing: border-box;
   cursor: pointer;
   font: inherit;
@@ -776,7 +776,7 @@ body {
 }
 
 .onboarding-checklist-compact:hover {
-  background: #f0f4e8;
+  background: var(--dropdown-item-hover);
 }
 
 .onboarding-checklist-compact-top {
@@ -791,6 +791,11 @@ body {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  color: var(--primary-green);
+}
+
+.onboarding-checklist-compact-icon svg path {
+  stroke: currentColor;
 }
 
 .onboarding-checklist-compact-title {
@@ -798,27 +803,184 @@ body {
   min-width: 0;
   font-size: 13px;
   font-weight: var(--font-weight-semibold);
-  color: var(--header-title-color);
+  color: var(--text-headings);
 }
 
 .onboarding-checklist-compact-count {
   flex-shrink: 0;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .onboarding-checklist-compact-bar {
   height: 3px;
   border-radius: 3px;
-  background: #e2e8d0;
+  background: color-mix(in srgb, var(--text-body) 18%, transparent);
   overflow: hidden;
 }
 
 .onboarding-checklist-compact-bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: #7a9200;
+  background: var(--primary-green);
   transition: width 0.25s ease;
+}
+
+.onboarding-checklist-shell {
+  width: 100%;
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-page);
+  border: 1px solid var(--dropdown-border-color);
+  box-sizing: border-box;
+}
+
+.onboarding-checklist-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.onboarding-checklist-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-headings);
+}
+
+.onboarding-checklist-panel-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.onboarding-checklist-collapse-btn {
+  border: none;
+  background: color-mix(in srgb, var(--primary-green) 14%, transparent);
+  border-radius: 8px;
+  width: 32px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-headings);
+  flex-shrink: 0;
+}
+
+.onboarding-checklist-progress {
+  height: 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text-body) 18%, transparent);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.onboarding-checklist-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--primary-green);
+  transition: width 0.25s ease;
+}
+
+.onboarding-checklist-nested-card {
+  border-radius: 8px;
+  border: 1px solid var(--dropdown-border-color);
+  background: var(--surface-page);
+  overflow: hidden;
+}
+
+.onboarding-checklist-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 8px;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text-headings);
+  box-sizing: border-box;
+}
+
+.onboarding-checklist-row:hover {
+  background: color-mix(in srgb, var(--text-body) 8%, transparent);
+}
+
+.onboarding-checklist-row--done {
+  cursor: default;
+  opacity: 0.72;
+  color: var(--text-secondary);
+}
+
+.onboarding-checklist-row--done:hover {
+  background: transparent;
+}
+
+.onboarding-checklist-row-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 2px;
+}
+
+.onboarding-checklist-chevron {
+  color: var(--neutral-500);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.onboarding-checklist-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  display: block;
+  color: inherit;
+}
+
+.onboarding-import-primary-btn--outline {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--primary-green) 42%, var(--dropdown-border-color));
+  background: var(--surface-page);
+  color: var(--text-headings);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.onboarding-import-primary-btn--outline:hover {
+  background: var(--dropdown-item-hover);
+}
+
+.onboarding-checklist-step-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary-green) 40%, var(--dropdown-border-color));
+  background: transparent;
+  color: var(--auth-on-primary);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.onboarding-checklist-step-icon--done {
+  border: none;
+  background: var(--primary-green);
+}
+
+.onboarding-import-shield-svg path {
+  fill: color-mix(in srgb, var(--surface-default) 82%, var(--primary-green) 18%);
+  stroke: color-mix(in srgb, var(--text-secondary) 55%, var(--primary-green) 45%);
 }
 
 /* Chat Log */
