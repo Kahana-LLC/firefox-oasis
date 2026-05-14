@@ -8,6 +8,12 @@
  * The frame script relays CustomEvents between that document and chrome.
  */
 
+import {
+    createEmbeddingDiagnosticError,
+    diagnoseEmbeddingFailure,
+    type EmbeddingDiagnostic,
+} from "../utils/embeddingDiagnostics.js";
+
 const VECTOR_DIMENSIONS = 384;
 const EMBEDDING_WORKER_PAGE_URL =
     "chrome://browser/content/assistant/embedding-worker.html";
@@ -25,8 +31,20 @@ class EmbeddingService {
     private readyPromise: Promise<void> | null = null;
     private pendingRequests = new Map<string, PendingRequest>();
     private requestCounter = 0;
+    private fatalDiagnostic: EmbeddingDiagnostic | null = null;
+
+    private setFatalDiagnosticFrom(error: unknown): Error {
+        const diagnostic = diagnoseEmbeddingFailure(error);
+        if (diagnostic.fatal) {
+            this.fatalDiagnostic = diagnostic;
+        }
+        return createEmbeddingDiagnosticError(diagnostic);
+    }
 
     private async ensureBrowser(): Promise<void> {
+        if (this.fatalDiagnostic?.fatal) {
+            throw createEmbeddingDiagnosticError(this.fatalDiagnostic);
+        }
         if (this.ready) return;
         if (this.readyPromise) {
             await this.readyPromise;
@@ -35,6 +53,10 @@ class EmbeddingService {
 
         this.readyPromise = new Promise<void>((resolve, reject) => {
             console.log("[EmbeddingService] Creating remote content browser...");
+            const failInitialization = (error: unknown) => {
+                const diagnosticError = this.setFatalDiagnosticFrom(error);
+                reject(diagnosticError);
+            };
 
             try {
                 const Services = (window as any).Services
@@ -44,7 +66,7 @@ class EmbeddingService {
                 const browserWin = Services?.wm?.getMostRecentWindow("navigator:browser");
 
                 if (!browserWin) {
-                    reject(new Error("Could not find main browser window"));
+                    failInitialization(new Error("Could not find main browser window"));
                     return;
                 }
 
@@ -62,7 +84,7 @@ class EmbeddingService {
                     try {
                         if (!this.browser.messageManager) {
                             console.error("[EmbeddingService] messageManager not available after timeout");
-                            reject(new Error("messageManager not available"));
+                            failInitialization(new Error("messageManager not available"));
                             return;
                         }
 
@@ -79,6 +101,7 @@ class EmbeddingService {
                         this.browser.messageManager.addMessageListener("EmbedModelLoaded", () => {
                             console.log("[EmbeddingService] Model loaded in content process");
                             this.modelLoaded = true;
+                            this.fatalDiagnostic = null;
                         });
 
                         this.browser.messageManager.addMessageListener("EmbedResponse", (msg: any) => {
@@ -87,8 +110,9 @@ class EmbeddingService {
                             if (pending) {
                                 this.pendingRequests.delete(id);
                                 if (error) {
-                                    pending.reject(new Error(error));
+                                    pending.reject(this.setFatalDiagnosticFrom(error));
                                 } else {
+                                    this.fatalDiagnostic = null;
                                     pending.resolve(embedding);
                                 }
                             }
@@ -98,20 +122,22 @@ class EmbeddingService {
 
                     } catch (err) {
                         console.error("[EmbeddingService] Setup failed:", err);
-                        reject(err as Error);
+                        failInitialization(err);
                     }
                 }, 1000); // Allow browser element to fully initialize
 
                 setTimeout(() => {
                     if (!this.ready) {
                         console.error("[EmbeddingService] Timeout: never received EmbedWorkerReady");
-                        reject(new Error("Embedding browser failed to initialize within 60s"));
+                        failInitialization(
+                            new Error("Embedding browser failed to initialize within 60s")
+                        );
                     }
                 }, 60000);
 
             } catch (err) {
                 console.error("[EmbeddingService] Failed to create browser:", err);
-                reject(err as Error);
+                failInitialization(err);
             }
         });
 
@@ -119,6 +145,9 @@ class EmbeddingService {
     }
 
     async embed(text: string): Promise<number[]> {
+        if (this.fatalDiagnostic?.fatal) {
+            throw createEmbeddingDiagnosticError(this.fatalDiagnostic);
+        }
         await this.ensureBrowser();
         const id = `embed-${++this.requestCounter}`;
 

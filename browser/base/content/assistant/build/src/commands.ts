@@ -20,6 +20,7 @@ import {
   filterStaleBookmarkFolderResults,
   hasBookmarkFolderCandidates,
 } from "./utils/searchMemoryUtils";
+import { formatSearchHistoryFailureMessage } from "./utils/embeddingDiagnostics";
 import { getMemoryDocSource } from "./utils/localMemoryUtils";
 import { assistantLogger } from "./utils/assistantLogger";
 import {
@@ -2413,7 +2414,7 @@ export class SearchHistorySemanticCommand implements Command {
     } catch (e: any) {
       console.error("[SearchHistorySemantic] Search failed:", e);
       return {
-        message: `History search failed: ${e.message || "Unknown error"}. The embedding model may still be loading — please try again in a moment.`,
+        message: formatSearchHistoryFailureMessage(e),
       };
     }
   }

@@ -47958,16 +47958,20 @@ ${fake_token_around_image}${global_img_token}` + image_token.repeat(image_seq_le
   var __webpack_exports__zeros = __webpack_exports__.zeros;
   var __webpack_exports__zeros_like = __webpack_exports__.zeros_like;
 
+  // src/utils/embeddingAssetPaths.ts
+  var EMBEDDING_ASSET_BASE = "./embedding-assets";
+  var EMBEDDING_LOCAL_MODEL_PATH = `${EMBEDDING_ASSET_BASE}/models`;
+  var EMBEDDING_ORT_WASM_PATH = `${EMBEDDING_ASSET_BASE}/ort/`;
+
   // src/embedding-worker-entry.ts
-  var EMBEDDING_CHROME_BASE = "chrome://browser/content/assistant/embedding-assets";
   __webpack_exports__env.allowRemoteModels = false;
   __webpack_exports__env.allowLocalModels = true;
   __webpack_exports__env.useBrowserCache = false;
-  __webpack_exports__env.localModelPath = `${EMBEDDING_CHROME_BASE}/models`;
+  __webpack_exports__env.localModelPath = EMBEDDING_LOCAL_MODEL_PATH;
   var onnxWasm = __webpack_exports__env.backends.onnx.wasm;
   onnxWasm.numThreads = 1;
   onnxWasm.proxy = false;
-  onnxWasm.wasmPaths = `${EMBEDDING_CHROME_BASE}/ort/`;
+  onnxWasm.wasmPaths = EMBEDDING_ORT_WASM_PATH;
   var MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
   var rootDoc = (() => {
     const d = globalThis.document;

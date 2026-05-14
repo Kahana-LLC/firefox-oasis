@@ -44137,6 +44137,94 @@ Content: ${content}`;
   var VECTOR_DIMENSIONS = 384;
   var EMBEDDING_WORKER_PAGE_URL = "chrome://browser/content/assistant/embedding-worker.html";
   var FRAME_SCRIPT_URL = "chrome://browser/content/assistant/embedding-frame-script.js";
+  var CSP_BLOCK_RE = /webassembly\.instantiate\(\)\s+blocked\s+by\s+csp|blocked by page security policy|blocked by csp/i;
+  var BACKEND_UNAVAILABLE_RE = /no available backend found/i;
+  var LOCAL_ASSET_MISSING_RE = /file was not found locally at|attempted to load a remote file from/i;
+  var WORKER_INIT_RE = /embedding browser failed to initialize|messageManager not available|could not find main browser window/i;
+  var TIMEOUT_RE = /embedding timed out after/i;
+  function rawMessageOf(error) {
+    if (typeof error === "string") {
+      return error;
+    }
+    if (error instanceof Error) {
+      return error.message || error.toString();
+    }
+    return String(error ?? "Unknown error");
+  }
+  function diagnoseEmbeddingFailure(error) {
+    if (error instanceof Error && error.embeddingDiagnosticCode) {
+      return {
+        code: error.embeddingDiagnosticCode,
+        fatal: error.embeddingFatal === true,
+        message: error.embeddingUserMessage || rawMessageOf(error),
+        rawMessage: rawMessageOf(error)
+      };
+    }
+    const rawMessage = rawMessageOf(error).trim() || "Unknown error";
+    if (CSP_BLOCK_RE.test(rawMessage)) {
+      return {
+        code: "backend_csp_blocked",
+        fatal: true,
+        message: "History search is unavailable in this build because the local embedding runtime was blocked by page security policy (CSP).",
+        rawMessage
+      };
+    }
+    if (BACKEND_UNAVAILABLE_RE.test(rawMessage)) {
+      return {
+        code: "backend_unavailable",
+        fatal: true,
+        message: "History search is unavailable because the local embedding runtime could not start.",
+        rawMessage
+      };
+    }
+    if (LOCAL_ASSET_MISSING_RE.test(rawMessage)) {
+      return {
+        code: "local_asset_missing",
+        fatal: true,
+        message: "History search is unavailable because the local embedding model files could not be found in the packaged assistant assets.",
+        rawMessage
+      };
+    }
+    if (WORKER_INIT_RE.test(rawMessage)) {
+      return {
+        code: "worker_init_failed",
+        fatal: true,
+        message: "History search is unavailable because the local embedding worker failed to initialize.",
+        rawMessage
+      };
+    }
+    if (TIMEOUT_RE.test(rawMessage)) {
+      return {
+        code: "model_loading_timeout",
+        fatal: false,
+        message: "History search is still loading its local embedding model. Please try again in a moment.",
+        rawMessage
+      };
+    }
+    return {
+      code: "unknown",
+      fatal: false,
+      message: `History search failed: ${rawMessage}.`,
+      rawMessage
+    };
+  }
+  function createEmbeddingDiagnosticError(diagnostic) {
+    const error = new Error(diagnostic.rawMessage || diagnostic.message);
+    error.embeddingDiagnosticCode = diagnostic.code;
+    error.embeddingFatal = diagnostic.fatal;
+    error.embeddingUserMessage = diagnostic.message;
+    return error;
+  }
+  function formatSearchHistoryFailureMessage(error) {
+    const diagnostic = diagnoseEmbeddingFailure(error);
+    if (diagnostic.code === "unknown") {
+      return diagnostic.message;
+    }
+    if (diagnostic.fatal) {
+      return `${diagnostic.message} Browser Console logs contain the underlying runtime error.`;
+    }
+    return diagnostic.message;
+  }
   var EmbeddingService = class {
     browser = null;
     ready = false;
@@ -44144,7 +44232,18 @@ Content: ${content}`;
     readyPromise = null;
     pendingRequests = /* @__PURE__ */ new Map();
     requestCounter = 0;
+    fatalDiagnostic = null;
+    setFatalDiagnosticFrom(error) {
+      const diagnostic = diagnoseEmbeddingFailure(error);
+      if (diagnostic.fatal) {
+        this.fatalDiagnostic = diagnostic;
+      }
+      return createEmbeddingDiagnosticError(diagnostic);
+    }
     async ensureBrowser() {
+      if (this.fatalDiagnostic?.fatal) {
+        throw createEmbeddingDiagnosticError(this.fatalDiagnostic);
+      }
       if (this.ready) return;
       if (this.readyPromise) {
         await this.readyPromise;
@@ -44152,11 +44251,15 @@ Content: ${content}`;
       }
       this.readyPromise = new Promise((resolve, reject) => {
         console.log("[EmbeddingService] Creating remote content browser...");
+        const failInitialization = (error) => {
+          const diagnosticError = this.setFatalDiagnosticFrom(error);
+          reject(diagnosticError);
+        };
         try {
           const Services = window.Services || window.top?.Services || globalThis.Services;
           const browserWin = Services?.wm?.getMostRecentWindow("navigator:browser");
           if (!browserWin) {
-            reject(new Error("Could not find main browser window"));
+            failInitialization(new Error("Could not find main browser window"));
             return;
           }
           this.browser = browserWin.document.createXULElement("browser");
@@ -44170,7 +44273,7 @@ Content: ${content}`;
             try {
               if (!this.browser.messageManager) {
                 console.error("[EmbeddingService] messageManager not available after timeout");
-                reject(new Error("messageManager not available"));
+                failInitialization(new Error("messageManager not available"));
                 return;
               }
               console.log("[EmbeddingService] Loading frame script...");
@@ -44184,6 +44287,7 @@ Content: ${content}`;
               this.browser.messageManager.addMessageListener("EmbedModelLoaded", () => {
                 console.log("[EmbeddingService] Model loaded in content process");
                 this.modelLoaded = true;
+                this.fatalDiagnostic = null;
               });
               this.browser.messageManager.addMessageListener("EmbedResponse", (msg) => {
                 const { id, embedding, error } = msg.data;
@@ -44191,8 +44295,9 @@ Content: ${content}`;
                 if (pending) {
                   this.pendingRequests.delete(id);
                   if (error) {
-                    pending.reject(new Error(error));
+                    pending.reject(this.setFatalDiagnosticFrom(error));
                   } else {
+                    this.fatalDiagnostic = null;
                     pending.resolve(embedding);
                   }
                 }
@@ -44200,23 +44305,26 @@ Content: ${content}`;
               console.log("[EmbeddingService] Message listeners set up");
             } catch (err) {
               console.error("[EmbeddingService] Setup failed:", err);
-              reject(err);
+              failInitialization(err);
             }
           }, 1e3);
           setTimeout(() => {
             if (!this.ready) {
               console.error("[EmbeddingService] Timeout: never received EmbedWorkerReady");
-              reject(new Error("Embedding browser failed to initialize within 60s"));
+              failInitialization(new Error("Embedding browser failed to initialize within 60s"));
             }
           }, 6e4);
         } catch (err) {
           console.error("[EmbeddingService] Failed to create browser:", err);
-          reject(err);
+          failInitialization(err);
         }
       });
       await this.readyPromise;
     }
     async embed(text2) {
+      if (this.fatalDiagnostic?.fatal) {
+        throw createEmbeddingDiagnosticError(this.fatalDiagnostic);
+      }
       await this.ensureBrowser();
       const id = `embed-${++this.requestCounter}`;
       return new Promise((resolve, reject) => {
@@ -53385,7 +53493,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       } catch (e2) {
         console.error("[SearchHistorySemantic] Search failed:", e2);
         return {
-          message: `History search failed: ${e2.message || "Unknown error"}. The embedding model may still be loading \u2014 please try again in a moment.`
+          message: formatSearchHistoryFailureMessage(e2)
         };
       }
     }

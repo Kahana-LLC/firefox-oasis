@@ -16,18 +16,20 @@
 
 import { pipeline, env, type FeatureExtractionPipeline } from "@huggingface/transformers";
 
-const EMBEDDING_CHROME_BASE =
-  "chrome://browser/content/assistant/embedding-assets";
+import {
+    EMBEDDING_LOCAL_MODEL_PATH,
+    EMBEDDING_ORT_WASM_PATH,
+} from "./utils/embeddingAssetPaths.js";
 
 env.allowRemoteModels = false;
 env.allowLocalModels = true;
 env.useBrowserCache = false;
-env.localModelPath = `${EMBEDDING_CHROME_BASE}/models`;
+env.localModelPath = EMBEDDING_LOCAL_MODEL_PATH;
 
 const onnxWasm = env.backends.onnx.wasm!;
 onnxWasm.numThreads = 1;
 onnxWasm.proxy = false;
-onnxWasm.wasmPaths = `${EMBEDDING_CHROME_BASE}/ort/`;
+onnxWasm.wasmPaths = EMBEDDING_ORT_WASM_PATH;
 
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 
