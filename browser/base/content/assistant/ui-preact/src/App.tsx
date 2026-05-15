@@ -682,33 +682,36 @@ export function App() {
         />
       )}
 
-      <Header
-        auth={auth}
-        onShowAuth={() => setView('auth')}
-        onOpenTrainingGallery={handleOpenTrainingGallery}
-        chatHistory={
-          auth.isAuthenticated && view === 'chat'
-            ? {
-                conversations: runtime.chatConversations,
-                activeId: runtime.activeChatId,
-                onSelectConversation: id => {
-                  void runtime.openConversation(id);
-                },
-                onNewChat: () => {
-                  void runtime.startNewChat();
-                },
-                onDeleteConversation: id => {
-                  void runtime.deleteChatConversation(id);
-                },
-              }
-            : null
-        }
-      />
+      <div className="assistant-viewport">
+        <div className="assistant-top-chrome">
+          <Header
+            auth={auth}
+            onShowAuth={() => setView('auth')}
+            onOpenTrainingGallery={handleOpenTrainingGallery}
+            chatHistory={
+              auth.isAuthenticated && view === 'chat'
+                ? {
+                    conversations: runtime.chatConversations,
+                    activeId: runtime.activeChatId,
+                    onSelectConversation: id => {
+                      void runtime.openConversation(id);
+                    },
+                    onNewChat: () => {
+                      void runtime.startNewChat();
+                    },
+                    onDeleteConversation: id => {
+                      void runtime.deleteChatConversation(id);
+                    },
+                  }
+                : null
+            }
+          />
+        </div>
 
-      <div
-        className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}${view !== 'auth' && auth.isAuthenticated && runtime.messages.length === 0 ? ' assistant-main--empty-signed-chat' : ''}`}
-        aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
-      >
+        <div
+          className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}${view === 'chat' ? ' assistant-main--chat' : ''}${view !== 'auth' && auth.isAuthenticated && runtime.messages.length === 0 ? ' assistant-main--empty-signed-chat' : ''}`}
+          aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
+        >
         {view !== 'auth' && (
           <div className="assistant-onboarding-top">
             <OnboardingChecklist
@@ -803,6 +806,7 @@ export function App() {
             }}
           />
         )}
+        </div>
       </div>
 
       <div

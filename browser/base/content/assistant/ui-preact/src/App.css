@@ -79,6 +79,24 @@ html {
   --icon-accent-color: var(--primary-green);
   --icon-accent-hover-bg: color-mix(in srgb, var(--primary-green) 18%, transparent);
   --auth-on-primary: #ffffff;
+  --auth-oauth-apple-fill: #111111;
+  --assistant-header-fade-height: 32px;
+}
+
+html[data-oasis-theme="traditional-dark"],
+html[data-oasis-theme="violet-dark"],
+html[data-oasis-theme="forest-dark"],
+html[data-oasis-theme="slate-dark"],
+html[data-oasis-theme="high-contrast"],
+html[data-oasis-theme="cool-dark"],
+html[data-oasis-theme="midnight-dark"],
+html[data-oasis-theme="vs-dark"],
+html[data-oasis-theme="dark-modern"],
+html[data-oasis-theme="dark-plus"],
+html[data-oasis-theme="abyss"],
+html[data-oasis-theme="kimbie-dark"],
+html[data-oasis-theme="monokai"] {
+  --auth-oauth-apple-fill: #ffffff;
 }
 
 body {
@@ -107,11 +125,27 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--assistant-sidebar-bg);
-  padding: var(--space-large);
-  gap: var(--space-large);
+  padding: var(--space-small) var(--space-large) var(--space-large);
+  gap: 0;
   box-sizing: border-box;
   border-radius: var(--border-radius-xlg);
   overflow: hidden;
+}
+
+.assistant-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.assistant-top-chrome {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--assistant-sidebar-bg);
 }
 
 .assistant-main {
@@ -124,6 +158,16 @@ body {
 
 .assistant-main--auth {
   gap: var(--space-large);
+}
+
+.assistant-main--chat {
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-medium);
+}
+
+.assistant-main--chat .assistant-onboarding-top:empty {
+  display: none;
 }
 
 .assistant-onboarding-top {
@@ -221,6 +265,36 @@ body {
   display: flex;
   flex-direction: column;
   background: transparent;
+}
+
+.assistant-main--chat .assistant-scroll {
+  position: relative;
+  scroll-padding-top: var(--assistant-header-fade-height);
+}
+
+.assistant-main--chat .assistant-scroll::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  height: var(--assistant-header-fade-height);
+  margin-bottom: calc(-1 * var(--assistant-header-fade-height));
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--assistant-sidebar-bg) 0%,
+    color-mix(in srgb, var(--assistant-sidebar-bg) 88%, transparent) 22%,
+    color-mix(in srgb, var(--assistant-sidebar-bg) 55%, transparent) 50%,
+    color-mix(in srgb, var(--assistant-sidebar-bg) 22%, transparent) 78%,
+    transparent 100%
+  );
+}
+
+.assistant-main--chat .chat-log {
+  overflow: visible;
 }
 
 .assistant-scroll--auth {
@@ -352,6 +426,10 @@ body {
   width: var(--size-item-small);
   height: var(--size-item-small);
   display: block;
+}
+
+.auth-oauth-apple-icon {
+  color: var(--auth-oauth-apple-fill);
 }
 
 .auth-screen--email-focus {
@@ -2087,6 +2165,7 @@ button.input-field.input-field-signin-prompt:disabled {
   flex-direction: column;
   width: 100%;
   position: relative;
+  scroll-margin-top: var(--assistant-header-fade-height);
 }
 
 .feedback-options {

@@ -60,6 +60,11 @@ function userPromptBefore(messages: AssistantMessage[], aiIndex: number): string
   return '';
 }
 
+function chatScrollRoot(log: HTMLDivElement): HTMLElement {
+  const scroll = log.closest('.assistant-scroll');
+  return scroll instanceof HTMLElement ? scroll : log;
+}
+
 export function ChatTimeline({
   messages,
   isAuthenticated,
@@ -103,11 +108,12 @@ export function ChatTimeline({
 
     if (shouldSnapToTopOfLastAi) {
       requestAnimationFrame(() => {
-        lastAiRef.current?.scrollIntoView({ block: 'start', behavior: 'auto', inline: 'nearest' });
+        lastAiRef.current?.scrollIntoView({ block: 'nearest', behavior: 'auto', inline: 'nearest' });
       });
       return;
     }
-    log.scrollTop = log.scrollHeight;
+    const scrollRoot = chatScrollRoot(log);
+    scrollRoot.scrollTop = scrollRoot.scrollHeight;
   }, [messages, busy, activeToolLabel, responseStreaming]);
 
   useEffect(() => {
@@ -128,7 +134,11 @@ export function ChatTimeline({
       const log = logRef.current;
       el.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
       requestAnimationFrame(() => {
-        log?.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
+        if (!log) {
+          return;
+        }
+        const scrollRoot = chatScrollRoot(log);
+        scrollRoot.scrollTo({ top: scrollRoot.scrollHeight, behavior: 'smooth' });
       });
     });
     return () => {

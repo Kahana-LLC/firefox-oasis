@@ -225,21 +225,20 @@ export function Header({
     setShowThemePanel(false);
   };
 
-  const headerGap = compactHeader ? 6 : 8;
-  const leftGap = compactHeader ? 6 : 8;
+  const headerGap = compactHeader ? 6 : 6;
+  const leftGap = compactHeader ? 6 : 6;
 
   return (
     <div
       ref={headerRef}
       onPointerDown={handleDragStart}
       style={{
-        height: '44px',
+        height: '32px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: `${headerGap}px`,
-        padding: '0 8px', // Figma has less padding on edges of the internal row
-        background: 'transparent',
+        padding: '0 4px',
         cursor: 'grab',
         zIndex: 1000,
         boxSizing: 'border-box',
@@ -274,8 +273,8 @@ export function Header({
             onOpenTrainingGallery();
           }}
           style={{
-            width: 32,
-            height: 32,
+            width: 24,
+            height: 24,
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
@@ -293,7 +292,7 @@ export function Header({
             (e.currentTarget.style.backgroundColor = 'transparent')
           }
         >
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
             <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="var(--text-secondary)" />
             <ellipse cx="16.5" cy="18" rx="10.5" ry="8.5" fill="var(--surface-default)" />
             <ellipse cx="10.3268" cy="18.7453" rx="2.45004" ry="5.0274" transform="rotate(46.2818 10.3268 18.7453)" fill="var(--text-secondary)" />
@@ -306,7 +305,7 @@ export function Header({
         {/* Title */}
         <span
           style={{
-            fontSize: '20px',
+            fontSize: '15px',
             fontWeight: 600,
             color: 'var(--header-title-color)',
             fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -324,7 +323,7 @@ export function Header({
           <div
             style={{
               background: 'var(--header-badge-bg)',
-              padding: '1px 8px',
+              padding: '0 5px',
               borderRadius: '32px',
               display: 'flex',
               alignItems: 'center',
@@ -335,7 +334,7 @@ export function Header({
           >
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '10px',
                 color: 'var(--header-badge-text)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -374,7 +373,7 @@ export function Header({
             (e.currentTarget.style.backgroundColor = 'transparent')
           }
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" />
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
             <circle cx="12" cy="17" r="1.35" fill="currentColor" stroke="none" />
@@ -393,7 +392,7 @@ export function Header({
             title="Color theme"
             ariaLabel="Choose assistant color theme"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0L12 2.69z" stroke="currentColor" fill="none" />
               <circle cx="8.5" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
               <circle cx="12" cy="7" r="1.2" fill="currentColor" stroke="none" />
@@ -582,7 +581,7 @@ export function Header({
               title="Account"
               ariaLabel="Account menu, sign in or sign up"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="8" r="4" />
                 <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
               </svg>
@@ -591,7 +590,7 @@ export function Header({
              {showMenu && (
                 <div className="dropdown-menu" style={{
                     position: 'absolute',
-                    top: '32px',
+                    top: '26px',
                     right: '0',
                     background: 'var(--dropdown-surface)',
                     border: '1px solid var(--dropdown-border-color)',
@@ -629,7 +628,7 @@ export function Header({
           }}
           title="Toggle Sidebar"
         >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 21C5.20435 21 4.44129 20.6839 3.87868 20.1213C3.31607 19.5587 3 18.7956 3 18V6C3 5.20435 3.31607 4.44129 3.87868 3.87868C4.44129 3.31607 5.20435 3 6 3H18C18.7956 3 19.5587 3.31607 20.1213 3.87868C20.6839 4.44129 21 5.20435 21 6V18C21 18.7956 20.6839 19.5587 20.1213 20.1213C19.5587 20.6839 18.7956 21 18 21H6ZM18 5H10V19H18C18.2652 19 18.5196 18.8946 18.7071 18.7071C18.8946 18.5196 19 18.2652 19 18V6C19 5.73478 18.8946 5.48043 18.7071 5.29289C18.5196 5.10536 18.2652 5 18 5Z" fill="currentColor"/>
             </svg>
         </HeaderBtn>
@@ -666,8 +665,8 @@ function HeaderBtn({
         background: 'transparent',
         cursor: 'pointer',
         borderRadius: '50%',
-        width: '28px',
-        height: '28px',
+        width: '22px',
+        height: '22px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
