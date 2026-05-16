@@ -88,6 +88,16 @@ jobs:
           npm ci --prefix browser/base/content/assistant/build
           npm run build --prefix browser/base/content/assistant/build
 
+      - name: Check DMG layout env present
+        run: |
+          set -euo pipefail
+          f=browser/branding/custom/build/dmg-cluster-width.env
+          if [[ ! -f "${f}" ]]; then
+            echo "error: ${f} missing on ref ${{ github.ref }}"
+            echo "Release tags before v1.0.0.10 lack this file; use v1.0.0.10+ on main (commit b51f08f1cc82)."
+            exit 1
+          fi
+
       - name: Verify Oasis branding icons
         run: |
           set -euo pipefail

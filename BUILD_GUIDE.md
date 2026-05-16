@@ -96,13 +96,18 @@ This updates `firefox.icns`, `Assets.car`, `document.icns`, `disk.icns`, `backgr
 
 Do **not** copy `browser/branding/unofficial/Assets.car` into custom branding; that restores the purple unofficial Firefox Dock icon.
 
+**Before creating a release tag** (oasis-canary / oasis-release check out `refs/tags/vX.Y.Z.N`):
+
+1. Commit `background.png`, `dsstore`, and `browser/branding/custom/build/dmg-cluster-width.env` (the env file is required by CI verify; tags before `v1.0.0.10` do not include it).
+2. On a clean checkout of the tag commit, run `./browser/branding/custom/verify_branding_icons.sh` and confirm it passes.
+
 | Artifact | Used for |
 |----------|----------|
 | `Assets.car` | Dock / Finder / DMG app icon (primary on macOS 11+) |
 | `firefox.icns` | Legacy bundle icon |
 | `document.icns` | File-type icons in Info.plist |
 | `disk.icns` | DMG volume icon |
-| `background.png`, `dsstore` | DMG installer window layout |
+| `background.png`, `dsstore`, `build/dmg-cluster-width.env` | DMG installer window layout |
 | `default*.png`, `content/about-logo*` | Tabs, about:newtab, browser.jar |
 
 ### DMG installer window (local test)
