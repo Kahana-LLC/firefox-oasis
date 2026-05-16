@@ -15,26 +15,39 @@ if [[ ! -f "${SVG_FILE}" ]]; then
   exit 1
 fi
 
-if command -v rsvg-convert &>/dev/null; then
+RSVG_CONVERT=""
+for candidate in rsvg-convert /opt/homebrew/bin/rsvg-convert /usr/local/bin/rsvg-convert; do
+  if command -v "${candidate}" &>/dev/null; then
+    RSVG_CONVERT="${candidate}"
+    break
+  fi
+done
+
+if [[ -n "${RSVG_CONVERT}" ]]; then
   RENDER_SVG() {
-    rsvg-convert -w "$1" -h "$1" "${SVG_FILE}" -o "$2"
+    "${RSVG_CONVERT}" -w "$1" -h "$1" "${SVG_FILE}" -o "$2"
   }
 elif command -v magick &>/dev/null; then
   RENDER_SVG() {
-    magick "${SVG_FILE}" -background none -resize "${1}x${1}" "$2"
+    local size="$1"
+    local out="$2"
+    local tmp="${BUILD_DIR}/svg-render-full.png"
+    magick -density 300 "${SVG_FILE}" -background none -alpha on -colorspace sRGB \
+      PNG32:"${tmp}"
+    magick "${tmp}" -filter Lanczos -resize "${size}x${size}" PNG32:"${out}"
   }
 else
-  echo "error: install rsvg-convert (brew install librsvg) or ImageMagick" >&2
+  echo "error: install ImageMagick (brew install imagemagick) or librsvg" >&2
   exit 1
 fi
 
 if command -v magick &>/dev/null; then
   RESIZE_PNG() {
-    magick "$1" -filter Lanczos -resize "${2}x${2}!" "$3"
+    magick "$1" -colorspace sRGB -filter Lanczos -resize "${2}x${2}" PNG32:"$3"
   }
 elif command -v convert &>/dev/null; then
   RESIZE_PNG() {
-    convert "$1" -filter Lanczos -resize "${2}x${2}!" "$3"
+    convert "$1" -colorspace sRGB -filter Lanczos -resize "${2}x${2}!" "$3"
   }
 else
   echo "error: ImageMagick required for downsampling (brew install imagemagick)" >&2
@@ -52,11 +65,22 @@ expect_dimensions() {
   fi
 }
 
+expect_rgb_colorspace() {
+  local file="$1"
+  local space
+  space="$(sips -g space "${file}" 2>/dev/null | awk '/space:/ {print $2}')"
+  if [[ "${space}" != "RGB" ]]; then
+    echo "error: ${file} expected RGB colorspace, got ${space}" >&2
+    exit 1
+  fi
+}
+
 mkdir -p "${BUILD_DIR}" "${ICONSET_DIR}" "${APPICONSET_DIR}"
 
 echo "Rendering master 1024x1024 from ${SVG_FILE}..."
 RENDER_SVG 1024 "${MASTER_PNG}"
 expect_dimensions "${MASTER_PNG}" 1024
+expect_rgb_colorspace "${MASTER_PNG}"
 
 echo "Generating in-browser and icon sizes from master..."
 for size in 16 32 48 64 128; do
@@ -72,6 +96,7 @@ RESIZE_PNG "${MASTER_PNG}" 256 "${OUTPUT_DIR}/content/about.png"
 
 expect_dimensions "${OUTPUT_DIR}/content/about-logo.png" 64
 expect_dimensions "${OUTPUT_DIR}/content/about-logo@2x.png" 128
+expect_rgb_colorspace "${OUTPUT_DIR}/content/about-logo.png"
 
 echo "Building macOS iconset..."
 RESIZE_PNG "${MASTER_PNG}" 16 "${ICONSET_DIR}/icon_16x16.png"
