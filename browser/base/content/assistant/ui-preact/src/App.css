@@ -148,6 +148,10 @@ body {
   background: var(--assistant-sidebar-bg);
 }
 
+.assistant-header-brand {
+  cursor: default;
+}
+
 .assistant-main {
   flex: 1;
   min-height: 0;
@@ -200,6 +204,39 @@ body {
 }
 
 .oasis-chat-history-trigger:focus:not(:focus-visible) {
+  outline-color: color-mix(in srgb, var(--primary-green) 58%, transparent);
+}
+
+.oasis-settings-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.oasis-settings-trigger {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--icon-accent-color);
+  flex-shrink: 0;
+}
+
+.oasis-settings-trigger:hover {
+  background: var(--icon-accent-hover-bg);
+}
+
+.oasis-settings-trigger:focus {
+  outline: 2px solid var(--primary-green);
+  outline-offset: 2px;
+}
+
+.oasis-settings-trigger:focus:not(:focus-visible) {
   outline-color: color-mix(in srgb, var(--primary-green) 58%, transparent);
 }
 /* stylelint-enable stylelint-plugin-mozilla/use-design-tokens */

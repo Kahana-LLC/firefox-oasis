@@ -5,9 +5,7 @@ import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatTimeline } from './components/ChatTimeline';
-import type { TrainingSubmittedPayload } from './components/Feedback';
 import { Composer } from './components/Composer';
-import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
@@ -15,7 +13,6 @@ import { postOasisOverlayChromeMessage } from './utils/postOasisOverlayChrome';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
-import { invalidateTrainingGalleryMetrics } from './utils/trainingMetrics';
 import type {
   AuthState,
   ConfirmationData,
@@ -429,7 +426,6 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
-  const [trainingGalleryOpen, setTrainingGalleryOpen] = useState(false);
   const [trainingFocusTick, setTrainingFocusTick] = useState(0);
   const [trainingFocusMessageId, setTrainingFocusMessageId] = useState('');
   const [trainLatestComposerHint, setTrainLatestComposerHint] = useState(false);
@@ -536,10 +532,6 @@ export function App() {
     window.open(feedbackUrl, '_blank');
   };
 
-  const handleTrainingSubmitted = useCallback((_payload: TrainingSubmittedPayload) => {
-    invalidateTrainingGalleryMetrics();
-  }, []);
-
   const handleGoToTrainingFromUsageBar = useCallback(() => {
     setView('chat');
     let lastId: string | null = null;
@@ -572,13 +564,6 @@ export function App() {
       window.setTimeout(() => setTrainLatestComposerHint(false), 6000);
     }
   }, [runtime.messages]);
-
-  const handleOpenTrainingGallery = useCallback(() => {
-    setTrainingGalleryOpen(true);
-    if (oasisWindow.mpTrack) {
-      oasisWindow.mpTrack('training_gallery_opened', {});
-    }
-  }, []);
 
   const handleLinkClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -664,12 +649,6 @@ export function App() {
       {voiceAgentOpen && (
         <VoiceAgentOverlay onClose={() => setVoiceAgentOpen(false)} />
       )}
-      {trainingGalleryOpen && (
-        <TrainingGallery
-          open={trainingGalleryOpen}
-          onClose={() => setTrainingGalleryOpen(false)}
-        />
-      )}
       {pendingConfirmation && (
         <ConfirmationModal
           data={pendingConfirmation}
@@ -687,7 +666,6 @@ export function App() {
           <Header
             auth={auth}
             onShowAuth={() => setView('auth')}
-            onOpenTrainingGallery={handleOpenTrainingGallery}
             chatHistory={
               auth.isAuthenticated && view === 'chat'
                 ? {
@@ -752,7 +730,6 @@ export function App() {
                 onLinkClick={handleLinkClick}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
-                onTrainingSubmitted={handleTrainingSubmitted}
                 trainingFocusTick={trainingFocusTick}
                 trainingFocusMessageId={trainingFocusMessageId}
               />

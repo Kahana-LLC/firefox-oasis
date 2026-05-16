@@ -15,8 +15,6 @@ import {
   OASIS_AMPLIFIER_TRAINING_URL,
   OASIS_PRICING_URL,
 } from '../utils/trainingRewards';
-import { invalidateTrainingGalleryMetrics } from '../utils/trainingMetrics';
-
 export interface TrainingSubmittedPayload {
   messageId: string;
   sentiment: 'up' | 'down';
@@ -365,7 +363,6 @@ export function Feedback({
           window.dispatchEvent(new CustomEvent('oasis-usage-update'));
         })();
       }, 400);
-      invalidateTrainingGalleryMetrics();
       setSubmitted(true);
       setTimeout(() => {
         if (onClose) {

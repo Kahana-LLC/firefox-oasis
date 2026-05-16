@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'preac
 import type { AuthState, OasisWindow } from '../types';
 import type { ChatConversationRow } from '../chatStore/index';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
+import { SettingsMenuPopover } from './SettingsMenuPopover';
 import {
   postOasisOverlayChromeMessage,
   runOasisAssistantLayoutToggle,
@@ -18,6 +19,7 @@ import {
   layoutKeyForPanel,
   type AssistantFixedPanelLayout,
 } from '../utils/assistantPanelLayout';
+import { openExternalUrl } from '../utils/openExternalUrl';
 
 export type HeaderChatHistoryProps = {
   conversations: ChatConversationRow[];
@@ -30,7 +32,6 @@ export type HeaderChatHistoryProps = {
 interface HeaderProps {
   auth: AuthState;
   onShowAuth: () => void;
-  onOpenTrainingGallery: () => void;
   chatHistory?: HeaderChatHistoryProps | null;
 }
 
@@ -43,26 +44,16 @@ const DOCS_URL = 'https://kahana.co/docs';
 const HEADER_COMPACT_WIDTH_PX = 380;
 
 function openDocsHelp(event: MouseEvent) {
-  event.preventDefault();
-  event.stopPropagation();
-  if (typeof oasisWindow.openWebLinkIn === 'function') {
-    oasisWindow.openWebLinkIn(DOCS_URL, 'tab', {});
-    return;
-  }
-  if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === 'function') {
-    (window.top as OasisWindow).openWebLinkIn!(DOCS_URL, 'tab', {});
-    return;
-  }
-  window.open(DOCS_URL, '_blank', 'noopener,noreferrer');
+  openExternalUrl(DOCS_URL, event);
 }
 
 export function Header({
   auth,
   onShowAuth,
-  onOpenTrainingGallery,
   chatHistory = null,
 }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [themePickerScheme, setThemePickerScheme] = useState<
     'light' | 'dark'
@@ -193,7 +184,9 @@ export function Header({
       t.closest('button') ||
       t.closest('.dropdown-menu') ||
       t.closest('.oasis-chat-history-wrap') ||
-      t.closest('.assistant-theme-picker')
+      t.closest('.oasis-settings-menu-wrap') ||
+      t.closest('.assistant-theme-picker') ||
+      t.closest('.assistant-header-brand')
     ) {
       return;
     }
@@ -249,6 +242,7 @@ export function Header({
     >
       {/* Left Container: Sloth + Title + Badge */}
       <div
+        className="assistant-header-brand"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -258,20 +252,9 @@ export function Header({
           overflow: 'hidden',
         }}
       >
-        {/* Sloth Icon */}
-        <button
-          type="button"
-          title={
-            compactHeader
-              ? 'Training progress — Oasis Beta'
-              : 'Training progress'
-          }
-          aria-label="Open training badges and streak progress"
-          onClick={(e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onOpenTrainingGallery();
-          }}
+        {/* Sloth mark (static branding) */}
+        <span
+          aria-hidden="true"
           style={{
             width: 24,
             height: 24,
@@ -279,18 +262,8 @@ export function Header({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            borderRadius: '50%',
             padding: 0,
           }}
-          onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-            (e.currentTarget.style.backgroundColor = 'var(--icon-accent-hover-bg)')
-          }
-          onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-            (e.currentTarget.style.backgroundColor = 'transparent')
-          }
         >
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
             <ellipse cx="16.5" cy="16" rx="12.5" ry="10.5" fill="var(--text-secondary)" />
@@ -300,7 +273,7 @@ export function Header({
             <ellipse cx="2.45004" cy="5.0274" rx="2.45004" ry="5.0274" transform="matrix(-0.691112 0.722747 0.722747 0.691112 20.7329 13.5)" fill="var(--text-secondary)" />
             <circle cx="1" cy="1" r="1" transform="matrix(1 0 0 -1 19 17.5)" fill="var(--surface-default)" />
           </svg>
-        </button>
+        </span>
         
         {/* Title */}
         <span
@@ -388,6 +361,7 @@ export function Header({
               e.stopPropagation();
               setShowThemePanel(v => !v);
               setShowMenu(false);
+              setShowSettingsMenu(false);
             }}
             title="Color theme"
             ariaLabel="Choose assistant color theme"
@@ -577,6 +551,7 @@ export function Header({
               onClick={() => {
                 setShowMenu(!showMenu);
                 setShowThemePanel(false);
+                setShowSettingsMenu(false);
               }}
               title="Account"
               ariaLabel="Account menu, sign in or sign up"
@@ -617,6 +592,17 @@ export function Header({
             )}
         </div>
 
+        <SettingsMenuPopover
+          open={showSettingsMenu}
+          onOpenChange={next => {
+            if (next) {
+              setShowMenu(false);
+              setShowThemePanel(false);
+            }
+            setShowSettingsMenu(next);
+          }}
+        />
+
         {/* Toggle Sidebar */}
         <HeaderBtn
           onClick={(e: MouseEvent) => {
@@ -643,6 +629,8 @@ type HeaderBtnProps = {
   children: ComponentChildren;
   hoverColor?: string;
   ariaLabel?: string;
+  ariaHaspopup?: 'menu';
+  ariaExpanded?: boolean;
   btnRef?: Ref<HTMLButtonElement>;
 };
 
@@ -652,6 +640,8 @@ function HeaderBtn({
   children,
   hoverColor,
   ariaLabel,
+  ariaHaspopup,
+  ariaExpanded,
   btnRef,
 }: HeaderBtnProps) {
   return (
@@ -660,6 +650,8 @@ function HeaderBtn({
       onClick={onClick}
       title={title}
       aria-label={ariaLabel ?? title}
+      aria-haspopup={ariaHaspopup}
+      aria-expanded={ariaExpanded}
       style={{
         border: 0,
         background: 'transparent',
