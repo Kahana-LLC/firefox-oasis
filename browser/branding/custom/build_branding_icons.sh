@@ -5,15 +5,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SVG_FILE="${SCRIPT_DIR}/kahana_logo.svg"
 OUTPUT_DIR="${SCRIPT_DIR}"
 BUILD_DIR="${SCRIPT_DIR}/build"
-MASTER_PNG="${BUILD_DIR}/icon-master-1024.png"
+MASTER_UI_PNG="${BUILD_DIR}/icon-master-ui-1024.png"
+MASTER_DOCK_PNG="${BUILD_DIR}/icon-master-dock-1024.png"
 ICONSET_DIR="${BUILD_DIR}/firefox.iconset"
 APPICONSET_DIR="${SCRIPT_DIR}/macos/Assets.xcassets/AppIcon.appiconset"
 UNOFFICIAL_DIR="${SCRIPT_DIR}/../unofficial"
+ICON_BACKGROUND="#313A00"
+APP_ICON_SOURCE=""
 
-if [[ ! -f "${SVG_FILE}" ]]; then
-  echo "error: missing ${SVG_FILE}" >&2
-  exit 1
-fi
+for candidate in \
+  "${SCRIPT_DIR}/app-icon-source.png" \
+  "${SCRIPT_DIR}/app-icon-1024.png" \
+  "${SCRIPT_DIR}/Oasis Logo(5).png"; do
+  if [[ -f "${candidate}" ]]; then
+    APP_ICON_SOURCE="${candidate}"
+    break
+  fi
+done
 
 RSVG_CONVERT=""
 for candidate in rsvg-convert /opt/homebrew/bin/rsvg-convert /usr/local/bin/rsvg-convert; do
@@ -40,6 +48,13 @@ else
   echo "error: install ImageMagick (brew install imagemagick) or librsvg" >&2
   exit 1
 fi
+
+apply_icon_background() {
+  local in="$1"
+  local out="$2"
+  magick "${in}" -channel RGB -fuzz 15% -fill "${ICON_BACKGROUND}" -opaque '#000000' +channel \
+    -background "${ICON_BACKGROUND}" -alpha remove -alpha off PNG32:"${out}"
+}
 
 if command -v magick &>/dev/null; then
   RESIZE_PNG() {
@@ -77,38 +92,58 @@ expect_rgb_colorspace() {
 
 mkdir -p "${BUILD_DIR}" "${ICONSET_DIR}" "${APPICONSET_DIR}"
 
-echo "Rendering master 1024x1024 from ${SVG_FILE}..."
-RENDER_SVG 1024 "${MASTER_PNG}"
-expect_dimensions "${MASTER_PNG}" 1024
-expect_rgb_colorspace "${MASTER_PNG}"
+if [[ -n "${APP_ICON_SOURCE}" ]]; then
+  if ! command -v magick &>/dev/null; then
+    echo "error: ImageMagick required to process ${APP_ICON_SOURCE}" >&2
+    exit 1
+  fi
+  echo "Using hand-off icon ${APP_ICON_SOURCE}..."
+  magick "${APP_ICON_SOURCE}" -colorspace sRGB -filter Lanczos -resize 1024x1024 \
+    PNG32:"${BUILD_DIR}/icon-resized.png"
+elif [[ -f "${SVG_FILE}" ]]; then
+  echo "Rendering 1024x1024 from ${SVG_FILE}..."
+  RENDER_SVG 1024 "${BUILD_DIR}/icon-resized.png"
+else
+  echo "error: provide app-icon-source.png (or Oasis Logo(5).png) or ${SVG_FILE}" >&2
+  exit 1
+fi
 
-echo "Generating in-browser and icon sizes from master..."
+cp "${BUILD_DIR}/icon-resized.png" "${MASTER_UI_PNG}"
+apply_icon_background "${BUILD_DIR}/icon-resized.png" "${MASTER_DOCK_PNG}"
+
+expect_dimensions "${MASTER_UI_PNG}" 1024
+expect_dimensions "${MASTER_DOCK_PNG}" 1024
+expect_rgb_colorspace "${MASTER_UI_PNG}"
+
+echo "Generating in-browser icon sizes (no dock background)..."
 for size in 16 32 48 64 128; do
-  RESIZE_PNG "${MASTER_PNG}" "${size}" "${OUTPUT_DIR}/default${size}.png"
+  RESIZE_PNG "${MASTER_UI_PNG}" "${size}" "${OUTPUT_DIR}/default${size}.png"
 done
 
-RESIZE_PNG "${MASTER_PNG}" 64 "${OUTPUT_DIR}/content/about-logo.png"
-RESIZE_PNG "${MASTER_PNG}" 128 "${OUTPUT_DIR}/content/about-logo@2x.png"
-cp "${SVG_FILE}" "${OUTPUT_DIR}/content/about-logo.svg"
-RESIZE_PNG "${MASTER_PNG}" 64 "${OUTPUT_DIR}/content/about-logo-private.png"
-RESIZE_PNG "${MASTER_PNG}" 128 "${OUTPUT_DIR}/content/about-logo-private@2x.png"
-RESIZE_PNG "${MASTER_PNG}" 256 "${OUTPUT_DIR}/content/about.png"
+RESIZE_PNG "${MASTER_UI_PNG}" 64 "${OUTPUT_DIR}/content/about-logo.png"
+RESIZE_PNG "${MASTER_UI_PNG}" 128 "${OUTPUT_DIR}/content/about-logo@2x.png"
+if [[ -f "${SVG_FILE}" ]]; then
+  cp "${SVG_FILE}" "${OUTPUT_DIR}/content/about-logo.svg"
+fi
+RESIZE_PNG "${MASTER_UI_PNG}" 64 "${OUTPUT_DIR}/content/about-logo-private.png"
+RESIZE_PNG "${MASTER_UI_PNG}" 128 "${OUTPUT_DIR}/content/about-logo-private@2x.png"
+RESIZE_PNG "${MASTER_UI_PNG}" 256 "${OUTPUT_DIR}/content/about.png"
 
 expect_dimensions "${OUTPUT_DIR}/content/about-logo.png" 64
 expect_dimensions "${OUTPUT_DIR}/content/about-logo@2x.png" 128
 expect_rgb_colorspace "${OUTPUT_DIR}/content/about-logo.png"
 
-echo "Building macOS iconset..."
-RESIZE_PNG "${MASTER_PNG}" 16 "${ICONSET_DIR}/icon_16x16.png"
-RESIZE_PNG "${MASTER_PNG}" 32 "${ICONSET_DIR}/icon_16x16@2x.png"
-RESIZE_PNG "${MASTER_PNG}" 32 "${ICONSET_DIR}/icon_32x32.png"
-RESIZE_PNG "${MASTER_PNG}" 64 "${ICONSET_DIR}/icon_32x32@2x.png"
-RESIZE_PNG "${MASTER_PNG}" 128 "${ICONSET_DIR}/icon_128x128.png"
-RESIZE_PNG "${MASTER_PNG}" 256 "${ICONSET_DIR}/icon_128x128@2x.png"
-RESIZE_PNG "${MASTER_PNG}" 256 "${ICONSET_DIR}/icon_256x256.png"
-RESIZE_PNG "${MASTER_PNG}" 512 "${ICONSET_DIR}/icon_256x256@2x.png"
-RESIZE_PNG "${MASTER_PNG}" 512 "${ICONSET_DIR}/icon_512x512.png"
-RESIZE_PNG "${MASTER_PNG}" 1024 "${ICONSET_DIR}/icon_512x512@2x.png"
+echo "Building macOS Dock iconset (background ${ICON_BACKGROUND})..."
+RESIZE_PNG "${MASTER_DOCK_PNG}" 16 "${ICONSET_DIR}/icon_16x16.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 32 "${ICONSET_DIR}/icon_16x16@2x.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 32 "${ICONSET_DIR}/icon_32x32.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 64 "${ICONSET_DIR}/icon_32x32@2x.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 128 "${ICONSET_DIR}/icon_128x128.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 256 "${ICONSET_DIR}/icon_128x128@2x.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 256 "${ICONSET_DIR}/icon_256x256.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 512 "${ICONSET_DIR}/icon_256x256@2x.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 512 "${ICONSET_DIR}/icon_512x512.png"
+RESIZE_PNG "${MASTER_DOCK_PNG}" 1024 "${ICONSET_DIR}/icon_512x512@2x.png"
 
 cp "${ICONSET_DIR}"/icon_*.png "${APPICONSET_DIR}/"
 

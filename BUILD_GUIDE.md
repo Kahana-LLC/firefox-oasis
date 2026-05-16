@@ -85,7 +85,7 @@ Use your actual clone path instead of `/path/to/firefox-oasis`.
 
 ### Branding icons on macOS
 
-Oasis icons (Dock, in-browser, DMG) are generated from **`browser/branding/custom/kahana_logo.svg`**. After changing that SVG, rebuild branding assets on macOS (requires Xcode command line tools: `iconutil`, `xcrun actool`, and ImageMagick or librsvg):
+Oasis icons (Dock, in-browser, DMG) are generated from a hand-off PNG or from **`browser/branding/custom/kahana_logo.svg`**. Prefer dropping a master at **`browser/branding/custom/app-icon-source.png`** (1024×1024 or larger square RGBA, e.g. 2059×2059). After changing icon art, rebuild branding assets on macOS (requires Xcode command line tools: `iconutil`, `xcrun actool`, and ImageMagick):
 
 ```bash
 ./browser/branding/custom/build_branding_icons.sh

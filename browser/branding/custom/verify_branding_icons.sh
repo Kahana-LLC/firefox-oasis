@@ -31,8 +31,8 @@ expect_dimensions "${SCRIPT_DIR}/content/about-logo.png" 64
 expect_dimensions "${SCRIPT_DIR}/content/about-logo@2x.png" 128
 expect_rgb_colorspace "${SCRIPT_DIR}/content/about-logo.png"
 
-if [[ -f "${SCRIPT_DIR}/build/icon-master-1024.png" ]]; then
-  expect_rgb_colorspace "${SCRIPT_DIR}/build/icon-master-1024.png"
+if [[ -f "${SCRIPT_DIR}/build/icon-master-ui-1024.png" ]]; then
+  expect_rgb_colorspace "${SCRIPT_DIR}/build/icon-master-ui-1024.png"
 fi
 
 if strings "${SCRIPT_DIR}/Assets.car" | grep -q 'unofficial-'; then
