@@ -7,11 +7,6 @@ on:
         description: Version to promote to oasis-stable (X.Y.Z.N)
         required: true
         type: string
-      build_target:
-        description: Build target to validate
-        required: false
-        default: Darwin_aarch64-gcc3
-        type: string
       locale:
         description: Locale to validate
         required: false
@@ -33,6 +28,7 @@ permissions:
 
 env:
   PRODUCT: Firefox
+  BUILD_TARGETS: Darwin_aarch64-gcc3,Darwin_x86_64-gcc3
 
 jobs:
   promote-stable:
@@ -50,38 +46,42 @@ jobs:
             exit 1
           fi
 
-      - name: Verify canary release asset exists
+      - name: Verify canary release assets exist
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          source scripts/ci/oasis-release-names.sh
           VERSION="${{ inputs.target_version }}"
-          BUILD_TARGET="${{ inputs.build_target }}"
           LOCALE="${{ inputs.locale }}"
-          SAFE_TARGET="$(echo "${BUILD_TARGET}" | tr '/ ' '__')"
           TAG="canary"
-          ASSET_NAME="oasis-${VERSION}-${SAFE_TARGET}-${LOCALE}.signed.complete.mar"
           RELEASE_JSON="$(mktemp)"
           gh release view "${TAG}" --json tagName,assets > "${RELEASE_JSON}"
-          if ! python3 -c 'import json, sys; payload = json.load(open(sys.argv[1], "r", encoding="utf-8")); asset_name = sys.argv[2]; sys.exit(0 if any(a.get("name") == asset_name for a in payload.get("assets", [])) else 1)' "${RELEASE_JSON}" "${ASSET_NAME}"
-          then
-            echo "Expected canary bucket asset ${ASSET_NAME} was not found under release ${TAG}." >&2
-            exit 1
-          fi
+          IFS=',' read -r -a TARGETS <<< "${BUILD_TARGETS}"
+          for BUILD_TARGET in "${TARGETS[@]}"; do
+            ASSET_NAME="$(oasis_mar_name "${VERSION}" "${BUILD_TARGET}" "${LOCALE}")"
+            if ! python3 -c 'import json, sys; payload = json.load(open(sys.argv[1], "r", encoding="utf-8")); asset_name = sys.argv[2]; sys.exit(0 if any(a.get("name") == asset_name for a in payload.get("assets", [])) else 1)' "${RELEASE_JSON}" "${ASSET_NAME}"
+            then
+              echo "Expected canary bucket asset ${ASSET_NAME} was not found under release ${TAG}." >&2
+              exit 1
+            fi
+            echo "Found ${ASSET_NAME}"
+          done
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "asset_name=${ASSET_NAME}" >> "${GITHUB_OUTPUT}"
           rm -f "${RELEASE_JSON}"
 
-      - name: Verify canary currently resolves target artifact
+      - name: Verify canary resolves both architecture artifacts
         env:
           OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
           OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
         run: |
           set -euo pipefail
+          source scripts/ci/oasis-release-names.sh
           SERVICE_BASE="${OASIS_UPDATE_SERVICE_URL%/}"
           TARGET_VERSION="${{ inputs.target_version }}"
-          EXPECTED_MAR_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/${{ steps.release.outputs.asset_name }}"
+          LOCALE="${{ inputs.locale }}"
+          TAG="${{ steps.release.outputs.tag }}"
 
           RING_JSON="$(curl -fsS -H "Authorization: Bearer ${OASIS_ADMIN_TOKEN}" "${SERVICE_BASE}/admin/rings/oasis-canary")"
           CURRENT_CANARY="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["target_version"])' <<<"${RING_JSON}")"
@@ -90,19 +90,24 @@ jobs:
             exit 1
           fi
 
-          UPDATE_URL="${SERVICE_BASE}/update/6/${PRODUCT}/0.0.0.0/0/${{ inputs.build_target }}/${{ inputs.locale }}/oasis-canary/Linux/default/default/update.xml"
-          UPDATE_XML="$(curl -fsS "${UPDATE_URL}")"
-          ACTUAL_MAR_URL="$(python3 -c 'import sys,xml.etree.ElementTree as ET; root = ET.fromstring(sys.stdin.read()); patch = root.find("./update/patch"); print(patch.attrib["URL"] if patch is not None else "")' <<<"${UPDATE_XML}")"
-          if [ -z "${ACTUAL_MAR_URL}" ]; then
-            echo "Canary update XML did not contain a patch URL for ${TARGET_VERSION}/${{ inputs.build_target }}/${{ inputs.locale }}." >&2
-            exit 1
-          fi
-          if [ "${ACTUAL_MAR_URL}" != "${EXPECTED_MAR_URL}" ]; then
-            echo "Canary artifact URL mismatch." >&2
-            echo "Expected: ${EXPECTED_MAR_URL}" >&2
-            echo "Actual:   ${ACTUAL_MAR_URL}" >&2
-            exit 1
-          fi
+          IFS=',' read -r -a TARGETS <<< "${BUILD_TARGETS}"
+          for BUILD_TARGET in "${TARGETS[@]}"; do
+            EXPECTED_MAR_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/$(oasis_mar_name "${TARGET_VERSION}" "${BUILD_TARGET}" "${LOCALE}")"
+            UPDATE_URL="${SERVICE_BASE}/update/6/${PRODUCT}/0.0.0.0/0/${BUILD_TARGET}/${LOCALE}/oasis-canary/Linux/default/default/update.xml"
+            UPDATE_XML="$(curl -fsS "${UPDATE_URL}")"
+            ACTUAL_MAR_URL="$(python3 -c 'import sys,xml.etree.ElementTree as ET; root = ET.fromstring(sys.stdin.read()); patch = root.find("./update/patch"); print(patch.attrib["URL"] if patch is not None else "")' <<<"${UPDATE_XML}")"
+            if [ -z "${ACTUAL_MAR_URL}" ]; then
+              echo "Canary update XML did not contain a patch URL for ${TARGET_VERSION}/${BUILD_TARGET}/${LOCALE}." >&2
+              exit 1
+            fi
+            if [ "${ACTUAL_MAR_URL}" != "${EXPECTED_MAR_URL}" ]; then
+              echo "Canary artifact URL mismatch for ${BUILD_TARGET}." >&2
+              echo "Expected: ${EXPECTED_MAR_URL}" >&2
+              echo "Actual:   ${ACTUAL_MAR_URL}" >&2
+              exit 1
+            fi
+            echo "Validated ${BUILD_TARGET}: ${ACTUAL_MAR_URL}"
+          done
 
       - name: Update stable ring pointer
         env:
@@ -116,4 +121,4 @@ jobs:
             --version "${{ inputs.target_version }}" \
             --ring oasis-stable \
             --actor "${{ inputs.actor }}" \
-            --reason "${{ inputs.reason }} (run ${GITHUB_RUN_ID}, source canary bucket)"
+            --reason "${{ inputs.reason }} (run ${GITHUB_RUN_ID}, source canary bucket, dual-arch validated)"

@@ -1,163 +1,82 @@
 # GitHub Actions Integration
 
-The repository includes two release workflows:
+The repository includes these release workflows:
 
-- `/Users/ashwinjohn/Projects/firefox-oasis/.github/workflows/oasis-canary-update.yml`
-- `/Users/ashwinjohn/Projects/firefox-oasis/.github/workflows/oasis-stable-promote.yml`
+- [`.github/workflows/oasis-canary.yml`](../../../.github/workflows/oasis-canary.yml) — dual-arch build, publish to rolling `canary` release, register Supabase artifacts, move `oasis-canary` ring
+- [`.github/workflows/oasis-release.yml`](../../../.github/workflows/oasis-release.yml) — dual-arch build, publish to immutable `vX.Y.Z.N` GitHub release (no Supabase registration)
+- [`.github/workflows/oasis-build-macos.yml`](../../../.github/workflows/oasis-build-macos.yml) — reusable per-arch macOS build/sign/notarize job
+- [`.github/workflows/oasis-stable-promote.yml`](../../../.github/workflows/oasis-stable-promote.yml) — pointer-only promote to `oasis-stable` after validating both canary MARs
 
-Release model:
+Shared naming helpers live in [`scripts/ci/oasis-release-names.sh`](../../../scripts/ci/oasis-release-names.sh). Publishing logic is in [`scripts/ci/oasis-publish-release.sh`](../../../scripts/ci/oasis-publish-release.sh).
 
-1. Build/sign/notarize app, build/sign/notarize DMG, then publish once to GitHub Releases (`vX.Y.Z.N`) and move `oasis-canary`.
-2. Promote to `oasis-stable` by ring pointer only, without rebuilding.
-3. Each canary release publishes two assets: signed MAR (OTA payload) and DMG (fresh installer baseline).
+## Release model
+
+1. Tag `vX.Y.Z.N` on the commit to ship.
+2. Run **Oasis Release Canary** with that tag. Two native builds run in parallel (Apple Silicon on `macos-15`, Intel on `macos-15-intel`).
+3. A publish job uploads **four** assets to the `canary` GitHub release and registers **two** Supabase MAR rows (one per `build_target`), then moves the `oasis-canary` ring pointer once.
+4. Run **Oasis Release Publish** for the same tag when you want a versioned GitHub release (four assets, no Supabase writes).
+5. Promote to `oasis-stable` with **Oasis Stable Ring Promote** (validates both MARs on canary, then moves the stable ring pointer only — no rebuild).
+
+## Asset naming
+
+| Asset | Pattern | Example |
+|-------|---------|---------|
+| DMG (Apple Silicon) | `oasis-{version}.{locale}.aarch64.mac.dmg` | `oasis-1.0.0.10.en-US.aarch64.mac.dmg` |
+| DMG (Intel) | `oasis-{version}.{locale}.x86_64.mac.dmg` | `oasis-1.0.0.10.en-US.x86_64.mac.dmg` |
+| MAR (per target) | `oasis-{version}-{build_target}-{locale}.signed.complete.mar` | `oasis-1.0.0.10-Darwin_aarch64-gcc3-en-US.signed.complete.mar` |
+
+DMG files are copied to their final names on disk before upload so browser downloads match the GitHub asset label. CI mozconfig sets `export MOZ_PKG_APPNAME=oasis` so intermediate packager output also uses the `oasis` prefix.
 
 ## Required GitHub Secrets
 
-For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **App ID** `com.oasis.browser` must include the **Passkeys (web-browser.public-key-credential)** capability, and release signing must use `./mach macos-sign -e production` so restricted entitlements are not stripped. After signing, confirm with `codesign -d --entitlements :- --xml Path/To/Oasis.app` that `com.apple.developer.web-browser.public-key-credential` and `com.apple.application-identifier` are present. Diagnose missing entitlement with `MOZ_LOG=macoswebauthnservice:5` (see `MacOSWebAuthnService.mm`).
+For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **App ID** `com.oasis.browser` must include the **Passkeys (web-browser.public-key-credential)** capability, and release signing must use `./mach macos-sign -e production` so restricted entitlements are not stripped.
 
-- `OASIS_UPDATE_SERVICE_URL`: Supabase function base URL, for example `https://<project>.supabase.co/functions/v1/oasis-update`
-- `OASIS_UPDATE_ADMIN_TOKEN`: bearer token used by `/admin/*` endpoints
-- `OASIS_APPLE_DEVELOPER_ID_P12_B64`: base64-encoded `Developer ID Application` PKCS#12 for macOS codesigning
+- `OASIS_UPDATE_SERVICE_URL`: Supabase function base URL
+- `OASIS_UPDATE_ADMIN_TOKEN`: bearer token for `/admin/*` endpoints
+- `OASIS_APPLE_DEVELOPER_ID_P12_B64`: base64-encoded `Developer ID Application` PKCS#12
 - `OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD`: password for the Apple PKCS#12 blob
-- `OASIS_APPLE_SIGNING_IDENTITY`: exact signing identity string used to sign DMG containers
-- `OASIS_APPLE_ID`: Apple ID email used for notarization
-- `OASIS_APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for the Apple ID
-- `OASIS_APPLE_TEAM_ID`: Apple Developer Team ID
-- `OASIS_MAR_SIGNING_P12_B64`: base64-encoded PKCS#12 containing MAR signing cert/private key
-- `OASIS_MAR_SIGNING_P12_PASSWORD`: password for the PKCS#12 blob
-- `OASIS_MAR_SIGNING_CERT_NICKNAME`: NSS cert nickname used by `signmar`
+- `OASIS_APPLE_SIGNING_IDENTITY`: codesign identity for DMG containers
+- `OASIS_APPLE_API_KEY_ID`, `OASIS_APPLE_API_ISSUER`, `OASIS_APPLE_API_KEY_P8_B64`: App Store Connect API key for notarization
+- `OASIS_MAR_SIGNING_P12_B64`, `OASIS_MAR_SIGNING_P12_PASSWORD`, `OASIS_MAR_SIGNING_CERT_NICKNAME`: MAR signing
 
 ## Optional GitHub Variables
 
 - `ALLOW_DEV_OASIS_CERTS=1` only for temporary non-production signing tests
 
-## Workflow Inputs
+## Workflow inputs
 
-`oasis-canary-update.yml` (`push` and `workflow_dispatch`):
+**Oasis Release Canary** (`workflow_dispatch`):
 
-- Trigger on tags matching `v*`
-- Manual rerun support with `workflow_dispatch` input `release_tag` (existing `vX.Y.Z.N`)
-- Required release tag format: `vX.Y.Z.N`
-- Workflow derives the internal app version from the tag (for example `v1.4.1.13` -> `1.4.1.13`)
-- Fixed metadata defaults in workflow:
-  - ring: `oasis-canary`
-  - build target: `Darwin_aarch64-gcc3`
-  - locale: `en-US`
-- Packaging/signing/notarization flow:
-  - `./mach build`
-  - `make -C obj-oasis-canary/browser/installer stage-package`
-  - sign staged app with `./mach macos-sign -r` (PKCS#12 input)
-  - notarize + staple app (fail-closed)
-  - generate DMG via `./mach python -m mozbuild.action.make_dmg ...`
-  - sign DMG with `codesign`
-  - notarize + staple DMG (fail-closed)
-  - build/sign/verify MAR from the same staged app
-  - publish release + register Supabase metadata + move canary pointer
+- `release_tag`: existing `vX.Y.Z.N` tag to build
+- Matrix: `Darwin_aarch64-gcc3` on `macos-15`, `Darwin_x86_64-gcc3` on `macos-15-intel`
+- Separate objdirs: `obj-oasis-canary-aarch64`, `obj-oasis-canary-x86_64`
+- Update channel: `oasis-canary`
 
-`oasis-stable-promote.yml` (`workflow_dispatch`):
+**Oasis Release Publish** (`workflow_dispatch`):
 
-- `target_version`: required numeric version (`X.Y.Z.N`)
-- `build_target`: target string to validate
-- `locale`: locale to validate
-- `actor`: audit actor
-- `reason`: audit reason
+- Same dual-arch matrix with objdirs `obj-oasis-release-aarch64`, `obj-oasis-release-x86_64`
+- Update channel: `oasis-stable`
+- Creates the `vX.Y.Z.N` GitHub release once (fails if it already exists)
 
-## One-Time Apple Credential Prep
+**Oasis Stable Ring Promote** (`workflow_dispatch`):
 
-1. Export your Apple `Developer ID Application` certificate as `developerid.p12`.
-2. Convert it to base64 for GitHub secret storage:
+- `target_version`: `X.Y.Z.N` to promote
+- `locale`: default `en-US`
+- Validates **both** canary MAR assets and update XML endpoints before moving `oasis-stable`
 
-```bash
-base64 -i developerid.p12 | tr -d '\n'
-```
-
-3. Capture signing identity text from a machine that has the cert imported:
-
-```bash
-security find-identity -v -p codesigning
-```
-
-4. Create an app-specific password for your Apple ID and record Team ID from Apple Developer account.
-
-## One-Time MAR Trust Key Prep
-
-1. Generate Oasis MAR keypairs on a secure machine (primary active, secondary standby):
-
-```bash
-set -euo pipefail
-umask 077
-
-KEYROOT="$HOME/oasis-signing/mar"
-mkdir -p "$KEYROOT"
-
-PRIMARY_P12_PASSWORD='<choose-strong-primary-password>'
-SECONDARY_P12_PASSWORD='<choose-strong-secondary-password>'
-
-openssl genrsa -out "$KEYROOT/oasis-mar-primary.key" 3072
-openssl req -new -x509 -sha384 -days 3650 \
-  -key "$KEYROOT/oasis-mar-primary.key" \
-  -subj "/CN=Oasis MAR Primary/" \
-  -out "$KEYROOT/oasis-mar-primary.crt"
-openssl x509 -in "$KEYROOT/oasis-mar-primary.crt" -outform DER -out "$KEYROOT/oasis_primary.der"
-openssl pkcs12 -export \
-  -inkey "$KEYROOT/oasis-mar-primary.key" \
-  -in "$KEYROOT/oasis-mar-primary.crt" \
-  -name oasis-mar-primary \
-  -out "$KEYROOT/oasis-mar-primary.p12" \
-  -passout pass:"$PRIMARY_P12_PASSWORD"
-
-openssl genrsa -out "$KEYROOT/oasis-mar-secondary.key" 3072
-openssl req -new -x509 -sha384 -days 3650 \
-  -key "$KEYROOT/oasis-mar-secondary.key" \
-  -subj "/CN=Oasis MAR Secondary/" \
-  -out "$KEYROOT/oasis-mar-secondary.crt"
-openssl x509 -in "$KEYROOT/oasis-mar-secondary.crt" -outform DER -out "$KEYROOT/oasis_secondary.der"
-openssl pkcs12 -export \
-  -inkey "$KEYROOT/oasis-mar-secondary.key" \
-  -in "$KEYROOT/oasis-mar-secondary.crt" \
-  -name oasis-mar-secondary \
-  -out "$KEYROOT/oasis-mar-secondary.p12" \
-  -passout pass:"$SECONDARY_P12_PASSWORD"
-```
-
-2. Replace updater trust anchors in repo:
-
-```bash
-cp "$HOME/oasis-signing/mar/oasis_primary.der" \
-  "/Users/ashwinjohn/Projects/firefox-oasis/toolkit/mozapps/update/updater/oasis_primary.der"
-cp "$HOME/oasis-signing/mar/oasis_secondary.der" \
-  "/Users/ashwinjohn/Projects/firefox-oasis/toolkit/mozapps/update/updater/oasis_secondary.der"
-scripts/update-signing/check-oasis-cert-material.sh
-```
-
-3. Prepare GitHub secret values for active signer (`primary`):
-
-```bash
-PRIMARY_P12_B64="$(base64 -i "$HOME/oasis-signing/mar/oasis-mar-primary.p12" | tr -d '\n')"
-printf 'OASIS_MAR_SIGNING_P12_B64=%s\n' "$PRIMARY_P12_B64"
-printf 'OASIS_MAR_SIGNING_P12_PASSWORD=%s\n' "$PRIMARY_P12_PASSWORD"
-printf 'OASIS_MAR_SIGNING_CERT_NICKNAME=oasis-mar-primary\n'
-```
-
-4. Keep `oasis-mar-secondary.p12` and its password offline for rotation; do not upload it as active signer secrets.
-
-## Operational Guardrails
+## Operational guardrails
 
 - Do not reuse release tags; publish a new `vX.Y.Z.N` for every correction.
-- Enable release/tag immutability controls for `v*`.
 - Keep stable promotions pointer-only to preserve binary identity across rings.
-- Canary release is fail-closed on both app notarization and DMG notarization.
-- Rotate Apple app-specific password and Developer ID certificate on a regular cadence or immediately after any credential exposure event.
-- If environment protection allows only `v*` tags, canary releases must be started by pushing a `v*` tag.
-- Supabase artifact registration remains MAR-only; DMG is for bootstrap/manual install.
+- Canary publish is fail-closed on app and DMG notarization.
+- Supabase artifact registration is MAR-only; DMGs are for fresh installs.
+- If `macos-15-intel` is unavailable on your GitHub plan, Intel builds will fail until an Intel runner or cross-compile fallback is added.
 
-## Release Cadence
+## Release cadence
 
-Use a single monotonic numeric version line (`X.Y.Z.N`) and promote immutable artifacts by ring pointer:
+Use monotonic `X.Y.Z.N` versions. `v1.0.0` is invalid; use `v1.0.0.0`.
 
-`v1.0.0` is invalid for this workflow; use `v1.0.0.0`.
-
-1. Bootstrap baseline canary: `v1.0.0.0`
-2. OTA test iterations: `v1.0.0.1`, `v1.0.0.2`, ...
-3. Canary feature rollout: `v1.1.0.0`
-4. Stable rollout: run stable promotion workflow with `target_version=1.1.0.0` (no rebuild)
+1. Tag and run **Oasis Release Canary**
+2. OTA-test via `oasis-canary` ring
+3. Optionally run **Oasis Release Publish** for a versioned download page
+4. Run **Oasis Stable Ring Promote** with `target_version=X.Y.Z.N`
