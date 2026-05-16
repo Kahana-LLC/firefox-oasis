@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=dmg_layout_common.sh
+source "${SCRIPT_DIR}/dmg_layout_common.sh"
 SVG_FILE="${SCRIPT_DIR}/kahana_logo.svg"
 OUTPUT_DIR="${SCRIPT_DIR}"
 BUILD_DIR="${SCRIPT_DIR}/build"
@@ -10,7 +12,13 @@ MASTER_DOCK_PNG="${BUILD_DIR}/icon-master-dock-1024.png"
 ICONSET_DIR="${BUILD_DIR}/firefox.iconset"
 APPICONSET_DIR="${SCRIPT_DIR}/macos/Assets.xcassets/AppIcon.appiconset"
 UNOFFICIAL_DIR="${SCRIPT_DIR}/../unofficial"
+EMPTY_STATE_BG="${SCRIPT_DIR}/../../base/content/assistant/images/empty-state-bg.png"
 ICON_BACKGROUND="#313A00"
+DMG_BG_WIDTH=1440
+DMG_BG_HEIGHT=880
+DMG_BG_COLOR="#ffffff"
+DMG_HEADLINE="Click and drag Oasis into the Applications folder"
+DMG_SUBLINE="to complete installation"
 APP_ICON_SOURCE=""
 
 for candidate in \
@@ -88,6 +96,110 @@ expect_rgb_colorspace() {
     echo "error: ${file} expected RGB colorspace, got ${space}" >&2
     exit 1
   fi
+}
+
+pick_dmg_font() {
+  local weight="${1:-regular}"
+  local font
+  local -a candidates
+  if [[ "${weight}" == "bold" ]]; then
+    candidates=(
+      "SF-Pro-Display-Semibold"
+      "SF Pro Display Semibold"
+      "Helvetica Neue Bold"
+      "Helvetica-Bold"
+      "Helvetica Neue"
+      "Helvetica"
+    )
+  else
+    candidates=(
+      "SF-Pro-Text-Regular"
+      "SF Pro Text Regular"
+      "Helvetica Neue"
+      "Helvetica"
+      "Arial"
+    )
+  fi
+  for font in "${candidates[@]}"; do
+    if magick -font "${font}" -pointsize 12 label:x /dev/null 2>/dev/null; then
+      echo "${font}"
+      return
+    fi
+  done
+  echo "Helvetica"
+}
+
+build_dmg_background() {
+  local out="${OUTPUT_DIR}/background.png"
+  local sloth_tmp="${BUILD_DIR}/dmg-sloth.png"
+  local sloth_trimmed="${BUILD_DIR}/dmg-sloth-trimmed.png"
+  if [[ ! -f "${EMPTY_STATE_BG}" ]]; then
+    echo "error: missing ${EMPTY_STATE_BG}" >&2
+    exit 1
+  fi
+  if ! command -v magick &>/dev/null; then
+    echo "error: ImageMagick required for DMG background" >&2
+    exit 1
+  fi
+
+  local sloth_max_w=$((DMG_LAYOUT_WINDOW_WIDTH * DMG_LAYOUT_FEATURE_ART_WIDTH_PCT / 100))
+  local sloth_max_h=$((DMG_LAYOUT_WINDOW_HEIGHT * DMG_LAYOUT_SLOTH_MAX_HEIGHT_PCT / 100))
+  local ink_w ink_h cluster_w min_cluster_w
+
+  echo "Generating DMG background (${DMG_BG_WIDTH}x${DMG_BG_HEIGHT})..."
+  magick "${EMPTY_STATE_BG}" -colorspace sRGB -fuzz 12% -transparent black \
+    -filter Lanczos -resize "${sloth_max_w}x" PNG32:"${sloth_tmp}"
+  magick "${sloth_tmp}" -trim +repage PNG32:"${sloth_trimmed}"
+  ink_w="$(magick identify -format '%w' "${sloth_trimmed}")"
+  ink_h="$(magick identify -format '%h' "${sloth_trimmed}")"
+  if [[ "${ink_h}" -gt ${sloth_max_h} ]]; then
+    magick "${sloth_trimmed}" -filter Lanczos -resize "x${sloth_max_h}" PNG32:"${sloth_trimmed}"
+    ink_w="$(magick identify -format '%w' "${sloth_trimmed}")"
+    ink_h="$(magick identify -format '%h' "${sloth_trimmed}")"
+  fi
+  min_cluster_w=$((DMG_LAYOUT_ICON_SIZE * 2))
+  cluster_w=$((ink_w + DMG_LAYOUT_ICON_CLUSTER_PAD))
+  if [[ "${cluster_w}" -lt ${min_cluster_w} ]]; then
+    cluster_w=${min_cluster_w}
+  fi
+  if [[ "${cluster_w}" -gt ${sloth_max_w} ]]; then
+    cluster_w=${sloth_max_w}
+  fi
+  dmg_layout_apply_cluster_width "${cluster_w}" "${ink_w}"
+  echo "DMG layout: sloth ink ${ink_w}px; icon cluster ${cluster_w}px (pad ${DMG_LAYOUT_ICON_CLUSTER_PAD}px; icons at ${DMG_LAYOUT_APP_ICON_X}, ${DMG_LAYOUT_APPS_ICON_X})"
+
+  local headline_font subline_font
+  headline_font="$(pick_dmg_font bold)"
+  subline_font="$(pick_dmg_font regular)"
+  local line_x1=${DMG_LAYOUT_ARROW_LINE_X1}
+  local line_x2=${DMG_LAYOUT_ARROW_LINE_X2}
+  local arrow_y=${DMG_LAYOUT_ARROW_Y}
+  local chevron=${DMG_LAYOUT_ARROW_CHEVRON_SIZE}
+  local chevron_half=${DMG_LAYOUT_ARROW_CHEVRON_HALF}
+  local shaft_end=$((line_x2 - chevron))
+
+  magick -size "${DMG_BG_WIDTH}x${DMG_BG_HEIGHT}" "xc:${DMG_BG_COLOR}" \
+    \( "${sloth_trimmed}" \) -gravity south -geometry +0+${DMG_LAYOUT_SLOTH_BOTTOM_INSET} -composite \
+    -stroke '#777777' -strokewidth 3 -fill none \
+    -draw "line ${line_x1},${arrow_y} ${shaft_end},${arrow_y}" \
+    -fill '#777777' -stroke none \
+    -draw "polygon ${line_x2},${arrow_y} $((line_x2 - chevron)),$((arrow_y - chevron_half)) $((line_x2 - chevron)),$((arrow_y + chevron_half))" \
+    -stroke none -strokewidth 0 \
+    -font "${headline_font}" -fill '#1a1a1a' -pointsize 36 -gravity north \
+    -annotate +0+48 "${DMG_HEADLINE}" \
+    -font "${subline_font}" -fill '#444444' -pointsize 19 -gravity north \
+    -annotate +0+98 "${DMG_SUBLINE}" \
+    PNG32:"${out}"
+  rm -f "${sloth_tmp}" "${sloth_trimmed}"
+
+  expect_dimensions "${out}" "${DMG_BG_WIDTH}"
+  local height
+  height="$(sips -g pixelHeight "${out}" 2>/dev/null | awk '/pixelHeight:/ {print $2}')"
+  if [[ "${height}" != "${DMG_BG_HEIGHT}" ]]; then
+    echo "error: ${out} expected height ${DMG_BG_HEIGHT}, got ${height}" >&2
+    exit 1
+  fi
+  expect_rgb_colorspace "${out}"
 }
 
 mkdir -p "${BUILD_DIR}" "${ICONSET_DIR}" "${APPICONSET_DIR}"
@@ -174,13 +286,15 @@ xcrun actool --compile "${ASSETS_OUT}" \
 cp "${ASSETS_OUT}/Assets.car" "${OUTPUT_DIR}/Assets.car"
 rm -rf "${ASSETS_OUT}"
 
-if [[ ! -s "${OUTPUT_DIR}/background.png" ]] && [[ -f "${UNOFFICIAL_DIR}/background.png" ]]; then
-  echo "Seeding background.png from unofficial branding..."
-  cp "${UNOFFICIAL_DIR}/background.png" "${OUTPUT_DIR}/background.png"
-fi
-if [[ ! -s "${OUTPUT_DIR}/dsstore" ]] && [[ -f "${UNOFFICIAL_DIR}/dsstore" ]]; then
-  echo "Seeding dsstore from unofficial branding..."
-  cp "${UNOFFICIAL_DIR}/dsstore" "${OUTPUT_DIR}/dsstore"
+build_dmg_background
+
+echo "Note: after make_dmg, run finalize_dmg_layout.sh on the .dmg to apply Finder background."
+if [[ ! -f "${OUTPUT_DIR}/dsstore" ]] || [[ ! -s "${OUTPUT_DIR}/dsstore" ]]; then
+  echo "Generating fallback DMG dsstore..."
+  python3 "${SCRIPT_DIR}/generate_dmg_dsstore.py" || {
+    echo "error: missing dsstore; run capture_dmg_dsstore.sh or install ds-store (pip3 install ds-store mac-alias)" >&2
+    exit 1
+  }
 fi
 
 if strings "${OUTPUT_DIR}/Assets.car" | grep -q 'unofficial-'; then

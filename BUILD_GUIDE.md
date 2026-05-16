@@ -92,7 +92,7 @@ Oasis icons (Dock, in-browser, DMG) are generated from a hand-off PNG or from **
 ./browser/branding/custom/verify_branding_icons.sh
 ```
 
-This updates `firefox.icns`, `Assets.car`, `document.icns`, `disk.icns`, tab/about PNGs, and `macos/Assets.xcassets/AppIcon.appiconset/`. Commit the regenerated binaries before release builds.
+This updates `firefox.icns`, `Assets.car`, `document.icns`, `disk.icns`, `background.png`, tab/about PNGs, and `macos/Assets.xcassets/AppIcon.appiconset/`. The DMG background composites `browser/base/content/assistant/images/empty-state-bg.png` with install copy on a white 1440×880 canvas (macOS system sans headline, sloth at bottom, drag arrow aligned to icon positions in `dmg_layout_common.sh`; sloth art uses trimmed ink width; icon X positions use a tighter cluster (`DMG_LAYOUT_ICON_CLUSTER_PAD=16` added to sloth ink width via `DMG_LAYOUT_FEATURE_ART_WIDTH` in `build/dmg-cluster-width.env`; arrow uses `ARROW_Y_BG_OFFSET=-32`, `ARROW_X_OFFSET=-76`, `ARROW_TIP_CLEARANCE=104`, `ARROW_GAP_PAD=10`, stroke `#777777` at width 3). After `make_dmg`, run `finalize_dmg_layout.sh` on the built `.dmg` so Finder writes a `dsstore` bound to the real **Oasis** volume (requires Automation permission for Finder). Commit regenerated `background.png` and `dsstore` before release builds.
 
 Do **not** copy `browser/branding/unofficial/Assets.car` into custom branding; that restores the purple unofficial Firefox Dock icon.
 
@@ -104,6 +104,38 @@ Do **not** copy `browser/branding/unofficial/Assets.car` into custom branding; t
 | `disk.icns` | DMG volume icon |
 | `background.png`, `dsstore` | DMG installer window layout |
 | `default*.png`, `content/about-logo*` | Tabs, about:newtab, browser.jar |
+
+### DMG installer window (local test)
+
+After branding assets and a successful `./mach build`:
+
+```bash
+OBJDIR=obj-aarch64-apple-darwin25.3.0   # use your object directory name
+
+./browser/branding/custom/build_branding_icons.sh
+./browser/branding/custom/verify_branding_icons.sh
+
+make -C "${OBJDIR}/browser/installer" stage-package
+
+MOZ_PKG_DIR=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_DIR)
+PACKAGE=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-PACKAGE)
+
+./mach python -m mozbuild.action.make_dmg \
+  --dsstore browser/branding/custom/dsstore \
+  --background browser/branding/custom/background.png \
+  --icon browser/branding/custom/disk.icns \
+  --volume-name Oasis \
+  "${OBJDIR}/dist/${MOZ_PKG_DIR}" \
+  "${OBJDIR}/dist/${PACKAGE}"
+
+./browser/branding/custom/finalize_dmg_layout.sh "${OBJDIR}/dist/${PACKAGE}" "${OBJDIR}/dist/${MOZ_PKG_DIR}"
+./browser/branding/custom/verify_dmg_layout.sh "${OBJDIR}/dist/${PACKAGE}"
+open "${OBJDIR}/dist/${PACKAGE}"
+```
+
+Confirm the opened DMG (volume name **Oasis**, not OasisCap9) shows a white background with black headline text, sloth art at the bottom, icons at y≈300 with no overlapping text, the `Oasis.app` icon matches current branding, and drag-install works.
+
+Re-run **finalize** whenever you change `background.png` or icon positions (`dmg_layout_common.sh` constants). Finalize captures Finder layout via a shadow mount, then **repacks** the DMG with `make_dmg` so the layout is visible when users open the file (shadow-only edits are not persisted otherwise). `capture_dmg_dsstore.sh` remains a fallback for generating `dsstore` from `stage-package` only. Grant Terminal or Cursor permission to control Finder if finalize fails.
 
 ### Run the build
 
