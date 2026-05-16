@@ -83,16 +83,27 @@ cd /path/to/firefox-oasis
 
 Use your actual clone path instead of `/path/to/firefox-oasis`.
 
-### Branding asset on macOS
+### Branding icons on macOS
 
-Before a full browser build, ensure the custom branding asset exists:
+Oasis icons (Dock, in-browser, DMG) are generated from **`browser/branding/custom/kahana_logo.svg`**. After changing that SVG, rebuild branding assets on macOS (requires Xcode command line tools: `iconutil`, `xcrun actool`, and ImageMagick or librsvg):
 
 ```bash
-# Only if the file is missing
-cp browser/branding/unofficial/Assets.car browser/branding/custom/Assets.car
+./browser/branding/custom/build_branding_icons.sh
+./browser/branding/custom/verify_branding_icons.sh
 ```
 
-Without **`browser/branding/custom/Assets.car`**, macOS builds can fail during packaging steps that expect this file.
+This updates `firefox.icns`, `Assets.car`, `document.icns`, `disk.icns`, tab/about PNGs, and `macos/Assets.xcassets/AppIcon.appiconset/`. Commit the regenerated binaries before release builds.
+
+Do **not** copy `browser/branding/unofficial/Assets.car` into custom branding; that restores the purple unofficial Firefox Dock icon.
+
+| Artifact | Used for |
+|----------|----------|
+| `Assets.car` | Dock / Finder / DMG app icon (primary on macOS 11+) |
+| `firefox.icns` | Legacy bundle icon |
+| `document.icns` | File-type icons in Info.plist |
+| `disk.icns` | DMG volume icon |
+| `background.png`, `dsstore` | DMG installer window layout |
+| `default*.png`, `content/about-logo*` | Tabs, about:newtab, browser.jar |
 
 ### Run the build
 
@@ -118,7 +129,7 @@ Compiler warnings are common; many are suppressed or benign. Fix errors that sto
   ```bash
   rm -f ~/.mozbuild/srcdirs/firefox-oasis-*/_virtualenvs/mach.lock
   ```
-- **Missing `Assets.car`**: See the branding step above.
+- **Missing or wrong Dock icon**: Run `./browser/branding/custom/build_branding_icons.sh` (see branding section above).
 - **Disk space**: Ensure enough free space for `obj-*` and `dist` outputs.
 
 ## Step 4: Run the browser
@@ -256,7 +267,7 @@ During rapid UI iteration, your team may use a workflow that reloads bundles wit
 cd browser/base/content/assistant/build && npm install && npm run build
 cd ../ui-preact && npm install && npm run build
 cd /path/to/firefox-oasis
-test -f browser/branding/custom/Assets.car || cp browser/branding/unofficial/Assets.car browser/branding/custom/Assets.car
+./browser/branding/custom/verify_branding_icons.sh
 ./mach build
 ./mach run
 ```

@@ -88,6 +88,11 @@ jobs:
           npm ci --prefix browser/base/content/assistant/build
           npm run build --prefix browser/base/content/assistant/build
 
+      - name: Verify Oasis branding icons
+        run: |
+          set -euo pipefail
+          ./browser/branding/custom/verify_branding_icons.sh
+
       - name: Create CI mozconfig
         run: |
           set -euo pipefail
