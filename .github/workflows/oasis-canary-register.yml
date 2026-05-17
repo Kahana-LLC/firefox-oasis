@@ -1,15 +1,19 @@
-name: Oasis Release Canary
+name: Oasis Canary Register Updates
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing release tag to run (vX.Y.Z.N)
+        description: Release tag for audit metadata (vX.Y.Z.N)
+        required: true
+        type: string
+      workflow_run_id:
+        description: Workflow run ID with oasis-macos-* artifacts (from Actions run URL)
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 env:
@@ -18,41 +22,18 @@ env:
   RING: oasis-canary
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - build_target: Darwin_aarch64-gcc3
-            arch_slug: aarch64
-            runner: macos-15
-            objdir: obj-oasis-canary-aarch64
-          - build_target: Darwin_x86_64-gcc3
-            arch_slug: x86_64
-            runner: macos-15-intel
-            objdir: obj-oasis-canary-x86_64
-    uses: ./.github/workflows/oasis-build-macos.yml
-    with:
-      release_tag: ${{ inputs.release_tag }}
-      build_target: ${{ matrix.build_target }}
-      arch_slug: ${{ matrix.arch_slug }}
-      runner: ${{ matrix.runner }}
-      objdir: ${{ matrix.objdir }}
-      update_channel: oasis-canary
-      ring: oasis-canary
-    secrets: inherit
-
-  publish:
-    needs: build
+  register:
     runs-on: ubuntu-latest
     environment: canary-signing
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download build artifacts
+      - name: Download build artifacts from prior run
         uses: actions/download-artifact@v4
         with:
+          run-id: ${{ inputs.workflow_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           pattern: oasis-macos-*
           path: artifacts
           merge-multiple: false
@@ -72,12 +53,13 @@ jobs:
           done
           echo "PUBLISH_DIR=${PUBLISH_DIR}" >> "${GITHUB_ENV}"
 
-      - name: Publish to canary release and register update service
+      - name: Register with update service
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLISH_MODE: canary
           RELEASE_TAG: ${{ inputs.release_tag }}
           ARTIFACT_DIR: ${{ env.PUBLISH_DIR }}
+          SKIP_GITHUB_UPLOAD: "1"
           OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
           OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
           PRODUCT: ${{ env.PRODUCT }}

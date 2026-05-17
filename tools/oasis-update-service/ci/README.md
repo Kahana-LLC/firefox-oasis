@@ -3,6 +3,7 @@
 The repository includes these release workflows:
 
 - [`.github/workflows/oasis-canary.yml`](../../../.github/workflows/oasis-canary.yml) — dual-arch build, publish to rolling `canary` release, register Supabase artifacts, move `oasis-canary` ring
+- [`.github/workflows/oasis-canary-register.yml`](../../../.github/workflows/oasis-canary-register.yml) — register Supabase only from a prior run's artifacts (no rebuild)
 - [`.github/workflows/oasis-release.yml`](../../../.github/workflows/oasis-release.yml) — dual-arch build, publish to immutable `vX.Y.Z.N` GitHub release (no Supabase registration)
 - [`.github/workflows/oasis-build-macos.yml`](../../../.github/workflows/oasis-build-macos.yml) — reusable per-arch macOS build/sign/notarize job
 - [`.github/workflows/oasis-stable-promote.yml`](../../../.github/workflows/oasis-stable-promote.yml) — pointer-only promote to `oasis-stable` after validating both canary MARs
@@ -63,6 +64,17 @@ For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **A
 - `target_version`: `X.Y.Z.N` to promote
 - `locale`: default `en-US`
 - Validates **both** canary MAR assets and update XML endpoints before moving `oasis-stable`
+
+## Recovering from a failed publish job
+
+**Re-run failed jobs** on an old workflow run uses the workflow YAML from that run's commit. It will not pick up fixes on `main` (for example `environment: canary-signing` on publish).
+
+If GitHub assets are already on the `canary` release but Supabase registration failed:
+
+1. Open the successful build run in Actions and copy the numeric **run ID** from the URL (`.../actions/runs/12345678901`).
+2. Run **Oasis Canary Register Updates** on `main` with `release_tag` and `workflow_run_id`.
+
+Publish and register jobs require secrets on the **`canary-signing`** GitHub Environment (`OASIS_UPDATE_SERVICE_URL`, `OASIS_UPDATE_ADMIN_TOKEN`).
 
 ## Operational guardrails
 

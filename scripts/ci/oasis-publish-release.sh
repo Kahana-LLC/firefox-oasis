@@ -14,6 +14,9 @@ set -euo pipefail
 # Canary-only (PUBLISH_MODE=canary):
 #   OASIS_UPDATE_SERVICE_URL
 #   OASIS_ADMIN_TOKEN
+#
+# Optional:
+#   SKIP_GITHUB_UPLOAD=1   register Supabase only (assets already on the release)
 #   PRODUCT               default Firefox
 #   RING                  default oasis-canary
 #   LOCALE                default en-US
@@ -65,28 +68,14 @@ for arch_slug in aarch64 x86_64; do
   upload_paths+=("${arch_dir}/${dmg_name}")
 done
 
+SKIP_GITHUB_UPLOAD="${SKIP_GITHUB_UPLOAD:-0}"
+
 case "${PUBLISH_MODE}" in
   canary)
     GH_TAG="canary"
-    if gh release view "${GH_TAG}" > /dev/null 2>&1; then
-      gh release edit "${GH_TAG}" --title "Canary Builds" --prerelease
-    else
-      gh release create "${GH_TAG}" \
-        --title "Canary Builds" \
-        --notes "Rolling canary artifacts. Assets are appended by automation." \
-        --prerelease
-    fi
-    gh release upload "${GH_TAG}" "${upload_paths[@]}" --clobber
     ;;
   versioned)
     GH_TAG="${RELEASE_TAG:?RELEASE_TAG required for versioned publish}"
-    if gh release view "${GH_TAG}" > /dev/null 2>&1; then
-      echo "Release ${GH_TAG} already exists. Publish a new version instead." >&2
-      exit 1
-    fi
-    gh release create "${GH_TAG}" "${upload_paths[@]}" \
-      --title "${GH_TAG}" \
-      --notes "Oasis release ${GH_TAG}"
     ;;
   *)
     echo "Unknown PUBLISH_MODE: ${PUBLISH_MODE}" >&2
@@ -94,7 +83,33 @@ case "${PUBLISH_MODE}" in
     ;;
 esac
 
-echo "Published ${#upload_paths[@]} assets to GitHub release ${GH_TAG}"
+if [ "${SKIP_GITHUB_UPLOAD}" != "1" ]; then
+  case "${PUBLISH_MODE}" in
+    canary)
+      if gh release view "${GH_TAG}" > /dev/null 2>&1; then
+        gh release edit "${GH_TAG}" --title "Canary Builds" --prerelease
+      else
+        gh release create "${GH_TAG}" \
+          --title "Canary Builds" \
+          --notes "Rolling canary artifacts. Assets are appended by automation." \
+          --prerelease
+      fi
+      gh release upload "${GH_TAG}" "${upload_paths[@]}" --clobber
+      ;;
+    versioned)
+      if gh release view "${GH_TAG}" > /dev/null 2>&1; then
+        echo "Release ${GH_TAG} already exists. Publish a new version instead." >&2
+        exit 1
+      fi
+      gh release create "${GH_TAG}" "${upload_paths[@]}" \
+        --title "${GH_TAG}" \
+        --notes "Oasis release ${GH_TAG}"
+      ;;
+  esac
+  echo "Published ${#upload_paths[@]} assets to GitHub release ${GH_TAG}"
+else
+  echo "Skipping GitHub upload (SKIP_GITHUB_UPLOAD=1); using existing release ${GH_TAG}"
+fi
 
 if [ "${PUBLISH_MODE}" = "canary" ]; then
   if [ -z "${OASIS_UPDATE_SERVICE_URL:-}" ] || [ -z "${OASIS_ADMIN_TOKEN:-}" ]; then
