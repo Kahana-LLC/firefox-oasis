@@ -1,10 +1,12 @@
 import { useEffect } from "preact/hooks";
 import {
   OASIS_EVENT_AUTH_UPDATE,
+  OASIS_EVENT_CLARIFICATION_UPDATE,
   OASIS_EVENT_CONFIRMATION_UPDATE,
 } from "../../../shared/contracts.js";
 import type {
   AuthState,
+  ClarificationData,
   ConfirmationData,
   OasisWindow,
   SupabaseAuthState,
@@ -46,10 +48,11 @@ function toCleanup(value: unknown): AuthSubscriptionCleanup {
 export function useAuthSync(params: {
   setAuth: (next: AuthState | ((prev: AuthState) => AuthState)) => void;
   setPendingConfirmation: (data: ConfirmationData | null) => void;
+  setPendingClarification: (data: ClarificationData | null) => void;
   onAuthenticated: () => void;
   onUserChanged: () => void;
 }) {
-  const { setAuth, setPendingConfirmation, onAuthenticated, onUserChanged } =
+  const { setAuth, setPendingConfirmation, setPendingClarification, onAuthenticated, onUserChanged } =
     params;
 
   useEffect(() => {
@@ -118,6 +121,14 @@ export function useAuthSync(params: {
       OASIS_EVENT_CONFIRMATION_UPDATE,
       handleConfirmationUpdate
     );
+    const handleClarificationUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<ClarificationData | null>).detail;
+      setPendingClarification(detail);
+    };
+    window.addEventListener(
+      OASIS_EVENT_CLARIFICATION_UPDATE,
+      handleClarificationUpdate
+    );
 
     let authCleanup: AuthSubscriptionCleanup;
     if (typeof oasisWindow.supabaseAuth?.onAuthStateChange === "function") {
@@ -146,8 +157,12 @@ export function useAuthSync(params: {
         OASIS_EVENT_CONFIRMATION_UPDATE,
         handleConfirmationUpdate
       );
+      window.removeEventListener(
+        OASIS_EVENT_CLARIFICATION_UPDATE,
+        handleClarificationUpdate
+      );
       window.clearTimeout(pollTimer);
       authCleanup?.();
     };
-  }, [onAuthenticated, onUserChanged, setAuth, setPendingConfirmation]);
+  }, [onAuthenticated, onUserChanged, setAuth, setPendingClarification, setPendingConfirmation]);
 }

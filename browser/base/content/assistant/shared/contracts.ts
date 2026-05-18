@@ -24,6 +24,20 @@ export type PendingAmbiguityPayload = {
   description: string;
 };
 
+export type ClarificationOption = {
+  id: string;
+  label: string;
+  resolvedPrompt: string;
+};
+
+export type PendingClarificationPayload = {
+  originalMessage: string;
+  options: ClarificationOption[];
+};
+
+export const OASIS_EVENT_CLARIFICATION_UPDATE =
+  "oasis-clarification-update" as const;
+
 export type OasisRecordToolActionStart = (
   commandName: string,
   messageId?: string,
@@ -65,6 +79,7 @@ export type OasisEventName =
   | typeof OASIS_EVENT_AUTH_UPDATE
   | typeof OASIS_EVENT_HISTORY_UPDATE
   | typeof OASIS_EVENT_CONFIRMATION_UPDATE
+  | typeof OASIS_EVENT_CLARIFICATION_UPDATE
   | typeof OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
 
 export type BookmarkFoldersChangedDetail = {
@@ -75,5 +90,6 @@ export type OasisEventDetailMap = {
   [OASIS_EVENT_AUTH_UPDATE]: unknown;
   [OASIS_EVENT_HISTORY_UPDATE]: undefined;
   [OASIS_EVENT_CONFIRMATION_UPDATE]: PendingConfirmationPayload | null;
+  [OASIS_EVENT_CLARIFICATION_UPDATE]: PendingClarificationPayload | null;
   [OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED]: BookmarkFoldersChangedDetail;
 };

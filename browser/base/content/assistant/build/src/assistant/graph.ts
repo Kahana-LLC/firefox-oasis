@@ -16,9 +16,12 @@ import { assistRemote, type AssistTool } from "../proxyClient.js";
 import {
   clearContinuationQueue,
   clearPendingAmbiguity,
+  clearPendingClarification,
   getContinuationQueue,
   getPendingAmbiguity,
+  getPendingClarification,
   getPendingConfirmation,
+  setPendingClarification,
   takeContinuationQueue,
 } from "../services/interactionState.js";
 import type { AssistantWindowLike } from "../types/runtime.js";
@@ -26,7 +29,7 @@ import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
 import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
-import { CHAT_SYSTEM_PROMPT } from "../prompts/chatPrompt.js";
+import { getChatSystemPrompt } from "../prompts/chatPrompt.js";
 import { subscriptionService } from "../services/subscription.js";
 import { buildHiddenInstruction } from "../prompts/hiddenInstructions.js";
 import { buildAssistRouterPrompt } from "../prompts/routerPrompt.js";
@@ -91,8 +94,10 @@ const CHAT_GENERATION_CONFIG = {
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
 import {
   resolvePendingAmbiguityGate,
+  resolvePendingClarificationGate,
   resolvePendingConfirmationGate,
 } from "./supervisorGates.js";
+import { classifyClarificationNeed } from "./clarificationClassifier.js";
 import {
   buildCommandQueuePlan,
   shouldClearContinuationQueue,
@@ -198,7 +203,7 @@ export function buildAssistantGraph(
     let res: unknown;
     try {
       res = await assistRemote(
-        CHAT_SYSTEM_PROMPT + railroadMemoryBlock,
+        getChatSystemPrompt() + railroadMemoryBlock,
         toWire(messagesWithPrompt),
         ["chat"],
         [],
@@ -307,6 +312,28 @@ export function buildAssistantGraph(
       clearPendingAmbiguity();
     }
 
+    const pendingClarification = getPendingClarification();
+    const clarificationGate = resolvePendingClarificationGate({
+      pendingClarification,
+      confirmationText,
+      commandText,
+    });
+    if (clarificationGate.kind === "resolved") {
+      clearPendingClarification();
+      return {
+        next: "supervisor",
+        args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },
+        commandQueue: [],
+      };
+    }
+    if (clarificationGate.kind === "cancel") {
+      clearPendingClarification();
+      return { next: "chat", args: {}, commandQueue: [] };
+    }
+    if (clarificationGate.kind === "clear") {
+      clearPendingClarification();
+    }
+
     const pendingContinuationQueue = getContinuationQueue();
     const shouldResumeContinuation =
       state.lastWorker === "confirm_action" &&
@@ -335,10 +362,44 @@ export function buildAssistantGraph(
       : [];
     const hasQueuedCommands =
       state.commandQueue.length > 0 || continuationQueue.length > 0;
-    const topLevelActionText = commandLine.toLowerCase();
+
+    const clarifiedPrompt =
+      typeof state.args?.__clarifiedPrompt === "string"
+        ? state.args.__clarifiedPrompt
+        : "";
+    const effectiveCommandLine = clarifiedPrompt || commandLine;
+    const topLevelActionText = effectiveCommandLine.toLowerCase();
     const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
 
-    if (!hasQueuedCommands && commandLine) {
+    if (
+      !hasQueuedCommands &&
+      effectiveCommandLine &&
+      !clarifiedPrompt &&
+      topLevelActionLike
+    ) {
+      const clarification = await classifyClarificationNeed({
+        messages: state.messages,
+        userText: effectiveCommandLine,
+      });
+      if (clarification.needsClarification) {
+        setPendingClarification({
+          originalMessage: effectiveCommandLine,
+          options: clarification.options,
+        });
+        const optionList = clarification.options
+          .map((o, i) => `${i + 1}. ${o.label}`)
+          .join("\n");
+        return {
+          next: "chat",
+          args: {
+            routerMessage: `I'd like to clarify what you mean. Please pick one:\n\n${optionList}`,
+          },
+          commandQueue: [],
+        };
+      }
+    }
+
+    if (!hasQueuedCommands && effectiveCommandLine) {
       const topLevelAssist = await tryResolveAssistRoute({
         endpointKey,
         activeCommandText: topLevelActionText,

@@ -42273,6 +42273,7 @@ Content: ${entry.description || ""}`;
   }
 
   // ../shared/contracts.ts
+  var OASIS_EVENT_CLARIFICATION_UPDATE = "oasis-clarification-update";
   var OASIS_EVENT_HISTORY_UPDATE = "oasis-history-update";
   var OASIS_EVENT_CONFIRMATION_UPDATE = "oasis-confirmation-update";
   var OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED = "oasis-bookmark-folders-changed";
@@ -51371,6 +51372,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   var InteractionStateStore = class {
     pendingConfirmation = null;
     pendingAmbiguity = null;
+    pendingClarification = null;
     continuationQueue = [];
     recentSearchResults = [];
     assistantWindow;
@@ -51412,6 +51414,22 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     }
     clearPendingAmbiguity() {
       this.pendingAmbiguity = null;
+    }
+    getPendingClarification() {
+      return this.pendingClarification;
+    }
+    setPendingClarification(pending) {
+      this.pendingClarification = pending;
+      if (pending) {
+        assistantLogger.debug("interaction", "Pending clarification set", {
+          optionCount: pending.options.length
+        });
+      }
+      this.emitClarificationUpdate(pending);
+    }
+    clearPendingClarification() {
+      this.pendingClarification = null;
+      this.emitClarificationUpdate(null);
     }
     getContinuationQueue() {
       return [...this.continuationQueue];
@@ -51472,6 +51490,23 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         );
       }
     }
+    emitClarificationUpdate(pending) {
+      try {
+        const relay = this.assistantWindow.oasisSetPendingClarificationRelay;
+        if (typeof relay === "function") {
+          relay(pending);
+        }
+        window.dispatchEvent(
+          new CustomEvent(OASIS_EVENT_CLARIFICATION_UPDATE, { detail: pending })
+        );
+      } catch (error) {
+        assistantLogger.error(
+          "interaction",
+          "Failed to update pending clarification state",
+          error
+        );
+      }
+    }
   };
   var interactionState = new InteractionStateStore();
   function getPendingConfirmation() {
@@ -51491,6 +51526,15 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
   function clearPendingAmbiguity() {
     interactionState.clearPendingAmbiguity();
+  }
+  function getPendingClarification() {
+    return interactionState.getPendingClarification();
+  }
+  function setPendingClarification(pending) {
+    interactionState.setPendingClarification(pending);
+  }
+  function clearPendingClarification() {
+    interactionState.clearPendingClarification();
   }
   function getContinuationQueue() {
     return interactionState.getContinuationQueue();
@@ -54736,7 +54780,18 @@ ${toHex2(hashedRequest)}`;
   }
 
   // src/prompts/chatPrompt.ts
-  var CHAT_SYSTEM_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into the Oasis browser. You can help with ANYTHING - not just browser tasks.
+  function currentDateString() {
+    return (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+  }
+  function getChatSystemPrompt() {
+    return `You are Oasis AI, a helpful and knowledgeable assistant integrated into the Oasis browser. You can help with ANYTHING - not just browser tasks.
+
+**Current date:** ${currentDateString()}.
 
 **Product naming:** The browser is Oasis (or Oasis Browser). Do not call it Firefox or imply the user is in Firefox unless you are quoting an external site or add-on name.
 
@@ -54817,6 +54872,7 @@ user_intent \u2014 the user's underlying goal:
   learning, research, work, dev, marketing, shopping, personal, entertainment, meta, other
 
 Use "other" only when genuinely uncertain. Output ONLY the JSON object.`;
+  }
 
   // src/prompts/hiddenInstructions.ts
   var SUMMARIZE_INSTRUCTION = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
@@ -54838,8 +54894,17 @@ Do NOT mention that you received page content or reference this instruction. Jus
   }
 
   // src/prompts/routerPrompt.ts
+  function currentDateString2() {
+    return (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+  }
   function buildAssistRouterPrompt(commandNames) {
     return [
+      `Today is ${currentDateString2()}.`,
       "You route the latest user request to one browser command.",
       `Valid commands: ${commandNames.join(", ")}.`,
       "For chained requests, you may call route_action_plan with actions[] (max 3) instead of a single command.",
@@ -55344,6 +55409,8 @@ Result: ${toolResult.message}`
   // src/assistant/supervisorGates.ts
   var CONFIRM_RE = /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i;
   var CANCEL_RE2 = /^(?:no|cancel|nevermind|don'?t|stop)$/i;
+  var CLARIFY_OPTION_RE = /^(?:clarify:opt_(\d+)|^(\d+)$)/i;
+  var CLARIFY_NONE_RE = /^(?:none|cancel|nevermind|other|skip)$/i;
   function resolvePendingConfirmationGate(params) {
     const { confirmationText, pendingConfirmation, justRanConfirm } = params;
     const confirmMatch = CONFIRM_RE.test(confirmationText);
@@ -55381,6 +55448,127 @@ Result: ${toolResult.message}`
       return { kind: "route", next: "resolve_ambiguity", args: {} };
     }
     return { kind: "clear" };
+  }
+  function resolvePendingClarificationGate(params) {
+    const { pendingClarification, confirmationText, commandText } = params;
+    if (!pendingClarification) {
+      return { kind: "none" };
+    }
+    if (CLARIFY_NONE_RE.test(confirmationText.trim())) {
+      return { kind: "cancel" };
+    }
+    const optMatch = CLARIFY_OPTION_RE.exec(confirmationText.trim());
+    if (optMatch) {
+      const idx = parseInt(optMatch[1] || optMatch[2], 10) - 1;
+      const option = pendingClarification.options[idx];
+      if (option) {
+        return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+      }
+    }
+    const lower = confirmationText.trim().toLowerCase();
+    for (const option of pendingClarification.options) {
+      if (option.label.toLowerCase() === lower || option.id === lower) {
+        return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+      }
+    }
+    if (looksLikeNewActionCommand(commandText)) {
+      return { kind: "clear" };
+    }
+    return { kind: "cancel" };
+  }
+
+  // src/assistant/clarificationClassifier.ts
+  var CLARIFICATION_SYSTEM_PROMPT = [
+    "You are a disambiguation classifier for a browser assistant.",
+    "Given the user's latest message and conversation context, decide whether the request is clear enough to act on immediately, or whether it needs clarification.",
+    "",
+    "If the request is CLEAR (single unambiguous action, specific enough to execute), respond:",
+    '{"need_clarification": false}',
+    "",
+    "If the request is AMBIGUOUS (multiple plausible interpretations, missing critical details, or could lead to unintended results), respond with exactly 2-3 candidate interpretations:",
+    '{"need_clarification": true, "options": [{"id": "opt_1", "label": "<short summary>", "resolvedPrompt": "<fully self-contained reformulation>"},  ...]}',
+    "",
+    "Rules:",
+    "- Each resolvedPrompt must be self-contained: include all context so the assistant can act without additional info.",
+    "- Labels should be concise (under 10 words) and clearly distinct from each other.",
+    "- Do NOT clarify trivial things; only clarify when there is genuine ambiguity about WHAT the user wants done.",
+    "- Simple greetings, questions, or clearly specified commands should always return need_clarification: false.",
+    "- Common commands (close tab, search X, open Y) are unambiguous \u2014 do NOT clarify those.",
+    "- Only return JSON; no prose before or after."
+  ].join("\n");
+  var CLARIFICATION_GENERATION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        need_clarification: {
+          type: "boolean",
+          description: "Whether the user's request needs clarification."
+        },
+        options: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              label: { type: "string" },
+              resolvedPrompt: { type: "string" }
+            },
+            required: ["id", "label", "resolvedPrompt"]
+          },
+          description: "2-3 candidate interpretations when need_clarification is true."
+        }
+      },
+      required: ["need_clarification"]
+    }
+  };
+  async function classifyClarificationNeed(params) {
+    const { messages, userText } = params;
+    if (userText.split(/\s+/).length <= 3) {
+      return { needsClarification: false };
+    }
+    try {
+      const wireMessages = toWire(messages.slice(-6));
+      const res = await assistRemote(
+        CLARIFICATION_SYSTEM_PROMPT,
+        wireMessages,
+        ["chat"],
+        [],
+        CLARIFICATION_GENERATION_CONFIG
+      );
+      const raw = res;
+      let parsed;
+      if (typeof raw.content === "string") {
+        parsed = JSON.parse(raw.content);
+      } else {
+        parsed = raw;
+      }
+      if (parsed.need_clarification !== true) {
+        return { needsClarification: false };
+      }
+      const options = parsed.options;
+      if (!Array.isArray(options) || options.length < 2) {
+        return { needsClarification: false };
+      }
+      const validOptions = options.slice(0, 3).filter(
+        (opt) => typeof opt.id === "string" && typeof opt.label === "string" && typeof opt.resolvedPrompt === "string"
+      ).map((opt) => ({
+        id: opt.id,
+        label: opt.label,
+        resolvedPrompt: opt.resolvedPrompt
+      }));
+      if (validOptions.length < 2) {
+        return { needsClarification: false };
+      }
+      return { needsClarification: true, options: validOptions };
+    } catch (error) {
+      assistantLogger.warn(
+        "clarification",
+        "Clarification classifier failed, proceeding without.",
+        error
+      );
+      return { needsClarification: false };
+    }
   }
 
   // src/assistant/commandChain.ts
@@ -56124,7 +56312,7 @@ ${lines.join("\n\n")}`;
       let res;
       try {
         res = await assistRemote(
-          CHAT_SYSTEM_PROMPT + railroadMemoryBlock,
+          getChatSystemPrompt() + railroadMemoryBlock,
           toWire(messagesWithPrompt),
           ["chat"],
           [],
@@ -56224,6 +56412,27 @@ ${lines.join("\n\n")}`;
       if (ambiguityGate.kind === "clear") {
         clearPendingAmbiguity();
       }
+      const pendingClarification = getPendingClarification();
+      const clarificationGate = resolvePendingClarificationGate({
+        pendingClarification,
+        confirmationText,
+        commandText
+      });
+      if (clarificationGate.kind === "resolved") {
+        clearPendingClarification();
+        return {
+          next: "supervisor",
+          args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },
+          commandQueue: []
+        };
+      }
+      if (clarificationGate.kind === "cancel") {
+        clearPendingClarification();
+        return { next: "chat", args: {}, commandQueue: [] };
+      }
+      if (clarificationGate.kind === "clear") {
+        clearPendingClarification();
+      }
       const pendingContinuationQueue = getContinuationQueue();
       const shouldResumeContinuation = state.lastWorker === "confirm_action" && pendingContinuationQueue.length > 0 && !getPendingConfirmation();
       if (shouldClearContinuationQueue({
@@ -56241,9 +56450,33 @@ ${lines.join("\n\n")}`;
       }
       const continuationQueue = shouldResumeContinuation ? takeContinuationQueue() : [];
       const hasQueuedCommands = state.commandQueue.length > 0 || continuationQueue.length > 0;
-      const topLevelActionText = commandLine.toLowerCase();
+      const clarifiedPrompt = typeof state.args?.__clarifiedPrompt === "string" ? state.args.__clarifiedPrompt : "";
+      const effectiveCommandLine = clarifiedPrompt || commandLine;
+      const topLevelActionText = effectiveCommandLine.toLowerCase();
       const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
-      if (!hasQueuedCommands && commandLine) {
+      if (!hasQueuedCommands && effectiveCommandLine && !clarifiedPrompt && topLevelActionLike) {
+        const clarification = await classifyClarificationNeed({
+          messages: state.messages,
+          userText: effectiveCommandLine
+        });
+        if (clarification.needsClarification) {
+          setPendingClarification({
+            originalMessage: effectiveCommandLine,
+            options: clarification.options
+          });
+          const optionList = clarification.options.map((o2, i2) => `${i2 + 1}. ${o2.label}`).join("\n");
+          return {
+            next: "chat",
+            args: {
+              routerMessage: `I'd like to clarify what you mean. Please pick one:
+
+${optionList}`
+            },
+            commandQueue: []
+          };
+        }
+      }
+      if (!hasQueuedCommands && effectiveCommandLine) {
         const topLevelAssist = await tryResolveAssistRoute({
           endpointKey,
           activeCommandText: topLevelActionText,

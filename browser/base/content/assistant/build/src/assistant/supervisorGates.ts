@@ -1,16 +1,19 @@
 /**
- * Confirmation & ambiguity gates — checked BEFORE any routing.
+ * Confirmation, ambiguity & clarification gates — checked BEFORE any routing.
  *
  * When the supervisor receives a new user message, these gates run first:
  * - Confirmation gate: if a destructive action is pending and the user
  *   says "yes"/"no", routes directly to confirm_action (skips LLM).
  * - Ambiguity gate: if the user was asked "tab group or bookmark folder?",
  *   routes to resolve_ambiguity based on their reply.
+ * - Clarification gate: if the LLM asked the user to pick from 2-3
+ *   reformulations, resolves the selected option and re-routes with it.
  *
- * If neither gate fires, normal routing proceeds.
+ * If no gate fires, normal routing proceeds.
  */
 import type {
   PendingAmbiguity,
+  PendingClarification,
   PendingConfirmation,
 } from "../services/interactionState.js";
 import {
@@ -20,6 +23,8 @@ import {
 
 const CONFIRM_RE = /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i;
 const CANCEL_RE = /^(?:no|cancel|nevermind|don'?t|stop)$/i;
+const CLARIFY_OPTION_RE = /^(?:clarify:opt_(\d+)|^(\d+)$)/i;
+const CLARIFY_NONE_RE = /^(?:none|cancel|nevermind|other|skip)$/i;
 
 type RouteGateDecision = {
   kind: "route";
@@ -46,6 +51,21 @@ export type ConfirmationGateDecision =
 
 export type AmbiguityGateDecision =
   | RouteGateDecision
+  | ClearGateDecision
+  | NoneGateDecision;
+
+type ClarificationResolvedDecision = {
+  kind: "resolved";
+  resolvedPrompt: string;
+};
+
+type ClarificationCancelDecision = {
+  kind: "cancel";
+};
+
+export type ClarificationGateDecision =
+  | ClarificationResolvedDecision
+  | ClarificationCancelDecision
   | ClearGateDecision
   | NoneGateDecision;
 
@@ -103,4 +123,41 @@ export function resolvePendingAmbiguityGate(params: {
   }
 
   return { kind: "clear" };
+}
+
+export function resolvePendingClarificationGate(params: {
+  pendingClarification: PendingClarification | null;
+  confirmationText: string;
+  commandText: string;
+}): ClarificationGateDecision {
+  const { pendingClarification, confirmationText, commandText } = params;
+  if (!pendingClarification) {
+    return { kind: "none" };
+  }
+
+  if (CLARIFY_NONE_RE.test(confirmationText.trim())) {
+    return { kind: "cancel" };
+  }
+
+  const optMatch = CLARIFY_OPTION_RE.exec(confirmationText.trim());
+  if (optMatch) {
+    const idx = parseInt(optMatch[1] || optMatch[2], 10) - 1;
+    const option = pendingClarification.options[idx];
+    if (option) {
+      return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+    }
+  }
+
+  const lower = confirmationText.trim().toLowerCase();
+  for (const option of pendingClarification.options) {
+    if (option.label.toLowerCase() === lower || option.id === lower) {
+      return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+    }
+  }
+
+  if (looksLikeNewActionCommand(commandText)) {
+    return { kind: "clear" };
+  }
+
+  return { kind: "cancel" };
 }

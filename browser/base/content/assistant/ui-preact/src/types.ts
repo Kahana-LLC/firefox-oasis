@@ -2,6 +2,7 @@ import type {
   AssistantHistoryWireEntry,
   OasisRecordToolActionStart,
   OasisRecordToolActionUpdate,
+  PendingClarificationPayload,
   PendingConfirmationPayload,
   RunAssistantStream,
   ToolActionStatus as SharedToolActionStatus,
@@ -37,6 +38,8 @@ export interface AuthState {
 }
 
 export type ConfirmationData = PendingConfirmationPayload;
+
+export type ClarificationData = PendingClarificationPayload;
 
 export type VoiceAgentState =
   | "idle"
@@ -203,6 +206,7 @@ export type OasisWindow = Window & {
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
+  oasisSetPendingClarificationRelay?: (data: ClarificationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
   textToSpeech?: (text: string) => Promise<Blob>;
   voiceAgent?: {
