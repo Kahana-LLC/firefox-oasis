@@ -15,6 +15,7 @@ import {
   OASIS_AMPLIFIER_TRAINING_URL,
   OASIS_PRICING_URL,
 } from '../utils/trainingRewards';
+import type { TrainingMode } from '../utils/trainingMode';
 export interface TrainingSubmittedPayload {
   messageId: string;
   sentiment: 'up' | 'down';
@@ -94,6 +95,10 @@ export function Feedback({
   const [detailFieldEngaged, setDetailFieldEngaged] = useState(false);
   const [trainingInfoOpen, setTrainingInfoOpen] = useState(false);
   const [earnChipDismissed, setEarnChipDismissed] = useState(readEarnChipDismissed);
+  const [trainingMode, setTrainingMode] = useState<TrainingMode>('personalized');
+  const [thanksTrainingMode, setThanksTrainingMode] = useState<TrainingMode | null>(
+    null
+  );
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -104,6 +109,7 @@ export function Feedback({
     setShowSubmitHint(false);
     setDetailFieldEngaged(false);
     setTrainingInfoOpen(false);
+    setTrainingMode('personalized');
   }, []);
 
   useEffect(() => {
@@ -221,7 +227,8 @@ export function Feedback({
     isNegative: boolean,
     category: string,
     commentTrimmed: string,
-    sentimentValue: 'up' | 'down'
+    sentimentValue: 'up' | 'down',
+    mode: TrainingMode
   ) => {
     const supabase = oasisWindow.supabaseAuth?.supabase;
     const sessionId = oasisWindow.supabaseAuth?.currentSession?.session_id || null;
@@ -240,20 +247,22 @@ export function Feedback({
         return false;
       }
 
+      const isPersonalized = mode === 'personalized';
       const payload: Record<string, unknown> = {
-        user_id: user.id,
-        session_id: sessionId,
+        user_id: isPersonalized ? user.id : null,
+        session_id: isPersonalized ? sessionId : null,
+        training_mode: mode,
         reported_at: new Date().toISOString(),
         negative_rating: isNegative,
         category,
         interaction_id: interactionId ?? null,
         additional_info: {
-          // Same defaults as removed checkboxes: include context, do not contact.
           badges: selectedBadges,
           comment: commentTrimmed,
           include_context: true,
           contact_me: false,
           sentiment: sentimentValue,
+          training_mode: mode,
           user_prompt: userPrompt.trim() || null,
           assistant_reply: assistantReply,
           ...(isUuidString(messageId) ? {} : { client_message_id: messageId }),
@@ -305,6 +314,7 @@ export function Feedback({
     setShowSubmitHint(false);
     setDetailFieldEngaged(false);
     setTrainingInfoOpen(false);
+    setTrainingMode('personalized');
     setModalOpen(true);
     if (next === 'up') {
       mpTrack('feedback_thumb_up', { messageId });
@@ -334,10 +344,12 @@ export function Feedback({
       sentiment === 'down',
       category,
       commentTrimmed,
-      sentiment
+      sentiment,
+      trainingMode
     );
 
     if (success) {
+      setThanksTrainingMode(trainingMode);
       const progressUpdate = recordTrainingSubmission(new Date());
       playTrainingConfetti();
       mpTrack('training_progress_updated', {
@@ -345,6 +357,7 @@ export function Feedback({
         current_streak_days: progressUpdate.progress.currentStreakDays,
         longest_streak_days: progressUpdate.progress.longestStreakDays,
         unlocked_count: progressUpdate.unlockedBadges.length,
+        training_mode: trainingMode,
       });
       for (const unlock of progressUpdate.unlockedBadges) {
         mpTrack('training_badge_unlocked', {
@@ -368,24 +381,22 @@ export function Feedback({
           detail: { immediate: true },
         })
       );
+      const dispatchUsageSnapshot = () => {
+        window.dispatchEvent(
+          new CustomEvent('oasis-usage-update', {
+            bubbles: true,
+            detail: { immediate: true },
+          })
+        );
+      };
       void (async () => {
         try {
           await oasisWindow.subscriptionService?.forceRefresh?.();
         } catch {
           void 0;
         }
-        window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+        dispatchUsageSnapshot();
       })();
-      window.setTimeout(() => {
-        void (async () => {
-          try {
-            await oasisWindow.subscriptionService?.forceRefresh?.();
-          } catch {
-            void 0;
-          }
-          window.dispatchEvent(new CustomEvent('oasis-usage-update'));
-        })();
-      }, 400);
       setSubmitted(true);
       setTimeout(() => {
         if (onClose) {
@@ -393,7 +404,10 @@ export function Feedback({
         }
         closeModal();
         setThanksInline(true);
-        setTimeout(() => setThanksInline(false), 3200);
+        setTimeout(() => {
+          setThanksInline(false);
+          setThanksTrainingMode(null);
+        }, 3200);
       }, 2000);
     }
     setIsSubmitting(false);
@@ -419,6 +433,11 @@ export function Feedback({
     selectedBadges.length < 1 ||
     comment.trim().length < FEEDBACK_MIN_DETAIL_CHARS;
 
+  const trainingModeHint =
+    trainingMode === 'personalized'
+      ? 'Linked to your account and used to improve Oasis for you.'
+      : 'Not linked to your account on the training record. Still earns bonus tokens when you qualify.';
+
   const onSubmitClick = () => {
     if (isSubmitting) {
       return;
@@ -443,7 +462,7 @@ export function Feedback({
         }}
       >
         <div
-          className="feedback-overlay-dialog"
+          className="feedback-overlay-dialog feedback-overlay-dialog--compact"
           role="dialog"
           aria-modal="true"
           aria-labelledby="feedback-dialog-title"
@@ -453,8 +472,8 @@ export function Feedback({
             <div className="feedback-overlay-thanks">
               <p className="feedback-overlay-thanks-text">Thanks — your training was saved!</p>
               <p className="feedback-overlay-thanks-bonus">
-                +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens have been added to your daily
-                token allowance (UTC day).
+                +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens have been added to your
+                daily token allowance (UTC day).
               </p>
               <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
                 View plans and limits
@@ -532,9 +551,16 @@ export function Feedback({
                         : 'Showing us what missed the mark teaches the assistant to do better next time.'}
                     </p>
                     <p className="feedback-training-info-popover__p">
-                      Each qualifying training submission earns +
-                      {FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens for today (UTC). Unused
-                      bonus allowance does not roll over.
+                      Choose <strong>Personalized</strong> to link training to your account and
+                      improve Oasis for you, or <strong>Anonymous</strong> to submit without tying
+                      it to your user ID or email. Prompt and reply text are still stored in both
+                      cases.
+                    </p>
+                    <p className="feedback-training-info-popover__p">
+                      Qualifying <strong>personalized</strong> and <strong>anonymous</strong>{' '}
+                      submissions earn +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens for
+                      today (UTC). Anonymous training is not linked to your account on the
+                      feedback record. Unused bonus allowance does not roll over.
                     </p>
                     <button
                       type="button"
@@ -666,6 +692,36 @@ export function Feedback({
                   </Fragment>
                 )}
 
+                <div className="feedback-training-mode">
+                  <div
+                    className="feedback-training-mode__tablist"
+                    role="radiogroup"
+                    aria-label="Training privacy"
+                  >
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={trainingMode === 'personalized'}
+                      tabIndex={trainingMode === 'personalized' ? -1 : 0}
+                      className={`feedback-training-mode__tab${trainingMode === 'personalized' ? ' feedback-training-mode__tab--active' : ''}`}
+                      onClick={() => setTrainingMode('personalized')}
+                    >
+                      Personalized
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={trainingMode === 'anonymous'}
+                      tabIndex={trainingMode === 'anonymous' ? -1 : 0}
+                      className={`feedback-training-mode__tab${trainingMode === 'anonymous' ? ' feedback-training-mode__tab--active' : ''}`}
+                      onClick={() => setTrainingMode('anonymous')}
+                    >
+                      Anonymous
+                    </button>
+                  </div>
+                  <p className="feedback-training-mode__hint">{trainingModeHint}</p>
+                </div>
+
                 <div className="feedback-detail-field">
                   <label
                     className="feedback-detail-field__label"
@@ -739,7 +795,8 @@ export function Feedback({
         <div className="feedback-submitted">
           <span className="feedback-submitted-line">Thanks — your training was saved!</span>
           <span className="feedback-submitted-bonus">
-            +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens added to your daily allowance (UTC).
+            +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens added to your daily allowance
+            (UTC).
           </span>
           <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
             View plans and limits

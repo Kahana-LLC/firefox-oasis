@@ -156,6 +156,16 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
+
+    if (
+      mode !== 'forgotPassword' &&
+      email.trim() &&
+      !password.trim()
+    ) {
+      document.getElementById('auth-password-input')?.focus();
+      return;
+    }
+
     setLoading(true);
 
     const authService = (window as OasisWindow).supabaseAuth;
@@ -237,10 +247,21 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
   };
 
   const switchAuthMode = (next: 'signin' | 'signup') => {
+    if (next === mode) {
+      return;
+    }
     setMode(next);
     setError(null);
     setSuccessMessage(null);
   };
+
+  const passwordPlaceholder =
+    mode === 'signup' ? 'Create a password' : 'Enter your password';
+
+  const emailPasswordHint =
+    mode === 'signup'
+      ? 'Enter your email and choose a password below.'
+      : 'Enter your email and password below.';
 
   const getButtonText = () => {
     if (loading) return 'Processing...';
@@ -311,6 +332,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
             aria-selected={mode === 'signin'}
             aria-controls="auth-tabpanel"
             id="auth-tab-signin"
+            tabIndex={mode === 'signin' ? -1 : 0}
             onClick={() => switchAuthMode('signin')}
           >
             Sign In
@@ -322,6 +344,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
             aria-selected={mode === 'signup'}
             aria-controls="auth-tabpanel"
             id="auth-tab-signup"
+            tabIndex={mode === 'signup' ? -1 : 0}
             onClick={() => switchAuthMode('signup')}
           >
             Create account
@@ -395,28 +418,35 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
           className="auth-form-minimal"
           onSubmit={handleSubmit}
         >
+          {showEmailPassword && mode !== 'forgotPassword' && (
+            <p className="auth-form-hint">{emailPasswordHint}</p>
+          )}
+
           <div className="auth-field-minimal">
             <label className="auth-field-minimal-label" htmlFor="auth-email-input">
-              email
+              Email
             </label>
-            <input
-              id="auth-email-input"
-              type="email"
-              value={email}
-              onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
-                setEmail(e.currentTarget.value)
-              }
-              required
-              className="auth-field-minimal-input"
-              autoComplete="email"
-            />
+            <div className="auth-field-minimal-input-wrap">
+              <input
+                id="auth-email-input"
+                type="email"
+                value={email}
+                onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
+                  setEmail(e.currentTarget.value)
+                }
+                required
+                className="auth-field-minimal-input"
+                autoComplete="email"
+                placeholder="you@example.com"
+              />
+            </div>
           </div>
 
           {mode !== 'forgotPassword' && (
             <div className="auth-field-minimal">
               <div className="auth-password-label-row">
                 <label className="auth-field-minimal-label" htmlFor="auth-password-input">
-                  password
+                  Password
                 </label>
                 {mode === 'signin' && (
                   <button
@@ -432,17 +462,20 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
                   </button>
                 )}
               </div>
-              <input
-                id="auth-password-input"
-                type="password"
-                value={password}
-                onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
-                  setPassword(e.currentTarget.value)
-                }
-                required
-                className="auth-field-minimal-input"
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              />
+              <div className="auth-field-minimal-input-wrap">
+                <input
+                  id="auth-password-input"
+                  type="password"
+                  value={password}
+                  onInput={(e: JSX.TargetedEvent<HTMLInputElement>) =>
+                    setPassword(e.currentTarget.value)
+                  }
+                  required
+                  className="auth-field-minimal-input"
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  placeholder={passwordPlaceholder}
+                />
+              </div>
             </div>
           )}
 

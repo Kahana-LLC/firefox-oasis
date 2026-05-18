@@ -66,6 +66,8 @@ skip-if = [
 
 ["browser_sidebar_prefs.js"]
 
+["browser_oasis_assistant_theme_layout.js"]
+
 ["browser_syncedtabs_sidebar.js"]
 
 ["browser_toolbar_sidebar_button.js"]

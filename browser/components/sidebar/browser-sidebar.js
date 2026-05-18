@@ -1983,6 +1983,20 @@ var SidebarController = {
     }, 0);
   },
 
+  _reapplyOasisAssistantThemeAfterLayout() {
+    try {
+      const overlayActive = document.documentElement.hasAttribute(
+        "oasis-assistant-overlay"
+      );
+      const browser = overlayActive
+        ? document.getElementById("oasis-assistant-overlay-browser")
+        : this.browser;
+      browser?.contentWindow?.assistantBridge?.reapplyAssistantThemeFromPref?.();
+    } catch (e) {
+      void e;
+    }
+  },
+
   /**
    * Toggle Oasis between docked sidebar and floating overlay without unloading
    * the assistant document when swapDocShells succeeds.
@@ -2048,6 +2062,7 @@ var SidebarController = {
     } else {
       void this._applyOasisDockedLayoutSwitch(commandID);
     }
+    this._reapplyOasisAssistantThemeAfterLayout();
     this.updateToolbarButton();
     return true;
   },

@@ -43614,6 +43614,12 @@ Content: ${content}`;
         prevCached + add,
         fromStorage
       );
+      if (this.cachedDailyLimit != null && this.cachedDailyLimit > 0 && Number.isFinite(this.cachedDailyLimit)) {
+        this.cachedDailyLimit += add;
+        if (this.cachedDailyRemainingFromApi != null && Number.isFinite(this.cachedDailyRemainingFromApi)) {
+          this.cachedDailyRemainingFromApi += add;
+        }
+      }
     }
     getUsageBarSnapshot() {
       return this.getDailyTokenUsageForDisplay();
@@ -43691,18 +43697,25 @@ Content: ${content}`;
       const qLimit = this.cachedDailyLimit;
       const qUsed = this.cachedDailyUsedFromApi;
       const qRem = this.cachedDailyRemainingFromApi;
-      if (qLimit != null && qLimit > 0 && qUsed != null && qRem != null && Number.isFinite(qUsed) && Number.isFinite(qRem) && Math.abs(qUsed + qRem - qLimit) <= 2 && qLimit >= local.limit) {
+      if (qLimit != null && qLimit > 0 && qUsed != null && qRem != null && Number.isFinite(qUsed) && Number.isFinite(qRem) && Math.abs(qUsed + qRem - qLimit) <= 2) {
+        const effectiveLimit = Math.max(local.limit, qLimit);
         const qBonus = Math.max(0, qLimit - local.baseLimit);
-        const qPercentOfBase = local.baseLimit > 0 ? Math.min(9999, Math.round(qUsed / local.baseLimit * 1e3) / 10) : 0;
-        const qPercentUsed = qLimit > 0 ? Math.min(9999, Math.round(qUsed / qLimit * 1e3) / 10) : 0;
+        const effectiveBonus = Math.max(
+          local.bonusTokens,
+          effectiveLimit - local.baseLimit,
+          qBonus
+        );
+        const effectiveRemaining = Math.max(0, effectiveLimit - qUsed);
+        const percentOfBaseMerged = local.baseLimit > 0 ? Math.min(9999, Math.round(qUsed / local.baseLimit * 1e3) / 10) : 0;
+        const percentUsedMerged = effectiveLimit > 0 ? Math.min(9999, Math.round(qUsed / effectiveLimit * 1e3) / 10) : 0;
         return {
           used: qUsed,
-          limit: qLimit,
+          limit: effectiveLimit,
           baseLimit: local.baseLimit,
-          bonusTokens: qBonus,
-          remaining: qRem,
-          percentUsed: qPercentUsed,
-          percentOfBase: qPercentOfBase
+          bonusTokens: effectiveBonus,
+          remaining: effectiveRemaining,
+          percentUsed: percentUsedMerged,
+          percentOfBase: percentOfBaseMerged
         };
       }
       return local;
