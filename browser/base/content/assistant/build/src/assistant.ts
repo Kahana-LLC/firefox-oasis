@@ -23,15 +23,19 @@ import {
   type PlainSessionTurn,
 } from "./assistant/session.js";
 import { consumeAssistantGraphStream } from "./assistant/stream.js";
+import type { InteractionPayload, InteractionUser } from "./assistant/messageUtils.js";
+import type { StreamContentData } from "./assistant/stream.js";
 import {
   VOICE_CHAT_TEXT_REPLY_ADDENDUM,
   VOICE_REPLY_ADDENDUM,
 } from "./prompts/voicePrompt.js";
 import SupabaseAuth from "./services/supabase";
 import { subscriptionService } from "./services/subscription";
+import { getChromeContext, tabUrl, tabTitle } from "./services/firefoxFacade.js";
 import voiceInputService from "./services/voiceInput";
 import voiceAgent from "./services/voiceAgent";
 import { textToSpeech } from "./proxyClient.js";
+import { ENV } from "./config/env.js";
 import type { AssistantWindowLike } from "./types/runtime";
 import {
   OASIS_EVENT_HISTORY_UPDATE,
@@ -67,6 +71,11 @@ function getOasisCapabilitiesMarkdown(): string {
 }
 assistantWindow.getOasisCapabilitiesMarkdown = getOasisCapabilitiesMarkdown;
 
+function oasisGetInteractionIdForMessage(messageId: string): string | null {
+  return interactionIdByMessageId.get(messageId) ?? null;
+}
+assistantWindow.oasisGetInteractionIdForMessage = oasisGetInteractionIdForMessage;
+
 function oasisPushLocalChatTurn(
   userText: string,
   assistantMarkdown: string
@@ -80,8 +89,28 @@ function oasisPushLocalChatTurn(
 }
 assistantWindow.oasisPushLocalChatTurn = oasisPushLocalChatTurn;
 
+let currentSessionId: string = crypto.randomUUID();
+
+const interactionIdByMessageId = new Map<string, string>();
+
+function storeInteractionId(messageId: string, interactionId: string): void {
+  interactionIdByMessageId.set(messageId, interactionId);
+  if (interactionIdByMessageId.size > 100) {
+    const oldest = interactionIdByMessageId.keys().next().value;
+    if (oldest) interactionIdByMessageId.delete(oldest);
+  }
+}
+
+function parseOs(ua: string): string {
+  if (/Mac OS X/.test(ua)) return "macOS";
+  if (/Windows/.test(ua)) return "Windows";
+  if (/Linux/.test(ua)) return "Linux";
+  return "unknown";
+}
+
 export function resetAssistantSession() {
   sessionController.resetAssistantSession();
+  currentSessionId = crypto.randomUUID();
 }
 assistantWindow.resetAssistantSession = resetAssistantSession;
 
@@ -102,7 +131,58 @@ export async function runAssistantStream(
   messageId?: string,
   voiceDelivery: VoiceUiDelivery = "spoken"
 ): Promise<string> {
-  const isAuthenticated = await supabaseAuth.isAuthenticated();
+  const startTime = Date.now();
+  const interactionId = crypto.randomUUID();
+  const currentUser = await supabaseAuth.getCurrentUser();
+  const isAuthenticated = currentUser !== null;
+
+  let interactionPayload: InteractionPayload | undefined;
+  if (ENV.RICH_TELEMETRY_ENABLED) {
+    const { gBrowser } = getChromeContext();
+    const activeTab = gBrowser?.selectedTab ?? null;
+    let optIn = false;
+    if (currentUser) {
+      try {
+        const { data } = await (supabaseAuth as any).supabase
+          .rpc("get_personalized_training_opt_in");
+        optIn = data ?? false;
+      } catch {
+        optIn = false;
+      }
+    }
+    const userBlock: InteractionUser | undefined =
+      optIn && currentUser
+        ? {
+            user_id: currentUser.id,
+            email: currentUser.email ?? "",
+            role: "user",
+            locale: navigator.language,
+            opt_in_personalized_training: true,
+          }
+        : undefined;
+    interactionPayload = {
+      interaction_id: interactionId,
+      session_id: optIn ? currentSessionId : crypto.randomUUID(),
+      timestamp: new Date(startTime).toISOString(),
+      app_version: ENV.APP_VERSION,
+      client: {
+        browser_name: "Oasis",
+        browser_version: ENV.APP_VERSION,
+        os: parseOs(navigator.userAgent),
+        platform: "desktop",
+      },
+      context: {
+        active_tab_url: tabUrl(activeTab),
+        active_tab_title: tabTitle(activeTab),
+        org_tier: subscriptionService.getCachedPlanName(),
+      },
+      prompt: {
+        text: prompt,
+        language: navigator.language,
+      },
+      ...(userBlock ? { user: userBlock } : {}),
+    };
+  }
 
   const { commands, toolCommandNames, assistTools } =
     createAssistantCommandsRegistry();
@@ -141,9 +221,33 @@ export async function runAssistantStream(
     inputType,
     toolCommandNames,
     pushCurrentTurn: sessionController.pushCurrentTurn,
-    trackUsage: (nextInputType, meta) => {
+    trackUsage: (nextInputType, meta, content?: StreamContentData) => {
       if (isAuthenticated) {
-        subscriptionService.trackUsage(nextInputType, undefined, meta);
+        if (messageId) {
+          storeInteractionId(messageId, interactionId);
+        }
+        let payload = interactionPayload;
+        if (ENV.RICH_TELEMETRY_ENABLED && payload && content) {
+          payload = {
+            ...payload,
+            prompt: {
+              ...payload.prompt!,
+              input_tokens: meta?.input_tokens ?? null,
+            },
+            response: {
+              text: content.responseText,
+              output_tokens: meta?.output_tokens ?? null,
+              latency_ms: Date.now() - startTime,
+            },
+            tool_trace: content.toolTrace.length > 0 ? content.toolTrace : undefined,
+          };
+        }
+        const enrichedMeta: typeof meta = {
+          ...(meta ?? { command_type: "other", user_intent: "other", input_tokens: null, output_tokens: null }),
+          interaction_id: interactionId,
+          ...(ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}),
+        };
+        subscriptionService.trackUsage(nextInputType, undefined, enrichedMeta);
       }
     },
   });

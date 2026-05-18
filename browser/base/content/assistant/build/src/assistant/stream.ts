@@ -24,9 +24,15 @@ import {
   isRecord,
   stripLeadingEchoedPayload,
   type MessageLike,
+  type ToolTraceEntry,
   type UsageMeta,
 } from "./messageUtils.js";
 import { STREAM_GUARD_MESSAGE } from "./constants.js";
+
+export type StreamContentData = {
+  responseText: string;
+  toolTrace: ToolTraceEntry[];
+};
 
 type ConsumeAssistantStreamArgs = {
   stream: AsyncIterable<Record<string, unknown>>;
@@ -35,7 +41,7 @@ type ConsumeAssistantStreamArgs = {
   inputType: AssistantInputType;
   toolCommandNames: Set<string>;
   pushCurrentTurn: (user: string, assistant: string) => void;
-  trackUsage: (inputType: AssistantInputType, meta?: UsageMeta) => void;
+  trackUsage: (inputType: AssistantInputType, meta?: UsageMeta, content?: StreamContentData) => void;
 };
 
 function extractMessageText(msg: MessageLike): string {
@@ -95,6 +101,10 @@ export async function consumeAssistantGraphStream(
   let emittedChars = 0;
   let guardTriggered = false;
   let lastUsageMeta: UsageMeta | undefined;
+  const toolTrace: ToolTraceEntry[] = [];
+  let currentToolStartTime: number | null = null;
+  let currentToolName: string = "";
+  let currentToolOutput: string = "";
 
   let streamGuardState = createStreamGuardState();
 
@@ -102,7 +112,7 @@ export async function consumeAssistantGraphStream(
     if ("__end__" in state) {
       if (combinedSessionString && !isSaved) {
         pushCurrentTurn(prompt, combinedSessionString);
-        trackUsage(inputType, lastUsageMeta);
+        trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
         isSaved = true;
       }
       break;
@@ -168,8 +178,24 @@ export async function consumeAssistantGraphStream(
         !!toolResult;
 
       if (isToolNodeMessage) {
+        const resolvedToolName = msgName || stepName || "unknown";
+        if (currentToolName !== resolvedToolName) {
+          if (currentToolName && currentToolStartTime !== null) {
+            toolTrace.push({
+              tool_name: currentToolName,
+              invocation_index: toolTrace.length,
+              status: "success",
+              latency_ms: Date.now() - currentToolStartTime,
+              output_summary: currentToolOutput.trim().slice(0, 300) || undefined,
+            });
+          }
+          currentToolName = resolvedToolName;
+          currentToolStartTime = Date.now();
+          currentToolOutput = "";
+        }
         toolMessageCount += 1;
         const payloadText = toolResult?.message || text;
+        currentToolOutput += payloadText;
         toolOutputBuffer += `${payloadText}\n`;
         const payload = String(payloadText || "").trim();
         if (payload) {
@@ -179,6 +205,18 @@ export async function consumeAssistantGraphStream(
           }
         }
         continue;
+      }
+      if (currentToolName && currentToolStartTime !== null) {
+        toolTrace.push({
+          tool_name: currentToolName,
+          invocation_index: toolTrace.length,
+          status: "success",
+          latency_ms: Date.now() - currentToolStartTime,
+          output_summary: currentToolOutput.trim().slice(0, 300) || undefined,
+        });
+        currentToolName = "";
+        currentToolStartTime = null;
+        currentToolOutput = "";
       }
 
       const sanitizedText = stripLeadingEchoedPayload(
@@ -215,7 +253,7 @@ export async function consumeAssistantGraphStream(
 
   if (combinedSessionString && !isSaved) {
     pushCurrentTurn(prompt, combinedSessionString);
-    trackUsage(inputType, lastUsageMeta);
+    trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
   }
 
   assistantLogger.debug("stream", "Run summary", {

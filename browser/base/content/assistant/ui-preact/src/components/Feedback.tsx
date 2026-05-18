@@ -28,6 +28,7 @@ interface FeedbackProps {
   messageId: string;
   userPrompt: string;
   assistantReply: string;
+  interactionId?: string;
   onClose?: () => void;
   /** When backend returns token grants, extend payload and show toast / bonus confetti here. */
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
@@ -74,6 +75,7 @@ export function Feedback({
   messageId,
   userPrompt,
   assistantReply,
+  interactionId,
   onClose,
   onTrainingSubmitted,
   inlineAutofocusTick = 0,
@@ -223,6 +225,7 @@ export function Feedback({
         reported_at: new Date().toISOString(),
         negative_rating: isNegative,
         category,
+        interaction_id: interactionId ?? null,
         additional_info: {
           badges: selectedBadges,
           comment: commentTrimmed,
@@ -242,6 +245,26 @@ export function Feedback({
         mpTrack('feedback_submit_error', { message: error.message || String(error) });
         showFeedbackMessage('Training could not be saved. Please try again.', true);
         return false;
+      }
+
+      if (interactionId) {
+        const feedbackBlock = {
+          rating: sentimentValue === 'up' ? 'positive' : 'negative',
+          thumbs_up: !isNegative,
+          thumbs_down: isNegative,
+          badges: selectedBadges,
+          reason_free_text: commentTrimmed || null,
+          feedback_source: 'user',
+          feedback_timestamp: new Date().toISOString(),
+        };
+        supabase.rpc('attach_feedback_to_interaction', {
+          p_interaction_id: interactionId,
+          p_feedback: feedbackBlock,
+        }).then(({ error: rpcErr }: { error: { message?: string } | null }) => {
+          if (rpcErr) {
+            console.error('attach_feedback_to_interaction failed:', rpcErr);
+          }
+        });
       }
 
       mpTrack('feedback_submit_success', { negative_rating: isNegative, category });

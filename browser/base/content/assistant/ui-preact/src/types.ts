@@ -15,6 +15,7 @@ export interface AssistantMessage {
   id: string;
   role: AssistantRole;
   content: string;
+  interactionId?: string;
 }
 
 export interface ToolAction {
@@ -192,6 +193,7 @@ export type OasisWindow = Window & {
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
+  oasisGetInteractionIdForMessage?: (messageId: string) => string | null;
   textToSpeech?: (text: string) => Promise<Blob>;
   voiceAgent?: {
     on(listener: (event: VoiceAgentEvent) => void): () => void;

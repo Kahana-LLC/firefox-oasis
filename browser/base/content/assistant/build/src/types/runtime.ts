@@ -2,6 +2,7 @@
 import type { BaseMessage } from "@langchain/core/messages";
 import type SupabaseAuth from "../services/supabase.js";
 import type voiceInputService from "../services/voiceInput.js";
+import type { subscriptionService } from "../services/subscription.js";
 import type {
   OasisRecordToolActionStart,
   OasisRecordToolActionUpdate,
@@ -214,7 +215,9 @@ export type { OasisRecordToolActionStart, OasisRecordToolActionUpdate };
 
 export type AssistantWindowLike = Window & {
   supabaseAuth?: ReturnType<typeof SupabaseAuth.getInstance>;
+  subscriptionService?: typeof subscriptionService;
   voiceInputService?: typeof voiceInputService;
+  oasisGetInteractionIdForMessage?: (messageId: string) => string | null;
   textToSpeech?: (text: string) => Promise<Blob>;
   voiceAgent?: {
     on(listener: (event: unknown) => void): () => void;

@@ -97,6 +97,8 @@ export class SubscriptionService {
   private cachedDailyTokensFromDbOk: boolean = false;
   private cachedDailyTokenLimitSupabase: number | null = null;
   private cachedFeedbackBonusTokensToday: number = 0;
+  private cachedPlanNameKey: string = "free";
+  private cachedOptInPersonalizedTraining: boolean = false;
 
   private constructor() {}
 
@@ -176,6 +178,14 @@ export class SubscriptionService {
     return this.getDailyTokenUsageForDisplay();
   }
 
+  public getCachedPlanName(): string {
+    return this.cachedPlanNameKey;
+  }
+
+  public getOptInPersonalizedTraining(): boolean {
+    return this.cachedOptInPersonalizedTraining;
+  }
+
   /**
    * Track usage for a command
    * @param type 'text' or 'voice'
@@ -222,6 +232,8 @@ export class SubscriptionService {
         user_intent: meta?.user_intent ?? null,
         input_tokens: meta?.input_tokens ?? 0,
         output_tokens: meta?.output_tokens ?? 0,
+        interaction_id: meta?.interaction_id ?? null,
+        ...(meta?.interaction_payload ? { interaction_data: meta.interaction_payload } : {}),
       })
       .then(({ error }: any) => {
         if (error) logError("Failed to track usage (DB Insert):", error);
@@ -473,6 +485,16 @@ export class SubscriptionService {
         }
       }
     }
+    this.cachedPlanNameKey = planNameKey;
+
+    const { data: prefRow } = await supabase
+      .from("users")
+      .select("opt_in_personalized_training")
+      .eq("user_id", userId)
+      .maybeSingle();
+    this.cachedOptInPersonalizedTraining =
+      prefRow?.opt_in_personalized_training ?? false;
+
     this.cachedDailyTokenLimitSupabase =
       dailyTokLimit ??
       PLAN_DAILY_TOKEN_LIMITS[planNameKey] ??

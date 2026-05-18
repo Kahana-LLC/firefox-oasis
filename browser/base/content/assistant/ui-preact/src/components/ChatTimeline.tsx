@@ -342,6 +342,7 @@ export function ChatTimeline({
                       messageId={message.id}
                       userPrompt={userPromptBefore(messages, index)}
                       assistantReply={message.content}
+                      interactionId={message.interactionId}
                       onTrainingSubmitted={onTrainingSubmitted}
                       inlineAutofocusTick={
                         trainingFocusMessageId === message.id

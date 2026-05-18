@@ -416,6 +416,14 @@ export function useAssistantRuntime(params: {
         inputType,
         aiMessageId
       );
+      const interactionId = oasisWindow.oasisGetInteractionIdForMessage?.(aiMessageId) ?? undefined;
+      if (interactionId) {
+        setMessages(previous =>
+          previous.map(msg =>
+            msg.id === aiMessageId ? { ...msg, interactionId } : msg
+          )
+        );
+      }
       return { fullText, aiMessageId };
     },
     [appendChunkToMessage]

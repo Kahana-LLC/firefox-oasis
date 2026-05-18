@@ -34,11 +34,64 @@ export type UserIntent =
   | "meta"
   | "other";
 
+export type InteractionClient = {
+  browser_name: "Oasis";
+  browser_version: string;
+  os: string;
+  platform: "desktop";
+};
+
+export type InteractionContext = {
+  active_tab_url?: string;
+  active_tab_title?: string;
+  org_tier?: string;
+};
+
+export type InteractionUser = {
+  user_id: string;
+  email: string;
+  role: "user";
+  locale: string;
+  opt_in_personalized_training: true;
+};
+
+export type ToolTraceEntry = {
+  tool_name: string;
+  invocation_index: number;
+  status: "success" | "error";
+  latency_ms: number;
+  output_summary?: string;
+};
+
+export type InteractionPayload = {
+  interaction_id: string;
+  session_id: string;
+  timestamp: string;
+  app_version: string;
+  client: InteractionClient;
+  context: InteractionContext;
+  prompt?: {
+    text: string;
+    input_tokens?: number | null;
+    language: string;
+  };
+  response?: {
+    text: string;
+    output_tokens?: number | null;
+    latency_ms: number;
+    completion_model?: string;
+  };
+  tool_trace?: ToolTraceEntry[];
+  user?: InteractionUser;
+};
+
 export type UsageMeta = {
   command_type: CommandType;
   user_intent: UserIntent;
   input_tokens: number | null;
   output_tokens: number | null;
+  interaction_id?: string;
+  interaction_payload?: InteractionPayload;
 };
 
 const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {
