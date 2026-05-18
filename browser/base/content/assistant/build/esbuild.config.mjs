@@ -1,5 +1,9 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import esbuild from "esbuild";
 import dotenv from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({ path: ".env.defaults", quiet: true });
 dotenv.config({ path: ".env.local", override: true, quiet: true });
@@ -30,6 +34,10 @@ await esbuild.build({
   outfile: "../assistant.bundle.js",
   sourcemap: false,
   logLevel: "info",
+  alias: {
+    "fs/promises": path.join(__dirname, "src/shims/fs-promises-stub.mjs"),
+    path: path.join(__dirname, "src/shims/path-stub.mjs"),
+  },
   define: {
     "process.env.OASIS_ASSIST_URL": JSON.stringify(OASIS_ASSIST_URL),
     "process.env.OASIS_TRANSCRIBE_URL": JSON.stringify(OASIS_TRANSCRIBE_URL),
@@ -37,5 +45,14 @@ await esbuild.build({
     "process.env.COGNITO_IDENTITY_POOL_ID": JSON.stringify(COGNITO_IDENTITY_POOL_ID),
     "process.env.SUPABASE_URL": JSON.stringify(SUPABASE_URL),
     "process.env.SUPABASE_ANON_KEY": JSON.stringify(SUPABASE_ANON_KEY),
+    "process.env.OASIS_ASSIST_MAX_INNER_ROUNDS": JSON.stringify(
+      process.env.OASIS_ASSIST_MAX_INNER_ROUNDS || ""
+    ),
+    "process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE": JSON.stringify(
+      process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE || ""
+    ),
+    "process.env.OASIS_RAILROAD_EXTRACTION_INTERVAL": JSON.stringify(
+      process.env.OASIS_RAILROAD_EXTRACTION_INTERVAL || ""
+    ),
   },
 });

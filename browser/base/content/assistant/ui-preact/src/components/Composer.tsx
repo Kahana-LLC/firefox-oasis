@@ -232,10 +232,9 @@ export function Composer({
 
         <div className="composer-toolbar-actions">
           <button
-            className="send-btn composer-tool-btn"
+            className="send-btn composer-tool-btn composer-tool-btn--muted"
             onClick={onResetSession}
             title="Clear Chat History"
-            style={{ color: '#666' }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 4v6h-6" />
@@ -245,13 +244,9 @@ export function Composer({
           </button>
 
           <button
-            className="send-btn composer-tool-btn"
+            className={`send-btn composer-tool-btn composer-tool-btn--tts${ttsEnabled ? ' composer-tool-btn--tts-on' : ' composer-tool-btn--tts-off'}`}
             onClick={onToggleTts}
             title={ttsEnabled ? 'Disable auto read-aloud' : 'Enable auto read-aloud'}
-            style={{
-              background: 'none',
-              color: ttsEnabled ? '#7A9200' : '#999',
-            }}
           >
             {ttsEnabled ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -275,11 +270,11 @@ export function Composer({
             title="Voice conversation (hands-free)"
           >
             <svg className="composer-voice-agent-icon" width="22" height="22" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <rect width="36" height="36" rx="18" fill="#F8FAF2" />
-              <path d="M18 10a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z" fill="#94A833" />
-              <path d="M23 17v1a5 5 0 0 1-10 0v-1" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="18" y1="23" x2="18" y2="26" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="15" y1="26" x2="21" y2="26" stroke="#94A833" strokeWidth="1.5" strokeLinecap="round" />
+              <rect width="36" height="36" rx="18" fill="var(--primary-light)" />
+              <path d="M18 10a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z" fill="var(--primary-green)" />
+              <path d="M23 17v1a5 5 0 0 1-10 0v-1" stroke="var(--primary-green)" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="18" y1="23" x2="18" y2="26" stroke="var(--primary-green)" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="15" y1="26" x2="21" y2="26" stroke="var(--primary-green)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
 
@@ -291,13 +286,13 @@ export function Composer({
             title="Send"
           >
             {busy ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7A9200" strokeWidth="2">
-                <rect x="9" y="9" width="6" height="6" />
+              <svg className="composer-send-btn-busy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <rect x="9" y="9" width="6" height="6" fill="var(--primary-green)" />
               </svg>
             ) : (
               <svg width="26" height="26" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                <circle cx="18" cy="18" r="18" fill="#7A9200" />
-                <path d="M18 24V12M18 12L24 18M18 12L12 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="18" cy="18" r="18" fill="var(--primary-green)" />
+                <path d="M18 24V12M18 12L24 18M18 12L12 18" stroke="var(--auth-on-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
           </button>

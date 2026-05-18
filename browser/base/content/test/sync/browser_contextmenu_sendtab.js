@@ -57,6 +57,7 @@ add_setup(async function () {
     set: [
       ["browser.urlbar.trustPanel.featureGate", false],
       ["test.wait300msAfterTabSwitch", true],
+      ["browser.oasis.hideFxAccountsNavbarButton", false],
     ],
   });
 

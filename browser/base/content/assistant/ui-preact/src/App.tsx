@@ -5,16 +5,14 @@ import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatTimeline } from './components/ChatTimeline';
-import type { TrainingSubmittedPayload } from './components/Feedback';
 import { Composer } from './components/Composer';
-import { TrainingGallery } from './components/TrainingGallery';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
+import { postOasisOverlayChromeMessage } from './utils/postOasisOverlayChrome';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
-import { invalidateTrainingGalleryMetrics } from './utils/trainingMetrics';
 import type {
   AuthState,
   ConfirmationData,
@@ -24,6 +22,9 @@ import type {
   VoiceCaptureMode,
 } from './types';
 import './App.css';
+import './themes.css';
+
+import { applyAssistantThemeToDocument } from './utils/applyAssistantTheme';
 
 const oasisWindow: OasisWindow = window;
 
@@ -425,7 +426,6 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
-  const [trainingGalleryOpen, setTrainingGalleryOpen] = useState(false);
   const [trainingFocusTick, setTrainingFocusTick] = useState(0);
   const [trainingFocusMessageId, setTrainingFocusMessageId] = useState('');
   const [trainLatestComposerHint, setTrainLatestComposerHint] = useState(false);
@@ -488,21 +488,35 @@ export function App() {
     onUserChanged: handleUserChanged,
   });
 
+  useEffect(() => {
+    try {
+      const id = oasisWindow.assistantBridge?.getAssistantTheme?.();
+      applyAssistantThemeToDocument(
+        typeof id === "string" ? id : "default"
+      );
+    } catch {
+      applyAssistantThemeToDocument("default");
+    }
+  }, []);
+
+  const prevAuthenticatedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = prevAuthenticatedRef.current;
+    const next = auth.isAuthenticated;
+    if (prev === true && next === false) {
+      setView('auth');
+    }
+    prevAuthenticatedRef.current = next;
+  }, [auth.isAuthenticated]);
+
   const handleResizeStart = (event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    try {
-      window.parent.postMessage(
-        {
-          type: 'oasisOverlayResizeStart',
-          screenX: event.screenX,
-          screenY: event.screenY,
-        },
-        '*'
-      );
-    } catch {
-      // ignore
-    }
+    postOasisOverlayChromeMessage({
+      type: 'oasisOverlayResizeStart',
+      screenX: event.screenX,
+      screenY: event.screenY,
+    });
   };
 
   const handleFeedback = () => {
@@ -517,10 +531,6 @@ export function App() {
     }
     window.open(feedbackUrl, '_blank');
   };
-
-  const handleTrainingSubmitted = useCallback((_payload: TrainingSubmittedPayload) => {
-    invalidateTrainingGalleryMetrics();
-  }, []);
 
   const handleGoToTrainingFromUsageBar = useCallback(() => {
     setView('chat');
@@ -554,13 +564,6 @@ export function App() {
       window.setTimeout(() => setTrainLatestComposerHint(false), 6000);
     }
   }, [runtime.messages]);
-
-  const handleOpenTrainingGallery = useCallback(() => {
-    setTrainingGalleryOpen(true);
-    if (oasisWindow.mpTrack) {
-      oasisWindow.mpTrack('training_gallery_opened', {});
-    }
-  }, []);
 
   const handleLinkClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -646,12 +649,6 @@ export function App() {
       {voiceAgentOpen && (
         <VoiceAgentOverlay onClose={() => setVoiceAgentOpen(false)} />
       )}
-      {trainingGalleryOpen && (
-        <TrainingGallery
-          open={trainingGalleryOpen}
-          onClose={() => setTrainingGalleryOpen(false)}
-        />
-      )}
       {pendingConfirmation && (
         <ConfirmationModal
           data={pendingConfirmation}
@@ -664,30 +661,35 @@ export function App() {
         />
       )}
 
-      <Header
-        auth={auth}
-        onShowAuth={() => setView('auth')}
-        onOpenTrainingGallery={handleOpenTrainingGallery}
-        chatHistory={
-          auth.isAuthenticated && view === 'chat'
-            ? {
-                conversations: runtime.chatConversations,
-                activeId: runtime.activeChatId,
-                onSelectConversation: id => {
-                  void runtime.openConversation(id);
-                },
-                onNewChat: () => {
-                  void runtime.startNewChat();
-                },
-              }
-            : null
-        }
-      />
+      <div className="assistant-viewport">
+        <div className="assistant-top-chrome">
+          <Header
+            auth={auth}
+            onShowAuth={() => setView('auth')}
+            chatHistory={
+              auth.isAuthenticated && view === 'chat'
+                ? {
+                    conversations: runtime.chatConversations,
+                    activeId: runtime.activeChatId,
+                    onSelectConversation: id => {
+                      void runtime.openConversation(id);
+                    },
+                    onNewChat: () => {
+                      void runtime.startNewChat();
+                    },
+                    onDeleteConversation: id => {
+                      void runtime.deleteChatConversation(id);
+                    },
+                  }
+                : null
+            }
+          />
+        </div>
 
-      <div
-        className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}${view !== 'auth' && auth.isAuthenticated && runtime.messages.length === 0 ? ' assistant-main--empty-signed-chat' : ''}`}
-        aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
-      >
+        <div
+          className={`assistant-main${view === 'auth' ? ' assistant-main--auth' : ''}${view === 'chat' ? ' assistant-main--chat' : ''}${view !== 'auth' && auth.isAuthenticated && runtime.messages.length === 0 ? ' assistant-main--empty-signed-chat' : ''}`}
+          aria-busy={view !== 'auth' && runtime.busy ? true : undefined}
+        >
         {view !== 'auth' && (
           <div className="assistant-onboarding-top">
             <OnboardingChecklist
@@ -728,7 +730,6 @@ export function App() {
                 onLinkClick={handleLinkClick}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
-                onTrainingSubmitted={handleTrainingSubmitted}
                 trainingFocusTick={trainingFocusTick}
                 trainingFocusMessageId={trainingFocusMessageId}
               />
@@ -782,6 +783,7 @@ export function App() {
             }}
           />
         )}
+        </div>
       </div>
 
       <div

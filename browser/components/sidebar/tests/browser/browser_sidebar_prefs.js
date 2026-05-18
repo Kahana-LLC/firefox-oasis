@@ -11,7 +11,7 @@ add_task(async function test_tools_prefs() {
 
   Services.prefs.setStringPref(
     "sidebar.main.tools",
-    "aichat,syncedtabs,history,bookmarks"
+    "oasis-assistant,history,bookmarks"
   );
 
   // Open customize sidebar

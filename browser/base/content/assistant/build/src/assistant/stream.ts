@@ -1,7 +1,7 @@
 /**
  * Graph output stream consumer.
  *
- * Iterates over the async output of `graph.stream()`, filters out
+ * Iterates over the async output of the agent stream (`graph.stream()`), filters out
  * internal tool messages, strips echoed payloads, and sends clean
  * text to the UI via `onChunk()`. Also:
  * - Saves completed turns to session history

@@ -15,8 +15,6 @@ import {
   OASIS_AMPLIFIER_TRAINING_URL,
   OASIS_PRICING_URL,
 } from '../utils/trainingRewards';
-import { invalidateTrainingGalleryMetrics } from '../utils/trainingMetrics';
-
 export interface TrainingSubmittedPayload {
   messageId: string;
   sentiment: 'up' | 'down';
@@ -71,6 +69,8 @@ const BADGES_NEGATIVE = [
   'Other',
 ];
 
+const TRAINING_INFO_PANEL_ID = 'feedback-training-info-panel';
+
 export function Feedback({
   messageId,
   userPrompt,
@@ -82,16 +82,17 @@ export function Feedback({
 }: FeedbackProps) {
   const oasisWindow = window as OasisWindow;
   const thumbUpRef = useRef<HTMLButtonElement>(null);
+  const trainingInfoWrapRef = useRef<HTMLDivElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [sentiment, setSentiment] = useState<'up' | 'down' | null>(null);
   const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
   const [comment, setComment] = useState('');
-  const [includeContext, setIncludeContext] = useState(true);
-  const [contactMe, setContactMe] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [thanksInline, setThanksInline] = useState(false);
   const [showSubmitHint, setShowSubmitHint] = useState(false);
+  const [detailFieldEngaged, setDetailFieldEngaged] = useState(false);
+  const [trainingInfoOpen, setTrainingInfoOpen] = useState(false);
   const [earnChipDismissed, setEarnChipDismissed] = useState(readEarnChipDismissed);
 
   const closeModal = useCallback(() => {
@@ -101,6 +102,8 @@ export function Feedback({
     setComment('');
     setSubmitted(false);
     setShowSubmitHint(false);
+    setDetailFieldEngaged(false);
+    setTrainingInfoOpen(false);
   }, []);
 
   useEffect(() => {
@@ -112,6 +115,10 @@ export function Feedback({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (trainingInfoOpen) {
+          setTrainingInfoOpen(false);
+          return;
+        }
         closeModal();
       }
     };
@@ -120,7 +127,21 @@ export function Feedback({
       document.body.style.overflow = prev;
       document.removeEventListener('keydown', onKey);
     };
-  }, [modalOpen, closeModal]);
+  }, [modalOpen, trainingInfoOpen, closeModal]);
+
+  useEffect(() => {
+    if (!modalOpen || !trainingInfoOpen) {
+      return;
+    }
+    function onDocMouseDown(ev: MouseEvent) {
+      const el = trainingInfoWrapRef.current;
+      if (el && !el.contains(ev.target as Node | null)) {
+        setTrainingInfoOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [modalOpen, trainingInfoOpen]);
 
   useEffect(() => {
     if (!inlineAutofocusTick || modalOpen) {
@@ -227,13 +248,14 @@ export function Feedback({
         category,
         interaction_id: interactionId ?? null,
         additional_info: {
+          // Same defaults as removed checkboxes: include context, do not contact.
           badges: selectedBadges,
           comment: commentTrimmed,
-          include_context: includeContext,
-          contact_me: contactMe,
+          include_context: true,
+          contact_me: false,
           sentiment: sentimentValue,
-          user_prompt: includeContext ? userPrompt.trim() || null : null,
-          assistant_reply: includeContext ? assistantReply : null,
+          user_prompt: userPrompt.trim() || null,
+          assistant_reply: assistantReply,
           ...(isUuidString(messageId) ? {} : { client_message_id: messageId }),
         },
       };
@@ -281,6 +303,8 @@ export function Feedback({
     setComment('');
     setSubmitted(false);
     setShowSubmitHint(false);
+    setDetailFieldEngaged(false);
+    setTrainingInfoOpen(false);
     setModalOpen(true);
     if (next === 'up') {
       mpTrack('feedback_thumb_up', { messageId });
@@ -335,9 +359,33 @@ export function Feedback({
         progress: progressUpdate.progress,
         unlockedBadges: progressUpdate.unlockedBadges,
       });
-      void oasisWindow.subscriptionService?.forceRefresh?.();
-      window.dispatchEvent(new CustomEvent('oasis-usage-update'));
-      invalidateTrainingGalleryMetrics();
+      oasisWindow.subscriptionService?.appendOptimisticTrainingBonus?.(
+        FEEDBACK_BONUS_TOKENS
+      );
+      window.dispatchEvent(
+        new CustomEvent('oasis-usage-update', {
+          bubbles: true,
+          detail: { immediate: true },
+        })
+      );
+      void (async () => {
+        try {
+          await oasisWindow.subscriptionService?.forceRefresh?.();
+        } catch {
+          void 0;
+        }
+        window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+      })();
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            await oasisWindow.subscriptionService?.forceRefresh?.();
+          } catch {
+            void 0;
+          }
+          window.dispatchEvent(new CustomEvent('oasis-usage-update'));
+        })();
+      }, 400);
       setSubmitted(true);
       setTimeout(() => {
         if (onClose) {
@@ -354,6 +402,18 @@ export function Feedback({
   const userDisplay = userPrompt.trim() || 'Not available';
   const earnChipText = `Earn ${FEEDBACK_BONUS_TOKENS.toLocaleString()} tokens each time you train.`;
   const showInlineEarnChip = !earnChipDismissed && !modalOpen;
+  const trimmedCommentLen = comment.trim().length;
+  const stepCategoriesDone = selectedBadges.length >= 1;
+  const stepDetailsEngaged = detailFieldEngaged;
+  const stepReadyDone = trimmedCommentLen >= FEEDBACK_MIN_DETAIL_CHARS;
+  const completedTrainingSteps =
+    (stepCategoriesDone ? 1 : 0) +
+    (stepDetailsEngaged ? 1 : 0) +
+    (stepReadyDone ? 1 : 0);
+  const charMeterPct = Math.min(
+    100,
+    (trimmedCommentLen / FEEDBACK_MIN_DETAIL_CHARS) * 100
+  );
   const submitDisabled =
     isSubmitting ||
     selectedBadges.length < 1 ||
@@ -402,46 +462,117 @@ export function Feedback({
             </div>
           ) : (
             <Fragment>
-              <div className="feedback-dialog-header-block">
+              <div className="feedback-dialog-header-block" ref={trainingInfoWrapRef}>
                 <div className="feedback-header">
                   <span id="feedback-dialog-title">
                     {sentiment === 'up' ? 'Train on a good answer' : 'Train on a miss'}
                   </span>
-                  <button
-                    type="button"
-                    className="feedback-close-btn"
-                    aria-label="Close"
-                    onClick={closeModal}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
+                  <div className="feedback-header-trailing">
+                    <div className="feedback-training-info-anchor">
+                      <button
+                        type="button"
+                        className="feedback-training-info-btn"
+                        aria-expanded={trainingInfoOpen}
+                        aria-controls={TRAINING_INFO_PANEL_ID}
+                        aria-label="Why training and bonus tokens"
+                        onClick={() => setTrainingInfoOpen(o => !o)}
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 16v-4M12 8h.01" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="feedback-close-btn"
+                      aria-label="Close"
+                      onClick={closeModal}
                     >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <p className="feedback-intro">
-                  {sentiment === 'up'
-                    ? 'Your input helps Oasis respond faster and more accurately over time.'
-                    : 'Showing us what missed the mark teaches the assistant to do better next time.'}
-                </p>
-                <div className="feedback-training-reward">
-                  <span>
-                    Each qualifying training submission earns +{FEEDBACK_BONUS_TOKENS.toLocaleString()}{' '}
-                    bonus tokens for today (UTC). Unused bonus allowance does not roll over.
-                  </span>
-                  <button type="button" className="feedback-pricing-link" onClick={openPricingPage}>
-                    View plans and limits
-                  </button>
+                {trainingInfoOpen ? (
+                  <div
+                    id={TRAINING_INFO_PANEL_ID}
+                    className="feedback-training-info-popover"
+                    role="region"
+                    aria-label="Training overview"
+                    onMouseDown={(e: JSX.TargetedMouseEvent<HTMLDivElement>) =>
+                      e.stopPropagation()
+                    }
+                  >
+                    <p className="feedback-training-info-popover__p">
+                      {sentiment === 'up'
+                        ? 'Your input helps Oasis respond faster and more accurately over time.'
+                        : 'Showing us what missed the mark teaches the assistant to do better next time.'}
+                    </p>
+                    <p className="feedback-training-info-popover__p">
+                      Each qualifying training submission earns +
+                      {FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens for today (UTC). Unused
+                      bonus allowance does not roll over.
+                    </p>
+                    <button
+                      type="button"
+                      className="feedback-pricing-link"
+                      onClick={openPricingPage}
+                    >
+                      View plans and limits
+                    </button>
+                  </div>
+                ) : null}
+                <div
+                  className="feedback-training-timeline"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={3}
+                  aria-valuenow={completedTrainingSteps}
+                  aria-label="Training form completion: categories, details field, and minimum length."
+                >
+                  <ol className="feedback-training-timeline__list">
+                    <li
+                      className={`feedback-training-timeline__item${stepCategoriesDone ? ' feedback-training-timeline__item--done' : ''}`}
+                    >
+                      <span className="feedback-training-timeline__dot" aria-hidden />
+                      <span className="feedback-training-timeline__label">Categories</span>
+                    </li>
+                    <li
+                      className={`feedback-training-timeline__item${stepDetailsEngaged ? ' feedback-training-timeline__item--done' : ''}`}
+                    >
+                      <span className="feedback-training-timeline__dot" aria-hidden />
+                      <span className="feedback-training-timeline__label">Details</span>
+                    </li>
+                    <li
+                      className={`feedback-training-timeline__item${stepReadyDone ? ' feedback-training-timeline__item--done' : ''}`}
+                    >
+                      <span className="feedback-training-timeline__dot" aria-hidden />
+                      <span className="feedback-training-timeline__label">Ready</span>
+                    </li>
+                  </ol>
                 </div>
               </div>
 
@@ -478,8 +609,8 @@ export function Feedback({
                           {selectedBadges.includes(badge) && (
                             <span className="badge-remove">
                               <svg
-                                width="10"
-                                height="10"
+                                width="8"
+                                height="8"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
@@ -514,8 +645,8 @@ export function Feedback({
                           {selectedBadges.includes(badge) && (
                             <span className="badge-remove">
                               <svg
-                                width="10"
-                                height="10"
+                                width="8"
+                                height="8"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
@@ -535,22 +666,40 @@ export function Feedback({
                   </Fragment>
                 )}
 
-                <div className="feedback-input-container">
+                <div className="feedback-detail-field">
+                  <label
+                    className="feedback-detail-field__label"
+                    htmlFor="feedback-training-detail"
+                  >
+                    Details (required)
+                  </label>
                   <textarea
+                    id="feedback-training-detail"
                     className="feedback-textarea"
                     placeholder={
                       sentiment === 'up'
-                        ? 'What worked well, what could be even better? (required, min. ' +
-                          FEEDBACK_MIN_DETAIL_CHARS +
-                          ' characters)'
-                        : 'What did you expect, or how could this answer be better? (required)'
+                        ? 'What stood out, and what could be even better?'
+                        : 'What went wrong, and what would a better answer look like?'
                     }
                     value={comment}
+                    aria-describedby="feedback-training-char-status"
+                    onFocus={() => setDetailFieldEngaged(true)}
                     onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => {
                       setComment(e.currentTarget.value);
                       setShowSubmitHint(false);
                     }}
                   />
+                  <div id="feedback-training-char-status" aria-live="polite">
+                    <div className="feedback-char-meter__track">
+                      <div
+                        className="feedback-char-meter__fill"
+                        style={{ width: `${charMeterPct}%` }}
+                      />
+                    </div>
+                    <p className="feedback-char-meter__text">
+                      {trimmedCommentLen} / {FEEDBACK_MIN_DETAIL_CHARS} characters
+                    </p>
+                  </div>
                 </div>
 
                 <div
@@ -564,25 +713,6 @@ export function Feedback({
                       characters about what you expected or what could be better.
                     </p>
                   ) : null}
-                </div>
-
-                <div className="feedback-checkboxes">
-                  <label className="feedback-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={includeContext}
-                      onChange={() => setIncludeContext(!includeContext)}
-                    />
-                    <span>Include this exchange in training data</span>
-                  </label>
-                  <label className="feedback-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={contactMe}
-                      onChange={() => setContactMe(!contactMe)}
-                    />
-                    <span>Contact me if this needs a quick follow-up</span>
-                  </label>
                 </div>
               </div>
 

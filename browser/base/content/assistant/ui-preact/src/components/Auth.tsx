@@ -23,8 +23,8 @@ function GoogleIcon() {
 
 function AppleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="#111" d="M16.7 12.8c0-2.1 1.8-3.1 1.9-3.2-1-1.5-2.7-1.7-3.3-1.7-1.4-.1-2.8.9-3.5.9-.8 0-1.9-.9-3.1-.9-1.6 0-3 .9-3.9 2.2-1.7 2.9-.4 7.2 1.2 9.4.8 1.1 1.7 2.4 2.9 2.3 1.1 0 1.6-.7 3-.7 1.5 0 1.9.7 3 .7 1.2 0 2-.9 2.8-2 .9-1.3 1.3-2.5 1.3-2.6-.1 0-2.3-.9-2.3-4.4Zm-2.3-6.3c.6-.8 1-1.8.9-2.9-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-.9 2.8 1 0 2.1-.5 2.8-1.3Z" />
+    <svg className="auth-oauth-apple-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M16.7 12.8c0-2.1 1.8-3.1 1.9-3.2-1-1.5-2.7-1.7-3.3-1.7-1.4-.1-2.8.9-3.5.9-.8 0-1.9-.9-3.1-.9-1.6 0-3 .9-3.9 2.2-1.7 2.9-.4 7.2 1.2 9.4.8 1.1 1.7 2.4 2.9 2.3 1.1 0 1.6-.7 3-.7 1.5 0 1.9.7 3 .7 1.2 0 2-.9 2.8-2 .9-1.3 1.3-2.5 1.3-2.6-.1 0-2.3-.9-2.3-4.4Zm-2.3-6.3c.6-.8 1-1.8.9-2.9-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-.9 2.8 1 0 2.1-.5 2.8-1.3Z" />
     </svg>
   );
 }
@@ -257,19 +257,6 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
   const subtitle = getSubtitle();
   const showFormFields = mode === 'forgotPassword' || showEmailPassword;
 
-  const oauthButtonStyle: JSX.CSSProperties = {
-    flex: 1,
-    height: '36px',
-    borderRadius: '999px',
-    border: '1px solid #d9dfc8',
-    background: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: oauthLoading ? 'wait' : 'pointer',
-    outlineOffset: '2px',
-  };
-
   const authScreenClass =
     (mode === 'forgotPassword'
       ? 'auth-screen'
@@ -285,7 +272,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Google"
         onClick={() => handleOAuthStart('signInWithGoogle')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <GoogleIcon />
       </button>
@@ -294,7 +281,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Microsoft"
         onClick={() => handleOAuthStart('signInWithAzure')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <MicrosoftIcon />
       </button>
@@ -303,7 +290,7 @@ export function Auth({ onSuccess, onEmailPasswordOpen }: AuthProps) {
         aria-label="Continue with Apple"
         onClick={() => handleOAuthStart('signInWithApple')}
         disabled={oauthLoading}
-        style={oauthButtonStyle}
+        className="auth-oauth-provider-btn"
       >
         <AppleIcon />
       </button>

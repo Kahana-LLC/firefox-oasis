@@ -1,4 +1,6 @@
 export const OASIS_PRICING_URL = "https://kahana.co/oasis-pricing";
+export const OASIS_BILLING_URL =
+  "https://billing.stripe.com/p/login/bIYg16d6l3FqelieUU";
 
 export type QuotaLimitVariant = "daily" | "monthly" | "generic";
 

@@ -430,7 +430,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
       }
 
       // Check if the target element exists in the main browser window
-      const chatButton = window.document.getElementById("oasis-chat-button");
+      const chatButton = window.document.getElementById("oasis-navbar-pill");
       if (chatButton) {
         lazy.log.debug(
           "Oasis chat button found in main window, triggering callout"
@@ -442,7 +442,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
         // Try to find it after a delay
         await delay(500);
         const chatButtonRetry =
-          window.document.getElementById("oasis-chat-button");
+          window.document.getElementById("oasis-navbar-pill");
         if (chatButtonRetry) {
           lazy.log.debug("Oasis chat button found on retry");
         } else {

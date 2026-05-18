@@ -195,7 +195,7 @@ add_task(async function test_open_new_private_window_after_install() {
 
   is(
     Services.prefs.getStringPref("sidebar.main.tools"),
-    "aichat,syncedtabs,history,bookmarks",
+    "oasis-assistant,history,bookmarks",
     "Extension is not in the main tools pref"
   );
 
@@ -252,7 +252,7 @@ add_task(async function test_customize_sidebar_extensions() {
 
   is(
     Services.prefs.getStringPref("sidebar.main.tools"),
-    "aichat,syncedtabs,history,bookmarks",
+    "oasis-assistant,history,bookmarks",
     "Extension is not in the main tools pref"
   );
   // Test reloading an extension
@@ -276,7 +276,7 @@ add_task(async function test_customize_sidebar_extensions() {
 
   is(
     Services.prefs.getStringPref("sidebar.main.tools"),
-    "aichat,syncedtabs,history,bookmarks",
+    "oasis-assistant,history,bookmarks",
     "Extension is still not in the main tools pref"
   );
 

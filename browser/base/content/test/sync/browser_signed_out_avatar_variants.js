@@ -158,6 +158,9 @@ async function testInNewWindow(doCleanup, taskFn) {
  */
 
 add_setup(async () => {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.oasis.hideFxAccountsNavbarButton", false]],
+  });
   UIState.get = () => ({
     status: UIState.STATUS_NOT_CONFIGURED,
   });

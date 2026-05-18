@@ -1,13 +1,26 @@
 import { h } from "preact";
 import type { JSX } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import type { ChatConversationRow } from "../chatStore/index";
+import {
+  layoutFixedPanelBelowTrigger,
+  layoutKeyForPanel,
+  type AssistantFixedPanelLayout,
+} from "../utils/assistantPanelLayout";
 
 export type ChatHistoryPopoverProps = {
   conversations: ChatConversationRow[];
   activeId: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
+  onDeleteConversation: (id: string) => void | Promise<void>;
 };
 
 function startOfLocalDayMs(d: Date): number {
@@ -48,13 +61,24 @@ export function ChatHistoryPopover({
   activeId,
   onSelectConversation,
   onNewChat,
+  onDeleteConversation,
 }: ChatHistoryPopoverProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [panelLayout, setPanelLayout] = useState<AssistantFixedPanelLayout | null>(
+    null
+  );
+  const lastAppliedKeyRef = useRef("");
+  const rafRef = useRef(0);
 
   const filtered = useMemo(() => {
     const q = query.replace(/\s+/g, " ").trim().toLowerCase();
@@ -74,10 +98,24 @@ export function ChatHistoryPopover({
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
+    setPendingDelete(null);
     requestAnimationFrame(() => {
       triggerRef.current?.focus();
     });
   }, []);
+
+  const runPendingDelete = useCallback(async () => {
+    if (!pendingDelete) {
+      return;
+    }
+    const { id } = pendingDelete;
+    try {
+      await Promise.resolve(onDeleteConversation(id));
+      close();
+    } catch (e) {
+      console.error("oasis delete chat", e);
+    }
+  }, [pendingDelete, onDeleteConversation, close]);
 
   const toggle = useCallback(
     (e: MouseEvent) => {
@@ -99,6 +137,69 @@ export function ChatHistoryPopover({
     return () => window.clearTimeout(t);
   }, [open]);
 
+  const applyPanelLayout = useCallback(() => {
+    const next = layoutFixedPanelBelowTrigger(
+      wrapRef.current,
+      triggerRef.current,
+      {
+        minWidth: 160,
+        maxWidth: 280,
+        gapBelowTrigger: 6,
+        maxHeight: "min(320px, 55vh)",
+      }
+    );
+    if (!next) {
+      lastAppliedKeyRef.current = "";
+      setPanelLayout(null);
+      return;
+    }
+    const key = layoutKeyForPanel(next);
+    if (key === lastAppliedKeyRef.current) {
+      return;
+    }
+    lastAppliedKeyRef.current = key;
+    setPanelLayout(next);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      lastAppliedKeyRef.current = "";
+      setPanelLayout(null);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      return;
+    }
+    const schedule = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = 0;
+        applyPanelLayout();
+      });
+    };
+    applyPanelLayout();
+    const wrap = wrapRef.current;
+    const container = wrap?.closest(".assistant-container");
+    const ro = new ResizeObserver(() => {
+      schedule();
+    });
+    if (container) {
+      ro.observe(container);
+    }
+    window.addEventListener("resize", schedule);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", schedule);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+  }, [open, applyPanelLayout]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -106,15 +207,12 @@ export function ChatHistoryPopover({
     function onDocMouseDown(ev: MouseEvent) {
       const el = wrapRef.current;
       if (el && !el.contains(ev.target as Node | null)) {
-        setOpen(false);
-        setQuery("");
+        close();
       }
     }
     function onKey(ev: KeyboardEvent) {
       if (ev.key === "Escape") {
-        setOpen(false);
-        setQuery("");
-        triggerRef.current?.focus();
+        close();
       }
     }
     document.addEventListener("mousedown", onDocMouseDown);
@@ -123,18 +221,29 @@ export function ChatHistoryPopover({
       document.removeEventListener("mousedown", onDocMouseDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, close]);
 
-  const rowStyle = (isActive: boolean): JSX.CSSProperties => ({
+  const rowShellStyle = (isActive: boolean): JSX.CSSProperties => ({
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "2px",
     width: "100%",
-    padding: "8px 12px",
-    border: "none",
+    borderRadius: "var(--border-radius-large)",
+    boxSizing: "border-box",
     background: isActive
       ? "color-mix(in srgb, var(--primary-green) 14%, var(--surface-page))"
       : "transparent",
+  });
+
+  const rowMainStyle: JSX.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: 1,
+    minWidth: 0,
+    padding: "8px 4px 8px 12px",
+    border: "none",
+    background: "transparent",
     color: "var(--text-headings)",
     font: "inherit",
     fontSize: "13px",
@@ -142,7 +251,22 @@ export function ChatHistoryPopover({
     cursor: "pointer",
     borderRadius: "var(--border-radius-large)",
     boxSizing: "border-box",
-  });
+  };
+
+  const deleteBtnStyle: JSX.CSSProperties = {
+    flexShrink: 0,
+    width: "32px",
+    height: "36px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "none",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    borderRadius: "var(--border-radius-large)",
+    padding: 0,
+  };
 
   const renderSection = (label: string, items: ChatConversationRow[]) => {
     if (items.length === 0) {
@@ -171,13 +295,10 @@ export function ChatHistoryPopover({
             const title = c.title?.trim() || "New chat";
             return (
               <li key={c.id} style={{ margin: 0, padding: 0 }}>
-                <button
-                  type="button"
-                  aria-current={isActive ? "true" : undefined}
-                  style={rowStyle(isActive)}
-                  title={title}
+                <div
+                  style={rowShellStyle(isActive)}
                   onMouseEnter={(
-                    e: JSX.TargetedMouseEvent<HTMLButtonElement>
+                    e: JSX.TargetedMouseEvent<HTMLDivElement>
                   ) => {
                     if (!isActive) {
                       e.currentTarget.style.background =
@@ -185,48 +306,100 @@ export function ChatHistoryPopover({
                     }
                   }}
                   onMouseLeave={(
-                    e: JSX.TargetedMouseEvent<HTMLButtonElement>
+                    e: JSX.TargetedMouseEvent<HTMLDivElement>
                   ) => {
                     e.currentTarget.style.background = isActive
                       ? "color-mix(in srgb, var(--primary-green) 14%, var(--surface-page))"
                       : "transparent";
                   }}
-                  onClick={(e: MouseEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onSelectConversation(c.id);
-                    close();
-                  }}
                 >
-                  {isActive ? (
+                  <button
+                    type="button"
+                    aria-current={isActive ? "true" : undefined}
+                    style={rowMainStyle}
+                    title={title}
+                    onClick={(e: MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelectConversation(c.id);
+                      close();
+                    }}
+                  >
+                    {isActive ? (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--primary-green)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <span
+                        style={{ width: "14px", flexShrink: 0 }}
+                        aria-hidden
+                      />
+                    )}
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {title}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete chat: ${title}`}
+                    title="Delete chat"
+                    style={deleteBtnStyle}
+                    onMouseDown={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={(e: MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPendingDelete({ id: c.id, title });
+                    }}
+                    onMouseEnter={(
+                      e: JSX.TargetedMouseEvent<HTMLButtonElement>
+                    ) => {
+                      e.currentTarget.style.color = "var(--primary-green)";
+                      e.currentTarget.style.background =
+                        "rgba(122, 146, 0, 0.1)";
+                    }}
+                    onMouseLeave={(
+                      e: JSX.TargetedMouseEvent<HTMLButtonElement>
+                    ) => {
+                      e.currentTarget.style.color = "var(--text-secondary)";
+                      e.currentTarget.style.background = "transparent";
+                    }}
+                  >
                     <svg
-                      width="14"
-                      height="14"
+                      width="16"
+                      height="16"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="var(--primary-green)"
-                      strokeWidth="2.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden
                     >
-                      <path d="M20 6L9 17l-5-5" />
+                      <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
                     </svg>
-                  ) : (
-                    <span style={{ width: "14px", flexShrink: 0 }} aria-hidden />
-                  )}
-                  <span
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {title}
-                  </span>
-                </button>
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -254,28 +427,10 @@ export function ChatHistoryPopover({
         aria-controls={PANEL_ID}
         aria-haspopup="dialog"
         onClick={toggle}
-        style={{
-          border: "none",
-          background: "transparent",
-          cursor: "pointer",
-          padding: "2px",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#7A9200",
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-          (e.currentTarget.style.backgroundColor = "rgba(122, 146, 0, 0.12)")
-        }
-        onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) =>
-          (e.currentTarget.style.backgroundColor = "transparent")
-        }
       >
         <svg
-          width="18"
-          height="18"
+          width="15"
+          height="15"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -291,17 +446,17 @@ export function ChatHistoryPopover({
 
       {open ? (
         <div
+          ref={panelRef}
           id={PANEL_ID}
           role="dialog"
           aria-label="Chat history"
           className="oasis-chat-history-panel dropdown-menu"
           style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "6px",
-            width: "min(280px, calc(100vw - 24px))",
-            maxHeight: "min(320px, 55vh)",
+            position: "fixed",
+            top: panelLayout ? `${panelLayout.top}px` : 0,
+            right: panelLayout ? `${panelLayout.right}px` : 0,
+            width: panelLayout ? `${panelLayout.width}px` : 260,
+            maxHeight: panelLayout?.maxHeight ?? "min(320px, 55vh)",
             display: "flex",
             flexDirection: "column",
             background: "var(--surface-page)",
@@ -310,6 +465,9 @@ export function ChatHistoryPopover({
             boxShadow: "0 8px 28px rgba(0, 0, 0, 0.12)",
             zIndex: 1001,
             overflow: "hidden",
+            transform: panelLayout?.transform,
+            opacity: panelLayout ? 1 : 0,
+            pointerEvents: panelLayout ? "auto" : "none",
           }}
           onMouseDown={(e: JSX.TargetedMouseEvent<HTMLDivElement>) =>
             e.stopPropagation()
@@ -398,6 +556,74 @@ export function ChatHistoryPopover({
               </svg>
             </button>
           </div>
+
+          {pendingDelete ? (
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "10px 12px",
+                borderBottom:
+                  "1px solid color-mix(in srgb, var(--text-body) 12%, transparent)",
+                background:
+                  "color-mix(in srgb, var(--primary-green) 8%, var(--surface-page))",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-headings)",
+                  marginBottom: "10px",
+                  lineHeight: 1.35,
+                }}
+              >
+                {`Delete "${pendingDelete.title}"? This cannot be undone.`}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  style={{
+                    font: "inherit",
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "var(--border-radius-large)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--text-body) 22%, transparent)",
+                    background: "var(--surface-page)",
+                    color: "var(--text-headings)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void runPendingDelete();
+                  }}
+                  style={{
+                    font: "inherit",
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "var(--border-radius-large)",
+                    border: "1px solid color-mix(in srgb, #c62828 35%, transparent)",
+                    background: "color-mix(in srgb, #ffebee 55%, var(--surface-page))",
+                    color: "#c62828",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div
             aria-label="Conversations"

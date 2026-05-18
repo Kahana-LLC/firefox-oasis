@@ -1,5 +1,4 @@
 import { h } from 'preact';
-import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { AuthState, OasisWindow, OnboardingStatus } from '../types';
 
@@ -27,34 +26,15 @@ function persistCollapsed(collapsed: boolean) {
   }
 }
 
-const shell: JSX.CSSProperties = {
-  width: '100%',
-  margin: 0,
-  padding: '10px',
-  borderRadius: '12px',
-  background: '#f6f8ef',
-  border: '1px solid #e2e8d0',
-  boxSizing: 'border-box',
-};
-
 function StepIcon({ done }: { done: boolean }) {
   return (
     <span
       aria-hidden
-      style={{
-        flexShrink: 0,
-        width: '16px',
-        height: '16px',
-        borderRadius: '50%',
-        border: done ? 'none' : '2px solid #c5d49a',
-        background: done ? '#7A9200' : 'transparent',
-        color: '#fff',
-        fontSize: '10px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 700,
-      }}
+      className={
+        done
+          ? 'onboarding-checklist-step-icon onboarding-checklist-step-icon--done'
+          : 'onboarding-checklist-step-icon'
+      }
     >
       {done ? '\u2713' : ''}
     </span>
@@ -79,11 +59,17 @@ function ImportMigrationBrandHeaderLogos() {
 
 function ImportPrivacyShield() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg
+      className="onboarding-import-shield-svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
       <path
         d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-        fill="#e8eedc"
-        stroke="#6b7c52"
         strokeWidth="1.75"
         strokeLinejoin="round"
       />
@@ -131,14 +117,14 @@ function ChecklistGlyph() {
     >
       <path
         d="M9 11l3 3L22 4"
-        stroke="#495800"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"
-        stroke="#495800"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -245,29 +231,6 @@ export function OnboardingChecklist({
     persistCollapsed(true);
   };
 
-  const rowBtn: JSX.CSSProperties = {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '10px',
-    width: '100%',
-    padding: '10px 8px',
-    margin: 0,
-    border: 'none',
-    borderRadius: '8px',
-    background: 'transparent',
-    cursor: 'pointer',
-    textAlign: 'left',
-    font: 'inherit',
-    color: '#333',
-  };
-
-  const rowDoneShell: JSX.CSSProperties = {
-    ...rowBtn,
-    cursor: 'default',
-    opacity: 0.72,
-    color: '#9ca3af',
-  };
-
   if (collapsed) {
     return (
       <div className="assistant-onboarding-dock assistant-onboarding-dock--collapsed">
@@ -302,49 +265,20 @@ export function OnboardingChecklist({
   return (
     <div
       id="oasis-onboarding-checklist-panel"
-      className="assistant-onboarding-dock"
-      style={shell}
+      className="assistant-onboarding-dock onboarding-checklist-shell"
     >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '10px',
-          gap: '8px',
-        }}
-      >
-        <span
-          style={{
-            fontSize: '14px',
-            fontWeight: 600,
-            color: '#495800',
-          }}
-        >
-          Getting started
-        </span>
+      <div className="onboarding-checklist-panel-head">
+        <span className="onboarding-checklist-panel-title">Getting started</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+          <span className="onboarding-checklist-panel-count">
             {doneCount}/{total}
           </span>
           <button
             type="button"
+            className="onboarding-checklist-collapse-btn"
             onClick={collapse}
             aria-expanded="true"
             title="Collapse checklist"
-            style={{
-              border: 'none',
-              background: 'rgba(122, 146, 0, 0.12)',
-              borderRadius: '8px',
-              width: '32px',
-              height: '28px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#495800',
-              flexShrink: 0,
-            }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
@@ -358,35 +292,15 @@ export function OnboardingChecklist({
           </button>
         </div>
       </div>
-      <div
-        style={{
-          height: '4px',
-          borderRadius: '4px',
-          background: '#e2e8d0',
-          marginBottom: '12px',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="onboarding-checklist-progress">
         <div
-          style={{
-            height: '100%',
-            width: `${progressPct}%`,
-            background: '#7A9200',
-            borderRadius: '4px',
-            transition: 'width 0.25s ease',
-          }}
+          className="onboarding-checklist-progress-fill"
+          style={{ width: `${progressPct}%` }}
         />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div
-          style={{
-            borderRadius: '8px',
-            border: '1px solid #e2e8d0',
-            background: '#fff',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="onboarding-checklist-nested-card">
           {importDone ? (
             <div className="onboarding-import-step-header onboarding-import-step-header--done">
               <StepIcon done />
@@ -428,20 +342,11 @@ export function OnboardingChecklist({
                 <div className="onboarding-import-actions">
                   <button
                     type="button"
-                    className="onboarding-import-primary-btn"
+                    className="onboarding-import-primary-btn onboarding-import-primary-btn--outline"
                     title="Open browser import"
                     onClick={e => {
                       e.stopPropagation();
                       onImport();
-                    }}
-                    style={{
-                      fontSize: '12px',
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #c5d49a',
-                      background: '#fff',
-                      color: '#495800',
-                      cursor: 'pointer',
                     }}
                   >
                     <ImportBrowserGlyph />
@@ -457,21 +362,12 @@ export function OnboardingChecklist({
           <div
             role="status"
             aria-label="Completed: Sign in to Oasis AI"
-            style={rowDoneShell}
+            className="onboarding-checklist-row onboarding-checklist-row--done"
           >
             <StepIcon done />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-                Sign in to Oasis AI
-              </span>
-              <span
-                style={{
-                  fontSize: '12px',
-                  color: '#9ca3af',
-                  display: 'block',
-                  marginTop: '2px',
-                }}
-              >
+              <span className="onboarding-checklist-row-title">Sign in to Oasis AI</span>
+              <span className="onboarding-checklist-row-sub">
                 {view === 'auth'
                   ? 'Use Google, Apple, Microsoft, or email.'
                   : 'Open sign-in to create an account or log in.'}
@@ -481,30 +377,21 @@ export function OnboardingChecklist({
         ) : (
           <button
             type="button"
-            style={rowBtn}
+            className="onboarding-checklist-row"
             onClick={() => {
               onNavigate.scrollToAuthPanel();
             }}
           >
             <StepIcon done={false} />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-                Sign in to Oasis AI
-              </span>
-              <span
-                style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  display: 'block',
-                  marginTop: '2px',
-                }}
-              >
+              <span className="onboarding-checklist-row-title">Sign in to Oasis AI</span>
+              <span className="onboarding-checklist-row-sub">
                 {view === 'auth'
                   ? 'Use Google, Apple, Microsoft, or email.'
                   : 'Open sign-in to create an account or log in.'}
               </span>
             </span>
-            <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
+            <span className="onboarding-checklist-chevron" aria-hidden>
               &#8250;
             </span>
           </button>
@@ -514,21 +401,12 @@ export function OnboardingChecklist({
           <div
             role="status"
             aria-label="Completed: Run your first AI command"
-            style={rowDoneShell}
+            className="onboarding-checklist-row onboarding-checklist-row--done"
           >
             <StepIcon done />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-                Run your first AI command
-              </span>
-              <span
-                style={{
-                  fontSize: '12px',
-                  color: '#9ca3af',
-                  display: 'block',
-                  marginTop: '2px',
-                }}
-              >
+              <span className="onboarding-checklist-row-title">Run your first AI command</span>
+              <span className="onboarding-checklist-row-sub">
                 {auth.isAuthenticated
                   ? 'Ask a question or use voice after you are signed in.'
                   : 'Use the composer and start chatting to run a command.'}
@@ -538,7 +416,7 @@ export function OnboardingChecklist({
         ) : (
           <button
             type="button"
-            style={rowBtn}
+            className="onboarding-checklist-row"
             onClick={() => {
               if (!auth.isAuthenticated) {
                 onNavigate.scrollToAuthPanel();
@@ -549,23 +427,14 @@ export function OnboardingChecklist({
           >
             <StepIcon done={false} />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
-                Run your first AI command
-              </span>
-              <span
-                style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  display: 'block',
-                  marginTop: '2px',
-                }}
-              >
+              <span className="onboarding-checklist-row-title">Run your first AI command</span>
+              <span className="onboarding-checklist-row-sub">
                 {auth.isAuthenticated
                   ? 'Ask a question or use voice after you are signed in.'
                   : 'Use the composer and start chatting to run a command.'}
               </span>
             </span>
-            <span style={{ color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} aria-hidden>
+            <span className="onboarding-checklist-chevron" aria-hidden>
               &#8250;
             </span>
           </button>

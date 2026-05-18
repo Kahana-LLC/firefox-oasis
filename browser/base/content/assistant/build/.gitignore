@@ -1,4 +1,4 @@
 node_modules/
 package-lock.json
-tests/
+tests/tmp*.mjs
 .env.local

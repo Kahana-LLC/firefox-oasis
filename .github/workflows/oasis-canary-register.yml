@@ -1,0 +1,70 @@
+name: Oasis Canary Register Updates
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag for audit metadata (vX.Y.Z.N)
+        required: true
+        type: string
+      workflow_run_id:
+        description: Workflow run ID with oasis-macos-* artifacts (from Actions run URL)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PRODUCT: Firefox
+  LOCALE: en-US
+  RING: oasis-canary
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    environment: canary-signing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download build artifacts from prior run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.workflow_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: oasis-macos-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Stage artifacts for publish
+        run: |
+          set -euo pipefail
+          PUBLISH_DIR="${RUNNER_TEMP}/oasis-publish"
+          mkdir -p "${PUBLISH_DIR}/aarch64" "${PUBLISH_DIR}/x86_64"
+          for arch_slug in aarch64 x86_64; do
+            src="artifacts/oasis-macos-${arch_slug}"
+            if [ ! -d "${src}" ]; then
+              echo "Missing downloaded artifact directory ${src}" >&2
+              exit 1
+            fi
+            cp -a "${src}/." "${PUBLISH_DIR}/${arch_slug}/"
+          done
+          echo "PUBLISH_DIR=${PUBLISH_DIR}" >> "${GITHUB_ENV}"
+
+      - name: Register with update service
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_MODE: canary
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          ARTIFACT_DIR: ${{ env.PUBLISH_DIR }}
+          SKIP_GITHUB_UPLOAD: "1"
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+          OASIS_ADMIN_TOKEN: ${{ secrets.OASIS_UPDATE_ADMIN_TOKEN }}
+          PRODUCT: ${{ env.PRODUCT }}
+          LOCALE: ${{ env.LOCALE }}
+          RING: ${{ env.RING }}
+        run: |
+          set -euo pipefail
+          scripts/ci/oasis-publish-release.sh

@@ -83,16 +83,64 @@ cd /path/to/firefox-oasis
 
 Use your actual clone path instead of `/path/to/firefox-oasis`.
 
-### Branding asset on macOS
+### Branding icons on macOS
 
-Before a full browser build, ensure the custom branding asset exists:
+Oasis icons (Dock, in-browser, DMG) are generated from a hand-off PNG or from **`browser/branding/custom/kahana_logo.svg`**. Prefer dropping a master at **`browser/branding/custom/app-icon-source.png`** (1024×1024 or larger square RGBA, e.g. 2059×2059). After changing icon art, rebuild branding assets on macOS (requires Xcode command line tools: `iconutil`, `xcrun actool`, and ImageMagick):
 
 ```bash
-# Only if the file is missing
-cp browser/branding/unofficial/Assets.car browser/branding/custom/Assets.car
+./browser/branding/custom/build_branding_icons.sh
+./browser/branding/custom/verify_branding_icons.sh
 ```
 
-Without **`browser/branding/custom/Assets.car`**, macOS builds can fail during packaging steps that expect this file.
+This updates `firefox.icns`, `Assets.car`, `document.icns`, `disk.icns`, `background.png`, tab/about PNGs, and `macos/Assets.xcassets/AppIcon.appiconset/`. The DMG background composites `browser/base/content/assistant/images/empty-state-bg.png` with install copy on a white 1440×880 canvas (macOS system sans headline, sloth at bottom, drag arrow aligned to icon positions in `dmg_layout_common.sh`; sloth art uses trimmed ink width; icon X positions use a tighter cluster (`DMG_LAYOUT_ICON_CLUSTER_PAD=16` added to sloth ink width via `DMG_LAYOUT_FEATURE_ART_WIDTH` in `build/dmg-cluster-width.env`; arrow uses `ARROW_Y_BG_OFFSET=-32`, `ARROW_X_OFFSET=-76`, `ARROW_TIP_CLEARANCE=104`, `ARROW_GAP_PAD=10`, stroke `#777777` at width 3). After `make_dmg`, run `finalize_dmg_layout.sh` on the built `.dmg` so Finder writes a `dsstore` bound to the real **Oasis** volume (requires Automation permission for Finder). Commit regenerated `background.png`, `dsstore`, and `build/dmg-cluster-width.env` before release builds.
+
+Do **not** copy `browser/branding/unofficial/Assets.car` into custom branding; that restores the purple unofficial Firefox Dock icon.
+
+**Before creating a release tag** (oasis-canary / oasis-release check out `refs/tags/vX.Y.Z.N`):
+
+1. Commit `background.png`, `dsstore`, and `browser/branding/custom/build/dmg-cluster-width.env` (the env file is required by CI verify; tags before `v1.0.0.10` do not include it).
+2. On a clean checkout of the tag commit, run `./browser/branding/custom/verify_branding_icons.sh` and confirm it passes.
+
+| Artifact | Used for |
+|----------|----------|
+| `Assets.car` | Dock / Finder / DMG app icon (primary on macOS 11+) |
+| `firefox.icns` | Legacy bundle icon |
+| `document.icns` | File-type icons in Info.plist |
+| `disk.icns` | DMG volume icon |
+| `background.png`, `dsstore`, `build/dmg-cluster-width.env` | DMG installer window layout |
+| `default*.png`, `content/about-logo*` | Tabs, about:newtab, browser.jar |
+
+### DMG installer window (local test)
+
+After branding assets and a successful `./mach build`:
+
+```bash
+OBJDIR=obj-aarch64-apple-darwin25.3.0   # use your object directory name
+
+./browser/branding/custom/build_branding_icons.sh
+./browser/branding/custom/verify_branding_icons.sh
+
+make -C "${OBJDIR}/browser/installer" stage-package
+
+MOZ_PKG_DIR=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-MOZ_PKG_DIR)
+PACKAGE=$(make -s -C "${OBJDIR}/browser/installer" echo-variable-PACKAGE)
+
+./mach python -m mozbuild.action.make_dmg \
+  --dsstore browser/branding/custom/dsstore \
+  --background browser/branding/custom/background.png \
+  --icon browser/branding/custom/disk.icns \
+  --volume-name Oasis \
+  "${OBJDIR}/dist/${MOZ_PKG_DIR}" \
+  "${OBJDIR}/dist/${PACKAGE}"
+
+./browser/branding/custom/finalize_dmg_layout.sh "${OBJDIR}/dist/${PACKAGE}" "${OBJDIR}/dist/${MOZ_PKG_DIR}"
+./browser/branding/custom/verify_dmg_layout.sh "${OBJDIR}/dist/${PACKAGE}"
+open "${OBJDIR}/dist/${PACKAGE}"
+```
+
+Confirm the opened DMG (volume name **Oasis**, not OasisCap9) shows a white background with black headline text, sloth art at the bottom, icons at y≈300 with no overlapping text, the `Oasis.app` icon matches current branding, and drag-install works.
+
+Re-run **finalize** whenever you change `background.png` or icon positions (`dmg_layout_common.sh` constants). Finalize captures Finder layout via a shadow mount, then **repacks** the DMG with `make_dmg` so the layout is visible when users open the file (shadow-only edits are not persisted otherwise). `capture_dmg_dsstore.sh` remains a fallback for generating `dsstore` from `stage-package` only. Grant Terminal or Cursor permission to control Finder if finalize fails.
 
 ### Run the build
 
@@ -118,7 +166,7 @@ Compiler warnings are common; many are suppressed or benign. Fix errors that sto
   ```bash
   rm -f ~/.mozbuild/srcdirs/firefox-oasis-*/_virtualenvs/mach.lock
   ```
-- **Missing `Assets.car`**: See the branding step above.
+- **Missing or wrong Dock icon**: Run `./browser/branding/custom/build_branding_icons.sh` (see branding section above).
 - **Disk space**: Ensure enough free space for `obj-*` and `dist` outputs.
 
 ## Step 4: Run the browser
@@ -256,7 +304,7 @@ During rapid UI iteration, your team may use a workflow that reloads bundles wit
 cd browser/base/content/assistant/build && npm install && npm run build
 cd ../ui-preact && npm install && npm run build
 cd /path/to/firefox-oasis
-test -f browser/branding/custom/Assets.car || cp browser/branding/unofficial/Assets.car browser/branding/custom/Assets.car
+./browser/branding/custom/verify_branding_icons.sh
 ./mach build
 ./mach run
 ```

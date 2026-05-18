@@ -680,3 +680,42 @@ toolbar[keyNav]:not([collapsed], [customizing]) toolbartabstop,
   width: calc(2 * var(--toolbarbutton-inner-padding) + 35px);
   padding-block: 0;
 }
+
+#nav-bar-customization-target > #oasis-navbar-pill {
+  display: flex;
+  align-items: center;
+  margin-inline: 2px;
+}
+
+#oasis-navbar-pill-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: calc(2 * var(--toolbarbutton-inner-padding) + 16px);
+  height: calc(2 * var(--toolbarbutton-inner-padding) + 16px);
+  padding: var(--toolbarbutton-inner-padding);
+  margin-inline: 0;
+  border-radius: var(--toolbarbutton-border-radius);
+  cursor: pointer;
+  background-color: var(--toolbarbutton-active-background);
+}
+
+#oasis-navbar-pill-inner:hover {
+  background-color: var(--toolbarbutton-hover-background);
+}
+
+#oasis-navbar-pill-inner:hover:active {
+  background-color: var(--toolbarbutton-active-background);
+}
+
+:root[oasis-assistant-overlay="true"] #oasis-navbar-pill-inner {
+  background-color: var(--toolbarbutton-hover-background);
+}
+
+#oasis-navbar-pill-inner .oasis-navbar-pill-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}

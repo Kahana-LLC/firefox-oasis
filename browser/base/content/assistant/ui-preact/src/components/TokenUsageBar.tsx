@@ -111,7 +111,19 @@ export function TokenUsageBar({
     if (!isAuthenticated) {
       return;
     }
-    const onUp = () => {
+    const onUp = (e: Event) => {
+      const detail = (e as CustomEvent<{ immediate?: boolean }>).detail;
+      if (detail?.immediate) {
+        const svc = oasisWindow.subscriptionService;
+        if (svc?.getUsageBarSnapshot) {
+          setData(svc.getUsageBarSnapshot());
+          setLoading(false);
+        } else if (svc?.getDailyTokenUsageForDisplay) {
+          setData(svc.getDailyTokenUsageForDisplay());
+          setLoading(false);
+        }
+        return;
+      }
       void load();
     };
     window.addEventListener('oasis-usage-update', onUp);

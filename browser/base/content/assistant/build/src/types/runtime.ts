@@ -249,6 +249,9 @@ export type AssistantWindowLike = Window & {
   oasisSyncSessionFromPlainTurns?: (
     turns: Array<{ type: "human" | "ai"; content: string }>
   ) => void;
+  /** Session id for Railroad memory (`userId:chatId`); set from UI. */
+  oasisRailroadSessionKey?: string;
+  oasisSetRailroadSessionKey?: (key: string | null) => void;
   runAssistantStream?: RunAssistantStream;
   oasisRecordToolActionStart?: OasisRecordToolActionStart;
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
