@@ -57,6 +57,67 @@
       : "default";
   }
 
+  const OASIS_ASSISTANT_XHTML =
+    "chrome://browser/content/assistant/assistant.xhtml";
+
+  function isOasisAssistantContentWindow(cw) {
+    if (!cw) {
+      return false;
+    }
+    try {
+      const href = cw.location?.href;
+      return (
+        typeof href === "string" &&
+        (href === OASIS_ASSISTANT_XHTML ||
+          href.endsWith("/assistant/assistant.xhtml"))
+      );
+    } catch (e) {
+      void e;
+      return false;
+    }
+  }
+
+  function forEachOasisAssistantContentWindow(callback) {
+    try {
+      const win = Services.wm.getMostRecentWindow("navigator:browser");
+      if (!win) {
+        return;
+      }
+      const sc = win.SidebarController;
+      const browsers = [
+        sc?.browser,
+        win.document.getElementById("oasis-assistant-overlay-browser"),
+      ].filter(Boolean);
+      for (const browser of browsers) {
+        try {
+          const cw = browser.contentWindow;
+          if (isOasisAssistantContentWindow(cw)) {
+            callback(cw);
+          }
+        } catch (e) {
+          void e;
+        }
+      }
+    } catch (e) {
+      void e;
+    }
+  }
+
+  function applyAssistantThemeToContentWindow(cw, themeId) {
+    const normalized = normalizeAssistantThemeId(themeId);
+    const el = cw.document.documentElement;
+    if (normalized === "default") {
+      el.removeAttribute("data-oasis-theme");
+    } else {
+      el.setAttribute("data-oasis-theme", normalized);
+    }
+    cw.dispatchEvent(
+      new cw.CustomEvent("oasis-assistant-theme-sync", {
+        detail: { themeId: normalized },
+      })
+    );
+  }
+
   window.assistantBridge = {
     openTab(url) {
       try {
@@ -186,6 +247,17 @@
       try {
         const next = normalizeAssistantThemeId(id);
         Services.prefs.setStringPref(OASIS_ASSISTANT_THEME_PREF, next);
+        forEachOasisAssistantContentWindow(cw => {
+          applyAssistantThemeToContentWindow(cw, next);
+        });
+      } catch (e) {
+        void e;
+      }
+    },
+    reapplyAssistantThemeFromPref() {
+      try {
+        const themeId = window.assistantBridge.getAssistantTheme();
+        applyAssistantThemeToContentWindow(window, themeId);
       } catch (e) {
         void e;
       }

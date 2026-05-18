@@ -124,6 +124,9 @@ export type OnboardingStatus = {
 
 export interface AssistantBridgeLike {
   openTab(url: string): boolean;
+  getAssistantTheme?(): string;
+  setAssistantTheme?(id: string): void;
+  reapplyAssistantThemeFromPref?(): void;
   getAssistantHistory?():
     | AssistantHistoryEntry[]
     | Promise<AssistantHistoryEntry[]>;

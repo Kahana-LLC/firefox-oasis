@@ -100,6 +100,21 @@ export function Header({
     }
   }, [showThemePanel, activeThemeId]);
 
+  useEffect(() => {
+    function handleThemeSync(event: Event) {
+      const themeId =
+        (event as CustomEvent<{ themeId?: string }>).detail?.themeId ??
+        oasisWindow.assistantBridge?.getAssistantTheme?.() ??
+        'default';
+      const id = typeof themeId === 'string' ? themeId : 'default';
+      applyAssistantThemeToDocument(id);
+      setActiveThemeId(id);
+    }
+    document.addEventListener('oasis-assistant-theme-sync', handleThemeSync);
+    return () =>
+      document.removeEventListener('oasis-assistant-theme-sync', handleThemeSync);
+  }, []);
+
   useLayoutEffect(() => {
     const el = headerRef.current;
     if (!el) {

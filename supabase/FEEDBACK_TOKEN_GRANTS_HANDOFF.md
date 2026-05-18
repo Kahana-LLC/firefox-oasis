@@ -44,6 +44,7 @@ Index: `(user_id, grant_date_utc)` for daily sums.
 
 **Server-side eligibility** (all must pass or **no** grant row is created; `feedback_events` insert still succeeds):
 
+0. A grant recipient is resolved: `feedback_events.user_id` for personalized rows, or the submitting user from JWT (`request.jwt.claim.sub`) for anonymous rows where `user_id` is null (see [`migrations/20260518130000_feedback_anonymous_token_grants.sql`](migrations/20260518130000_feedback_anonymous_token_grants.sql)). Anonymous feedback is not linked to your account on `feedback_events`, but qualifying anonymous submissions still credit bonus tokens to the signed-in submitter.
 1. `trim(category)` is non-empty.
 2. `additional_info->'badges'` is a JSON **array** with **length ≥ 1**.
 3. `trim(additional_info->>'comment')` has length **≥ 30** characters.
