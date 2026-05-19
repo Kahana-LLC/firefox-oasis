@@ -537,7 +537,7 @@ export function ChatHistoryPopover({
                 border: "1px solid var(--primary-green)",
                 background:
                   "color-mix(in srgb, var(--primary-green) 10%, var(--surface-page))",
-                color: "#7A9200",
+                color: "var(--primary-green)",
                 cursor: "pointer",
                 padding: 0,
               }}
@@ -612,9 +612,9 @@ export function ChatHistoryPopover({
                     fontSize: "13px",
                     padding: "6px 12px",
                     borderRadius: "var(--border-radius-large)",
-                    border: "1px solid color-mix(in srgb, #c62828 35%, transparent)",
-                    background: "color-mix(in srgb, #ffebee 55%, var(--surface-page))",
-                    color: "#c62828",
+                    border: "1px solid color-mix(in srgb, var(--primary-green) 58%, red)",
+                    background: "color-mix(in srgb, red 8%, var(--surface-page))",
+                    color: "color-mix(in srgb, red 78%, black)",
                     cursor: "pointer",
                     fontWeight: 600,
                   }}
