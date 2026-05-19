@@ -115,7 +115,7 @@ function SettingsMenuRow({ label, onClick, icon }: SettingsMenuRowProps) {
         boxSizing: "border-box",
       }}
       onMouseEnter={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
-        e.currentTarget.style.background = "rgba(122, 146, 0, 0.08)";
+        e.currentTarget.style.background = "var(--icon-accent-hover-bg)";
       }}
       onMouseLeave={(e: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
         e.currentTarget.style.background = "transparent";

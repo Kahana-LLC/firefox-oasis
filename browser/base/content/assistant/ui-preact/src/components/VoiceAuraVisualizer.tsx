@@ -11,6 +11,41 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
+function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
+  if (!m) return null;
+  return {
+    r: parseInt(m[1], 16),
+    g: parseInt(m[2], 16),
+    b: parseInt(m[3], 16),
+  };
+}
+
+function readAccentRgb(): { r: number; g: number; b: number } {
+  try {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue('--primary-green')
+      .trim();
+    const parsed = parseHexColor(raw);
+    if (parsed) return parsed;
+    const rgbMatch = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(raw);
+    if (rgbMatch) {
+      return {
+        r: parseInt(rgbMatch[1], 10),
+        g: parseInt(rgbMatch[2], 10),
+        b: parseInt(rgbMatch[3], 10),
+      };
+    }
+  } catch {
+    // Ignore errors reading computed style
+  }
+  return { r: 122, g: 146, b: 0 };
+}
+
+function rgbaStr(r: number, g: number, b: number, a: number): string {
+  return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${a.toFixed(3)})`;
+}
+
 export function VoiceAuraVisualizer({ agent, agentState }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const micRef = useRef(0);
@@ -68,6 +103,7 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
       ctx.clearRect(0, 0, w, h);
 
       const currentState = agentStateRef.current;
+      const accent = readAccentRgb();
 
       const breathe =
         currentState === "thinking" || currentState === "transcribing"
@@ -91,6 +127,10 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
         { phase: -0.35, alpha: 0.85, w: 1.4 },
       ];
 
+      const shadowR = accent.r + (accent.r < 128 ? 80 : -40);
+      const shadowG = accent.g + (accent.g < 128 ? 80 : -40);
+      const shadowB = accent.b + 60;
+
       for (const layer of layers) {
         const ph = timeRef.current * 1.2 + layer.phase;
         ctx.save();
@@ -99,12 +139,12 @@ export function VoiceAuraVisualizer({ agent, agentState }: Props) {
         ctx.shadowBlur = 18 + energy * 28;
         ctx.shadowColor =
           currentState === "speaking"
-            ? `rgba(160, 200, 255, ${0.35 + tts * 0.45})`
-            : `rgba(140, 200, 90, ${0.35 + mic * 0.45})`;
+            ? rgbaStr(shadowR, shadowG, shadowB, 0.35 + tts * 0.45)
+            : rgbaStr(accent.r + 18, accent.g + 54, accent.b + 90, 0.35 + mic * 0.45);
         const g = ctx.createLinearGradient(0, 0, w, 0);
-        g.addColorStop(0, `rgba(80, 220, 160, ${layer.alpha})`);
-        g.addColorStop(0.45, `rgba(100, 180, 255, ${layer.alpha})`);
-        g.addColorStop(1, `rgba(220, 120, 255, ${layer.alpha})`);
+        g.addColorStop(0, rgbaStr(accent.r - 42, accent.g + 74, accent.b + 160, layer.alpha));
+        g.addColorStop(0.45, rgbaStr(accent.r - 22, accent.g + 34, accent.b + 255, layer.alpha));
+        g.addColorStop(1, rgbaStr(accent.r + 98, accent.g - 26, accent.b + 255, layer.alpha));
         ctx.strokeStyle = g;
         ctx.globalAlpha = 0.75 + energy * 0.2;
         ctx.beginPath();
