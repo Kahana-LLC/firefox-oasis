@@ -7,6 +7,7 @@ import type {
   OasisRecordToolActionStart,
   OasisRecordToolActionUpdate,
   PendingAmbiguityPayload,
+  PendingClarificationPayload,
   PendingConfirmationPayload,
   RunAssistantStream,
 } from "../../../shared/contracts.js";
@@ -257,6 +258,9 @@ export type AssistantWindowLike = Window & {
   oasisRecordToolActionUpdate?: OasisRecordToolActionUpdate;
   oasisSetPendingConfirmationRelay?: (
     confirmation: PendingConfirmationPayload | null
+  ) => void;
+  oasisSetPendingClarificationRelay?: (
+    clarification: PendingClarificationPayload | null
   ) => void;
   oasisGetPendingConfirmation?: () => PendingConfirmationPayload | null;
   oasisClearPendingConfirmation?: () => void;

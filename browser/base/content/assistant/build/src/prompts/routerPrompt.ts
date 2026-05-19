@@ -28,10 +28,20 @@
 //   ].join(" ");
 // }
 
+function currentDateString(): string {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export function buildAssistRouterPrompt(
   commandNames: readonly string[]
 ): string {
   return [
+    `Today is ${currentDateString()}.`,
     "You route the latest user request to one browser command.",
     `Valid commands: ${commandNames.join(", ")}.`,
     "For chained requests, you may call route_action_plan with actions[] (max 3) instead of a single command.",

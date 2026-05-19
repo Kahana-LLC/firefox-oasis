@@ -4,6 +4,7 @@ import { VoiceAuraVisualizer } from './components/VoiceAuraVisualizer';
 import { Header } from './components/Header';
 import { Auth } from './components/Auth';
 import { ConfirmationModal } from './components/ConfirmationModal';
+import { ClarificationModal } from './components/ClarificationModal';
 import { ChatTimeline } from './components/ChatTimeline';
 import { Composer } from './components/Composer';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
@@ -15,6 +16,7 @@ import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import type {
   AuthState,
+  ClarificationData,
   ConfirmationData,
   OasisWindow,
   VoiceAgentEvent,
@@ -425,6 +427,7 @@ export function App() {
   const composerInputRef = createRef<HTMLTextAreaElement>();
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
+  const [pendingClarification, setPendingClarification] = useState<ClarificationData | null>(null);
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
   const [trainingFocusTick, setTrainingFocusTick] = useState(0);
   const [trainingFocusMessageId, setTrainingFocusMessageId] = useState('');
@@ -455,6 +458,7 @@ export function App() {
     updateToolAction: runtime.updateToolAction,
     resetAssistantSession: runtime.resetAssistantSession,
     setPendingConfirmation,
+    setPendingClarification,
   });
 
   useEffect(() => {
@@ -484,6 +488,7 @@ export function App() {
   useAuthSync({
     setAuth,
     setPendingConfirmation,
+    setPendingClarification,
     onAuthenticated: handleAuthenticated,
     onUserChanged: handleUserChanged,
   });
@@ -657,6 +662,24 @@ export function App() {
           }}
           onCancel={() => {
             void runtime.handleConfirmationCancel();
+          }}
+        />
+      )}
+      {pendingClarification && (
+        <ClarificationModal
+          data={pendingClarification}
+          onSelect={optionId => {
+            const idx = pendingClarification.options.findIndex(
+              o => o.id === optionId
+            );
+            setPendingClarification(null);
+            if (idx >= 0) {
+              void runtime.send(`clarify:opt_${idx + 1}`);
+            }
+          }}
+          onCancel={() => {
+            setPendingClarification(null);
+            void runtime.send('none');
           }}
         />
       )}

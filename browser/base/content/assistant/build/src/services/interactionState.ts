@@ -14,9 +14,13 @@ import type {
   AmbiguityTarget,
   InteractionCommandArgs,
   PendingAmbiguityPayload,
+  PendingClarificationPayload,
   PendingConfirmationPayload,
 } from "../../../shared/contracts.js";
-import { OASIS_EVENT_CONFIRMATION_UPDATE } from "../../../shared/contracts.js";
+import {
+  OASIS_EVENT_CLARIFICATION_UPDATE,
+  OASIS_EVENT_CONFIRMATION_UPDATE,
+} from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 
 export type { InteractionCommandArgs, AmbiguityTarget };
@@ -24,6 +28,8 @@ export type { InteractionCommandArgs, AmbiguityTarget };
 export type PendingConfirmation = PendingConfirmationPayload;
 
 export type PendingAmbiguity = PendingAmbiguityPayload;
+
+export type PendingClarification = PendingClarificationPayload;
 
 export type RecentSearchResult = {
   index: number;
@@ -38,11 +44,14 @@ export type RecentSearchResult = {
 class InteractionStateStore {
   private pendingConfirmation: PendingConfirmation | null = null;
   private pendingAmbiguity: PendingAmbiguity | null = null;
+  private pendingClarification: PendingClarification | null = null;
   private continuationQueue: string[] = [];
   private recentSearchResults: RecentSearchResult[] = [];
   private readonly assistantWindow: AssistantWindowLike;
 
-  constructor(assistantWindow: AssistantWindowLike = window as AssistantWindowLike) {
+  constructor(
+    assistantWindow: AssistantWindowLike = window as AssistantWindowLike
+  ) {
     this.assistantWindow = assistantWindow;
     this.assistantWindow.oasisGetPendingConfirmation = () =>
       this.getPendingConfirmation();
@@ -89,6 +98,25 @@ class InteractionStateStore {
 
   clearPendingAmbiguity(): void {
     this.pendingAmbiguity = null;
+  }
+
+  getPendingClarification(): PendingClarification | null {
+    return this.pendingClarification;
+  }
+
+  setPendingClarification(pending: PendingClarification | null): void {
+    this.pendingClarification = pending;
+    if (pending) {
+      assistantLogger.debug("interaction", "Pending clarification set", {
+        optionCount: pending.options.length,
+      });
+    }
+    this.emitClarificationUpdate(pending);
+  }
+
+  clearPendingClarification(): void {
+    this.pendingClarification = null;
+    this.emitClarificationUpdate(null);
   }
 
   getContinuationQueue(): string[] {
@@ -162,6 +190,24 @@ class InteractionStateStore {
       );
     }
   }
+
+  private emitClarificationUpdate(pending: PendingClarification | null): void {
+    try {
+      const relay = this.assistantWindow.oasisSetPendingClarificationRelay;
+      if (typeof relay === "function") {
+        relay(pending);
+      }
+      window.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_CLARIFICATION_UPDATE, { detail: pending })
+      );
+    } catch (error) {
+      assistantLogger.error(
+        "interaction",
+        "Failed to update pending clarification state",
+        error
+      );
+    }
+  }
 }
 
 export const interactionState = new InteractionStateStore();
@@ -170,7 +216,9 @@ export function getPendingConfirmation(): PendingConfirmation | null {
   return interactionState.getPendingConfirmation();
 }
 
-export function setPendingConfirmation(pending: PendingConfirmation | null): void {
+export function setPendingConfirmation(
+  pending: PendingConfirmation | null
+): void {
   interactionState.setPendingConfirmation(pending);
 }
 
@@ -188,6 +236,20 @@ export function setPendingAmbiguity(pending: PendingAmbiguity | null): void {
 
 export function clearPendingAmbiguity(): void {
   interactionState.clearPendingAmbiguity();
+}
+
+export function getPendingClarification(): PendingClarification | null {
+  return interactionState.getPendingClarification();
+}
+
+export function setPendingClarification(
+  pending: PendingClarification | null
+): void {
+  interactionState.setPendingClarification(pending);
+}
+
+export function clearPendingClarification(): void {
+  interactionState.clearPendingClarification();
 }
 
 export function getContinuationQueue(): string[] {

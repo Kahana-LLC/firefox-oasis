@@ -1,9 +1,10 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect } from "preact/hooks";
 import type {
+  ClarificationData,
   ConfirmationData,
   OasisWindow,
   ToolActionStatus,
-} from '../types';
+} from "../types";
 
 const oasisWindow: OasisWindow = window;
 
@@ -12,12 +13,14 @@ export function useAssistantBridge(params: {
   updateToolAction: (id: string, status: ToolActionStatus) => void;
   resetAssistantSession: () => void | Promise<void>;
   setPendingConfirmation: (data: ConfirmationData | null) => void;
+  setPendingClarification: (data: ClarificationData | null) => void;
 }) {
   const {
     startToolAction,
     updateToolAction,
     resetAssistantSession,
     setPendingConfirmation,
+    setPendingClarification,
   } = params;
 
   useEffect(() => {
@@ -25,6 +28,8 @@ export function useAssistantBridge(params: {
     const previousRecordUpdate = oasisWindow.oasisRecordToolActionUpdate;
     const previousResetAssistantSession = oasisWindow.resetAssistantSession;
     const previousPendingRelay = oasisWindow.oasisSetPendingConfirmationRelay;
+    const previousClarificationRelay =
+      oasisWindow.oasisSetPendingClarificationRelay;
 
     oasisWindow.oasisRecordToolActionStart = (
       name: string,
@@ -38,8 +43,15 @@ export function useAssistantBridge(params: {
       updateToolAction(id, status);
     };
     oasisWindow.resetAssistantSession = () => resetAssistantSession();
-    oasisWindow.oasisSetPendingConfirmationRelay = (data: ConfirmationData | null) => {
+    oasisWindow.oasisSetPendingConfirmationRelay = (
+      data: ConfirmationData | null
+    ) => {
       setPendingConfirmation(data);
+    };
+    oasisWindow.oasisSetPendingClarificationRelay = (
+      data: ClarificationData | null
+    ) => {
+      setPendingClarification(data);
     };
 
     return () => {
@@ -47,9 +59,12 @@ export function useAssistantBridge(params: {
       oasisWindow.oasisRecordToolActionUpdate = previousRecordUpdate;
       oasisWindow.resetAssistantSession = previousResetAssistantSession;
       oasisWindow.oasisSetPendingConfirmationRelay = previousPendingRelay;
+      oasisWindow.oasisSetPendingClarificationRelay =
+        previousClarificationRelay;
     };
   }, [
     resetAssistantSession,
+    setPendingClarification,
     setPendingConfirmation,
     startToolAction,
     updateToolAction,

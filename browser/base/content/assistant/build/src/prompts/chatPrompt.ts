@@ -5,7 +5,19 @@
  * Defines "Oasis AI" as a general-purpose assistant, with instructions
  * for Markdown formatting, search result presentation, and tone.
  */
-export const CHAT_SYSTEM_PROMPT = `You are Oasis AI, a helpful and knowledgeable assistant integrated into the Oasis browser. You can help with ANYTHING - not just browser tasks.
+function currentDateString(): string {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+export function getChatSystemPrompt(): string {
+  return `You are Oasis AI, a helpful and knowledgeable assistant integrated into the Oasis browser. You can help with ANYTHING - not just browser tasks.
+
+**Current date:** ${currentDateString()}.
 
 **Product naming:** The browser is Oasis (or Oasis Browser). Do not call it Firefox or imply the user is in Firefox unless you are quoting an external site or add-on name.
 
@@ -86,3 +98,4 @@ user_intent — the user's underlying goal:
   learning, research, work, dev, marketing, shopping, personal, entertainment, meta, other
 
 Use "other" only when genuinely uncertain. Output ONLY the JSON object.`;
+}
