@@ -23,6 +23,7 @@ import { localMemory } from "./localMemory";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import type { UsageMeta } from "../assistant/messageUtils.js";
 import type { QuotaResult } from "../proxyClient.js";
+import { isOasisDataCollectionIdentified } from "./telemetryConsent.js";
 
 // Plan Limits (Units per month)
 // Plan A ($20): 1500 units
@@ -136,7 +137,6 @@ export class SubscriptionService {
   private cachedDailyTokenLimitSupabase: number | null = null;
   private cachedFeedbackBonusTokensToday: number = 0;
   private cachedPlanNameKey: string = "free";
-  private cachedOptInPersonalizedTraining: boolean = false;
 
   private constructor() {}
 
@@ -326,7 +326,7 @@ export class SubscriptionService {
   }
 
   public getOptInPersonalizedTraining(): boolean {
-    return this.cachedOptInPersonalizedTraining;
+    return isOasisDataCollectionIdentified();
   }
 
   /**
@@ -407,11 +407,14 @@ export class SubscriptionService {
 
     // Async fire-and-forget insert to not block UI
     const supabase = (supabaseAuth as any).supabase;
+    const telemetryIdentified =
+      meta?.telemetry_identified ?? isOasisDataCollectionIdentified();
+    const rowUserId = telemetryIdentified ? user.id : null;
 
     supabase
       .from("llm_usage")
       .insert({
-        user_id: user.id,
+        user_id: rowUserId,
         tokens_used: units,
         usage_count: units,
         model_used: `${type}:${model}`,
@@ -674,14 +677,6 @@ export class SubscriptionService {
       }
     }
     this.cachedPlanNameKey = planNameKey;
-
-    const { data: prefRow } = await supabase
-      .from("users")
-      .select("opt_in_personalized_training")
-      .eq("user_id", userId)
-      .maybeSingle();
-    this.cachedOptInPersonalizedTraining =
-      prefRow?.opt_in_personalized_training ?? false;
 
     this.cachedDailyTokenLimitSupabase =
       dailyTokLimit ??

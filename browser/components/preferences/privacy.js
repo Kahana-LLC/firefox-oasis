@@ -3979,10 +3979,12 @@ var gPrivacyPane = {
         "command",
         gPrivacyPane.updateSubmitHealthReportToPref
       );
-      if (AppConstants.MOZ_NORMANDY) {
-        this.initOptOutStudyCheckbox();
+      if (AppConstants.MOZ_TELEMETRY_REPORTING) {
+        if (AppConstants.MOZ_NORMANDY) {
+          this.initOptOutStudyCheckbox();
+        }
+        this.initAddonRecommendationsCheckbox();
       }
-      this.initAddonRecommendationsCheckbox();
     }
 
     let signonBundle = document.getElementById("signonBundle");
@@ -5563,21 +5565,31 @@ var gPrivacyPane = {
     let checkbox = document.getElementById("submitHealthReportBox");
     let telemetryContainer = document.getElementById("telemetry-container");
 
-    // Telemetry is only sending data if MOZ_TELEMETRY_REPORTING is defined.
-    // We still want to display the preferences panel if that's not the case, but
-    // we want it to be disabled and unchecked.
-    if (
-      Services.prefs.prefIsLocked(PREF_UPLOAD_ENABLED) ||
-      !AppConstants.MOZ_TELEMETRY_REPORTING
-    ) {
+    if (Services.prefs.prefIsLocked(PREF_UPLOAD_ENABLED)) {
       checkbox.setAttribute("disabled", "true");
       return;
     }
 
-    checkbox.checked =
-      Services.prefs.getBoolPref(PREF_UPLOAD_ENABLED) &&
-      AppConstants.MOZ_TELEMETRY_REPORTING;
-    telemetryContainer.hidden = checkbox.checked;
+    checkbox.removeAttribute("disabled");
+
+    const uploadEnabled = Services.prefs.getBoolPref(
+      PREF_UPLOAD_ENABLED,
+      false
+    );
+
+    if (AppConstants.MOZ_TELEMETRY_REPORTING) {
+      checkbox.checked = uploadEnabled;
+      if (telemetryContainer) {
+        telemetryContainer.hidden = checkbox.checked;
+      }
+    } else {
+      // Oasis assistant interaction telemetry (Supabase) still honors this pref
+      // when Mozilla Toolkit telemetry is not compiled in.
+      checkbox.checked = uploadEnabled;
+      if (telemetryContainer) {
+        telemetryContainer.hidden = true;
+      }
+    }
   },
 
   /**
@@ -5588,7 +5600,9 @@ var gPrivacyPane = {
     let telemetryContainer = document.getElementById("telemetry-container");
 
     Services.prefs.setBoolPref(PREF_UPLOAD_ENABLED, checkbox.checked);
-    telemetryContainer.hidden = checkbox.checked;
+    if (AppConstants.MOZ_TELEMETRY_REPORTING && telemetryContainer) {
+      telemetryContainer.hidden = checkbox.checked;
+    }
   },
 
   /**

@@ -42780,7 +42780,7 @@ Content: ${content}`;
     APP_VERSION: "1.0.0",
     LOG_LEVEL: "info",
     /** Collect rich per-interaction telemetry (tab URL, platform, latency).
-     *  Off by default; requires backend `llm_usage.metadata` JSONB column. */
+     *  Identifiable fields gated by Privacy pref datareporting.healthreport.uploadEnabled. */
     RICH_TELEMETRY_ENABLED: true,
     validate() {
       if (!this.SUPABASE_URL) {
@@ -43513,6 +43513,20 @@ Content: ${content}`;
     window.supabaseAuth = supabaseAuth;
   }
 
+  // src/services/telemetryConsent.ts
+  var OASIS_DATA_COLLECTION_PREF = "datareporting.healthreport.uploadEnabled";
+  function isOasisDataCollectionIdentified() {
+    const { Services } = getChromeContext();
+    if (!Services?.prefs?.getBoolPref) {
+      return false;
+    }
+    try {
+      return Services.prefs.getBoolPref(OASIS_DATA_COLLECTION_PREF, false);
+    } catch {
+      return false;
+    }
+  }
+
   // src/services/subscription.ts
   var PLAN_LIMITS = {
     free: 50,
@@ -43593,7 +43607,6 @@ Content: ${content}`;
     cachedDailyTokenLimitSupabase = null;
     cachedFeedbackBonusTokensToday = 0;
     cachedPlanNameKey = "free";
-    cachedOptInPersonalizedTraining = false;
     constructor() {
     }
     static getInstance() {
@@ -43734,7 +43747,7 @@ Content: ${content}`;
       return this.cachedPlanNameKey;
     }
     getOptInPersonalizedTraining() {
-      return this.cachedOptInPersonalizedTraining;
+      return isOasisDataCollectionIdentified();
     }
     /**
      * Track usage for a command
@@ -43794,8 +43807,10 @@ Content: ${content}`;
       logDebug2(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
       localMemory.saveUsage(user.id, this.cachedUsage).catch((e2) => logError2("Failed to save local usage:", e2));
       const supabase = supabaseAuth.supabase;
+      const telemetryIdentified = meta?.telemetry_identified ?? isOasisDataCollectionIdentified();
+      const rowUserId = telemetryIdentified ? user.id : null;
       supabase.from("llm_usage").insert({
-        user_id: user.id,
+        user_id: rowUserId,
         tokens_used: units,
         usage_count: units,
         model_used: `${type}:${model}`,
@@ -43990,8 +44005,6 @@ Content: ${content}`;
         }
       }
       this.cachedPlanNameKey = planNameKey;
-      const { data: prefRow } = await supabase.from("users").select("opt_in_personalized_training").eq("user_id", userId).maybeSingle();
-      this.cachedOptInPersonalizedTraining = prefRow?.opt_in_personalized_training ?? false;
       this.cachedDailyTokenLimitSupabase = dailyTokLimit ?? PLAN_DAILY_TOKEN_LIMITS[planNameKey] ?? DEFAULT_DAILY_TOKEN_LIMIT;
       const startOfUtcDay = /* @__PURE__ */ new Date();
       startOfUtcDay.setUTCHours(0, 0, 0, 0);
@@ -66346,29 +66359,21 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     const interactionId = crypto.randomUUID();
     const currentUser = await supabaseAuth4.getCurrentUser();
     const isAuthenticated = currentUser !== null;
+    const dataCollectionIdentified = isOasisDataCollectionIdentified();
     let interactionPayload;
     if (ENV.RICH_TELEMETRY_ENABLED) {
       const { gBrowser } = getChromeContext();
       const activeTab = gBrowser?.selectedTab ?? null;
-      let optIn = false;
-      if (currentUser) {
-        try {
-          const { data } = await supabaseAuth4.supabase.rpc("get_personalized_training_opt_in");
-          optIn = data ?? false;
-        } catch {
-          optIn = false;
-        }
-      }
-      const userBlock = optIn && currentUser ? {
+      const userBlock = dataCollectionIdentified && currentUser ? {
         user_id: currentUser.id,
         email: currentUser.email ?? "",
         role: "user",
-        locale: navigator.language,
-        opt_in_personalized_training: true
+        locale: navigator.language || "en-US",
+        opt_in_data_collection_use: true
       } : void 0;
       interactionPayload = {
         interaction_id: interactionId,
-        session_id: optIn ? currentSessionId : crypto.randomUUID(),
+        session_id: dataCollectionIdentified ? currentSessionId : crypto.randomUUID(),
         timestamp: new Date(startTime).toISOString(),
         app_version: ENV.APP_VERSION,
         client: {
@@ -66384,7 +66389,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         },
         prompt: {
           text: prompt,
-          language: navigator.language
+          language: navigator.language || "en-US"
         },
         ...userBlock ? { user: userBlock } : {}
       };
@@ -66441,6 +66446,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
           const enrichedMeta = {
             ...meta ?? { command_type: "other", user_intent: "other", input_tokens: null, output_tokens: null },
             interaction_id: interactionId,
+            telemetry_identified: dataCollectionIdentified,
             ...ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}
           };
           subscriptionService.trackUsage(nextInputType, void 0, enrichedMeta);

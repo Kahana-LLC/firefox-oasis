@@ -7,9 +7,12 @@
 -- {
 --   interaction_id, session_id, timestamp, app_version,
 --   client:  { browser_name, browser_version, os, platform },
---   context: { active_tab_url, active_tab_title, org_tier }
+--   context: { active_tab_url, active_tab_title, org_tier },
+--   prompt, response, tool_trace,
+--   user: { user_id, email, role, locale, opt_in_data_collection_use }  -- only when
+--     datareporting.healthreport.uploadEnabled is true (Privacy > Data Collection)
 -- }
--- prompt, response, tool_trace, feedback blocks added in Phase 2–3.
+-- llm_usage.user_id is NULL for anonymous telemetry rows; auth.uid() when identified.
 
 -- -----------------------------------------------------------------------------
 -- llm_usage: add interaction_id + interaction_data

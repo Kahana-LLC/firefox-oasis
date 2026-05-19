@@ -1935,6 +1935,14 @@ addon-recommendations-description = Get extension recommendations to improve you
 # or builds with no Telemetry support available.
 collection-health-report-disabled2 = Data reporting is disabled for this build configuration.
 
+preferences-collection-description-oasis = Oasis collects assistant interaction data to improve the product. You choose whether that data is linked to your account or stored anonymously.
+
+collection-oasis-assistant-personalization =
+    .label = Personalize Oasis Assistant with my account
+    .accesskey = p
+collection-oasis-assistant-personalization-description = On: We may store your assistant prompts, replies, and browsing context (such as the active tab) with your account so Oasis can personalize responses, improve features, and support training. Off: The same interaction data is stored without your email or account id; we cannot tie it back to you for personalization.
+collection-oasis-assistant-personalization-link = Learn more
+
 collection-backlogged-crash-reports2 =
     .label = Automatically send crash reports
     .accesskey = c

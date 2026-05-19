@@ -50,9 +50,9 @@ export type InteractionContext = {
 export type InteractionUser = {
   user_id: string;
   email: string;
-  role: "user";
+  role: string;
   locale: string;
-  opt_in_personalized_training: true;
+  opt_in_data_collection_use: true;
 };
 
 export type ToolTraceEntry = {
@@ -92,6 +92,8 @@ export type UsageMeta = {
   output_tokens: number | null;
   interaction_id?: string;
   interaction_payload?: InteractionPayload;
+  /** When false, llm_usage.user_id is null (anonymous rich telemetry). */
+  telemetry_identified?: boolean;
 };
 
 const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {

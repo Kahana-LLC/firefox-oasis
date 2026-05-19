@@ -5,7 +5,7 @@ export const ENV = {
   APP_VERSION: "1.0.0",
   LOG_LEVEL: "info",
   /** Collect rich per-interaction telemetry (tab URL, platform, latency).
-   *  Off by default; requires backend `llm_usage.metadata` JSONB column. */
+   *  Identifiable fields gated by Privacy pref datareporting.healthreport.uploadEnabled. */
   RICH_TELEMETRY_ENABLED: true,
   validate(): void {
     if (!this.SUPABASE_URL) {

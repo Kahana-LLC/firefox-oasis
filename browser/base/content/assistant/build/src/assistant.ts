@@ -42,6 +42,7 @@ import voiceInputService from "./services/voiceInput";
 import voiceAgent from "./services/voiceAgent";
 import { textToSpeech } from "./proxyClient.js";
 import { ENV } from "./config/env.js";
+import { isOasisDataCollectionIdentified } from "./services/telemetryConsent.js";
 import type { AssistantWindowLike } from "./types/runtime";
 import {
   OASIS_EVENT_HISTORY_UPDATE,
@@ -151,34 +152,27 @@ export async function runAssistantStream(
   const interactionId = crypto.randomUUID();
   const currentUser = await supabaseAuth.getCurrentUser();
   const isAuthenticated = currentUser !== null;
+  const dataCollectionIdentified = isOasisDataCollectionIdentified();
 
   let interactionPayload: InteractionPayload | undefined;
   if (ENV.RICH_TELEMETRY_ENABLED) {
     const { gBrowser } = getChromeContext();
     const activeTab = gBrowser?.selectedTab ?? null;
-    let optIn = false;
-    if (currentUser) {
-      try {
-        const { data } = await (supabaseAuth as any).supabase
-          .rpc("get_personalized_training_opt_in");
-        optIn = data ?? false;
-      } catch {
-        optIn = false;
-      }
-    }
     const userBlock: InteractionUser | undefined =
-      optIn && currentUser
+      dataCollectionIdentified && currentUser
         ? {
             user_id: currentUser.id,
             email: currentUser.email ?? "",
             role: "user",
-            locale: navigator.language,
-            opt_in_personalized_training: true,
+            locale: navigator.language || "en-US",
+            opt_in_data_collection_use: true,
           }
         : undefined;
     interactionPayload = {
       interaction_id: interactionId,
-      session_id: optIn ? currentSessionId : crypto.randomUUID(),
+      session_id: dataCollectionIdentified
+        ? currentSessionId
+        : crypto.randomUUID(),
       timestamp: new Date(startTime).toISOString(),
       app_version: ENV.APP_VERSION,
       client: {
@@ -194,7 +188,7 @@ export async function runAssistantStream(
       },
       prompt: {
         text: prompt,
-        language: navigator.language,
+        language: navigator.language || "en-US",
       },
       ...(userBlock ? { user: userBlock } : {}),
     };
@@ -264,6 +258,7 @@ export async function runAssistantStream(
         const enrichedMeta: typeof meta = {
           ...(meta ?? { command_type: "other", user_intent: "other", input_tokens: null, output_tokens: null }),
           interaction_id: interactionId,
+          telemetry_identified: dataCollectionIdentified,
           ...(ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}),
         };
         subscriptionService.trackUsage(nextInputType, undefined, enrichedMeta);

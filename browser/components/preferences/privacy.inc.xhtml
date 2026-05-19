@@ -902,7 +902,11 @@
   <label class="search-header" hidden="true"><html:h2 data-l10n-id="collection-header2" data-l10n-attrs="searchkeywords"/></label>
 
   <description class="description-deemphasized">
+#ifdef MOZ_TELEMETRY_REPORTING
     <html:span data-l10n-id="preferences-collection-description"/>
+#else
+    <html:span data-l10n-id="preferences-collection-description-oasis"/>
+#endif
     <html:a id="dataCollectionPrivacyNotice"
             class="learnMore"
             target="_blank"
@@ -917,6 +921,7 @@
             data-l10n-id="preferences-view-profiles"/>
   </description>
 #ifdef MOZ_DATA_REPORTING
+#ifdef MOZ_TELEMETRY_REPORTING
   <hbox id="telemetry-container" class="info-box-container smaller-font-size" hidden="true">
     <hbox class="info-icon-container">
       <html:img class="info-icon"></html:img>
@@ -930,23 +935,34 @@
               target="_blank"/>
     </description>
   </hbox>
+#endif
 
   <vbox data-subcategory="reports">
+#ifdef MOZ_TELEMETRY_REPORTING
     <checkbox id="submitHealthReportBox"
               data-l10n-id="collection-health-report2"/>
     <description class="indent tip-caption">
-#ifdef MOZ_TELEMETRY_REPORTING
       <html:span data-l10n-id="collection-health-report-description"/>
-#else # !MOZ_TELEMETRY_REPORTING
-      <html:span data-l10n-id="collection-health-report-disabled2"/>
-#endif # MOZ_TELEMETRY_REPORTING
       <html:a id="FHRLearnMore"
               href="https://kahana.co/docs/technical-and-interaction-data"
               class="learnMore"
               data-l10n-id="collection-health-report-link"
               target="_blank"/>
     </description>
+#else
+    <checkbox id="submitHealthReportBox"
+              data-l10n-id="collection-oasis-assistant-personalization"/>
+    <description class="indent tip-caption">
+      <html:span data-l10n-id="collection-oasis-assistant-personalization-description"/>
+      <html:a id="FHRLearnMore"
+              href="https://kahana.co/docs/technical-and-interaction-data"
+              class="learnMore"
+              data-l10n-id="collection-oasis-assistant-personalization-link"
+              target="_blank"/>
+    </description>
+#endif
 
+#ifdef MOZ_TELEMETRY_REPORTING
     <vbox class="indent">
       <checkbox id="addonRecommendationEnabled"
                 data-l10n-id="addon-recommendations2"/>
@@ -982,6 +998,7 @@
               class="learnMore"
               target="_blank"/>
     </description>
+#endif # MOZ_TELEMETRY_REPORTING
 
 #ifdef MOZ_CRASHREPORTER
     <checkbox id="automaticallySubmitCrashesBox"
