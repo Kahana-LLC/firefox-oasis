@@ -2144,6 +2144,7 @@ pref(
   "datareporting.policy.firstRunURL",
   "https://kahana.co/privacy-policy#personal-data-collect"
 );
+pref("datareporting.healthreport.uploadEnabled", false);
 pref("browser.oasis.user.name", "");
 pref("browser.oasis.import.history", false);
 pref("browser.oasis.import.bookmarks", false);
