@@ -57,6 +57,16 @@ export function buildAssistRouterPrompt(
     "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) → search_history.",
     "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' → search_memory.",
 
+    "SITE-SPECIFIC NAVIGATION (MUST route to a command, NEVER respond with chat):",
+    "- When the user wants to play, watch, or find a video on YouTube, route to play_video with the search query. Do NOT return chat.",
+    "- When the user wants to find something on a specific site (e.g. Medium, Reddit, GitHub, Amazon, Wikipedia), route to open_url with that site's search URL. Do NOT return chat. Common patterns:",
+    "  Medium: https://medium.com/search?q=<query>",
+    "  Reddit: https://www.reddit.com/search/?q=<query>",
+    "  GitHub: https://github.com/search?q=<query>",
+    "  Amazon: https://www.amazon.com/s?k=<query>",
+    "  Wikipedia: https://en.wikipedia.org/w/index.php?search=<query>",
+    "- If the user says 'on YouTube/Medium/Reddit/etc.', ALWAYS route to the appropriate command. NEVER use web_search or chat for these.",
+
     "SPLIT VIEW:",
     "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
     "- For removing split view or unsplitting, prefer remove_split_view.",

@@ -514,6 +514,68 @@ export class WebSearchCommand implements Command {
   }
 }
 
+async function fetchFirstVideoId(query: string): Promise<string | null> {
+  try {
+    const resp = await fetch("https://www.youtube.com/youtubei/v1/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: {
+          client: { clientName: "WEB", clientVersion: "2.20240101.00.00" },
+        },
+        query,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const contents =
+      data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+        ?.sectionListRenderer?.contents;
+    if (!Array.isArray(contents)) return null;
+    for (const section of contents) {
+      const items = section?.itemSectionRenderer?.contents;
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        const videoId = item?.videoRenderer?.videoId;
+        if (typeof videoId === "string" && videoId) return videoId;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+export class PlayVideoCommand implements Command {
+  commandName = "play_video";
+  description =
+    "Search YouTube and play the top video result in a new tab. Arguments: { query: string }.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { topWin } = getChrome();
+    const query = stringArg(args, "query");
+    if (!query) {
+      return { message: "Missing 'query' argument." };
+    }
+    if (!topWin?.openTrustedLinkIn) {
+      return { message: "Cannot open video (openTrustedLinkIn not found)." };
+    }
+
+    const videoId = await fetchFirstVideoId(query);
+    if (videoId) {
+      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      topWin.openTrustedLinkIn(watchUrl, "tab");
+      return { message: `Playing top YouTube result for "${query}": ${watchUrl}` };
+    }
+
+    const fallbackUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    topWin.openTrustedLinkIn(fallbackUrl, "tab");
+    return {
+      message: `Couldn't auto-play the top result. Opened YouTube search for "${query}" instead.`,
+    };
+  }
+}
+
 export class OpenTabCommand implements Command {
   commandName = "open_tab";
   description =

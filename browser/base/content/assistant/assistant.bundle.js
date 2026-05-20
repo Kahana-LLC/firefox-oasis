@@ -51921,6 +51921,60 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       return { message: `Opened web search for "${query}" in a new tab.` };
     }
   };
+  async function fetchFirstVideoId(query) {
+    try {
+      const resp = await fetch("https://www.youtube.com/youtubei/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: {
+            client: { clientName: "WEB", clientVersion: "2.20240101.00.00" }
+          },
+          query
+        }),
+        signal: AbortSignal.timeout(8e3)
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+      if (!Array.isArray(contents)) return null;
+      for (const section of contents) {
+        const items = section?.itemSectionRenderer?.contents;
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          const videoId = item?.videoRenderer?.videoId;
+          if (typeof videoId === "string" && videoId) return videoId;
+        }
+      }
+    } catch {
+    }
+    return null;
+  }
+  var PlayVideoCommand = class {
+    commandName = "play_video";
+    description = "Search YouTube and play the top video result in a new tab. Arguments: { query: string }.";
+    async execute(args) {
+      const { topWin } = getChrome2();
+      const query = stringArg(args, "query");
+      if (!query) {
+        return { message: "Missing 'query' argument." };
+      }
+      if (!topWin?.openTrustedLinkIn) {
+        return { message: "Cannot open video (openTrustedLinkIn not found)." };
+      }
+      const videoId = await fetchFirstVideoId(query);
+      if (videoId) {
+        const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        topWin.openTrustedLinkIn(watchUrl, "tab");
+        return { message: `Playing top YouTube result for "${query}": ${watchUrl}` };
+      }
+      const fallbackUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+      topWin.openTrustedLinkIn(fallbackUrl, "tab");
+      return {
+        message: `Couldn't auto-play the top result. Opened YouTube search for "${query}" instead.`
+      };
+    }
+  };
   var OpenTabCommand = class {
     commandName = "open_tab";
     description = "Legacy alias that opens a URL or web query in a new tab. Prefer open_url({url}) or web_search({query}).";
@@ -53482,6 +53536,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
     list_tabs: `{"scope?":"window|tab-group|bookmark-folder","name?":"string"}`,
     open_url: `{"url":"string"}`,
     web_search: `{"query":"string"}`,
+    play_video: `{"query":"string"}`,
     open_tab: `{"url":"string"} (legacy alias; prefer open_url/web_search)`,
     close_tab: `{"index?":"number","confirmed?":"boolean"}`,
     move_tab_to_new_window: `{"index?":"number"}`,
@@ -53527,6 +53582,7 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       new ListTabsCommand(),
       new OpenUrlCommand(),
       new WebSearchCommand(),
+      new PlayVideoCommand(),
       new OpenTabCommand(),
       new CloseTabCommand(),
       new ReloadTabCommand(),
@@ -54960,6 +55016,15 @@ Do NOT mention that you received page content or reference this instruction. Jus
       "- search_memory does NOT search browsing history \u2014 use search_history instead.",
       "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) \u2192 search_history.",
       "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' \u2192 search_memory.",
+      "SITE-SPECIFIC NAVIGATION (MUST route to a command, NEVER respond with chat):",
+      "- When the user wants to play, watch, or find a video on YouTube, route to play_video with the search query. Do NOT return chat.",
+      "- When the user wants to find something on a specific site (e.g. Medium, Reddit, GitHub, Amazon, Wikipedia), route to open_url with that site's search URL. Do NOT return chat. Common patterns:",
+      "  Medium: https://medium.com/search?q=<query>",
+      "  Reddit: https://www.reddit.com/search/?q=<query>",
+      "  GitHub: https://github.com/search?q=<query>",
+      "  Amazon: https://www.amazon.com/s?k=<query>",
+      "  Wikipedia: https://en.wikipedia.org/w/index.php?search=<query>",
+      "- If the user says 'on YouTube/Medium/Reddit/etc.', ALWAYS route to the appropriate command. NEVER use web_search or chat for these.",
       "SPLIT VIEW:",
       "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
       "- For removing split view or unsplitting, prefer remove_split_view.",
