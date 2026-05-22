@@ -59,7 +59,7 @@ function formatListBookmarkFolders(message: string): string {
   if (rows.length === 0) {
     return message;
   }
-  return formatLines("Here are your bookmark folders:", rows);
+  return formatLines("I've found these bookmark folders for you:", rows);
 }
 
 function formatListTabGroups(message: string): string {
@@ -82,7 +82,7 @@ function formatListTabGroups(message: string): string {
     const collapsed = row.collapsed === true ? "collapsed" : "expanded";
     return `${name} (${tabCount} tabs, ${collapsed})`;
   });
-  return formatLines("Here are your tab groups:", lines);
+  return formatLines("Here are the tab groups you currently have open:", lines);
 }
 
 function extractJsonArrayTail(message: string): unknown {
@@ -101,7 +101,7 @@ function formatListTabs(message: string): string {
   const parsedTop = safeParseJson(message);
   const strings = toStringList(parsedTop);
   if (strings.length > 0) {
-    return formatLines("Here are your open tabs:", strings);
+    return formatLines("Sure, here are your open tabs:", strings);
   }
 
   const tail = extractJsonArrayTail(message);
@@ -117,7 +117,7 @@ function formatListTabs(message: string): string {
     const url = typeof row.url === "string" ? row.url : "";
     return url ? `${title} (${url})` : title;
   });
-  return formatLines(`Here are the tabs in ${container}:`, lines);
+  return formatLines(`I found these tabs in ${container}:`, lines);
 }
 
 function formatSearchResults(message: string): string {
@@ -131,7 +131,7 @@ function formatSearchResults(message: string): string {
     return message;
   }
   const summary =
-    typeof parsed.summary === "string" ? parsed.summary.trim() : "Search results:";
+    typeof parsed.summary === "string" ? parsed.summary.trim() : "I found these results for you:";
   const rows = toObjectList<SearchResultRow>(parsed.results).slice(0, 10);
   if (rows.length === 0) {
     return summary || message;
@@ -175,13 +175,13 @@ function formatHistorySearchResults(message: string): string {
       ? `${idx}[**${title}**](${url})${relevance}${visited}`
       : `${idx}**${title}**${relevance}${visited}`;
   });
-  return `Here's what I found in your browsing history:\n\n${lines.join("\n\n")}`;
+  return `I've looked through your history and found these matches:\n\n${lines.join("\n\n")}`;
 }
 
 export function presentToolResult(payload: ToolResultPayload): string {
   const message = String(payload.message || "").trim();
   if (!message) {
-    return "Done.";
+    return "I've taken care of that for you.";
   }
 
   switch (payload.commandName) {

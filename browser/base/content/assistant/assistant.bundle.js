@@ -49384,14 +49384,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
 
   // src/utils/intentParser.ts
-  var ACTION_WORD_RE = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy)\b/i;
+  var ACTION_WORD_RE = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
   var ACTION_OBJECT_RE = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|url|result|split)\b/i;
   var LIST_VERB_RE = /^list\b/i;
   var SHOW_VERB_RE = /^show\b/i;
   var LIST_OBJECT_RE = /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
   var SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked|read|looked\s+at)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+(?:save|read|visit|look\s+at|browse))\s+/i;
   var HISTORY_FAMILY_RE = /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
-  var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
+  var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
   var GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
   var FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
   var GENERIC_FOLDER_NAME_RE = /^(?:bookmark(?:\s+folders?)?|folders?|hubs?)$/i;
@@ -51824,7 +51824,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!topWin?.OpenBrowserWindow)
         return { message: "Browser UI not available." };
       topWin.OpenBrowserWindow();
-      return { message: "Successfully opened a new window." };
+      return { message: "I've opened a new window for you." };
     }
   };
   var OrganizeWindowsCommand = class {
@@ -51862,7 +51862,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         win.resizeTo(windowWidth, availHeight);
         win.moveTo(xPos, availTop);
       }
-      return { message: `Organized ${numWindows} windows side-by-side.` };
+      return { message: `I've arranged your ${numWindows} windows side-by-side.` };
     }
   };
   var ShowURLCommand = class {
@@ -51875,7 +51875,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const url = stringArg(args, "url");
       if (!url) return { message: "Missing 'url' argument." };
       topWin.openTrustedLinkIn(url, "tab");
-      return { message: `Successfully opened URL: ${url}` };
+      return { message: `I've opened that URL for you: ${url}` };
     }
   };
   var OpenUrlCommand = class {
@@ -51901,7 +51901,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         assistantLogger.warn("commands", "Failed to fixup URI", error);
       }
       topWin.openTrustedLinkIn(url, "tab");
-      return { message: `Opened URL in a new tab: ${url}` };
+      return { message: `I've opened that site in a new tab: ${url}` };
     }
   };
   var WebSearchCommand = class {
@@ -51918,7 +51918,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       }
       const searchUrl = toWebSearchUrl(query);
       topWin.openTrustedLinkIn(searchUrl, "tab");
-      return { message: `Opened web search for "${query}" in a new tab.` };
+      return { message: `I've opened a web search for "${query}" in a new tab.` };
     }
   };
   var OpenTabCommand = class {
@@ -51957,14 +51957,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           description: `Close tab "${title}"?`
         });
         return {
-          message: `Requesting confirmation to close tab "${title}"...`,
+          message: `Sure, I'll close the tab "${title}". Is that okay?`,
           requiresConfirmation: true,
           confirmationData: { title }
         };
       }
       clearPendingConfirmation();
       gBrowser.removeTab?.(tab);
-      return { message: `Closed tab: ${title}` };
+      return { message: `I've closed the tab: ${title}` };
     }
   };
   var ReloadTabCommand = class {
@@ -51979,7 +51979,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.reloadTab(tab);
-      return { message: `Reloaded tab: ${tabTitle(tab)}` };
+      return { message: `I've reloaded that tab for you: ${tabTitle(tab)}` };
     }
   };
   var ToggleMuteTabCommand = class {
@@ -51996,7 +51996,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (typeof toggle !== "function")
         return { message: "Mute is not available for this tab." };
       toggle.call(tab);
-      return { message: `Toggled mute for: ${tabTitle(tab)}` };
+      return { message: `I've toggled the mute for you: ${tabTitle(tab)}` };
     }
   };
   var PinTabCommand = class {
@@ -52011,9 +52011,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       if (tab.pinned)
-        return { message: `Tab is already pinned: ${tabTitle(tab)}` };
+        return { message: `That tab is already pinned: ${tabTitle(tab)}` };
       gb.pinTab(tab, {});
-      return { message: `Pinned tab: ${tabTitle(tab)}` };
+      return { message: `I've pinned that tab for you: ${tabTitle(tab)}` };
     }
   };
   var UnpinTabCommand = class {
@@ -52027,9 +52027,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const tab = tabByIndexOrCurrent(gb, idx);
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
-      if (!tab.pinned) return { message: `Tab is not pinned: ${tabTitle(tab)}` };
+      if (!tab.pinned) return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
       gb.unpinTab(tab);
-      return { message: `Unpinned tab: ${tabTitle(tab)}` };
+      return { message: `I've unpinned that tab for you: ${tabTitle(tab)}` };
     }
   };
   var UnloadTabCommand = class {
@@ -52045,7 +52045,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       await gb.explicitUnloadTabs([tab]);
-      return { message: `Unloaded tab: ${tabTitle(tab)}` };
+      return { message: `I've unloaded that tab to save memory: ${tabTitle(tab)}` };
     }
   };
   var NewTabToRightCommand = class {
@@ -52063,7 +52063,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.addAdjacentNewTab(tab);
-      return { message: `Opened a new tab to the right of: ${tabTitle(tab)}` };
+      return { message: `I've opened a new tab to the right of: ${tabTitle(tab)}` };
     }
   };
   var DuplicateTabCommand = class {
@@ -52079,7 +52079,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.duplicateTab(tab);
-      return { message: `Duplicated tab: ${tabTitle(tab)}` };
+      return { message: `I've duplicated that tab for you: ${tabTitle(tab)}` };
     }
   };
   var BookmarkTabCommand = class {
@@ -52094,7 +52094,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       hook([tab]);
-      return { message: `Bookmarked tab: ${tabTitle(tab)}` };
+      return { message: `I've bookmarked that tab for you: ${tabTitle(tab)}` };
     }
   };
   var MoveTabToStartCommand = class {
@@ -52109,7 +52109,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.moveTabToStart(tab);
-      return { message: `Moved tab to start: ${tabTitle(tab)}` };
+      return { message: `I've moved that tab to the beginning: ${tabTitle(tab)}` };
     }
   };
   var MoveTabToEndCommand = class {
@@ -52124,7 +52124,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.moveTabToEnd(tab);
-      return { message: `Moved tab to end: ${tabTitle(tab)}` };
+      return { message: `I've moved that tab to the end: ${tabTitle(tab)}` };
     }
   };
   var SelectAllTabsCommand = class {
@@ -52135,7 +52135,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!gb?.selectAllTabs)
         return { message: "Browser UI (gBrowser.selectAllTabs) not available." };
       gb.selectAllTabs();
-      return { message: "Selected all tabs in this window." };
+      return { message: "I've selected all the tabs in this window for you." };
     }
   };
   var CloseDuplicateTabsCommand = class {
@@ -52152,7 +52152,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const dupes = gb.getDuplicateTabsToClose(tab);
       if (!dupes.length) {
-        return { message: "No duplicate tabs to close for this tab." };
+        return { message: "I didn't find any duplicate tabs to close." };
       }
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -52161,14 +52161,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           description: `Close ${dupes.length} duplicate tab(s)?`
         });
         return {
-          message: `Requesting confirmation to close ${dupes.length} duplicate tab(s)...`,
+          message: `I've found ${dupes.length} duplicate tab(s). Should I go ahead and close them?`,
           requiresConfirmation: true,
           confirmationData: { count: dupes.length }
         };
       }
       clearPendingConfirmation();
       gb.removeTabs(dupes, { isUserTriggered: true });
-      return { message: `Closed ${dupes.length} duplicate tab(s).` };
+      return { message: `I've closed ${dupes.length} duplicate tab(s) for you.` };
     }
   };
   var CloseTabsToRightCommand = class {
@@ -52185,7 +52185,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const toClose = gb._getTabsToTheEndFrom(tab);
       if (!toClose.length) {
-        return { message: "No tabs to the right to close." };
+        return { message: "There aren't any tabs to the right to close." };
       }
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -52194,14 +52194,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           description: `Close ${toClose.length} tab(s) to the right?`
         });
         return {
-          message: `Requesting confirmation to close ${toClose.length} tab(s) to the right...`,
+          message: `I've found ${toClose.length} tab(s) to the right. Should I close them?`,
           requiresConfirmation: true,
           confirmationData: { count: toClose.length }
         };
       }
       clearPendingConfirmation();
       gb.removeTabs(toClose, { isUserTriggered: true });
-      return { message: `Closed ${toClose.length} tab(s) to the right.` };
+      return { message: `I've closed ${toClose.length} tab(s) to the right.` };
     }
   };
   var CloseTabsToLeftCommand = class {
@@ -52218,7 +52218,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const toClose = gb._getTabsToTheStartFrom(tab);
       if (!toClose.length) {
-        return { message: "No tabs to the left to close." };
+        return { message: "There aren't any tabs to the left to close." };
       }
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -52227,14 +52227,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           description: `Close ${toClose.length} tab(s) to the left?`
         });
         return {
-          message: `Requesting confirmation to close ${toClose.length} tab(s) to the left...`,
+          message: `I've found ${toClose.length} tab(s) to the left. Should I close them?`,
           requiresConfirmation: true,
           confirmationData: { count: toClose.length }
         };
       }
       clearPendingConfirmation();
       gb.removeTabs(toClose, { isUserTriggered: true });
-      return { message: `Closed ${toClose.length} tab(s) to the left.` };
+      return { message: `I've closed ${toClose.length} tab(s) to the left.` };
     }
   };
   var CloseOtherTabsCommand = class {
@@ -52250,7 +52250,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       const others = getTabs(gb).filter((t2) => t2 !== tab && !t2.pinned);
       if (!others.length) {
-        return { message: "No other unpinned tabs to close." };
+        return { message: "There are no other unpinned tabs to close." };
       }
       if (booleanArg(args, "confirmed") !== true) {
         setPendingConfirmation({
@@ -52259,14 +52259,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           description: `Close ${others.length} other tab(s) (keeping "${tabTitle(tab)}")?`
         });
         return {
-          message: `Requesting confirmation to close ${others.length} other tab(s)...`,
+          message: `I've found ${others.length} other tab(s). Should I close them and keep "${tabTitle(tab)}"?`,
           requiresConfirmation: true,
           confirmationData: { count: others.length }
         };
       }
       clearPendingConfirmation();
       gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
-      return { message: `Closed other tabs (kept: ${tabTitle(tab)}).` };
+      return { message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.` };
     }
   };
   var ReopenClosedTabCommand = class {
@@ -52281,8 +52281,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         };
       const index2 = numberArg3(args, "index");
       const reopened = ss.undoCloseTab(topWin, index2 ?? 0);
-      if (!reopened) return { message: "No closed tab to reopen." };
-      return { message: "Reopened the last closed tab." };
+      if (!reopened) return { message: "I didn't find any recently closed tabs to reopen." };
+      return { message: "I've reopened the last tab you closed." };
     }
   };
   var OpenSendTabToDeviceCommand = class {
@@ -52296,11 +52296,11 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       );
       if (!sync?.showSendToDeviceViewFromFxaMenu || !anchor) {
         return {
-          message: "Could not open Send Tab to Device. Sign in to Sync and ensure the account toolbar button is visible."
+          message: "I couldn't open Send Tab to Device. Please make sure you're signed in to Sync and the account button is visible."
         };
       }
       sync.showSendToDeviceViewFromFxaMenu(anchor);
-      return { message: "Opened Send Tab to Device." };
+      return { message: "I've opened the Send Tab to Device menu for you." };
     }
   };
   var OpenTabNoteCommand = class {
@@ -52316,7 +52316,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       menu.openPanel(tab, {});
-      return { message: `Opened tab note for: ${tabTitle(tab)}` };
+      return { message: `I've opened the tab note for you: ${tabTitle(tab)}` };
     }
   };
   var MoveTabToNewWindowCommand = class {
@@ -52335,7 +52335,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const newWin = topWin.OpenBrowserWindow();
       await new Promise((r2) => setTimeout(r2, 250));
       newWin.gBrowser?.adoptTab?.(tab, 0);
-      return { message: `Moved tab to new window: ${title}` };
+      return { message: `I've moved the tab "${title}" to a new window for you.` };
     }
   };
   var CopyTabUrlsCommand = class {
@@ -52348,9 +52348,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const text2 = urls.join("\n");
       try {
         await navigator.clipboard.writeText(text2);
-        return { message: `Copied ${urls.length} URLs to clipboard.` };
+        return { message: `I've copied ${urls.length} URL(s) to your clipboard.` };
       } catch {
-        return { message: `Copied fallback. URLs:
+        return { message: `I couldn't access the clipboard, but here are the URLs:
 ${text2}` };
       }
     }
@@ -52369,7 +52369,7 @@ ${text2}` };
         name: res.name
       });
       return {
-        message: `Created bookmark folder "${res.name}" with ${res.count} items.`
+        message: `I've created the bookmark folder "${res.name}" with ${res.count} items for you.`
       };
     }
   };
@@ -52388,7 +52388,7 @@ ${text2}` };
           description: `Delete bookmark folder "${name}"${closeMsg}?`
         });
         return {
-          message: `Requesting confirmation to delete bookmark folder "${name}"${closeMsg}...`,
+          message: `Are you sure you want to delete the bookmark folder "${name}"${closeMsg}?`,
           requiresConfirmation: true,
           confirmationData: { name, closeTabs: closeTabs2 }
         };
@@ -52396,14 +52396,14 @@ ${text2}` };
       clearPendingConfirmation();
       const closeTabs = booleanArg(args, "closeTabs") === true;
       const res = await bookmarkFolders.delete(name, { closeTabs });
-      if (res.removed === 0) return { message: `No folder named "${name}".` };
+      if (res.removed === 0) return { message: `I couldn't find a folder named "${name}".` };
       applyRoutingStateMutation({
         kind: "delete",
         entity: "folder",
         name: res.name
       });
       return {
-        message: `Deleted bookmark folder "${res.name}" (${res.removed} items removed).`
+        message: `I've deleted the bookmark folder "${res.name}" and removed ${res.removed} items.`
       };
     }
   };
@@ -52412,7 +52412,7 @@ ${text2}` };
     description = "List all managed bookmark folders. Accepts no arguments.";
     async execute(_args) {
       const items = await bookmarkFolders.list();
-      if (!items.length) return { message: "No bookmark folders yet." };
+      if (!items.length) return { message: "You don't have any bookmark folders yet." };
       return {
         message: JSON.stringify(items.map((h2) => `${h2.name} (${h2.count})`))
       };
@@ -52425,7 +52425,7 @@ ${text2}` };
       const from = stringArg(args, "from");
       const to = stringArg(args, "to");
       if (!from || !to)
-        return { message: "Please provide old and new folder names." };
+        return { message: "Please tell me the current name and the new name for the folder." };
       const r2 = await bookmarkFolders.rename(from, to);
       if (r2.ok) {
         applyRoutingStateMutation({
@@ -52436,7 +52436,7 @@ ${text2}` };
         });
       }
       return {
-        message: r2.ok ? `Renamed "${from}" to "${to}".` : `Rename failed: ${r2.msg || "unknown error"}`
+        message: r2.ok ? `I've renamed "${from}" to "${to}" for you.` : `I couldn't rename the folder: ${r2.msg || "unknown error"}`
       };
     }
   };
@@ -52445,7 +52445,7 @@ ${text2}` };
     description = "Add tabs to a managed bookmark folder. Accepts arguments: { name: string, query?: string, all?: boolean } (query matches title/URL). all=true adds all tabs. If no query/all, adds current tab.";
     async execute(args) {
       const name = stringArg(args, "name");
-      if (!name) return { message: "Which folder should I add tabs to?" };
+      if (!name) return { message: "Which folder should I add the tabs to?" };
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI not available." };
       const query = normalizeQuery(stringArg(args, "query"));
@@ -52457,7 +52457,7 @@ ${text2}` };
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
           return {
-            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+            message: `I couldn't find any tabs matching "${stringArg(args, "query") || ""}".`
           };
         }
       } else {
@@ -52466,16 +52466,16 @@ ${text2}` };
           tabsToAdd = [current];
         }
       }
-      if (tabsToAdd.length === 0) return { message: "No tabs available to add." };
+      if (tabsToAdd.length === 0) return { message: "I don't see any tabs to add." };
       const r2 = await bookmarkFolders.addTabs(name, tabsToAdd);
-      if (!r2.ok) return { message: `Failed to add tabs to "${name}".` };
+      if (!r2.ok) return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
       applyRoutingStateMutation({
         kind: "upsert",
         entity: "folder",
         name
       });
       const count3 = tabsToAdd.length;
-      return { message: `Added ${count3} tab(s) to bookmark folder "${name}".` };
+      return { message: `I've added ${count3} tab(s) to your bookmark folder "${name}".` };
     }
   };
   var RemoveTabFromBookmarkFolderCommand = class {
@@ -52483,7 +52483,7 @@ ${text2}` };
     description = "Remove a tab from a managed bookmark folder. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
     async execute(args) {
       const name = stringArg(args, "name");
-      if (!name) return { message: "Which folder?" };
+      if (!name) return { message: "Which folder should I look in?" };
       let url = stringArg(args, "url");
       if (!url) {
         const { gBrowser } = getChrome2();
@@ -52491,10 +52491,10 @@ ${text2}` };
           url = tabUrl(gBrowser.selectedTab || null);
         }
       }
-      if (!url) return { message: "Could not determine URL to remove." };
+      if (!url) return { message: "I couldn't figure out which URL to remove." };
       const r2 = await bookmarkFolders.removeUrl(name, url);
       return {
-        message: r2.ok ? `Removed URL from folder "${name}".` : `Failed to remove URL from folder "${name}" (maybe not found).`
+        message: r2.ok ? `I've removed that URL from your folder "${name}".` : `I couldn't find that URL in the folder "${name}".`
       };
     }
   };
@@ -52503,12 +52503,12 @@ ${text2}` };
     description = "Open all bookmarks from a managed folder. Accepts arguments: { name: string, where?: 'tabs'|'window'|'tabgroup' }. 'tabgroup' creates a new visual group.";
     async execute(args) {
       const name = stringArg(args, "name");
-      if (!name) return { message: "Which folder should I open?" };
+      if (!name) return { message: "Which folder would you like me to open?" };
       const whereRaw = stringArg(args, "where");
       const where = whereRaw === "window" || whereRaw === "tabgroup" ? whereRaw : "tabs";
       const r2 = await bookmarkFolders.openFolder(name, where);
       return {
-        message: r2.ok ? `Opened folder "${name}" in ${where}.` : `Failed to open folder "${name}".`
+        message: r2.ok ? `I've opened the folder "${name}" in ${where} for you.` : `I'm sorry, I couldn't open the folder "${name}".`
       };
     }
   };
@@ -52523,7 +52523,7 @@ ${text2}` };
         false
       );
       if (!splitViewEnabled) {
-        return { message: "Split view is not enabled in this browser." };
+        return { message: "I'm sorry, split view isn't enabled in this browser." };
       }
       let tab1 = null;
       let tab2 = null;
@@ -52533,9 +52533,9 @@ ${text2}` };
         const i2 = Math.max(1, Math.floor(indices[1]));
         const first = tabByIndex(gBrowser, i1);
         const second2 = tabByIndex(gBrowser, i2);
-        if (!first) return { message: `No tab ${i1}.` };
-        if (!second2) return { message: `No tab ${i2}.` };
-        if (i1 === i2) return { message: "Cannot split a tab with itself." };
+        if (!first) return { message: `I couldn't find tab ${i1}.` };
+        if (!second2) return { message: `I couldn't find tab ${i2}.` };
+        if (i1 === i2) return { message: "I can't split a tab with itself." };
         tab1 = first;
         tab2 = second2;
       } else {
@@ -52545,12 +52545,12 @@ ${text2}` };
         if (withIndex != null) {
           const i2 = Math.max(1, Math.floor(withIndex));
           tab2 = tabByIndex(gBrowser, i2);
-          if (!tab2) return { message: `No tab ${i2}.` };
+          if (!tab2) return { message: `I couldn't find tab ${i2}.` };
         } else if (withQuery) {
           tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
           if (!tab2) {
             return {
-              message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`
+              message: `I couldn't find a tab matching "${stringArg(args, "withQuery") || ""}".`
             };
           }
         } else {
@@ -52558,18 +52558,18 @@ ${text2}` };
         }
       }
       if (!tab1 || !tab2)
-        return { message: "Unable to resolve tabs for split view." };
+        return { message: "I couldn't resolve the tabs for split view." };
       if (tab1 === tab2) {
-        return { message: "Cannot split a tab with itself." };
+        return { message: "I can't split a tab with itself." };
       }
       if (tab1.pinned || tab2.pinned) {
-        return { message: "Cannot add pinned tabs to split view." };
+        return { message: "I'm sorry, I can't add pinned tabs to split view." };
       }
       if (tab1.splitview) {
-        return { message: `Tab "${tab1.label}" is already in a split view.` };
+        return { message: `The tab "${tab1.label}" is already in a split view.` };
       }
       if (tab2.splitview) {
-        return { message: `Tab "${tab2.label}" is already in a split view.` };
+        return { message: `The tab "${tab2.label}" is already in a split view.` };
       }
       try {
         gBrowser.addTabSplitView?.([tab1, tab2], {
@@ -52578,10 +52578,10 @@ ${text2}` };
         const title1 = tabTitle(tab1);
         const title2 = tabTitle(tab2);
         return {
-          message: `Added split view: "${title1}" and "${title2}".`
+          message: `I've set up a split view with "${title1}" and "${title2}" for you.`
         };
       } catch (e2) {
-        return { message: `Failed to create split view: ${e2}` };
+        return { message: `I'm sorry, I failed to create the split view: ${e2}` };
       }
     }
   };
@@ -52592,16 +52592,16 @@ ${text2}` };
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI not available." };
       const currentTab = gBrowser.selectedTab;
-      if (!currentTab) return { message: "No active tab found." };
+      if (!currentTab) return { message: "I couldn't find an active tab." };
       const splitview = currentTab.splitview;
       if (!splitview?.unsplitTabs) {
-        return { message: "This tab is not in a split view." };
+        return { message: "This tab isn't in a split view." };
       }
       try {
         splitview.unsplitTabs();
-        return { message: "Split view removed. Tabs are now separate." };
+        return { message: "I've removed the split view and separated your tabs." };
       } catch (e2) {
-        return { message: `Failed to remove split view: ${e2}` };
+        return { message: `I couldn't remove the split view: ${e2}` };
       }
     }
   };
@@ -52615,14 +52615,14 @@ ${text2}` };
       const indices = numberArrayArg(args, "indices");
       if (indices.length < 2) {
         return {
-          message: "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] })."
+          message: "Please tell me at least two tab indices to split (for example: 1 and 2)."
         };
       }
       const tabs = [];
       for (const idx of indices) {
         const i2 = Math.max(1, Math.floor(idx));
         const tab = tabByIndex(gBrowser, i2);
-        if (!tab) return { message: `No tab ${i2}.` };
+        if (!tab) return { message: `I couldn't find tab ${i2}.` };
         tabs.push(tab);
       }
       const screen = topWin.screen;
@@ -52659,7 +52659,7 @@ ${text2}` };
         win.gBrowser?.adoptTab?.(tab, 0);
       }
       const tabTitles = windows.map((w3) => w3.title).join(", ");
-      return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
+      return { message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.` };
     }
   };
   var SummarizePageCommand = class {
@@ -52670,33 +52670,33 @@ ${text2}` };
       if (!gBrowser) return { message: "Browser UI not available." };
       const idx = numberArg3(args, "index");
       let tab = tabByIndexOrCurrent(gBrowser, idx);
-      if (idx != null && !tab) return { message: `No tab ${idx}.` };
+      if (idx != null && !tab) return { message: `I couldn't find tab ${idx}.` };
       const query = normalizeQuery(stringArg(args, "query"));
       if (query && !idx) {
         tab = findTabsByQuery(gBrowser, query)[0] || null;
         if (!tab) {
           return {
-            message: `No tab found matching "${stringArg(args, "query") || ""}".`
+            message: `I couldn't find a tab matching "${stringArg(args, "query") || ""}".`
           };
         }
       }
       const browser = tab?.linkedBrowser;
-      if (!browser) return { message: "No active tab found." };
+      if (!browser) return { message: "I couldn't find an active tab." };
       const url = browser.currentURI?.spec || "";
       const title = tabTitle(tab);
       if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
-        return { message: "Cannot summarize browser internal pages." };
+        return { message: "I'm sorry, I can't summarize internal browser pages." };
       }
       try {
         const currentWindowContext = browser.browsingContext?.currentWindowContext;
         if (!currentWindowContext) {
           return {
-            message: "Cannot access page content. The page may still be loading."
+            message: "I can't access the page content right now. Is it still loading?"
           };
         }
         const pageExtractor = currentWindowContext.getActor("PageExtractor");
         if (!pageExtractor) {
-          return { message: "Page content extractor not available." };
+          return { message: "The page content extractor isn't available." };
         }
         let content = "";
         try {
@@ -52719,7 +52719,7 @@ ${text2}` };
         content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
         if (!content || content.length < 50) {
           return {
-            message: "Not enough content found on this page to summarize."
+            message: "I didn't find enough content on this page to summarize."
           };
         }
         const maxLength = 12e3;
@@ -52735,7 +52735,7 @@ Content:
 ${content}`
         };
       } catch (e2) {
-        return { message: `Failed to extract page content: ${e2}` };
+        return { message: `I'm sorry, I couldn't extract the page content: ${e2}` };
       }
     }
   };
@@ -52747,7 +52747,7 @@ ${content}`
       const folder = stringArg(args, "folder");
       const source = stringArg(args, "source");
       const sourceScope = source === "bookmark-folder" ? "bookmark-folder" : void 0;
-      if (!query) return { message: "Missing 'query' argument." };
+      if (!query) return { message: "Please tell me what you'd like to search for." };
       let results = await localMemory.search(
         query,
         10,
@@ -52806,14 +52806,14 @@ ${content}`
             description: `No local matches found for "${query}". Search the web in a new tab?`
           });
           return {
-            message: `No local matches found for "${query}". Would you like me to open a web search in a new tab?`,
+            message: `I couldn't find any local matches for "${query}". Would you like me to try a web search for you?`,
             requiresConfirmation: true,
             confirmationData: { query, url: toWebSearchUrl(query) }
           };
         }
-        const guidance = folder ? ` Try "list tabs in bookmark folder ${folder}" to inspect what is saved there.` : "";
+        const guidance = folder ? ` Try asking me to "list tabs in bookmark folder ${folder}" to see what's saved there.` : "";
         return {
-          message: `No matches found for "${query}"${scopeSuffix}.${guidance}`
+          message: `I didn't find any matches for "${query}"${scopeSuffix}.${guidance}`
         };
       }
       const sourceMap = {
@@ -52851,7 +52851,7 @@ ${content}`
         });
       }
       const sourceCounts = Object.entries(resultsBySource).map(([src, items]) => `${items.length} from ${src}`).join(", ");
-      const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
+      const summary = `I've found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
       return {
         message: JSON.stringify({
           summary,
@@ -52871,7 +52871,7 @@ ${content}`
       if (recent.length === 0) {
         return {
           message: JSON.stringify({
-            summary: "No recent search results available.",
+            summary: "I don't have any recent search results to show you.",
             results: []
           })
         };
@@ -52887,7 +52887,7 @@ ${content}`
       }));
       return {
         message: JSON.stringify({
-          summary: `Found ${results.length} cached recent search result(s).`,
+          summary: `I've found ${results.length} cached recent search result(s) for you.`,
           results
         })
       };
@@ -52905,14 +52905,14 @@ ${content}`
         const recent = getRecentSearchResults();
         if (recent.length === 0) {
           return {
-            message: "No recent search result is available to open. Run a search first or pass a URL."
+            message: "I don't have any recent search results available. Would you like me to run a search first?"
           };
         }
         const targetIndex = index2 != null ? Math.max(1, Math.floor(index2)) : 1;
         const selected = recent[targetIndex - 1];
         if (!selected?.url) {
           return {
-            message: `Result index ${targetIndex} is out of range. I currently have ${recent.length} recent result(s).`
+            message: `I'm sorry, result index ${targetIndex} is out of range. I only have ${recent.length} recent result(s).`
           };
         }
         url = selected.url;
@@ -52940,16 +52940,16 @@ ${content}`
           );
         }
       }
-      if (!url) return { message: "Missing 'url' argument." };
+      if (!url) return { message: "I'm sorry, I couldn't find a URL to open." };
       if (type === "tab") {
         const foundTab = getTabs(gBrowser).find((tab) => tabUrl(tab) === url);
         if (foundTab) {
           gBrowser.selectedTab = foundTab;
-          return { message: `Switched to tab: ${url}` };
+          return { message: `I've switched you over to the tab: ${url}` };
         }
       }
       topWin.openTrustedLinkIn(url, "tab");
-      return { message: `Opened in new tab: ${url}` };
+      return { message: `I've opened that in a new tab for you: ${url}` };
     }
   };
   var ShowSubscriptionCommand = class {
@@ -52963,8 +52963,7 @@ ${content}`
       const url = subscriptionService.getSubscriptionUrl();
       topWin.openTrustedLinkIn(url, "tab");
       return {
-        message: `Opened subscription page.
-Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
+        message: `I've opened your subscription page. Your usage this month is ${stats.totalUnits} units out of a ${stats.limit} limit.`
       };
     }
   };
@@ -53071,15 +53070,15 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
         });
         let msg;
         if (openUrl) {
-          msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+          msg = `I've created the tab group "${name}" and opened ${openUrl} in it for you.`;
         } else if (createdNewTab) {
-          msg = `Created tab group "${name}" with a new tab.`;
+          msg = `I've created the tab group "${name}" with a new tab.`;
         } else {
-          msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+          msg = `I've created the tab group "${name}" with ${groupableTabs.length} tab(s).`;
         }
         return { message: msg };
       } catch (e2) {
-        return { message: `Failed to create tab group: ${e2}` };
+        return { message: `I'm sorry, I couldn't create the tab group: ${e2}` };
       }
     }
   };
@@ -53090,22 +53089,22 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = stringArg(args, "name");
-      if (!name) return { message: "Which tab group should I delete?" };
+      if (!name) return { message: "Which tab group would you like me to delete?" };
       const group = findGroupByName(gBrowser, name);
       if (!group) {
-        return { message: `No tab group named "${name}".` };
+        return { message: `I couldn't find a tab group named "${name}".` };
       }
       const tabCount = (group.tabs || []).length;
       const closeTabs = booleanArg(args, "closeTabs") === true;
       if (booleanArg(args, "confirmed") !== true) {
-        const closeMsg = closeTabs ? " and close all its tabs" : " (tabs will be ungrouped)";
+        const closeMsg = closeTabs ? " and close all its tabs" : " (your tabs will be ungrouped)";
         setPendingConfirmation({
           command: "delete_tab_group",
           args: { ...args, confirmed: true },
           description: `Delete tab group "${name}"${closeMsg}?`
         });
         return {
-          message: `Requesting confirmation to delete tab group "${name}" (${tabCount} tabs)${closeMsg}...`,
+          message: `Are you sure you want to delete the tab group "${name}" (${tabCount} tabs)${closeMsg}?`,
           requiresConfirmation: true,
           confirmationData: { name, tabCount, closeTabs }
         };
@@ -53128,10 +53127,10 @@ Usage this month: ${stats.totalUnits} units / ${stats.limit} limit.`
           name: group.label || name
         });
         return {
-          message: `Deleted tab group "${name}"${closeTabs ? " and closed its tabs" : ""}.`
+          message: `I've deleted the tab group "${name}"${closeTabs ? " and closed its tabs" : ""}.`
         };
       } catch (e2) {
-        return { message: `Failed to delete tab group: ${e2}` };
+        return { message: `I'm sorry, I couldn't delete the tab group: ${e2}` };
       }
     }
   };
@@ -54810,7 +54809,7 @@ ${toHex2(hashedRequest)}`;
   }
   function looksLikeNewActionCommand(text2) {
     const input = String(text2 || "");
-    const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit)\b/i.test(
+    const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|copy|unload)\b/i.test(
       input
     );
     const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
@@ -54862,6 +54861,19 @@ Treat command traces as internal context only. Never repeat raw tool payloads ve
 4. **Natural Tone:** Be friendly and conversational. Don't mention internal workings or "tool outputs".
 5. **Context Aware:** Use the conversation history to provide relevant, contextual responses.
 6. **No Trace Echo:** Never start a response by repeating command payload text, IDs, or serialized objects.
+
+**Task Completion & Action Verification:**
+- **NEVER** claim to have performed a browser action (e.g., closing a tab, moving a tab, creating a bookmark, etc.) unless you see an "Internal command result" or command trace in the conversation history confirming the action was successful.
+- If the user asks you to perform an action and you don't see a corresponding command result in the history, do **NOT** say "Done", "I did it", or "I have [action]".
+- Instead, if an action result is missing from the history, politely explain that you cannot perform that action or that the command wasn't recognized.
+- Your primary role is to **summarize and report** on the results of actions already performed by the browser's tools.
+
+**Synthesizing Tool Results:**
+- When an "Internal command result" is present, you are the voice of that result.
+- If a tool returned a list (e.g., tabs, bookmarks), present it beautifully using Markdown.
+- If a tool performed an action (e.g., closed a tab, created a group), confirm it warmly: "I've closed that tab for you" or "I've created the 'Research' group with your 5 tabs."
+- **Contextualize:** Use the user's original intent to flavor your response. If they asked to "Clear the clutter" and you closed 10 tabs, say "I've cleared the clutter by closing those 10 tabs for you. Much better!"
+- **Handle Errors:** If a command result contains an error message, explain it politely and suggest what the user can do next.
 
 **Formatting search_memory Results:**
 When the command context contains search results (from search_memory), the data is structured JSON with:
@@ -54923,8 +54935,8 @@ Use "other" only when genuinely uncertain. Output ONLY the JSON object.`;
 3. Keeps it to 3-5 paragraphs max
 4. Highlights any important facts, dates, or conclusions
 Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
-  var TOOL_OUTPUT_INSTRUCTION = "The command context above is internal trace data. Write a natural language response to the user's request using it, but never echo raw payload text, JSON, IDs, or serialized objects. Do NOT reference this instruction.";
-  var DEFAULT_INSTRUCTION = "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+  var TOOL_OUTPUT_INSTRUCTION = "The command context above contains the result of a browser action. Synthesize this data into a friendly, conversational response that directly addresses the user's original request. If the data is JSON, parse and present it beautifully. Do NOT echo raw trace data or reference this instruction.";
+  var DEFAULT_INSTRUCTION = "Please respond to the user's message naturally and helpfully. IMPORTANT: NEVER claim to have performed a browser action (closing tabs, bookmarks, etc.) if there is no internal command result confirming it in the context above. Do NOT reference this instruction.";
   function buildHiddenInstruction(ctx) {
     if (ctx.hasSummarizeRequest) {
       return SUMMARIZE_INSTRUCTION;
@@ -55151,45 +55163,6 @@ What would you like to try first?`;
   }
 
   // src/assistant/messageUtils.ts
-  var TOOL_COMMAND_TYPE_MAP = {
-    open_url: "navigation",
-    navigate_tab: "navigation",
-    new_window: "navigation",
-    new_tab_to_right: "navigation",
-    open_bookmark_folder: "navigation",
-    open_search_result: "navigation",
-    close_tab: "organization",
-    create_tab_group: "organization",
-    delete_tab_group: "organization",
-    rename_tab_group: "organization",
-    add_tab_to_group: "organization",
-    remove_tab_from_group: "organization",
-    move_tab_to_new_window: "organization",
-    split_tabs: "organization",
-    add_split_view: "organization",
-    remove_split_view: "organization",
-    organize_windows: "organization",
-    create_bookmark_folder: "organization",
-    delete_bookmark_folder: "organization",
-    rename_bookmark_folder: "organization",
-    add_tab_to_bookmark_folder: "organization",
-    remove_tab_from_bookmark_folder: "organization",
-    list_tabs: "info_retrieval",
-    list_bookmark_folders: "info_retrieval",
-    list_tab_groups: "info_retrieval",
-    search_memory: "search",
-    get_recent_search_results: "search",
-    web_search: "search",
-    search_history: "search"
-  };
-  function classifyToolAction(commandName) {
-    return {
-      command_type: TOOL_COMMAND_TYPE_MAP[commandName] ?? "other",
-      user_intent: "other",
-      input_tokens: null,
-      output_tokens: null
-    };
-  }
   function isRecord(value) {
     return !!value && typeof value === "object";
   }
@@ -55699,7 +55672,7 @@ Result: ${toolResult.message}`
     if (!activeCommand) {
       return null;
     }
-    const truncationNotice = source === "parsed" && truncated ? `I can run up to ${maxCommands} commands per request, so I will run the first ${maxCommands}.` : null;
+    const truncationNotice = source === "parsed" && truncated ? `I can only handle up to ${maxCommands} commands at once, so I'll start with the first ${maxCommands} for you.` : null;
     return {
       commandQueue,
       activeCommand,
@@ -55854,7 +55827,17 @@ Result: ${toolResult.message}`
     "confirm_action",
     "resolve_ambiguity",
     "new_window",
-    "organize_windows"
+    "organize_windows",
+    "reload_tab",
+    "toggle_mute_tab",
+    "pin_tab",
+    "unpin_tab",
+    "duplicate_tab",
+    "bookmark_tab",
+    "reopen_closed_tab",
+    "open_send_tab_to_device",
+    "copy_tab_urls",
+    "unload_tab"
   ]);
   var SEARCH_WEB_HINT_RE = /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
   var SEARCH_LOCAL_HINT_RE = /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
@@ -56100,148 +56083,6 @@ Result: ${toolResult.message}`
     }
   }
 
-  // src/assistant/toolResultPresenter.ts
-  function safeParseJson(value) {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
-    }
-  }
-  function toStringList(value) {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
-  }
-  function toObjectList(value) {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value.filter(
-      (item) => !!item && typeof item === "object" && !Array.isArray(item)
-    );
-  }
-  function formatLines(title, lines) {
-    if (lines.length === 0) {
-      return title;
-    }
-    return `${title}
-
-${lines.map((line) => `- ${line}`).join("\n")}`;
-  }
-  function formatListBookmarkFolders(message) {
-    const parsed = safeParseJson(message);
-    const rows = toStringList(parsed);
-    if (rows.length === 0) {
-      return message;
-    }
-    return formatLines("Here are your bookmark folders:", rows);
-  }
-  function formatListTabGroups(message) {
-    const parsed = safeParseJson(message);
-    const rows = toObjectList(parsed);
-    if (rows.length === 0) {
-      return message;
-    }
-    const lines = rows.map((row) => {
-      const name = typeof row.name === "string" ? row.name : "(unnamed)";
-      const tabCount = typeof row.tabCount === "number" && Number.isFinite(row.tabCount) ? row.tabCount : 0;
-      const collapsed = row.collapsed === true ? "collapsed" : "expanded";
-      return `${name} (${tabCount} tabs, ${collapsed})`;
-    });
-    return formatLines("Here are your tab groups:", lines);
-  }
-  function extractJsonArrayTail(message) {
-    const colon = message.indexOf(":");
-    if (colon < 0) {
-      return null;
-    }
-    const tail = message.slice(colon + 1).trim();
-    if (!tail.startsWith("[")) {
-      return null;
-    }
-    return safeParseJson(tail);
-  }
-  function formatListTabs(message) {
-    const parsedTop = safeParseJson(message);
-    const strings = toStringList(parsedTop);
-    if (strings.length > 0) {
-      return formatLines("Here are your open tabs:", strings);
-    }
-    const tail = extractJsonArrayTail(message);
-    const rows = toObjectList(tail);
-    if (rows.length === 0) {
-      return message;
-    }
-    const containerMatch = message.match(/^Tabs in ([^:]+):/i);
-    const container = containerMatch?.[1]?.trim() || "the requested target";
-    const lines = rows.map((row) => {
-      const title = typeof row.title === "string" ? row.title : "(untitled)";
-      const url = typeof row.url === "string" ? row.url : "";
-      return url ? `${title} (${url})` : title;
-    });
-    return formatLines(`Here are the tabs in ${container}:`, lines);
-  }
-  function formatSearchResults(message) {
-    const parsed = safeParseJson(message);
-    if (!parsed || typeof parsed !== "object") {
-      return message;
-    }
-    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "Search results:";
-    const rows = toObjectList(parsed.results).slice(0, 10);
-    if (rows.length === 0) {
-      return summary || message;
-    }
-    const lines = rows.map((row) => {
-      const index2 = typeof row.index === "number" && Number.isFinite(row.index) ? row.index : void 0;
-      const title = typeof row.title === "string" ? row.title : "(untitled)";
-      const url = typeof row.url === "string" ? row.url : "";
-      const prefix = index2 != null ? `${index2}. ` : "";
-      return url ? `${prefix}${title} (${url})` : `${prefix}${title}`;
-    });
-    return formatLines(summary, lines);
-  }
-  function formatHistorySearchResults(message) {
-    const parsed = safeParseJson(message);
-    const rows = toObjectList(parsed);
-    if (rows.length === 0) {
-      return message;
-    }
-    const lines = rows.map((row) => {
-      const idx = typeof row.index === "number" ? `${row.index}. ` : "";
-      const title = typeof row.title === "string" ? row.title : "(untitled)";
-      const url = typeof row.url === "string" ? row.url : "";
-      const relevance = typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
-      const visited = typeof row.visited === "string" ? ` \u2014 visited ${row.visited}` : "";
-      return url ? `${idx}[**${title}**](${url})${relevance}${visited}` : `${idx}**${title}**${relevance}${visited}`;
-    });
-    return `Here's what I found in your browsing history:
-
-${lines.join("\n\n")}`;
-  }
-  function presentToolResult(payload) {
-    const message = String(payload.message || "").trim();
-    if (!message) {
-      return "Done.";
-    }
-    switch (payload.commandName) {
-      case "list_bookmark_folders":
-        return formatListBookmarkFolders(message);
-      case "list_tab_groups":
-        return formatListTabGroups(message);
-      case "list_tabs":
-        return formatListTabs(message);
-      case "search_memory":
-      case "get_recent_search_results":
-        return formatSearchResults(message);
-      case "search_history":
-        return formatHistorySearchResults(message);
-      default:
-        return message;
-    }
-  }
-
   // src/assistant/graph.ts
   var CHAT_GENERATION_CONFIG = {
     responseMimeType: "application/json",
@@ -56321,20 +56162,6 @@ ${lines.join("\n\n")}`;
       const toolPayload = getToolResultPayload(lastMsg);
       const hasToolOutput = Boolean(toolPayload);
       const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
-      if (toolPayload && !hasSummarizeRequest) {
-        return {
-          messages: [
-            new AIMessage({
-              content: presentToolResult(toolPayload),
-              additional_kwargs: {
-                oasisUsageMeta: classifyToolAction(toolPayload.commandName)
-              }
-            })
-          ],
-          lastWorker: "chat",
-          commandQueue: []
-        };
-      }
       const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
       if (capabilitiesReply) {
         return {

@@ -108,7 +108,6 @@ import {
 } from "./supervisorQueue.js";
 import { tryResolveAssistRoute } from "./supervisorAssist.js";
 import { decodePlannedAction, encodePlannedAction } from "./plannedActions.js";
-import { presentToolResult } from "./toolResultPresenter.js";
 import {
   classifyToolAction,
   extractChatContent,
@@ -169,21 +168,6 @@ export function buildAssistantGraph(
     const toolPayload = getToolResultPayload(lastMsg as MessageLike);
     const hasToolOutput = Boolean(toolPayload);
     const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
-
-    if (toolPayload && !hasSummarizeRequest) {
-      return {
-        messages: [
-          new AIMessage({
-            content: presentToolResult(toolPayload),
-            additional_kwargs: {
-              oasisUsageMeta: classifyToolAction(toolPayload.commandName),
-            },
-          }),
-        ],
-        lastWorker: "chat",
-        commandQueue: [],
-      };
-    }
 
     const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
     if (capabilitiesReply) {

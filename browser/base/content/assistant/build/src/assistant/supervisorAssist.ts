@@ -73,6 +73,16 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "resolve_ambiguity",
   "new_window",
   "organize_windows",
+  "reload_tab",
+  "toggle_mute_tab",
+  "pin_tab",
+  "unpin_tab",
+  "duplicate_tab",
+  "bookmark_tab",
+  "reopen_closed_tab",
+  "open_send_tab_to_device",
+  "copy_tab_urls",
+  "unload_tab",
 ]);
 // const SEARCH_WEB_HINT_RE =
 //   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;

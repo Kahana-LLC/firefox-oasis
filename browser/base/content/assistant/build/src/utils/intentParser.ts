@@ -13,7 +13,7 @@
 import type { ContainerType, IntentFamily, ParsedIntent } from "./routerTypes.js";
 
 const ACTION_WORD_RE =
-  /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy)\b/i;
+  /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
 
 const ACTION_OBJECT_RE =
   /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|url|result|split)\b/i;
@@ -26,7 +26,7 @@ const SEARCH_FAMILY_RE =
 const HISTORY_FAMILY_RE =
   /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
 const MUTATION_FAMILY_RE =
-  /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup)\b/i;
+  /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
 
 const GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
 const FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;

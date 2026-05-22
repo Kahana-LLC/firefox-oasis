@@ -394,7 +394,7 @@ export class NewWindowCommand implements Command {
       return { message: "Browser UI not available." };
 
     topWin.OpenBrowserWindow();
-    return { message: "Successfully opened a new window." };
+    return { message: "I've opened a new window for you." };
   }
 }
 
@@ -446,7 +446,7 @@ export class OrganizeWindowsCommand implements Command {
       win.moveTo(xPos, availTop);
     }
 
-    return { message: `Organized ${numWindows} windows side-by-side.` };
+    return { message: `I've arranged your ${numWindows} windows side-by-side.` };
   }
 }
 
@@ -462,7 +462,7 @@ export class ShowURLCommand implements Command {
     if (!url) return { message: "Missing 'url' argument." };
 
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Successfully opened URL: ${url}` };
+    return { message: `I've opened that URL for you: ${url}` };
   }
 }
 
@@ -491,7 +491,7 @@ export class OpenUrlCommand implements Command {
       assistantLogger.warn("commands", "Failed to fixup URI", error);
     }
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened URL in a new tab: ${url}` };
+    return { message: `I've opened that site in a new tab: ${url}` };
   }
 }
 
@@ -510,7 +510,7 @@ export class WebSearchCommand implements Command {
     }
     const searchUrl = toWebSearchUrl(query);
     topWin.openTrustedLinkIn(searchUrl, "tab");
-    return { message: `Opened web search for "${query}" in a new tab.` };
+    return { message: `I've opened a web search for "${query}" in a new tab.` };
   }
 }
 
@@ -554,7 +554,7 @@ export class CloseTabCommand implements Command {
         description: `Close tab "${title}"?`,
       });
       return {
-        message: `Requesting confirmation to close tab "${title}"...`,
+        message: `Sure, I'll close the tab "${title}". Is that okay?`,
         requiresConfirmation: true,
         confirmationData: { title },
       };
@@ -562,7 +562,7 @@ export class CloseTabCommand implements Command {
 
     clearPendingConfirmation();
     gBrowser.removeTab?.(tab);
-    return { message: `Closed tab: ${title}` };
+    return { message: `I've closed the tab: ${title}` };
   }
 }
 
@@ -579,7 +579,7 @@ export class ReloadTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.reloadTab(tab);
-    return { message: `Reloaded tab: ${tabTitle(tab)}` };
+    return { message: `I've reloaded that tab for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -599,7 +599,7 @@ export class ToggleMuteTabCommand implements Command {
     if (typeof toggle !== "function")
       return { message: "Mute is not available for this tab." };
     toggle.call(tab);
-    return { message: `Toggled mute for: ${tabTitle(tab)}` };
+    return { message: `I've toggled the mute for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -616,9 +616,9 @@ export class PinTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     if (tab.pinned)
-      return { message: `Tab is already pinned: ${tabTitle(tab)}` };
+      return { message: `That tab is already pinned: ${tabTitle(tab)}` };
     gb.pinTab(tab, {});
-    return { message: `Pinned tab: ${tabTitle(tab)}` };
+    return { message: `I've pinned that tab for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -634,9 +634,9 @@ export class UnpinTabCommand implements Command {
     const tab = tabByIndexOrCurrent(gb, idx);
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
-    if (!tab.pinned) return { message: `Tab is not pinned: ${tabTitle(tab)}` };
+    if (!tab.pinned) return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
     gb.unpinTab(tab);
-    return { message: `Unpinned tab: ${tabTitle(tab)}` };
+    return { message: `I've unpinned that tab for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -654,7 +654,7 @@ export class UnloadTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     await gb.explicitUnloadTabs([tab]);
-    return { message: `Unloaded tab: ${tabTitle(tab)}` };
+    return { message: `I've unloaded that tab to save memory: ${tabTitle(tab)}` };
   }
 }
 
@@ -674,7 +674,7 @@ export class NewTabToRightCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.addAdjacentNewTab(tab);
-    return { message: `Opened a new tab to the right of: ${tabTitle(tab)}` };
+    return { message: `I've opened a new tab to the right of: ${tabTitle(tab)}` };
   }
 }
 
@@ -692,7 +692,7 @@ export class DuplicateTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.duplicateTab(tab);
-    return { message: `Duplicated tab: ${tabTitle(tab)}` };
+    return { message: `I've duplicated that tab for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -710,7 +710,7 @@ export class BookmarkTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     hook([tab]);
-    return { message: `Bookmarked tab: ${tabTitle(tab)}` };
+    return { message: `I've bookmarked that tab for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -727,7 +727,7 @@ export class MoveTabToStartCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.moveTabToStart(tab);
-    return { message: `Moved tab to start: ${tabTitle(tab)}` };
+    return { message: `I've moved that tab to the beginning: ${tabTitle(tab)}` };
   }
 }
 
@@ -744,7 +744,7 @@ export class MoveTabToEndCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.moveTabToEnd(tab);
-    return { message: `Moved tab to end: ${tabTitle(tab)}` };
+    return { message: `I've moved that tab to the end: ${tabTitle(tab)}` };
   }
 }
 
@@ -757,7 +757,7 @@ export class SelectAllTabsCommand implements Command {
     if (!gb?.selectAllTabs)
       return { message: "Browser UI (gBrowser.selectAllTabs) not available." };
     gb.selectAllTabs();
-    return { message: "Selected all tabs in this window." };
+    return { message: "I've selected all the tabs in this window for you." };
   }
 }
 
@@ -776,7 +776,7 @@ export class CloseDuplicateTabsCommand implements Command {
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const dupes = gb.getDuplicateTabsToClose(tab);
     if (!dupes.length) {
-      return { message: "No duplicate tabs to close for this tab." };
+      return { message: "I didn't find any duplicate tabs to close." };
     }
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -786,7 +786,7 @@ export class CloseDuplicateTabsCommand implements Command {
         description: `Close ${dupes.length} duplicate tab(s)?`,
       });
       return {
-        message: `Requesting confirmation to close ${dupes.length} duplicate tab(s)...`,
+        message: `I've found ${dupes.length} duplicate tab(s). Should I go ahead and close them?`,
         requiresConfirmation: true,
         confirmationData: { count: dupes.length },
       };
@@ -794,7 +794,7 @@ export class CloseDuplicateTabsCommand implements Command {
 
     clearPendingConfirmation();
     gb.removeTabs(dupes, { isUserTriggered: true });
-    return { message: `Closed ${dupes.length} duplicate tab(s).` };
+    return { message: `I've closed ${dupes.length} duplicate tab(s) for you.` };
   }
 }
 
@@ -813,7 +813,7 @@ export class CloseTabsToRightCommand implements Command {
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const toClose = gb._getTabsToTheEndFrom(tab);
     if (!toClose.length) {
-      return { message: "No tabs to the right to close." };
+      return { message: "There aren't any tabs to the right to close." };
     }
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -823,7 +823,7 @@ export class CloseTabsToRightCommand implements Command {
         description: `Close ${toClose.length} tab(s) to the right?`,
       });
       return {
-        message: `Requesting confirmation to close ${toClose.length} tab(s) to the right...`,
+        message: `I've found ${toClose.length} tab(s) to the right. Should I close them?`,
         requiresConfirmation: true,
         confirmationData: { count: toClose.length },
       };
@@ -831,7 +831,7 @@ export class CloseTabsToRightCommand implements Command {
 
     clearPendingConfirmation();
     gb.removeTabs(toClose, { isUserTriggered: true });
-    return { message: `Closed ${toClose.length} tab(s) to the right.` };
+    return { message: `I've closed ${toClose.length} tab(s) to the right.` };
   }
 }
 
@@ -850,7 +850,7 @@ export class CloseTabsToLeftCommand implements Command {
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const toClose = gb._getTabsToTheStartFrom(tab);
     if (!toClose.length) {
-      return { message: "No tabs to the left to close." };
+      return { message: "There aren't any tabs to the left to close." };
     }
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -860,7 +860,7 @@ export class CloseTabsToLeftCommand implements Command {
         description: `Close ${toClose.length} tab(s) to the left?`,
       });
       return {
-        message: `Requesting confirmation to close ${toClose.length} tab(s) to the left...`,
+        message: `I've found ${toClose.length} tab(s) to the left. Should I close them?`,
         requiresConfirmation: true,
         confirmationData: { count: toClose.length },
       };
@@ -868,7 +868,7 @@ export class CloseTabsToLeftCommand implements Command {
 
     clearPendingConfirmation();
     gb.removeTabs(toClose, { isUserTriggered: true });
-    return { message: `Closed ${toClose.length} tab(s) to the left.` };
+    return { message: `I've closed ${toClose.length} tab(s) to the left.` };
   }
 }
 
@@ -886,7 +886,7 @@ export class CloseOtherTabsCommand implements Command {
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     const others = getTabs(gb).filter(t => t !== tab && !t.pinned);
     if (!others.length) {
-      return { message: "No other unpinned tabs to close." };
+      return { message: "There are no other unpinned tabs to close." };
     }
 
     if (booleanArg(args, "confirmed") !== true) {
@@ -896,7 +896,7 @@ export class CloseOtherTabsCommand implements Command {
         description: `Close ${others.length} other tab(s) (keeping "${tabTitle(tab)}")?`,
       });
       return {
-        message: `Requesting confirmation to close ${others.length} other tab(s)...`,
+        message: `I've found ${others.length} other tab(s). Should I close them and keep "${tabTitle(tab)}"?`,
         requiresConfirmation: true,
         confirmationData: { count: others.length },
       };
@@ -904,7 +904,7 @@ export class CloseOtherTabsCommand implements Command {
 
     clearPendingConfirmation();
     gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
-    return { message: `Closed other tabs (kept: ${tabTitle(tab)}).` };
+    return { message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.` };
   }
 }
 
@@ -921,8 +921,8 @@ export class ReopenClosedTabCommand implements Command {
       };
     const index = numberArg(args, "index");
     const reopened = ss.undoCloseTab(topWin as Window, index ?? 0);
-    if (!reopened) return { message: "No closed tab to reopen." };
-    return { message: "Reopened the last closed tab." };
+    if (!reopened) return { message: "I didn't find any recently closed tabs to reopen." };
+    return { message: "I've reopened the last tab you closed." };
   }
 }
 
@@ -939,11 +939,11 @@ export class OpenSendTabToDeviceCommand implements Command {
     if (!sync?.showSendToDeviceViewFromFxaMenu || !anchor) {
       return {
         message:
-          "Could not open Send Tab to Device. Sign in to Sync and ensure the account toolbar button is visible.",
+          "I couldn't open Send Tab to Device. Please make sure you're signed in to Sync and the account button is visible.",
       };
     }
     sync.showSendToDeviceViewFromFxaMenu(anchor);
-    return { message: "Opened Send Tab to Device." };
+    return { message: "I've opened the Send Tab to Device menu for you." };
   }
 }
 
@@ -961,7 +961,7 @@ export class OpenTabNoteCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     menu.openPanel(tab, {});
-    return { message: `Opened tab note for: ${tabTitle(tab)}` };
+    return { message: `I've opened the tab note for you: ${tabTitle(tab)}` };
   }
 }
 
@@ -984,7 +984,7 @@ export class MoveTabToNewWindowCommand implements Command {
     const newWin = topWin.OpenBrowserWindow();
     await new Promise(r => setTimeout(r, 250)); // give it a tick
     newWin.gBrowser?.adoptTab?.(tab, 0);
-    return { message: `Moved tab to new window: ${title}` };
+    return { message: `I've moved the tab "${title}" to a new window for you.` };
   }
 }
 
@@ -1001,9 +1001,9 @@ export class CopyTabUrlsCommand implements Command {
     const text = urls.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      return { message: `Copied ${urls.length} URLs to clipboard.` };
+      return { message: `I've copied ${urls.length} URL(s) to your clipboard.` };
     } catch {
-      return { message: `Copied fallback. URLs:\n${text}` };
+      return { message: `I couldn't access the clipboard, but here are the URLs:\n${text}` };
     }
   }
 }
@@ -1030,7 +1030,7 @@ export class CreateBookmarkFolderCommand implements Command {
       name: res.name,
     });
     return {
-      message: `Created bookmark folder "${res.name}" with ${res.count} items.`,
+      message: `I've created the bookmark folder "${res.name}" with ${res.count} items for you.`,
     };
   }
 }
@@ -1052,7 +1052,7 @@ export class DeleteBookmarkFolderCommand implements Command {
         description: `Delete bookmark folder "${name}"${closeMsg}?`,
       });
       return {
-        message: `Requesting confirmation to delete bookmark folder "${name}"${closeMsg}...`,
+        message: `Are you sure you want to delete the bookmark folder "${name}"${closeMsg}?`,
         requiresConfirmation: true,
         confirmationData: { name, closeTabs },
       };
@@ -1061,14 +1061,14 @@ export class DeleteBookmarkFolderCommand implements Command {
     clearPendingConfirmation();
     const closeTabs = booleanArg(args, "closeTabs") === true;
     const res = await bookmarkFolders.delete(name, { closeTabs });
-    if (res.removed === 0) return { message: `No folder named "${name}".` };
+    if (res.removed === 0) return { message: `I couldn't find a folder named "${name}".` };
     applyRoutingStateMutation({
       kind: "delete",
       entity: "folder",
       name: res.name,
     });
     return {
-      message: `Deleted bookmark folder "${res.name}" (${res.removed} items removed).`,
+      message: `I've deleted the bookmark folder "${res.name}" and removed ${res.removed} items.`,
     };
   }
 }
@@ -1078,7 +1078,7 @@ export class ListBookmarkFoldersCommand implements Command {
   description = "List all managed bookmark folders. Accepts no arguments.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const items = await bookmarkFolders.list();
-    if (!items.length) return { message: "No bookmark folders yet." };
+    if (!items.length) return { message: "You don't have any bookmark folders yet." };
     return {
       message: JSON.stringify(items.map(h => `${h.name} (${h.count})`)),
     };
@@ -1093,7 +1093,7 @@ export class RenameBookmarkFolderCommand implements Command {
     const from = stringArg(args, "from");
     const to = stringArg(args, "to");
     if (!from || !to)
-      return { message: "Please provide old and new folder names." };
+      return { message: "Please tell me the current name and the new name for the folder." };
     const r = await bookmarkFolders.rename(from, to);
     if (r.ok) {
       applyRoutingStateMutation({
@@ -1105,8 +1105,8 @@ export class RenameBookmarkFolderCommand implements Command {
     }
     return {
       message: r.ok
-        ? `Renamed "${from}" to "${to}".`
-        : `Rename failed: ${r.msg || "unknown error"}`,
+        ? `I've renamed "${from}" to "${to}" for you.`
+        : `I couldn't rename the folder: ${r.msg || "unknown error"}`,
     };
   }
 }
@@ -1117,7 +1117,7 @@ export class AddTabToBookmarkFolderCommand implements Command {
     "Add tabs to a managed bookmark folder. Accepts arguments: { name: string, query?: string, all?: boolean } (query matches title/URL). all=true adds all tabs. If no query/all, adds current tab.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const name = stringArg(args, "name");
-    if (!name) return { message: "Which folder should I add tabs to?" };
+    if (!name) return { message: "Which folder should I add the tabs to?" };
 
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI not available." };
@@ -1133,7 +1133,7 @@ export class AddTabToBookmarkFolderCommand implements Command {
 
       if (tabsToAdd.length === 0) {
         return {
-          message: `No tabs found matching "${stringArg(args, "query") || ""}".`,
+          message: `I couldn't find any tabs matching "${stringArg(args, "query") || ""}".`,
         };
       }
     } else {
@@ -1144,11 +1144,11 @@ export class AddTabToBookmarkFolderCommand implements Command {
       }
     }
 
-    if (tabsToAdd.length === 0) return { message: "No tabs available to add." };
+    if (tabsToAdd.length === 0) return { message: "I don't see any tabs to add." };
 
     const r = await bookmarkFolders.addTabs(name, tabsToAdd);
 
-    if (!r.ok) return { message: `Failed to add tabs to "${name}".` };
+    if (!r.ok) return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
     applyRoutingStateMutation({
       kind: "upsert",
       entity: "folder",
@@ -1156,7 +1156,7 @@ export class AddTabToBookmarkFolderCommand implements Command {
     });
 
     const count = tabsToAdd.length;
-    return { message: `Added ${count} tab(s) to bookmark folder "${name}".` };
+    return { message: `I've added ${count} tab(s) to your bookmark folder "${name}".` };
   }
 }
 
@@ -1166,7 +1166,7 @@ export class RemoveTabFromBookmarkFolderCommand implements Command {
     "Remove a tab from a managed bookmark folder. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const name = stringArg(args, "name");
-    if (!name) return { message: "Which folder?" };
+    if (!name) return { message: "Which folder should I look in?" };
 
     let url = stringArg(args, "url");
     if (!url) {
@@ -1176,13 +1176,13 @@ export class RemoveTabFromBookmarkFolderCommand implements Command {
       }
     }
 
-    if (!url) return { message: "Could not determine URL to remove." };
+    if (!url) return { message: "I couldn't figure out which URL to remove." };
 
     const r = await bookmarkFolders.removeUrl(name, url);
     return {
       message: r.ok
-        ? `Removed URL from folder "${name}".`
-        : `Failed to remove URL from folder "${name}" (maybe not found).`,
+        ? `I've removed that URL from your folder "${name}".`
+        : `I couldn't find that URL in the folder "${name}".`,
     };
   }
 }
@@ -1193,15 +1193,15 @@ export class OpenBookmarkFolderCommand implements Command {
     "Open all bookmarks from a managed folder. Accepts arguments: { name: string, where?: 'tabs'|'window'|'tabgroup' }. 'tabgroup' creates a new visual group.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const name = stringArg(args, "name");
-    if (!name) return { message: "Which folder should I open?" };
+    if (!name) return { message: "Which folder would you like me to open?" };
     const whereRaw = stringArg(args, "where");
     const where: "tabs" | "window" | "tabgroup" =
       whereRaw === "window" || whereRaw === "tabgroup" ? whereRaw : "tabs";
     const r = await bookmarkFolders.openFolder(name, where);
     return {
       message: r.ok
-        ? `Opened folder "${name}" in ${where}.`
-        : `Failed to open folder "${name}".`,
+        ? `I've opened the folder "${name}" in ${where} for you.`
+        : `I'm sorry, I couldn't open the folder "${name}".`,
     };
   }
 }
@@ -1219,7 +1219,7 @@ export class AddSplitViewCommand implements Command {
       false
     );
     if (!splitViewEnabled) {
-      return { message: "Split view is not enabled in this browser." };
+      return { message: "I'm sorry, split view isn't enabled in this browser." };
     }
 
     let tab1: BrowserTabLike | null = null;
@@ -1231,9 +1231,9 @@ export class AddSplitViewCommand implements Command {
       const i2 = Math.max(1, Math.floor(indices[1]));
       const first = tabByIndex(gBrowser, i1);
       const second = tabByIndex(gBrowser, i2);
-      if (!first) return { message: `No tab ${i1}.` };
-      if (!second) return { message: `No tab ${i2}.` };
-      if (i1 === i2) return { message: "Cannot split a tab with itself." };
+      if (!first) return { message: `I couldn't find tab ${i1}.` };
+      if (!second) return { message: `I couldn't find tab ${i2}.` };
+      if (i1 === i2) return { message: "I can't split a tab with itself." };
       tab1 = first;
       tab2 = second;
     } else {
@@ -1244,12 +1244,12 @@ export class AddSplitViewCommand implements Command {
       if (withIndex != null) {
         const i = Math.max(1, Math.floor(withIndex));
         tab2 = tabByIndex(gBrowser, i);
-        if (!tab2) return { message: `No tab ${i}.` };
+        if (!tab2) return { message: `I couldn't find tab ${i}.` };
       } else if (withQuery) {
         tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
         if (!tab2) {
           return {
-            message: `No tab found matching "${stringArg(args, "withQuery") || ""}".`,
+            message: `I couldn't find a tab matching "${stringArg(args, "withQuery") || ""}".`,
           };
         }
       } else {
@@ -1258,20 +1258,20 @@ export class AddSplitViewCommand implements Command {
     }
 
     if (!tab1 || !tab2)
-      return { message: "Unable to resolve tabs for split view." };
+      return { message: "I couldn't resolve the tabs for split view." };
     if (tab1 === tab2) {
-      return { message: "Cannot split a tab with itself." };
+      return { message: "I can't split a tab with itself." };
     }
 
     if (tab1.pinned || tab2.pinned) {
-      return { message: "Cannot add pinned tabs to split view." };
+      return { message: "I'm sorry, I can't add pinned tabs to split view." };
     }
 
     if (tab1.splitview) {
-      return { message: `Tab "${tab1.label}" is already in a split view.` };
+      return { message: `The tab "${tab1.label}" is already in a split view.` };
     }
     if (tab2.splitview) {
-      return { message: `Tab "${tab2.label}" is already in a split view.` };
+      return { message: `The tab "${tab2.label}" is already in a split view.` };
     }
 
     try {
@@ -1282,10 +1282,10 @@ export class AddSplitViewCommand implements Command {
       const title1 = tabTitle(tab1);
       const title2 = tabTitle(tab2);
       return {
-        message: `Added split view: "${title1}" and "${title2}".`,
+        message: `I've set up a split view with "${title1}" and "${title2}" for you.`,
       };
     } catch (e) {
-      return { message: `Failed to create split view: ${e}` };
+      return { message: `I'm sorry, I failed to create the split view: ${e}` };
     }
   }
 }
@@ -1298,18 +1298,18 @@ export class RemoveSplitViewCommand implements Command {
     if (!gBrowser) return { message: "Browser UI not available." };
 
     const currentTab = gBrowser.selectedTab;
-    if (!currentTab) return { message: "No active tab found." };
+    if (!currentTab) return { message: "I couldn't find an active tab." };
     const splitview = currentTab.splitview;
 
     if (!splitview?.unsplitTabs) {
-      return { message: "This tab is not in a split view." };
+      return { message: "This tab isn't in a split view." };
     }
 
     try {
       splitview.unsplitTabs();
-      return { message: "Split view removed. Tabs are now separate." };
+      return { message: "I've removed the split view and separated your tabs." };
     } catch (e) {
-      return { message: `Failed to remove split view: ${e}` };
+      return { message: `I couldn't remove the split view: ${e}` };
     }
   }
 }
@@ -1327,7 +1327,7 @@ export class SplitTabsCommand implements Command {
     if (indices.length < 2) {
       return {
         message:
-          "Please provide at least 2 tab indices to split (e.g., { indices: [1, 2] }).",
+          "Please tell me at least two tab indices to split (for example: 1 and 2).",
       };
     }
 
@@ -1336,7 +1336,7 @@ export class SplitTabsCommand implements Command {
     for (const idx of indices) {
       const i = Math.max(1, Math.floor(idx));
       const tab = tabByIndex(gBrowser, i);
-      if (!tab) return { message: `No tab ${i}.` };
+      if (!tab) return { message: `I couldn't find tab ${i}.` };
       tabs.push(tab);
     }
 
@@ -1400,7 +1400,7 @@ export class SplitTabsCommand implements Command {
     }
 
     const tabTitles = windows.map(w => w.title).join(", ");
-    return { message: `Split ${numTabs} tabs side-by-side: ${tabTitles}` };
+    return { message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.` };
   }
 }
 
@@ -1416,7 +1416,7 @@ export class SummarizePageCommand implements Command {
     let tab = tabByIndexOrCurrent(gBrowser, idx);
 
     // Allow specifying tab by index
-    if (idx != null && !tab) return { message: `No tab ${idx}.` };
+    if (idx != null && !tab) return { message: `I couldn't find tab ${idx}.` };
 
     // Allow specifying tab by query (title/URL match)
     const query = normalizeQuery(stringArg(args, "query"));
@@ -1424,13 +1424,13 @@ export class SummarizePageCommand implements Command {
       tab = findTabsByQuery(gBrowser, query)[0] || null;
       if (!tab) {
         return {
-          message: `No tab found matching "${stringArg(args, "query") || ""}".`,
+          message: `I couldn't find a tab matching "${stringArg(args, "query") || ""}".`,
         };
       }
     }
 
     const browser = tab?.linkedBrowser;
-    if (!browser) return { message: "No active tab found." };
+    if (!browser) return { message: "I couldn't find an active tab." };
 
     const url = browser.currentURI?.spec || "";
     const title = tabTitle(tab);
@@ -1441,7 +1441,7 @@ export class SummarizePageCommand implements Command {
       url.startsWith("chrome://") ||
       url.startsWith("moz-extension://")
     ) {
-      return { message: "Cannot summarize browser internal pages." };
+      return { message: "I'm sorry, I can't summarize internal browser pages." };
     }
 
     try {
@@ -1450,14 +1450,14 @@ export class SummarizePageCommand implements Command {
 
       if (!currentWindowContext) {
         return {
-          message: "Cannot access page content. The page may still be loading.",
+          message: "I can't access the page content right now. Is it still loading?",
         };
       }
 
       const pageExtractor = currentWindowContext.getActor("PageExtractor");
 
       if (!pageExtractor) {
-        return { message: "Page content extractor not available." };
+        return { message: "The page content extractor isn't available." };
       }
 
       // Try Reader Mode first (cleaner content), fall back to full text
@@ -1490,7 +1490,7 @@ export class SummarizePageCommand implements Command {
 
       if (!content || content.length < 50) {
         return {
-          message: "Not enough content found on this page to summarize.",
+          message: "I didn't find enough content on this page to summarize.",
         };
       }
 
@@ -1505,7 +1505,7 @@ export class SummarizePageCommand implements Command {
         message: `__SUMMARIZE_REQUEST__\nTitle: ${title}\nURL: ${url}\n\nContent:\n${content}`,
       };
     } catch (e) {
-      return { message: `Failed to extract page content: ${e}` };
+      return { message: `I'm sorry, I couldn't extract the page content: ${e}` };
     }
   }
 }
@@ -1524,7 +1524,7 @@ export class SearchMemoryCommand implements Command {
     const source = stringArg(args, "source");
     const sourceScope =
       source === "bookmark-folder" ? "bookmark-folder" : undefined;
-    if (!query) return { message: "Missing 'query' argument." };
+    if (!query) return { message: "Please tell me what you'd like to search for." };
 
     let results = await localMemory.search(
       query,
@@ -1594,17 +1594,17 @@ export class SearchMemoryCommand implements Command {
         });
         return {
           message:
-            `No local matches found for "${query}". ` +
-            `Would you like me to open a web search in a new tab?`,
+            `I couldn't find any local matches for "${query}". ` +
+            `Would you like me to try a web search for you?`,
           requiresConfirmation: true,
           confirmationData: { query, url: toWebSearchUrl(query) },
         };
       }
       const guidance = folder
-        ? ` Try "list tabs in bookmark folder ${folder}" to inspect what is saved there.`
+        ? ` Try asking me to "list tabs in bookmark folder ${folder}" to see what's saved there.`
         : "";
       return {
-        message: `No matches found for "${query}"${scopeSuffix}.${guidance}`,
+        message: `I didn't find any matches for "${query}"${scopeSuffix}.${guidance}`,
       };
     }
 
@@ -1655,7 +1655,7 @@ export class SearchMemoryCommand implements Command {
     const sourceCounts = Object.entries(resultsBySource)
       .map(([src, items]) => `${items.length} from ${src}`)
       .join(", ");
-    const summary = `Found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
+    const summary = `I've found ${structured.length} result(s) for "${query}"${scopeSuffix}: ${sourceCounts}.`;
 
     return {
       message: JSON.stringify({
@@ -1679,7 +1679,7 @@ export class GetRecentSearchResultsCommand implements Command {
     if (recent.length === 0) {
       return {
         message: JSON.stringify({
-          summary: "No recent search results available.",
+          summary: "I don't have any recent search results to show you.",
           results: [],
         }),
       };
@@ -1696,7 +1696,7 @@ export class GetRecentSearchResultsCommand implements Command {
     }));
     return {
       message: JSON.stringify({
-        summary: `Found ${results.length} cached recent search result(s).`,
+        summary: `I've found ${results.length} cached recent search result(s) for you.`,
         results,
       }),
     };
@@ -1718,7 +1718,7 @@ export class OpenSearchResultCommand implements Command {
       if (recent.length === 0) {
         return {
           message:
-            "No recent search result is available to open. Run a search first or pass a URL.",
+            "I don't have any recent search results available. Would you like me to run a search first?",
         };
       }
       const targetIndex = index != null ? Math.max(1, Math.floor(index)) : 1;
@@ -1726,8 +1726,8 @@ export class OpenSearchResultCommand implements Command {
       if (!selected?.url) {
         return {
           message:
-            `Result index ${targetIndex} is out of range. ` +
-            `I currently have ${recent.length} recent result(s).`,
+            `I'm sorry, result index ${targetIndex} is out of range. ` +
+            `I only have ${recent.length} recent result(s).`,
         };
       }
       url = selected.url;
@@ -1759,7 +1759,7 @@ export class OpenSearchResultCommand implements Command {
       }
     }
 
-    if (!url) return { message: "Missing 'url' argument." };
+    if (!url) return { message: "I'm sorry, I couldn't find a URL to open." };
 
     // If it's an open tab, try to find and switch to it
     if (type === "tab") {
@@ -1767,13 +1767,13 @@ export class OpenSearchResultCommand implements Command {
 
       if (foundTab) {
         gBrowser.selectedTab = foundTab;
-        return { message: `Switched to tab: ${url}` };
+        return { message: `I've switched you over to the tab: ${url}` };
       }
     }
 
     // Otherwise (or if tab not found), open in new tab
     topWin.openTrustedLinkIn(url, "tab");
-    return { message: `Opened in new tab: ${url}` };
+    return { message: `I've opened that in a new tab for you: ${url}` };
   }
 }
 
@@ -1791,7 +1791,7 @@ export class ShowSubscriptionCommand implements Command {
     topWin.openTrustedLinkIn(url, "tab");
 
     return {
-      message: `Opened subscription page.\nUsage this month: ${stats.totalUnits} units / ${stats.limit} limit.`,
+      message: `I've opened your subscription page. Your usage this month is ${stats.totalUnits} units out of a ${stats.limit} limit.`,
     };
   }
 }
@@ -1923,15 +1923,15 @@ export class CreateTabGroupCommand implements Command {
       });
       let msg: string;
       if (openUrl) {
-        msg = `Created tab group "${name}" and opened ${openUrl} in it.`;
+        msg = `I've created the tab group "${name}" and opened ${openUrl} in it for you.`;
       } else if (createdNewTab) {
-        msg = `Created tab group "${name}" with a new tab.`;
+        msg = `I've created the tab group "${name}" with a new tab.`;
       } else {
-        msg = `Created tab group "${name}" with ${groupableTabs.length} tab(s).`;
+        msg = `I've created the tab group "${name}" with ${groupableTabs.length} tab(s).`;
       }
       return { message: msg };
     } catch (e) {
-      return { message: `Failed to create tab group: ${e}` };
+      return { message: `I'm sorry, I couldn't create the tab group: ${e}` };
     }
   }
 }
@@ -1945,12 +1945,12 @@ export class DeleteTabGroupCommand implements Command {
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
 
     const name = stringArg(args, "name");
-    if (!name) return { message: "Which tab group should I delete?" };
+    if (!name) return { message: "Which tab group would you like me to delete?" };
 
     const group = findGroupByName(gBrowser, name);
 
     if (!group) {
-      return { message: `No tab group named "${name}".` };
+      return { message: `I couldn't find a tab group named "${name}".` };
     }
 
     const tabCount = (group.tabs || []).length;
@@ -1959,14 +1959,14 @@ export class DeleteTabGroupCommand implements Command {
     if (booleanArg(args, "confirmed") !== true) {
       const closeMsg = closeTabs
         ? " and close all its tabs"
-        : " (tabs will be ungrouped)";
+        : " (your tabs will be ungrouped)";
       setPendingConfirmation({
         command: "delete_tab_group",
         args: { ...args, confirmed: true },
         description: `Delete tab group "${name}"${closeMsg}?`,
       });
       return {
-        message: `Requesting confirmation to delete tab group "${name}" (${tabCount} tabs)${closeMsg}...`,
+        message: `Are you sure you want to delete the tab group "${name}" (${tabCount} tabs)${closeMsg}?`,
         requiresConfirmation: true,
         confirmationData: { name, tabCount, closeTabs },
       };
@@ -1991,10 +1991,10 @@ export class DeleteTabGroupCommand implements Command {
         name: group.label || name,
       });
       return {
-        message: `Deleted tab group "${name}"${closeTabs ? " and closed its tabs" : ""}.`,
+        message: `I've deleted the tab group "${name}"${closeTabs ? " and closed its tabs" : ""}.`,
       };
     } catch (e) {
-      return { message: `Failed to delete tab group: ${e}` };
+      return { message: `I'm sorry, I couldn't delete the tab group: ${e}` };
     }
   }
 }

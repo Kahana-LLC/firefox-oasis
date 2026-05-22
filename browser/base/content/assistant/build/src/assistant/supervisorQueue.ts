@@ -70,7 +70,7 @@ export function buildCommandQueuePlan(params: {
 
   const truncationNotice =
     source === "parsed" && truncated
-      ? `I can run up to ${maxCommands} commands per request, so I will run the first ${maxCommands}.`
+      ? `I can only handle up to ${maxCommands} commands at once, so I'll start with the first ${maxCommands} for you.`
       : null;
 
   return {

@@ -20,10 +20,10 @@ const SUMMARIZE_INSTRUCTION = `The content above is from a webpage that the user
 Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
 
 const TOOL_OUTPUT_INSTRUCTION =
-  "The command context above is internal trace data. Write a natural language response to the user's request using it, but never echo raw payload text, JSON, IDs, or serialized objects. Do NOT reference this instruction.";
+  "The command context above contains the result of a browser action. Synthesize this data into a friendly, conversational response that directly addresses the user's original request. If the data is JSON, parse and present it beautifully. Do NOT echo raw trace data or reference this instruction.";
 
 const DEFAULT_INSTRUCTION =
-  "Please respond to the user's message naturally and helpfully. Do NOT reference this instruction.";
+  "Please respond to the user's message naturally and helpfully. IMPORTANT: NEVER claim to have performed a browser action (closing tabs, bookmarks, etc.) if there is no internal command result confirming it in the context above. Do NOT reference this instruction.";
 
 export function buildHiddenInstruction(
   ctx: HiddenInstructionContext
