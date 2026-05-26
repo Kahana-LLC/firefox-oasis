@@ -13,7 +13,89 @@ type Particle = {
   shape: "rect" | "dot";
 };
 
-export function playTrainingConfetti(): void {
+const RAINBOW_HUES = [
+  "#e11d48",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#3b82f6",
+  "#a855f7",
+];
+
+const FALLBACK_ACCENT = "#7a9200";
+const FALLBACK_SOFT = "#e8f0c8";
+
+function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+  const normalized = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(normalized)) {
+    return null;
+  }
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map(c => c + c)
+          .join("")
+      : normalized;
+  const n = Number.parseInt(full, 16);
+  return {
+    r: (n >> 16) & 255,
+    g: (n >> 8) & 255,
+    b: n & 255,
+  };
+}
+
+function toHex(r: number, g: number, b: number): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[clamp(r), clamp(g), clamp(b)]
+    .map(v => v.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function mixRgb(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number },
+  weightB: number
+): string {
+  const w = Math.max(0, Math.min(1, weightB));
+  return toHex(
+    a.r * (1 - w) + b.r * w,
+    a.g * (1 - w) + b.g * w,
+    a.b * (1 - w) + b.b * w
+  );
+}
+
+function buildShadesFromAccent(accent: string, soft: string): string[] {
+  const accentRgb = parseHexColor(accent);
+  const softRgb = parseHexColor(soft);
+  if (!accentRgb) {
+    return [accent, FALLBACK_SOFT, "#94a82e", "#5a7000"];
+  }
+  const white = { r: 255, g: 255, b: 255 };
+  const black = { r: 0, g: 0, b: 0 };
+  const shades = [
+    accent,
+    softRgb ? toHex(softRgb.r, softRgb.g, softRgb.b) : mixRgb(accentRgb, white, 0.55),
+    mixRgb(accentRgb, white, 0.35),
+    mixRgb(accentRgb, black, 0.22),
+    mixRgb(accentRgb, black, 0.38),
+  ];
+  return [...new Set(shades)];
+}
+
+export function getTrainingConfettiPalette(): string[] {
+  if (typeof document === "undefined") {
+    return [...buildShadesFromAccent(FALLBACK_ACCENT, FALLBACK_SOFT), ...RAINBOW_HUES];
+  }
+  const root = document.documentElement;
+  const styles = getComputedStyle(root);
+  const accent =
+    styles.getPropertyValue("--primary-green").trim() || FALLBACK_ACCENT;
+  const soft = styles.getPropertyValue("--primary-50").trim() || FALLBACK_SOFT;
+  return [...buildShadesFromAccent(accent, soft), ...RAINBOW_HUES];
+}
+
+export function playTrainingConfetti(colors?: string[]): void {
   if (typeof document === "undefined" || typeof window === "undefined") {
     return;
   }
@@ -21,6 +103,8 @@ export function playTrainingConfetti(): void {
   if (motionMq?.matches) {
     return;
   }
+
+  const palette = colors?.length ? colors : getTrainingConfettiPalette();
 
   const canvas = document.createElement("canvas");
   canvas.setAttribute("aria-hidden", "true");
@@ -41,14 +125,6 @@ export function playTrainingConfetti(): void {
   canvas.height = h * dpr;
   draw.scale(dpr, dpr);
 
-  const colors = [
-    "#7a9200",
-    "#94a82e",
-    "#5a7000",
-    "#c5d49a",
-    "#4a5c00",
-    "#e8f0c8",
-  ];
   const particles: Particle[] = [];
   const burst = (
     count: number,
@@ -70,7 +146,7 @@ export function playTrainingConfetti(): void {
         r: 2 + Math.random() * 4.4,
         rot: Math.random() * Math.PI * 2,
         vr: (Math.random() - 0.5) * 0.42,
-        color: colors[(Math.random() * colors.length) | 0]!,
+        color: palette[(Math.random() * palette.length) | 0]!,
         life: 0,
         max: 62 + Math.random() * 55,
         shape: Math.random() < 0.35 ? "dot" : "rect",
