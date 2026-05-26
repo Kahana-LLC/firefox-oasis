@@ -428,6 +428,8 @@ export function App() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationData | null>(null);
   const [pendingClarification, setPendingClarification] = useState<ClarificationData | null>(null);
+  const [clarificationDirectInputOpen, setClarificationDirectInputOpen] = useState(false);
+  const [clarificationDirectInput, setClarificationDirectInput] = useState('');
   const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
   const [trainingFocusTick, setTrainingFocusTick] = useState(0);
   const [trainingFocusMessageId, setTrainingFocusMessageId] = useState('');
@@ -492,6 +494,13 @@ export function App() {
     onAuthenticated: handleAuthenticated,
     onUserChanged: handleUserChanged,
   });
+
+  useEffect(() => {
+    if (!pendingClarification) {
+      setClarificationDirectInputOpen(false);
+      setClarificationDirectInput('');
+    }
+  }, [pendingClarification]);
 
   useEffect(() => {
     try {
@@ -668,18 +677,36 @@ export function App() {
       {pendingClarification && (
         <ClarificationModal
           data={pendingClarification}
+          directInputOpen={clarificationDirectInputOpen}
+          directInputValue={clarificationDirectInput}
           onSelect={optionId => {
             const idx = pendingClarification.options.findIndex(
               o => o.id === optionId
             );
             setPendingClarification(null);
+            setClarificationDirectInputOpen(false);
+            setClarificationDirectInput('');
             if (idx >= 0) {
-              void runtime.send(`clarify:opt_${idx + 1}`);
+              void runtime.send(`clarify:opt_${idx + 1}`, {
+                hideUserMessage: true,
+              });
             }
           }}
-          onCancel={() => {
+          onOpenDirectInput={() => {
+            setClarificationDirectInputOpen(true);
+          }}
+          onDirectInputChange={value => {
+            setClarificationDirectInput(value);
+          }}
+          onTellDirectly={() => {
+            const text = clarificationDirectInput.trim();
+            if (!text) {
+              return;
+            }
             setPendingClarification(null);
-            void runtime.send('none');
+            setClarificationDirectInputOpen(false);
+            setClarificationDirectInput('');
+            void runtime.send(text);
           }}
         />
       )}

@@ -25,7 +25,7 @@ import {
   shouldAttemptAssist,
 } from "../services/assistEndpointState.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
-import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
+import { shouldAskAssistRouter } from "../utils/routingUtils.js";
 import { classifyCommandFamily } from "../utils/intentParser.js";
 import type { IntentFamily } from "../utils/routerTypes.js";
 import {
@@ -235,7 +235,9 @@ export type AssistRouteResult =
  * Edge (authenticated) sends `usage_stats` after server-side RPC — update cache only.
  * Lambda (or anonymous) sends `usage_metadata` — insert `llm_usage` row with real tokens.
  */
-function syncSubscriptionFromAssistRouterResponse(assist: AssistResponse): void {
+function syncSubscriptionFromAssistRouterResponse(
+  assist: AssistResponse
+): void {
   const raw = assist as Record<string, unknown>;
   if (isRecord(raw.usage_stats)) {
     subscriptionService.updateFromAssistUsageStats(
@@ -285,7 +287,7 @@ export async function tryResolveAssistRoute(params: {
   } = params;
 
   const shouldTryAssistRouting =
-    commandQueueLength <= 1 && looksLikeNewActionCommand(activeCommandText);
+    commandQueueLength <= 1 && shouldAskAssistRouter(activeCommandText);
   if (!shouldTryAssistRouting) {
     return { kind: "none" };
   }
@@ -340,7 +342,9 @@ export async function tryResolveAssistRoute(params: {
       assistLoop
     );
     const innerRounds =
-      typeof assist?.inner_rounds === "number" ? assist.inner_rounds : undefined;
+      typeof assist?.inner_rounds === "number"
+        ? assist.inner_rounds
+        : undefined;
     if (innerRounds != null && innerRounds > 1) {
       assistantLogger.debug("router", "Assist inner rounds", { innerRounds });
     }

@@ -31,7 +31,11 @@ import {
 import type { AssistantWindowLike } from "../types/runtime.js";
 import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
-import { looksLikeNewActionCommand } from "../utils/routingUtils.js";
+import { hasPageContextRequest } from "../utils/pageContextRequest.js";
+import {
+  looksLikeNewActionCommand,
+  looksLikePageContextRequest,
+} from "../utils/routingUtils.js";
 import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
 import { getChatSystemPrompt } from "../prompts/chatPrompt.js";
 import { subscriptionService } from "../services/subscription.js";
@@ -167,7 +171,7 @@ export function buildAssistantGraph(
     const lastMsgText = msgText(lastMsg as MessageLike);
     const toolPayload = getToolResultPayload(lastMsg as MessageLike);
     const hasToolOutput = Boolean(toolPayload);
-    const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+    const includesPageContextRequest = hasPageContextRequest(lastMsgText);
 
     const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
     if (capabilitiesReply) {
@@ -179,7 +183,7 @@ export function buildAssistantGraph(
     }
 
     const hiddenInstruction = buildHiddenInstruction({
-      hasSummarizeRequest,
+      hasPageContextRequest: includesPageContextRequest,
       hasToolOutput,
     });
 
@@ -358,12 +362,15 @@ export function buildAssistantGraph(
     const effectiveCommandLine = clarifiedPrompt || commandLine;
     const topLevelActionText = effectiveCommandLine.toLowerCase();
     const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
+    const topLevelPageContextRequest =
+      looksLikePageContextRequest(effectiveCommandLine);
 
     if (
       !hasQueuedCommands &&
       effectiveCommandLine &&
       !clarifiedPrompt &&
-      topLevelActionLike
+      topLevelActionLike &&
+      !topLevelPageContextRequest
     ) {
       const clarification = await classifyClarificationNeed({
         messages: state.messages,

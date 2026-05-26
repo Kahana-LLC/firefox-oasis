@@ -67,5 +67,9 @@ export function buildAssistRouterPrompt(
     "For follow-ups like 'open it' after search results, prefer open_search_result with index (default 1).",
     "If the user asks to inspect previous search results, use get_recent_search_results.",
     "For ambiguous destructive/container targets, prefer safe commands like resolve_ambiguity instead of guessing.",
+    "PAGE CONTEXT:",
+    "- Use summarize_page for explicit summaries of the active page, such as 'summarize this page' or 'summarize this tab'.",
+    "- Use summarize_page for active-page questions grounded in what is currently open, such as 'show me the price of this', 'what does this page say about refunds?', or 'based on this page, is this legit?'.",
+    "- For summarize_page, put the user's page-grounded question or task into query. Only use index when the user explicitly points to a numbered tab. If index is omitted, the current active tab will be used.",
   ].join(" ");
 }

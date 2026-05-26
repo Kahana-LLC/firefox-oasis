@@ -4,12 +4,38 @@ import type { ClarificationData } from '../types';
 export function ClarificationModal({
   data,
   onSelect,
-  onCancel,
+  directInputOpen,
+  directInputValue,
+  onOpenDirectInput,
+  onDirectInputChange,
+  onTellDirectly,
 }: {
   data: ClarificationData;
   onSelect: (optionId: string) => void;
-  onCancel: () => void;
+  directInputOpen: boolean;
+  directInputValue: string;
+  onOpenDirectInput: () => void;
+  onDirectInputChange: (value: string) => void;
+  onTellDirectly: () => void;
 }) {
+  const handleNumericShortcut = (event: KeyboardEvent) => {
+    if (directInputOpen) {
+      return;
+    }
+    if (event.key === '1' || event.key === '2') {
+      const option = data.options[Number(event.key) - 1];
+      if (option) {
+        event.preventDefault();
+        onSelect(option.id);
+      }
+      return;
+    }
+    if (event.key === '3') {
+      event.preventDefault();
+      onOpenDirectInput();
+    }
+  };
+
   return (
     <div
       className="clarification-overlay"
@@ -28,6 +54,11 @@ export function ClarificationModal({
     >
       <div
         className="clarification-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="oasis-clarification-title"
+        onKeyDown={handleNumericShortcut}
+        tabIndex={-1}
         style={{
           background: '#fff',
           borderRadius: '12px',
@@ -66,7 +97,10 @@ export function ClarificationModal({
           </svg>
         </div>
 
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#333' }}>
+        <h3
+          id="oasis-clarification-title"
+          style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#333' }}
+        >
           What did you mean?
         </h3>
 
@@ -100,24 +134,73 @@ export function ClarificationModal({
               {option.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={onOpenDirectInput}
+            style={{
+              padding: '12px 16px',
+              border: '1px solid #d9e1b4',
+              borderRadius: '8px',
+              background: '#F7F9EC',
+              color: '#425000',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <span style={{ fontWeight: 600, marginRight: '8px', color: '#7A9200' }}>
+              3.
+            </span>
+            None of these
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{
-            padding: '10px 20px',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            background: '#fff',
-            color: '#666',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-          }}
-        >
-          None of these
-        </button>
+        {directInputOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input
+              type="text"
+              ref={element => {
+                element?.focus();
+              }}
+              value={directInputValue}
+              onInput={event => {
+                onDirectInputChange((event.currentTarget as HTMLInputElement).value);
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onTellDirectly();
+                }
+              }}
+              placeholder="Tell Oasis what you meant"
+              style={{
+                padding: '12px 14px',
+                border: '1px solid #d8d8d8',
+                borderRadius: '8px',
+                fontSize: '14px',
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Send to Oasis"
+              disabled={!directInputValue.trim()}
+              onClick={onTellDirectly}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '8px',
+                background: '#7A9200',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: directInputValue.trim() ? 'pointer' : 'default',
+                opacity: directInputValue.trim() ? 1 : 0.55,
+              }}
+            >
+              Enter
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

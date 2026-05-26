@@ -7,7 +7,7 @@
  * - execute(args): performs the browser action and returns a result
  *
  * Commands cover: tab management, navigation, bookmark folders, tab groups,
- * search (full-text + semantic), window management, page summarization,
+ * search (full-text + semantic), window management, active-page reading,
  * and interaction flows (confirmation, ambiguity resolution).
  */
 import { bookmarkFolders, CreateFolderOpts } from "./bookmarkFolders";
@@ -29,7 +29,6 @@ import {
 import {
   findGroupByName,
   findTabByIndex,
-  findTabsByQuery,
   getChromeContext,
   getTabGroups,
   getTabs,
@@ -62,6 +61,7 @@ import type {
   BrowserTabLike,
   BrowserWindowLike,
 } from "./types/runtime";
+import { buildPageContextRequestMessage } from "./utils/pageContextRequest";
 
 type CommandArgs = InteractionCommandArgs;
 type SearchResultItem = {
@@ -183,10 +183,6 @@ type BrowserChromeExtras = BrowserWindowLike & {
   SessionStore?: { undoCloseTab?: (win: Window, index?: number) => unknown };
   gSync?: { showSendToDeviceViewFromFxaMenu?: (anchor: Element) => void };
 };
-
-function normalizeQuery(value: string | undefined): string {
-  return (value || "").trim().toLowerCase();
-}
 
 function toWebSearchUrl(query: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
@@ -446,7 +442,9 @@ export class OrganizeWindowsCommand implements Command {
       win.moveTo(xPos, availTop);
     }
 
-    return { message: `I've arranged your ${numWindows} windows side-by-side.` };
+    return {
+      message: `I've arranged your ${numWindows} windows side-by-side.`,
+    };
   }
 }
 
@@ -497,8 +495,7 @@ export class OpenUrlCommand implements Command {
 
 export class WebSearchCommand implements Command {
   commandName = "web_search";
-  description =
-    "Search the web in a new tab. Arguments: { query: string }.";
+  description = "Search the web in a new tab. Arguments: { query: string }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { topWin } = getChrome();
     const query = stringArg(args, "query");
@@ -506,7 +503,9 @@ export class WebSearchCommand implements Command {
       return { message: "Missing 'query' argument." };
     }
     if (!topWin?.openTrustedLinkIn) {
-      return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+      return {
+        message: "Cannot open web search (openTrustedLinkIn not found).",
+      };
     }
     const searchUrl = toWebSearchUrl(query);
     topWin.openTrustedLinkIn(searchUrl, "tab");
@@ -634,7 +633,8 @@ export class UnpinTabCommand implements Command {
     const tab = tabByIndexOrCurrent(gb, idx);
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
-    if (!tab.pinned) return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
+    if (!tab.pinned)
+      return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
     gb.unpinTab(tab);
     return { message: `I've unpinned that tab for you: ${tabTitle(tab)}` };
   }
@@ -654,7 +654,9 @@ export class UnloadTabCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     await gb.explicitUnloadTabs([tab]);
-    return { message: `I've unloaded that tab to save memory: ${tabTitle(tab)}` };
+    return {
+      message: `I've unloaded that tab to save memory: ${tabTitle(tab)}`,
+    };
   }
 }
 
@@ -674,7 +676,9 @@ export class NewTabToRightCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.addAdjacentNewTab(tab);
-    return { message: `I've opened a new tab to the right of: ${tabTitle(tab)}` };
+    return {
+      message: `I've opened a new tab to the right of: ${tabTitle(tab)}`,
+    };
   }
 }
 
@@ -727,7 +731,9 @@ export class MoveTabToStartCommand implements Command {
     if (!tab)
       return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
     gb.moveTabToStart(tab);
-    return { message: `I've moved that tab to the beginning: ${tabTitle(tab)}` };
+    return {
+      message: `I've moved that tab to the beginning: ${tabTitle(tab)}`,
+    };
   }
 }
 
@@ -904,7 +910,9 @@ export class CloseOtherTabsCommand implements Command {
 
     clearPendingConfirmation();
     gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
-    return { message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.` };
+    return {
+      message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.`,
+    };
   }
 }
 
@@ -921,7 +929,8 @@ export class ReopenClosedTabCommand implements Command {
       };
     const index = numberArg(args, "index");
     const reopened = ss.undoCloseTab(topWin as Window, index ?? 0);
-    if (!reopened) return { message: "I didn't find any recently closed tabs to reopen." };
+    if (!reopened)
+      return { message: "I didn't find any recently closed tabs to reopen." };
     return { message: "I've reopened the last tab you closed." };
   }
 }
@@ -984,7 +993,9 @@ export class MoveTabToNewWindowCommand implements Command {
     const newWin = topWin.OpenBrowserWindow();
     await new Promise(r => setTimeout(r, 250)); // give it a tick
     newWin.gBrowser?.adoptTab?.(tab, 0);
-    return { message: `I've moved the tab "${title}" to a new window for you.` };
+    return {
+      message: `I've moved the tab "${title}" to a new window for you.`,
+    };
   }
 }
 
@@ -1001,9 +1012,13 @@ export class CopyTabUrlsCommand implements Command {
     const text = urls.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      return { message: `I've copied ${urls.length} URL(s) to your clipboard.` };
+      return {
+        message: `I've copied ${urls.length} URL(s) to your clipboard.`,
+      };
     } catch {
-      return { message: `I couldn't access the clipboard, but here are the URLs:\n${text}` };
+      return {
+        message: `I couldn't access the clipboard, but here are the URLs:\n${text}`,
+      };
     }
   }
 }
@@ -1061,7 +1076,8 @@ export class DeleteBookmarkFolderCommand implements Command {
     clearPendingConfirmation();
     const closeTabs = booleanArg(args, "closeTabs") === true;
     const res = await bookmarkFolders.delete(name, { closeTabs });
-    if (res.removed === 0) return { message: `I couldn't find a folder named "${name}".` };
+    if (res.removed === 0)
+      return { message: `I couldn't find a folder named "${name}".` };
     applyRoutingStateMutation({
       kind: "delete",
       entity: "folder",
@@ -1078,7 +1094,8 @@ export class ListBookmarkFoldersCommand implements Command {
   description = "List all managed bookmark folders. Accepts no arguments.";
   async execute(_args: CommandArgs): Promise<CmdResult> {
     const items = await bookmarkFolders.list();
-    if (!items.length) return { message: "You don't have any bookmark folders yet." };
+    if (!items.length)
+      return { message: "You don't have any bookmark folders yet." };
     return {
       message: JSON.stringify(items.map(h => `${h.name} (${h.count})`)),
     };
@@ -1093,7 +1110,10 @@ export class RenameBookmarkFolderCommand implements Command {
     const from = stringArg(args, "from");
     const to = stringArg(args, "to");
     if (!from || !to)
-      return { message: "Please tell me the current name and the new name for the folder." };
+      return {
+        message:
+          "Please tell me the current name and the new name for the folder.",
+      };
     const r = await bookmarkFolders.rename(from, to);
     if (r.ok) {
       applyRoutingStateMutation({
@@ -1144,11 +1164,13 @@ export class AddTabToBookmarkFolderCommand implements Command {
       }
     }
 
-    if (tabsToAdd.length === 0) return { message: "I don't see any tabs to add." };
+    if (tabsToAdd.length === 0)
+      return { message: "I don't see any tabs to add." };
 
     const r = await bookmarkFolders.addTabs(name, tabsToAdd);
 
-    if (!r.ok) return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
+    if (!r.ok)
+      return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
     applyRoutingStateMutation({
       kind: "upsert",
       entity: "folder",
@@ -1156,7 +1178,9 @@ export class AddTabToBookmarkFolderCommand implements Command {
     });
 
     const count = tabsToAdd.length;
-    return { message: `I've added ${count} tab(s) to your bookmark folder "${name}".` };
+    return {
+      message: `I've added ${count} tab(s) to your bookmark folder "${name}".`,
+    };
   }
 }
 
@@ -1219,7 +1243,9 @@ export class AddSplitViewCommand implements Command {
       false
     );
     if (!splitViewEnabled) {
-      return { message: "I'm sorry, split view isn't enabled in this browser." };
+      return {
+        message: "I'm sorry, split view isn't enabled in this browser.",
+      };
     }
 
     let tab1: BrowserTabLike | null = null;
@@ -1307,7 +1333,9 @@ export class RemoveSplitViewCommand implements Command {
 
     try {
       splitview.unsplitTabs();
-      return { message: "I've removed the split view and separated your tabs." };
+      return {
+        message: "I've removed the split view and separated your tabs.",
+      };
     } catch (e) {
       return { message: `I couldn't remove the split view: ${e}` };
     }
@@ -1400,14 +1428,16 @@ export class SplitTabsCommand implements Command {
     }
 
     const tabTitles = windows.map(w => w.title).join(", ");
-    return { message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.` };
+    return {
+      message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.`,
+    };
   }
 }
 
 export class SummarizePageCommand implements Command {
   commandName = "summarize_page";
   description =
-    "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+    "Read the current page and answer from it. Use for explicit summaries, questions about the active page, and grounded evaluations based on the page content. Arguments: { index?: number, query?: string }. Use index only when the user explicitly refers to a numbered tab. If index is omitted, always use the current active tab. Put the user's page-grounded question or task in query.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI not available." };
@@ -1418,39 +1448,32 @@ export class SummarizePageCommand implements Command {
     // Allow specifying tab by index
     if (idx != null && !tab) return { message: `I couldn't find tab ${idx}.` };
 
-    // Allow specifying tab by query (title/URL match)
-    const query = normalizeQuery(stringArg(args, "query"));
-    if (query && !idx) {
-      tab = findTabsByQuery(gBrowser, query)[0] || null;
-      if (!tab) {
-        return {
-          message: `I couldn't find a tab matching "${stringArg(args, "query") || ""}".`,
-        };
-      }
-    }
-
     const browser = tab?.linkedBrowser;
     if (!browser) return { message: "I couldn't find an active tab." };
 
     const url = browser.currentURI?.spec || "";
     const title = tabTitle(tab);
+    const userQuery = (stringArg(args, "query") || "").trim();
 
-    // Skip certain pages that can't be summarized
     if (
       url.startsWith("about:") ||
       url.startsWith("chrome://") ||
       url.startsWith("moz-extension://")
     ) {
-      return { message: "I'm sorry, I can't summarize internal browser pages." };
+      return {
+        message: "I'm sorry, I can't read internal browser pages.",
+      };
     }
 
     try {
       // Use PageExtractor actor for Fission-compatible content extraction
-      const currentWindowContext = browser.browsingContext?.currentWindowContext;
+      const currentWindowContext =
+        browser.browsingContext?.currentWindowContext;
 
       if (!currentWindowContext) {
         return {
-          message: "I can't access the page content right now. Is it still loading?",
+          message:
+            "I can't access the page content right now. Is it still loading?",
         };
       }
 
@@ -1490,7 +1513,7 @@ export class SummarizePageCommand implements Command {
 
       if (!content || content.length < 50) {
         return {
-          message: "I didn't find enough content on this page to summarize.",
+          message: "I didn't find enough content on this page to answer from.",
         };
       }
 
@@ -1500,12 +1523,18 @@ export class SummarizePageCommand implements Command {
         content = content.substring(0, maxLength) + "...";
       }
 
-      // Return the content for the chat node to summarize
       return {
-        message: `__SUMMARIZE_REQUEST__\nTitle: ${title}\nURL: ${url}\n\nContent:\n${content}`,
+        message: buildPageContextRequestMessage({
+          title,
+          url,
+          userQuery,
+          content,
+        }),
       };
     } catch (e) {
-      return { message: `I'm sorry, I couldn't extract the page content: ${e}` };
+      return {
+        message: `I'm sorry, I couldn't extract the page content: ${e}`,
+      };
     }
   }
 }
@@ -1524,7 +1553,8 @@ export class SearchMemoryCommand implements Command {
     const source = stringArg(args, "source");
     const sourceScope =
       source === "bookmark-folder" ? "bookmark-folder" : undefined;
-    if (!query) return { message: "Please tell me what you'd like to search for." };
+    if (!query)
+      return { message: "Please tell me what you'd like to search for." };
 
     let results = await localMemory.search(
       query,
@@ -1630,13 +1660,19 @@ export class SearchMemoryCommand implements Command {
         bookmarkGuid: r.metadata?.bookmarkGuid || undefined,
         context:
           r.metadata?.context ||
-          (source === "history" ? "Browsing History" :
-            source === "bookmark" ? "Bookmarks" :
-              source === "bookmark-folder" ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}` :
-                source === "tab" ? "Open Tab" :
-                  source === "tab-group" ? "Tab Group" :
-                    "Memory"),
-        snippet: r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
+          (source === "history"
+            ? "Browsing History"
+            : source === "bookmark"
+              ? "Bookmarks"
+              : source === "bookmark-folder"
+                ? `Bookmark Folder: ${r.metadata?.hubName || "unknown"}`
+                : source === "tab"
+                  ? "Open Tab"
+                  : source === "tab-group"
+                    ? "Tab Group"
+                    : "Memory"),
+        snippet:
+          r.text.length > 120 ? r.text.substring(0, 120) + "..." : r.text,
       };
     });
     setRecentSearchResults(structured);
@@ -1945,7 +1981,8 @@ export class DeleteTabGroupCommand implements Command {
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
 
     const name = stringArg(args, "name");
-    if (!name) return { message: "Which tab group would you like me to delete?" };
+    if (!name)
+      return { message: "Which tab group would you like me to delete?" };
 
     const group = findGroupByName(gBrowser, name);
 
@@ -2339,7 +2376,7 @@ function formatRelativeVisitTime(visitDate: number): string {
 export class SearchHistorySemanticCommand implements Command {
   commandName = "search_history";
   description =
-    "Search the user's recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as \"\" to return recent visits.";
+    'Search the user\'s recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as "" to return recent visits.';
 
   async execute(args: CommandArgs): Promise<CmdResult> {
     const qVal = (args as Record<string, unknown>)?.query;

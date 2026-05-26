@@ -143,6 +143,9 @@ export function resolvePendingClarificationGate(params: {
   const optMatch = CLARIFY_OPTION_RE.exec(confirmationText.trim());
   if (optMatch) {
     const idx = parseInt(optMatch[1] || optMatch[2], 10) - 1;
+    if (idx === pendingClarification.options.length) {
+      return { kind: "cancel" };
+    }
     const option = pendingClarification.options[idx];
     if (option) {
       return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
@@ -156,9 +159,5 @@ export function resolvePendingClarificationGate(params: {
     }
   }
 
-  if (looksLikeNewActionCommand(commandText)) {
-    return { kind: "clear" };
-  }
-
-  return { kind: "cancel" };
+  return { kind: "clear" };
 }

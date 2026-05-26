@@ -105,7 +105,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
   get_recent_search_results: `{"limit?":"number"}`,
   open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
-  summarize_page: `{"index?":"number","query?":"string"}`,
+  summarize_page: `{"index?":"number","query?":"string (the user's page-grounded question or task)"}`,
   show_subscription: `{}`,
   search_history: `{"query":"string (optional; omit or \"\" for recent visits)"}`,
 };

@@ -2,7 +2,7 @@
  * Meta-prompting clarification classifier.
  *
  * Before routing an ambiguous user message, asks the LLM whether the
- * intent is clear. If not, the LLM returns 2-3 candidate interpretations
+ * intent is clear. If not, the LLM returns 2 candidate interpretations
  * that the UI presents as options for the user to choose from.
  */
 import type { BaseMessage } from "@langchain/core/messages";
@@ -19,7 +19,7 @@ const CLARIFICATION_SYSTEM_PROMPT = [
   "If the request is CLEAR (single unambiguous action, specific enough to execute), respond:",
   '{"need_clarification": false}',
   "",
-  "If the request is AMBIGUOUS (multiple plausible interpretations, missing critical details, or could lead to unintended results), respond with exactly 2-3 candidate interpretations:",
+  "If the request is AMBIGUOUS (multiple materially different interpretations, missing critical details, or could lead to unintended results), respond with exactly 2 candidate interpretations:",
   '{"need_clarification": true, "options": [{"id": "opt_1", "label": "<short summary>", "resolvedPrompt": "<fully self-contained reformulation>"},  ...]}',
   "",
   "Rules:",
@@ -52,7 +52,7 @@ const CLARIFICATION_GENERATION_CONFIG = {
           required: ["id", "label", "resolvedPrompt"],
         },
         description:
-          "2-3 candidate interpretations when need_clarification is true.",
+          "2 candidate interpretations when need_clarification is true.",
       },
     },
     required: ["need_clarification"],
@@ -102,7 +102,7 @@ export async function classifyClarificationNeed(params: {
     }
 
     const validOptions: ClarificationOption[] = options
-      .slice(0, 3)
+      .slice(0, 2)
       .filter(
         (opt: unknown) =>
           typeof (opt as Record<string, unknown>).id === "string" &&
