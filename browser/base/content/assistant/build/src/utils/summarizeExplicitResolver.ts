@@ -1,4 +1,4 @@
-/** Routes "summarize this page" / "summarize tab N" commands to summarize_page. Supports current tab, tab index, tab query, and generic summarize patterns. */
+/** Deterministic fallback for exact summarize-page commands. */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 type SummarizeRoute = {
@@ -22,13 +22,30 @@ function numberArg(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function normalizeExactSummaryInput(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .trim();
+}
+
 const SUMMARIZE_ROUTES: readonly SummarizeRoute[] = [
   {
-    reason: "summarize-current-tab",
-    resolve: input =>
-      /summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i.test(input)
-        ? {}
-        : null,
+    reason: "summarize-current-page",
+    resolve: input => {
+      const normalized = normalizeExactSummaryInput(input);
+      return new Set([
+        "summarize this page",
+        "summarize this tab",
+        "summarize current page",
+        "summarize current tab",
+        "summarize active page",
+        "summarize active tab",
+      ]).has(normalized)
+        ? { query: input.trim() }
+        : null;
+    },
   },
   {
     reason: "summarize-tab-index",
@@ -40,30 +57,8 @@ const SUMMARIZE_ROUTES: readonly SummarizeRoute[] = [
         return null;
       }
       const index = numberArg(match.groups?.index) ?? 1;
-      return { index };
+      return { index, query: input.trim() };
     },
-  },
-  {
-    reason: "summarize-tab-query",
-    resolve: input => {
-      const match = input.match(
-        /summarize\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*tab/i
-      );
-      const query = match?.groups?.query?.trim();
-      if (!query || /^(?:current|this|active)$/i.test(query)) {
-        return null;
-      }
-      return { query };
-    },
-  },
-  {
-    reason: "summarize-page",
-    resolve: input =>
-      /summarize\s+(?:this\s+)?(?:page|article|website|site)?|(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)|give\s+(?:me\s+)?(?:a\s+)?summary/i.test(
-        input
-      )
-        ? {}
-        : null,
   },
 ];
 

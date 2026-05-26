@@ -429,7 +429,8 @@ export function useAssistantRuntime(params: {
         inputType,
         aiMessageId
       );
-      const interactionId = oasisWindow.oasisGetInteractionIdForMessage?.(aiMessageId) ?? undefined;
+      const interactionId =
+        oasisWindow.oasisGetInteractionIdForMessage?.(aiMessageId) ?? undefined;
       if (interactionId) {
         setMessages(previous =>
           previous.map(msg =>
@@ -693,8 +694,12 @@ export function useAssistantRuntime(params: {
   }, [auth.isAuthenticated, stopSpeaking]);
 
   const send = useCallback(
-    async (textInput?: string, options?: { fromVoice?: boolean }) => {
+    async (
+      textInput?: string,
+      options?: { fromVoice?: boolean; hideUserMessage?: boolean }
+    ) => {
       const fromVoice = options?.fromVoice ?? false;
+      const hideUserMessage = options?.hideUserMessage ?? false;
       const text = textInput || input;
       if (!text.trim()) {
         return;
@@ -722,11 +727,13 @@ export function useAssistantRuntime(params: {
       setResponseStreaming(false);
       setBusy(true);
       setToolActions([]);
-      const userMessageId = uuid();
-      setMessages(previous => [
-        ...previous,
-        { id: userMessageId, role: "user", content: text },
-      ]);
+      if (!hideUserMessage) {
+        const userMessageId = uuid();
+        setMessages(previous => [
+          ...previous,
+          { id: userMessageId, role: "user", content: text },
+        ]);
+      }
 
       try {
         const result = await runStreamTurn(text, fromVoice ? "voice" : "text");

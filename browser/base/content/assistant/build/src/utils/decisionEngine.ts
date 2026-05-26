@@ -5,7 +5,7 @@
  * 1. Classify command family (list/search/mutation/other)
  * 2. Run the matching family resolver (manifestList/Search/Mutation)
  * 3. Try explicit route rules (regex patterns for URLs, commands)
- * 4. Try search result and summarize resolvers
+ * 4. Try search result and exact summarize fallback
  * 5. Check if text looks actionable but unrecognized
  * 6. Return no_match (falls through to chat)
  *

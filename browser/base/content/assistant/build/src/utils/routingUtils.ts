@@ -53,3 +53,29 @@ export function looksLikeNewActionCommand(text: string): boolean {
     KNOWN_SITES_HINT_RE.test(input);
   return hasAction && hasObjectOrTarget;
 }
+
+const PAGE_CONTEXT_REFERENCE_RE =
+  /\b(?:this|that|current|active)\s+(?:page|site|website|article|tab)\b|\bon\s+this\s+(?:page|site|website|article|tab)\b/i;
+const PAGE_CONTEXT_DEICTIC_RE =
+  /^(?:show|tell|give|find|what|which|who|when|where|why|how|does|do|is|are|based\s+on)\b.*\b(?:of|on|from|about)\s+this\b/i;
+
+export function looksLikePageContextRequest(text: string): boolean {
+  const input = String(text || "").trim();
+  if (!input) {
+    return false;
+  }
+  return (
+    PAGE_CONTEXT_REFERENCE_RE.test(input) || PAGE_CONTEXT_DEICTIC_RE.test(input)
+  );
+}
+
+export function shouldAskAssistRouter(text: string): boolean {
+  const input = String(text || "").trim();
+  if (!input) {
+    return false;
+  }
+  if (looksLikeNewActionCommand(input)) {
+    return true;
+  }
+  return looksLikePageContextRequest(input);
+}
