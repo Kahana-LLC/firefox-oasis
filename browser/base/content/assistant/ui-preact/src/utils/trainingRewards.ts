@@ -6,3 +6,5 @@ export const OASIS_PRICING_URL = "https://kahana.co/oasis-pricing";
 
 export const OASIS_AMPLIFIER_TRAINING_URL =
   "https://kahana.co/features/oasis-amplifier";
+
+export const OASIS_TRAINING_DOCS_URL = "https://kahana.co/docs/training";

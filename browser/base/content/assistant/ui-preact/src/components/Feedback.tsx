@@ -14,6 +14,7 @@ import {
   FEEDBACK_MIN_DETAIL_CHARS,
   OASIS_AMPLIFIER_TRAINING_URL,
   OASIS_PRICING_URL,
+  OASIS_TRAINING_DOCS_URL,
 } from '../utils/trainingRewards';
 import type { TrainingMode } from '../utils/trainingMode';
 export interface TrainingSubmittedPayload {
@@ -70,7 +71,14 @@ const BADGES_NEGATIVE = [
   'Other',
 ];
 
-const TRAINING_INFO_PANEL_ID = 'feedback-training-info-panel';
+const TRAINING_WIZARD_STEPS = 3;
+const WIZARD_STEP_TITLES = [
+  'Choose categories',
+  'Add your own words',
+  'Choose privacy mode',
+] as const;
+
+type WizardStep = 1 | 2 | 3;
 
 export function Feedback({
   messageId,
@@ -83,7 +91,7 @@ export function Feedback({
 }: FeedbackProps) {
   const oasisWindow = window as OasisWindow;
   const thumbUpRef = useRef<HTMLButtonElement>(null);
-  const trainingInfoWrapRef = useRef<HTMLDivElement>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [sentiment, setSentiment] = useState<'up' | 'down' | null>(null);
   const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
@@ -92,13 +100,17 @@ export function Feedback({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [thanksInline, setThanksInline] = useState(false);
   const [showSubmitHint, setShowSubmitHint] = useState(false);
-  const [detailFieldEngaged, setDetailFieldEngaged] = useState(false);
-  const [trainingInfoOpen, setTrainingInfoOpen] = useState(false);
   const [earnChipDismissed, setEarnChipDismissed] = useState(readEarnChipDismissed);
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('personalized');
   const [thanksTrainingMode, setThanksTrainingMode] = useState<TrainingMode | null>(
     null
   );
+  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
+  const [wizardSlideDirection, setWizardSlideDirection] = useState<'forward' | 'back'>(
+    'forward'
+  );
+  const [wizardStepHint, setWizardStepHint] = useState(false);
+  const [detailsFieldFocused, setDetailsFieldFocused] = useState(false);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -107,9 +119,11 @@ export function Feedback({
     setComment('');
     setSubmitted(false);
     setShowSubmitHint(false);
-    setDetailFieldEngaged(false);
-    setTrainingInfoOpen(false);
+    setWizardStepHint(false);
+    setDetailsFieldFocused(false);
     setTrainingMode('personalized');
+    setWizardStep(1);
+    setWizardSlideDirection('forward');
   }, []);
 
   useEffect(() => {
@@ -121,10 +135,6 @@ export function Feedback({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (trainingInfoOpen) {
-          setTrainingInfoOpen(false);
-          return;
-        }
         closeModal();
       }
     };
@@ -133,21 +143,7 @@ export function Feedback({
       document.body.style.overflow = prev;
       document.removeEventListener('keydown', onKey);
     };
-  }, [modalOpen, trainingInfoOpen, closeModal]);
-
-  useEffect(() => {
-    if (!modalOpen || !trainingInfoOpen) {
-      return;
-    }
-    function onDocMouseDown(ev: MouseEvent) {
-      const el = trainingInfoWrapRef.current;
-      if (el && !el.contains(ev.target as Node | null)) {
-        setTrainingInfoOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [modalOpen, trainingInfoOpen]);
+  }, [modalOpen, closeModal]);
 
   useEffect(() => {
     if (!inlineAutofocusTick || modalOpen) {
@@ -172,6 +168,7 @@ export function Feedback({
       prev.includes(badge) ? prev.filter(b => b !== badge) : [...prev, badge]
     );
     setShowSubmitHint(false);
+    setWizardStepHint(false);
   };
 
   const mpTrack = (event: string, props: Record<string, unknown> = {}) => {
@@ -190,6 +187,29 @@ export function Feedback({
       return;
     }
     window.open(OASIS_PRICING_URL, '_blank');
+  };
+
+  const openTrainingDocsPage = () => {
+    const url = OASIS_TRAINING_DOCS_URL;
+    if (oasisWindow.assistantBridge?.openTab) {
+      const opened = oasisWindow.assistantBridge.openTab(url);
+      if (opened) {
+        mpTrack('training_docs_click', {});
+        return;
+      }
+    }
+    if (typeof oasisWindow.openWebLinkIn === 'function') {
+      oasisWindow.openWebLinkIn(url, 'tab', {});
+      mpTrack('training_docs_click', {});
+      return;
+    }
+    if (window.top && typeof (window.top as OasisWindow).openWebLinkIn === 'function') {
+      (window.top as OasisWindow).openWebLinkIn!(url, 'tab', {});
+      mpTrack('training_docs_click', {});
+      return;
+    }
+    window.open(url, '_blank');
+    mpTrack('training_docs_click', {});
   };
 
   const openAmplifierTrainingDoc = (e: MouseEvent) => {
@@ -312,9 +332,10 @@ export function Feedback({
     setComment('');
     setSubmitted(false);
     setShowSubmitHint(false);
-    setDetailFieldEngaged(false);
-    setTrainingInfoOpen(false);
+    setWizardStepHint(false);
     setTrainingMode('personalized');
+    setWizardStep(1);
+    setWizardSlideDirection('forward');
     setModalOpen(true);
     if (next === 'up') {
       mpTrack('feedback_thumb_up', { messageId });
@@ -417,13 +438,6 @@ export function Feedback({
   const earnChipText = `Earn ${FEEDBACK_BONUS_TOKENS.toLocaleString()} tokens each time you train.`;
   const showInlineEarnChip = !earnChipDismissed && !modalOpen;
   const trimmedCommentLen = comment.trim().length;
-  const stepCategoriesDone = selectedBadges.length >= 1;
-  const stepDetailsEngaged = detailFieldEngaged;
-  const stepReadyDone = trimmedCommentLen >= FEEDBACK_MIN_DETAIL_CHARS;
-  const completedTrainingSteps =
-    (stepCategoriesDone ? 1 : 0) +
-    (stepDetailsEngaged ? 1 : 0) +
-    (stepReadyDone ? 1 : 0);
   const charMeterPct = Math.min(
     100,
     (trimmedCommentLen / FEEDBACK_MIN_DETAIL_CHARS) * 100
@@ -433,10 +447,81 @@ export function Feedback({
     selectedBadges.length < 1 ||
     comment.trim().length < FEEDBACK_MIN_DETAIL_CHARS;
 
-  const trainingModeHint =
-    trainingMode === 'personalized'
-      ? 'Linked to your account and used to improve Oasis for you.'
-      : 'Not linked to your account on the training record. Still earns bonus tokens when you qualify.';
+  const isStepComplete = useCallback(
+    (step: WizardStep): boolean => {
+      if (step === 1) {
+        return selectedBadges.length >= 1;
+      }
+      if (step === 2) {
+        return comment.trim().length >= FEEDBACK_MIN_DETAIL_CHARS;
+      }
+      return true;
+    },
+    [selectedBadges.length, comment]
+  );
+
+  const currentStepComplete = isStepComplete(wizardStep);
+  const showDetailsInvite =
+    wizardStep === 2 &&
+    trimmedCommentLen < FEEDBACK_MIN_DETAIL_CHARS &&
+    !detailsFieldFocused;
+  const progressPercent = Math.round(
+    ((wizardStep - 1) + (currentStepComplete ? 1 : 0)) / TRAINING_WIZARD_STEPS * 100
+  );
+
+  const goBack = useCallback(() => {
+    setWizardStepHint(false);
+    setWizardSlideDirection('back');
+    setWizardStep(s => {
+      if (s <= 1) {
+        return 1;
+      }
+      mpTrack('training_wizard_back', { from_step: s });
+      return (s - 1) as WizardStep;
+    });
+  }, []);
+
+  const goForward = useCallback(() => {
+    setWizardStepHint(false);
+    setWizardSlideDirection('forward');
+    setWizardStep(s => {
+      if (s >= TRAINING_WIZARD_STEPS || !isStepComplete(s)) {
+        return s;
+      }
+      mpTrack('training_wizard_continue', { from_step: s });
+      return (s + 1) as WizardStep;
+    });
+  }, [isStepComplete]);
+
+  const wizardTrackOffsetPct = ((wizardStep - 1) / TRAINING_WIZARD_STEPS) * 100;
+
+  useEffect(() => {
+    if (!modalOpen || submitted) {
+      return;
+    }
+    mpTrack('training_wizard_step_view', {
+      step: wizardStep,
+      sentiment: sentiment ?? undefined,
+    });
+    requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus();
+    });
+  }, [wizardStep, modalOpen, submitted, sentiment]);
+
+  const onContinueClick = () => {
+    if (!currentStepComplete) {
+      setWizardStepHint(true);
+      return;
+    }
+    goForward();
+  };
+
+  const wizardStepHintMessage =
+    wizardStep === 1
+      ? 'Choose at least one category to continue.'
+      : wizardStep === 2
+        ? `Write at least ${FEEDBACK_MIN_DETAIL_CHARS} characters to continue.`
+        : null;
 
   const onSubmitClick = () => {
     if (isSubmitting) {
@@ -462,10 +547,11 @@ export function Feedback({
         }}
       >
         <div
-          className="feedback-overlay-dialog feedback-overlay-dialog--compact"
+          className="feedback-overlay-dialog"
           role="dialog"
           aria-modal="true"
           aria-labelledby="feedback-dialog-title"
+          aria-describedby="feedback-wizard-progress-label"
           onMouseDown={(e: JSX.TargetedMouseEvent<HTMLDivElement>) => e.stopPropagation()}
         >
           {submitted ? (
@@ -481,20 +567,29 @@ export function Feedback({
             </div>
           ) : (
             <Fragment>
-              <div className="feedback-dialog-header-block" ref={trainingInfoWrapRef}>
+              <div className="feedback-dialog-header-block">
                 <div className="feedback-header">
-                  <span id="feedback-dialog-title">
-                    {sentiment === 'up' ? 'Train on a good answer' : 'Train on a miss'}
-                  </span>
+                  <div className="feedback-header__title-block">
+                    <span id="feedback-dialog-title">
+                      {sentiment === 'up' ? 'Train on a good answer' : 'Train on a miss'}
+                    </span>
+                  </div>
                   <div className="feedback-header-trailing">
+                    <span
+                      className="feedback-token-chip-wrap"
+                      role="status"
+                      aria-label={`Earn ${FEEDBACK_BONUS_TOKENS.toLocaleString()} more tokens today when you submit qualifying training`}
+                    >
+                      <span className="feedback-token-chip">
+                        +{FEEDBACK_BONUS_TOKENS.toLocaleString()} more tokens today
+                      </span>
+                    </span>
                     <div className="feedback-training-info-anchor">
                       <button
                         type="button"
                         className="feedback-training-info-btn"
-                        aria-expanded={trainingInfoOpen}
-                        aria-controls={TRAINING_INFO_PANEL_ID}
-                        aria-label="Why training and bonus tokens"
-                        onClick={() => setTrainingInfoOpen(o => !o)}
+                        aria-label="Learn more about training"
+                        onClick={openTrainingDocsPage}
                       >
                         <svg
                           width="18"
@@ -535,74 +630,76 @@ export function Feedback({
                     </button>
                   </div>
                 </div>
-                {trainingInfoOpen ? (
-                  <div
-                    id={TRAINING_INFO_PANEL_ID}
-                    className="feedback-training-info-popover"
-                    role="region"
-                    aria-label="Training overview"
-                    onMouseDown={(e: JSX.TargetedMouseEvent<HTMLDivElement>) =>
-                      e.stopPropagation()
-                    }
-                  >
-                    <p className="feedback-training-info-popover__p">
-                      {sentiment === 'up'
-                        ? 'Your input helps Oasis respond faster and more accurately over time.'
-                        : 'Showing us what missed the mark teaches the assistant to do better next time.'}
-                    </p>
-                    <p className="feedback-training-info-popover__p">
-                      Choose <strong>Personalized</strong> to link training to your account and
-                      improve Oasis for you, or <strong>Anonymous</strong> to submit without tying
-                      it to your user ID or email. Prompt and reply text are still stored in both
-                      cases.
-                    </p>
-                    <p className="feedback-training-info-popover__p">
-                      Qualifying <strong>personalized</strong> and <strong>anonymous</strong>{' '}
-                      submissions earn +{FEEDBACK_BONUS_TOKENS.toLocaleString()} bonus tokens for
-                      today (UTC). Anonymous training is not linked to your account on the
-                      feedback record. Unused bonus allowance does not roll over.
-                    </p>
-                    <button
-                      type="button"
-                      className="feedback-pricing-link"
-                      onClick={openPricingPage}
-                    >
-                      View plans and limits
-                    </button>
+              </div>
+
+              <div
+                className="feedback-wizard-progress"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPercent}
+                aria-labelledby="feedback-wizard-progress-label"
+              >
+                <div className="feedback-wizard-progress__header">
+                  <div className="feedback-wizard-progress__ring" aria-hidden="true">
+                    <svg className="feedback-wizard-progress__svg" viewBox="0 0 40 40">
+                      <circle
+                        className="feedback-wizard-progress__ring-bg"
+                        cx="20"
+                        cy="20"
+                        r="16"
+                        fill="none"
+                      />
+                      <circle
+                        className="feedback-wizard-progress__ring-fill"
+                        cx="20"
+                        cy="20"
+                        r="16"
+                        fill="none"
+                        pathLength="100"
+                        strokeDasharray={`${progressPercent} 100`}
+                        transform="rotate(-90 20 20)"
+                      />
+                    </svg>
+                    <span className="feedback-wizard-progress__ring-center">
+                      {wizardStep}
+                      <span className="feedback-wizard-progress__ring-of">/{TRAINING_WIZARD_STEPS}</span>
+                    </span>
                   </div>
-                ) : null}
-                <div
-                  className="feedback-training-timeline"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={3}
-                  aria-valuenow={completedTrainingSteps}
-                  aria-label="Training form completion: categories, details field, and minimum length."
-                >
-                  <ol className="feedback-training-timeline__list">
-                    <li
-                      className={`feedback-training-timeline__item${stepCategoriesDone ? ' feedback-training-timeline__item--done' : ''}`}
+                  <div className="feedback-wizard-progress__copy">
+                    <p
+                      id="feedback-wizard-progress-label"
+                      className="feedback-wizard-progress__label"
+                      aria-live="polite"
                     >
-                      <span className="feedback-training-timeline__dot" aria-hidden />
-                      <span className="feedback-training-timeline__label">Categories</span>
-                    </li>
-                    <li
-                      className={`feedback-training-timeline__item${stepDetailsEngaged ? ' feedback-training-timeline__item--done' : ''}`}
-                    >
-                      <span className="feedback-training-timeline__dot" aria-hidden />
-                      <span className="feedback-training-timeline__label">Details</span>
-                    </li>
-                    <li
-                      className={`feedback-training-timeline__item${stepReadyDone ? ' feedback-training-timeline__item--done' : ''}`}
-                    >
-                      <span className="feedback-training-timeline__dot" aria-hidden />
-                      <span className="feedback-training-timeline__label">Ready</span>
-                    </li>
-                  </ol>
+                      Step {wizardStep} of {TRAINING_WIZARD_STEPS}:{' '}
+                      {WIZARD_STEP_TITLES[wizardStep - 1]}
+                    </p>
+                    <ol className="feedback-wizard-stepper" aria-label="Training steps">
+                      {WIZARD_STEP_TITLES.map((title, index) => {
+                        const stepNum = (index + 1) as WizardStep;
+                        const state =
+                          stepNum < wizardStep
+                            ? 'complete'
+                            : stepNum === wizardStep
+                              ? 'current'
+                              : 'upcoming';
+                        return (
+                          <li
+                            key={title}
+                            className={`feedback-wizard-stepper__item feedback-wizard-stepper__item--${state}`}
+                          >
+                            <span className="feedback-wizard-stepper__marker" aria-hidden="true" />
+                            <span className="feedback-wizard-stepper__text">{title}</span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
                 </div>
               </div>
 
-              <div className="feedback-dialog-scroll">
+              <div className="feedback-wizard-context" aria-label="This exchange">
                 <div className="feedback-context-card">
                   <div className="feedback-context-section">
                     <div className="feedback-context-label">Your message</div>
@@ -613,157 +710,247 @@ export function Feedback({
                     <pre className="feedback-context-block">{assistantReply}</pre>
                   </div>
                 </div>
+              </div>
 
-                {sentiment === 'down' ? (
-                  <Fragment>
-                    <p className="feedback-badges-lead" id="feedback-badges-label-down">
-                      What went wrong? (choose one or more)
-                    </p>
-                    <div
-                      className="feedback-badges"
-                      role="group"
-                      aria-labelledby="feedback-badges-label-down"
-                    >
-                      {BADGES_NEGATIVE.map(badge => (
-                        <button
-                          key={badge}
-                          type="button"
-                          className={`feedback-badge ${selectedBadges.includes(badge) ? 'selected' : ''}`}
-                          onClick={() => toggleBadge(badge)}
-                        >
-                          {badge}
-                          {selectedBadges.includes(badge) && (
-                            <span className="badge-remove">
-                              <svg
-                                width="8"
-                                height="8"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
-                              >
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </Fragment>
-                ) : (
-                  <Fragment>
-                    <p className="feedback-badges-lead" id="feedback-badges-label-up">
-                      What stood out?
-                    </p>
-                    <div className="feedback-badges" role="group" aria-labelledby="feedback-badges-label-up">
-                      {BADGES_POSITIVE.map(badge => (
-                        <button
-                          key={badge}
-                          type="button"
-                          className={`feedback-badge ${selectedBadges.includes(badge) ? 'selected' : ''}`}
-                          onClick={() => toggleBadge(badge)}
-                        >
-                          {badge}
-                          {selectedBadges.includes(badge) && (
-                            <span className="badge-remove">
-                              <svg
-                                width="8"
-                                height="8"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
-                              >
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </Fragment>
-                )}
-
-                <div className="feedback-training-mode">
-                  <div
-                    className="feedback-training-mode__tablist"
-                    role="radiogroup"
-                    aria-label="Training privacy"
-                  >
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={trainingMode === 'personalized'}
-                      tabIndex={trainingMode === 'personalized' ? -1 : 0}
-                      className={`feedback-training-mode__tab${trainingMode === 'personalized' ? ' feedback-training-mode__tab--active' : ''}`}
-                      onClick={() => setTrainingMode('personalized')}
-                    >
-                      Personalized
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={trainingMode === 'anonymous'}
-                      tabIndex={trainingMode === 'anonymous' ? -1 : 0}
-                      className={`feedback-training-mode__tab${trainingMode === 'anonymous' ? ' feedback-training-mode__tab--active' : ''}`}
-                      onClick={() => setTrainingMode('anonymous')}
-                    >
-                      Anonymous
-                    </button>
-                  </div>
-                  <p className="feedback-training-mode__hint">{trainingModeHint}</p>
-                </div>
-
-                <div className="feedback-detail-field">
-                  <label
-                    className="feedback-detail-field__label"
-                    htmlFor="feedback-training-detail"
-                  >
-                    Details (required)
-                  </label>
-                  <textarea
-                    id="feedback-training-detail"
-                    className="feedback-textarea"
-                    placeholder={
-                      sentiment === 'up'
-                        ? 'What stood out, and what could be even better?'
-                        : 'What went wrong, and what would a better answer look like?'
-                    }
-                    value={comment}
-                    aria-describedby="feedback-training-char-status"
-                    onFocus={() => setDetailFieldEngaged(true)}
-                    onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => {
-                      setComment(e.currentTarget.value);
-                      setShowSubmitHint(false);
-                    }}
-                  />
-                  <div id="feedback-training-char-status" aria-live="polite">
-                    <div className="feedback-char-meter__track">
-                      <div
-                        className="feedback-char-meter__fill"
-                        style={{ width: `${charMeterPct}%` }}
-                      />
-                    </div>
-                    <p className="feedback-char-meter__text">
-                      {trimmedCommentLen} / {FEEDBACK_MIN_DETAIL_CHARS} characters
-                    </p>
-                  </div>
-                </div>
-
+              <div className="feedback-wizard-step-area">
                 <div
-                  className="feedback-validation-slot"
-                  aria-live="polite"
-                  aria-relevant="additions text"
+                  className="feedback-wizard-step-viewport"
+                  key={wizardStep}
+                  data-direction={wizardSlideDirection}
                 >
-                  {showSubmitHint ? (
+                  <div
+                    className="feedback-wizard-step-track"
+                    style={{
+                      transform: `translate3d(-${wizardTrackOffsetPct}%, 0, 0)`,
+                    }}
+                    data-direction={wizardSlideDirection}
+                  >
+                    <div
+                      className="feedback-wizard-step-pane"
+                      aria-hidden={wizardStep !== 1}
+                      {...(wizardStep !== 1 ? { inert: true } : {})}
+                    >
+                      <div className="feedback-wizard-step-panel">
+                        <div className="feedback-wizard-step__body">
+                        <h3
+                          ref={wizardStep === 1 ? stepHeadingRef : undefined}
+                          id="feedback-wizard-step-heading-1"
+                          className="feedback-wizard-step__title"
+                          tabIndex={-1}
+                        >
+                          Choose one or more
+                        </h3>
+                        <p className="feedback-wizard-step__subtitle">
+                          {sentiment === 'down'
+                            ? 'What went wrong with this answer?'
+                            : 'What stood out about this answer?'}
+                        </p>
+                        {sentiment === 'down' ? (
+                          <div
+                            className="feedback-badges"
+                            role="group"
+                            aria-labelledby="feedback-wizard-step-heading-1"
+                          >
+                            {BADGES_NEGATIVE.map(badge => (
+                              <button
+                                key={badge}
+                                type="button"
+                                className={`feedback-badge ${selectedBadges.includes(badge) ? 'selected' : ''}`}
+                                tabIndex={wizardStep === 1 ? 0 : -1}
+                                onClick={() => toggleBadge(badge)}
+                              >
+                                {badge}
+                                {selectedBadges.includes(badge) && (
+                                  <span className="badge-remove">
+                                    <svg
+                                      width="8"
+                                      height="8"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="3"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden
+                                    >
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div
+                            className="feedback-badges"
+                            role="group"
+                            aria-labelledby="feedback-wizard-step-heading-1"
+                          >
+                            {BADGES_POSITIVE.map(badge => (
+                              <button
+                                key={badge}
+                                type="button"
+                                className={`feedback-badge ${selectedBadges.includes(badge) ? 'selected' : ''}`}
+                                tabIndex={wizardStep === 1 ? 0 : -1}
+                                onClick={() => toggleBadge(badge)}
+                              >
+                                {badge}
+                                {selectedBadges.includes(badge) && (
+                                  <span className="badge-remove">
+                                    <svg
+                                      width="8"
+                                      height="8"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="3"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden
+                                    >
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className="feedback-wizard-step-pane"
+                      aria-hidden={wizardStep !== 2}
+                      {...(wizardStep !== 2 ? { inert: true } : {})}
+                    >
+                      <div className="feedback-wizard-step-panel">
+                        <div className="feedback-wizard-step__body">
+                        <h3
+                          ref={wizardStep === 2 ? stepHeadingRef : undefined}
+                          id="feedback-wizard-step-heading-2"
+                          className="feedback-wizard-step__title"
+                          tabIndex={-1}
+                        >
+                          Add your own words
+                        </h3>
+                        <p className="feedback-wizard-step__subtitle">
+                          Share at least {FEEDBACK_MIN_DETAIL_CHARS} characters so we understand what
+                          you expected.
+                        </p>
+                        <div className="feedback-detail-field">
+                          <div
+                            className={`feedback-textarea-wrap${showDetailsInvite ? ' feedback-textarea-wrap--invite' : ''}`}
+                          >
+                            <textarea
+                              id="feedback-training-detail"
+                              className="feedback-textarea"
+                              aria-labelledby="feedback-wizard-step-heading-2"
+                              placeholder={
+                                sentiment === 'up'
+                                  ? 'What stood out, and what could be even better?'
+                                  : 'What went wrong, and what would a better answer look like?'
+                              }
+                              value={comment}
+                              tabIndex={wizardStep === 2 ? 0 : -1}
+                              aria-describedby="feedback-training-char-status"
+                              onFocus={() => setDetailsFieldFocused(true)}
+                              onBlur={() => setDetailsFieldFocused(false)}
+                              onInput={(e: JSX.TargetedEvent<HTMLTextAreaElement>) => {
+                                setComment(e.currentTarget.value);
+                                setShowSubmitHint(false);
+                                setWizardStepHint(false);
+                              }}
+                            />
+                          </div>
+                          <div id="feedback-training-char-status" aria-live="polite">
+                            <div className="feedback-char-meter__track">
+                              <div
+                                className="feedback-char-meter__fill"
+                                style={{ width: `${charMeterPct}%` }}
+                              />
+                            </div>
+                            <p className="feedback-char-meter__text">
+                              {trimmedCommentLen} / {FEEDBACK_MIN_DETAIL_CHARS} characters
+                            </p>
+                          </div>
+                        </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className="feedback-wizard-step-pane"
+                      aria-hidden={wizardStep !== 3}
+                      {...(wizardStep !== 3 ? { inert: true } : {})}
+                    >
+                      <div className="feedback-wizard-step-panel">
+                        <div className="feedback-wizard-step__body">
+                        <h3
+                          ref={wizardStep === 3 ? stepHeadingRef : undefined}
+                          id="feedback-wizard-step-heading-3"
+                          className="feedback-wizard-step__title"
+                          tabIndex={-1}
+                        >
+                          How should we use this training?
+                        </h3>
+                        <p className="feedback-wizard-step__subtitle">
+                          Your prompt and the assistant reply are saved either way. This only
+                          controls whether the training record is linked to your account.
+                        </p>
+                        <div
+                          className="feedback-training-mode__cards"
+                          role="radiogroup"
+                          aria-label="Training privacy"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={trainingMode === 'personalized'}
+                            tabIndex={
+                              wizardStep === 3 && trainingMode === 'personalized' ? 0 : -1
+                            }
+                            className={`feedback-training-mode-card${trainingMode === 'personalized' ? ' feedback-training-mode-card--selected' : ''}`}
+                            onClick={() => setTrainingMode('personalized')}
+                          >
+                            <span className="feedback-training-mode-card__title">Personalized</span>
+                            <span className="feedback-training-mode-card__desc">
+                              Links this submission to your account so Oasis can tailor responses and
+                              product improvements for you over time. Best when you want the assistant
+                              to learn from your feedback in a way that applies to your signed-in
+                              experience.
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={trainingMode === 'anonymous'}
+                            tabIndex={wizardStep === 3 && trainingMode === 'anonymous' ? 0 : -1}
+                            className={`feedback-training-mode-card${trainingMode === 'anonymous' ? ' feedback-training-mode-card--selected' : ''}`}
+                            onClick={() => setTrainingMode('anonymous')}
+                          >
+                            <span className="feedback-training-mode-card__title">Anonymous</span>
+                            <span className="feedback-training-mode-card__desc">
+                              Does not attach your user ID to this training record. Your message and
+                              reply are still stored so we can review what worked and what did not.
+                              Helps improve Oasis for everyone without tying this feedback to you.
+                            </span>
+                          </button>
+                        </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="feedback-validation-slot" aria-live="polite" aria-relevant="additions text">
+                  {wizardStepHint && wizardStepHintMessage && !currentStepComplete ? (
+                    <p className="feedback-validation-hint">{wizardStepHintMessage}</p>
+                  ) : null}
+                  {wizardStep === 3 && showSubmitHint ? (
                     <p className="feedback-validation-hint">
                       Choose at least one category and write at least {FEEDBACK_MIN_DETAIL_CHARS}{' '}
                       characters about what you expected or what could be better.
@@ -772,15 +959,41 @@ export function Feedback({
                 </div>
               </div>
 
-              <div className="feedback-footer">
+              <div className="feedback-wizard-nav">
                 <button
                   type="button"
-                  className={`feedback-submit-btn ${submitDisabled ? 'feedback-submit-btn--muted' : ''}`}
-                  onClick={onSubmitClick}
-                  aria-busy={isSubmitting}
+                  className="feedback-wizard-nav__back"
+                  onClick={goBack}
+                  aria-disabled={wizardStep === 1}
+                  disabled={wizardStep === 1}
                 >
-                  {isSubmitting ? 'Saving…' : 'Submit training'}
+                  Back
                 </button>
+                {wizardStep < 3 ? (
+                  <button
+                    type="button"
+                    className={`feedback-wizard-nav__next${currentStepComplete ? ' feedback-wizard-nav__next--ready' : ' feedback-wizard-nav__next--muted'}`}
+                    onClick={onContinueClick}
+                    aria-disabled={!currentStepComplete}
+                    aria-label={
+                      currentStepComplete
+                        ? `Continue to step ${wizardStep + 1}`
+                        : `Complete step ${wizardStep} to continue`
+                    }
+                  >
+                    Continue
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`feedback-submit-btn feedback-wizard-nav__submit${submitDisabled ? ' feedback-submit-btn--muted' : ' feedback-wizard-nav__next--ready'}`}
+                    onClick={onSubmitClick}
+                    aria-busy={isSubmitting}
+                    aria-disabled={submitDisabled}
+                  >
+                    {isSubmitting ? 'Saving…' : 'Submit training'}
+                  </button>
+                )}
               </div>
             </Fragment>
           )}
