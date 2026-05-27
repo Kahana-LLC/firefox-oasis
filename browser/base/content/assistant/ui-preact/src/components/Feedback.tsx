@@ -899,8 +899,8 @@ export function Feedback({
                           How should we use this training?
                         </h3>
                         <p className="feedback-wizard-step__subtitle">
-                          Your prompt and the assistant reply are saved either way. This only
-                          controls whether the training record is linked to your account.
+                          Your exchange is saved either way. Choose whether it is linked to your
+                          account.
                         </p>
                         <div
                           className="feedback-training-mode__cards"
@@ -919,10 +919,7 @@ export function Feedback({
                           >
                             <span className="feedback-training-mode-card__title">Personalized</span>
                             <span className="feedback-training-mode-card__desc">
-                              Links this submission to your account so Oasis can tailor responses and
-                              product improvements for you over time. Best when you want the assistant
-                              to learn from your feedback in a way that applies to your signed-in
-                              experience.
+                              Linked to your account so Oasis can improve responses for you.
                             </span>
                           </button>
                           <button
@@ -935,9 +932,8 @@ export function Feedback({
                           >
                             <span className="feedback-training-mode-card__title">Anonymous</span>
                             <span className="feedback-training-mode-card__desc">
-                              Does not attach your user ID to this training record. Your message and
-                              reply are still stored so we can review what worked and what did not.
-                              Helps improve Oasis for everyone without tying this feedback to you.
+                              Not linked to your account. We still save the exchange to improve Oasis
+                              for everyone.
                             </span>
                           </button>
                         </div>

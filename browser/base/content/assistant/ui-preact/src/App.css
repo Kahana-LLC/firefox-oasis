@@ -2864,7 +2864,8 @@ button.input-field.input-field-signin-prompt:disabled {
 
 .feedback-wizard-step-panel {
   box-sizing: border-box;
-  height: 100%;
+  height: auto;
+  min-height: 0;
   padding: var(--space-medium);
   border-radius: var(--border-radius-large);
   background: var(--surface-default);
@@ -2900,7 +2901,7 @@ button.input-field.input-field-signin-prompt:disabled {
 
 .feedback-wizard-step-pane .feedback-training-mode-card__desc {
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 @media (max-width: 400px) {
