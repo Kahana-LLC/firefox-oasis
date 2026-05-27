@@ -632,6 +632,7 @@ export function Feedback({
                 </div>
               </div>
 
+              <div className="feedback-wizard-scroll feedback-dialog-scroll">
               <div
                 className="feedback-wizard-progress"
                 role="progressbar"
@@ -957,6 +958,7 @@ export function Feedback({
                     </p>
                   ) : null}
                 </div>
+              </div>
               </div>
 
               <div className="feedback-wizard-nav">

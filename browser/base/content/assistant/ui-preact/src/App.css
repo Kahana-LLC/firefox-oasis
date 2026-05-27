@@ -2534,7 +2534,7 @@ button.input-field.input-field-signin-prompt:disabled {
   max-height: min(92vh, 640px);
   min-height: 0;
   overflow: hidden;
-  --feedback-wizard-step-height: 280px;
+  --feedback-wizard-step-height: min(220px, 30vh);
   background: var(--surface-page);
   border-radius: var(--border-radius-lg);
   padding: var(--space-large);
@@ -2801,6 +2801,13 @@ button.input-field.input-field-signin-prompt:disabled {
 
 .feedback-wizard-stepper__item--upcoming .feedback-wizard-stepper__text {
   color: var(--text-secondary);
+}
+
+.feedback-wizard-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .feedback-wizard-context {
@@ -3297,12 +3304,16 @@ button.input-field.input-field-signin-prompt:disabled {
   margin-right: calc(-1 * var(--space-xxsmall));
 }
 
-.feedback-overlay-dialog > .feedback-wizard-progress,
-.feedback-overlay-dialog > .feedback-wizard-context,
-.feedback-overlay-dialog > .feedback-wizard-step-area,
+.feedback-wizard-scroll > .feedback-wizard-progress,
+.feedback-wizard-scroll > .feedback-wizard-context,
+.feedback-wizard-scroll > .feedback-wizard-step-area,
 .feedback-overlay-dialog > .feedback-wizard-nav {
   width: 100%;
   box-sizing: border-box;
+}
+
+.feedback-overlay-dialog > .feedback-wizard-nav {
+  margin-top: auto;
 }
 
 @keyframes feedback-wizard-fade-in {
