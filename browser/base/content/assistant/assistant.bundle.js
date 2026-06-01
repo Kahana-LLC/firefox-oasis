@@ -1950,7 +1950,7 @@
         parseRange(range) {
           const memoOpts = (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE);
           const memoKey = memoOpts + ":" + range;
-          const cached = cache2.get(memoKey);
+          const cached = cache3.get(memoKey);
           if (cached) {
             return cached;
           }
@@ -1984,7 +1984,7 @@
             rangeMap.delete("");
           }
           const result = [...rangeMap.values()];
-          cache2.set(memoKey, result);
+          cache3.set(memoKey, result);
           return result;
         }
         intersects(range, options) {
@@ -2023,7 +2023,7 @@
       };
       module.exports = Range;
       var LRU = require_lrucache();
-      var cache2 = new LRU();
+      var cache3 = new LRU();
       var parseOptions2 = require_parse_options();
       var Comparator = require_comparator();
       var debug = require_debug();
@@ -3073,6 +3073,3065 @@
         enumerable: true,
         get: assembleStyles
       });
+    }
+  });
+
+  // node_modules/idb/build/index.js
+  function getIdbProxyableTypes() {
+    return idbProxyableTypes || (idbProxyableTypes = [
+      IDBDatabase,
+      IDBObjectStore,
+      IDBIndex,
+      IDBCursor,
+      IDBTransaction
+    ]);
+  }
+  function getCursorAdvanceMethods() {
+    return cursorAdvanceMethods || (cursorAdvanceMethods = [
+      IDBCursor.prototype.advance,
+      IDBCursor.prototype.continue,
+      IDBCursor.prototype.continuePrimaryKey
+    ]);
+  }
+  function promisifyRequest(request) {
+    const promise = new Promise((resolve, reject) => {
+      const unlisten = () => {
+        request.removeEventListener("success", success);
+        request.removeEventListener("error", error);
+      };
+      const success = () => {
+        resolve(wrap2(request.result));
+        unlisten();
+      };
+      const error = () => {
+        reject(request.error);
+        unlisten();
+      };
+      request.addEventListener("success", success);
+      request.addEventListener("error", error);
+    });
+    reverseTransformCache.set(promise, request);
+    return promise;
+  }
+  function cacheDonePromiseForTransaction(tx) {
+    if (transactionDoneMap.has(tx))
+      return;
+    const done = new Promise((resolve, reject) => {
+      const unlisten = () => {
+        tx.removeEventListener("complete", complete);
+        tx.removeEventListener("error", error);
+        tx.removeEventListener("abort", error);
+      };
+      const complete = () => {
+        resolve();
+        unlisten();
+      };
+      const error = () => {
+        reject(tx.error || new DOMException("AbortError", "AbortError"));
+        unlisten();
+      };
+      tx.addEventListener("complete", complete);
+      tx.addEventListener("error", error);
+      tx.addEventListener("abort", error);
+    });
+    transactionDoneMap.set(tx, done);
+  }
+  function replaceTraps(callback) {
+    idbProxyTraps = callback(idbProxyTraps);
+  }
+  function wrapFunction(func) {
+    if (getCursorAdvanceMethods().includes(func)) {
+      return function(...args) {
+        func.apply(unwrap(this), args);
+        return wrap2(this.request);
+      };
+    }
+    return function(...args) {
+      return wrap2(func.apply(unwrap(this), args));
+    };
+  }
+  function transformCachableValue(value) {
+    if (typeof value === "function")
+      return wrapFunction(value);
+    if (value instanceof IDBTransaction)
+      cacheDonePromiseForTransaction(value);
+    if (instanceOfAny(value, getIdbProxyableTypes()))
+      return new Proxy(value, idbProxyTraps);
+    return value;
+  }
+  function wrap2(value) {
+    if (value instanceof IDBRequest)
+      return promisifyRequest(value);
+    if (transformCache.has(value))
+      return transformCache.get(value);
+    const newValue = transformCachableValue(value);
+    if (newValue !== value) {
+      transformCache.set(value, newValue);
+      reverseTransformCache.set(newValue, value);
+    }
+    return newValue;
+  }
+  function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
+    const request = indexedDB.open(name, version);
+    const openPromise = wrap2(request);
+    if (upgrade) {
+      request.addEventListener("upgradeneeded", (event) => {
+        upgrade(wrap2(request.result), event.oldVersion, event.newVersion, wrap2(request.transaction), event);
+      });
+    }
+    if (blocked) {
+      request.addEventListener("blocked", (event) => blocked(
+        // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion,
+        event.newVersion,
+        event
+      ));
+    }
+    openPromise.then((db) => {
+      if (terminated)
+        db.addEventListener("close", () => terminated());
+      if (blocking) {
+        db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
+      }
+    }).catch(() => {
+    });
+    return openPromise;
+  }
+  function getMethod(target, prop) {
+    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
+      return;
+    }
+    if (cachedMethods.get(prop))
+      return cachedMethods.get(prop);
+    const targetFuncName = prop.replace(/FromIndex$/, "");
+    const useIndex = prop !== targetFuncName;
+    const isWrite = writeMethods.includes(targetFuncName);
+    if (
+      // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+      !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
+    ) {
+      return;
+    }
+    const method = async function(storeName, ...args) {
+      const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+      let target2 = tx.store;
+      if (useIndex)
+        target2 = target2.index(args.shift());
+      return (await Promise.all([
+        target2[targetFuncName](...args),
+        isWrite && tx.done
+      ]))[0];
+    };
+    cachedMethods.set(prop, method);
+    return method;
+  }
+  async function* iterate(...args) {
+    let cursor = this;
+    if (!(cursor instanceof IDBCursor)) {
+      cursor = await cursor.openCursor(...args);
+    }
+    if (!cursor)
+      return;
+    cursor = cursor;
+    const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+    ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+    reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+    while (cursor) {
+      yield proxiedCursor;
+      cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+      advanceResults.delete(proxiedCursor);
+    }
+  }
+  function isIteratorProp(target, prop) {
+    return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
+  }
+  var instanceOfAny, idbProxyableTypes, cursorAdvanceMethods, transactionDoneMap, transformCache, reverseTransformCache, idbProxyTraps, unwrap, readMethods, writeMethods, cachedMethods, advanceMethodProps, methodMap, advanceResults, ittrProxiedCursorToOriginalProxy, cursorIteratorTraps;
+  var init_build = __esm({
+    "node_modules/idb/build/index.js"() {
+      instanceOfAny = (object, constructors) => constructors.some((c3) => object instanceof c3);
+      transactionDoneMap = /* @__PURE__ */ new WeakMap();
+      transformCache = /* @__PURE__ */ new WeakMap();
+      reverseTransformCache = /* @__PURE__ */ new WeakMap();
+      idbProxyTraps = {
+        get(target, prop, receiver) {
+          if (target instanceof IDBTransaction) {
+            if (prop === "done")
+              return transactionDoneMap.get(target);
+            if (prop === "store") {
+              return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
+            }
+          }
+          return wrap2(target[prop]);
+        },
+        set(target, prop, value) {
+          target[prop] = value;
+          return true;
+        },
+        has(target, prop) {
+          if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
+            return true;
+          }
+          return prop in target;
+        }
+      };
+      unwrap = (value) => reverseTransformCache.get(value);
+      readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
+      writeMethods = ["put", "add", "delete", "clear"];
+      cachedMethods = /* @__PURE__ */ new Map();
+      replaceTraps((oldTraps) => ({
+        ...oldTraps,
+        get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+        has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
+      }));
+      advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
+      methodMap = {};
+      advanceResults = /* @__PURE__ */ new WeakMap();
+      ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
+      cursorIteratorTraps = {
+        get(target, prop) {
+          if (!advanceMethodProps.includes(prop))
+            return target[prop];
+          let cachedFunc = methodMap[prop];
+          if (!cachedFunc) {
+            cachedFunc = methodMap[prop] = function(...args) {
+              advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+            };
+          }
+          return cachedFunc;
+        }
+      };
+      replaceTraps((oldTraps) => ({
+        ...oldTraps,
+        get(target, prop, receiver) {
+          if (isIteratorProp(target, prop))
+            return iterate;
+          return oldTraps.get(target, prop, receiver);
+        },
+        has(target, prop) {
+          return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+        }
+      }));
+    }
+  });
+
+  // node_modules/minisearch/dist/es/index.js
+  var ENTRIES, KEYS, VALUES, LEAF, TreeIterator, last$1, fuzzySearch, recurse, SearchableMap, trackDown, lookup, createPath, remove, cleanup, merge, last, OR, AND, AND_NOT, MiniSearch, getOwnProperty, combinators, defaultBM25params, calcBM25Score, termToQuerySpec, defaultOptions2, defaultSearchOptions, defaultAutoSuggestOptions, defaultVacuumOptions, defaultVacuumConditions, defaultAutoVacuumOptions, assignUniqueTerm, assignUniqueTerms, byScore, createMap, objectToNumericMap, objectToNumericMapAsync, wait, SPACE_OR_PUNCTUATION;
+  var init_es = __esm({
+    "node_modules/minisearch/dist/es/index.js"() {
+      ENTRIES = "ENTRIES";
+      KEYS = "KEYS";
+      VALUES = "VALUES";
+      LEAF = "";
+      TreeIterator = class {
+        constructor(set2, type) {
+          const node = set2._tree;
+          const keys = Array.from(node.keys());
+          this.set = set2;
+          this._type = type;
+          this._path = keys.length > 0 ? [{ node, keys }] : [];
+        }
+        next() {
+          const value = this.dive();
+          this.backtrack();
+          return value;
+        }
+        dive() {
+          if (this._path.length === 0) {
+            return { done: true, value: void 0 };
+          }
+          const { node, keys } = last$1(this._path);
+          if (last$1(keys) === LEAF) {
+            return { done: false, value: this.result() };
+          }
+          const child = node.get(last$1(keys));
+          this._path.push({ node: child, keys: Array.from(child.keys()) });
+          return this.dive();
+        }
+        backtrack() {
+          if (this._path.length === 0) {
+            return;
+          }
+          const keys = last$1(this._path).keys;
+          keys.pop();
+          if (keys.length > 0) {
+            return;
+          }
+          this._path.pop();
+          this.backtrack();
+        }
+        key() {
+          return this.set._prefix + this._path.map(({ keys }) => last$1(keys)).filter((key) => key !== LEAF).join("");
+        }
+        value() {
+          return last$1(this._path).node.get(LEAF);
+        }
+        result() {
+          switch (this._type) {
+            case VALUES:
+              return this.value();
+            case KEYS:
+              return this.key();
+            default:
+              return [this.key(), this.value()];
+          }
+        }
+        [Symbol.iterator]() {
+          return this;
+        }
+      };
+      last$1 = (array) => {
+        return array[array.length - 1];
+      };
+      fuzzySearch = (node, query, maxDistance) => {
+        const results = /* @__PURE__ */ new Map();
+        if (query === void 0)
+          return results;
+        const n2 = query.length + 1;
+        const m3 = n2 + maxDistance;
+        const matrix = new Uint8Array(m3 * n2).fill(maxDistance + 1);
+        for (let j3 = 0; j3 < n2; ++j3)
+          matrix[j3] = j3;
+        for (let i2 = 1; i2 < m3; ++i2)
+          matrix[i2 * n2] = i2;
+        recurse(node, query, maxDistance, results, matrix, 1, n2, "");
+        return results;
+      };
+      recurse = (node, query, maxDistance, results, matrix, m3, n2, prefix) => {
+        const offset = m3 * n2;
+        key: for (const key of node.keys()) {
+          if (key === LEAF) {
+            const distance = matrix[offset - 1];
+            if (distance <= maxDistance) {
+              results.set(prefix, [node.get(key), distance]);
+            }
+          } else {
+            let i2 = m3;
+            for (let pos = 0; pos < key.length; ++pos, ++i2) {
+              const char = key[pos];
+              const thisRowOffset = n2 * i2;
+              const prevRowOffset = thisRowOffset - n2;
+              let minDistance = matrix[thisRowOffset];
+              const jmin = Math.max(0, i2 - maxDistance - 1);
+              const jmax = Math.min(n2 - 1, i2 + maxDistance);
+              for (let j3 = jmin; j3 < jmax; ++j3) {
+                const different = char !== query[j3];
+                const rpl = matrix[prevRowOffset + j3] + +different;
+                const del = matrix[prevRowOffset + j3 + 1] + 1;
+                const ins = matrix[thisRowOffset + j3] + 1;
+                const dist = matrix[thisRowOffset + j3 + 1] = Math.min(rpl, del, ins);
+                if (dist < minDistance)
+                  minDistance = dist;
+              }
+              if (minDistance > maxDistance) {
+                continue key;
+              }
+            }
+            recurse(node.get(key), query, maxDistance, results, matrix, i2, n2, prefix + key);
+          }
+        }
+      };
+      SearchableMap = class _SearchableMap {
+        /**
+         * The constructor is normally called without arguments, creating an empty
+         * map. In order to create a {@link SearchableMap} from an iterable or from an
+         * object, check {@link SearchableMap.from} and {@link
+         * SearchableMap.fromObject}.
+         *
+         * The constructor arguments are for internal use, when creating derived
+         * mutable views of a map at a prefix.
+         */
+        constructor(tree = /* @__PURE__ */ new Map(), prefix = "") {
+          this._size = void 0;
+          this._tree = tree;
+          this._prefix = prefix;
+        }
+        /**
+         * Creates and returns a mutable view of this {@link SearchableMap},
+         * containing only entries that share the given prefix.
+         *
+         * ### Usage:
+         *
+         * ```javascript
+         * let map = new SearchableMap()
+         * map.set("unicorn", 1)
+         * map.set("universe", 2)
+         * map.set("university", 3)
+         * map.set("unique", 4)
+         * map.set("hello", 5)
+         *
+         * let uni = map.atPrefix("uni")
+         * uni.get("unique") // => 4
+         * uni.get("unicorn") // => 1
+         * uni.get("hello") // => undefined
+         *
+         * let univer = map.atPrefix("univer")
+         * univer.get("unique") // => undefined
+         * univer.get("universe") // => 2
+         * univer.get("university") // => 3
+         * ```
+         *
+         * @param prefix  The prefix
+         * @return A {@link SearchableMap} representing a mutable view of the original
+         * Map at the given prefix
+         */
+        atPrefix(prefix) {
+          if (!prefix.startsWith(this._prefix)) {
+            throw new Error("Mismatched prefix");
+          }
+          const [node, path] = trackDown(this._tree, prefix.slice(this._prefix.length));
+          if (node === void 0) {
+            const [parentNode, key] = last(path);
+            for (const k3 of parentNode.keys()) {
+              if (k3 !== LEAF && k3.startsWith(key)) {
+                const node2 = /* @__PURE__ */ new Map();
+                node2.set(k3.slice(key.length), parentNode.get(k3));
+                return new _SearchableMap(node2, prefix);
+              }
+            }
+          }
+          return new _SearchableMap(node, prefix);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/clear
+         */
+        clear() {
+          this._size = void 0;
+          this._tree.clear();
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/delete
+         * @param key  Key to delete
+         */
+        delete(key) {
+          this._size = void 0;
+          return remove(this._tree, key);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/entries
+         * @return An iterator iterating through `[key, value]` entries.
+         */
+        entries() {
+          return new TreeIterator(this, ENTRIES);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/forEach
+         * @param fn  Iteration function
+         */
+        forEach(fn) {
+          for (const [key, value] of this) {
+            fn(key, value, this);
+          }
+        }
+        /**
+         * Returns a Map of all the entries that have a key within the given edit
+         * distance from the search key. The keys of the returned Map are the matching
+         * keys, while the values are two-element arrays where the first element is
+         * the value associated to the key, and the second is the edit distance of the
+         * key to the search key.
+         *
+         * ### Usage:
+         *
+         * ```javascript
+         * let map = new SearchableMap()
+         * map.set('hello', 'world')
+         * map.set('hell', 'yeah')
+         * map.set('ciao', 'mondo')
+         *
+         * // Get all entries that match the key 'hallo' with a maximum edit distance of 2
+         * map.fuzzyGet('hallo', 2)
+         * // => Map(2) { 'hello' => ['world', 1], 'hell' => ['yeah', 2] }
+         *
+         * // In the example, the "hello" key has value "world" and edit distance of 1
+         * // (change "e" to "a"), the key "hell" has value "yeah" and edit distance of 2
+         * // (change "e" to "a", delete "o")
+         * ```
+         *
+         * @param key  The search key
+         * @param maxEditDistance  The maximum edit distance (Levenshtein)
+         * @return A Map of the matching keys to their value and edit distance
+         */
+        fuzzyGet(key, maxEditDistance) {
+          return fuzzySearch(this._tree, key, maxEditDistance);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get
+         * @param key  Key to get
+         * @return Value associated to the key, or `undefined` if the key is not
+         * found.
+         */
+        get(key) {
+          const node = lookup(this._tree, key);
+          return node !== void 0 ? node.get(LEAF) : void 0;
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/has
+         * @param key  Key
+         * @return True if the key is in the map, false otherwise
+         */
+        has(key) {
+          const node = lookup(this._tree, key);
+          return node !== void 0 && node.has(LEAF);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/keys
+         * @return An `Iterable` iterating through keys
+         */
+        keys() {
+          return new TreeIterator(this, KEYS);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/set
+         * @param key  Key to set
+         * @param value  Value to associate to the key
+         * @return The {@link SearchableMap} itself, to allow chaining
+         */
+        set(key, value) {
+          if (typeof key !== "string") {
+            throw new Error("key must be a string");
+          }
+          this._size = void 0;
+          const node = createPath(this._tree, key);
+          node.set(LEAF, value);
+          return this;
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/size
+         */
+        get size() {
+          if (this._size) {
+            return this._size;
+          }
+          this._size = 0;
+          const iter = this.entries();
+          while (!iter.next().done)
+            this._size += 1;
+          return this._size;
+        }
+        /**
+         * Updates the value at the given key using the provided function. The function
+         * is called with the current value at the key, and its return value is used as
+         * the new value to be set.
+         *
+         * ### Example:
+         *
+         * ```javascript
+         * // Increment the current value by one
+         * searchableMap.update('somekey', (currentValue) => currentValue == null ? 0 : currentValue + 1)
+         * ```
+         *
+         * If the value at the given key is or will be an object, it might not require
+         * re-assignment. In that case it is better to use `fetch()`, because it is
+         * faster.
+         *
+         * @param key  The key to update
+         * @param fn  The function used to compute the new value from the current one
+         * @return The {@link SearchableMap} itself, to allow chaining
+         */
+        update(key, fn) {
+          if (typeof key !== "string") {
+            throw new Error("key must be a string");
+          }
+          this._size = void 0;
+          const node = createPath(this._tree, key);
+          node.set(LEAF, fn(node.get(LEAF)));
+          return this;
+        }
+        /**
+         * Fetches the value of the given key. If the value does not exist, calls the
+         * given function to create a new value, which is inserted at the given key
+         * and subsequently returned.
+         *
+         * ### Example:
+         *
+         * ```javascript
+         * const map = searchableMap.fetch('somekey', () => new Map())
+         * map.set('foo', 'bar')
+         * ```
+         *
+         * @param key  The key to update
+         * @param initial  A function that creates a new value if the key does not exist
+         * @return The existing or new value at the given key
+         */
+        fetch(key, initial) {
+          if (typeof key !== "string") {
+            throw new Error("key must be a string");
+          }
+          this._size = void 0;
+          const node = createPath(this._tree, key);
+          let value = node.get(LEAF);
+          if (value === void 0) {
+            node.set(LEAF, value = initial());
+          }
+          return value;
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/values
+         * @return An `Iterable` iterating through values.
+         */
+        values() {
+          return new TreeIterator(this, VALUES);
+        }
+        /**
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/@@iterator
+         */
+        [Symbol.iterator]() {
+          return this.entries();
+        }
+        /**
+         * Creates a {@link SearchableMap} from an `Iterable` of entries
+         *
+         * @param entries  Entries to be inserted in the {@link SearchableMap}
+         * @return A new {@link SearchableMap} with the given entries
+         */
+        static from(entries2) {
+          const tree = new _SearchableMap();
+          for (const [key, value] of entries2) {
+            tree.set(key, value);
+          }
+          return tree;
+        }
+        /**
+         * Creates a {@link SearchableMap} from the iterable properties of a JavaScript object
+         *
+         * @param object  Object of entries for the {@link SearchableMap}
+         * @return A new {@link SearchableMap} with the given entries
+         */
+        static fromObject(object) {
+          return _SearchableMap.from(Object.entries(object));
+        }
+      };
+      trackDown = (tree, key, path = []) => {
+        if (key.length === 0 || tree == null) {
+          return [tree, path];
+        }
+        for (const k3 of tree.keys()) {
+          if (k3 !== LEAF && key.startsWith(k3)) {
+            path.push([tree, k3]);
+            return trackDown(tree.get(k3), key.slice(k3.length), path);
+          }
+        }
+        path.push([tree, key]);
+        return trackDown(void 0, "", path);
+      };
+      lookup = (tree, key) => {
+        if (key.length === 0 || tree == null) {
+          return tree;
+        }
+        for (const k3 of tree.keys()) {
+          if (k3 !== LEAF && key.startsWith(k3)) {
+            return lookup(tree.get(k3), key.slice(k3.length));
+          }
+        }
+      };
+      createPath = (node, key) => {
+        const keyLength = key.length;
+        outer: for (let pos = 0; node && pos < keyLength; ) {
+          for (const k3 of node.keys()) {
+            if (k3 !== LEAF && key[pos] === k3[0]) {
+              const len = Math.min(keyLength - pos, k3.length);
+              let offset = 1;
+              while (offset < len && key[pos + offset] === k3[offset])
+                ++offset;
+              const child2 = node.get(k3);
+              if (offset === k3.length) {
+                node = child2;
+              } else {
+                const intermediate = /* @__PURE__ */ new Map();
+                intermediate.set(k3.slice(offset), child2);
+                node.set(key.slice(pos, pos + offset), intermediate);
+                node.delete(k3);
+                node = intermediate;
+              }
+              pos += offset;
+              continue outer;
+            }
+          }
+          const child = /* @__PURE__ */ new Map();
+          node.set(key.slice(pos), child);
+          return child;
+        }
+        return node;
+      };
+      remove = (tree, key) => {
+        const [node, path] = trackDown(tree, key);
+        if (node === void 0) {
+          return;
+        }
+        node.delete(LEAF);
+        if (node.size === 0) {
+          cleanup(path);
+        } else if (node.size === 1) {
+          const [key2, value] = node.entries().next().value;
+          merge(path, key2, value);
+        }
+      };
+      cleanup = (path) => {
+        if (path.length === 0) {
+          return;
+        }
+        const [node, key] = last(path);
+        node.delete(key);
+        if (node.size === 0) {
+          cleanup(path.slice(0, -1));
+        } else if (node.size === 1) {
+          const [key2, value] = node.entries().next().value;
+          if (key2 !== LEAF) {
+            merge(path.slice(0, -1), key2, value);
+          }
+        }
+      };
+      merge = (path, key, value) => {
+        if (path.length === 0) {
+          return;
+        }
+        const [node, nodeKey] = last(path);
+        node.set(nodeKey + key, value);
+        node.delete(nodeKey);
+      };
+      last = (array) => {
+        return array[array.length - 1];
+      };
+      OR = "or";
+      AND = "and";
+      AND_NOT = "and_not";
+      MiniSearch = class _MiniSearch {
+        /**
+         * @param options  Configuration options
+         *
+         * ### Examples:
+         *
+         * ```javascript
+         * // Create a search engine that indexes the 'title' and 'text' fields of your
+         * // documents:
+         * const miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+         * ```
+         *
+         * ### ID Field:
+         *
+         * ```javascript
+         * // Your documents are assumed to include a unique 'id' field, but if you want
+         * // to use a different field for document identification, you can set the
+         * // 'idField' option:
+         * const miniSearch = new MiniSearch({ idField: 'key', fields: ['title', 'text'] })
+         * ```
+         *
+         * ### Options and defaults:
+         *
+         * ```javascript
+         * // The full set of options (here with their default value) is:
+         * const miniSearch = new MiniSearch({
+         *   // idField: field that uniquely identifies a document
+         *   idField: 'id',
+         *
+         *   // extractField: function used to get the value of a field in a document.
+         *   // By default, it assumes the document is a flat object with field names as
+         *   // property keys and field values as string property values, but custom logic
+         *   // can be implemented by setting this option to a custom extractor function.
+         *   extractField: (document, fieldName) => document[fieldName],
+         *
+         *   // tokenize: function used to split fields into individual terms. By
+         *   // default, it is also used to tokenize search queries, unless a specific
+         *   // `tokenize` search option is supplied. When tokenizing an indexed field,
+         *   // the field name is passed as the second argument.
+         *   tokenize: (string, _fieldName) => string.split(SPACE_OR_PUNCTUATION),
+         *
+         *   // processTerm: function used to process each tokenized term before
+         *   // indexing. It can be used for stemming and normalization. Return a falsy
+         *   // value in order to discard a term. By default, it is also used to process
+         *   // search queries, unless a specific `processTerm` option is supplied as a
+         *   // search option. When processing a term from a indexed field, the field
+         *   // name is passed as the second argument.
+         *   processTerm: (term, _fieldName) => term.toLowerCase(),
+         *
+         *   // searchOptions: default search options, see the `search` method for
+         *   // details
+         *   searchOptions: undefined,
+         *
+         *   // fields: document fields to be indexed. Mandatory, but not set by default
+         *   fields: undefined
+         *
+         *   // storeFields: document fields to be stored and returned as part of the
+         *   // search results.
+         *   storeFields: []
+         * })
+         * ```
+         */
+        constructor(options) {
+          if ((options === null || options === void 0 ? void 0 : options.fields) == null) {
+            throw new Error('MiniSearch: option "fields" must be provided');
+          }
+          const autoVacuum = options.autoVacuum == null || options.autoVacuum === true ? defaultAutoVacuumOptions : options.autoVacuum;
+          this._options = {
+            ...defaultOptions2,
+            ...options,
+            autoVacuum,
+            searchOptions: { ...defaultSearchOptions, ...options.searchOptions || {} },
+            autoSuggestOptions: { ...defaultAutoSuggestOptions, ...options.autoSuggestOptions || {} }
+          };
+          this._index = new SearchableMap();
+          this._documentCount = 0;
+          this._documentIds = /* @__PURE__ */ new Map();
+          this._idToShortId = /* @__PURE__ */ new Map();
+          this._fieldIds = {};
+          this._fieldLength = /* @__PURE__ */ new Map();
+          this._avgFieldLength = [];
+          this._nextId = 0;
+          this._storedFields = /* @__PURE__ */ new Map();
+          this._dirtCount = 0;
+          this._currentVacuum = null;
+          this._enqueuedVacuum = null;
+          this._enqueuedVacuumConditions = defaultVacuumConditions;
+          this.addFields(this._options.fields);
+        }
+        /**
+         * Adds a document to the index
+         *
+         * @param document  The document to be indexed
+         */
+        add(document2) {
+          const { extractField, stringifyField, tokenize: tokenize2, processTerm, fields, idField } = this._options;
+          const id = extractField(document2, idField);
+          if (id == null) {
+            throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
+          }
+          if (this._idToShortId.has(id)) {
+            throw new Error(`MiniSearch: duplicate ID ${id}`);
+          }
+          const shortDocumentId = this.addDocumentId(id);
+          this.saveStoredFields(shortDocumentId, document2);
+          for (const field of fields) {
+            const fieldValue = extractField(document2, field);
+            if (fieldValue == null)
+              continue;
+            const tokens = tokenize2(stringifyField(fieldValue, field), field);
+            const fieldId = this._fieldIds[field];
+            const uniqueTerms = new Set(tokens).size;
+            this.addFieldLength(shortDocumentId, fieldId, this._documentCount - 1, uniqueTerms);
+            for (const term of tokens) {
+              const processedTerm = processTerm(term, field);
+              if (Array.isArray(processedTerm)) {
+                for (const t2 of processedTerm) {
+                  this.addTerm(fieldId, shortDocumentId, t2);
+                }
+              } else if (processedTerm) {
+                this.addTerm(fieldId, shortDocumentId, processedTerm);
+              }
+            }
+          }
+        }
+        /**
+         * Adds all the given documents to the index
+         *
+         * @param documents  An array of documents to be indexed
+         */
+        addAll(documents) {
+          for (const document2 of documents)
+            this.add(document2);
+        }
+        /**
+         * Adds all the given documents to the index asynchronously.
+         *
+         * Returns a promise that resolves (to `undefined`) when the indexing is done.
+         * This method is useful when index many documents, to avoid blocking the main
+         * thread. The indexing is performed asynchronously and in chunks.
+         *
+         * @param documents  An array of documents to be indexed
+         * @param options  Configuration options
+         * @return A promise resolving to `undefined` when the indexing is done
+         */
+        addAllAsync(documents, options = {}) {
+          const { chunkSize = 10 } = options;
+          const acc = { chunk: [], promise: Promise.resolve() };
+          const { chunk, promise } = documents.reduce(({ chunk: chunk2, promise: promise2 }, document2, i2) => {
+            chunk2.push(document2);
+            if ((i2 + 1) % chunkSize === 0) {
+              return {
+                chunk: [],
+                promise: promise2.then(() => new Promise((resolve) => setTimeout(resolve, 0))).then(() => this.addAll(chunk2))
+              };
+            } else {
+              return { chunk: chunk2, promise: promise2 };
+            }
+          }, acc);
+          return promise.then(() => this.addAll(chunk));
+        }
+        /**
+         * Removes the given document from the index.
+         *
+         * The document to remove must NOT have changed between indexing and removal,
+         * otherwise the index will be corrupted.
+         *
+         * This method requires passing the full document to be removed (not just the
+         * ID), and immediately removes the document from the inverted index, allowing
+         * memory to be released. A convenient alternative is {@link
+         * MiniSearch#discard}, which needs only the document ID, and has the same
+         * visible effect, but delays cleaning up the index until the next vacuuming.
+         *
+         * @param document  The document to be removed
+         */
+        remove(document2) {
+          const { tokenize: tokenize2, processTerm, extractField, stringifyField, fields, idField } = this._options;
+          const id = extractField(document2, idField);
+          if (id == null) {
+            throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
+          }
+          const shortId = this._idToShortId.get(id);
+          if (shortId == null) {
+            throw new Error(`MiniSearch: cannot remove document with ID ${id}: it is not in the index`);
+          }
+          for (const field of fields) {
+            const fieldValue = extractField(document2, field);
+            if (fieldValue == null)
+              continue;
+            const tokens = tokenize2(stringifyField(fieldValue, field), field);
+            const fieldId = this._fieldIds[field];
+            const uniqueTerms = new Set(tokens).size;
+            this.removeFieldLength(shortId, fieldId, this._documentCount, uniqueTerms);
+            for (const term of tokens) {
+              const processedTerm = processTerm(term, field);
+              if (Array.isArray(processedTerm)) {
+                for (const t2 of processedTerm) {
+                  this.removeTerm(fieldId, shortId, t2);
+                }
+              } else if (processedTerm) {
+                this.removeTerm(fieldId, shortId, processedTerm);
+              }
+            }
+          }
+          this._storedFields.delete(shortId);
+          this._documentIds.delete(shortId);
+          this._idToShortId.delete(id);
+          this._fieldLength.delete(shortId);
+          this._documentCount -= 1;
+        }
+        /**
+         * Removes all the given documents from the index. If called with no arguments,
+         * it removes _all_ documents from the index.
+         *
+         * @param documents  The documents to be removed. If this argument is omitted,
+         * all documents are removed. Note that, for removing all documents, it is
+         * more efficient to call this method with no arguments than to pass all
+         * documents.
+         */
+        removeAll(documents) {
+          if (documents) {
+            for (const document2 of documents)
+              this.remove(document2);
+          } else if (arguments.length > 0) {
+            throw new Error("Expected documents to be present. Omit the argument to remove all documents.");
+          } else {
+            this._index = new SearchableMap();
+            this._documentCount = 0;
+            this._documentIds = /* @__PURE__ */ new Map();
+            this._idToShortId = /* @__PURE__ */ new Map();
+            this._fieldLength = /* @__PURE__ */ new Map();
+            this._avgFieldLength = [];
+            this._storedFields = /* @__PURE__ */ new Map();
+            this._nextId = 0;
+          }
+        }
+        /**
+         * Discards the document with the given ID, so it won't appear in search results
+         *
+         * It has the same visible effect of {@link MiniSearch.remove} (both cause the
+         * document to stop appearing in searches), but a different effect on the
+         * internal data structures:
+         *
+         *   - {@link MiniSearch#remove} requires passing the full document to be
+         *   removed as argument, and removes it from the inverted index immediately.
+         *
+         *   - {@link MiniSearch#discard} instead only needs the document ID, and
+         *   works by marking the current version of the document as discarded, so it
+         *   is immediately ignored by searches. This is faster and more convenient
+         *   than {@link MiniSearch#remove}, but the index is not immediately
+         *   modified. To take care of that, vacuuming is performed after a certain
+         *   number of documents are discarded, cleaning up the index and allowing
+         *   memory to be released.
+         *
+         * After discarding a document, it is possible to re-add a new version, and
+         * only the new version will appear in searches. In other words, discarding
+         * and re-adding a document works exactly like removing and re-adding it. The
+         * {@link MiniSearch.replace} method can also be used to replace a document
+         * with a new version.
+         *
+         * #### Details about vacuuming
+         *
+         * Repetite calls to this method would leave obsolete document references in
+         * the index, invisible to searches. Two mechanisms take care of cleaning up:
+         * clean up during search, and vacuuming.
+         *
+         *   - Upon search, whenever a discarded ID is found (and ignored for the
+         *   results), references to the discarded document are removed from the
+         *   inverted index entries for the search terms. This ensures that subsequent
+         *   searches for the same terms do not need to skip these obsolete references
+         *   again.
+         *
+         *   - In addition, vacuuming is performed automatically by default (see the
+         *   `autoVacuum` field in {@link Options}) after a certain number of
+         *   documents are discarded. Vacuuming traverses all terms in the index,
+         *   cleaning up all references to discarded documents. Vacuuming can also be
+         *   triggered manually by calling {@link MiniSearch#vacuum}.
+         *
+         * @param id  The ID of the document to be discarded
+         */
+        discard(id) {
+          const shortId = this._idToShortId.get(id);
+          if (shortId == null) {
+            throw new Error(`MiniSearch: cannot discard document with ID ${id}: it is not in the index`);
+          }
+          this._idToShortId.delete(id);
+          this._documentIds.delete(shortId);
+          this._storedFields.delete(shortId);
+          (this._fieldLength.get(shortId) || []).forEach((fieldLength, fieldId) => {
+            this.removeFieldLength(shortId, fieldId, this._documentCount, fieldLength);
+          });
+          this._fieldLength.delete(shortId);
+          this._documentCount -= 1;
+          this._dirtCount += 1;
+          this.maybeAutoVacuum();
+        }
+        maybeAutoVacuum() {
+          if (this._options.autoVacuum === false) {
+            return;
+          }
+          const { minDirtFactor, minDirtCount, batchSize, batchWait } = this._options.autoVacuum;
+          this.conditionalVacuum({ batchSize, batchWait }, { minDirtCount, minDirtFactor });
+        }
+        /**
+         * Discards the documents with the given IDs, so they won't appear in search
+         * results
+         *
+         * It is equivalent to calling {@link MiniSearch#discard} for all the given
+         * IDs, but with the optimization of triggering at most one automatic
+         * vacuuming at the end.
+         *
+         * Note: to remove all documents from the index, it is faster and more
+         * convenient to call {@link MiniSearch.removeAll} with no argument, instead
+         * of passing all IDs to this method.
+         */
+        discardAll(ids) {
+          const autoVacuum = this._options.autoVacuum;
+          try {
+            this._options.autoVacuum = false;
+            for (const id of ids) {
+              this.discard(id);
+            }
+          } finally {
+            this._options.autoVacuum = autoVacuum;
+          }
+          this.maybeAutoVacuum();
+        }
+        /**
+         * It replaces an existing document with the given updated version
+         *
+         * It works by discarding the current version and adding the updated one, so
+         * it is functionally equivalent to calling {@link MiniSearch#discard}
+         * followed by {@link MiniSearch#add}. The ID of the updated document should
+         * be the same as the original one.
+         *
+         * Since it uses {@link MiniSearch#discard} internally, this method relies on
+         * vacuuming to clean up obsolete document references from the index, allowing
+         * memory to be released (see {@link MiniSearch#discard}).
+         *
+         * @param updatedDocument  The updated document to replace the old version
+         * with
+         */
+        replace(updatedDocument) {
+          const { idField, extractField } = this._options;
+          const id = extractField(updatedDocument, idField);
+          this.discard(id);
+          this.add(updatedDocument);
+        }
+        /**
+         * Triggers a manual vacuuming, cleaning up references to discarded documents
+         * from the inverted index
+         *
+         * Vacuuming is only useful for applications that use the {@link
+         * MiniSearch#discard} or {@link MiniSearch#replace} methods.
+         *
+         * By default, vacuuming is performed automatically when needed (controlled by
+         * the `autoVacuum` field in {@link Options}), so there is usually no need to
+         * call this method, unless one wants to make sure to perform vacuuming at a
+         * specific moment.
+         *
+         * Vacuuming traverses all terms in the inverted index in batches, and cleans
+         * up references to discarded documents from the posting list, allowing memory
+         * to be released.
+         *
+         * The method takes an optional object as argument with the following keys:
+         *
+         *   - `batchSize`: the size of each batch (1000 by default)
+         *
+         *   - `batchWait`: the number of milliseconds to wait between batches (10 by
+         *   default)
+         *
+         * On large indexes, vacuuming could have a non-negligible cost: batching
+         * avoids blocking the thread for long, diluting this cost so that it is not
+         * negatively affecting the application. Nonetheless, this method should only
+         * be called when necessary, and relying on automatic vacuuming is usually
+         * better.
+         *
+         * It returns a promise that resolves (to undefined) when the clean up is
+         * completed. If vacuuming is already ongoing at the time this method is
+         * called, a new one is enqueued immediately after the ongoing one, and a
+         * corresponding promise is returned. However, no more than one vacuuming is
+         * enqueued on top of the ongoing one, even if this method is called more
+         * times (enqueuing multiple ones would be useless).
+         *
+         * @param options  Configuration options for the batch size and delay. See
+         * {@link VacuumOptions}.
+         */
+        vacuum(options = {}) {
+          return this.conditionalVacuum(options);
+        }
+        conditionalVacuum(options, conditions) {
+          if (this._currentVacuum) {
+            this._enqueuedVacuumConditions = this._enqueuedVacuumConditions && conditions;
+            if (this._enqueuedVacuum != null) {
+              return this._enqueuedVacuum;
+            }
+            this._enqueuedVacuum = this._currentVacuum.then(() => {
+              const conditions2 = this._enqueuedVacuumConditions;
+              this._enqueuedVacuumConditions = defaultVacuumConditions;
+              return this.performVacuuming(options, conditions2);
+            });
+            return this._enqueuedVacuum;
+          }
+          if (this.vacuumConditionsMet(conditions) === false) {
+            return Promise.resolve();
+          }
+          this._currentVacuum = this.performVacuuming(options);
+          return this._currentVacuum;
+        }
+        async performVacuuming(options, conditions) {
+          const initialDirtCount = this._dirtCount;
+          if (this.vacuumConditionsMet(conditions)) {
+            const batchSize = options.batchSize || defaultVacuumOptions.batchSize;
+            const batchWait = options.batchWait || defaultVacuumOptions.batchWait;
+            let i2 = 1;
+            for (const [term, fieldsData] of this._index) {
+              for (const [fieldId, fieldIndex] of fieldsData) {
+                for (const [shortId] of fieldIndex) {
+                  if (this._documentIds.has(shortId)) {
+                    continue;
+                  }
+                  if (fieldIndex.size <= 1) {
+                    fieldsData.delete(fieldId);
+                  } else {
+                    fieldIndex.delete(shortId);
+                  }
+                }
+              }
+              if (this._index.get(term).size === 0) {
+                this._index.delete(term);
+              }
+              if (i2 % batchSize === 0) {
+                await new Promise((resolve) => setTimeout(resolve, batchWait));
+              }
+              i2 += 1;
+            }
+            this._dirtCount -= initialDirtCount;
+          }
+          await null;
+          this._currentVacuum = this._enqueuedVacuum;
+          this._enqueuedVacuum = null;
+        }
+        vacuumConditionsMet(conditions) {
+          if (conditions == null) {
+            return true;
+          }
+          let { minDirtCount, minDirtFactor } = conditions;
+          minDirtCount = minDirtCount || defaultAutoVacuumOptions.minDirtCount;
+          minDirtFactor = minDirtFactor || defaultAutoVacuumOptions.minDirtFactor;
+          return this.dirtCount >= minDirtCount && this.dirtFactor >= minDirtFactor;
+        }
+        /**
+         * Is `true` if a vacuuming operation is ongoing, `false` otherwise
+         */
+        get isVacuuming() {
+          return this._currentVacuum != null;
+        }
+        /**
+         * The number of documents discarded since the most recent vacuuming
+         */
+        get dirtCount() {
+          return this._dirtCount;
+        }
+        /**
+         * A number between 0 and 1 giving an indication about the proportion of
+         * documents that are discarded, and can therefore be cleaned up by vacuuming.
+         * A value close to 0 means that the index is relatively clean, while a higher
+         * value means that the index is relatively dirty, and vacuuming could release
+         * memory.
+         */
+        get dirtFactor() {
+          return this._dirtCount / (1 + this._documentCount + this._dirtCount);
+        }
+        /**
+         * Returns `true` if a document with the given ID is present in the index and
+         * available for search, `false` otherwise
+         *
+         * @param id  The document ID
+         */
+        has(id) {
+          return this._idToShortId.has(id);
+        }
+        /**
+         * Returns the stored fields (as configured in the `storeFields` constructor
+         * option) for the given document ID. Returns `undefined` if the document is
+         * not present in the index.
+         *
+         * @param id  The document ID
+         */
+        getStoredFields(id) {
+          const shortId = this._idToShortId.get(id);
+          if (shortId == null) {
+            return void 0;
+          }
+          return this._storedFields.get(shortId);
+        }
+        /**
+         * Search for documents matching the given search query.
+         *
+         * The result is a list of scored document IDs matching the query, sorted by
+         * descending score, and each including data about which terms were matched and
+         * in which fields.
+         *
+         * ### Basic usage:
+         *
+         * ```javascript
+         * // Search for "zen art motorcycle" with default options: terms have to match
+         * // exactly, and individual terms are joined with OR
+         * miniSearch.search('zen art motorcycle')
+         * // => [ { id: 2, score: 2.77258, match: { ... } }, { id: 4, score: 1.38629, match: { ... } } ]
+         * ```
+         *
+         * ### Restrict search to specific fields:
+         *
+         * ```javascript
+         * // Search only in the 'title' field
+         * miniSearch.search('zen', { fields: ['title'] })
+         * ```
+         *
+         * ### Field boosting:
+         *
+         * ```javascript
+         * // Boost a field
+         * miniSearch.search('zen', { boost: { title: 2 } })
+         * ```
+         *
+         * ### Prefix search:
+         *
+         * ```javascript
+         * // Search for "moto" with prefix search (it will match documents
+         * // containing terms that start with "moto" or "neuro")
+         * miniSearch.search('moto neuro', { prefix: true })
+         * ```
+         *
+         * ### Fuzzy search:
+         *
+         * ```javascript
+         * // Search for "ismael" with fuzzy search (it will match documents containing
+         * // terms similar to "ismael", with a maximum edit distance of 0.2 term.length
+         * // (rounded to nearest integer)
+         * miniSearch.search('ismael', { fuzzy: 0.2 })
+         * ```
+         *
+         * ### Combining strategies:
+         *
+         * ```javascript
+         * // Mix of exact match, prefix search, and fuzzy search
+         * miniSearch.search('ismael mob', {
+         *  prefix: true,
+         *  fuzzy: 0.2
+         * })
+         * ```
+         *
+         * ### Advanced prefix and fuzzy search:
+         *
+         * ```javascript
+         * // Perform fuzzy and prefix search depending on the search term. Here
+         * // performing prefix and fuzzy search only on terms longer than 3 characters
+         * miniSearch.search('ismael mob', {
+         *  prefix: term => term.length > 3
+         *  fuzzy: term => term.length > 3 ? 0.2 : null
+         * })
+         * ```
+         *
+         * ### Combine with AND:
+         *
+         * ```javascript
+         * // Combine search terms with AND (to match only documents that contain both
+         * // "motorcycle" and "art")
+         * miniSearch.search('motorcycle art', { combineWith: 'AND' })
+         * ```
+         *
+         * ### Combine with AND_NOT:
+         *
+         * There is also an AND_NOT combinator, that finds documents that match the
+         * first term, but do not match any of the other terms. This combinator is
+         * rarely useful with simple queries, and is meant to be used with advanced
+         * query combinations (see later for more details).
+         *
+         * ### Filtering results:
+         *
+         * ```javascript
+         * // Filter only results in the 'fiction' category (assuming that 'category'
+         * // is a stored field)
+         * miniSearch.search('motorcycle art', {
+         *   filter: (result) => result.category === 'fiction'
+         * })
+         * ```
+         *
+         * ### Wildcard query
+         *
+         * Searching for an empty string (assuming the default tokenizer) returns no
+         * results. Sometimes though, one needs to match all documents, like in a
+         * "wildcard" search. This is possible by passing the special value
+         * {@link MiniSearch.wildcard} as the query:
+         *
+         * ```javascript
+         * // Return search results for all documents
+         * miniSearch.search(MiniSearch.wildcard)
+         * ```
+         *
+         * Note that search options such as `filter` and `boostDocument` are still
+         * applied, influencing which results are returned, and their order:
+         *
+         * ```javascript
+         * // Return search results for all documents in the 'fiction' category
+         * miniSearch.search(MiniSearch.wildcard, {
+         *   filter: (result) => result.category === 'fiction'
+         * })
+         * ```
+         *
+         * ### Advanced combination of queries:
+         *
+         * It is possible to combine different subqueries with OR, AND, and AND_NOT,
+         * and even with different search options, by passing a query expression
+         * tree object as the first argument, instead of a string.
+         *
+         * ```javascript
+         * // Search for documents that contain "zen" and ("motorcycle" or "archery")
+         * miniSearch.search({
+         *   combineWith: 'AND',
+         *   queries: [
+         *     'zen',
+         *     {
+         *       combineWith: 'OR',
+         *       queries: ['motorcycle', 'archery']
+         *     }
+         *   ]
+         * })
+         *
+         * // Search for documents that contain ("apple" or "pear") but not "juice" and
+         * // not "tree"
+         * miniSearch.search({
+         *   combineWith: 'AND_NOT',
+         *   queries: [
+         *     {
+         *       combineWith: 'OR',
+         *       queries: ['apple', 'pear']
+         *     },
+         *     'juice',
+         *     'tree'
+         *   ]
+         * })
+         * ```
+         *
+         * Each node in the expression tree can be either a string, or an object that
+         * supports all {@link SearchOptions} fields, plus a `queries` array field for
+         * subqueries.
+         *
+         * Note that, while this can become complicated to do by hand for complex or
+         * deeply nested queries, it provides a formalized expression tree API for
+         * external libraries that implement a parser for custom query languages.
+         *
+         * @param query  Search query
+         * @param searchOptions  Search options. Each option, if not given, defaults to the corresponding value of `searchOptions` given to the constructor, or to the library default.
+         */
+        search(query, searchOptions = {}) {
+          const { searchOptions: globalSearchOptions } = this._options;
+          const searchOptionsWithDefaults = { ...globalSearchOptions, ...searchOptions };
+          const rawResults = this.executeQuery(query, searchOptions);
+          const results = [];
+          for (const [docId, { score, terms, match }] of rawResults) {
+            const quality = terms.length || 1;
+            const result = {
+              id: this._documentIds.get(docId),
+              score: score * quality,
+              terms: Object.keys(match),
+              queryTerms: terms,
+              match
+            };
+            Object.assign(result, this._storedFields.get(docId));
+            if (searchOptionsWithDefaults.filter == null || searchOptionsWithDefaults.filter(result)) {
+              results.push(result);
+            }
+          }
+          if (query === _MiniSearch.wildcard && searchOptionsWithDefaults.boostDocument == null) {
+            return results;
+          }
+          results.sort(byScore);
+          return results;
+        }
+        /**
+         * Provide suggestions for the given search query
+         *
+         * The result is a list of suggested modified search queries, derived from the
+         * given search query, each with a relevance score, sorted by descending score.
+         *
+         * By default, it uses the same options used for search, except that by
+         * default it performs prefix search on the last term of the query, and
+         * combine terms with `'AND'` (requiring all query terms to match). Custom
+         * options can be passed as a second argument. Defaults can be changed upon
+         * calling the {@link MiniSearch} constructor, by passing a
+         * `autoSuggestOptions` option.
+         *
+         * ### Basic usage:
+         *
+         * ```javascript
+         * // Get suggestions for 'neuro':
+         * miniSearch.autoSuggest('neuro')
+         * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 0.46240 } ]
+         * ```
+         *
+         * ### Multiple words:
+         *
+         * ```javascript
+         * // Get suggestions for 'zen ar':
+         * miniSearch.autoSuggest('zen ar')
+         * // => [
+         * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
+         * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
+         * // ]
+         * ```
+         *
+         * ### Fuzzy suggestions:
+         *
+         * ```javascript
+         * // Correct spelling mistakes using fuzzy search:
+         * miniSearch.autoSuggest('neromancer', { fuzzy: 0.2 })
+         * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 1.03998 } ]
+         * ```
+         *
+         * ### Filtering:
+         *
+         * ```javascript
+         * // Get suggestions for 'zen ar', but only within the 'fiction' category
+         * // (assuming that 'category' is a stored field):
+         * miniSearch.autoSuggest('zen ar', {
+         *   filter: (result) => result.category === 'fiction'
+         * })
+         * // => [
+         * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
+         * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
+         * // ]
+         * ```
+         *
+         * @param queryString  Query string to be expanded into suggestions
+         * @param options  Search options. The supported options and default values
+         * are the same as for the {@link MiniSearch#search} method, except that by
+         * default prefix search is performed on the last term in the query, and terms
+         * are combined with `'AND'`.
+         * @return  A sorted array of suggestions sorted by relevance score.
+         */
+        autoSuggest(queryString, options = {}) {
+          options = { ...this._options.autoSuggestOptions, ...options };
+          const suggestions = /* @__PURE__ */ new Map();
+          for (const { score, terms } of this.search(queryString, options)) {
+            const phrase = terms.join(" ");
+            const suggestion = suggestions.get(phrase);
+            if (suggestion != null) {
+              suggestion.score += score;
+              suggestion.count += 1;
+            } else {
+              suggestions.set(phrase, { score, terms, count: 1 });
+            }
+          }
+          const results = [];
+          for (const [suggestion, { score, terms, count: count3 }] of suggestions) {
+            results.push({ suggestion, terms, score: score / count3 });
+          }
+          results.sort(byScore);
+          return results;
+        }
+        /**
+         * Total number of documents available to search
+         */
+        get documentCount() {
+          return this._documentCount;
+        }
+        /**
+         * Number of terms in the index
+         */
+        get termCount() {
+          return this._index.size;
+        }
+        /**
+         * Deserializes a JSON index (serialized with `JSON.stringify(miniSearch)`)
+         * and instantiates a MiniSearch instance. It should be given the same options
+         * originally used when serializing the index.
+         *
+         * ### Usage:
+         *
+         * ```javascript
+         * // If the index was serialized with:
+         * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+         * miniSearch.addAll(documents)
+         *
+         * const json = JSON.stringify(miniSearch)
+         * // It can later be deserialized like this:
+         * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
+         * ```
+         *
+         * @param json  JSON-serialized index
+         * @param options  configuration options, same as the constructor
+         * @return An instance of MiniSearch deserialized from the given JSON.
+         */
+        static loadJSON(json, options) {
+          if (options == null) {
+            throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
+          }
+          return this.loadJS(JSON.parse(json), options);
+        }
+        /**
+         * Async equivalent of {@link MiniSearch.loadJSON}
+         *
+         * This function is an alternative to {@link MiniSearch.loadJSON} that returns
+         * a promise, and loads the index in batches, leaving pauses between them to avoid
+         * blocking the main thread. It tends to be slower than the synchronous
+         * version, but does not block the main thread, so it can be a better choice
+         * when deserializing very large indexes.
+         *
+         * @param json  JSON-serialized index
+         * @param options  configuration options, same as the constructor
+         * @return A Promise that will resolve to an instance of MiniSearch deserialized from the given JSON.
+         */
+        static async loadJSONAsync(json, options) {
+          if (options == null) {
+            throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
+          }
+          return this.loadJSAsync(JSON.parse(json), options);
+        }
+        /**
+         * Returns the default value of an option. It will throw an error if no option
+         * with the given name exists.
+         *
+         * @param optionName  Name of the option
+         * @return The default value of the given option
+         *
+         * ### Usage:
+         *
+         * ```javascript
+         * // Get default tokenizer
+         * MiniSearch.getDefault('tokenize')
+         *
+         * // Get default term processor
+         * MiniSearch.getDefault('processTerm')
+         *
+         * // Unknown options will throw an error
+         * MiniSearch.getDefault('notExisting')
+         * // => throws 'MiniSearch: unknown option "notExisting"'
+         * ```
+         */
+        static getDefault(optionName) {
+          if (defaultOptions2.hasOwnProperty(optionName)) {
+            return getOwnProperty(defaultOptions2, optionName);
+          } else {
+            throw new Error(`MiniSearch: unknown option "${optionName}"`);
+          }
+        }
+        /**
+         * @ignore
+         */
+        static loadJS(js, options) {
+          const { index: index2, documentIds, fieldLength, storedFields, serializationVersion } = js;
+          const miniSearch = this.instantiateMiniSearch(js, options);
+          miniSearch._documentIds = objectToNumericMap(documentIds);
+          miniSearch._fieldLength = objectToNumericMap(fieldLength);
+          miniSearch._storedFields = objectToNumericMap(storedFields);
+          for (const [shortId, id] of miniSearch._documentIds) {
+            miniSearch._idToShortId.set(id, shortId);
+          }
+          for (const [term, data] of index2) {
+            const dataMap = /* @__PURE__ */ new Map();
+            for (const fieldId of Object.keys(data)) {
+              let indexEntry = data[fieldId];
+              if (serializationVersion === 1) {
+                indexEntry = indexEntry.ds;
+              }
+              dataMap.set(parseInt(fieldId, 10), objectToNumericMap(indexEntry));
+            }
+            miniSearch._index.set(term, dataMap);
+          }
+          return miniSearch;
+        }
+        /**
+         * @ignore
+         */
+        static async loadJSAsync(js, options) {
+          const { index: index2, documentIds, fieldLength, storedFields, serializationVersion } = js;
+          const miniSearch = this.instantiateMiniSearch(js, options);
+          miniSearch._documentIds = await objectToNumericMapAsync(documentIds);
+          miniSearch._fieldLength = await objectToNumericMapAsync(fieldLength);
+          miniSearch._storedFields = await objectToNumericMapAsync(storedFields);
+          for (const [shortId, id] of miniSearch._documentIds) {
+            miniSearch._idToShortId.set(id, shortId);
+          }
+          let count3 = 0;
+          for (const [term, data] of index2) {
+            const dataMap = /* @__PURE__ */ new Map();
+            for (const fieldId of Object.keys(data)) {
+              let indexEntry = data[fieldId];
+              if (serializationVersion === 1) {
+                indexEntry = indexEntry.ds;
+              }
+              dataMap.set(parseInt(fieldId, 10), await objectToNumericMapAsync(indexEntry));
+            }
+            if (++count3 % 1e3 === 0)
+              await wait(0);
+            miniSearch._index.set(term, dataMap);
+          }
+          return miniSearch;
+        }
+        /**
+         * @ignore
+         */
+        static instantiateMiniSearch(js, options) {
+          const { documentCount, nextId, fieldIds, averageFieldLength, dirtCount, serializationVersion } = js;
+          if (serializationVersion !== 1 && serializationVersion !== 2) {
+            throw new Error("MiniSearch: cannot deserialize an index created with an incompatible version");
+          }
+          const miniSearch = new _MiniSearch(options);
+          miniSearch._documentCount = documentCount;
+          miniSearch._nextId = nextId;
+          miniSearch._idToShortId = /* @__PURE__ */ new Map();
+          miniSearch._fieldIds = fieldIds;
+          miniSearch._avgFieldLength = averageFieldLength;
+          miniSearch._dirtCount = dirtCount || 0;
+          miniSearch._index = new SearchableMap();
+          return miniSearch;
+        }
+        /**
+         * @ignore
+         */
+        executeQuery(query, searchOptions = {}) {
+          if (query === _MiniSearch.wildcard) {
+            return this.executeWildcardQuery(searchOptions);
+          }
+          if (typeof query !== "string") {
+            const options2 = { ...searchOptions, ...query, queries: void 0 };
+            const results2 = query.queries.map((subquery) => this.executeQuery(subquery, options2));
+            return this.combineResults(results2, options2.combineWith);
+          }
+          const { tokenize: tokenize2, processTerm, searchOptions: globalSearchOptions } = this._options;
+          const options = { tokenize: tokenize2, processTerm, ...globalSearchOptions, ...searchOptions };
+          const { tokenize: searchTokenize, processTerm: searchProcessTerm } = options;
+          const terms = searchTokenize(query).flatMap((term) => searchProcessTerm(term)).filter((term) => !!term);
+          const queries = terms.map(termToQuerySpec(options));
+          const results = queries.map((query2) => this.executeQuerySpec(query2, options));
+          return this.combineResults(results, options.combineWith);
+        }
+        /**
+         * @ignore
+         */
+        executeQuerySpec(query, searchOptions) {
+          const options = { ...this._options.searchOptions, ...searchOptions };
+          const boosts = (options.fields || this._options.fields).reduce((boosts2, field) => ({ ...boosts2, [field]: getOwnProperty(options.boost, field) || 1 }), {});
+          const { boostDocument, weights, maxFuzzy, bm25: bm25params } = options;
+          const { fuzzy: fuzzyWeight, prefix: prefixWeight } = { ...defaultSearchOptions.weights, ...weights };
+          const data = this._index.get(query.term);
+          const results = this.termResults(query.term, query.term, 1, query.termBoost, data, boosts, boostDocument, bm25params);
+          let prefixMatches;
+          let fuzzyMatches;
+          if (query.prefix) {
+            prefixMatches = this._index.atPrefix(query.term);
+          }
+          if (query.fuzzy) {
+            const fuzzy = query.fuzzy === true ? 0.2 : query.fuzzy;
+            const maxDistance = fuzzy < 1 ? Math.min(maxFuzzy, Math.round(query.term.length * fuzzy)) : fuzzy;
+            if (maxDistance)
+              fuzzyMatches = this._index.fuzzyGet(query.term, maxDistance);
+          }
+          if (prefixMatches) {
+            for (const [term, data2] of prefixMatches) {
+              const distance = term.length - query.term.length;
+              if (!distance) {
+                continue;
+              }
+              fuzzyMatches === null || fuzzyMatches === void 0 ? void 0 : fuzzyMatches.delete(term);
+              const weight = prefixWeight * term.length / (term.length + 0.3 * distance);
+              this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
+            }
+          }
+          if (fuzzyMatches) {
+            for (const term of fuzzyMatches.keys()) {
+              const [data2, distance] = fuzzyMatches.get(term);
+              if (!distance) {
+                continue;
+              }
+              const weight = fuzzyWeight * term.length / (term.length + distance);
+              this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
+            }
+          }
+          return results;
+        }
+        /**
+         * @ignore
+         */
+        executeWildcardQuery(searchOptions) {
+          const results = /* @__PURE__ */ new Map();
+          const options = { ...this._options.searchOptions, ...searchOptions };
+          for (const [shortId, id] of this._documentIds) {
+            const score = options.boostDocument ? options.boostDocument(id, "", this._storedFields.get(shortId)) : 1;
+            results.set(shortId, {
+              score,
+              terms: [],
+              match: {}
+            });
+          }
+          return results;
+        }
+        /**
+         * @ignore
+         */
+        combineResults(results, combineWith = OR) {
+          if (results.length === 0) {
+            return /* @__PURE__ */ new Map();
+          }
+          const operator = combineWith.toLowerCase();
+          const combinator = combinators[operator];
+          if (!combinator) {
+            throw new Error(`Invalid combination operator: ${combineWith}`);
+          }
+          return results.reduce(combinator) || /* @__PURE__ */ new Map();
+        }
+        /**
+         * Allows serialization of the index to JSON, to possibly store it and later
+         * deserialize it with {@link MiniSearch.loadJSON}.
+         *
+         * Normally one does not directly call this method, but rather call the
+         * standard JavaScript `JSON.stringify()` passing the {@link MiniSearch}
+         * instance, and JavaScript will internally call this method. Upon
+         * deserialization, one must pass to {@link MiniSearch.loadJSON} the same
+         * options used to create the original instance that was serialized.
+         *
+         * ### Usage:
+         *
+         * ```javascript
+         * // Serialize the index:
+         * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+         * miniSearch.addAll(documents)
+         * const json = JSON.stringify(miniSearch)
+         *
+         * // Later, to deserialize it:
+         * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
+         * ```
+         *
+         * @return A plain-object serializable representation of the search index.
+         */
+        toJSON() {
+          const index2 = [];
+          for (const [term, fieldIndex] of this._index) {
+            const data = {};
+            for (const [fieldId, freqs] of fieldIndex) {
+              data[fieldId] = Object.fromEntries(freqs);
+            }
+            index2.push([term, data]);
+          }
+          return {
+            documentCount: this._documentCount,
+            nextId: this._nextId,
+            documentIds: Object.fromEntries(this._documentIds),
+            fieldIds: this._fieldIds,
+            fieldLength: Object.fromEntries(this._fieldLength),
+            averageFieldLength: this._avgFieldLength,
+            storedFields: Object.fromEntries(this._storedFields),
+            dirtCount: this._dirtCount,
+            index: index2,
+            serializationVersion: 2
+          };
+        }
+        /**
+         * @ignore
+         */
+        termResults(sourceTerm, derivedTerm, termWeight, termBoost, fieldTermData, fieldBoosts, boostDocumentFn, bm25params, results = /* @__PURE__ */ new Map()) {
+          if (fieldTermData == null)
+            return results;
+          for (const field of Object.keys(fieldBoosts)) {
+            const fieldBoost = fieldBoosts[field];
+            const fieldId = this._fieldIds[field];
+            const fieldTermFreqs = fieldTermData.get(fieldId);
+            if (fieldTermFreqs == null)
+              continue;
+            let matchingFields = fieldTermFreqs.size;
+            const avgFieldLength = this._avgFieldLength[fieldId];
+            for (const docId of fieldTermFreqs.keys()) {
+              if (!this._documentIds.has(docId)) {
+                this.removeTerm(fieldId, docId, derivedTerm);
+                matchingFields -= 1;
+                continue;
+              }
+              const docBoost = boostDocumentFn ? boostDocumentFn(this._documentIds.get(docId), derivedTerm, this._storedFields.get(docId)) : 1;
+              if (!docBoost)
+                continue;
+              const termFreq = fieldTermFreqs.get(docId);
+              const fieldLength = this._fieldLength.get(docId)[fieldId];
+              const rawScore = calcBM25Score(termFreq, matchingFields, this._documentCount, fieldLength, avgFieldLength, bm25params);
+              const weightedScore = termWeight * termBoost * fieldBoost * docBoost * rawScore;
+              const result = results.get(docId);
+              if (result) {
+                result.score += weightedScore;
+                assignUniqueTerm(result.terms, sourceTerm);
+                const match = getOwnProperty(result.match, derivedTerm);
+                if (match) {
+                  match.push(field);
+                } else {
+                  result.match[derivedTerm] = [field];
+                }
+              } else {
+                results.set(docId, {
+                  score: weightedScore,
+                  terms: [sourceTerm],
+                  match: { [derivedTerm]: [field] }
+                });
+              }
+            }
+          }
+          return results;
+        }
+        /**
+         * @ignore
+         */
+        addTerm(fieldId, documentId, term) {
+          const indexData = this._index.fetch(term, createMap);
+          let fieldIndex = indexData.get(fieldId);
+          if (fieldIndex == null) {
+            fieldIndex = /* @__PURE__ */ new Map();
+            fieldIndex.set(documentId, 1);
+            indexData.set(fieldId, fieldIndex);
+          } else {
+            const docs = fieldIndex.get(documentId);
+            fieldIndex.set(documentId, (docs || 0) + 1);
+          }
+        }
+        /**
+         * @ignore
+         */
+        removeTerm(fieldId, documentId, term) {
+          if (!this._index.has(term)) {
+            this.warnDocumentChanged(documentId, fieldId, term);
+            return;
+          }
+          const indexData = this._index.fetch(term, createMap);
+          const fieldIndex = indexData.get(fieldId);
+          if (fieldIndex == null || fieldIndex.get(documentId) == null) {
+            this.warnDocumentChanged(documentId, fieldId, term);
+          } else if (fieldIndex.get(documentId) <= 1) {
+            if (fieldIndex.size <= 1) {
+              indexData.delete(fieldId);
+            } else {
+              fieldIndex.delete(documentId);
+            }
+          } else {
+            fieldIndex.set(documentId, fieldIndex.get(documentId) - 1);
+          }
+          if (this._index.get(term).size === 0) {
+            this._index.delete(term);
+          }
+        }
+        /**
+         * @ignore
+         */
+        warnDocumentChanged(shortDocumentId, fieldId, term) {
+          for (const fieldName of Object.keys(this._fieldIds)) {
+            if (this._fieldIds[fieldName] === fieldId) {
+              this._options.logger("warn", `MiniSearch: document with ID ${this._documentIds.get(shortDocumentId)} has changed before removal: term "${term}" was not present in field "${fieldName}". Removing a document after it has changed can corrupt the index!`, "version_conflict");
+              return;
+            }
+          }
+        }
+        /**
+         * @ignore
+         */
+        addDocumentId(documentId) {
+          const shortDocumentId = this._nextId;
+          this._idToShortId.set(documentId, shortDocumentId);
+          this._documentIds.set(shortDocumentId, documentId);
+          this._documentCount += 1;
+          this._nextId += 1;
+          return shortDocumentId;
+        }
+        /**
+         * @ignore
+         */
+        addFields(fields) {
+          for (let i2 = 0; i2 < fields.length; i2++) {
+            this._fieldIds[fields[i2]] = i2;
+          }
+        }
+        /**
+         * @ignore
+         */
+        addFieldLength(documentId, fieldId, count3, length) {
+          let fieldLengths = this._fieldLength.get(documentId);
+          if (fieldLengths == null)
+            this._fieldLength.set(documentId, fieldLengths = []);
+          fieldLengths[fieldId] = length;
+          const averageFieldLength = this._avgFieldLength[fieldId] || 0;
+          const totalFieldLength = averageFieldLength * count3 + length;
+          this._avgFieldLength[fieldId] = totalFieldLength / (count3 + 1);
+        }
+        /**
+         * @ignore
+         */
+        removeFieldLength(documentId, fieldId, count3, length) {
+          if (count3 === 1) {
+            this._avgFieldLength[fieldId] = 0;
+            return;
+          }
+          const totalFieldLength = this._avgFieldLength[fieldId] * count3 - length;
+          this._avgFieldLength[fieldId] = totalFieldLength / (count3 - 1);
+        }
+        /**
+         * @ignore
+         */
+        saveStoredFields(documentId, doc) {
+          const { storeFields, extractField } = this._options;
+          if (storeFields == null || storeFields.length === 0) {
+            return;
+          }
+          let documentFields = this._storedFields.get(documentId);
+          if (documentFields == null)
+            this._storedFields.set(documentId, documentFields = {});
+          for (const fieldName of storeFields) {
+            const fieldValue = extractField(doc, fieldName);
+            if (fieldValue !== void 0)
+              documentFields[fieldName] = fieldValue;
+          }
+        }
+      };
+      MiniSearch.wildcard = Symbol("*");
+      getOwnProperty = (object, property) => Object.prototype.hasOwnProperty.call(object, property) ? object[property] : void 0;
+      combinators = {
+        [OR]: (a2, b3) => {
+          for (const docId of b3.keys()) {
+            const existing = a2.get(docId);
+            if (existing == null) {
+              a2.set(docId, b3.get(docId));
+            } else {
+              const { score, terms, match } = b3.get(docId);
+              existing.score = existing.score + score;
+              existing.match = Object.assign(existing.match, match);
+              assignUniqueTerms(existing.terms, terms);
+            }
+          }
+          return a2;
+        },
+        [AND]: (a2, b3) => {
+          const combined = /* @__PURE__ */ new Map();
+          for (const docId of b3.keys()) {
+            const existing = a2.get(docId);
+            if (existing == null)
+              continue;
+            const { score, terms, match } = b3.get(docId);
+            assignUniqueTerms(existing.terms, terms);
+            combined.set(docId, {
+              score: existing.score + score,
+              terms: existing.terms,
+              match: Object.assign(existing.match, match)
+            });
+          }
+          return combined;
+        },
+        [AND_NOT]: (a2, b3) => {
+          for (const docId of b3.keys())
+            a2.delete(docId);
+          return a2;
+        }
+      };
+      defaultBM25params = { k: 1.2, b: 0.7, d: 0.5 };
+      calcBM25Score = (termFreq, matchingCount, totalCount, fieldLength, avgFieldLength, bm25params) => {
+        const { k: k3, b: b3, d: d3 } = bm25params;
+        const invDocFreq = Math.log(1 + (totalCount - matchingCount + 0.5) / (matchingCount + 0.5));
+        return invDocFreq * (d3 + termFreq * (k3 + 1) / (termFreq + k3 * (1 - b3 + b3 * fieldLength / avgFieldLength)));
+      };
+      termToQuerySpec = (options) => (term, i2, terms) => {
+        const fuzzy = typeof options.fuzzy === "function" ? options.fuzzy(term, i2, terms) : options.fuzzy || false;
+        const prefix = typeof options.prefix === "function" ? options.prefix(term, i2, terms) : options.prefix === true;
+        const termBoost = typeof options.boostTerm === "function" ? options.boostTerm(term, i2, terms) : 1;
+        return { term, fuzzy, prefix, termBoost };
+      };
+      defaultOptions2 = {
+        idField: "id",
+        extractField: (document2, fieldName) => document2[fieldName],
+        stringifyField: (fieldValue, fieldName) => fieldValue.toString(),
+        tokenize: (text2) => text2.split(SPACE_OR_PUNCTUATION),
+        processTerm: (term) => term.toLowerCase(),
+        fields: void 0,
+        searchOptions: void 0,
+        storeFields: [],
+        logger: (level, message) => {
+          if (typeof (console === null || console === void 0 ? void 0 : console[level]) === "function")
+            console[level](message);
+        },
+        autoVacuum: true
+      };
+      defaultSearchOptions = {
+        combineWith: OR,
+        prefix: false,
+        fuzzy: false,
+        maxFuzzy: 6,
+        boost: {},
+        weights: { fuzzy: 0.45, prefix: 0.375 },
+        bm25: defaultBM25params
+      };
+      defaultAutoSuggestOptions = {
+        combineWith: AND,
+        prefix: (term, i2, terms) => i2 === terms.length - 1
+      };
+      defaultVacuumOptions = { batchSize: 1e3, batchWait: 10 };
+      defaultVacuumConditions = { minDirtFactor: 0.1, minDirtCount: 20 };
+      defaultAutoVacuumOptions = { ...defaultVacuumOptions, ...defaultVacuumConditions };
+      assignUniqueTerm = (target, term) => {
+        if (!target.includes(term))
+          target.push(term);
+      };
+      assignUniqueTerms = (target, source) => {
+        for (const term of source) {
+          if (!target.includes(term))
+            target.push(term);
+        }
+      };
+      byScore = ({ score: a2 }, { score: b3 }) => b3 - a2;
+      createMap = () => /* @__PURE__ */ new Map();
+      objectToNumericMap = (object) => {
+        const map2 = /* @__PURE__ */ new Map();
+        for (const key of Object.keys(object)) {
+          map2.set(parseInt(key, 10), object[key]);
+        }
+        return map2;
+      };
+      objectToNumericMapAsync = async (object) => {
+        const map2 = /* @__PURE__ */ new Map();
+        let count3 = 0;
+        for (const key of Object.keys(object)) {
+          map2.set(parseInt(key, 10), object[key]);
+          if (++count3 % 1e3 === 0) {
+            await wait(0);
+          }
+        }
+        return map2;
+      };
+      wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
+    }
+  });
+
+  // src/utils/localMemoryUtils.ts
+  function sanitizeKeyPart(value) {
+    return value.replace(/\|/g, "%7C");
+  }
+  function normalizeTextForKey(text2) {
+    return text2.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 256);
+  }
+  function normalizeMemoryName(value) {
+    return (value || "").trim().toLowerCase();
+  }
+  function isBookmarkFolderType(rawType) {
+    return BOOKMARK_FOLDER_TYPES.has((rawType || "").toLowerCase());
+  }
+  function getMemoryDocSource(doc) {
+    const rawType = String(doc?.metadata?.type || "memory").toLowerCase();
+    if (isBookmarkFolderType(rawType)) {
+      return "bookmark-folder";
+    }
+    return rawType;
+  }
+  function getMemoryDocFolderName(doc) {
+    return normalizeMemoryName(
+      String(doc?.metadata?.folderName || doc?.metadata?.hubName || "")
+    );
+  }
+  function getMemoryDocUrl(doc) {
+    return String(doc?.url || doc?.metadata?.url || "").trim();
+  }
+  function computeMemoryDedupeKey(doc) {
+    const source = getMemoryDocSource(doc);
+    const folder = getMemoryDocFolderName(doc);
+    const url = getMemoryDocUrl(doc);
+    const contentKey = url || `text:${normalizeTextForKey(String(doc?.text || ""))}`;
+    return `${sanitizeKeyPart(source)}|${sanitizeKeyPart(folder)}|${sanitizeKeyPart(contentKey)}`;
+  }
+  var BOOKMARK_FOLDER_TYPES;
+  var init_localMemoryUtils = __esm({
+    "src/utils/localMemoryUtils.ts"() {
+      "use strict";
+      BOOKMARK_FOLDER_TYPES = /* @__PURE__ */ new Set(["hub_item", "bookmark_folder_item"]);
+    }
+  });
+
+  // src/types/runtime.ts
+  function getBrowserWindow(globalRef = globalThis) {
+    const maybeWindow = globalRef.window;
+    const win = maybeWindow || globalRef;
+    const services = win.Services || win.top?.Services;
+    if (services?.wm) {
+      return services.wm.getMostRecentWindow("navigator:browser");
+    }
+    return win.top || win;
+  }
+  var init_runtime = __esm({
+    "src/types/runtime.ts"() {
+      "use strict";
+    }
+  });
+
+  // src/utils/assistantLogger.ts
+  function isDebugEnabled(globalRef = globalThis) {
+    try {
+      const host = globalRef;
+      const prefs = host.window?.Services?.prefs || host.Services?.prefs;
+      if (!prefs?.getBoolPref) {
+        return false;
+      }
+      return !!prefs.getBoolPref(DEBUG_PREF_NAME, false);
+    } catch {
+      return false;
+    }
+  }
+  function formatPrefix(scope, message) {
+    return `[Assistant:${scope}] ${message}`;
+  }
+  function write(level, scope, message, meta) {
+    if ((level === "debug" || level === "info") && !isDebugEnabled()) {
+      return;
+    }
+    const text2 = formatPrefix(scope, message);
+    if (meta !== void 0) {
+      console[level](text2, meta);
+      return;
+    }
+    console[level](text2);
+  }
+  var DEBUG_PREF_NAME, assistantLogger;
+  var init_assistantLogger = __esm({
+    "src/utils/assistantLogger.ts"() {
+      "use strict";
+      DEBUG_PREF_NAME = "browser.oasis.assistant.debug";
+      assistantLogger = {
+        debug(scope, message, meta) {
+          write("debug", scope, message, meta);
+        },
+        info(scope, message, meta) {
+          write("info", scope, message, meta);
+        },
+        warn(scope, message, meta) {
+          write("warn", scope, message, meta);
+        },
+        error(scope, message, meta) {
+          write("error", scope, message, meta);
+        },
+        isDebugEnabled
+      };
+    }
+  });
+
+  // src/services/localMemory.ts
+  function getChrome() {
+    const topWin = getBrowserWindow();
+    const gBrowser = topWin?.gBrowser;
+    const PlacesUtils = topWin?.PlacesUtils;
+    return { topWin, gBrowser, PlacesUtils };
+  }
+  function toUrlString(value) {
+    if (!value) return "";
+    if (typeof value === "string") return value.trim();
+    const fromSpec = String(value.spec || "").trim();
+    if (fromSpec) return fromSpec;
+    const fromHref = String(value.href || "").trim();
+    if (fromHref) return fromHref;
+    return String(value.toString?.() || "").trim();
+  }
+  var logDebug, logWarn, logError, OASIS_MANAGED_BOOKMARK_ROOT, LocalMemoryService, localMemory;
+  var init_localMemory = __esm({
+    "src/services/localMemory.ts"() {
+      "use strict";
+      init_build();
+      init_es();
+      init_localMemoryUtils();
+      init_runtime();
+      init_assistantLogger();
+      logDebug = (message, ...meta) => {
+        assistantLogger.debug(
+          "local-memory",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      logWarn = (message, ...meta) => {
+        assistantLogger.warn(
+          "local-memory",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      logError = (message, ...meta) => {
+        assistantLogger.error(
+          "local-memory",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      OASIS_MANAGED_BOOKMARK_ROOT = "Oasis Hubs";
+      LocalMemoryService = class {
+        dbPromise;
+        miniSearch;
+        isIndexDirty = true;
+        constructor() {
+          try {
+            this.dbPromise = openDB("oasis-memory", 3, {
+              upgrade(db, oldVersion, _newVersion, transaction) {
+                if (oldVersion < 1) {
+                  const store2 = db.createObjectStore("documents", {
+                    keyPath: "id",
+                    autoIncrement: true
+                  });
+                  store2.createIndex("by-timestamp", "timestamp");
+                  store2.createIndex("by-url", "url", { unique: false });
+                }
+                if (oldVersion < 2) {
+                  db.createObjectStore("usage", { keyPath: "userId" });
+                }
+                if (oldVersion < 3) {
+                  const docsStore = transaction.objectStore("documents");
+                  if (!docsStore.indexNames.contains("by-dedupe-key")) {
+                    docsStore.createIndex("by-dedupe-key", "dedupeKey", {
+                      unique: true
+                    });
+                  }
+                }
+              }
+            });
+          } catch (error) {
+            logError("[LocalMemory] IndexedDB unavailable in this context", error);
+            this.dbPromise = Promise.reject(error);
+          }
+          this.miniSearch = new MiniSearch({
+            fields: ["text", "title", "description"],
+            storeFields: ["text", "metadata", "url", "timestamp", "dedupeKey"],
+            extractField: (doc, fieldName) => {
+              if (fieldName === "title") return doc.metadata?.title;
+              if (fieldName === "description") return doc.metadata?.description;
+              return doc[fieldName];
+            },
+            tokenize: (text2) => this.tokenize(text2),
+            searchOptions: {
+              boost: { title: 2 },
+              fuzzy: 0.2,
+              prefix: true,
+              tokenize: (text2) => this.tokenize(text2)
+            }
+          });
+          this.backfillDedupeKeys().then(() => this.ensureIndex()).then(() => {
+            setTimeout(() => this.indexAll(), 5e3);
+          }).catch((error) => {
+            logError("[LocalMemory] initialization failed", error);
+          });
+        }
+        // Simple tokenizer: lowercase, replace punctuation with spaces, split by whitespace
+        tokenize(text2) {
+          return text2.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).filter((t2) => t2.length > 2);
+        }
+        async backfillDedupeKeys() {
+          const db = await this.dbPromise;
+          const tx = db.transaction("documents", "readwrite");
+          const store2 = tx.store;
+          const winners = /* @__PURE__ */ new Map();
+          let cursor = await store2.openCursor();
+          let updated = 0;
+          let removed = 0;
+          while (cursor) {
+            const id = Number(cursor.primaryKey);
+            const doc = cursor.value;
+            const dedupeKey = computeMemoryDedupeKey(doc);
+            const timestamp2 = Number(doc.timestamp || 0);
+            const winner = winners.get(dedupeKey);
+            if (winner) {
+              if (timestamp2 > winner.timestamp) {
+                await store2.delete(winner.id);
+                winners.set(dedupeKey, { id, timestamp: timestamp2 });
+                if (doc.dedupeKey !== dedupeKey) {
+                  await cursor.update({ ...doc, dedupeKey });
+                  updated++;
+                }
+              } else {
+                await cursor.delete();
+              }
+              removed++;
+              cursor = await cursor.continue();
+              continue;
+            }
+            winners.set(dedupeKey, { id, timestamp: timestamp2 });
+            if (doc.dedupeKey !== dedupeKey) {
+              await cursor.update({ ...doc, dedupeKey });
+              updated++;
+            }
+            cursor = await cursor.continue();
+          }
+          await tx.done;
+          if (updated > 0 || removed > 0) {
+            this.isIndexDirty = true;
+            logDebug(
+              `[LocalMemory] dedupe backfill updated=${updated} removed_duplicates=${removed}`
+            );
+          }
+        }
+        async upsertDocumentByDedupeKey(doc) {
+          const db = await this.dbPromise;
+          const tx = db.transaction("documents", "readwrite");
+          const docsStore = tx.store;
+          const index2 = docsStore.index("by-dedupe-key");
+          const existing = doc.dedupeKey ? await index2.get(doc.dedupeKey) : null;
+          if (existing?.id != null) {
+            await docsStore.put({ ...doc, id: existing.id });
+            await tx.done;
+            return "updated";
+          }
+          await docsStore.add(doc);
+          await tx.done;
+          return "inserted";
+        }
+        async mutateDocuments(mutator) {
+          const db = await this.dbPromise;
+          const tx = db.transaction("documents", "readwrite");
+          let cursor = await tx.store.openCursor();
+          let changed = 0;
+          while (cursor) {
+            const doc = cursor.value;
+            const nextDoc = mutator(doc);
+            if (nextDoc === null) {
+              await cursor.delete();
+              changed++;
+            } else if (nextDoc !== doc) {
+              await cursor.update(nextDoc);
+              changed++;
+            }
+            cursor = await cursor.continue();
+          }
+          await tx.done;
+          if (changed > 0) {
+            this.isIndexDirty = true;
+          }
+          return changed;
+        }
+        async ensureIndex() {
+          if (!this.isIndexDirty) return;
+          const db = await this.dbPromise;
+          const docs = await db.getAll("documents");
+          this.miniSearch.removeAll();
+          if (docs.length > 0) {
+            this.miniSearch.addAll(
+              docs.map((d3) => ({
+                id: d3.id,
+                text: d3.text,
+                metadata: d3.metadata,
+                url: d3.url,
+                timestamp: d3.timestamp,
+                dedupeKey: d3.dedupeKey
+              }))
+            );
+          }
+          this.isIndexDirty = false;
+          logDebug(`[LocalMemory] Index rebuilt with ${docs.length} documents`);
+        }
+        async addDocument(text2, metadata = {}, url) {
+          const tokens = this.tokenize(text2);
+          const doc = {
+            text: text2,
+            tokens,
+            metadata,
+            timestamp: Date.now(),
+            url,
+            dedupeKey: computeMemoryDedupeKey({ text: text2, metadata, url })
+          };
+          const upsertResult = await this.upsertDocumentByDedupeKey(doc);
+          this.isIndexDirty = true;
+          if (upsertResult === "updated") {
+            logDebug(
+              `[LocalMemory] dedupe hit source=${getMemoryDocSource(doc)} key=${doc.dedupeKey}`
+            );
+          }
+        }
+        async removeDocumentByUrl(url) {
+          const db = await this.dbPromise;
+          const tx = db.transaction("documents", "readwrite");
+          const index2 = tx.store.index("by-url");
+          let cursor = await index2.openCursor(url);
+          while (cursor) {
+            await cursor.delete();
+            cursor = await cursor.continue();
+          }
+          await tx.done;
+          this.isIndexDirty = true;
+          logDebug(`Removed documents for URL: ${url}`);
+        }
+        async removeBookmarkFolderDocuments(folderName) {
+          const targetFolder = normalizeMemoryName(folderName);
+          if (!targetFolder) return 0;
+          const removed = await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
+            if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
+            return null;
+          });
+          if (removed > 0) {
+            logDebug(
+              `[LocalMemory] Removed ${removed} documents for folder: ${folderName}`
+            );
+          }
+          return removed;
+        }
+        async removeAllBookmarkFolderDocuments() {
+          const removed = await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
+            return null;
+          });
+          if (removed > 0) {
+            logDebug(
+              `[LocalMemory] Removed all bookmark-folder documents: ${removed}`
+            );
+          }
+          return removed;
+        }
+        async removeBookmarkFolderDocumentByUrl(folderName, url) {
+          const targetFolder = normalizeMemoryName(folderName);
+          if (!targetFolder || !url) return 0;
+          const removed = await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
+            if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
+            const docUrl = getMemoryDocUrl(doc);
+            if (docUrl !== url) return doc;
+            return null;
+          });
+          if (removed > 0) {
+            logDebug(
+              `[LocalMemory] Removed ${removed} folder documents for URL: ${url}`
+            );
+          }
+          return removed;
+        }
+        async renameBookmarkFolderDocuments(oldName, newName) {
+          const from = normalizeMemoryName(oldName);
+          const to = (newName || "").trim();
+          const toNorm = normalizeMemoryName(newName);
+          if (!from || !toNorm) return 0;
+          const updated = await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
+            if (getMemoryDocFolderName(doc) !== from) return doc;
+            const metadata = { ...doc.metadata || {} };
+            metadata.folderName = to;
+            metadata.hubName = to;
+            if (typeof metadata.context === "string" && metadata.context.toLowerCase().startsWith("bookmark folder:")) {
+              metadata.context = `Bookmark Folder: ${to}`;
+            }
+            return {
+              ...doc,
+              metadata,
+              dedupeKey: computeMemoryDedupeKey({ ...doc, metadata })
+            };
+          });
+          if (updated > 0) {
+            logDebug(
+              `[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`
+            );
+          }
+          return updated;
+        }
+        async syncBookmarkFolderDocuments(entries2) {
+          const byGuid = /* @__PURE__ */ new Map();
+          for (const entry of entries2) {
+            const guid = String(entry.bookmarkGuid || "").trim();
+            const url = String(entry.url || "").trim();
+            const folderName = String(entry.folderName || "").trim();
+            if (!guid || !url || !folderName) continue;
+            byGuid.set(guid, { ...entry, bookmarkGuid: guid, url, folderName });
+          }
+          const seen = /* @__PURE__ */ new Set();
+          let updated = 0;
+          let removed = 0;
+          await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
+            const bookmarkGuid = String(doc.metadata?.bookmarkGuid || "").trim();
+            if (!bookmarkGuid) {
+              removed++;
+              return null;
+            }
+            const nextEntry = byGuid.get(bookmarkGuid);
+            if (!nextEntry) {
+              removed++;
+              return null;
+            }
+            seen.add(bookmarkGuid);
+            const previousMetadata = doc.metadata || {};
+            const nextMetadata = {
+              ...previousMetadata,
+              type: "bookmark_folder_item",
+              title: nextEntry.title,
+              url: nextEntry.url,
+              hub: nextEntry.parentGuid,
+              hubName: nextEntry.folderName,
+              folderName: nextEntry.folderName,
+              bookmarkGuid: nextEntry.bookmarkGuid,
+              parentGuid: nextEntry.parentGuid,
+              context: `Bookmark Folder: ${nextEntry.folderName}`,
+              description: nextEntry.description ?? previousMetadata.description ?? ""
+            };
+            const nextText = `Title: ${nextEntry.title}
+URL: ${nextEntry.url}
+Content: ${nextMetadata.description || ""}`;
+            const nextDoc = {
+              ...doc,
+              text: nextText,
+              metadata: nextMetadata,
+              url: nextEntry.url,
+              dedupeKey: computeMemoryDedupeKey({
+                text: nextText,
+                metadata: nextMetadata,
+                url: nextEntry.url
+              })
+            };
+            const unchanged = doc.text === nextDoc.text && doc.url === nextDoc.url && doc.metadata?.title === nextMetadata.title && doc.metadata?.folderName === nextMetadata.folderName && doc.metadata?.bookmarkGuid === nextMetadata.bookmarkGuid && doc.metadata?.parentGuid === nextMetadata.parentGuid;
+            if (unchanged) return doc;
+            updated++;
+            return nextDoc;
+          });
+          let added = 0;
+          for (const entry of byGuid.values()) {
+            if (seen.has(entry.bookmarkGuid)) continue;
+            const text2 = `Title: ${entry.title}
+URL: ${entry.url}
+Content: ${entry.description || ""}`;
+            await this.addDocument(
+              text2,
+              {
+                type: "bookmark_folder_item",
+                title: entry.title,
+                url: entry.url,
+                hub: entry.parentGuid,
+                hubName: entry.folderName,
+                folderName: entry.folderName,
+                bookmarkGuid: entry.bookmarkGuid,
+                parentGuid: entry.parentGuid,
+                context: `Bookmark Folder: ${entry.folderName}`,
+                description: entry.description || ""
+              },
+              entry.url
+            );
+            added++;
+          }
+          if (added > 0 || updated > 0 || removed > 0) {
+            logDebug(
+              `[LocalMemory] bookmark-folder sync added=${added} updated=${updated} removed=${removed}`
+            );
+          }
+          return { added, updated, removed };
+        }
+        async removeStaleBookmarkSourceDocuments(validDedupeKeys) {
+          const removed = await this.mutateDocuments((doc) => {
+            if (getMemoryDocSource(doc) !== "bookmark") return doc;
+            const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
+            if (validDedupeKeys.has(key)) return doc;
+            return null;
+          });
+          if (removed > 0) {
+            logDebug(
+              `[LocalMemory] Removed stale bookmark-source documents: ${removed}`
+            );
+          }
+          return removed;
+        }
+        async removeStaleLiveSourceDocuments(validDedupeKeys) {
+          const removed = await this.mutateDocuments((doc) => {
+            const source = getMemoryDocSource(doc);
+            if (source !== "tab" && source !== "tab-group") return doc;
+            const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
+            if (validDedupeKeys.has(key)) return doc;
+            return null;
+          });
+          if (removed > 0) {
+            logDebug(
+              `[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`
+            );
+          }
+          return removed;
+        }
+        async search(query, limit = 5, filter) {
+          await this.ensureIndex();
+          const folderFilter = filter?.folder || filter?.hub;
+          const results = this.miniSearch.search(query, {
+            filter: (result) => {
+              if (folderFilter) {
+                const name = normalizeMemoryName(
+                  String(
+                    result.metadata?.folderName || result.metadata?.hubName || ""
+                  )
+                );
+                return name === normalizeMemoryName(folderFilter);
+              }
+              return true;
+            }
+          });
+          const seenKeys = /* @__PURE__ */ new Set();
+          const uniqueResults = [];
+          for (const r2 of results) {
+            const stored = r2;
+            const metadata = stored.metadata || {};
+            const key = String(
+              stored.dedupeKey || computeMemoryDedupeKey({
+                text: stored.text || "",
+                url: stored.url,
+                metadata
+              })
+            );
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+            uniqueResults.push(stored);
+            if (uniqueResults.length >= limit) break;
+          }
+          return uniqueResults.map((r2) => ({
+            text: r2.text || "",
+            score: r2.score,
+            metadata: r2.metadata || {},
+            url: r2.url
+          }));
+        }
+        async getUsage(userId) {
+          const db = await this.dbPromise;
+          const record = await db.get("usage", userId);
+          return record?.count || 0;
+        }
+        async saveUsage(userId, count3) {
+          const db = await this.dbPromise;
+          await db.put("usage", { userId, count: count3, timestamp: Date.now() });
+          logDebug(`[LocalMemory] Saved usage for ${userId}: ${count3}`);
+        }
+        // --- Indexing from Browser ---
+        async indexHistory(maxItems = 1e3) {
+          const win = window;
+          const PlacesUtils = getChrome().PlacesUtils ?? win.PlacesUtils;
+          if (!PlacesUtils?.history) return;
+          const options = PlacesUtils.history.getNewQueryOptions();
+          options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+          options.maxResults = maxItems;
+          options.includeHidden = false;
+          const query = PlacesUtils.history.getNewQuery();
+          const result = PlacesUtils.history.executeQuery(query, options);
+          const root = result.root;
+          try {
+            root.containerOpen = true;
+            for (let i2 = 0; i2 < root.childCount; i2++) {
+              const node = root.getChild(i2);
+              const uri2 = node.uri ? String(node.uri) : "";
+              if (!uri2) continue;
+              const title = node.title != null ? String(node.title) : "";
+              const rawTime = typeof node.time === "number" ? node.time : Number(node.time) || 0;
+              const visitTimeMs = Math.floor(rawTime / 1e3);
+              await this.addDocument(
+                `${title} ${uri2}`,
+                {
+                  type: "history",
+                  title,
+                  url: uri2,
+                  timestamp: visitTimeMs,
+                  context: "Browsing History"
+                },
+                uri2
+              );
+            }
+            logDebug(`[LocalMemory] Indexed ${root.childCount} history items.`);
+          } catch (e2) {
+            logError("[LocalMemory] Failed to index history:", e2);
+          } finally {
+            root.containerOpen = false;
+          }
+        }
+        async indexBookmarks() {
+          const { PlacesUtils } = getChrome();
+          const win = window;
+          const PM = win.PlacesUtils || win.top?.PlacesUtils;
+          if (!PlacesUtils?.bookmarks && !PM?.bookmarks) return;
+          const PU = PlacesUtils || PM;
+          if (!PU?.bookmarks) return;
+          const bookmarksApi = PU.bookmarks;
+          try {
+            const validBookmarkKeys = /* @__PURE__ */ new Set();
+            const unfiledGuid = bookmarksApi.unfiledGuid;
+            let hadTraversalFailure = false;
+            const processFolder = async (folderGuid, folderName) => {
+              try {
+                const fetched = await bookmarksApi.fetch({ parentGuid: folderGuid });
+                const children = Array.isArray(fetched) ? fetched : fetched ? [fetched] : [];
+                if (children.length === 0) return;
+                for (const child of children) {
+                  if (child.type === bookmarksApi.TYPE_FOLDER) {
+                    const childName = String(child.title || "Untitled");
+                    const isManagedRoot = folderGuid === unfiledGuid && normalizeMemoryName(childName) === normalizeMemoryName(OASIS_MANAGED_BOOKMARK_ROOT);
+                    if (isManagedRoot) {
+                      continue;
+                    }
+                    await processFolder(child.guid, childName);
+                  } else if (child.type === bookmarksApi.TYPE_BOOKMARK && child.url) {
+                    const url = toUrlString(child.url);
+                    if (!url) continue;
+                    const metadata = {
+                      type: "bookmark",
+                      title: child.title,
+                      url,
+                      timestamp: child.dateAdded,
+                      context: `Bookmark Folder: ${folderName}`,
+                      folderName,
+                      hubName: folderName
+                    };
+                    const text2 = (child.title || "") + " " + url;
+                    validBookmarkKeys.add(
+                      computeMemoryDedupeKey({
+                        text: text2,
+                        metadata,
+                        url
+                      })
+                    );
+                    await this.addDocument(text2, metadata, url);
+                  }
+                }
+              } catch (e2) {
+                hadTraversalFailure = true;
+                logWarn(`Failed to fetch bookmarks for ${folderGuid}:`, e2);
+              }
+            };
+            await processFolder(bookmarksApi.menuGuid, "Bookmarks Menu");
+            await processFolder(bookmarksApi.toolbarGuid, "Bookmarks Toolbar");
+            await processFolder(bookmarksApi.unfiledGuid, "Other Bookmarks");
+            if (!hadTraversalFailure) {
+              await this.removeStaleBookmarkSourceDocuments(validBookmarkKeys);
+            } else {
+              logWarn(
+                "[LocalMemory] Skipped stale bookmark cleanup due to traversal failures."
+              );
+            }
+            logDebug("[LocalMemory] Bookmarks indexed.");
+          } catch (e2) {
+            logError("[LocalMemory] Failed to index bookmarks:", e2);
+          }
+        }
+        async indexTabGroups() {
+          const { gBrowser } = getChrome();
+          if (!gBrowser) return;
+          try {
+            const validLiveKeys = /* @__PURE__ */ new Set();
+            const groups = Array.from(
+              gBrowser.tabGroups || []
+            );
+            for (const group of groups) {
+              const groupName = group.label || "(unnamed group)";
+              const groupMetadata = {
+                type: "tab-group",
+                title: groupName,
+                id: group.id
+              };
+              const groupUrl = `about:tab-group?id=${group.id}`;
+              const groupText = `Tab Group: ${groupName}`;
+              validLiveKeys.add(
+                computeMemoryDedupeKey({
+                  text: groupText,
+                  metadata: groupMetadata,
+                  url: groupUrl
+                })
+              );
+              await this.addDocument(groupText, groupMetadata, groupUrl);
+            }
+            const tabs = Array.from(gBrowser.tabs || []);
+            for (const tab of tabs) {
+              const url = tab.linkedBrowser?.currentURI?.spec;
+              const title = tab.label || "(untitled)";
+              let context = "Open Tab";
+              if (tab.group) {
+                const gName = tab.group.label || "Unnamed Group";
+                context = `Tab Group: ${gName}`;
+              }
+              if (url && !url.startsWith("about:")) {
+                const tabMetadata = {
+                  type: "tab",
+                  title,
+                  url,
+                  timestamp: Date.now(),
+                  context
+                };
+                const tabText = title + " " + url;
+                validLiveKeys.add(
+                  computeMemoryDedupeKey({
+                    text: tabText,
+                    metadata: tabMetadata,
+                    url
+                  })
+                );
+                await this.addDocument(tabText, tabMetadata, url);
+              }
+            }
+            await this.removeStaleLiveSourceDocuments(validLiveKeys);
+            logDebug(`[LocalMemory] Indexed tabs and groups.`);
+          } catch (e2) {
+            logError("[LocalMemory] Failed to index tab groups:", e2);
+          }
+        }
+        async indexAll() {
+          await this.indexTabGroups();
+          await this.indexBookmarks();
+          await this.indexHistory();
+        }
+      };
+      localMemory = new LocalMemoryService();
+    }
+  });
+
+  // src/services/firefoxFacade.ts
+  function getAssistantWindow() {
+    return window;
+  }
+  function getChromeContext() {
+    const topWin = getBrowserWindow();
+    const assistantWindow2 = getAssistantWindow();
+    const Services = topWin?.Services || assistantWindow2.Services || assistantWindow2.top?.Services || null;
+    const PlacesUtils = topWin?.PlacesUtils || assistantWindow2.PlacesUtils || assistantWindow2.top?.PlacesUtils || null;
+    const gBrowser = topWin?.gBrowser || null;
+    return { topWin, gBrowser, PlacesUtils, Services };
+  }
+  function toUrlString2(value) {
+    if (!value) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "object") {
+      const uri2 = value;
+      const fromSpec = String(uri2.spec || "").trim();
+      if (fromSpec) return fromSpec;
+      const fromHref = String(uri2.href || "").trim();
+      if (fromHref) return fromHref;
+      const fromToString = String(uri2.toString?.() || "").trim();
+      if (fromToString && fromToString !== "[object Object]") return fromToString;
+    }
+    return "";
+  }
+  function normalizeName(value) {
+    return (value || "").trim().toLowerCase();
+  }
+  function getTabs(gBrowser) {
+    if (!gBrowser?.tabs) return [];
+    return Array.from(gBrowser.tabs);
+  }
+  function getTabGroups(gBrowser) {
+    if (!gBrowser) return [];
+    const groups = gBrowser.getAllTabGroups ? gBrowser.getAllTabGroups() : gBrowser.tabGroups || [];
+    return Array.from(groups);
+  }
+  function tabUrl(tab) {
+    return toUrlString2(tab?.linkedBrowser?.currentURI);
+  }
+  function tabTitle(tab) {
+    return tab?.label || tab?.linkedBrowser?.contentTitle || tabUrl(tab) || "(untitled)";
+  }
+  function findTabByIndex(gBrowser, index2) {
+    const tabs = getTabs(gBrowser);
+    if (!tabs.length) return null;
+    if (index2 == null) return gBrowser?.selectedTab || tabs[0] || null;
+    const i2 = Math.max(1, Math.floor(index2));
+    if (i2 > tabs.length) return null;
+    return tabs[i2 - 1] || null;
+  }
+  function findTabsByQuery2(gBrowser, query) {
+    const target = normalizeName(query);
+    if (!target) return [];
+    return getTabs(gBrowser).filter((tab) => {
+      const title = normalizeName(tabTitle(tab));
+      const url = normalizeName(tabUrl(tab));
+      return title.includes(target) || url.includes(target);
+    });
+  }
+  function findGroupByName(gBrowser, name) {
+    const match = findGroupByNameFuzzy(gBrowser, name);
+    return match.group;
+  }
+  function levenshtein(a2, b3) {
+    if (a2 === b3) {
+      return 0;
+    }
+    const rows = a2.length + 1;
+    const cols = b3.length + 1;
+    const matrix = Array.from(
+      { length: rows },
+      () => Array(cols).fill(0)
+    );
+    for (let i2 = 0; i2 < rows; i2++) {
+      matrix[i2][0] = i2;
+    }
+    for (let j3 = 0; j3 < cols; j3++) {
+      matrix[0][j3] = j3;
+    }
+    for (let i2 = 1; i2 < rows; i2++) {
+      for (let j3 = 1; j3 < cols; j3++) {
+        const cost = a2[i2 - 1] === b3[j3 - 1] ? 0 : 1;
+        matrix[i2][j3] = Math.min(
+          matrix[i2 - 1][j3] + 1,
+          matrix[i2][j3 - 1] + 1,
+          matrix[i2 - 1][j3 - 1] + cost
+        );
+      }
+    }
+    return matrix[rows - 1][cols - 1];
+  }
+  function findGroupByNameFuzzy(gBrowser, name) {
+    const target = normalizeName(name);
+    const groups = getTabGroups(gBrowser);
+    if (!target || groups.length === 0) {
+      return {
+        group: null,
+        matchKind: "none",
+        alternatives: [],
+        closestLabel: null
+      };
+    }
+    const exact = groups.find(
+      (group) => normalizeName(group.label || "") === target
+    );
+    if (exact) {
+      return {
+        group: exact,
+        matchKind: "exact",
+        alternatives: [],
+        closestLabel: exact.label || null
+      };
+    }
+    const substringMatches = groups.filter((group) => {
+      const label = normalizeName(group.label || "");
+      return label.includes(target) || target.includes(label);
+    });
+    if (substringMatches.length === 1) {
+      return {
+        group: substringMatches[0],
+        matchKind: "substring",
+        alternatives: [],
+        closestLabel: substringMatches[0].label || null
+      };
+    }
+    if (substringMatches.length > 1) {
+      return {
+        group: null,
+        matchKind: "substring",
+        alternatives: substringMatches.slice(0, 3),
+        closestLabel: substringMatches[0].label || null
+      };
+    }
+    const scored = groups.map((group) => {
+      const label = normalizeName(group.label || "");
+      return {
+        group,
+        distance: levenshtein(target, label)
+      };
+    }).filter((item) => item.distance <= 2).sort((a2, b3) => a2.distance - b3.distance);
+    if (scored.length === 1) {
+      return {
+        group: scored[0].group,
+        matchKind: "fuzzy",
+        alternatives: [],
+        closestLabel: scored[0].group.label || null
+      };
+    }
+    if (scored.length > 1) {
+      return {
+        group: null,
+        matchKind: "fuzzy",
+        alternatives: scored.slice(0, 3).map((item) => item.group),
+        closestLabel: scored[0].group.label || null
+      };
+    }
+    const closest = groups.map((group) => ({
+      group,
+      distance: levenshtein(target, normalizeName(group.label || ""))
+    })).sort((a2, b3) => a2.distance - b3.distance)[0];
+    return {
+      group: null,
+      matchKind: "none",
+      alternatives: [],
+      closestLabel: closest?.group.label || null
+    };
+  }
+  function resolveActiveTabGroup(gBrowser) {
+    const groups = getTabGroups(gBrowser);
+    if (!groups.length) {
+      return null;
+    }
+    const selected = gBrowser?.selectedTab;
+    if (selected) {
+      const containing = groups.find(
+        (group) => Array.from(group.tabs || []).some((tab) => tab === selected)
+      );
+      if (containing) {
+        return containing;
+      }
+    }
+    return groups.reduce((largest, group) => {
+      const count3 = Array.from(group.tabs || []).length;
+      const largestCount = Array.from(largest.tabs || []).length;
+      return count3 > largestCount ? group : largest;
+    });
+  }
+  function withUriFixup(rawInput, services) {
+    let input = String(rawInput || "").trim();
+    if (!input) return "";
+    const info = services?.uriFixup?.getFixupURIInfo?.(input, 2 | 4);
+    const fixed = toUrlString2(info?.preferredURI);
+    return fixed || input;
+  }
+  function getSystemPrincipal(services) {
+    return services?.scriptSecurityManager?.getSystemPrincipal?.();
+  }
+  async function fetchChildrenBookmarks(places, parentGuid) {
+    if (!places?.bookmarks?.fetch || !parentGuid) return [];
+    const collected = [];
+    const fetched = await places.bookmarks.fetch({ parentGuid }, (bookmark) => {
+      collected.push(bookmark);
+    });
+    if (collected.length > 0) {
+      return collected;
+    }
+    if (Array.isArray(fetched)) {
+      return fetched;
+    }
+    return fetched ? [fetched] : [];
+  }
+  async function fetchBookmarkByGuid(places, guid) {
+    if (!places?.bookmarks?.fetch || !guid) return null;
+    const fetched = await places.bookmarks.fetch(guid);
+    if (!fetched) return null;
+    if (Array.isArray(fetched)) {
+      return fetched[0] || null;
+    }
+    return fetched;
+  }
+  var init_firefoxFacade = __esm({
+    "src/services/firefoxFacade.ts"() {
+      "use strict";
+      init_runtime();
+    }
+  });
+
+  // ../shared/contracts.ts
+  var OASIS_EVENT_CLARIFICATION_UPDATE, OASIS_EVENT_BRIEF_PROGRESS, OASIS_EVENT_HISTORY_UPDATE, OASIS_EVENT_CONFIRMATION_UPDATE, OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
+  var init_contracts = __esm({
+    "../shared/contracts.ts"() {
+      OASIS_EVENT_CLARIFICATION_UPDATE = "oasis-clarification-update";
+      OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress";
+      OASIS_EVENT_HISTORY_UPDATE = "oasis-history-update";
+      OASIS_EVENT_CONFIRMATION_UPDATE = "oasis-confirmation-update";
+      OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED = "oasis-bookmark-folders-changed";
     }
   });
 
@@ -16612,6 +19671,2725 @@ ${suffix}`;
     }
   });
 
+  // node_modules/@supabase/supabase-js/dist/esm/wrapper.mjs
+  var index, PostgrestError, FunctionsHttpError, FunctionsFetchError, FunctionsRelayError, FunctionsError, FunctionRegion, SupabaseClient, createClient, GoTrueAdminApi, GoTrueClient, AuthAdminApi, AuthClient, navigatorLock, NavigatorLockAcquireTimeoutError, lockInternals, processLock, SIGN_OUT_SCOPES, AuthError, AuthApiError, AuthUnknownError, CustomAuthError, AuthSessionMissingError, AuthInvalidTokenResponseError, AuthInvalidCredentialsError, AuthImplicitGrantRedirectError, AuthPKCEGrantCodeExchangeError, AuthRetryableFetchError, AuthWeakPasswordError, AuthInvalidJwtError, isAuthError, isAuthApiError, isAuthSessionMissingError, isAuthImplicitGrantRedirectError, isAuthRetryableFetchError, isAuthWeakPasswordError, RealtimePresence, RealtimeChannel, RealtimeClient, REALTIME_LISTEN_TYPES, REALTIME_POSTGRES_CHANGES_LISTEN_EVENT, REALTIME_PRESENCE_LISTEN_EVENTS, REALTIME_SUBSCRIBE_STATES, REALTIME_CHANNEL_STATES;
+  var init_wrapper = __esm({
+    "node_modules/@supabase/supabase-js/dist/esm/wrapper.mjs"() {
+      index = __toESM(require_main5(), 1);
+      ({
+        PostgrestError,
+        FunctionsHttpError,
+        FunctionsFetchError,
+        FunctionsRelayError,
+        FunctionsError,
+        FunctionRegion,
+        SupabaseClient,
+        createClient,
+        GoTrueAdminApi,
+        GoTrueClient,
+        AuthAdminApi,
+        AuthClient,
+        navigatorLock,
+        NavigatorLockAcquireTimeoutError,
+        lockInternals,
+        processLock,
+        SIGN_OUT_SCOPES,
+        AuthError,
+        AuthApiError,
+        AuthUnknownError,
+        CustomAuthError,
+        AuthSessionMissingError,
+        AuthInvalidTokenResponseError,
+        AuthInvalidCredentialsError,
+        AuthImplicitGrantRedirectError,
+        AuthPKCEGrantCodeExchangeError,
+        AuthRetryableFetchError,
+        AuthWeakPasswordError,
+        AuthInvalidJwtError,
+        isAuthError,
+        isAuthApiError,
+        isAuthSessionMissingError,
+        isAuthImplicitGrantRedirectError,
+        isAuthRetryableFetchError,
+        isAuthWeakPasswordError,
+        RealtimePresence,
+        RealtimeChannel,
+        RealtimeClient,
+        REALTIME_LISTEN_TYPES,
+        REALTIME_POSTGRES_CHANGES_LISTEN_EVENT,
+        REALTIME_PRESENCE_LISTEN_EVENTS,
+        REALTIME_SUBSCRIBE_STATES,
+        REALTIME_CHANNEL_STATES
+      } = index.default || index);
+    }
+  });
+
+  // src/config/env.ts
+  var ENV;
+  var init_env = __esm({
+    "src/config/env.ts"() {
+      "use strict";
+      ENV = {
+        SUPABASE_URL: "https://wvclepquxxczgrukfqyr.supabase.co",
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY",
+        APP_VERSION: "1.0.0",
+        LOG_LEVEL: "info",
+        /** Collect rich per-interaction telemetry (tab URL, platform, latency).
+         *  Identifiable fields gated by Privacy pref datareporting.healthreport.uploadEnabled. */
+        RICH_TELEMETRY_ENABLED: true,
+        validate() {
+          if (!this.SUPABASE_URL) {
+            throw new Error("SUPABASE_URL is required");
+          }
+          if (!this.SUPABASE_ANON_KEY) {
+            throw new Error("SUPABASE_ANON_KEY is required");
+          }
+        }
+      };
+    }
+  });
+
+  // src/utils/oauthHandoff.ts
+  function normalizeAllowedCallbackBaseUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return null;
+    }
+    const normalized = url.replace(/\/+$/, "");
+    return ALLOWED_CALLBACK_BASE_URLS.includes(normalized) ? normalized : null;
+  }
+  function getHandoffTarget(payload) {
+    const target = payload.handoff_target ?? payload.target;
+    return typeof target === "string" ? target : null;
+  }
+  function getHandoffFlowId(payload) {
+    const flowId = payload.flow_id ?? payload.flowId;
+    return typeof flowId === "string" ? flowId : null;
+  }
+  function validateHandoffPayload(payload, options = {}) {
+    const { expectedTarget, expectedFlowId, callbackBaseUrl } = options;
+    if (!payload || typeof payload !== "object") {
+      return { ok: false, error: "Invalid OAuth handoff payload" };
+    }
+    const record = payload;
+    const timestamp2 = record.timestamp;
+    if (typeof timestamp2 !== "number" || Number.isNaN(timestamp2)) {
+      return { ok: false, error: "OAuth handoff is missing a valid timestamp" };
+    }
+    const age = Date.now() - timestamp2;
+    if (age < 0 || age > MAX_HANDOFF_AGE_MS) {
+      return { ok: false, error: "OAuth handoff has expired" };
+    }
+    if (expectedTarget) {
+      const target = getHandoffTarget(record);
+      if (target && target !== expectedTarget) {
+        return { ok: false, error: "OAuth handoff target mismatch" };
+      }
+    }
+    if (expectedFlowId) {
+      const flowId = getHandoffFlowId(record);
+      if (!flowId || flowId !== expectedFlowId) {
+        return { ok: false, error: "OAuth handoff flow mismatch" };
+      }
+    }
+    if (callbackBaseUrl) {
+      const normalized = normalizeAllowedCallbackBaseUrl(callbackBaseUrl);
+      if (!normalized) {
+        return { ok: false, error: "OAuth callback base URL is not allowed" };
+      }
+    }
+    return { ok: true };
+  }
+  function isOAuthDevEnvironment() {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    try {
+      const loc = window.location?.href || "";
+      if (loc.startsWith("chrome://") || loc.startsWith("about:")) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+  var MAX_HANDOFF_AGE_MS, DEFAULT_CALLBACK_BASE_URL, ALLOWED_CALLBACK_BASE_URLS;
+  var init_oauthHandoff = __esm({
+    "src/utils/oauthHandoff.ts"() {
+      "use strict";
+      MAX_HANDOFF_AGE_MS = 10 * 60 * 1e3;
+      DEFAULT_CALLBACK_BASE_URL = "https://kahana.co";
+      ALLOWED_CALLBACK_BASE_URLS = [
+        DEFAULT_CALLBACK_BASE_URL,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+      ];
+    }
+  });
+
+  // src/services/supabase.ts
+  var SupabaseAuth, supabaseAuth;
+  var init_supabase = __esm({
+    "src/services/supabase.ts"() {
+      "use strict";
+      init_wrapper();
+      init_env();
+      init_oauthHandoff();
+      SupabaseAuth = class _SupabaseAuth {
+        static instance;
+        supabase;
+        currentSession = null;
+        authStateCallbacks = [];
+        lastTrackedSessionUserId = null;
+        sessionTrackInFlight = null;
+        oauthCallbackBaseUrl = null;
+        activeOAuthLaunch = null;
+        constructor() {
+          this.supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
+          this.supabase.auth.onAuthStateChange((event, session) => {
+            console.log("Auth state changed:", event);
+            this.handleAuthStateChange(event, session);
+          });
+        }
+        static getInstance() {
+          if (!_SupabaseAuth.instance) {
+            _SupabaseAuth.instance = new _SupabaseAuth();
+          }
+          return _SupabaseAuth.instance;
+        }
+        setOAuthCallbackBaseUrl(url) {
+          const normalized = normalizeAllowedCallbackBaseUrl(url);
+          if (!normalized) {
+            console.warn(
+              "OAuth callback base URL rejected (not on allowlist):",
+              url
+            );
+            return this.getOAuthCallbackBaseUrl();
+          }
+          this.oauthCallbackBaseUrl = normalized;
+          if (typeof window !== "undefined") {
+            window.__oasisOAuthCallbackBaseUrl = normalized;
+          }
+          return normalized;
+        }
+        getOAuthCallbackBaseUrl() {
+          if (this.oauthCallbackBaseUrl) {
+            const cached = normalizeAllowedCallbackBaseUrl(this.oauthCallbackBaseUrl);
+            if (cached) {
+              return cached;
+            }
+            this.oauthCallbackBaseUrl = null;
+          }
+          if (typeof window !== "undefined") {
+            const runtimeOverride = window.__oasisOAuthCallbackBaseUrl;
+            const normalizedRuntime = normalizeAllowedCallbackBaseUrl(runtimeOverride);
+            if (normalizedRuntime) {
+              this.oauthCallbackBaseUrl = normalizedRuntime;
+              return normalizedRuntime;
+            }
+            if (isOAuthDevEnvironment()) {
+              try {
+                const override = window.localStorage?.getItem(
+                  "oasis_oauth_callback_base_url"
+                );
+                const normalizedStorage = normalizeAllowedCallbackBaseUrl(override);
+                if (normalizedStorage) {
+                  this.oauthCallbackBaseUrl = normalizedStorage;
+                  return normalizedStorage;
+                }
+              } catch (e2) {
+              }
+            }
+          }
+          return DEFAULT_CALLBACK_BASE_URL;
+        }
+        getActiveOAuthFlowId() {
+          if (!this.activeOAuthLaunch) {
+            return null;
+          }
+          if (Date.now() - this.activeOAuthLaunch.startedAt > 6e5) {
+            this.activeOAuthLaunch = null;
+            return null;
+          }
+          return this.activeOAuthLaunch.flowId;
+        }
+        createOAuthFlowId() {
+          return `oauth_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+        getActiveOAuthLaunch(provider, target) {
+          if (!this.activeOAuthLaunch) {
+            return null;
+          }
+          if (Date.now() - this.activeOAuthLaunch.startedAt > 6e5) {
+            this.activeOAuthLaunch = null;
+            return null;
+          }
+          if (this.activeOAuthLaunch.provider === provider && this.activeOAuthLaunch.target === target) {
+            return this.activeOAuthLaunch;
+          }
+          return null;
+        }
+        beginOAuthLaunch(provider, target) {
+          const existingLaunch = this.getActiveOAuthLaunch(provider, target);
+          if (existingLaunch) {
+            console.warn(
+              `[Oasis OAuth][${existingLaunch.flowId}] Reusing active OAuth launcher URL`
+            );
+            return existingLaunch;
+          }
+          const flowId = this.createOAuthFlowId();
+          this.setFirefoxOAuthMarker(target, provider, flowId);
+          const launcherUrl = this.getOAuthLauncherUrl(provider, target, flowId);
+          const launch = {
+            provider,
+            target,
+            flowId,
+            launcherUrl,
+            startedAt: Date.now()
+          };
+          this.activeOAuthLaunch = launch;
+          return launch;
+        }
+        clearActiveOAuthLaunch(flowId) {
+          if (!this.activeOAuthLaunch) {
+            return;
+          }
+          if (!flowId || this.activeOAuthLaunch.flowId === flowId) {
+            this.activeOAuthLaunch = null;
+          }
+        }
+        getOAuthRedirectUrl(target = "assistant", flowId) {
+          const params = new URLSearchParams({
+            flow: "assistant",
+            handoff_target: target
+          });
+          if (flowId) {
+            params.set("flow_id", flowId);
+          }
+          return `${this.getOAuthCallbackBaseUrl()}/oauth-callback?${params.toString()}`;
+        }
+        getOAuthLauncherUrl(provider, target = "assistant", flowId) {
+          const params = new URLSearchParams({
+            flow: "assistant",
+            handoff_target: target,
+            provider
+          });
+          if (flowId) {
+            params.set("flow_id", flowId);
+          }
+          return `${this.getOAuthCallbackBaseUrl()}/oasis-auth?${params.toString()}`;
+        }
+        setFirefoxOAuthMarker(target, provider, flowId) {
+          if (typeof window === "undefined") {
+            return;
+          }
+          const Services = window.Services || (globalThis.ChromeUtils ? globalThis.ChromeUtils.import(
+            "resource://gre/modules/Services.jsm"
+          ).Services : null);
+          const Ci = window.Ci || globalThis.Ci;
+          if (!Services?.cookies || !Ci?.nsICookie) {
+            return;
+          }
+          const payload = encodeURIComponent(
+            JSON.stringify({
+              target,
+              provider,
+              flowId,
+              timestamp: Date.now(),
+              callbackBaseUrl: this.getOAuthCallbackBaseUrl()
+            })
+          );
+          const expiry = Date.now() + 3 * 60 * 1e3;
+          const writeCookie = (baseUrl) => {
+            try {
+              const parsed = new URL(baseUrl);
+              const schemeMap = parsed.protocol === "https:" ? Ci.nsICookie.SCHEME_HTTPS : Ci.nsICookie.SCHEME_HTTP;
+              Services.cookies.add(
+                parsed.hostname,
+                "/",
+                "oasis_firefox_oauth_target",
+                payload,
+                parsed.protocol === "https:",
+                false,
+                false,
+                expiry,
+                {},
+                Ci.nsICookie.SAMESITE_LAX,
+                schemeMap
+              );
+            } catch (e2) {
+              console.warn("Failed to set Firefox OAuth marker cookie:", e2);
+            }
+          };
+          const callbackBaseUrl = this.getOAuthCallbackBaseUrl();
+          writeCookie(callbackBaseUrl);
+          if (!callbackBaseUrl.includes("kahana.co")) {
+            writeCookie("https://kahana.co");
+          }
+        }
+        // Google OAuth Authentication
+        async signInWithGoogle(target = "assistant") {
+          try {
+            const launch = this.beginOAuthLaunch("google", target);
+            const { flowId, launcherUrl } = launch;
+            console.log(
+              `[Oasis OAuth][${flowId}] Preparing Google OAuth launcher URL`
+            );
+            const currentUser = await this.getCurrentUser();
+            if (currentUser) {
+              console.log(
+                `[Oasis OAuth][${flowId}] User already authenticated:`,
+                currentUser.id
+              );
+              return { user: currentUser, error: null };
+            }
+            console.log(
+              `[Oasis OAuth][${flowId}] Generated launcher URL:`,
+              launcherUrl
+            );
+            return {
+              user: null,
+              error: new Error(`GOOGLE_OAUTH_URL:${launcherUrl}`)
+            };
+          } catch (error) {
+            console.error("Google sign in error:", error);
+            return { user: null, error };
+          }
+        }
+        async signInWithAzure(target = "assistant") {
+          try {
+            const launch = this.beginOAuthLaunch("azure", target);
+            const { flowId, launcherUrl } = launch;
+            console.log(
+              `[Oasis OAuth][${flowId}] Preparing Azure OAuth launcher URL`
+            );
+            const currentUser = await this.getCurrentUser();
+            if (currentUser) {
+              console.log(
+                `[Oasis OAuth][${flowId}] User already authenticated:`,
+                currentUser.id
+              );
+              return { user: currentUser, error: null };
+            }
+            console.log(
+              `[Oasis OAuth][${flowId}] Generated launcher URL:`,
+              launcherUrl
+            );
+            return {
+              user: null,
+              error: new Error(`AZURE_OAUTH_URL:${launcherUrl}`)
+            };
+          } catch (error) {
+            console.error("Azure sign in error:", error);
+            return { user: null, error };
+          }
+        }
+        async signInWithApple(target = "assistant") {
+          try {
+            const launch = this.beginOAuthLaunch("apple", target);
+            const { flowId, launcherUrl } = launch;
+            console.log(
+              `[Oasis OAuth][${flowId}] Preparing Apple OAuth launcher URL`
+            );
+            const currentUser = await this.getCurrentUser();
+            if (currentUser) {
+              console.log(
+                `[Oasis OAuth][${flowId}] User already authenticated:`,
+                currentUser.id
+              );
+              return { user: currentUser, error: null };
+            }
+            console.log(
+              `[Oasis OAuth][${flowId}] Generated launcher URL:`,
+              launcherUrl
+            );
+            return {
+              user: null,
+              error: new Error(`APPLE_OAUTH_URL:${launcherUrl}`)
+            };
+          } catch (error) {
+            console.error("Apple sign in error:", error);
+            return { user: null, error };
+          }
+        }
+        // Email/Password Authentication
+        async signInWithEmail(email, password) {
+          try {
+            console.log("Attempting email sign in for:", email);
+            const { data, error } = await this.supabase.auth.signInWithPassword({
+              email,
+              password
+            });
+            if (error) {
+              console.error("Email sign in error:", error.message);
+              return { user: null, error };
+            }
+            if (data.user) {
+              await this.updateLastLogin(data.user.id);
+              await this.createSession(data.user.id);
+              console.log("Email sign in successful for user:", data.user.id);
+            }
+            return { user: data.user, error: null };
+          } catch (error) {
+            console.error("Sign in error:", error);
+            return { user: null, error };
+          }
+        }
+        async signUp(email, password, name) {
+          try {
+            console.log("Attempting sign up for:", email);
+            const { data, error } = await this.supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  name: name || email.split("@")[0]
+                }
+              }
+            });
+            if (error) {
+              console.error("Sign up error:", error.message);
+              return { user: null, error };
+            }
+            if (data.user) {
+              await this.createUserProfile(data.user, name);
+              console.log("Sign up successful for user:", data.user.id);
+            }
+            return { user: data.user, error: null };
+          } catch (error) {
+            console.error("Sign up error:", error);
+            return { user: null, error };
+          }
+        }
+        async resetPasswordForEmail(email) {
+          try {
+            console.log("Attempting password reset for:", email);
+            const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: "https://kahana.co/update-password"
+            });
+            if (error) {
+              console.error("Password reset error:", error.message);
+              return { error };
+            }
+            console.log("Password reset email sent");
+            return { error: null };
+          } catch (error) {
+            console.error("Password reset error:", error);
+            return { error };
+          }
+        }
+        async signOut() {
+          try {
+            console.log("Attempting sign out");
+            if (this.currentSession) {
+              await this.endSession(this.currentSession.session_id);
+            }
+            const { error } = await this.supabase.auth.signOut();
+            if (error) {
+              console.error("Sign out error:", error.message);
+              return { error };
+            }
+            this.currentSession = null;
+            console.log("Sign out successful");
+            return { error: null };
+          } catch (error) {
+            console.error("Sign out error:", error);
+            return { error };
+          }
+        }
+        // Session Management
+        async getCurrentUser() {
+          const {
+            data: { user }
+          } = await this.supabase.auth.getUser();
+          return user;
+        }
+        async getSession() {
+          const {
+            data: { session }
+          } = await this.supabase.auth.getSession();
+          return session;
+        }
+        async isAuthenticated() {
+          const user = await this.getCurrentUser();
+          return user !== null;
+        }
+        normalizeOAuthCallbackPayload(authData) {
+          const out = {};
+          if (!authData || typeof authData !== "object") {
+            return out;
+          }
+          if (typeof authData.code === "string" && authData.code) {
+            out.code = authData.code;
+          }
+          if (authData.access_token && authData.refresh_token) {
+            out.access_token = authData.access_token;
+            out.refresh_token = authData.refresh_token;
+            return out;
+          }
+          const tryParseHash = (raw) => {
+            const h2 = raw.replace(/^#/, "");
+            const params = new URLSearchParams(h2);
+            const at = params.get("access_token");
+            const rt = params.get("refresh_token");
+            if (at && rt) {
+              out.access_token = at;
+              out.refresh_token = rt;
+              return true;
+            }
+            return false;
+          };
+          const urlLike = typeof authData.redirect_url === "string" ? authData.redirect_url : typeof authData.redirectUrl === "string" ? authData.redirectUrl : typeof authData.url === "string" ? authData.url : typeof authData.callback_url === "string" ? authData.callback_url : null;
+          if (urlLike?.includes("#")) {
+            const frag = urlLike.split("#")[1];
+            if (frag) {
+              tryParseHash(frag);
+            }
+          }
+          if (!out.access_token && typeof authData.fragment === "string" && authData.fragment) {
+            tryParseHash(authData.fragment);
+          }
+          if (authData.access_token) {
+            out.access_token = authData.access_token;
+          }
+          if (authData.refresh_token) {
+            out.refresh_token = authData.refresh_token;
+          }
+          return out;
+        }
+        /**
+         * Handle OAuth callback data (similar to Electron's handleOAuthRedirectCallback)
+         * Processes auth data from manual input and exchanges it for a session
+         */
+        async handleOAuthCallbackData(authData) {
+          const flowId = authData?.flow_id || authData?.flowId || "unknown";
+          try {
+            console.log(`[Oasis OAuth][${flowId}] Handling callback data:`, authData);
+            const activeFlowId = this.getActiveOAuthFlowId();
+            if (activeFlowId) {
+              const payloadFlowId = getHandoffFlowId(
+                authData && typeof authData === "object" ? authData : {}
+              );
+              if (!payloadFlowId || payloadFlowId !== activeFlowId) {
+                console.warn(
+                  `[Oasis OAuth][${flowId}] Handoff flow_id does not match active OAuth launch`
+                );
+                return {
+                  success: false,
+                  error: "Authentication failed. Please try signing in again."
+                };
+              }
+            }
+            if (authData && typeof authData === "object" && authData.timestamp) {
+              const handoffCheck = validateHandoffPayload(authData, {
+                expectedFlowId: activeFlowId || void 0,
+                callbackBaseUrl: this.getOAuthCallbackBaseUrl()
+              });
+              if (!handoffCheck.ok) {
+                console.warn(
+                  `[Oasis OAuth][${flowId}] Handoff validation failed:`,
+                  handoffCheck.error
+                );
+                this.clearActiveOAuthLaunch(flowId);
+                return {
+                  success: false,
+                  error: "Authentication failed. Please try signing in again."
+                };
+              }
+            }
+            const normalized = this.normalizeOAuthCallbackPayload(authData);
+            if (!normalized.code && !(normalized.access_token && normalized.refresh_token)) {
+              const safeKeys = Object.keys(authData || {}).filter(
+                (k3) => !/^(access_token|refresh_token|provider_token)$/i.test(k3)
+              );
+              console.warn(
+                `[Oasis OAuth][${flowId}] Incomplete handoff (no code or tokens). Keys: ${safeKeys.join(", ")}`
+              );
+              this.clearActiveOAuthLaunch(flowId);
+              return {
+                success: false,
+                error: "Complete sign-in in the browser window that opened, then return here."
+              };
+            }
+            if (normalized.code) {
+              console.log(
+                `[Oasis OAuth][${flowId}] Exchanging auth code for session...`
+              );
+              const { data, error } = await this.supabase.auth.exchangeCodeForSession(
+                normalized.code
+              );
+              if (error) {
+                console.error(
+                  `[Oasis OAuth][${flowId}] Failed to exchange code for session:`,
+                  error.message
+                );
+                this.clearActiveOAuthLaunch(flowId);
+                return { success: false, error: error.message };
+              } else {
+                console.log(
+                  `[Oasis OAuth][${flowId}] Exchanged code for session for user:`,
+                  data.user?.id
+                );
+                if (data.user) {
+                  await this.rpcEnsureUserProfile(data.user);
+                  const existingProfile = await this.getUserProfile();
+                  if (!existingProfile) {
+                    await this.createUserProfile(
+                      data.user,
+                      data.user.user_metadata?.name
+                    );
+                    console.log(
+                      `[Oasis OAuth][${flowId}] Created user profile from OAuth callback`
+                    );
+                  }
+                  await this.updateLastLogin(data.user.id);
+                  await this.createSession(data.user.id);
+                }
+                this.clearActiveOAuthLaunch(flowId);
+                return { success: true };
+              }
+            }
+            if (normalized.access_token && normalized.refresh_token) {
+              console.warn(
+                `[Oasis OAuth][${flowId}] Token handoff is deprecated; use authorization code`
+              );
+              console.log(`[Oasis OAuth][${flowId}] Setting session from tokens...`);
+              const { data, error } = await this.supabase.auth.setSession({
+                access_token: normalized.access_token,
+                refresh_token: normalized.refresh_token
+              });
+              if (error) {
+                console.error(
+                  `[Oasis OAuth][${flowId}] Failed to set session from tokens:`,
+                  error.message
+                );
+                this.clearActiveOAuthLaunch(flowId);
+                return { success: false, error: error.message };
+              } else {
+                console.log(
+                  `[Oasis OAuth][${flowId}] Set session from tokens for user:`,
+                  data.user?.id
+                );
+                if (data.user) {
+                  await this.rpcEnsureUserProfile(data.user);
+                  const existingProfile = await this.getUserProfile();
+                  if (!existingProfile) {
+                    await this.createUserProfile(
+                      data.user,
+                      data.user.user_metadata?.name
+                    );
+                    console.log(
+                      `[Oasis OAuth][${flowId}] Created user profile from tokens`
+                    );
+                  }
+                  await this.updateLastLogin(data.user.id);
+                  await this.createSession(data.user.id);
+                }
+                this.clearActiveOAuthLaunch(flowId);
+                return { success: true };
+              }
+            }
+            console.warn(
+              `[Oasis OAuth][${flowId}] No valid OAuth data after normalization`
+            );
+            this.clearActiveOAuthLaunch(flowId);
+            return {
+              success: false,
+              error: "Complete sign-in in the browser window that opened, then return here."
+            };
+          } catch (error) {
+            console.error(
+              `[Oasis OAuth][${flowId}] Error handling callback data:`,
+              error
+            );
+            this.clearActiveOAuthLaunch(flowId);
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Unknown error"
+            };
+          }
+        }
+        // User Profile Management
+        async getUserProfile() {
+          try {
+            const user = await this.getCurrentUser();
+            if (!user) return null;
+            const { data, error } = await this.supabase.from("users").select("*").eq("user_id", user.id).single();
+            if (error) {
+              console.error("Error fetching user profile:", error.message);
+              return null;
+            }
+            return data;
+          } catch (error) {
+            console.error("Error fetching user profile:", error);
+            return null;
+          }
+        }
+        // Auth State Management
+        onAuthStateChange(callback) {
+          this.authStateCallbacks.push(callback);
+        }
+        async handleAuthStateChange(event, session) {
+          const user = session?.user || null;
+          const authState = {
+            user,
+            session,
+            isAuthenticated: user !== null
+          };
+          this.authStateCallbacks.forEach((callback) => {
+            try {
+              callback(authState);
+            } catch (error) {
+              console.error("Error in auth state callback:", error);
+            }
+          });
+          if (event === "SIGNED_IN" && user) {
+            await this.rpcEnsureUserProfile(user);
+            await this.trackSessionForUser(user.id);
+          } else if (event === "SIGNED_OUT" && this.currentSession) {
+            this.lastTrackedSessionUserId = null;
+            await this.endSession(this.currentSession.session_id);
+            this.currentSession = null;
+          } else if (event === "SIGNED_OUT") {
+            this.lastTrackedSessionUserId = null;
+          }
+        }
+        async rpcEnsureUserProfile(user) {
+          try {
+            const meta = user.user_metadata;
+            const fullName = typeof meta?.full_name === "string" ? meta.full_name : void 0;
+            const metaName = typeof meta?.name === "string" ? meta.name : void 0;
+            const { error } = await this.supabase.rpc("ensure_user_profile", {
+              p_email: user.email ?? "",
+              p_name: fullName ?? metaName ?? null
+            });
+            if (error) {
+              console.warn("ensure_user_profile RPC:", error.message);
+            }
+          } catch (error) {
+            console.warn("ensure_user_profile RPC failed:", error);
+          }
+        }
+        // Database Operations
+        async createUserProfile(user, name) {
+          try {
+            const { error } = await this.supabase.from("users").insert({
+              user_id: user.id,
+              email: user.email,
+              name: name || user.user_metadata?.name || user.email.split("@")[0],
+              password_hash: "",
+              // Supabase handles this
+              status: "active"
+            });
+            if (error) {
+              console.error("Error creating user profile:", error.message);
+            } else {
+              console.log("User profile created successfully");
+            }
+          } catch (error) {
+            console.error("Error creating user profile:", error);
+          }
+        }
+        async updateLastLogin(userId) {
+          try {
+            const { error } = await this.supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("user_id", userId);
+            if (error) {
+              console.error("Error updating last login:", error.message);
+            }
+          } catch (error) {
+            console.error("Error updating last login:", error);
+          }
+        }
+        async trackSessionForUser(userId) {
+          if (this.currentSession?.user_id === userId && !this.currentSession?.ended_at) {
+            this.lastTrackedSessionUserId = userId;
+            return;
+          }
+          if (this.lastTrackedSessionUserId === userId) {
+            return;
+          }
+          if (this.sessionTrackInFlight?.userId === userId) {
+            await this.sessionTrackInFlight.promise;
+            return;
+          }
+          const pendingTrack = {
+            userId,
+            promise: Promise.resolve()
+          };
+          pendingTrack.promise = this.createSession(userId).finally(() => {
+            if (this.sessionTrackInFlight === pendingTrack) {
+              this.sessionTrackInFlight = null;
+            }
+          });
+          this.sessionTrackInFlight = pendingTrack;
+          await pendingTrack.promise;
+          this.lastTrackedSessionUserId = userId;
+        }
+        async createSession(userId) {
+          try {
+            const deviceInfo = {
+              platform: "browser",
+              version: ENV.APP_VERSION,
+              userAgent: window.navigator.userAgent
+            };
+            const { data, error } = await this.supabase.from("sessions").insert({
+              user_id: userId,
+              device_info: deviceInfo
+            }).select().single();
+            if (error) {
+              if (error.message.includes("row-level security policy")) {
+                console.warn(
+                  "Session tracking skipped due to RLS policy (non-critical):",
+                  error.message
+                );
+              } else {
+                console.error("Error creating session:", error.message);
+              }
+            } else if (data) {
+              this.currentSession = data;
+              console.log("Session created:", data.session_id);
+            }
+          } catch (error) {
+            console.error("Error creating session:", error);
+          }
+        }
+        async endSession(sessionId) {
+          try {
+            const { error } = await this.supabase.from("sessions").update({ ended_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("session_id", sessionId);
+            if (error) {
+              console.error("Error ending session:", error.message);
+            } else {
+              console.log("Session ended:", sessionId);
+            }
+          } catch (error) {
+            console.error("Error ending session:", error);
+          }
+        }
+        // Utility Methods
+        handleAuthError(error) {
+          if (error.message && (error.message.startsWith("GOOGLE_OAUTH_URL:") || error.message.startsWith("AZURE_OAUTH_URL:") || error.message.startsWith("APPLE_OAUTH_URL:"))) {
+            return error.message;
+          }
+          switch (error.message) {
+            case "Invalid login credentials":
+              return "Invalid email or password. Please try again.";
+            case "Email not confirmed":
+              return "Please check your email and click the confirmation link.";
+            case "User already registered":
+              return "An account with this email already exists.";
+            case "Password should be at least 6 characters":
+              return "Password must be at least 6 characters long.";
+            case "Unable to validate email address: invalid format":
+              return "Please enter a valid email address.";
+            case "OAuth provider not found":
+              return "Google sign-in is not configured. Please contact support.";
+            case "OAuth account not linked":
+              return "This Google account is not linked to an existing account.";
+            case "Google sign-in is blocked by browser security. Please use email/password authentication instead.":
+              return "Google sign-in is blocked by browser security. Please use email/password authentication instead.";
+            case "Popup blocked. Please allow popups for this site and try again.":
+              return "Popup blocked. Please allow popups for this site and try again.";
+            case "Google sign-in was cancelled or failed. Please try again.":
+              return "Google sign-in was cancelled or failed. Please try again.";
+            case "Google sign-in timed out. Please try again.":
+              return "Google sign-in timed out. Please try again.";
+            case "Failed to generate OAuth URL":
+              return "Failed to generate OAuth URL. Please try again.";
+            case "Failed to open OAuth URL. Please allow popups and try again.":
+              return "Failed to open OAuth URL. Please allow popups and try again.";
+            default:
+              return error.message || "An unexpected error occurred. Please try again.";
+          }
+        }
+      };
+      supabaseAuth = SupabaseAuth.getInstance();
+      if (typeof window !== "undefined") {
+        window.supabaseAuth = supabaseAuth;
+      }
+    }
+  });
+
+  // src/services/telemetryConsent.ts
+  function isOasisDataCollectionIdentified() {
+    const { Services } = getChromeContext();
+    if (!Services?.prefs?.getBoolPref) {
+      return false;
+    }
+    try {
+      return Services.prefs.getBoolPref(OASIS_DATA_COLLECTION_PREF, false);
+    } catch {
+      return false;
+    }
+  }
+  var OASIS_DATA_COLLECTION_PREF;
+  var init_telemetryConsent = __esm({
+    "src/services/telemetryConsent.ts"() {
+      "use strict";
+      init_firefoxFacade();
+      OASIS_DATA_COLLECTION_PREF = "datareporting.healthreport.uploadEnabled";
+    }
+  });
+
+  // src/services/subscription.ts
+  function utcCalendarDateString() {
+    const d3 = /* @__PURE__ */ new Date();
+    d3.setUTCHours(0, 0, 0, 0);
+    return d3.toISOString().slice(0, 10);
+  }
+  function readOptimisticFeedbackBonusTokensToday() {
+    try {
+      const raw = sessionStorage.getItem(
+        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString()
+      );
+      const n2 = parseInt(String(raw || "0"), 10);
+      return Number.isFinite(n2) && n2 >= 0 ? n2 : 0;
+    } catch {
+      return 0;
+    }
+  }
+  function writeOptimisticFeedbackBonusTokensToday(total) {
+    try {
+      sessionStorage.setItem(
+        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString(),
+        String(Math.max(0, Math.floor(total)))
+      );
+    } catch {
+    }
+  }
+  var PLAN_LIMITS, PLAN_DAILY_TOKEN_LIMITS, DEFAULT_LIMIT, DEFAULT_DAILY_TOKEN_LIMIT, COST_TEXT, COST_VOICE, logDebug2, logWarn2, logError2, OPTIMISTIC_FEEDBACK_BONUS_KEY, SubscriptionService, subscriptionService;
+  var init_subscription = __esm({
+    "src/services/subscription.ts"() {
+      "use strict";
+      init_supabase();
+      init_localMemory();
+      init_assistantLogger();
+      init_telemetryConsent();
+      PLAN_LIMITS = {
+        free: 50,
+        basic: 1500,
+        // $20/mo
+        pro: 3e3
+        // $40/mo
+      };
+      PLAN_DAILY_TOKEN_LIMITS = {
+        free: 1e5,
+        basic: 1e6,
+        pro: 2e6
+      };
+      DEFAULT_LIMIT = 50;
+      DEFAULT_DAILY_TOKEN_LIMIT = 1e5;
+      COST_TEXT = 1;
+      COST_VOICE = 10;
+      logDebug2 = (message, ...meta) => {
+        assistantLogger.debug(
+          "subscription",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      logWarn2 = (message, ...meta) => {
+        assistantLogger.warn(
+          "subscription",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      logError2 = (message, ...meta) => {
+        assistantLogger.error(
+          "subscription",
+          String(message ?? ""),
+          meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
+        );
+      };
+      OPTIMISTIC_FEEDBACK_BONUS_KEY = "oasis.daily_training_bonus.verified.";
+      SubscriptionService = class _SubscriptionService {
+        static instance;
+        // Cache current plan details to avoid hitting DB on every keystroke
+        cachedLimit = null;
+        cachedUsage = 0;
+        lastFetchTime = 0;
+        CACHE_TTL = 60 * 1e3;
+        // 1 minute cache
+        cachedDailyLimit = null;
+        cachedDailyUsedFromApi = null;
+        cachedDailyRemainingFromApi = null;
+        cachedDailyTokensFromDb = 0;
+        cachedDailyTokensFromDbOk = false;
+        cachedDailyTokenLimitSupabase = null;
+        cachedFeedbackBonusTokensToday = 0;
+        cachedPlanNameKey = "free";
+        constructor() {
+        }
+        static getInstance() {
+          if (!_SubscriptionService.instance) {
+            _SubscriptionService.instance = new _SubscriptionService();
+          }
+          return _SubscriptionService.instance;
+        }
+        /**
+         * Call after a qualifying training save succeeds so the daily bar reflects bonus tokens
+         * even when `feedback_token_grants` is unavailable. Persists for the current UTC calendar day.
+         */
+        appendOptimisticTrainingBonus(amount) {
+          if (!Number.isFinite(amount) || amount <= 0) {
+            return;
+          }
+          const add = Math.floor(amount);
+          const prevCached = this.cachedFeedbackBonusTokensToday;
+          writeOptimisticFeedbackBonusTokensToday(
+            readOptimisticFeedbackBonusTokensToday() + add
+          );
+          const fromStorage = readOptimisticFeedbackBonusTokensToday();
+          this.cachedFeedbackBonusTokensToday = Math.max(
+            prevCached + add,
+            fromStorage
+          );
+          if (this.cachedDailyLimit != null && this.cachedDailyLimit > 0 && Number.isFinite(this.cachedDailyLimit)) {
+            this.cachedDailyLimit += add;
+            if (this.cachedDailyRemainingFromApi != null && Number.isFinite(this.cachedDailyRemainingFromApi)) {
+              this.cachedDailyRemainingFromApi += add;
+            }
+          }
+        }
+        getUsageBarSnapshot() {
+          return this.getDailyTokenUsageForDisplay();
+        }
+        updateFromQuota(quota) {
+          if (!quota) return;
+          if (quota.monthly_limit !== void 0) {
+            this.cachedLimit = quota.monthly_limit;
+          }
+          if (quota.monthly_used !== void 0) {
+            this.cachedUsage = quota.monthly_used;
+          }
+          if (quota.daily_limit !== void 0) {
+            this.cachedDailyLimit = quota.daily_limit;
+          }
+          if (quota.daily_used !== void 0) {
+            this.cachedDailyUsedFromApi = quota.daily_used;
+          }
+          if (quota.daily_remaining !== void 0) {
+            this.cachedDailyRemainingFromApi = quota.daily_remaining;
+          }
+          this.lastFetchTime = Date.now();
+          logDebug2(
+            `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
+          );
+        }
+        /**
+         * Apply `usage_stats` from Supabase Edge assist (post-`record_llm_usage`).
+         * Avoid calling `trackUsage` for the same request when this object is present.
+         */
+        updateFromAssistUsageStats(stats) {
+          if (!stats || typeof stats !== "object") {
+            return;
+          }
+          const patch = {};
+          if (typeof stats.total_tokens === "number" && Number.isFinite(stats.total_tokens)) {
+            patch.daily_used = stats.total_tokens;
+          }
+          if (typeof stats.limit === "number" && Number.isFinite(stats.limit)) {
+            patch.daily_limit = stats.limit;
+          }
+          if (typeof stats.remaining === "number" && Number.isFinite(stats.remaining)) {
+            patch.daily_remaining = stats.remaining;
+          }
+          if (Object.keys(patch).length > 0) {
+            this.updateFromQuota(patch);
+          }
+        }
+        getDailyTokenUsageForDisplay() {
+          const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
+          const baseLimit = Math.max(
+            1,
+            fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
+          );
+          const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
+          const limit = baseLimit + bonusTokens;
+          const fromApi = this.cachedDailyUsedFromApi ?? 0;
+          const fromDb = this.cachedDailyTokensFromDb;
+          const used = Math.max(
+            0,
+            this.cachedDailyTokensFromDbOk ? fromDb : Math.max(fromApi, fromDb)
+          );
+          const remaining = Math.max(0, limit - used);
+          const percentOfBase = baseLimit > 0 ? Math.min(9999, Math.round(used / baseLimit * 1e3) / 10) : 0;
+          const percentUsed = limit > 0 ? Math.min(9999, Math.round(used / limit * 1e3) / 10) : 0;
+          const local = {
+            used,
+            limit,
+            baseLimit,
+            bonusTokens,
+            remaining,
+            percentUsed,
+            percentOfBase
+          };
+          const qLimit = this.cachedDailyLimit;
+          const qUsed = this.cachedDailyUsedFromApi;
+          const qRem = this.cachedDailyRemainingFromApi;
+          if (qLimit != null && qLimit > 0 && qUsed != null && qRem != null && Number.isFinite(qUsed) && Number.isFinite(qRem) && Math.abs(qUsed + qRem - qLimit) <= 2) {
+            const effectiveLimit = Math.max(local.limit, qLimit);
+            const qBonus = Math.max(0, qLimit - local.baseLimit);
+            const effectiveBonus = Math.max(
+              local.bonusTokens,
+              effectiveLimit - local.baseLimit,
+              qBonus
+            );
+            const effectiveRemaining = Math.max(0, effectiveLimit - qUsed);
+            const percentOfBaseMerged = local.baseLimit > 0 ? Math.min(9999, Math.round(qUsed / local.baseLimit * 1e3) / 10) : 0;
+            const percentUsedMerged = effectiveLimit > 0 ? Math.min(9999, Math.round(qUsed / effectiveLimit * 1e3) / 10) : 0;
+            return {
+              used: qUsed,
+              limit: effectiveLimit,
+              baseLimit: local.baseLimit,
+              bonusTokens: effectiveBonus,
+              remaining: effectiveRemaining,
+              percentUsed: percentUsedMerged,
+              percentOfBase: percentOfBaseMerged
+            };
+          }
+          return local;
+        }
+        async getUsageBarData() {
+          await this.forceRefresh();
+          return this.getUsageBarSnapshot();
+        }
+        getCachedPlanName() {
+          return this.cachedPlanNameKey;
+        }
+        getOptInPersonalizedTraining() {
+          return isOasisDataCollectionIdentified();
+        }
+        /**
+         * Track usage for a command
+         * @param type 'text' or 'voice'
+         * @param model Optional model name for record keeping
+         */
+        /**
+         * Log Gemini tokens for assist **routing** only (`usage_count` / monthly units stay 0).
+         * Final assistant turns still use `trackUsage` from the graph stream.
+         */
+        recordAssistRoutingTokens(meta) {
+          void this.recordAssistRoutingTokensAsync(meta);
+        }
+        async recordAssistRoutingTokensAsync(meta) {
+          const user = await supabaseAuth.getCurrentUser();
+          if (!user) {
+            logWarn2("recordAssistRoutingTokens: No user found.");
+            return;
+          }
+          const input = Number(meta.input_tokens ?? 0);
+          const output = Number(meta.output_tokens ?? 0);
+          if (!Number.isFinite(input) || !Number.isFinite(output) || input <= 0 && output <= 0) {
+            return;
+          }
+          const supabase = supabaseAuth.supabase;
+          const { error } = await supabase.from("llm_usage").insert({
+            user_id: user.id,
+            tokens_used: 0,
+            usage_count: 0,
+            model_used: "assist-router",
+            success: true,
+            command_type: meta.command_type ?? null,
+            user_intent: meta.user_intent ?? null,
+            input_tokens: input,
+            output_tokens: output
+          });
+          if (error) {
+            logError2("recordAssistRoutingTokens: DB insert failed", error);
+          } else {
+            logDebug2("recordAssistRoutingTokens: logged routing tokens", {
+              input,
+              output
+            });
+          }
+        }
+        async trackUsage(type, model = "gemini-1.5-flash", meta) {
+          const user = await supabaseAuth.getCurrentUser();
+          if (!user) {
+            logWarn2("trackUsage: No user found.");
+            return;
+          }
+          const units = type === "voice" ? COST_VOICE : COST_TEXT;
+          logDebug2(
+            `trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`
+          );
+          this.cachedUsage += units;
+          logDebug2(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
+          localMemory.saveUsage(user.id, this.cachedUsage).catch((e2) => logError2("Failed to save local usage:", e2));
+          const supabase = supabaseAuth.supabase;
+          const telemetryIdentified = meta?.telemetry_identified ?? isOasisDataCollectionIdentified();
+          const rowUserId = telemetryIdentified ? user.id : null;
+          supabase.from("llm_usage").insert({
+            user_id: rowUserId,
+            tokens_used: units,
+            usage_count: units,
+            model_used: `${type}:${model}`,
+            success: true,
+            command_type: meta?.command_type ?? null,
+            user_intent: meta?.user_intent ?? null,
+            input_tokens: meta?.input_tokens ?? 0,
+            output_tokens: meta?.output_tokens ?? 0,
+            interaction_id: meta?.interaction_id ?? null,
+            ...meta?.interaction_payload ? { interaction_data: meta.interaction_payload } : {}
+          }).then(({ error }) => {
+            if (error) logError2("Failed to track usage (DB Insert):", error);
+            else logDebug2("trackUsage: DB insert successful");
+          });
+        }
+        /**
+         * Check if the user can proceed with a command
+         */
+        async checkAvailability() {
+          const user = await supabaseAuth.getCurrentUser();
+          if (!user) {
+            return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
+          }
+          if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
+            await this.refreshUsageData(user.id);
+          }
+          const limit = this.cachedLimit ?? DEFAULT_LIMIT;
+          const remaining = Math.max(0, limit - this.cachedUsage);
+          return {
+            totalUnits: this.cachedUsage,
+            limit,
+            remaining,
+            isLimitReached: this.cachedUsage >= limit
+          };
+        }
+        getSubscriptionUrl() {
+          return "https://kahana.co/oasis-pricing";
+        }
+        async forceRefresh() {
+          const user = await supabaseAuth.getCurrentUser();
+          if (user) {
+            this.lastFetchTime = 0;
+            await this.refreshUsageData(user.id);
+          }
+        }
+        async refreshUsageData(userId) {
+          const supabase = supabaseAuth.supabase;
+          logDebug2("refreshUsageData: syncing usage...");
+          let limit = DEFAULT_LIMIT;
+          const { data: planData, error: planError } = await supabase.from("user_plans").select(
+            `
+                plan_id,
+                stripe_subscription_id,
+                is_active,
+                plans ( name, llm_call_limit )
+            `
+          ).eq("user_id", userId).eq("is_active", true).maybeSingle();
+          logDebug2(`refreshUsageData: Primary query result:`, {
+            planData,
+            planError,
+            hasPlansJoin: planData && planData.plans ? true : false,
+            userId
+          });
+          let planNameKey = "free";
+          let planIdForDaily = null;
+          if (planData) {
+            if (planData.plan_id != null) {
+              planIdForDaily = String(planData.plan_id);
+            }
+            const joined = planData.plans;
+            if (joined && typeof joined.name === "string" && joined.name) {
+              planNameKey = joined.name.toLowerCase();
+            }
+          }
+          if (planData && planData.plans) {
+            const dbLimit = planData.plans.llm_call_limit;
+            const planName = (planData.plans.name || "").toLowerCase();
+            if (dbLimit) {
+              limit = dbLimit;
+              logDebug2(`refreshUsageData: Using plan limit from DB: ${limit}`);
+            } else if (PLAN_LIMITS[planName]) {
+              limit = PLAN_LIMITS[planName];
+              logDebug2(
+                `refreshUsageData: Using plan limit from name mapping: ${limit}`
+              );
+            }
+          } else if (planData && planData.is_active) {
+            const stripeSubId = planData.stripe_subscription_id;
+            const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+            logDebug2(
+              `refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`,
+              {
+                stripeSubId,
+                hasStripeSubscription,
+                is_active: planData.is_active
+              }
+            );
+            if (hasStripeSubscription) {
+              limit = PLAN_LIMITS["basic"];
+              planNameKey = "basic";
+              logDebug2(
+                `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`
+              );
+            } else {
+              logWarn2(
+                "refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query"
+              );
+            }
+          }
+          if (limit === DEFAULT_LIMIT) {
+            logWarn2(
+              "refreshUsageData: Limit still at default, trying fallback query without join"
+            );
+            const { data: fallbackData, error: fallbackError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
+            logDebug2(`refreshUsageData: Fallback query result:`, {
+              fallbackData,
+              fallbackError,
+              userId
+            });
+            if (fallbackError) {
+              logError2("refreshUsageData: Fallback query error:", fallbackError);
+            }
+            if (fallbackData && fallbackData.is_active) {
+              if (planIdForDaily === null && fallbackData.plan_id != null) {
+                planIdForDaily = String(fallbackData.plan_id);
+              }
+              const stripeSubId = fallbackData.stripe_subscription_id;
+              const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
+              logDebug2(`refreshUsageData: Checking stripe_subscription_id:`, {
+                stripeSubId,
+                hasStripeSubscription,
+                type: typeof stripeSubId
+              });
+              if (hasStripeSubscription) {
+                limit = PLAN_LIMITS["basic"];
+                planNameKey = "basic";
+                logDebug2(
+                  `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`
+                );
+              } else {
+                logWarn2(
+                  "refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit"
+                );
+              }
+            } else {
+              logWarn2(
+                "refreshUsageData: No active plan found for user, using free plan limit",
+                {
+                  fallbackData,
+                  userId
+                }
+              );
+            }
+          }
+          logDebug2(`refreshUsageData: Final limit set to: ${limit}`);
+          this.cachedLimit = limit;
+          let dbTotal = 0;
+          const startOfMonth = /* @__PURE__ */ new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          const { data: usageData, error: usageError } = await supabase.from("llm_usage").select("usage_count").eq("user_id", userId).gte("created_at", startOfMonth.toISOString());
+          if (usageData) {
+            dbTotal = usageData.reduce(
+              (acc, row) => acc + (row.usage_count || 0),
+              0
+            );
+          }
+          const localTotal = await localMemory.getUsage(userId);
+          if (!usageError && usageData) {
+            this.cachedUsage = dbTotal;
+            localMemory.saveUsage(userId, dbTotal).catch((e2) => logWarn2("refreshUsageData: sync local:", e2));
+          } else {
+            if (usageError) {
+              logWarn2(
+                "refreshUsageData: DB fetch failed (RLS?), using local only.",
+                usageError.message
+              );
+            }
+            this.cachedUsage = Math.max(dbTotal, localTotal);
+          }
+          logDebug2(
+            `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
+          );
+          let dailyTokLimit = null;
+          if (planIdForDaily) {
+            const { data: planRow, error: planRowErr } = await supabase.from("plans").select("daily_token_limit").eq("id", planIdForDaily).maybeSingle();
+            if (!planRowErr && planRow && planRow.daily_token_limit != null) {
+              const n2 = Number(planRow.daily_token_limit);
+              if (Number.isFinite(n2) && n2 > 0) {
+                dailyTokLimit = n2;
+              }
+            }
+          }
+          this.cachedPlanNameKey = planNameKey;
+          this.cachedDailyTokenLimitSupabase = dailyTokLimit ?? PLAN_DAILY_TOKEN_LIMITS[planNameKey] ?? DEFAULT_DAILY_TOKEN_LIMIT;
+          const startOfUtcDay = /* @__PURE__ */ new Date();
+          startOfUtcDay.setUTCHours(0, 0, 0, 0);
+          const utcGrantDate = startOfUtcDay.toISOString().slice(0, 10);
+          let grantSum = 0;
+          const { data: grantRows, error: grantErr } = await supabase.from("feedback_token_grants").select("tokens").eq("user_id", userId).eq("grant_date_utc", utcGrantDate);
+          if (!grantErr && grantRows) {
+            grantSum = grantRows.reduce(
+              (acc, row) => acc + (Number(row.tokens) || 0),
+              0
+            );
+          } else if (grantErr) {
+            logDebug2(
+              "refreshUsageData: feedback_token_grants unavailable or error",
+              grantErr.message
+            );
+          }
+          const optimistic = readOptimisticFeedbackBonusTokensToday();
+          this.cachedFeedbackBonusTokensToday = Math.max(
+            grantSum,
+            optimistic,
+            this.cachedFeedbackBonusTokensToday
+          );
+          this.cachedDailyTokensFromDbOk = false;
+          const { data: dayRows, error: dayErr } = await supabase.from("llm_usage").select("input_tokens, output_tokens").eq("user_id", userId).gte("created_at", startOfUtcDay.toISOString());
+          if (!dayErr && dayRows) {
+            this.cachedDailyTokensFromDbOk = true;
+            this.cachedDailyTokensFromDb = dayRows.reduce(
+              (acc, row) => acc + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
+              0
+            );
+          } else {
+            if (dayErr) {
+              logWarn2(
+                "refreshUsageData: daily token aggregate failed",
+                dayErr.message
+              );
+            }
+          }
+          this.lastFetchTime = Date.now();
+        }
+      };
+      subscriptionService = SubscriptionService.getInstance();
+    }
+  });
+
+  // src/utils/intentParser.ts
+  function cleanCaptured(text2) {
+    return String(text2 || "").replace(/["']/g, "").replace(/^\s*(?:my|the)\s+/i, "").trim();
+  }
+  function extractContainerType(text2) {
+    const hasGroup = GROUP_LABEL_RE.test(text2);
+    const hasFolder = FOLDER_LABEL_RE.test(text2);
+    if (hasGroup && hasFolder) {
+      return null;
+    }
+    if (hasGroup) {
+      return "tab-group";
+    }
+    if (hasFolder) {
+      return "bookmark-folder";
+    }
+    return null;
+  }
+  function extractTargetName(raw) {
+    let name = cleanCaptured(raw);
+    name = name.replace(/^bookmark\s+folder\s+/i, "");
+    name = name.replace(/^bookmarks?\s+/i, "");
+    name = name.replace(/^tab\s*group\s+/i, "");
+    name = name.replace(/^folder\s+/i, "");
+    name = name.replace(/^hub\s+/i, "");
+    name = name.replace(/^group\s+/i, "");
+    name = name.replace(/\s+bookmarks?\s*$/i, "");
+    name = name.replace(/\s+bookmark\s+folder\s*$/i, "");
+    name = name.replace(/\s+tab\s*group\s*$/i, "");
+    name = name.replace(/\s+folder\s*$/i, "");
+    name = name.replace(/\s+hub\s*$/i, "");
+    name = name.replace(/\s+group\s*$/i, "");
+    return name.trim();
+  }
+  function isNonContainerTarget(rawTarget) {
+    return /\bnew\s+window\b|\bwindow\b|\bsplit\s*view\b/i.test(rawTarget);
+  }
+  function looksActionableText(text2) {
+    const input = String(text2 || "");
+    return ACTION_WORD_RE.test(input) && ACTION_OBJECT_RE.test(input);
+  }
+  function classifyCommandFamily(commandText) {
+    const input = String(commandText || "").trim();
+    if (!input) {
+      return "other";
+    }
+    if (LIST_OPEN_TABS_QUESTION_RE.test(input)) {
+      return "list";
+    }
+    if (LIST_VERB_RE.test(input)) {
+      return "list";
+    }
+    if (SHOW_VERB_RE.test(input) && LIST_OBJECT_RE.test(input)) {
+      return "list";
+    }
+    if (SEARCH_FAMILY_RE.test(input) || HISTORY_FAMILY_RE.test(input)) {
+      return "search";
+    }
+    if (MUTATION_FAMILY_RE.test(input)) {
+      return "mutation";
+    }
+    return "other";
+  }
+  function normalizeRouteName(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+  function parseContainerAddIntent(commandText) {
+    const input = String(commandText || "").trim();
+    if (!input) return null;
+    const allMatch = input.match(
+      /^(?<verb>add|save|move|put)\s+all\s+(?:tabs?|existing\s+tabs?)\s+to\s+(?<target>.+)$/i
+    );
+    if (allMatch?.groups) {
+      if (isNonContainerTarget(allMatch.groups.target)) {
+        return null;
+      }
+      const explicitContainer = extractContainerType(allMatch.groups.target);
+      const targetName = extractTargetName(allMatch.groups.target);
+      if (!targetName) return null;
+      return {
+        rawText: input,
+        normalizedText: input.toLowerCase(),
+        verb: allMatch.groups.verb.toLowerCase(),
+        isActionLike: true,
+        explicitContainer,
+        targetName,
+        all: true,
+        kind: "container_add"
+      };
+    }
+    const currentMatch = input.match(
+      /^(?<verb>add|save|move|put)\s+(?:this|current|active)\s+tab\s+to\s+(?<target>.+)$/i
+    );
+    if (currentMatch?.groups) {
+      if (isNonContainerTarget(currentMatch.groups.target)) {
+        return null;
+      }
+      const explicitContainer = extractContainerType(currentMatch.groups.target);
+      const targetName = extractTargetName(currentMatch.groups.target);
+      if (!targetName) return null;
+      return {
+        rawText: input,
+        normalizedText: input.toLowerCase(),
+        verb: currentMatch.groups.verb.toLowerCase(),
+        isActionLike: true,
+        explicitContainer,
+        targetName,
+        current: true,
+        kind: "container_add"
+      };
+    }
+    const queryMatch = input.match(
+      /^(?<verb>add|save|move|put)\s+(?<query>.+?)\s+to\s+(?<target>.+)$/i
+    );
+    if (queryMatch?.groups) {
+      if (isNonContainerTarget(queryMatch.groups.target)) {
+        return null;
+      }
+      const explicitContainer = extractContainerType(queryMatch.groups.target);
+      const targetName = extractTargetName(queryMatch.groups.target);
+      const query = cleanCaptured(queryMatch.groups.query);
+      if (!targetName || !query) return null;
+      return {
+        rawText: input,
+        normalizedText: input.toLowerCase(),
+        verb: queryMatch.groups.verb.toLowerCase(),
+        isActionLike: true,
+        explicitContainer,
+        targetName,
+        all: /^(?:all\s+tabs?|all\s+existing\s+tabs?)$/i.test(query),
+        current: /^(?:this|current|active)\s+tab$/i.test(query),
+        query,
+        kind: "container_add"
+      };
+    }
+    return null;
+  }
+  function parseCloseDeleteTargetIntent(commandText) {
+    const input = String(commandText || "").trim();
+    if (!input) return null;
+    const match = input.match(/^(?<verb>close|delete|remove)\s+(?<target>.+)$/i);
+    if (!match?.groups) return null;
+    const verb = match.groups.verb.toLowerCase();
+    const target = cleanCaptured(match.groups.target);
+    if (!target) return null;
+    return {
+      rawText: input,
+      normalizedText: input.toLowerCase(),
+      verb,
+      isActionLike: true,
+      explicitContainer: extractContainerType(target),
+      targetName: extractTargetName(target),
+      kind: "close_delete_target"
+    };
+  }
+  function parseSearchFolderSlots(commandText) {
+    const input = String(commandText || "").trim();
+    if (!input) return null;
+    const quotedQueryFirst = input.match(
+      /^(?:search|find|look\s*up)\s+(?:for\s+)?(?<query>.+?)\s+(?:in|inside|within|from)\s+(?:my\s+)?(?:the\s+)?["'](?<folder>[^"']+?)["']\s*(?:bookmark\s+folder|folder|hub|bookmarks?)?\s*$/i
+    );
+    if (quotedQueryFirst?.groups) {
+      const folder = cleanCaptured(quotedQueryFirst.groups.folder);
+      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
+        return null;
+      }
+      return {
+        query: cleanCaptured(quotedQueryFirst.groups.query),
+        folder
+      };
+    }
+    const quotedFolderFirst = input.match(
+      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?["'](?<folder>[^"']+?)["']\s*(?:bookmark\s+folder|folder|hub|bookmarks?)?\s+(?:for\s+)?(?<query>.+?)\s*$/i
+    );
+    if (quotedFolderFirst?.groups) {
+      const folder = cleanCaptured(quotedFolderFirst.groups.folder);
+      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
+        return null;
+      }
+      return {
+        query: cleanCaptured(quotedFolderFirst.groups.query),
+        folder
+      };
+    }
+    const queryFirst = input.match(
+      /^(?:search|find|look\s*up)\s+(?:for\s+)?(?<query>.+?)\s+(?:in|inside|within|from)\s+(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s*$/i
+    );
+    if (queryFirst?.groups) {
+      const folder = cleanCaptured(queryFirst.groups.folder);
+      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
+        return null;
+      }
+      return {
+        query: cleanCaptured(queryFirst.groups.query),
+        folder
+      };
+    }
+    const folderFirst = input.match(
+      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s+(?:for\s+)?(?<query>.+?)\s*$/i
+    );
+    if (folderFirst?.groups) {
+      const folder = cleanCaptured(folderFirst.groups.folder);
+      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
+        return null;
+      }
+      return {
+        query: cleanCaptured(folderFirst.groups.query),
+        folder
+      };
+    }
+    return null;
+  }
+  function parseSearchMemoryIntent(commandText) {
+    const input = String(commandText || "").trim();
+    if (!input) {
+      return null;
+    }
+    const folderSourceScope = input.match(
+      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?(?:bookmark\s+folders?|folders?|hubs?|bookmarks?)\s+(?:for\s+)?(?<query>.+?)\s*$/i
+    );
+    if (folderSourceScope?.groups?.query) {
+      const scopedQuery = cleanCaptured(folderSourceScope.groups.query);
+      if (scopedQuery) {
+        return { query: scopedQuery, source: "bookmark-folder" };
+      }
+    }
+    const folderSlots = parseSearchFolderSlots(input);
+    if (folderSlots) {
+      return folderSlots;
+    }
+    const wildcard = input.match(
+      /what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\s+(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\b/i
+    );
+    const wildcardFolder = wildcard?.groups?.folder;
+    if (wildcardFolder) {
+      return { query: "*", folder: cleanCaptured(wildcardFolder) };
+    }
+    const queryMatch = input.match(
+      /(?:search|find|look\s*up)\s+(?:for\s+)?(?:(?:in|inside|within|from)\s+(?:my\s+)?(?:history|bookmarks?|memory|tabs?)\s+)?"?(?<query>.+?)"?\s*$/i
+    ) || input.match(
+      /have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\s+(?:any\s+)?"?(?<query>.+?)"?\s*$/i
+    ) || input.match(
+      /(?:do\s+i\s+have)\s+(?:any(?:thing)?\s+(?:about|on|related\s+to)\s+)?"?(?<query>.+?)"?\s*(?:saved|bookmarked|in\s+my)/i
+    );
+    const query = cleanCaptured(queryMatch?.groups?.query || "");
+    if (!query) {
+      return null;
+    }
+    return { query };
+  }
+  var ACTION_WORD_RE, ACTION_OBJECT_RE, LIST_VERB_RE, SHOW_VERB_RE, LIST_OBJECT_RE, SEARCH_FAMILY_RE, HISTORY_FAMILY_RE, MUTATION_FAMILY_RE, GROUP_LABEL_RE, FOLDER_LABEL_RE, GENERIC_FOLDER_NAME_RE, LIST_OPEN_TABS_QUESTION_RE;
+  var init_intentParser = __esm({
+    "src/utils/intentParser.ts"() {
+      "use strict";
+      ACTION_WORD_RE = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
+      ACTION_OBJECT_RE = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|url|result|split)\b/i;
+      LIST_VERB_RE = /^list\b/i;
+      SHOW_VERB_RE = /^show\b/i;
+      LIST_OBJECT_RE = /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
+      SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked|read|looked\s+at)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+(?:save|read|visit|look\s+at|browse))\s+/i;
+      HISTORY_FAMILY_RE = /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
+      MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
+      GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
+      FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
+      GENERIC_FOLDER_NAME_RE = /^(?:bookmark(?:\s+folders?)?|folders?|hubs?)$/i;
+      LIST_OPEN_TABS_QUESTION_RE = /^(?:what|which)\s+tabs\b|\btabs\s+do\s+i\s+have\s+open\b|\btabs\s+are\s+open\b/i;
+    }
+  });
+
+  // src/utils/researchBriefTopicPolicy.ts
+  function isShortLabel(value) {
+    const text2 = String(value || "").trim();
+    if (!text2) {
+      return true;
+    }
+    const words = text2.split(/\s+/).filter(Boolean);
+    return text2.length <= SHORT_LABEL_MAX_CHARS || words.length <= SHORT_LABEL_MAX_WORDS;
+  }
+  function isDistinctTopic(topic, scopeLabel) {
+    const t2 = normalizeRouteName(topic);
+    const s2 = normalizeRouteName(scopeLabel);
+    if (!t2) {
+      return false;
+    }
+    if (!s2 || t2 === s2) {
+      return !isShortLabel(topic);
+    }
+    if (s2.includes(t2) || t2.includes(s2)) {
+      const extra = topic.replace(
+        new RegExp(scopeLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
+        ""
+      ).trim();
+      const extraWords = extra.split(/\s+/).filter(Boolean);
+      return extra.length >= DISTINCT_TOPIC_MIN_EXTRA_CHARS || extraWords.length >= DISTINCT_TOPIC_MIN_EXTRA_WORDS;
+    }
+    return true;
+  }
+  function resolveBriefTopicFields(params) {
+    const userTopic = String(params.userTopic || "").trim();
+    const groupName = String(params.groupName || "").trim();
+    const scopeLabel = String(params.scopeLabel || "").trim() || (groupName ? `Tab group: ${groupName}` : "");
+    if (params.scope === "tabs") {
+      if (userTopic && isDistinctTopic(userTopic, scopeLabel)) {
+        return { topic: userTopic, inferTopicFromContent: false };
+      }
+      return { topic: "", inferTopicFromContent: true };
+    }
+    if (params.scope === "window") {
+      if (userTopic) {
+        return { topic: userTopic, inferTopicFromContent: false };
+      }
+      return { topic: "", inferTopicFromContent: true };
+    }
+    if (userTopic && isDistinctTopic(userTopic, groupName || scopeLabel)) {
+      return { topic: userTopic, inferTopicFromContent: false };
+    }
+    if (!userTopic && groupName) {
+      return { topic: "", inferTopicFromContent: true };
+    }
+    if (userTopic && groupName && normalizeRouteName(userTopic) === normalizeRouteName(groupName)) {
+      return { topic: "", inferTopicFromContent: true };
+    }
+    if (userTopic) {
+      return { topic: userTopic, inferTopicFromContent: false };
+    }
+    return { topic: "", inferTopicFromContent: true };
+  }
+  function stripSiteSuffix(title) {
+    return String(title || "").replace(/\s*[-|–—]\s*[^-|–—]+$/, "").trim();
+  }
+  function tokenizeTitle(title) {
+    return stripSiteSuffix(title).toLowerCase().split(/[^a-z0-9]+/i).filter((w3) => w3.length >= 3 && !GENERIC_TOPIC_RE.test(w3));
+  }
+  function inferResearchBriefTopicHeuristic(digests) {
+    const titles = digests.map((d3) => stripSiteSuffix(d3.title)).filter((t2) => t2 && !GENERIC_TOPIC_RE.test(t2));
+    if (titles.length === 0) {
+      return "";
+    }
+    const tokenCounts = /* @__PURE__ */ new Map();
+    for (const title of titles) {
+      const seenInTitle = /* @__PURE__ */ new Set();
+      for (const token of tokenizeTitle(title)) {
+        if (seenInTitle.has(token)) {
+          continue;
+        }
+        seenInTitle.add(token);
+        tokenCounts.set(token, (tokenCounts.get(token) || 0) + 1);
+      }
+    }
+    const shared = [...tokenCounts.entries()].filter(([, count3]) => count3 >= 2).sort((a2, b3) => b3[1] - a2[1] || b3[0].length - a2[0].length);
+    if (shared.length > 0) {
+      const phrase = shared.slice(0, 4).map(([token]) => token).join(" ");
+      return phrase.length <= 80 ? phrase : phrase.slice(0, 77) + "...";
+    }
+    const primary = titles[0];
+    if (titles.length === 1) {
+      return primary.length <= 80 ? primary : primary.slice(0, 77) + "...";
+    }
+    const shortened = titles.slice(0, 3).map((t2) => t2.length > 40 ? `${t2.slice(0, 37)}...` : t2).join("; ");
+    return shortened.length <= 80 ? shortened : shortened.slice(0, 77) + "...";
+  }
+  var SHORT_LABEL_MAX_CHARS, SHORT_LABEL_MAX_WORDS, DISTINCT_TOPIC_MIN_EXTRA_CHARS, DISTINCT_TOPIC_MIN_EXTRA_WORDS, GENERIC_TOPIC_RE;
+  var init_researchBriefTopicPolicy = __esm({
+    "src/utils/researchBriefTopicPolicy.ts"() {
+      "use strict";
+      init_intentParser();
+      SHORT_LABEL_MAX_CHARS = 24;
+      SHORT_LABEL_MAX_WORDS = 2;
+      DISTINCT_TOPIC_MIN_EXTRA_CHARS = 12;
+      DISTINCT_TOPIC_MIN_EXTRA_WORDS = 2;
+      GENERIC_TOPIC_RE = /^(?:untitled|home|new tab|welcome|loading|page|article|news)$/i;
+    }
+  });
+
+  // src/services/researchBriefScope.ts
+  function normalizeExcludeQueries(queries) {
+    if (!Array.isArray(queries)) {
+      return [];
+    }
+    return queries.map((q3) => String(q3 || "").trim()).filter((q3) => q3.length >= MIN_EXCLUDE_QUERY_LENGTH);
+  }
+  function normalizeExcludeIndices(indices) {
+    const set2 = /* @__PURE__ */ new Set();
+    if (!Array.isArray(indices)) {
+      return set2;
+    }
+    for (const value of indices) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const i2 = Math.floor(value);
+        if (i2 >= 1) {
+          set2.add(i2);
+        }
+      }
+    }
+    return set2;
+  }
+  function tabMatchesExcludeQuery(tab, query) {
+    const q3 = query.toLowerCase();
+    const title = String(tab.title || "").toLowerCase();
+    const url = String(tab.url || "").toLowerCase();
+    return title.includes(q3) || url.includes(q3);
+  }
+  function filterExcludedTabs(tabs, options) {
+    const excludeIndexSet = normalizeExcludeIndices(options.excludeIndices);
+    const excludeQueries = normalizeExcludeQueries(options.excludeQueries);
+    if (excludeIndexSet.size === 0 && excludeQueries.length === 0) {
+      return { tabs: [...tabs], excludedCount: 0 };
+    }
+    const kept = [];
+    let excludedCount = 0;
+    tabs.forEach((tab, index2) => {
+      const position = index2 + 1;
+      if (excludeIndexSet.has(position)) {
+        excludedCount++;
+        return;
+      }
+      if (excludeQueries.some((query) => tabMatchesExcludeQuery(tab, query))) {
+        excludedCount++;
+        return;
+      }
+      kept.push(tab);
+    });
+    return { tabs: kept, excludedCount };
+  }
+  function buildScopeLabelWithExclusions(baseLabel, includedCount, excludedCount) {
+    if (excludedCount <= 0) {
+      return `${baseLabel} (${includedCount} tabs)`;
+    }
+    return `${baseLabel} (${includedCount} tabs, excluded ${excludedCount})`;
+  }
+  var MIN_EXCLUDE_QUERY_LENGTH;
+  var init_researchBriefScope = __esm({
+    "src/services/researchBriefScope.ts"() {
+      "use strict";
+      MIN_EXCLUDE_QUERY_LENGTH = 3;
+    }
+  });
+
+  // src/assistant/messageUtils.ts
+  function isRecord(value) {
+    return !!value && typeof value === "object";
+  }
+  function asToolResultPayload(value) {
+    if (!isRecord(value)) {
+      return null;
+    }
+    const kind = value.kind;
+    const commandName = value.commandName;
+    const message = value.message;
+    if (kind !== "tool_result") {
+      return null;
+    }
+    if (typeof commandName !== "string" || !commandName.trim()) {
+      return null;
+    }
+    if (typeof message !== "string") {
+      return null;
+    }
+    return {
+      kind,
+      commandName,
+      message
+    };
+  }
+  function getToolResultPayload(message) {
+    if (!message) {
+      return null;
+    }
+    const rawKwargs = message.additional_kwargs;
+    if (!isRecord(rawKwargs)) {
+      return null;
+    }
+    return asToolResultPayload(rawKwargs.oasisToolResult);
+  }
+  function msgText(m3) {
+    if (!m3) return "";
+    const toolResult = getToolResultPayload(m3);
+    if (toolResult) {
+      return toolResult.message;
+    }
+    const c3 = m3.content;
+    if (typeof c3 === "string") return c3;
+    if (Array.isArray(c3)) {
+      return c3.map(
+        (v6) => typeof v6 === "string" ? v6 : typeof v6 === "object" && v6 && "text" in v6 ? String(v6.text || "") : ""
+      ).join("");
+    }
+    return String(c3 ?? "");
+  }
+  function toWire(messages) {
+    return messages.map((m3) => {
+      const role = m3._getType() === "human" ? "user" : "model";
+      const toolResult = getToolResultPayload(m3);
+      if (toolResult) {
+        return {
+          role,
+          content: `Internal command result
+Command: ${toolResult.commandName}
+Result: ${toolResult.message}`
+        };
+      }
+      return { role, content: msgText(m3) };
+    });
+  }
+  function extractChatContent(response) {
+    if (typeof response === "string") {
+      return response;
+    }
+    if (response && typeof response === "object" && "content" in response) {
+      return String(response.content ?? "");
+    }
+    return "";
+  }
+  function extractTokenCountsFromUsageMetadata(usage) {
+    let inputTokens = null;
+    let outputTokens = null;
+    if (!isRecord(usage)) {
+      return { input_tokens: null, output_tokens: null };
+    }
+    if (typeof usage.prompt_token_count === "number") {
+      inputTokens = usage.prompt_token_count;
+    } else if (typeof usage.promptTokenCount === "number") {
+      inputTokens = usage.promptTokenCount;
+    }
+    if (typeof usage.candidates_token_count === "number") {
+      outputTokens = usage.candidates_token_count;
+    } else if (typeof usage.candidatesTokenCount === "number") {
+      outputTokens = usage.candidatesTokenCount;
+    }
+    return { input_tokens: inputTokens, output_tokens: outputTokens };
+  }
+  function extractTokenCountsFromAssistPayload(payload) {
+    if (!isRecord(payload)) {
+      return { input_tokens: null, output_tokens: null };
+    }
+    return extractTokenCountsFromUsageMetadata(payload.usage_metadata);
+  }
+  function parseChatEnvelope(response) {
+    const defaultMeta = {
+      command_type: "other",
+      user_intent: "other",
+      input_tokens: null,
+      output_tokens: null
+    };
+    const tokenCounts = extractTokenCountsFromAssistPayload(response);
+    const tokenMeta = {
+      input_tokens: tokenCounts.input_tokens,
+      output_tokens: tokenCounts.output_tokens
+    };
+    if (!isRecord(response)) {
+      return {
+        text: extractChatContent(response),
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
+    }
+    const contentField = response.content;
+    if (isRecord(contentField)) {
+      return extractFromParsed(contentField, tokenMeta, defaultMeta);
+    }
+    if (typeof contentField !== "string" || !contentField.trim()) {
+      return {
+        text: extractChatContent(response),
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
+    }
+    let jsonStr = contentField.trim();
+    const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    }
+    const direct = tryJsonParse(jsonStr);
+    if (direct !== null) {
+      return extractFromParsed(direct, tokenMeta, defaultMeta);
+    }
+    const repaired = jsonStr.replace(/\r\n/g, "\\n").replace(/\r/g, "\\n").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+    const fromRepair = tryJsonParse(repaired);
+    if (fromRepair !== null) {
+      return extractFromParsed(fromRepair, tokenMeta, defaultMeta);
+    }
+    const regexResult = extractViaRegex(jsonStr, tokenMeta, defaultMeta);
+    if (regexResult !== null) {
+      return regexResult;
+    }
+    return {
+      text: jsonStr || contentField,
+      meta: { ...defaultMeta, ...tokenMeta }
+    };
+  }
+  function tryJsonParse(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  }
+  function extractFromParsed(parsed, tokenMeta, defaultMeta) {
+    if (!isRecord(parsed) || typeof parsed.response !== "string") {
+      return {
+        text: typeof parsed === "string" ? parsed : "",
+        meta: { ...defaultMeta, ...tokenMeta }
+      };
+    }
+    const commandType = VALID_COMMAND_TYPES.has(
+      String(parsed.command_type ?? "")
+    ) ? parsed.command_type : "other";
+    const userIntent = VALID_USER_INTENTS.has(
+      String(parsed.user_intent ?? "")
+    ) ? parsed.user_intent : "other";
+    return {
+      text: parsed.response,
+      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
+    };
+  }
+  function extractViaRegex(str, tokenMeta, defaultMeta) {
+    const responseMatch = str.match(
+      /"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/
+    );
+    if (!responseMatch) {
+      return null;
+    }
+    const responseText = responseMatch[1].replace(/\\n/g, "\n").replace(/\\t/g, "	").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    const cmdMatch = str.match(/"command_type"\s*:\s*"([^"]+)"/);
+    const intentMatch = str.match(/"user_intent"\s*:\s*"([^"]+)"/);
+    const commandType = cmdMatch && VALID_COMMAND_TYPES.has(cmdMatch[1]) ? cmdMatch[1] : "other";
+    const userIntent = intentMatch && VALID_USER_INTENTS.has(intentMatch[1]) ? intentMatch[1] : "other";
+    return {
+      text: responseText || str,
+      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
+    };
+  }
+  function stripLeadingEchoedPayload(value, payloads) {
+    let text2 = String(value || "").trim();
+    if (!text2 || payloads.length === 0) {
+      return text2;
+    }
+    for (const payload of payloads) {
+      const candidate = String(payload || "").trim();
+      if (!candidate) {
+        continue;
+      }
+      if (text2.startsWith(candidate)) {
+        if (text2.length === candidate.length) {
+          continue;
+        }
+        text2 = text2.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
+        break;
+      }
+    }
+    return text2;
+  }
+  function hasMessages(value) {
+    return !!value && typeof value === "object" && Array.isArray(value.messages);
+  }
+  var VALID_COMMAND_TYPES, VALID_USER_INTENTS;
+  var init_messageUtils = __esm({
+    "src/assistant/messageUtils.ts"() {
+      "use strict";
+      VALID_COMMAND_TYPES = /* @__PURE__ */ new Set([
+        "info_retrieval",
+        "navigation",
+        "organization",
+        "content_transform",
+        "content_create",
+        "search",
+        "automation",
+        "system",
+        "help",
+        "other"
+      ]);
+      VALID_USER_INTENTS = /* @__PURE__ */ new Set([
+        "learning",
+        "research",
+        "work",
+        "dev",
+        "marketing",
+        "shopping",
+        "personal",
+        "entertainment",
+        "meta",
+        "other"
+      ]);
+    }
+  });
+
+  // src/services/researchBriefFormat.ts
+  function clampMaxTabs(value) {
+    if (value == null || !Number.isFinite(value)) {
+      return DEFAULT_MAX_TABS;
+    }
+    return Math.min(HARD_MAX_TABS, Math.max(1, Math.floor(value)));
+  }
+  function estimateSynthesisTokens(digests) {
+    const chars = digests.reduce(
+      (sum, d3) => sum + String(d3.content || "").length,
+      0
+    );
+    return Math.ceil(chars / 4) + 4e3;
+  }
+  function truncateDigestsToBudget(digests, maxTotalChars) {
+    const total = digests.reduce(
+      (sum, d3) => sum + String(d3.content || "").length,
+      0
+    );
+    if (total <= maxTotalChars) {
+      return { digests, truncated: false };
+    }
+    const ratio = maxTotalChars / total;
+    const truncatedDigests = digests.map((d3) => {
+      if (!d3.content || d3.status !== "ok") {
+        return d3;
+      }
+      const newLen = Math.max(200, Math.floor(d3.content.length * ratio));
+      if (newLen >= d3.content.length) {
+        return d3;
+      }
+      return {
+        ...d3,
+        content: d3.content.substring(0, newLen) + "..."
+      };
+    });
+    return { digests: truncatedDigests, truncated: true };
+  }
+  function truncateQuote(text2) {
+    const t2 = String(text2 || "").trim();
+    if (t2.length <= MAX_QUOTE_CHARS) {
+      return t2;
+    }
+    return t2.substring(0, MAX_QUOTE_CHARS - 3) + "...";
+  }
+  function researchBriefToMarkdown(brief) {
+    const okCount = brief.sources.filter((s2) => s2.status === "ok").length;
+    const failedCount = brief.sources.filter(
+      (s2) => s2.status === "failed" || s2.status === "skipped"
+    ).length;
+    const metaParts = [`**Generated:** ${brief.generatedAt}`];
+    if (brief.topicInferred) {
+      metaParts.push(`**Topic:** ${brief.topic} (inferred from page content)`);
+    }
+    if (brief.sources.length > 0) {
+      metaParts.push(
+        `**Sources:** ${brief.sources.length} (${okCount} ok${failedCount > 0 ? `, ${failedCount} unavailable` : ""})`
+      );
+    }
+    if (brief.synthesisCharCount != null && brief.synthesisCharCount > 0) {
+      const k3 = Math.round(brief.synthesisCharCount / 1e3);
+      metaParts.push(`**~${k3}k chars sent for synthesis**`);
+    }
+    const lines = [
+      `# Research brief: ${brief.topic}`,
+      "",
+      metaParts.join(" \xB7 "),
+      ""
+    ];
+    if (brief.executiveSummary?.trim()) {
+      lines.push("## Executive summary", "", brief.executiveSummary.trim(), "");
+    }
+    if (brief.outline?.length) {
+      lines.push("## Suggested outline", "");
+      for (const section of brief.outline) {
+        lines.push(`### ${section.heading}`);
+        for (const bullet of section.bullets || []) {
+          lines.push(`- ${bullet}`);
+        }
+        lines.push("");
+      }
+    }
+    if (brief.themes?.length) {
+      lines.push("## Themes", "");
+      for (const theme of brief.themes) {
+        lines.push(`### ${theme.label}`, "", theme.synthesis.trim(), "");
+        if (theme.sourceUrls?.length) {
+          lines.push(
+            `Sources: ${theme.sourceUrls.map((u4) => `<${u4}>`).join(", ")}`,
+            ""
+          );
+        }
+      }
+    }
+    if (brief.sources?.length) {
+      lines.push("## Sources", "");
+      for (const source of brief.sources) {
+        const title = source.title?.trim() || source.url || "Untitled";
+        lines.push(`### [${title}](${source.url})`);
+        if (source.status !== "ok" && source.failureReason) {
+          lines.push("", `*${source.failureReason}*`, "");
+        }
+        for (const quote of source.quotes || []) {
+          const q3 = truncateQuote(quote.text);
+          if (q3) {
+            lines.push("> " + q3.split("\n").join("\n> "));
+            if (quote.context?.trim()) {
+              lines.push(`> \u2014 ${quote.context.trim()}`);
+            }
+            lines.push("");
+          }
+        }
+        if (source.keyClaims?.length) {
+          lines.push("**Key claims:**");
+          for (const claim of source.keyClaims) {
+            lines.push(`- ${claim}`);
+          }
+          lines.push("");
+        }
+      }
+    }
+    if (brief.gapsAndContradictions?.length) {
+      lines.push("## Gaps and contradictions", "");
+      for (const item of brief.gapsAndContradictions) {
+        lines.push(`- ${item}`);
+      }
+      lines.push("");
+    }
+    return lines.join("\n").trim();
+  }
+  function normalizeQuote(raw) {
+    if (!isRecord(raw) || typeof raw.text !== "string") {
+      return null;
+    }
+    const text2 = truncateQuote(raw.text);
+    if (!text2) {
+      return null;
+    }
+    return {
+      text: text2,
+      context: typeof raw.context === "string" ? raw.context : void 0
+    };
+  }
+  function normalizeSource(raw) {
+    if (!isRecord(raw)) {
+      return null;
+    }
+    const status = raw.status;
+    if (status !== "ok" && status !== "skipped" && status !== "failed") {
+      return null;
+    }
+    const quotes = Array.isArray(raw.quotes) ? raw.quotes.map(normalizeQuote).filter((q3) => q3 != null).slice(0, 5) : [];
+    const keyClaims = Array.isArray(raw.keyClaims) ? raw.keyClaims.filter((c3) => typeof c3 === "string").slice(0, 8) : [];
+    return {
+      title: typeof raw.title === "string" ? raw.title : "",
+      url: typeof raw.url === "string" ? raw.url : "",
+      status,
+      failureReason: typeof raw.failureReason === "string" ? raw.failureReason : void 0,
+      keyClaims,
+      quotes
+    };
+  }
+  function tryJsonParseLoose(str) {
+    const trimmed = String(str || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : trimmed;
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      return null;
+    }
+  }
+  function parseResearchBriefFromAssistContent(content) {
+    let parsed = content;
+    if (typeof content === "string") {
+      parsed = tryJsonParseLoose(content);
+    }
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    if (typeof parsed.topic !== "string") {
+      return null;
+    }
+    const sources = Array.isArray(parsed.sources) ? parsed.sources.map(normalizeSource).filter((s2) => s2 != null) : [];
+    const outline = Array.isArray(parsed.outline) ? parsed.outline.filter(isRecord).map((section) => ({
+      heading: typeof section.heading === "string" ? section.heading : "",
+      bullets: Array.isArray(section.bullets) ? section.bullets.filter((b3) => typeof b3 === "string") : []
+    })).slice(0, 15) : [];
+    const themes = Array.isArray(parsed.themes) ? parsed.themes.filter(isRecord).map((theme) => ({
+      label: typeof theme.label === "string" ? theme.label : "",
+      synthesis: typeof theme.synthesis === "string" ? theme.synthesis : "",
+      sourceUrls: Array.isArray(theme.sourceUrls) ? theme.sourceUrls.filter((u4) => typeof u4 === "string") : []
+    })).slice(0, 10) : [];
+    const gaps = Array.isArray(parsed.gapsAndContradictions) ? parsed.gapsAndContradictions.filter(
+      (g2) => typeof g2 === "string"
+    ) : [];
+    return {
+      topic: parsed.topic,
+      generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : (/* @__PURE__ */ new Date()).toISOString(),
+      scopeLabel: typeof parsed.scopeLabel === "string" ? parsed.scopeLabel : "",
+      executiveSummary: typeof parsed.executiveSummary === "string" ? parsed.executiveSummary : "",
+      outline,
+      themes,
+      sources,
+      gapsAndContradictions: gaps
+    };
+  }
+  var DEFAULT_MAX_TABS, HARD_MAX_TABS, MAX_QUOTE_CHARS;
+  var init_researchBriefFormat = __esm({
+    "src/services/researchBriefFormat.ts"() {
+      "use strict";
+      init_messageUtils();
+      DEFAULT_MAX_TABS = 10;
+      HARD_MAX_TABS = 15;
+      MAX_QUOTE_CHARS = 500;
+    }
+  });
+
+  // src/utils/researchBriefUrlDedupe.ts
+  function normalizeBriefUrl(url) {
+    const raw = String(url || "").trim();
+    if (!raw) {
+      return "";
+    }
+    try {
+      const parsed = new URL(raw);
+      parsed.hash = "";
+      const dropParams = [/^utm/i, /^fbclid$/i, /^gclid$/i, /^mc_eid$/i, /^ref$/i];
+      const kept = [];
+      parsed.searchParams.forEach((_2, key) => {
+        if (!dropParams.some((re2) => re2.test(key))) {
+          kept.push(key);
+        }
+      });
+      const next = new URL(parsed.origin + parsed.pathname);
+      for (const key of kept) {
+        const values = parsed.searchParams.getAll(key);
+        for (const value of values) {
+          next.searchParams.append(key, value);
+        }
+      }
+      return next.href.toLowerCase();
+    } catch {
+      return raw.split("#")[0].toLowerCase();
+    }
+  }
+  function dedupeTabsByUrl(items) {
+    const seen = /* @__PURE__ */ new Set();
+    const kept = [];
+    let dedupedCount = 0;
+    for (const item of items) {
+      const key = normalizeBriefUrl(item.url);
+      if (key && seen.has(key)) {
+        dedupedCount += 1;
+        continue;
+      }
+      if (key) {
+        seen.add(key);
+      }
+      kept.push(item);
+    }
+    return { items: kept, dedupedCount };
+  }
+  var init_researchBriefUrlDedupe = __esm({
+    "src/utils/researchBriefUrlDedupe.ts"() {
+      "use strict";
+    }
+  });
+
+  // src/services/researchBriefResolve.ts
+  function finalizeResolvedTabList(params) {
+    const { tabs: afterExclude, excludedCount } = filterExcludedTabs(
+      params.tabDescriptors,
+      params.exclusions
+    );
+    if (afterExclude.length === 0) {
+      return {
+        ok: false,
+        message: "No tabs left after exclusions. Adjust which tabs to skip, or say list tabs in tab group [name] to see positions."
+      };
+    }
+    const { items: deduped, dedupedCount } = dedupeTabsByUrl(afterExclude);
+    const limit = clampMaxTabs(params.maxTabs);
+    const capped = deduped.slice(0, limit);
+    const tabsOmittedByLimit = Math.max(0, deduped.length - capped.length);
+    let scopeLabel = buildScopeLabelWithExclusions(
+      params.baseLabel,
+      capped.length,
+      excludedCount
+    );
+    if (dedupedCount > 0) {
+      scopeLabel += ` (${dedupedCount} duplicate URL${dedupedCount === 1 ? "" : "s"} skipped)`;
+    }
+    return {
+      ok: true,
+      tabs: capped.map((item) => item.tab),
+      scopeLabel,
+      tabsOmittedByLimit,
+      totalBeforeCap: deduped.length,
+      urlsDeduplicated: dedupedCount,
+      usedFuzzyGroupMatch: params.usedFuzzyGroupMatch === true,
+      tabQueriesCount: params.tabQueriesCount ?? 0
+    };
+  }
+  var init_researchBriefResolve = __esm({
+    "src/services/researchBriefResolve.ts"() {
+      "use strict";
+      init_researchBriefFormat();
+      init_researchBriefScope();
+      init_researchBriefUrlDedupe();
+    }
+  });
+
+  // src/services/researchBriefTabResolve.ts
+  function tabKey(tab) {
+    const id = tab.linkedBrowser?.permanentKey;
+    if (id != null) {
+      return String(id);
+    }
+    return `${tabTitle(tab)}|${tab.linkedBrowser?.currentURI?.spec || ""}`;
+  }
+  function parseTabQueryList(raw) {
+    return String(raw || "").split(/\s*,\s*|\s+and\s+/i).map(
+      (part) => part.trim().replace(/^["']|["']$/g, "").trim()
+    ).filter((part) => part.length >= MIN_TAB_QUERY_LEN);
+  }
+  function parseTabIndicesFromClause(raw) {
+    const indices = [...String(raw || "").matchAll(/\d+/g)].map((match) => parseInt(match[0], 10)).filter((n2) => Number.isFinite(n2) && n2 >= 1);
+    return [...new Set(indices)];
+  }
+  function isIndicesOnlyClause(raw) {
+    return /^[\d,\sand]+$/i.test(String(raw || "").trim());
+  }
+  function buildTabsBaseLabel(tabQueries, tabIndices, matchedCount, totalBeforeCap) {
+    const parts = [];
+    if (tabQueries.length > 0) {
+      const shown = tabQueries.slice(0, 4).map((q3) => `"${q3}"`).join(", ");
+      parts.push(
+        tabQueries.length > 4 ? `${shown}, \u2026` : shown
+      );
+    }
+    if (tabIndices.length > 0) {
+      parts.push(`indices ${tabIndices.join(", ")}`);
+    }
+    let label = `Tabs: ${parts.join("; ") || "selected"}`;
+    if (totalBeforeCap > matchedCount) {
+      label += ` (${matchedCount} of ${totalBeforeCap} matched)`;
+    }
+    return label;
+  }
+  function resolveTabsScope(gBrowser, tabQueries, tabIndices, maxTabs, exclusions = {}) {
+    if (!gBrowser) {
+      return { ok: false, message: "Browser UI is not available." };
+    }
+    const queries = tabQueries.map((q3) => String(q3 || "").trim()).filter((q3) => q3.length >= MIN_TAB_QUERY_LEN);
+    const indices = tabIndices.filter((n2) => Number.isFinite(n2) && n2 >= 1);
+    if (queries.length === 0 && indices.length === 0) {
+      return {
+        ok: false,
+        message: "Which tabs should I use? Name them by title, URL keyword, or position (e.g. from tabs ESPN, 2 and 3)."
+      };
+    }
+    const seen = /* @__PURE__ */ new Set();
+    const ordered = [];
+    for (const index2 of indices) {
+      const tab = findTabByIndex(gBrowser, index2);
+      if (!tab) {
+        continue;
+      }
+      const key = tabKey(tab);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      ordered.push(tab);
+    }
+    for (const query of queries) {
+      for (const tab of findTabsByQuery2(gBrowser, query)) {
+        const key = tabKey(tab);
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        ordered.push(tab);
+      }
+    }
+    if (ordered.length === 0) {
+      return {
+        ok: false,
+        message: "I couldn't find open tabs matching that description. Say list tabs to see open tabs, or try a shorter title or URL keyword."
+      };
+    }
+    const tabDescriptors = ordered.map((tab) => ({
+      tab,
+      title: tabTitle(tab),
+      url: tab.linkedBrowser?.currentURI?.spec || ""
+    }));
+    const { tabs: afterExclude, excludedCount } = filterExcludedTabs(
+      tabDescriptors,
+      exclusions
+    );
+    if (afterExclude.length === 0) {
+      return {
+        ok: false,
+        message: "No tabs left after exclusions. Adjust which tabs to skip or try different tab names."
+      };
+    }
+    const baseLabel = buildTabsBaseLabel(
+      queries,
+      indices,
+      afterExclude.length,
+      afterExclude.length
+    );
+    return finalizeResolvedTabList({
+      tabDescriptors: afterExclude,
+      exclusions: {},
+      maxTabs,
+      baseLabel,
+      tabQueriesCount: queries.length,
+      usedFuzzyGroupMatch: false
+    });
+  }
+  var MIN_TAB_QUERY_LEN;
+  var init_researchBriefTabResolve = __esm({
+    "src/services/researchBriefTabResolve.ts"() {
+      "use strict";
+      init_firefoxFacade();
+      init_researchBriefScope();
+      init_researchBriefResolve();
+      MIN_TAB_QUERY_LEN = 3;
+    }
+  });
+
+  // src/services/pageContentExtract.ts
+  function isNonWebUrl(url) {
+    const spec = String(url || "").trim();
+    return spec.startsWith("about:") || spec.startsWith("chrome://") || spec.startsWith("moz-extension://");
+  }
+  function normalizeExtractedContent(content) {
+    return content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
+  }
+  async function extractPageContentFromTab(tab) {
+    const title = tabTitle(tab);
+    const url = tabUrl(tab);
+    if (!tab?.linkedBrowser) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "failed",
+        failureReason: "No active tab browser."
+      };
+    }
+    if (isNonWebUrl(url)) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "skipped",
+        failureReason: "Internal browser page."
+      };
+    }
+    const browser = tab.linkedBrowser;
+    const currentWindowContext = browser.browsingContext?.currentWindowContext;
+    if (!currentWindowContext) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "failed",
+        failureReason: "Page may still be loading or is not accessible."
+      };
+    }
+    const pageExtractor = currentWindowContext.getActor("PageExtractor");
+    if (!pageExtractor) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "failed",
+        failureReason: "Page content extractor is not available."
+      };
+    }
+    try {
+      let content = "";
+      try {
+        content = await pageExtractor.getReaderModeContent?.() || "";
+      } catch (e2) {
+        assistantLogger.warn(
+          "pageContentExtract",
+          "Reader mode extraction failed, trying full text",
+          e2
+        );
+      }
+      if (!content || content.length < MIN_CONTENT_CHARS) {
+        try {
+          const result = await pageExtractor.getText?.();
+          content = typeof result === "string" ? result : result?.text || "";
+        } catch (e2) {
+          assistantLogger.warn(
+            "pageContentExtract",
+            "Full text extraction failed",
+            e2
+          );
+        }
+      }
+      content = normalizeExtractedContent(content);
+      if (!content || content.length < MIN_CONTENT_CHARS) {
+        return {
+          title,
+          url,
+          content: "",
+          status: "failed",
+          failureReason: "Not enough readable content on this page."
+        };
+      }
+      if (content.length > MAX_CONTENT_CHARS_PER_TAB) {
+        content = content.substring(0, MAX_CONTENT_CHARS_PER_TAB) + "...";
+      }
+      return { title, url, content, status: "ok" };
+    } catch (e2) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "failed",
+        failureReason: String(e2)
+      };
+    }
+  }
+  var MAX_CONTENT_CHARS_PER_TAB, MIN_CONTENT_CHARS;
+  var init_pageContentExtract = __esm({
+    "src/services/pageContentExtract.ts"() {
+      "use strict";
+      init_assistantLogger();
+      init_firefoxFacade();
+      MAX_CONTENT_CHARS_PER_TAB = 12e3;
+      MIN_CONTENT_CHARS = 50;
+    }
+  });
+
   // node_modules/@aws-crypto/sha256-js/build/module/constants.js
   var BLOCK_SIZE, DIGEST_LENGTH, KEY, INIT, MAX_HASHABLE_LENGTH;
   var init_constants = __esm({
@@ -16971,6 +22749,24 @@ ${suffix}`;
     }
   });
 
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/CognitoProviderParameters.js
+  var init_CognitoProviderParameters = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/CognitoProviderParameters.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/Logins.js
+  var init_Logins = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/Logins.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/Storage.js
+  var init_Storage = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/Storage.js"() {
+    }
+  });
+
   // node_modules/@smithy/property-provider/dist-es/ProviderError.js
   var ProviderError;
   var init_ProviderError = __esm({
@@ -17093,6 +22889,26 @@ ${suffix}`;
       init_chain();
       init_fromStatic();
       init_memoize();
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/resolveLogins.js
+  function resolveLogins(logins) {
+    return Promise.all(Object.keys(logins).reduce((arr2, name) => {
+      const tokenOrProvider = logins[name];
+      if (typeof tokenOrProvider === "string") {
+        arr2.push([name, tokenOrProvider]);
+      } else {
+        arr2.push(tokenOrProvider().then((token) => [name, token]));
+      }
+      return arr2;
+    }, [])).then((resolvedPairs) => resolvedPairs.reduce((logins2, [key, value]) => {
+      logins2[key] = value;
+      return logins2;
+    }, {}));
+  }
+  var init_resolveLogins = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/resolveLogins.js"() {
     }
   });
 
@@ -22627,13 +28443,13 @@ ${toHex(hashedRequest)}`;
   });
 
   // node_modules/@smithy/smithy-client/dist-es/command.js
-  var Command2, ClassBuilder;
+  var Command, ClassBuilder;
   var init_command2 = __esm({
     "node_modules/@smithy/smithy-client/dist-es/command.js"() {
       init_dist_es26();
       init_dist_es3();
       init_schemaLogFilter();
-      Command2 = class {
+      Command = class {
         middlewareStack = constructStack();
         schema;
         static classBuilder() {
@@ -22724,7 +28540,7 @@ ${toHex(hashedRequest)}`;
         build() {
           const closure = this;
           let CommandRef;
-          return CommandRef = class extends Command2 {
+          return CommandRef = class extends Command {
             input;
             static getEndpointParameterInstructions() {
               return closure._ep;
@@ -26869,7 +32685,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      CreateIdentityPoolCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      CreateIdentityPoolCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26888,7 +32704,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      DeleteIdentitiesCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      DeleteIdentitiesCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26907,7 +32723,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      DeleteIdentityPoolCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      DeleteIdentityPoolCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26926,7 +32742,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      DescribeIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      DescribeIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26945,7 +32761,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      DescribeIdentityPoolCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      DescribeIdentityPoolCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26965,7 +32781,7 @@ ${toHex(hashedRequest)}`;
       init_EndpointParameters();
       init_models_0();
       init_Aws_json1_1();
-      GetCredentialsForIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetCredentialsForIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -26985,7 +32801,7 @@ ${toHex(hashedRequest)}`;
       init_EndpointParameters();
       init_models_0();
       init_Aws_json1_1();
-      GetIdCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetIdCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27004,7 +32820,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      GetIdentityPoolRolesCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetIdentityPoolRolesCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27024,7 +32840,7 @@ ${toHex(hashedRequest)}`;
       init_EndpointParameters();
       init_models_0();
       init_Aws_json1_1();
-      GetOpenIdTokenCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetOpenIdTokenCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27044,7 +32860,7 @@ ${toHex(hashedRequest)}`;
       init_EndpointParameters();
       init_models_0();
       init_Aws_json1_1();
-      GetOpenIdTokenForDeveloperIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetOpenIdTokenForDeveloperIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27063,7 +32879,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      GetPrincipalTagAttributeMapCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      GetPrincipalTagAttributeMapCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27082,7 +32898,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      ListIdentitiesCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      ListIdentitiesCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27101,7 +32917,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      ListIdentityPoolsCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      ListIdentityPoolsCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27120,7 +32936,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      ListTagsForResourceCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      ListTagsForResourceCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27139,7 +32955,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      LookupDeveloperIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      LookupDeveloperIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27158,7 +32974,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      MergeDeveloperIdentitiesCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      MergeDeveloperIdentitiesCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27177,7 +32993,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      SetIdentityPoolRolesCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      SetIdentityPoolRolesCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27196,7 +33012,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      SetPrincipalTagAttributeMapCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      SetPrincipalTagAttributeMapCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27215,7 +33031,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      TagResourceCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      TagResourceCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27234,7 +33050,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      UnlinkDeveloperIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      UnlinkDeveloperIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27254,7 +33070,7 @@ ${toHex(hashedRequest)}`;
       init_EndpointParameters();
       init_models_0();
       init_Aws_json1_1();
-      UnlinkIdentityCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      UnlinkIdentityCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27273,7 +33089,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      UntagResourceCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      UntagResourceCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27292,7 +33108,7 @@ ${toHex(hashedRequest)}`;
       init_dist_es27();
       init_EndpointParameters();
       init_Aws_json1_1();
-      UpdateIdentityPoolCommand = class extends Command2.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
+      UpdateIdentityPoolCommand = class extends Command.classBuilder().ep(commonParams).m(function(Command3, cs, config, o2) {
         return [
           getSerdePlugin(config, this.serialize, this.deserialize),
           getEndpointPlugin(config, Command3.getEndpointParameterInstructions())
@@ -27444,6 +33260,328 @@ ${toHex(hashedRequest)}`;
   var init_loadCognitoIdentity = __esm({
     "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/loadCognitoIdentity.js"() {
       init_dist_es41();
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentity.js
+  function fromCognitoIdentity(parameters) {
+    return async (awsIdentityProperties) => {
+      parameters.logger?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
+      const { GetCredentialsForIdentityCommand: GetCredentialsForIdentityCommand2, CognitoIdentityClient: CognitoIdentityClient2 } = await Promise.resolve().then(() => (init_loadCognitoIdentity(), loadCognitoIdentity_exports));
+      const fromConfigs = (property) => parameters.clientConfig?.[property] ?? parameters.parentClientConfig?.[property] ?? awsIdentityProperties?.callerClientConfig?.[property];
+      const { Credentials: { AccessKeyId = throwOnMissingAccessKeyId(parameters.logger), Expiration, SecretKey = throwOnMissingSecretKey(parameters.logger), SessionToken } = throwOnMissingCredentials(parameters.logger) } = await (parameters.client ?? new CognitoIdentityClient2(Object.assign({}, parameters.clientConfig ?? {}, {
+        region: fromConfigs("region"),
+        profile: fromConfigs("profile")
+      }))).send(new GetCredentialsForIdentityCommand2({
+        CustomRoleArn: parameters.customRoleArn,
+        IdentityId: parameters.identityId,
+        Logins: parameters.logins ? await resolveLogins(parameters.logins) : void 0
+      }));
+      return {
+        identityId: parameters.identityId,
+        accessKeyId: AccessKeyId,
+        secretAccessKey: SecretKey,
+        sessionToken: SessionToken,
+        expiration: Expiration
+      };
+    };
+  }
+  function throwOnMissingAccessKeyId(logger2) {
+    throw new CredentialsProviderError("Response from Amazon Cognito contained no access key ID", { logger: logger2 });
+  }
+  function throwOnMissingCredentials(logger2) {
+    throw new CredentialsProviderError("Response from Amazon Cognito contained no credentials", { logger: logger2 });
+  }
+  function throwOnMissingSecretKey(logger2) {
+    throw new CredentialsProviderError("Response from Amazon Cognito contained no secret key", { logger: logger2 });
+  }
+  var init_fromCognitoIdentity = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentity.js"() {
+      init_dist_es2();
+      init_resolveLogins();
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/IndexedDbStorage.js
+  var STORE_NAME, IndexedDbStorage;
+  var init_IndexedDbStorage = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/IndexedDbStorage.js"() {
+      STORE_NAME = "IdentityIds";
+      IndexedDbStorage = class {
+        dbName;
+        constructor(dbName = "aws:cognito-identity-ids") {
+          this.dbName = dbName;
+        }
+        getItem(key) {
+          return this.withObjectStore("readonly", (store2) => {
+            const req = store2.get(key);
+            return new Promise((resolve) => {
+              req.onerror = () => resolve(null);
+              req.onsuccess = () => resolve(req.result ? req.result.value : null);
+            });
+          }).catch(() => null);
+        }
+        removeItem(key) {
+          return this.withObjectStore("readwrite", (store2) => {
+            const req = store2.delete(key);
+            return new Promise((resolve, reject) => {
+              req.onerror = () => reject(req.error);
+              req.onsuccess = () => resolve();
+            });
+          });
+        }
+        setItem(id, value) {
+          return this.withObjectStore("readwrite", (store2) => {
+            const req = store2.put({ id, value });
+            return new Promise((resolve, reject) => {
+              req.onerror = () => reject(req.error);
+              req.onsuccess = () => resolve();
+            });
+          });
+        }
+        getDb() {
+          const openDbRequest = self.indexedDB.open(this.dbName, 1);
+          return new Promise((resolve, reject) => {
+            openDbRequest.onsuccess = () => {
+              resolve(openDbRequest.result);
+            };
+            openDbRequest.onerror = () => {
+              reject(openDbRequest.error);
+            };
+            openDbRequest.onblocked = () => {
+              reject(new Error("Unable to access DB"));
+            };
+            openDbRequest.onupgradeneeded = () => {
+              const db = openDbRequest.result;
+              db.onerror = () => {
+                reject(new Error("Failed to create object store"));
+              };
+              db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            };
+          });
+        }
+        withObjectStore(mode, action) {
+          return this.getDb().then((db) => {
+            const tx = db.transaction(STORE_NAME, mode);
+            tx.oncomplete = () => db.close();
+            return new Promise((resolve, reject) => {
+              tx.onerror = () => reject(tx.error);
+              resolve(action(tx.objectStore(STORE_NAME)));
+            }).catch((err) => {
+              db.close();
+              throw err;
+            });
+          });
+        }
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/InMemoryStorage.js
+  var InMemoryStorage;
+  var init_InMemoryStorage = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/InMemoryStorage.js"() {
+      InMemoryStorage = class {
+        store;
+        constructor(store2 = {}) {
+          this.store = store2;
+        }
+        getItem(key) {
+          if (key in this.store) {
+            return this.store[key];
+          }
+          return null;
+        }
+        removeItem(key) {
+          delete this.store[key];
+        }
+        setItem(key, value) {
+          this.store[key] = value;
+        }
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/localStorage.js
+  function localStorage2() {
+    if (typeof self === "object" && self.indexedDB) {
+      return new IndexedDbStorage();
+    }
+    if (typeof window === "object" && window.localStorage) {
+      return window.localStorage;
+    }
+    return inMemoryStorage;
+  }
+  var inMemoryStorage;
+  var init_localStorage = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/localStorage.js"() {
+      init_IndexedDbStorage();
+      init_InMemoryStorage();
+      inMemoryStorage = new InMemoryStorage();
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js
+  function fromCognitoIdentityPool({ accountId, cache: cache3 = localStorage2(), client: client2, clientConfig, customRoleArn, identityPoolId: identityPoolId2, logins, userIdentifier = !logins || Object.keys(logins).length === 0 ? "ANONYMOUS" : void 0, logger: logger2, parentClientConfig }) {
+    logger2?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
+    const cacheKey = userIdentifier ? `aws:cognito-identity-credentials:${identityPoolId2}:${userIdentifier}` : void 0;
+    let provider = async (awsIdentityProperties) => {
+      const { GetIdCommand: GetIdCommand2, CognitoIdentityClient: CognitoIdentityClient2 } = await Promise.resolve().then(() => (init_loadCognitoIdentity(), loadCognitoIdentity_exports));
+      const fromConfigs = (property) => clientConfig?.[property] ?? parentClientConfig?.[property] ?? awsIdentityProperties?.callerClientConfig?.[property];
+      const _client = client2 ?? new CognitoIdentityClient2(Object.assign({}, clientConfig ?? {}, {
+        region: fromConfigs("region"),
+        profile: fromConfigs("profile")
+      }));
+      let identityId = cacheKey && await cache3.getItem(cacheKey);
+      if (!identityId) {
+        const { IdentityId = throwOnMissingId(logger2) } = await _client.send(new GetIdCommand2({
+          AccountId: accountId,
+          IdentityPoolId: identityPoolId2,
+          Logins: logins ? await resolveLogins(logins) : void 0
+        }));
+        identityId = IdentityId;
+        if (cacheKey) {
+          Promise.resolve(cache3.setItem(cacheKey, identityId)).catch(() => {
+          });
+        }
+      }
+      provider = fromCognitoIdentity({
+        client: _client,
+        customRoleArn,
+        logins,
+        identityId
+      });
+      return provider(awsIdentityProperties);
+    };
+    return (awsIdentityProperties) => provider(awsIdentityProperties).catch(async (err) => {
+      if (cacheKey) {
+        Promise.resolve(cache3.removeItem(cacheKey)).catch(() => {
+        });
+      }
+      throw err;
+    });
+  }
+  function throwOnMissingId(logger2) {
+    throw new CredentialsProviderError("Response from Amazon Cognito contained no identity ID", { logger: logger2 });
+  }
+  var init_fromCognitoIdentityPool = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js"() {
+      init_dist_es2();
+      init_fromCognitoIdentity();
+      init_localStorage();
+      init_resolveLogins();
+    }
+  });
+
+  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/index.js
+  var init_dist_es42 = __esm({
+    "node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/index.js"() {
+      init_CognitoProviderParameters();
+      init_Logins();
+      init_Storage();
+      init_fromCognitoIdentity();
+      init_fromCognitoIdentityPool();
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/FieldPosition.js
+  var FieldPosition2;
+  var init_FieldPosition = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/FieldPosition.js"() {
+      (function(FieldPosition3) {
+        FieldPosition3[FieldPosition3["HEADER"] = 0] = "HEADER";
+        FieldPosition3[FieldPosition3["TRAILER"] = 1] = "TRAILER";
+      })(FieldPosition2 || (FieldPosition2 = {}));
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/Field.js
+  var init_Field2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/Field.js"() {
+      init_FieldPosition();
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/Fields.js
+  var init_Fields2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/Fields.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/httpHandler.js
+  var init_httpHandler2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/httpHandler.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/httpRequest.js
+  function cloneQuery2(query) {
+    return Object.keys(query).reduce((carry, paramName) => {
+      const param = query[paramName];
+      return {
+        ...carry,
+        [paramName]: Array.isArray(param) ? [...param] : param
+      };
+    }, {});
+  }
+  var HttpRequest2;
+  var init_httpRequest2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/httpRequest.js"() {
+      HttpRequest2 = class _HttpRequest {
+        constructor(options) {
+          this.method = options.method || "GET";
+          this.hostname = options.hostname || "localhost";
+          this.port = options.port;
+          this.query = options.query || {};
+          this.headers = options.headers || {};
+          this.body = options.body;
+          this.protocol = options.protocol ? options.protocol.slice(-1) !== ":" ? `${options.protocol}:` : options.protocol : "https:";
+          this.path = options.path ? options.path.charAt(0) !== "/" ? `/${options.path}` : options.path : "/";
+          this.username = options.username;
+          this.password = options.password;
+          this.fragment = options.fragment;
+        }
+        static isInstance(request) {
+          if (!request)
+            return false;
+          const req = request;
+          return "method" in req && "protocol" in req && "hostname" in req && "path" in req && typeof req["query"] === "object" && typeof req["headers"] === "object";
+        }
+        clone() {
+          const cloned = new _HttpRequest({
+            ...this,
+            headers: { ...this.headers }
+          });
+          if (cloned.query)
+            cloned.query = cloneQuery2(cloned.query);
+          return cloned;
+        }
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/httpResponse.js
+  var init_httpResponse2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/httpResponse.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/isValidHostname.js
+  var init_isValidHostname2 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/isValidHostname.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/protocol-http/dist-es/index.js
+  var init_dist_es43 = __esm({
+    "node_modules/@aws-sdk/protocol-http/dist-es/index.js"() {
+      init_Field2();
+      init_FieldPosition();
+      init_Fields2();
+      init_httpHandler2();
+      init_httpRequest2();
+      init_httpResponse2();
+      init_isValidHostname2();
     }
   });
 
@@ -28302,6 +34440,2126 @@ ${toHex(hashedRequest)}`;
       Object.defineProperty(exports, "AwsCrc32", { enumerable: true, get: function() {
         return aws_crc32_1.AwsCrc32;
       } });
+    }
+  });
+
+  // node_modules/@aws-sdk/util-hex-encoding/dist-es/index.js
+  function fromHex2(encoded) {
+    if (encoded.length % 2 !== 0) {
+      throw new Error("Hex encoded strings must have an even number length");
+    }
+    const out = new Uint8Array(encoded.length / 2);
+    for (let i2 = 0; i2 < encoded.length; i2 += 2) {
+      const encodedByte = encoded.slice(i2, i2 + 2).toLowerCase();
+      if (encodedByte in HEX_TO_SHORT2) {
+        out[i2 / 2] = HEX_TO_SHORT2[encodedByte];
+      } else {
+        throw new Error(`Cannot decode unrecognized sequence ${encodedByte} as hexadecimal`);
+      }
+    }
+    return out;
+  }
+  function toHex2(bytes) {
+    let out = "";
+    for (let i2 = 0; i2 < bytes.byteLength; i2++) {
+      out += SHORT_TO_HEX2[bytes[i2]];
+    }
+    return out;
+  }
+  var SHORT_TO_HEX2, HEX_TO_SHORT2;
+  var init_dist_es44 = __esm({
+    "node_modules/@aws-sdk/util-hex-encoding/dist-es/index.js"() {
+      SHORT_TO_HEX2 = {};
+      HEX_TO_SHORT2 = {};
+      for (let i2 = 0; i2 < 256; i2++) {
+        let encodedByte = i2.toString(16).toLowerCase();
+        if (encodedByte.length === 1) {
+          encodedByte = `0${encodedByte}`;
+        }
+        SHORT_TO_HEX2[i2] = encodedByte;
+        HEX_TO_SHORT2[encodedByte] = i2;
+      }
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/Int64.js
+  function negate2(bytes) {
+    for (let i2 = 0; i2 < 8; i2++) {
+      bytes[i2] ^= 255;
+    }
+    for (let i2 = 7; i2 > -1; i2--) {
+      bytes[i2]++;
+      if (bytes[i2] !== 0)
+        break;
+    }
+  }
+  var Int642;
+  var init_Int64 = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/Int64.js"() {
+      init_dist_es44();
+      Int642 = class _Int64 {
+        constructor(bytes) {
+          this.bytes = bytes;
+          if (bytes.byteLength !== 8) {
+            throw new Error("Int64 buffers must be exactly 8 bytes");
+          }
+        }
+        static fromNumber(number) {
+          if (number > 9223372036854776e3 || number < -9223372036854776e3) {
+            throw new Error(`${number} is too large (or, if negative, too small) to represent as an Int64`);
+          }
+          const bytes = new Uint8Array(8);
+          for (let i2 = 7, remaining = Math.abs(Math.round(number)); i2 > -1 && remaining > 0; i2--, remaining /= 256) {
+            bytes[i2] = remaining;
+          }
+          if (number < 0) {
+            negate2(bytes);
+          }
+          return new _Int64(bytes);
+        }
+        valueOf() {
+          const bytes = this.bytes.slice(0);
+          const negative = bytes[0] & 128;
+          if (negative) {
+            negate2(bytes);
+          }
+          return parseInt(toHex2(bytes), 16) * (negative ? -1 : 1);
+        }
+        toString() {
+          return String(this.valueOf());
+        }
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/HeaderMarshaller.js
+  var HeaderMarshaller, HEADER_VALUE_TYPE2, BOOLEAN_TAG, BYTE_TAG, SHORT_TAG, INT_TAG, LONG_TAG, BINARY_TAG, STRING_TAG, TIMESTAMP_TAG, UUID_TAG, UUID_PATTERN2;
+  var init_HeaderMarshaller = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/HeaderMarshaller.js"() {
+      init_dist_es44();
+      init_Int64();
+      HeaderMarshaller = class {
+        constructor(toUtf83, fromUtf85) {
+          this.toUtf8 = toUtf83;
+          this.fromUtf8 = fromUtf85;
+        }
+        format(headers) {
+          const chunks = [];
+          for (const headerName of Object.keys(headers)) {
+            const bytes = this.fromUtf8(headerName);
+            chunks.push(Uint8Array.from([bytes.byteLength]), bytes, this.formatHeaderValue(headers[headerName]));
+          }
+          const out = new Uint8Array(chunks.reduce((carry, bytes) => carry + bytes.byteLength, 0));
+          let position = 0;
+          for (const chunk of chunks) {
+            out.set(chunk, position);
+            position += chunk.byteLength;
+          }
+          return out;
+        }
+        formatHeaderValue(header) {
+          switch (header.type) {
+            case "boolean":
+              return Uint8Array.from([header.value ? 0 : 1]);
+            case "byte":
+              return Uint8Array.from([2, header.value]);
+            case "short":
+              const shortView = new DataView(new ArrayBuffer(3));
+              shortView.setUint8(0, 3);
+              shortView.setInt16(1, header.value, false);
+              return new Uint8Array(shortView.buffer);
+            case "integer":
+              const intView = new DataView(new ArrayBuffer(5));
+              intView.setUint8(0, 4);
+              intView.setInt32(1, header.value, false);
+              return new Uint8Array(intView.buffer);
+            case "long":
+              const longBytes = new Uint8Array(9);
+              longBytes[0] = 5;
+              longBytes.set(header.value.bytes, 1);
+              return longBytes;
+            case "binary":
+              const binView = new DataView(new ArrayBuffer(3 + header.value.byteLength));
+              binView.setUint8(0, 6);
+              binView.setUint16(1, header.value.byteLength, false);
+              const binBytes = new Uint8Array(binView.buffer);
+              binBytes.set(header.value, 3);
+              return binBytes;
+            case "string":
+              const utf8Bytes = this.fromUtf8(header.value);
+              const strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
+              strView.setUint8(0, 7);
+              strView.setUint16(1, utf8Bytes.byteLength, false);
+              const strBytes = new Uint8Array(strView.buffer);
+              strBytes.set(utf8Bytes, 3);
+              return strBytes;
+            case "timestamp":
+              const tsBytes = new Uint8Array(9);
+              tsBytes[0] = 8;
+              tsBytes.set(Int642.fromNumber(header.value.valueOf()).bytes, 1);
+              return tsBytes;
+            case "uuid":
+              if (!UUID_PATTERN2.test(header.value)) {
+                throw new Error(`Invalid UUID received: ${header.value}`);
+              }
+              const uuidBytes = new Uint8Array(17);
+              uuidBytes[0] = 9;
+              uuidBytes.set(fromHex2(header.value.replace(/\-/g, "")), 1);
+              return uuidBytes;
+          }
+        }
+        parse(headers) {
+          const out = {};
+          let position = 0;
+          while (position < headers.byteLength) {
+            const nameLength = headers.getUint8(position++);
+            const name = this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, nameLength));
+            position += nameLength;
+            switch (headers.getUint8(position++)) {
+              case 0:
+                out[name] = {
+                  type: BOOLEAN_TAG,
+                  value: true
+                };
+                break;
+              case 1:
+                out[name] = {
+                  type: BOOLEAN_TAG,
+                  value: false
+                };
+                break;
+              case 2:
+                out[name] = {
+                  type: BYTE_TAG,
+                  value: headers.getInt8(position++)
+                };
+                break;
+              case 3:
+                out[name] = {
+                  type: SHORT_TAG,
+                  value: headers.getInt16(position, false)
+                };
+                position += 2;
+                break;
+              case 4:
+                out[name] = {
+                  type: INT_TAG,
+                  value: headers.getInt32(position, false)
+                };
+                position += 4;
+                break;
+              case 5:
+                out[name] = {
+                  type: LONG_TAG,
+                  value: new Int642(new Uint8Array(headers.buffer, headers.byteOffset + position, 8))
+                };
+                position += 8;
+                break;
+              case 6:
+                const binaryLength = headers.getUint16(position, false);
+                position += 2;
+                out[name] = {
+                  type: BINARY_TAG,
+                  value: new Uint8Array(headers.buffer, headers.byteOffset + position, binaryLength)
+                };
+                position += binaryLength;
+                break;
+              case 7:
+                const stringLength = headers.getUint16(position, false);
+                position += 2;
+                out[name] = {
+                  type: STRING_TAG,
+                  value: this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, stringLength))
+                };
+                position += stringLength;
+                break;
+              case 8:
+                out[name] = {
+                  type: TIMESTAMP_TAG,
+                  value: new Date(new Int642(new Uint8Array(headers.buffer, headers.byteOffset + position, 8)).valueOf())
+                };
+                position += 8;
+                break;
+              case 9:
+                const uuidBytes = new Uint8Array(headers.buffer, headers.byteOffset + position, 16);
+                position += 16;
+                out[name] = {
+                  type: UUID_TAG,
+                  value: `${toHex2(uuidBytes.subarray(0, 4))}-${toHex2(uuidBytes.subarray(4, 6))}-${toHex2(uuidBytes.subarray(6, 8))}-${toHex2(uuidBytes.subarray(8, 10))}-${toHex2(uuidBytes.subarray(10))}`
+                };
+                break;
+              default:
+                throw new Error(`Unrecognized header type tag`);
+            }
+          }
+          return out;
+        }
+      };
+      (function(HEADER_VALUE_TYPE3) {
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["boolTrue"] = 0] = "boolTrue";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["boolFalse"] = 1] = "boolFalse";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["byte"] = 2] = "byte";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["short"] = 3] = "short";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["integer"] = 4] = "integer";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["long"] = 5] = "long";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["byteArray"] = 6] = "byteArray";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["string"] = 7] = "string";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["timestamp"] = 8] = "timestamp";
+        HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["uuid"] = 9] = "uuid";
+      })(HEADER_VALUE_TYPE2 || (HEADER_VALUE_TYPE2 = {}));
+      BOOLEAN_TAG = "boolean";
+      BYTE_TAG = "byte";
+      SHORT_TAG = "short";
+      INT_TAG = "integer";
+      LONG_TAG = "long";
+      BINARY_TAG = "binary";
+      STRING_TAG = "string";
+      TIMESTAMP_TAG = "timestamp";
+      UUID_TAG = "uuid";
+      UUID_PATTERN2 = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/splitMessage.js
+  var import_crc32, PRELUDE_MEMBER_LENGTH, PRELUDE_LENGTH, CHECKSUM_LENGTH, MINIMUM_MESSAGE_LENGTH;
+  var init_splitMessage = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/splitMessage.js"() {
+      import_crc32 = __toESM(require_build2());
+      PRELUDE_MEMBER_LENGTH = 4;
+      PRELUDE_LENGTH = PRELUDE_MEMBER_LENGTH * 2;
+      CHECKSUM_LENGTH = 4;
+      MINIMUM_MESSAGE_LENGTH = PRELUDE_LENGTH + CHECKSUM_LENGTH * 2;
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/EventStreamCodec.js
+  var import_crc322;
+  var init_EventStreamCodec = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/EventStreamCodec.js"() {
+      import_crc322 = __toESM(require_build2());
+      init_HeaderMarshaller();
+      init_splitMessage();
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/Message.js
+  var init_Message = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/Message.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/MessageDecoderStream.js
+  var init_MessageDecoderStream = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/MessageDecoderStream.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/MessageEncoderStream.js
+  var init_MessageEncoderStream = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/MessageEncoderStream.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/SmithyMessageDecoderStream.js
+  var init_SmithyMessageDecoderStream = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/SmithyMessageDecoderStream.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/SmithyMessageEncoderStream.js
+  var init_SmithyMessageEncoderStream = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/SmithyMessageEncoderStream.js"() {
+    }
+  });
+
+  // node_modules/@aws-sdk/eventstream-codec/dist-es/index.js
+  var init_dist_es45 = __esm({
+    "node_modules/@aws-sdk/eventstream-codec/dist-es/index.js"() {
+      init_EventStreamCodec();
+      init_HeaderMarshaller();
+      init_Int64();
+      init_Message();
+      init_MessageDecoderStream();
+      init_MessageEncoderStream();
+      init_SmithyMessageDecoderStream();
+      init_SmithyMessageEncoderStream();
+    }
+  });
+
+  // node_modules/@aws-sdk/util-middleware/dist-es/normalizeProvider.js
+  var normalizeProvider3;
+  var init_normalizeProvider3 = __esm({
+    "node_modules/@aws-sdk/util-middleware/dist-es/normalizeProvider.js"() {
+      normalizeProvider3 = (input) => {
+        if (typeof input === "function")
+          return input;
+        const promisified = Promise.resolve(input);
+        return () => promisified;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/util-middleware/dist-es/index.js
+  var init_dist_es46 = __esm({
+    "node_modules/@aws-sdk/util-middleware/dist-es/index.js"() {
+      init_normalizeProvider3();
+    }
+  });
+
+  // node_modules/@aws-sdk/util-utf8/dist-es/fromUtf8.browser.js
+  var fromUtf84;
+  var init_fromUtf8_browser3 = __esm({
+    "node_modules/@aws-sdk/util-utf8/dist-es/fromUtf8.browser.js"() {
+      fromUtf84 = (input) => new TextEncoder().encode(input);
+    }
+  });
+
+  // node_modules/@aws-sdk/util-utf8/dist-es/toUint8Array.js
+  var toUint8Array2;
+  var init_toUint8Array3 = __esm({
+    "node_modules/@aws-sdk/util-utf8/dist-es/toUint8Array.js"() {
+      init_fromUtf8_browser3();
+      toUint8Array2 = (data) => {
+        if (typeof data === "string") {
+          return fromUtf84(data);
+        }
+        if (ArrayBuffer.isView(data)) {
+          return new Uint8Array(data.buffer, data.byteOffset, data.byteLength / Uint8Array.BYTES_PER_ELEMENT);
+        }
+        return new Uint8Array(data);
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/util-utf8/dist-es/toUtf8.browser.js
+  var toUtf82;
+  var init_toUtf8_browser3 = __esm({
+    "node_modules/@aws-sdk/util-utf8/dist-es/toUtf8.browser.js"() {
+      toUtf82 = (input) => new TextDecoder("utf-8").decode(input);
+    }
+  });
+
+  // node_modules/@aws-sdk/util-utf8/dist-es/index.js
+  var init_dist_es47 = __esm({
+    "node_modules/@aws-sdk/util-utf8/dist-es/index.js"() {
+      init_fromUtf8_browser3();
+      init_toUint8Array3();
+      init_toUtf8_browser3();
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/constants.js
+  var ALGORITHM_QUERY_PARAM2, CREDENTIAL_QUERY_PARAM2, AMZ_DATE_QUERY_PARAM2, SIGNED_HEADERS_QUERY_PARAM2, EXPIRES_QUERY_PARAM2, SIGNATURE_QUERY_PARAM2, TOKEN_QUERY_PARAM2, AUTH_HEADER2, AMZ_DATE_HEADER2, DATE_HEADER2, GENERATED_HEADERS2, SIGNATURE_HEADER2, SHA256_HEADER2, TOKEN_HEADER2, ALWAYS_UNSIGNABLE_HEADERS2, PROXY_HEADER_PATTERN2, SEC_HEADER_PATTERN2, ALGORITHM_IDENTIFIER2, EVENT_ALGORITHM_IDENTIFIER2, UNSIGNED_PAYLOAD2, MAX_CACHE_SIZE2, KEY_TYPE_IDENTIFIER2, MAX_PRESIGNED_TTL2;
+  var init_constants9 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/constants.js"() {
+      ALGORITHM_QUERY_PARAM2 = "X-Amz-Algorithm";
+      CREDENTIAL_QUERY_PARAM2 = "X-Amz-Credential";
+      AMZ_DATE_QUERY_PARAM2 = "X-Amz-Date";
+      SIGNED_HEADERS_QUERY_PARAM2 = "X-Amz-SignedHeaders";
+      EXPIRES_QUERY_PARAM2 = "X-Amz-Expires";
+      SIGNATURE_QUERY_PARAM2 = "X-Amz-Signature";
+      TOKEN_QUERY_PARAM2 = "X-Amz-Security-Token";
+      AUTH_HEADER2 = "authorization";
+      AMZ_DATE_HEADER2 = AMZ_DATE_QUERY_PARAM2.toLowerCase();
+      DATE_HEADER2 = "date";
+      GENERATED_HEADERS2 = [AUTH_HEADER2, AMZ_DATE_HEADER2, DATE_HEADER2];
+      SIGNATURE_HEADER2 = SIGNATURE_QUERY_PARAM2.toLowerCase();
+      SHA256_HEADER2 = "x-amz-content-sha256";
+      TOKEN_HEADER2 = TOKEN_QUERY_PARAM2.toLowerCase();
+      ALWAYS_UNSIGNABLE_HEADERS2 = {
+        authorization: true,
+        "cache-control": true,
+        connection: true,
+        expect: true,
+        from: true,
+        "keep-alive": true,
+        "max-forwards": true,
+        pragma: true,
+        referer: true,
+        te: true,
+        trailer: true,
+        "transfer-encoding": true,
+        upgrade: true,
+        "user-agent": true,
+        "x-amzn-trace-id": true
+      };
+      PROXY_HEADER_PATTERN2 = /^proxy-/;
+      SEC_HEADER_PATTERN2 = /^sec-/;
+      ALGORITHM_IDENTIFIER2 = "AWS4-HMAC-SHA256";
+      EVENT_ALGORITHM_IDENTIFIER2 = "AWS4-HMAC-SHA256-PAYLOAD";
+      UNSIGNED_PAYLOAD2 = "UNSIGNED-PAYLOAD";
+      MAX_CACHE_SIZE2 = 50;
+      KEY_TYPE_IDENTIFIER2 = "aws4_request";
+      MAX_PRESIGNED_TTL2 = 60 * 60 * 24 * 7;
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/credentialDerivation.js
+  var signingKeyCache2, cacheQueue2, createScope2, getSigningKey2, hmac2;
+  var init_credentialDerivation2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/credentialDerivation.js"() {
+      init_dist_es44();
+      init_dist_es47();
+      init_constants9();
+      signingKeyCache2 = {};
+      cacheQueue2 = [];
+      createScope2 = (shortDate, region2, service) => `${shortDate}/${region2}/${service}/${KEY_TYPE_IDENTIFIER2}`;
+      getSigningKey2 = async (sha256Constructor, credentials, shortDate, region2, service) => {
+        const credsHash = await hmac2(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
+        const cacheKey = `${shortDate}:${region2}:${service}:${toHex2(credsHash)}:${credentials.sessionToken}`;
+        if (cacheKey in signingKeyCache2) {
+          return signingKeyCache2[cacheKey];
+        }
+        cacheQueue2.push(cacheKey);
+        while (cacheQueue2.length > MAX_CACHE_SIZE2) {
+          delete signingKeyCache2[cacheQueue2.shift()];
+        }
+        let key = `AWS4${credentials.secretAccessKey}`;
+        for (const signable of [shortDate, region2, service, KEY_TYPE_IDENTIFIER2]) {
+          key = await hmac2(sha256Constructor, key, signable);
+        }
+        return signingKeyCache2[cacheKey] = key;
+      };
+      hmac2 = (ctor, secret, data) => {
+        const hash = new ctor(secret);
+        hash.update(toUint8Array2(data));
+        return hash.digest();
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalHeaders.js
+  var getCanonicalHeaders2;
+  var init_getCanonicalHeaders2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalHeaders.js"() {
+      init_constants9();
+      getCanonicalHeaders2 = ({ headers }, unsignableHeaders, signableHeaders) => {
+        const canonical = {};
+        for (const headerName of Object.keys(headers).sort()) {
+          if (headers[headerName] == void 0) {
+            continue;
+          }
+          const canonicalHeaderName = headerName.toLowerCase();
+          if (canonicalHeaderName in ALWAYS_UNSIGNABLE_HEADERS2 || unsignableHeaders?.has(canonicalHeaderName) || PROXY_HEADER_PATTERN2.test(canonicalHeaderName) || SEC_HEADER_PATTERN2.test(canonicalHeaderName)) {
+            if (!signableHeaders || signableHeaders && !signableHeaders.has(canonicalHeaderName)) {
+              continue;
+            }
+          }
+          canonical[canonicalHeaderName] = headers[headerName].trim().replace(/\s+/g, " ");
+        }
+        return canonical;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/util-uri-escape/dist-es/escape-uri.js
+  var escapeUri2, hexEncode2;
+  var init_escape_uri2 = __esm({
+    "node_modules/@aws-sdk/util-uri-escape/dist-es/escape-uri.js"() {
+      escapeUri2 = (uri2) => encodeURIComponent(uri2).replace(/[!'()*]/g, hexEncode2);
+      hexEncode2 = (c3) => `%${c3.charCodeAt(0).toString(16).toUpperCase()}`;
+    }
+  });
+
+  // node_modules/@aws-sdk/util-uri-escape/dist-es/escape-uri-path.js
+  var init_escape_uri_path2 = __esm({
+    "node_modules/@aws-sdk/util-uri-escape/dist-es/escape-uri-path.js"() {
+      init_escape_uri2();
+    }
+  });
+
+  // node_modules/@aws-sdk/util-uri-escape/dist-es/index.js
+  var init_dist_es48 = __esm({
+    "node_modules/@aws-sdk/util-uri-escape/dist-es/index.js"() {
+      init_escape_uri2();
+      init_escape_uri_path2();
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalQuery.js
+  var getCanonicalQuery2;
+  var init_getCanonicalQuery2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalQuery.js"() {
+      init_dist_es48();
+      init_constants9();
+      getCanonicalQuery2 = ({ query = {} }) => {
+        const keys = [];
+        const serialized = {};
+        for (const key of Object.keys(query).sort()) {
+          if (key.toLowerCase() === SIGNATURE_HEADER2) {
+            continue;
+          }
+          keys.push(key);
+          const value = query[key];
+          if (typeof value === "string") {
+            serialized[key] = `${escapeUri2(key)}=${escapeUri2(value)}`;
+          } else if (Array.isArray(value)) {
+            serialized[key] = value.slice(0).sort().reduce((encoded, value2) => encoded.concat([`${escapeUri2(key)}=${escapeUri2(value2)}`]), []).join("&");
+          }
+        }
+        return keys.map((key) => serialized[key]).filter((serialized2) => serialized2).join("&");
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/is-array-buffer/dist-es/index.js
+  var isArrayBuffer2;
+  var init_dist_es49 = __esm({
+    "node_modules/@aws-sdk/is-array-buffer/dist-es/index.js"() {
+      isArrayBuffer2 = (arg) => typeof ArrayBuffer === "function" && arg instanceof ArrayBuffer || Object.prototype.toString.call(arg) === "[object ArrayBuffer]";
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/getPayloadHash.js
+  var getPayloadHash2;
+  var init_getPayloadHash2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/getPayloadHash.js"() {
+      init_dist_es49();
+      init_dist_es44();
+      init_dist_es47();
+      init_constants9();
+      getPayloadHash2 = async ({ headers, body }, hashConstructor) => {
+        for (const headerName of Object.keys(headers)) {
+          if (headerName.toLowerCase() === SHA256_HEADER2) {
+            return headers[headerName];
+          }
+        }
+        if (body == void 0) {
+          return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        } else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer2(body)) {
+          const hashCtor = new hashConstructor();
+          hashCtor.update(toUint8Array2(body));
+          return toHex2(await hashCtor.digest());
+        }
+        return UNSIGNED_PAYLOAD2;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/headerUtil.js
+  var hasHeader2;
+  var init_headerUtil2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/headerUtil.js"() {
+      hasHeader2 = (soughtHeader, headers) => {
+        soughtHeader = soughtHeader.toLowerCase();
+        for (const headerName of Object.keys(headers)) {
+          if (soughtHeader === headerName.toLowerCase()) {
+            return true;
+          }
+        }
+        return false;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/cloneRequest.js
+  var cloneRequest, cloneQuery3;
+  var init_cloneRequest = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/cloneRequest.js"() {
+      cloneRequest = ({ headers, query, ...rest }) => ({
+        ...rest,
+        headers: { ...headers },
+        query: query ? cloneQuery3(query) : void 0
+      });
+      cloneQuery3 = (query) => Object.keys(query).reduce((carry, paramName) => {
+        const param = query[paramName];
+        return {
+          ...carry,
+          [paramName]: Array.isArray(param) ? [...param] : param
+        };
+      }, {});
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/moveHeadersToQuery.js
+  var moveHeadersToQuery2;
+  var init_moveHeadersToQuery2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/moveHeadersToQuery.js"() {
+      init_cloneRequest();
+      moveHeadersToQuery2 = (request, options = {}) => {
+        const { headers, query = {} } = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
+        for (const name of Object.keys(headers)) {
+          const lname = name.toLowerCase();
+          if (lname.slice(0, 6) === "x-amz-" && !options.unhoistableHeaders?.has(lname)) {
+            query[name] = headers[name];
+            delete headers[name];
+          }
+        }
+        return {
+          ...request,
+          headers,
+          query
+        };
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/prepareRequest.js
+  var prepareRequest2;
+  var init_prepareRequest2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/prepareRequest.js"() {
+      init_cloneRequest();
+      init_constants9();
+      prepareRequest2 = (request) => {
+        request = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
+        for (const headerName of Object.keys(request.headers)) {
+          if (GENERATED_HEADERS2.indexOf(headerName.toLowerCase()) > -1) {
+            delete request.headers[headerName];
+          }
+        }
+        return request;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/utilDate.js
+  var iso86012, toDate2;
+  var init_utilDate2 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/utilDate.js"() {
+      iso86012 = (time2) => toDate2(time2).toISOString().replace(/\.\d{3}Z$/, "Z");
+      toDate2 = (time2) => {
+        if (typeof time2 === "number") {
+          return new Date(time2 * 1e3);
+        }
+        if (typeof time2 === "string") {
+          if (Number(time2)) {
+            return new Date(Number(time2) * 1e3);
+          }
+          return new Date(time2);
+        }
+        return time2;
+      };
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/SignatureV4.js
+  var SignatureV42, formatDate, getCanonicalHeaderList;
+  var init_SignatureV42 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/SignatureV4.js"() {
+      init_dist_es45();
+      init_dist_es44();
+      init_dist_es46();
+      init_dist_es47();
+      init_constants9();
+      init_credentialDerivation2();
+      init_getCanonicalHeaders2();
+      init_getCanonicalQuery2();
+      init_getPayloadHash2();
+      init_headerUtil2();
+      init_moveHeadersToQuery2();
+      init_prepareRequest2();
+      init_utilDate2();
+      SignatureV42 = class {
+        constructor({ applyChecksum, credentials, region: region2, service, sha256, uriEscapePath = true }) {
+          this.headerMarshaller = new HeaderMarshaller(toUtf82, fromUtf84);
+          this.service = service;
+          this.sha256 = sha256;
+          this.uriEscapePath = uriEscapePath;
+          this.applyChecksum = typeof applyChecksum === "boolean" ? applyChecksum : true;
+          this.regionProvider = normalizeProvider3(region2);
+          this.credentialProvider = normalizeProvider3(credentials);
+        }
+        async presign(originalRequest, options = {}) {
+          const { signingDate = /* @__PURE__ */ new Date(), expiresIn = 3600, unsignableHeaders, unhoistableHeaders, signableHeaders, signingRegion, signingService } = options;
+          const credentials = await this.credentialProvider();
+          this.validateResolvedCredentials(credentials);
+          const region2 = signingRegion ?? await this.regionProvider();
+          const { longDate, shortDate } = formatDate(signingDate);
+          if (expiresIn > MAX_PRESIGNED_TTL2) {
+            return Promise.reject("Signature version 4 presigned URLs must have an expiration date less than one week in the future");
+          }
+          const scope = createScope2(shortDate, region2, signingService ?? this.service);
+          const request = moveHeadersToQuery2(prepareRequest2(originalRequest), { unhoistableHeaders });
+          if (credentials.sessionToken) {
+            request.query[TOKEN_QUERY_PARAM2] = credentials.sessionToken;
+          }
+          request.query[ALGORITHM_QUERY_PARAM2] = ALGORITHM_IDENTIFIER2;
+          request.query[CREDENTIAL_QUERY_PARAM2] = `${credentials.accessKeyId}/${scope}`;
+          request.query[AMZ_DATE_QUERY_PARAM2] = longDate;
+          request.query[EXPIRES_QUERY_PARAM2] = expiresIn.toString(10);
+          const canonicalHeaders = getCanonicalHeaders2(request, unsignableHeaders, signableHeaders);
+          request.query[SIGNED_HEADERS_QUERY_PARAM2] = getCanonicalHeaderList(canonicalHeaders);
+          request.query[SIGNATURE_QUERY_PARAM2] = await this.getSignature(longDate, scope, this.getSigningKey(credentials, region2, shortDate, signingService), this.createCanonicalRequest(request, canonicalHeaders, await getPayloadHash2(originalRequest, this.sha256)));
+          return request;
+        }
+        async sign(toSign, options) {
+          if (typeof toSign === "string") {
+            return this.signString(toSign, options);
+          } else if (toSign.headers && toSign.payload) {
+            return this.signEvent(toSign, options);
+          } else if (toSign.message) {
+            return this.signMessage(toSign, options);
+          } else {
+            return this.signRequest(toSign, options);
+          }
+        }
+        async signEvent({ headers, payload }, { signingDate = /* @__PURE__ */ new Date(), priorSignature, signingRegion, signingService }) {
+          const region2 = signingRegion ?? await this.regionProvider();
+          const { shortDate, longDate } = formatDate(signingDate);
+          const scope = createScope2(shortDate, region2, signingService ?? this.service);
+          const hashedPayload = await getPayloadHash2({ headers: {}, body: payload }, this.sha256);
+          const hash = new this.sha256();
+          hash.update(headers);
+          const hashedHeaders = toHex2(await hash.digest());
+          const stringToSign = [
+            EVENT_ALGORITHM_IDENTIFIER2,
+            longDate,
+            scope,
+            priorSignature,
+            hashedHeaders,
+            hashedPayload
+          ].join("\n");
+          return this.signString(stringToSign, { signingDate, signingRegion: region2, signingService });
+        }
+        async signMessage(signableMessage, { signingDate = /* @__PURE__ */ new Date(), signingRegion, signingService }) {
+          const promise = this.signEvent({
+            headers: this.headerMarshaller.format(signableMessage.message.headers),
+            payload: signableMessage.message.body
+          }, {
+            signingDate,
+            signingRegion,
+            signingService,
+            priorSignature: signableMessage.priorSignature
+          });
+          return promise.then((signature) => {
+            return { message: signableMessage.message, signature };
+          });
+        }
+        async signString(stringToSign, { signingDate = /* @__PURE__ */ new Date(), signingRegion, signingService } = {}) {
+          const credentials = await this.credentialProvider();
+          this.validateResolvedCredentials(credentials);
+          const region2 = signingRegion ?? await this.regionProvider();
+          const { shortDate } = formatDate(signingDate);
+          const hash = new this.sha256(await this.getSigningKey(credentials, region2, shortDate, signingService));
+          hash.update(toUint8Array2(stringToSign));
+          return toHex2(await hash.digest());
+        }
+        async signRequest(requestToSign, { signingDate = /* @__PURE__ */ new Date(), signableHeaders, unsignableHeaders, signingRegion, signingService } = {}) {
+          const credentials = await this.credentialProvider();
+          this.validateResolvedCredentials(credentials);
+          const region2 = signingRegion ?? await this.regionProvider();
+          const request = prepareRequest2(requestToSign);
+          const { longDate, shortDate } = formatDate(signingDate);
+          const scope = createScope2(shortDate, region2, signingService ?? this.service);
+          request.headers[AMZ_DATE_HEADER2] = longDate;
+          if (credentials.sessionToken) {
+            request.headers[TOKEN_HEADER2] = credentials.sessionToken;
+          }
+          const payloadHash = await getPayloadHash2(request, this.sha256);
+          if (!hasHeader2(SHA256_HEADER2, request.headers) && this.applyChecksum) {
+            request.headers[SHA256_HEADER2] = payloadHash;
+          }
+          const canonicalHeaders = getCanonicalHeaders2(request, unsignableHeaders, signableHeaders);
+          const signature = await this.getSignature(longDate, scope, this.getSigningKey(credentials, region2, shortDate, signingService), this.createCanonicalRequest(request, canonicalHeaders, payloadHash));
+          request.headers[AUTH_HEADER2] = `${ALGORITHM_IDENTIFIER2} Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${getCanonicalHeaderList(canonicalHeaders)}, Signature=${signature}`;
+          return request;
+        }
+        createCanonicalRequest(request, canonicalHeaders, payloadHash) {
+          const sortedHeaders = Object.keys(canonicalHeaders).sort();
+          return `${request.method}
+${this.getCanonicalPath(request)}
+${getCanonicalQuery2(request)}
+${sortedHeaders.map((name) => `${name}:${canonicalHeaders[name]}`).join("\n")}
+
+${sortedHeaders.join(";")}
+${payloadHash}`;
+        }
+        async createStringToSign(longDate, credentialScope, canonicalRequest) {
+          const hash = new this.sha256();
+          hash.update(toUint8Array2(canonicalRequest));
+          const hashedRequest = await hash.digest();
+          return `${ALGORITHM_IDENTIFIER2}
+${longDate}
+${credentialScope}
+${toHex2(hashedRequest)}`;
+        }
+        getCanonicalPath({ path }) {
+          if (this.uriEscapePath) {
+            const normalizedPathSegments = [];
+            for (const pathSegment of path.split("/")) {
+              if (pathSegment?.length === 0)
+                continue;
+              if (pathSegment === ".")
+                continue;
+              if (pathSegment === "..") {
+                normalizedPathSegments.pop();
+              } else {
+                normalizedPathSegments.push(pathSegment);
+              }
+            }
+            const normalizedPath = `${path?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path?.endsWith("/") ? "/" : ""}`;
+            const doubleEncoded = encodeURIComponent(normalizedPath);
+            return doubleEncoded.replace(/%2F/g, "/");
+          }
+          return path;
+        }
+        async getSignature(longDate, credentialScope, keyPromise, canonicalRequest) {
+          const stringToSign = await this.createStringToSign(longDate, credentialScope, canonicalRequest);
+          const hash = new this.sha256(await keyPromise);
+          hash.update(toUint8Array2(stringToSign));
+          return toHex2(await hash.digest());
+        }
+        getSigningKey(credentials, region2, shortDate, service) {
+          return getSigningKey2(this.sha256, credentials, shortDate, region2, service || this.service);
+        }
+        validateResolvedCredentials(credentials) {
+          if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
+            throw new Error("Resolved credential object is not valid");
+          }
+        }
+      };
+      formatDate = (now2) => {
+        const longDate = iso86012(now2).replace(/[\-:]/g, "");
+        return {
+          longDate,
+          shortDate: longDate.slice(0, 8)
+        };
+      };
+      getCanonicalHeaderList = (headers) => Object.keys(headers).sort().join(";");
+    }
+  });
+
+  // node_modules/@aws-sdk/signature-v4/dist-es/index.js
+  var init_dist_es50 = __esm({
+    "node_modules/@aws-sdk/signature-v4/dist-es/index.js"() {
+      init_SignatureV42();
+      init_getCanonicalHeaders2();
+      init_getCanonicalQuery2();
+      init_getPayloadHash2();
+      init_moveHeadersToQuery2();
+      init_prepareRequest2();
+      init_credentialDerivation2();
+    }
+  });
+
+  // src/voiceLambdaIamFetch.ts
+  function cognitoCredentials() {
+    if (!region || !identityPoolId) {
+      throw new Error(
+        "Missing AWS_REGION or COGNITO_IDENTITY_POOL_ID for voice Lambda signing."
+      );
+    }
+    return fromCognitoIdentityPool({
+      clientConfig: { region },
+      identityPoolId
+    });
+  }
+  function getSigner() {
+    if (!signerPromise) {
+      signerPromise = Promise.resolve(
+        new SignatureV42({
+          credentials: cognitoCredentials(),
+          region,
+          service: "lambda",
+          sha256: Sha256,
+          applyChecksum: false
+        })
+      );
+    }
+    return signerPromise;
+  }
+  async function postVoiceLambdaWithIam(endpoint, body, jwtAccessToken) {
+    const url = new URL(
+      endpoint.startsWith("http") ? endpoint : `https://${endpoint}`
+    );
+    const path = url.pathname && url.pathname.length > 0 ? url.pathname : "/";
+    const headers = {
+      host: url.host,
+      "content-type": "application/json"
+    };
+    if (jwtAccessToken) {
+      headers["x-oasis-authorization"] = `Bearer ${jwtAccessToken}`;
+    }
+    const req = new HttpRequest2({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port ? parseInt(url.port, 10) : void 0,
+      method: "POST",
+      path,
+      headers,
+      body
+    });
+    const signer = await getSigner();
+    const signed = await signer.sign(req);
+    const portPart = signed.port != null && signed.port !== 80 && signed.port !== 443 ? `:${signed.port}` : "";
+    const signedUrl = `${signed.protocol}//${signed.hostname}${portPart}${signed.path}`;
+    return fetch(signedUrl, {
+      method: signed.method,
+      headers: signed.headers,
+      body: signed.body
+    });
+  }
+  var region, identityPoolId, signerPromise;
+  var init_voiceLambdaIamFetch = __esm({
+    "src/voiceLambdaIamFetch.ts"() {
+      "use strict";
+      init_module2();
+      init_dist_es42();
+      init_dist_es43();
+      init_dist_es50();
+      region = "us-east-2";
+      identityPoolId = "us-east-2:21ce1894-9a97-48ac-8741-b69f7eafea1c";
+      signerPromise = null;
+    }
+  });
+
+  // src/awsSignedFetch.ts
+  function getAssistantApiBase() {
+    return assistantUrl;
+  }
+  async function postSigned(op, payload, signal) {
+    const endpoint = endpointByOperation[op];
+    if (!endpoint) {
+      throw new Error(
+        `Endpoint not configured for operation "${op}". Missing ${endpointEnvByOperation[op]}.`
+      );
+    }
+    const body = JSON.stringify({ op, ...payload });
+    const session = await supabaseAuth2.getSession();
+    const token = session?.access_token;
+    const requiresJwt = op !== "assist";
+    if (requiresJwt && !token) {
+      throw new Error("Authentication required: No JWT found");
+    }
+    const headers = {
+      "content-type": "application/json"
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const res = op === "transcribe" || op === "tts" ? await postVoiceLambdaWithIam(endpoint, body, token) : await fetch(endpoint, { method: "POST", headers, body, signal });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      if (res.status === 429 && op === "assist") {
+        try {
+          const parsed = JSON.parse(errorBody);
+          if (parsed.error === "quota_exceeded") {
+            throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+          }
+        } catch (e2) {
+          if (e2.isQuotaError) throw e2;
+        }
+      }
+      assistantLogger.error("transport", "Assistant backend error", {
+        op,
+        status: res.status,
+        errorBody
+      });
+      throw new Error(`Assistant backend ${res.status} ${errorBody}`);
+    }
+    return res.json();
+  }
+  var QuotaExceededError, normalizeEndpoint, assistantUrl, transcribeUrl, supabaseAuth2, endpointByOperation, endpointEnvByOperation;
+  var init_awsSignedFetch = __esm({
+    "src/awsSignedFetch.ts"() {
+      "use strict";
+      init_supabase();
+      init_assistantLogger();
+      init_voiceLambdaIamFetch();
+      QuotaExceededError = class extends Error {
+        quota;
+        isQuotaError = true;
+        constructor(message, quota) {
+          super(message);
+          this.name = "QuotaExceededError";
+          this.quota = quota;
+        }
+      };
+      normalizeEndpoint = (value) => String(value || "").trim().replace(/\/+$/, "");
+      assistantUrl = normalizeEndpoint("https://wvclepquxxczgrukfqyr.supabase.co/functions/v1/oasis-assist-test");
+      transcribeUrl = normalizeEndpoint("https://ic3fypkh4rz24odos4m3u5xsma0edmnn.lambda-url.us-east-2.on.aws/");
+      supabaseAuth2 = SupabaseAuth.getInstance();
+      endpointByOperation = {
+        assist: assistantUrl,
+        transcribe: transcribeUrl,
+        tts: transcribeUrl
+      };
+      endpointEnvByOperation = {
+        assist: "OASIS_ASSIST_URL",
+        transcribe: "OASIS_TRANSCRIBE_URL",
+        tts: "OASIS_TRANSCRIBE_URL"
+      };
+    }
+  });
+
+  // src/proxyClient.ts
+  function getAssistLoopOptionsFromBuildEnv() {
+    const rawMax = String(
+      true ? "" : ""
+    ).trim();
+    const rawRefine = String(
+      true ? "" : ""
+    ).trim();
+    const refine = rawRefine === "1" || /^true$/i.test(rawRefine);
+    let max;
+    if (rawMax !== "") {
+      const n2 = parseInt(rawMax, 10);
+      if (Number.isFinite(n2) && n2 >= 1) {
+        max = Math.min(8, n2);
+      }
+    }
+    if (refine && (max == null || max < 2)) {
+      max = 3;
+    }
+    if (max == null && !refine) {
+      return void 0;
+    }
+    const out = {};
+    if (max != null) {
+      out.max_inner_rounds = max;
+    }
+    if (refine) {
+      out.refine_after_route = true;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  async function ensureAuthenticated() {
+    const isAuthenticated = await supabaseAuth3.isAuthenticated();
+    if (!isAuthenticated) {
+      throw new Error("Authentication required: Please sign in to use voice features");
+    }
+  }
+  async function assistRemote(system, messages, options, tools = [], generationConfig, assistLoop, signal) {
+    return postSigned(
+      "assist",
+      {
+        system,
+        messages,
+        options,
+        tools,
+        ...generationConfig ? { generation_config: generationConfig } : {},
+        ...assistLoop?.max_inner_rounds != null ? { max_inner_rounds: assistLoop.max_inner_rounds } : {},
+        ...assistLoop?.refine_after_route ? { refine_after_route: true } : {}
+      },
+      signal
+    );
+  }
+  async function transcribeAudio(audioBlob, options = {}) {
+    await ensureAuthenticated();
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const base64Audio = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+    const result = await postSigned("transcribe", {
+      audio: base64Audio,
+      mimeType: audioBlob.type,
+      ...options.language ? { language: options.language } : {},
+      ...options.captureMeta ? { captureMeta: options.captureMeta } : {},
+      ...options.source != null ? { source: options.source } : {},
+      ...options.utteranceSeq != null ? { utteranceSeq: options.utteranceSeq } : {}
+    });
+    return result;
+  }
+  async function textToSpeech(text2) {
+    await ensureAuthenticated();
+    const result = await postSigned("tts", { text: text2 });
+    const audioData = atob(result.audio);
+    const arrayBuffer = new Uint8Array(audioData.length);
+    for (let i2 = 0; i2 < audioData.length; i2++) {
+      arrayBuffer[i2] = audioData.charCodeAt(i2);
+    }
+    return new Blob([arrayBuffer], { type: result.mimeType || "audio/mpeg" });
+  }
+  var supabaseAuth3;
+  var init_proxyClient = __esm({
+    "src/proxyClient.ts"() {
+      "use strict";
+      init_awsSignedFetch();
+      init_supabase();
+      supabaseAuth3 = SupabaseAuth.getInstance();
+    }
+  });
+
+  // src/prompts/researchBriefPrompt.ts
+  function buildResearchBriefUserMessage(params) {
+    const lines = [`Topic: ${params.topic}`, `Scope: ${params.scopeLabel}`];
+    if (params.outlineHint?.trim()) {
+      lines.push(`Outline hint: ${params.outlineHint.trim()}`);
+    }
+    lines.push("", "Tab digests (JSON):", JSON.stringify(params.digests));
+    return lines.join("\n");
+  }
+  var RESEARCH_BRIEF_SYSTEM_PROMPT, quoteSchema, sourceSchema, RESEARCH_BRIEF_GENERATION_CONFIG;
+  var init_researchBriefPrompt = __esm({
+    "src/prompts/researchBriefPrompt.ts"() {
+      "use strict";
+      RESEARCH_BRIEF_SYSTEM_PROMPT = [
+        "You are a research assistant helping a writer draft long-form content.",
+        "You receive extracted text from multiple open browser tabs on a single topic.",
+        "Produce a structured research brief grounded ONLY in the provided tab digests.",
+        "Do not invent facts, quotes, or URLs that are not supported by the digests.",
+        "Use verbatim quotes when possible (max 500 characters each).",
+        "Populate gapsAndContradictions when sources disagree or coverage is thin.",
+        "Return only valid JSON matching the required schema."
+      ].join("\n");
+      quoteSchema = {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          context: { type: "string" }
+        },
+        required: ["text"]
+      };
+      sourceSchema = {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          status: { type: "string", enum: ["ok", "skipped", "failed"] },
+          failureReason: { type: "string" },
+          keyClaims: { type: "array", items: { type: "string" } },
+          quotes: { type: "array", items: quoteSchema }
+        },
+        required: ["title", "url", "status", "keyClaims", "quotes"]
+      };
+      RESEARCH_BRIEF_GENERATION_CONFIG = {
+        responseMimeType: "application/json",
+        responseJsonSchema: {
+          type: "object",
+          properties: {
+            topic: { type: "string" },
+            generatedAt: { type: "string" },
+            scopeLabel: { type: "string" },
+            executiveSummary: { type: "string" },
+            outline: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  heading: { type: "string" },
+                  bullets: { type: "array", items: { type: "string" } }
+                },
+                required: ["heading", "bullets"]
+              }
+            },
+            themes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  label: { type: "string" },
+                  synthesis: { type: "string" },
+                  sourceUrls: { type: "array", items: { type: "string" } }
+                },
+                required: ["label", "synthesis", "sourceUrls"]
+              }
+            },
+            sources: { type: "array", items: sourceSchema },
+            gapsAndContradictions: {
+              type: "array",
+              items: { type: "string" }
+            }
+          },
+          required: [
+            "topic",
+            "generatedAt",
+            "scopeLabel",
+            "executiveSummary",
+            "outline",
+            "themes",
+            "sources",
+            "gapsAndContradictions"
+          ]
+        }
+      };
+    }
+  });
+
+  // src/utils/quotaUserMessage.ts
+  function formatQuotaExceededMessage(raw) {
+    const s2 = String(raw || "").trim().toLowerCase();
+    if (!s2) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    if (s2.includes("daily_limit") || s2 === "daily_limit_exceeded") {
+      return "You have reached your daily AI usage limit. Your allocation resets every day.";
+    }
+    if (s2.includes("monthly_limit") || s2 === "monthly_limit_exceeded") {
+      return "You have reached your monthly AI usage limit. Your allocation resets at the start of your next billing cycle.";
+    }
+    if (s2.includes("quota_exceeded") || s2.includes("quota exceeded")) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    if (/^[a-z0-9_]+$/.test(String(raw || "").trim())) {
+      return "You have reached your AI usage limit for this plan.";
+    }
+    return String(raw || "").trim();
+  }
+  var init_quotaUserMessage = __esm({
+    "src/utils/quotaUserMessage.ts"() {
+      "use strict";
+    }
+  });
+
+  // src/utils/researchBriefTopic.ts
+  function isWeakHeuristicTopic(topic) {
+    const t2 = String(topic || "").trim();
+    if (!t2 || t2.length < 4) {
+      return true;
+    }
+    if (GENERIC_TOPIC_RE2.test(t2)) {
+      return true;
+    }
+    const words = t2.split(/\s+/).filter(Boolean);
+    return words.length < 2 && t2.length < 12;
+  }
+  async function inferResearchBriefTopicFromDigests(digests) {
+    const heuristic = inferResearchBriefTopicHeuristic(digests);
+    if (heuristic && !isWeakHeuristicTopic(heuristic)) {
+      return heuristic;
+    }
+    const readable = digests.filter((d3) => d3.status === "ok" && d3.content?.trim());
+    if (readable.length === 0) {
+      return heuristic || "Research notes";
+    }
+    const payload = readable.slice(0, 8).map((d3) => ({
+      title: d3.title,
+      excerpt: d3.content.slice(0, 400)
+    }));
+    try {
+      const res = await assistRemote(
+        TOPIC_INFER_SYSTEM,
+        [
+          {
+            role: "user",
+            content: `Tab excerpts (JSON):
+${JSON.stringify(payload)}`
+          }
+        ],
+        ["chat"],
+        [],
+        TOPIC_INFER_CONFIG
+      );
+      const content = res.content;
+      let parsed = null;
+      if (typeof content === "object" && content && "topic" in content) {
+        parsed = content;
+      } else if (typeof content === "string") {
+        try {
+          parsed = JSON.parse(content);
+        } catch {
+          parsed = null;
+        }
+      }
+      const topic = parsed && typeof parsed.topic === "string" ? parsed.topic.trim() : "";
+      if (topic && !isWeakHeuristicTopic(topic)) {
+        return topic.length <= 80 ? topic : topic.slice(0, 77) + "...";
+      }
+    } catch {
+    }
+    return heuristic || readable[0]?.title?.trim() || "Research notes";
+  }
+  var GENERIC_TOPIC_RE2, TOPIC_INFER_CONFIG, TOPIC_INFER_SYSTEM;
+  var init_researchBriefTopic = __esm({
+    "src/utils/researchBriefTopic.ts"() {
+      "use strict";
+      init_proxyClient();
+      init_researchBriefTopicPolicy();
+      init_researchBriefTopicPolicy();
+      GENERIC_TOPIC_RE2 = /^(?:untitled|home|new tab|welcome|loading|page|article|news)$/i;
+      TOPIC_INFER_CONFIG = {
+        responseMimeType: "application/json",
+        responseJsonSchema: {
+          type: "object",
+          properties: {
+            topic: { type: "string" }
+          },
+          required: ["topic"]
+        }
+      };
+      TOPIC_INFER_SYSTEM = [
+        "Given excerpts from open browser tabs, return a concise research topic title (under 80 characters).",
+        "Use themes shared across the pages, not a single site name.",
+        'Return only JSON: {"topic": "..."}'
+      ].join("\n");
+    }
+  });
+
+  // src/utils/researchBriefProgress.ts
+  function beginResearchBriefRun() {
+    activeAbort?.abort();
+    activeAbort = new AbortController();
+    return activeAbort.signal;
+  }
+  function abortResearchBriefRun() {
+    activeAbort?.abort();
+  }
+  function endResearchBriefRun() {
+    activeAbort = null;
+    emitResearchBriefProgress(null);
+  }
+  function throwIfResearchBriefAborted(signal) {
+    const active = signal ?? activeAbort?.signal;
+    if (active?.aborted) {
+      throw new DOMException("Research brief cancelled.", "AbortError");
+    }
+  }
+  function emitResearchBriefProgress(detail) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_BRIEF_PROGRESS, { detail })
+      );
+    } catch {
+    }
+  }
+  function createResearchBriefProgressReporter(signal) {
+    return (detail) => {
+      throwIfResearchBriefAborted(signal);
+      emitResearchBriefProgress(detail);
+    };
+  }
+  var activeAbort;
+  var init_researchBriefProgress = __esm({
+    "src/utils/researchBriefProgress.ts"() {
+      "use strict";
+      init_contracts();
+      activeAbort = null;
+    }
+  });
+
+  // src/services/syncAssistUsage.ts
+  function syncSubscriptionFromAssistResponse(assist) {
+    const raw = assist;
+    if (isRecord(raw.usage_stats)) {
+      subscriptionService.updateFromAssistUsageStats(
+        raw.usage_stats
+      );
+      return;
+    }
+    const tokens = extractTokenCountsFromAssistPayload(assist);
+    const hasTokens = tokens.input_tokens != null && tokens.input_tokens > 0 || tokens.output_tokens != null && tokens.output_tokens > 0;
+    if (!hasTokens) {
+      return;
+    }
+    subscriptionService.recordAssistRoutingTokens({
+      command_type: "content_create",
+      user_intent: "research",
+      input_tokens: tokens.input_tokens,
+      output_tokens: tokens.output_tokens
+    });
+  }
+  var init_syncAssistUsage = __esm({
+    "src/services/syncAssistUsage.ts"() {
+      "use strict";
+      init_messageUtils();
+      init_subscription();
+    }
+  });
+
+  // src/services/researchBriefDigestCache.ts
+  function storeResearchBriefRun(run) {
+    cache2.set(run.briefId, run);
+    latestBriefId = run.briefId;
+  }
+  function getCachedResearchBriefRun(briefId) {
+    const id = briefId || latestBriefId;
+    if (!id) {
+      return null;
+    }
+    return cache2.get(id) ?? null;
+  }
+  var cache2, latestBriefId;
+  var init_researchBriefDigestCache = __esm({
+    "src/services/researchBriefDigestCache.ts"() {
+      "use strict";
+      cache2 = /* @__PURE__ */ new Map();
+      latestBriefId = null;
+    }
+  });
+
+  // src/utils/researchBriefResume.ts
+  function setResearchBriefResume(context) {
+    resumeContext = context;
+  }
+  function clearResearchBriefResume() {
+    resumeContext = null;
+  }
+  function buildResearchBriefResumePrompt(optionId) {
+    return `${RESEARCH_BRIEF_RESUME_SENTINEL}|${optionId}`;
+  }
+  function parseResearchBriefResumePrompt(resolvedPrompt) {
+    const raw = String(resolvedPrompt || "").trim();
+    if (!raw.startsWith(RESEARCH_BRIEF_RESUME_SENTINEL)) {
+      return null;
+    }
+    const parts = raw.split("|");
+    return parts[1]?.trim() || null;
+  }
+  function consumeResearchBriefResume(optionId) {
+    const ctx = resumeContext;
+    if (!ctx) {
+      return null;
+    }
+    clearResearchBriefResume();
+    const args = {
+      ...ctx.args,
+      scope_confirmed: true
+    };
+    if (ctx.reason === "ambiguous_group") {
+      const prefix = "brief_group:";
+      if (!optionId.startsWith(prefix)) {
+        return null;
+      }
+      args.name = decodeURIComponent(optionId.slice(prefix.length));
+      return args;
+    }
+    if (optionId === "brief_quota_truncate") {
+      args.quota_mode = "truncate";
+      return args;
+    }
+    if (optionId === "brief_quota_fewer_tabs") {
+      const maxTabs = args.suggested_max_tabs;
+      args.quota_mode = "fewer_tabs";
+      if (typeof maxTabs === "number" && Number.isFinite(maxTabs)) {
+        args.max_tabs = maxTabs;
+      }
+      return args;
+    }
+    return null;
+  }
+  function buildAmbiguousGroupClarification(query, candidates) {
+    const options = candidates.map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      resolvedPrompt: buildResearchBriefResumePrompt(candidate.id)
+    }));
+    return {
+      options,
+      message: `Several tab groups match "${query}". Pick one to continue.`
+    };
+  }
+  function buildOverQuotaClarification(params) {
+    const options = [
+      {
+        id: "brief_quota_truncate",
+        label: "Proceed with truncated content",
+        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_truncate")
+      },
+      {
+        id: "brief_quota_fewer_tabs",
+        label: `Use first ${params.suggestedTabCount} tabs only`,
+        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_fewer_tabs")
+      }
+    ];
+    return {
+      options,
+      message: `This brief may need about ${params.estimate.toLocaleString()} tokens, but you have about ${params.remaining.toLocaleString()} remaining today. Choose how to continue.`
+    };
+  }
+  var RESEARCH_BRIEF_RESUME_SENTINEL, resumeContext;
+  var init_researchBriefResume = __esm({
+    "src/utils/researchBriefResume.ts"() {
+      "use strict";
+      RESEARCH_BRIEF_RESUME_SENTINEL = "__RESEARCH_BRIEF_RESUME__";
+      resumeContext = null;
+    }
+  });
+
+  // src/utils/researchBriefClarify.ts
+  function suggestTabCountForQuota(digests, remainingTokens) {
+    if (digests.length === 0 || remainingTokens <= 0) {
+      return 1;
+    }
+    let low = 1;
+    let high = digests.length;
+    let best = 1;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const slice = digests.slice(0, mid);
+      const estimate = estimateSynthesisTokens(slice);
+      if (estimate <= remainingTokens) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return Math.max(1, best);
+  }
+  var init_researchBriefClarify = __esm({
+    "src/utils/researchBriefClarify.ts"() {
+      "use strict";
+      init_researchBriefFormat();
+      init_researchBriefResume();
+    }
+  });
+
+  // src/services/researchBriefMapReduce.ts
+  var researchBriefMapReduce_exports = {};
+  __export(researchBriefMapReduce_exports, {
+    isMapReduceEnabled: () => isMapReduceEnabled,
+    synthesizeResearchBriefWithBudget: () => synthesizeResearchBriefWithBudget
+  });
+  function tryJsonParseLoose2(str) {
+    const trimmed = String(str || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : trimmed;
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      return null;
+    }
+  }
+  function parseAssistResponseContent(res) {
+    if (!isRecord(res)) {
+      return null;
+    }
+    const content = res.content;
+    if (isRecord(content)) {
+      return content;
+    }
+    if (typeof content === "string") {
+      return tryJsonParseLoose2(content);
+    }
+    return null;
+  }
+  async function microSummarizeDigest(digest, topic, signal) {
+    throwIfResearchBriefAborted(signal);
+    const snippet = digest.content.slice(0, MICRO_SUMMARY_MAX_CHARS);
+    const res = await assistRemote(
+      "You summarize one web page for a multi-tab research brief. Return JSON: { summary: string, quotes: [{ text, context? }] }",
+      [
+        {
+          role: "user",
+          content: `Topic: ${topic}
+Title: ${digest.title}
+URL: ${digest.url}
+
+Content:
+${snippet}`
+        }
+      ],
+      ["chat"],
+      [],
+      { ...RESEARCH_BRIEF_GENERATION_CONFIG, maxOutputTokens: 1024 },
+      void 0,
+      signal
+    );
+    if (res.quota) {
+      subscriptionService.updateFromQuota(res.quota);
+    }
+    syncSubscriptionFromAssistResponse(res);
+    const parsed = parseAssistResponseContent(res);
+    const summary = isRecord(parsed) && typeof parsed.summary === "string" ? parsed.summary : snippet.slice(0, 1200);
+    return {
+      ...digest,
+      content: summary,
+      status: "ok"
+    };
+  }
+  function isMapReduceEnabled() {
+    try {
+      const Services = window.Services;
+      return Services?.prefs?.getBoolPref?.(
+        "browser.oasis.assistant.researchBrief.mapReduce",
+        false
+      ) ?? false;
+    } catch {
+      return false;
+    }
+  }
+  async function synthesizeResearchBriefWithBudget(params) {
+    const totalChars = params.digests.reduce(
+      (sum, d3) => sum + String(d3.content || "").length,
+      0
+    );
+    if (totalChars <= params.maxTotalChars || !isMapReduceEnabled()) {
+      const { digests, truncated: truncated2 } = truncateDigestsToBudget(
+        params.digests,
+        params.maxTotalChars
+      );
+      const brief2 = await synthesizeResearchBrief({
+        topic: params.topic,
+        outlineHint: params.outlineHint,
+        scopeLabel: params.scopeLabel,
+        digests,
+        signal: params.signal
+      });
+      return { brief: brief2, digests, truncated: truncated2 };
+    }
+    const readable = params.digests.filter((d3) => d3.status === "ok" && d3.content);
+    const microTargets = readable.slice(0, MAX_MICRO_CALLS);
+    const microDigests = [];
+    for (const digest of microTargets) {
+      microDigests.push(
+        await microSummarizeDigest(digest, params.topic, params.signal)
+      );
+    }
+    const remainder = params.digests.filter(
+      (d3) => !microTargets.some((t2) => t2.url === d3.url)
+    );
+    const merged = [...microDigests, ...remainder];
+    const { digests: budgetDigests, truncated } = truncateDigestsToBudget(
+      merged,
+      params.maxTotalChars
+    );
+    const brief = await synthesizeResearchBrief({
+      topic: params.topic,
+      outlineHint: params.outlineHint,
+      scopeLabel: params.scopeLabel,
+      digests: budgetDigests,
+      signal: params.signal
+    });
+    return { brief, digests: budgetDigests, truncated: truncated || true };
+  }
+  var MICRO_SUMMARY_MAX_CHARS, MAX_MICRO_CALLS;
+  var init_researchBriefMapReduce = __esm({
+    "src/services/researchBriefMapReduce.ts"() {
+      "use strict";
+      init_messageUtils();
+      init_proxyClient();
+      init_researchBriefProgress();
+      init_researchBriefPrompt();
+      init_syncAssistUsage();
+      init_subscription();
+      init_researchBriefFormat();
+      init_researchBrief();
+      MICRO_SUMMARY_MAX_CHARS = 2500;
+      MAX_MICRO_CALLS = 10;
+    }
+  });
+
+  // src/services/researchBrief.ts
+  function resolveResearchTabs(gBrowser, scope, name, maxTabs, exclusions = {}, tabQueries = [], tabIndices = []) {
+    if (!gBrowser) {
+      return { ok: false, message: "Browser UI is not available." };
+    }
+    if (scope === "tabs") {
+      return resolveTabsScope(
+        gBrowser,
+        tabQueries,
+        tabIndices,
+        maxTabs,
+        exclusions
+      );
+    }
+    let baseLabel = "";
+    let allTabs = [];
+    let usedFuzzyGroupMatch = false;
+    if (scope === "tab-group") {
+      const groupName = String(name || "").trim();
+      if (!groupName) {
+        return {
+          ok: false,
+          message: "Which tab group should I use? Name the group in your request."
+        };
+      }
+      const fuzzy = findGroupByNameFuzzy(gBrowser, groupName);
+      if (fuzzy.alternatives.length > 1 && !fuzzy.group) {
+        return {
+          ok: false,
+          code: "ambiguous_group",
+          message: `Several tab groups match "${groupName}".`,
+          candidates: fuzzy.alternatives.map((g2) => ({
+            name: String(g2.label || "Untitled").trim(),
+            label: `Tab group: ${g2.label || "Untitled"}`,
+            tabCount: Array.from(g2.tabs || []).length
+          }))
+        };
+      }
+      if (!fuzzy.group) {
+        const hint = fuzzy.closestLabel ? ` Did you mean "${fuzzy.closestLabel}"?` : "";
+        return {
+          ok: false,
+          message: `I couldn't find a tab group named "${groupName}".${hint}`
+        };
+      }
+      usedFuzzyGroupMatch = fuzzy.matchKind !== "exact";
+      allTabs = Array.from(fuzzy.group.tabs || []);
+      baseLabel = `Tab group: ${fuzzy.group.label || groupName}`;
+      if (allTabs.length === 0) {
+        return {
+          ok: false,
+          message: `Tab group "${fuzzy.group.label || groupName}" has no tabs.`
+        };
+      }
+    } else {
+      allTabs = getTabs(gBrowser);
+      baseLabel = "Current window";
+      if (allTabs.length === 0) {
+        return { ok: false, message: "There are no open tabs in this window." };
+      }
+    }
+    const tabDescriptors = allTabs.map((tab) => ({
+      tab,
+      title: tabTitle(tab),
+      url: tabUrl(tab)
+    }));
+    return finalizeResolvedTabList({
+      tabDescriptors,
+      exclusions,
+      maxTabs,
+      baseLabel,
+      usedFuzzyGroupMatch,
+      tabQueriesCount: 0
+    });
+  }
+  function resolveActiveTabGroupScope(gBrowser, maxTabs, exclusions = {}) {
+    if (!gBrowser) {
+      return { ok: false, message: "Browser UI is not available." };
+    }
+    const group = resolveActiveTabGroup(gBrowser);
+    if (!group) {
+      return {
+        ok: false,
+        message: "I couldn't find an active tab group. Name a tab group or use tabs by title."
+      };
+    }
+    const allTabs = Array.from(group.tabs || []);
+    if (allTabs.length === 0) {
+      return {
+        ok: false,
+        message: `Tab group "${group.label || "Untitled"}" has no tabs.`
+      };
+    }
+    const tabDescriptors = allTabs.map((tab) => ({
+      tab,
+      title: tabTitle(tab),
+      url: tabUrl(tab)
+    }));
+    return finalizeResolvedTabList({
+      tabDescriptors,
+      exclusions,
+      maxTabs,
+      baseLabel: `Tab group: ${group.label || "current"}`,
+      usedFuzzyGroupMatch: false,
+      tabQueriesCount: 0
+    });
+  }
+  async function extractTabDigests(tabs, options = {}) {
+    const concurrency = options.concurrency ?? EXTRACT_CONCURRENCY;
+    const total = tabs.length;
+    const results = new Array(total);
+    let completed = 0;
+    async function extractOne(tab) {
+      let extracted = await extractPageContentFromTab(tab);
+      const retriable = extracted.status === "failed" && /loading|timeout|not accessible/i.test(
+        String(extracted.failureReason || "")
+      );
+      if (options.retryOnce !== false && retriable) {
+        extracted = await extractPageContentFromTab(tab);
+      }
+      return {
+        title: extracted.title,
+        url: extracted.url,
+        content: extracted.content,
+        status: extracted.status,
+        failureReason: extracted.failureReason
+      };
+    }
+    let nextIndex = 0;
+    async function worker() {
+      while (nextIndex < total) {
+        throwIfResearchBriefAborted(options.signal);
+        const i2 = nextIndex++;
+        const tab = tabs[i2];
+        results[i2] = await extractOne(tab);
+        completed += 1;
+        options.onProgress?.(completed, total);
+      }
+    }
+    const workers = Array.from(
+      { length: Math.min(concurrency, total) },
+      () => worker()
+    );
+    await Promise.all(workers);
+    return results;
+  }
+  function tryJsonParseLoose3(str) {
+    const trimmed = String(str || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : trimmed;
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      return null;
+    }
+  }
+  function mergeDigestSourcesIntoBrief(brief, digests) {
+    const byUrl = new Map(brief.sources.map((s2) => [s2.url, s2]));
+    for (const digest of digests) {
+      if (byUrl.has(digest.url)) {
+        continue;
+      }
+      byUrl.set(digest.url, {
+        title: digest.title,
+        url: digest.url,
+        status: digest.status,
+        failureReason: digest.failureReason,
+        keyClaims: [],
+        quotes: []
+      });
+    }
+    return { ...brief, sources: Array.from(byUrl.values()) };
+  }
+  function parseAssistResponseContent2(res) {
+    if (!isRecord(res)) {
+      return null;
+    }
+    const content = res.content;
+    if (isRecord(content)) {
+      return content;
+    }
+    if (typeof content === "string") {
+      return tryJsonParseLoose3(content);
+    }
+    return null;
+  }
+  function appendSourceQualityNote(brief, digests) {
+    const failed = digests.filter(
+      (d3) => d3.status === "failed" || d3.status === "skipped"
+    ).length;
+    if (failed === 0) {
+      return brief;
+    }
+    const note = `${failed} source(s) had limited or unreadable text.`;
+    if (brief.executiveSummary.includes(note)) {
+      return brief;
+    }
+    return {
+      ...brief,
+      executiveSummary: `${brief.executiveSummary.trim()}
+
+${note}`.trim()
+    };
+  }
+  async function synthesizeResearchBrief(params) {
+    throwIfResearchBriefAborted(params.signal);
+    const userMessage = buildResearchBriefUserMessage({
+      topic: params.topic,
+      outlineHint: params.outlineHint,
+      scopeLabel: params.scopeLabel,
+      digests: params.digests
+    });
+    const res = await assistRemote(
+      RESEARCH_BRIEF_SYSTEM_PROMPT,
+      [{ role: "user", content: userMessage }],
+      ["chat"],
+      [],
+      RESEARCH_BRIEF_GENERATION_CONFIG,
+      void 0,
+      params.signal
+    );
+    throwIfResearchBriefAborted(params.signal);
+    if (res.quota) {
+      subscriptionService.updateFromQuota(res.quota);
+    }
+    syncSubscriptionFromAssistResponse(res);
+    const parsed = parseResearchBriefFromAssistContent(
+      parseAssistResponseContent2(res)
+    );
+    if (!parsed) {
+      throw new Error(
+        "I couldn't parse the research brief from the AI response."
+      );
+    }
+    parsed.topic = params.topic;
+    parsed.scopeLabel = params.scopeLabel;
+    if (!parsed.generatedAt) {
+      parsed.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    parsed.synthesisCharCount = params.digests.reduce(
+      (sum, d3) => sum + String(d3.content || "").length,
+      0
+    );
+    return mergeDigestSourcesIntoBrief(parsed, params.digests);
+  }
+  function previewResearchBriefScope(options) {
+    if (options.useActiveTabGroup) {
+      return resolveActiveTabGroupScope(
+        options.gBrowser,
+        options.maxTabs ?? DEFAULT_MAX_TABS,
+        {
+          excludeIndices: options.excludeIndices,
+          excludeQueries: options.excludeQueries
+        }
+      );
+    }
+    return resolveResearchTabs(
+      options.gBrowser,
+      options.scope,
+      options.name,
+      options.maxTabs ?? DEFAULT_MAX_TABS,
+      {
+        excludeIndices: options.excludeIndices,
+        excludeQueries: options.excludeQueries
+      },
+      options.tabQueries ?? [],
+      options.tabIndices ?? []
+    );
+  }
+  async function buildResearchBrief(options) {
+    const report = options.onProgress ?? createResearchBriefProgressReporter(options.signal);
+    let topic = String(options.topic || "").trim();
+    const inferTopicFromContent = options.inferTopicFromContent === true;
+    if (!topic && !inferTopicFromContent) {
+      return {
+        ok: false,
+        message: "Please provide a topic for the research brief."
+      };
+    }
+    try {
+      report({ phase: "resolving" });
+      throwIfResearchBriefAborted(options.signal);
+      const resolved = options.useActiveTabGroup ? resolveActiveTabGroupScope(
+        options.gBrowser,
+        options.maxTabs ?? DEFAULT_MAX_TABS,
+        {
+          excludeIndices: options.excludeIndices,
+          excludeQueries: options.excludeQueries
+        }
+      ) : resolveResearchTabs(
+        options.gBrowser,
+        options.scope,
+        options.name,
+        options.maxTabs ?? DEFAULT_MAX_TABS,
+        {
+          excludeIndices: options.excludeIndices,
+          excludeQueries: options.excludeQueries
+        },
+        options.tabQueries ?? [],
+        options.tabIndices ?? []
+      );
+      if (!resolved.ok) {
+        return { ok: false, message: resolved.message };
+      }
+      const digests = await extractTabDigests(resolved.tabs, {
+        onProgress: (current, total) => report({ phase: "extracting", current, total }),
+        signal: options.signal
+      });
+      const readable = digests.filter((d3) => d3.status === "ok" && d3.content);
+      if (readable.length === 0) {
+        return {
+          ok: false,
+          message: "I couldn't read any web pages in that scope. Try a tab group with loaded articles."
+        };
+      }
+      let topicInferred = false;
+      if (inferTopicFromContent || !topic) {
+        report({ phase: "topic", label: "Choosing topic from page content\u2026" });
+        topic = await inferResearchBriefTopicFromDigests(readable);
+        topicInferred = true;
+        report({ phase: "topic", label: `Topic: ${topic}` });
+      }
+      let budgetDigests = digests;
+      let truncated = false;
+      if (options.quotaMode === "fewer_tabs") {
+        const half = Math.max(1, Math.floor(readable.length / 2));
+        budgetDigests = digests.slice(0, half);
+      } else {
+        const budget = truncateDigestsToBudget(digests, MAX_TOTAL_CHARS);
+        budgetDigests = budget.digests;
+        truncated = budget.truncated || options.quotaMode === "truncate";
+      }
+      const estimate = estimateSynthesisTokens(budgetDigests);
+      const display = subscriptionService.getDailyTokenUsageForDisplay();
+      if (display.remaining > 0 && estimate > display.remaining && options.quotaMode === "default") {
+        const suggestedTabCount = suggestTabCountForQuota(
+          budgetDigests,
+          display.remaining
+        );
+        return {
+          ok: false,
+          code: "over_quota",
+          message: `This research brief may need about ${estimate.toLocaleString()} tokens, but you have about ${display.remaining.toLocaleString()} remaining today.`,
+          estimate,
+          remaining: display.remaining,
+          suggestedTabCount
+        };
+      }
+      report({ phase: "synthesizing" });
+      const { synthesizeResearchBriefWithBudget: synthesizeResearchBriefWithBudget2 } = await Promise.resolve().then(() => (init_researchBriefMapReduce(), researchBriefMapReduce_exports));
+      const synth = await synthesizeResearchBriefWithBudget2({
+        topic,
+        outlineHint: options.outlineHint,
+        scopeLabel: resolved.scopeLabel,
+        digests: budgetDigests,
+        maxTotalChars: MAX_TOTAL_CHARS,
+        signal: options.signal
+      });
+      let brief = synth.brief;
+      truncated = truncated || synth.truncated;
+      budgetDigests = synth.digests;
+      brief = { ...brief, topic, topicInferred };
+      brief = appendSourceQualityNote(brief, digests);
+      brief.synthesisCharCount = budgetDigests.reduce(
+        (sum, d3) => sum + String(d3.content || "").length,
+        0
+      );
+      const gapNotes = [...brief.gapsAndContradictions];
+      if (truncated) {
+        gapNotes.push(
+          "Some page content was truncated to fit processing limits; consider fewer tabs for fuller coverage."
+        );
+      }
+      if (resolved.tabsOmittedByLimit > 0) {
+        gapNotes.push(
+          `${resolved.tabsOmittedByLimit} tab(s) in scope were not included due to the tab limit.`
+        );
+      }
+      if (gapNotes.length !== brief.gapsAndContradictions.length) {
+        brief = { ...brief, gapsAndContradictions: gapNotes };
+      }
+      const markdown = researchBriefToMarkdown(brief);
+      const briefId = crypto.randomUUID?.() || String(Date.now());
+      storeResearchBriefRun({
+        briefId,
+        brief,
+        digests,
+        markdown
+      });
+      return { ok: true, brief, markdown, briefId };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return { ok: false, message: "Research brief cancelled." };
+      }
+      if (error instanceof QuotaExceededError || error.isQuotaError) {
+        const quota = error.quota;
+        if (quota) {
+          subscriptionService.updateFromQuota(quota);
+        }
+        return {
+          ok: false,
+          message: formatQuotaExceededMessage(error.message)
+        };
+      }
+      assistantLogger.warn("researchBrief", "Build failed", error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "I couldn't build the research brief. Please try again."
+      };
+    }
+  }
+  var MAX_TOTAL_CHARS, EXTRACT_CONCURRENCY;
+  var init_researchBrief = __esm({
+    "src/services/researchBrief.ts"() {
+      "use strict";
+      init_awsSignedFetch();
+      init_messageUtils();
+      init_proxyClient();
+      init_researchBriefFormat();
+      init_researchBriefPrompt();
+      init_assistantLogger();
+      init_quotaUserMessage();
+      init_researchBriefTopic();
+      init_researchBriefProgress();
+      init_pageContentExtract();
+      init_subscription();
+      init_syncAssistUsage();
+      init_firefoxFacade();
+      init_researchBriefTabResolve();
+      init_researchBriefResolve();
+      init_researchBriefDigestCache();
+      init_researchBriefClarify();
+      init_researchBriefFormat();
+      MAX_TOTAL_CHARS = 8e4;
+      EXTRACT_CONCURRENCY = 3;
     }
   });
 
@@ -39390,2895 +47648,11 @@ ${error.stack}` : "");
     ].join("\n\n");
   }
 
-  // node_modules/idb/build/index.js
-  var instanceOfAny = (object, constructors) => constructors.some((c3) => object instanceof c3);
-  var idbProxyableTypes;
-  var cursorAdvanceMethods;
-  function getIdbProxyableTypes() {
-    return idbProxyableTypes || (idbProxyableTypes = [
-      IDBDatabase,
-      IDBObjectStore,
-      IDBIndex,
-      IDBCursor,
-      IDBTransaction
-    ]);
-  }
-  function getCursorAdvanceMethods() {
-    return cursorAdvanceMethods || (cursorAdvanceMethods = [
-      IDBCursor.prototype.advance,
-      IDBCursor.prototype.continue,
-      IDBCursor.prototype.continuePrimaryKey
-    ]);
-  }
-  var transactionDoneMap = /* @__PURE__ */ new WeakMap();
-  var transformCache = /* @__PURE__ */ new WeakMap();
-  var reverseTransformCache = /* @__PURE__ */ new WeakMap();
-  function promisifyRequest(request) {
-    const promise = new Promise((resolve, reject) => {
-      const unlisten = () => {
-        request.removeEventListener("success", success);
-        request.removeEventListener("error", error);
-      };
-      const success = () => {
-        resolve(wrap2(request.result));
-        unlisten();
-      };
-      const error = () => {
-        reject(request.error);
-        unlisten();
-      };
-      request.addEventListener("success", success);
-      request.addEventListener("error", error);
-    });
-    reverseTransformCache.set(promise, request);
-    return promise;
-  }
-  function cacheDonePromiseForTransaction(tx) {
-    if (transactionDoneMap.has(tx))
-      return;
-    const done = new Promise((resolve, reject) => {
-      const unlisten = () => {
-        tx.removeEventListener("complete", complete);
-        tx.removeEventListener("error", error);
-        tx.removeEventListener("abort", error);
-      };
-      const complete = () => {
-        resolve();
-        unlisten();
-      };
-      const error = () => {
-        reject(tx.error || new DOMException("AbortError", "AbortError"));
-        unlisten();
-      };
-      tx.addEventListener("complete", complete);
-      tx.addEventListener("error", error);
-      tx.addEventListener("abort", error);
-    });
-    transactionDoneMap.set(tx, done);
-  }
-  var idbProxyTraps = {
-    get(target, prop, receiver) {
-      if (target instanceof IDBTransaction) {
-        if (prop === "done")
-          return transactionDoneMap.get(target);
-        if (prop === "store") {
-          return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
-        }
-      }
-      return wrap2(target[prop]);
-    },
-    set(target, prop, value) {
-      target[prop] = value;
-      return true;
-    },
-    has(target, prop) {
-      if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
-        return true;
-      }
-      return prop in target;
-    }
-  };
-  function replaceTraps(callback) {
-    idbProxyTraps = callback(idbProxyTraps);
-  }
-  function wrapFunction(func) {
-    if (getCursorAdvanceMethods().includes(func)) {
-      return function(...args) {
-        func.apply(unwrap(this), args);
-        return wrap2(this.request);
-      };
-    }
-    return function(...args) {
-      return wrap2(func.apply(unwrap(this), args));
-    };
-  }
-  function transformCachableValue(value) {
-    if (typeof value === "function")
-      return wrapFunction(value);
-    if (value instanceof IDBTransaction)
-      cacheDonePromiseForTransaction(value);
-    if (instanceOfAny(value, getIdbProxyableTypes()))
-      return new Proxy(value, idbProxyTraps);
-    return value;
-  }
-  function wrap2(value) {
-    if (value instanceof IDBRequest)
-      return promisifyRequest(value);
-    if (transformCache.has(value))
-      return transformCache.get(value);
-    const newValue = transformCachableValue(value);
-    if (newValue !== value) {
-      transformCache.set(value, newValue);
-      reverseTransformCache.set(newValue, value);
-    }
-    return newValue;
-  }
-  var unwrap = (value) => reverseTransformCache.get(value);
-  function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
-    const request = indexedDB.open(name, version);
-    const openPromise = wrap2(request);
-    if (upgrade) {
-      request.addEventListener("upgradeneeded", (event) => {
-        upgrade(wrap2(request.result), event.oldVersion, event.newVersion, wrap2(request.transaction), event);
-      });
-    }
-    if (blocked) {
-      request.addEventListener("blocked", (event) => blocked(
-        // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
-        event.oldVersion,
-        event.newVersion,
-        event
-      ));
-    }
-    openPromise.then((db) => {
-      if (terminated)
-        db.addEventListener("close", () => terminated());
-      if (blocking) {
-        db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
-      }
-    }).catch(() => {
-    });
-    return openPromise;
-  }
-  var readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
-  var writeMethods = ["put", "add", "delete", "clear"];
-  var cachedMethods = /* @__PURE__ */ new Map();
-  function getMethod(target, prop) {
-    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
-      return;
-    }
-    if (cachedMethods.get(prop))
-      return cachedMethods.get(prop);
-    const targetFuncName = prop.replace(/FromIndex$/, "");
-    const useIndex = prop !== targetFuncName;
-    const isWrite = writeMethods.includes(targetFuncName);
-    if (
-      // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
-      !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
-    ) {
-      return;
-    }
-    const method = async function(storeName, ...args) {
-      const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
-      let target2 = tx.store;
-      if (useIndex)
-        target2 = target2.index(args.shift());
-      return (await Promise.all([
-        target2[targetFuncName](...args),
-        isWrite && tx.done
-      ]))[0];
-    };
-    cachedMethods.set(prop, method);
-    return method;
-  }
-  replaceTraps((oldTraps) => ({
-    ...oldTraps,
-    get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
-    has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
-  }));
-  var advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
-  var methodMap = {};
-  var advanceResults = /* @__PURE__ */ new WeakMap();
-  var ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
-  var cursorIteratorTraps = {
-    get(target, prop) {
-      if (!advanceMethodProps.includes(prop))
-        return target[prop];
-      let cachedFunc = methodMap[prop];
-      if (!cachedFunc) {
-        cachedFunc = methodMap[prop] = function(...args) {
-          advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
-        };
-      }
-      return cachedFunc;
-    }
-  };
-  async function* iterate(...args) {
-    let cursor = this;
-    if (!(cursor instanceof IDBCursor)) {
-      cursor = await cursor.openCursor(...args);
-    }
-    if (!cursor)
-      return;
-    cursor = cursor;
-    const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
-    ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
-    reverseTransformCache.set(proxiedCursor, unwrap(cursor));
-    while (cursor) {
-      yield proxiedCursor;
-      cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
-      advanceResults.delete(proxiedCursor);
-    }
-  }
-  function isIteratorProp(target, prop) {
-    return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
-  }
-  replaceTraps((oldTraps) => ({
-    ...oldTraps,
-    get(target, prop, receiver) {
-      if (isIteratorProp(target, prop))
-        return iterate;
-      return oldTraps.get(target, prop, receiver);
-    },
-    has(target, prop) {
-      return isIteratorProp(target, prop) || oldTraps.has(target, prop);
-    }
-  }));
-
-  // node_modules/minisearch/dist/es/index.js
-  var ENTRIES = "ENTRIES";
-  var KEYS = "KEYS";
-  var VALUES = "VALUES";
-  var LEAF = "";
-  var TreeIterator = class {
-    constructor(set2, type) {
-      const node = set2._tree;
-      const keys = Array.from(node.keys());
-      this.set = set2;
-      this._type = type;
-      this._path = keys.length > 0 ? [{ node, keys }] : [];
-    }
-    next() {
-      const value = this.dive();
-      this.backtrack();
-      return value;
-    }
-    dive() {
-      if (this._path.length === 0) {
-        return { done: true, value: void 0 };
-      }
-      const { node, keys } = last$1(this._path);
-      if (last$1(keys) === LEAF) {
-        return { done: false, value: this.result() };
-      }
-      const child = node.get(last$1(keys));
-      this._path.push({ node: child, keys: Array.from(child.keys()) });
-      return this.dive();
-    }
-    backtrack() {
-      if (this._path.length === 0) {
-        return;
-      }
-      const keys = last$1(this._path).keys;
-      keys.pop();
-      if (keys.length > 0) {
-        return;
-      }
-      this._path.pop();
-      this.backtrack();
-    }
-    key() {
-      return this.set._prefix + this._path.map(({ keys }) => last$1(keys)).filter((key) => key !== LEAF).join("");
-    }
-    value() {
-      return last$1(this._path).node.get(LEAF);
-    }
-    result() {
-      switch (this._type) {
-        case VALUES:
-          return this.value();
-        case KEYS:
-          return this.key();
-        default:
-          return [this.key(), this.value()];
-      }
-    }
-    [Symbol.iterator]() {
-      return this;
-    }
-  };
-  var last$1 = (array) => {
-    return array[array.length - 1];
-  };
-  var fuzzySearch = (node, query, maxDistance) => {
-    const results = /* @__PURE__ */ new Map();
-    if (query === void 0)
-      return results;
-    const n2 = query.length + 1;
-    const m3 = n2 + maxDistance;
-    const matrix = new Uint8Array(m3 * n2).fill(maxDistance + 1);
-    for (let j3 = 0; j3 < n2; ++j3)
-      matrix[j3] = j3;
-    for (let i2 = 1; i2 < m3; ++i2)
-      matrix[i2 * n2] = i2;
-    recurse(node, query, maxDistance, results, matrix, 1, n2, "");
-    return results;
-  };
-  var recurse = (node, query, maxDistance, results, matrix, m3, n2, prefix) => {
-    const offset = m3 * n2;
-    key: for (const key of node.keys()) {
-      if (key === LEAF) {
-        const distance = matrix[offset - 1];
-        if (distance <= maxDistance) {
-          results.set(prefix, [node.get(key), distance]);
-        }
-      } else {
-        let i2 = m3;
-        for (let pos = 0; pos < key.length; ++pos, ++i2) {
-          const char = key[pos];
-          const thisRowOffset = n2 * i2;
-          const prevRowOffset = thisRowOffset - n2;
-          let minDistance = matrix[thisRowOffset];
-          const jmin = Math.max(0, i2 - maxDistance - 1);
-          const jmax = Math.min(n2 - 1, i2 + maxDistance);
-          for (let j3 = jmin; j3 < jmax; ++j3) {
-            const different = char !== query[j3];
-            const rpl = matrix[prevRowOffset + j3] + +different;
-            const del = matrix[prevRowOffset + j3 + 1] + 1;
-            const ins = matrix[thisRowOffset + j3] + 1;
-            const dist = matrix[thisRowOffset + j3 + 1] = Math.min(rpl, del, ins);
-            if (dist < minDistance)
-              minDistance = dist;
-          }
-          if (minDistance > maxDistance) {
-            continue key;
-          }
-        }
-        recurse(node.get(key), query, maxDistance, results, matrix, i2, n2, prefix + key);
-      }
-    }
-  };
-  var SearchableMap = class _SearchableMap {
-    /**
-     * The constructor is normally called without arguments, creating an empty
-     * map. In order to create a {@link SearchableMap} from an iterable or from an
-     * object, check {@link SearchableMap.from} and {@link
-     * SearchableMap.fromObject}.
-     *
-     * The constructor arguments are for internal use, when creating derived
-     * mutable views of a map at a prefix.
-     */
-    constructor(tree = /* @__PURE__ */ new Map(), prefix = "") {
-      this._size = void 0;
-      this._tree = tree;
-      this._prefix = prefix;
-    }
-    /**
-     * Creates and returns a mutable view of this {@link SearchableMap},
-     * containing only entries that share the given prefix.
-     *
-     * ### Usage:
-     *
-     * ```javascript
-     * let map = new SearchableMap()
-     * map.set("unicorn", 1)
-     * map.set("universe", 2)
-     * map.set("university", 3)
-     * map.set("unique", 4)
-     * map.set("hello", 5)
-     *
-     * let uni = map.atPrefix("uni")
-     * uni.get("unique") // => 4
-     * uni.get("unicorn") // => 1
-     * uni.get("hello") // => undefined
-     *
-     * let univer = map.atPrefix("univer")
-     * univer.get("unique") // => undefined
-     * univer.get("universe") // => 2
-     * univer.get("university") // => 3
-     * ```
-     *
-     * @param prefix  The prefix
-     * @return A {@link SearchableMap} representing a mutable view of the original
-     * Map at the given prefix
-     */
-    atPrefix(prefix) {
-      if (!prefix.startsWith(this._prefix)) {
-        throw new Error("Mismatched prefix");
-      }
-      const [node, path] = trackDown(this._tree, prefix.slice(this._prefix.length));
-      if (node === void 0) {
-        const [parentNode, key] = last(path);
-        for (const k3 of parentNode.keys()) {
-          if (k3 !== LEAF && k3.startsWith(key)) {
-            const node2 = /* @__PURE__ */ new Map();
-            node2.set(k3.slice(key.length), parentNode.get(k3));
-            return new _SearchableMap(node2, prefix);
-          }
-        }
-      }
-      return new _SearchableMap(node, prefix);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/clear
-     */
-    clear() {
-      this._size = void 0;
-      this._tree.clear();
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/delete
-     * @param key  Key to delete
-     */
-    delete(key) {
-      this._size = void 0;
-      return remove(this._tree, key);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/entries
-     * @return An iterator iterating through `[key, value]` entries.
-     */
-    entries() {
-      return new TreeIterator(this, ENTRIES);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/forEach
-     * @param fn  Iteration function
-     */
-    forEach(fn) {
-      for (const [key, value] of this) {
-        fn(key, value, this);
-      }
-    }
-    /**
-     * Returns a Map of all the entries that have a key within the given edit
-     * distance from the search key. The keys of the returned Map are the matching
-     * keys, while the values are two-element arrays where the first element is
-     * the value associated to the key, and the second is the edit distance of the
-     * key to the search key.
-     *
-     * ### Usage:
-     *
-     * ```javascript
-     * let map = new SearchableMap()
-     * map.set('hello', 'world')
-     * map.set('hell', 'yeah')
-     * map.set('ciao', 'mondo')
-     *
-     * // Get all entries that match the key 'hallo' with a maximum edit distance of 2
-     * map.fuzzyGet('hallo', 2)
-     * // => Map(2) { 'hello' => ['world', 1], 'hell' => ['yeah', 2] }
-     *
-     * // In the example, the "hello" key has value "world" and edit distance of 1
-     * // (change "e" to "a"), the key "hell" has value "yeah" and edit distance of 2
-     * // (change "e" to "a", delete "o")
-     * ```
-     *
-     * @param key  The search key
-     * @param maxEditDistance  The maximum edit distance (Levenshtein)
-     * @return A Map of the matching keys to their value and edit distance
-     */
-    fuzzyGet(key, maxEditDistance) {
-      return fuzzySearch(this._tree, key, maxEditDistance);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get
-     * @param key  Key to get
-     * @return Value associated to the key, or `undefined` if the key is not
-     * found.
-     */
-    get(key) {
-      const node = lookup(this._tree, key);
-      return node !== void 0 ? node.get(LEAF) : void 0;
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/has
-     * @param key  Key
-     * @return True if the key is in the map, false otherwise
-     */
-    has(key) {
-      const node = lookup(this._tree, key);
-      return node !== void 0 && node.has(LEAF);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/keys
-     * @return An `Iterable` iterating through keys
-     */
-    keys() {
-      return new TreeIterator(this, KEYS);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/set
-     * @param key  Key to set
-     * @param value  Value to associate to the key
-     * @return The {@link SearchableMap} itself, to allow chaining
-     */
-    set(key, value) {
-      if (typeof key !== "string") {
-        throw new Error("key must be a string");
-      }
-      this._size = void 0;
-      const node = createPath(this._tree, key);
-      node.set(LEAF, value);
-      return this;
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/size
-     */
-    get size() {
-      if (this._size) {
-        return this._size;
-      }
-      this._size = 0;
-      const iter = this.entries();
-      while (!iter.next().done)
-        this._size += 1;
-      return this._size;
-    }
-    /**
-     * Updates the value at the given key using the provided function. The function
-     * is called with the current value at the key, and its return value is used as
-     * the new value to be set.
-     *
-     * ### Example:
-     *
-     * ```javascript
-     * // Increment the current value by one
-     * searchableMap.update('somekey', (currentValue) => currentValue == null ? 0 : currentValue + 1)
-     * ```
-     *
-     * If the value at the given key is or will be an object, it might not require
-     * re-assignment. In that case it is better to use `fetch()`, because it is
-     * faster.
-     *
-     * @param key  The key to update
-     * @param fn  The function used to compute the new value from the current one
-     * @return The {@link SearchableMap} itself, to allow chaining
-     */
-    update(key, fn) {
-      if (typeof key !== "string") {
-        throw new Error("key must be a string");
-      }
-      this._size = void 0;
-      const node = createPath(this._tree, key);
-      node.set(LEAF, fn(node.get(LEAF)));
-      return this;
-    }
-    /**
-     * Fetches the value of the given key. If the value does not exist, calls the
-     * given function to create a new value, which is inserted at the given key
-     * and subsequently returned.
-     *
-     * ### Example:
-     *
-     * ```javascript
-     * const map = searchableMap.fetch('somekey', () => new Map())
-     * map.set('foo', 'bar')
-     * ```
-     *
-     * @param key  The key to update
-     * @param initial  A function that creates a new value if the key does not exist
-     * @return The existing or new value at the given key
-     */
-    fetch(key, initial) {
-      if (typeof key !== "string") {
-        throw new Error("key must be a string");
-      }
-      this._size = void 0;
-      const node = createPath(this._tree, key);
-      let value = node.get(LEAF);
-      if (value === void 0) {
-        node.set(LEAF, value = initial());
-      }
-      return value;
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/values
-     * @return An `Iterable` iterating through values.
-     */
-    values() {
-      return new TreeIterator(this, VALUES);
-    }
-    /**
-     * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/@@iterator
-     */
-    [Symbol.iterator]() {
-      return this.entries();
-    }
-    /**
-     * Creates a {@link SearchableMap} from an `Iterable` of entries
-     *
-     * @param entries  Entries to be inserted in the {@link SearchableMap}
-     * @return A new {@link SearchableMap} with the given entries
-     */
-    static from(entries2) {
-      const tree = new _SearchableMap();
-      for (const [key, value] of entries2) {
-        tree.set(key, value);
-      }
-      return tree;
-    }
-    /**
-     * Creates a {@link SearchableMap} from the iterable properties of a JavaScript object
-     *
-     * @param object  Object of entries for the {@link SearchableMap}
-     * @return A new {@link SearchableMap} with the given entries
-     */
-    static fromObject(object) {
-      return _SearchableMap.from(Object.entries(object));
-    }
-  };
-  var trackDown = (tree, key, path = []) => {
-    if (key.length === 0 || tree == null) {
-      return [tree, path];
-    }
-    for (const k3 of tree.keys()) {
-      if (k3 !== LEAF && key.startsWith(k3)) {
-        path.push([tree, k3]);
-        return trackDown(tree.get(k3), key.slice(k3.length), path);
-      }
-    }
-    path.push([tree, key]);
-    return trackDown(void 0, "", path);
-  };
-  var lookup = (tree, key) => {
-    if (key.length === 0 || tree == null) {
-      return tree;
-    }
-    for (const k3 of tree.keys()) {
-      if (k3 !== LEAF && key.startsWith(k3)) {
-        return lookup(tree.get(k3), key.slice(k3.length));
-      }
-    }
-  };
-  var createPath = (node, key) => {
-    const keyLength = key.length;
-    outer: for (let pos = 0; node && pos < keyLength; ) {
-      for (const k3 of node.keys()) {
-        if (k3 !== LEAF && key[pos] === k3[0]) {
-          const len = Math.min(keyLength - pos, k3.length);
-          let offset = 1;
-          while (offset < len && key[pos + offset] === k3[offset])
-            ++offset;
-          const child2 = node.get(k3);
-          if (offset === k3.length) {
-            node = child2;
-          } else {
-            const intermediate = /* @__PURE__ */ new Map();
-            intermediate.set(k3.slice(offset), child2);
-            node.set(key.slice(pos, pos + offset), intermediate);
-            node.delete(k3);
-            node = intermediate;
-          }
-          pos += offset;
-          continue outer;
-        }
-      }
-      const child = /* @__PURE__ */ new Map();
-      node.set(key.slice(pos), child);
-      return child;
-    }
-    return node;
-  };
-  var remove = (tree, key) => {
-    const [node, path] = trackDown(tree, key);
-    if (node === void 0) {
-      return;
-    }
-    node.delete(LEAF);
-    if (node.size === 0) {
-      cleanup(path);
-    } else if (node.size === 1) {
-      const [key2, value] = node.entries().next().value;
-      merge(path, key2, value);
-    }
-  };
-  var cleanup = (path) => {
-    if (path.length === 0) {
-      return;
-    }
-    const [node, key] = last(path);
-    node.delete(key);
-    if (node.size === 0) {
-      cleanup(path.slice(0, -1));
-    } else if (node.size === 1) {
-      const [key2, value] = node.entries().next().value;
-      if (key2 !== LEAF) {
-        merge(path.slice(0, -1), key2, value);
-      }
-    }
-  };
-  var merge = (path, key, value) => {
-    if (path.length === 0) {
-      return;
-    }
-    const [node, nodeKey] = last(path);
-    node.set(nodeKey + key, value);
-    node.delete(nodeKey);
-  };
-  var last = (array) => {
-    return array[array.length - 1];
-  };
-  var OR = "or";
-  var AND = "and";
-  var AND_NOT = "and_not";
-  var MiniSearch = class _MiniSearch {
-    /**
-     * @param options  Configuration options
-     *
-     * ### Examples:
-     *
-     * ```javascript
-     * // Create a search engine that indexes the 'title' and 'text' fields of your
-     * // documents:
-     * const miniSearch = new MiniSearch({ fields: ['title', 'text'] })
-     * ```
-     *
-     * ### ID Field:
-     *
-     * ```javascript
-     * // Your documents are assumed to include a unique 'id' field, but if you want
-     * // to use a different field for document identification, you can set the
-     * // 'idField' option:
-     * const miniSearch = new MiniSearch({ idField: 'key', fields: ['title', 'text'] })
-     * ```
-     *
-     * ### Options and defaults:
-     *
-     * ```javascript
-     * // The full set of options (here with their default value) is:
-     * const miniSearch = new MiniSearch({
-     *   // idField: field that uniquely identifies a document
-     *   idField: 'id',
-     *
-     *   // extractField: function used to get the value of a field in a document.
-     *   // By default, it assumes the document is a flat object with field names as
-     *   // property keys and field values as string property values, but custom logic
-     *   // can be implemented by setting this option to a custom extractor function.
-     *   extractField: (document, fieldName) => document[fieldName],
-     *
-     *   // tokenize: function used to split fields into individual terms. By
-     *   // default, it is also used to tokenize search queries, unless a specific
-     *   // `tokenize` search option is supplied. When tokenizing an indexed field,
-     *   // the field name is passed as the second argument.
-     *   tokenize: (string, _fieldName) => string.split(SPACE_OR_PUNCTUATION),
-     *
-     *   // processTerm: function used to process each tokenized term before
-     *   // indexing. It can be used for stemming and normalization. Return a falsy
-     *   // value in order to discard a term. By default, it is also used to process
-     *   // search queries, unless a specific `processTerm` option is supplied as a
-     *   // search option. When processing a term from a indexed field, the field
-     *   // name is passed as the second argument.
-     *   processTerm: (term, _fieldName) => term.toLowerCase(),
-     *
-     *   // searchOptions: default search options, see the `search` method for
-     *   // details
-     *   searchOptions: undefined,
-     *
-     *   // fields: document fields to be indexed. Mandatory, but not set by default
-     *   fields: undefined
-     *
-     *   // storeFields: document fields to be stored and returned as part of the
-     *   // search results.
-     *   storeFields: []
-     * })
-     * ```
-     */
-    constructor(options) {
-      if ((options === null || options === void 0 ? void 0 : options.fields) == null) {
-        throw new Error('MiniSearch: option "fields" must be provided');
-      }
-      const autoVacuum = options.autoVacuum == null || options.autoVacuum === true ? defaultAutoVacuumOptions : options.autoVacuum;
-      this._options = {
-        ...defaultOptions2,
-        ...options,
-        autoVacuum,
-        searchOptions: { ...defaultSearchOptions, ...options.searchOptions || {} },
-        autoSuggestOptions: { ...defaultAutoSuggestOptions, ...options.autoSuggestOptions || {} }
-      };
-      this._index = new SearchableMap();
-      this._documentCount = 0;
-      this._documentIds = /* @__PURE__ */ new Map();
-      this._idToShortId = /* @__PURE__ */ new Map();
-      this._fieldIds = {};
-      this._fieldLength = /* @__PURE__ */ new Map();
-      this._avgFieldLength = [];
-      this._nextId = 0;
-      this._storedFields = /* @__PURE__ */ new Map();
-      this._dirtCount = 0;
-      this._currentVacuum = null;
-      this._enqueuedVacuum = null;
-      this._enqueuedVacuumConditions = defaultVacuumConditions;
-      this.addFields(this._options.fields);
-    }
-    /**
-     * Adds a document to the index
-     *
-     * @param document  The document to be indexed
-     */
-    add(document2) {
-      const { extractField, stringifyField, tokenize: tokenize2, processTerm, fields, idField } = this._options;
-      const id = extractField(document2, idField);
-      if (id == null) {
-        throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
-      }
-      if (this._idToShortId.has(id)) {
-        throw new Error(`MiniSearch: duplicate ID ${id}`);
-      }
-      const shortDocumentId = this.addDocumentId(id);
-      this.saveStoredFields(shortDocumentId, document2);
-      for (const field of fields) {
-        const fieldValue = extractField(document2, field);
-        if (fieldValue == null)
-          continue;
-        const tokens = tokenize2(stringifyField(fieldValue, field), field);
-        const fieldId = this._fieldIds[field];
-        const uniqueTerms = new Set(tokens).size;
-        this.addFieldLength(shortDocumentId, fieldId, this._documentCount - 1, uniqueTerms);
-        for (const term of tokens) {
-          const processedTerm = processTerm(term, field);
-          if (Array.isArray(processedTerm)) {
-            for (const t2 of processedTerm) {
-              this.addTerm(fieldId, shortDocumentId, t2);
-            }
-          } else if (processedTerm) {
-            this.addTerm(fieldId, shortDocumentId, processedTerm);
-          }
-        }
-      }
-    }
-    /**
-     * Adds all the given documents to the index
-     *
-     * @param documents  An array of documents to be indexed
-     */
-    addAll(documents) {
-      for (const document2 of documents)
-        this.add(document2);
-    }
-    /**
-     * Adds all the given documents to the index asynchronously.
-     *
-     * Returns a promise that resolves (to `undefined`) when the indexing is done.
-     * This method is useful when index many documents, to avoid blocking the main
-     * thread. The indexing is performed asynchronously and in chunks.
-     *
-     * @param documents  An array of documents to be indexed
-     * @param options  Configuration options
-     * @return A promise resolving to `undefined` when the indexing is done
-     */
-    addAllAsync(documents, options = {}) {
-      const { chunkSize = 10 } = options;
-      const acc = { chunk: [], promise: Promise.resolve() };
-      const { chunk, promise } = documents.reduce(({ chunk: chunk2, promise: promise2 }, document2, i2) => {
-        chunk2.push(document2);
-        if ((i2 + 1) % chunkSize === 0) {
-          return {
-            chunk: [],
-            promise: promise2.then(() => new Promise((resolve) => setTimeout(resolve, 0))).then(() => this.addAll(chunk2))
-          };
-        } else {
-          return { chunk: chunk2, promise: promise2 };
-        }
-      }, acc);
-      return promise.then(() => this.addAll(chunk));
-    }
-    /**
-     * Removes the given document from the index.
-     *
-     * The document to remove must NOT have changed between indexing and removal,
-     * otherwise the index will be corrupted.
-     *
-     * This method requires passing the full document to be removed (not just the
-     * ID), and immediately removes the document from the inverted index, allowing
-     * memory to be released. A convenient alternative is {@link
-     * MiniSearch#discard}, which needs only the document ID, and has the same
-     * visible effect, but delays cleaning up the index until the next vacuuming.
-     *
-     * @param document  The document to be removed
-     */
-    remove(document2) {
-      const { tokenize: tokenize2, processTerm, extractField, stringifyField, fields, idField } = this._options;
-      const id = extractField(document2, idField);
-      if (id == null) {
-        throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
-      }
-      const shortId = this._idToShortId.get(id);
-      if (shortId == null) {
-        throw new Error(`MiniSearch: cannot remove document with ID ${id}: it is not in the index`);
-      }
-      for (const field of fields) {
-        const fieldValue = extractField(document2, field);
-        if (fieldValue == null)
-          continue;
-        const tokens = tokenize2(stringifyField(fieldValue, field), field);
-        const fieldId = this._fieldIds[field];
-        const uniqueTerms = new Set(tokens).size;
-        this.removeFieldLength(shortId, fieldId, this._documentCount, uniqueTerms);
-        for (const term of tokens) {
-          const processedTerm = processTerm(term, field);
-          if (Array.isArray(processedTerm)) {
-            for (const t2 of processedTerm) {
-              this.removeTerm(fieldId, shortId, t2);
-            }
-          } else if (processedTerm) {
-            this.removeTerm(fieldId, shortId, processedTerm);
-          }
-        }
-      }
-      this._storedFields.delete(shortId);
-      this._documentIds.delete(shortId);
-      this._idToShortId.delete(id);
-      this._fieldLength.delete(shortId);
-      this._documentCount -= 1;
-    }
-    /**
-     * Removes all the given documents from the index. If called with no arguments,
-     * it removes _all_ documents from the index.
-     *
-     * @param documents  The documents to be removed. If this argument is omitted,
-     * all documents are removed. Note that, for removing all documents, it is
-     * more efficient to call this method with no arguments than to pass all
-     * documents.
-     */
-    removeAll(documents) {
-      if (documents) {
-        for (const document2 of documents)
-          this.remove(document2);
-      } else if (arguments.length > 0) {
-        throw new Error("Expected documents to be present. Omit the argument to remove all documents.");
-      } else {
-        this._index = new SearchableMap();
-        this._documentCount = 0;
-        this._documentIds = /* @__PURE__ */ new Map();
-        this._idToShortId = /* @__PURE__ */ new Map();
-        this._fieldLength = /* @__PURE__ */ new Map();
-        this._avgFieldLength = [];
-        this._storedFields = /* @__PURE__ */ new Map();
-        this._nextId = 0;
-      }
-    }
-    /**
-     * Discards the document with the given ID, so it won't appear in search results
-     *
-     * It has the same visible effect of {@link MiniSearch.remove} (both cause the
-     * document to stop appearing in searches), but a different effect on the
-     * internal data structures:
-     *
-     *   - {@link MiniSearch#remove} requires passing the full document to be
-     *   removed as argument, and removes it from the inverted index immediately.
-     *
-     *   - {@link MiniSearch#discard} instead only needs the document ID, and
-     *   works by marking the current version of the document as discarded, so it
-     *   is immediately ignored by searches. This is faster and more convenient
-     *   than {@link MiniSearch#remove}, but the index is not immediately
-     *   modified. To take care of that, vacuuming is performed after a certain
-     *   number of documents are discarded, cleaning up the index and allowing
-     *   memory to be released.
-     *
-     * After discarding a document, it is possible to re-add a new version, and
-     * only the new version will appear in searches. In other words, discarding
-     * and re-adding a document works exactly like removing and re-adding it. The
-     * {@link MiniSearch.replace} method can also be used to replace a document
-     * with a new version.
-     *
-     * #### Details about vacuuming
-     *
-     * Repetite calls to this method would leave obsolete document references in
-     * the index, invisible to searches. Two mechanisms take care of cleaning up:
-     * clean up during search, and vacuuming.
-     *
-     *   - Upon search, whenever a discarded ID is found (and ignored for the
-     *   results), references to the discarded document are removed from the
-     *   inverted index entries for the search terms. This ensures that subsequent
-     *   searches for the same terms do not need to skip these obsolete references
-     *   again.
-     *
-     *   - In addition, vacuuming is performed automatically by default (see the
-     *   `autoVacuum` field in {@link Options}) after a certain number of
-     *   documents are discarded. Vacuuming traverses all terms in the index,
-     *   cleaning up all references to discarded documents. Vacuuming can also be
-     *   triggered manually by calling {@link MiniSearch#vacuum}.
-     *
-     * @param id  The ID of the document to be discarded
-     */
-    discard(id) {
-      const shortId = this._idToShortId.get(id);
-      if (shortId == null) {
-        throw new Error(`MiniSearch: cannot discard document with ID ${id}: it is not in the index`);
-      }
-      this._idToShortId.delete(id);
-      this._documentIds.delete(shortId);
-      this._storedFields.delete(shortId);
-      (this._fieldLength.get(shortId) || []).forEach((fieldLength, fieldId) => {
-        this.removeFieldLength(shortId, fieldId, this._documentCount, fieldLength);
-      });
-      this._fieldLength.delete(shortId);
-      this._documentCount -= 1;
-      this._dirtCount += 1;
-      this.maybeAutoVacuum();
-    }
-    maybeAutoVacuum() {
-      if (this._options.autoVacuum === false) {
-        return;
-      }
-      const { minDirtFactor, minDirtCount, batchSize, batchWait } = this._options.autoVacuum;
-      this.conditionalVacuum({ batchSize, batchWait }, { minDirtCount, minDirtFactor });
-    }
-    /**
-     * Discards the documents with the given IDs, so they won't appear in search
-     * results
-     *
-     * It is equivalent to calling {@link MiniSearch#discard} for all the given
-     * IDs, but with the optimization of triggering at most one automatic
-     * vacuuming at the end.
-     *
-     * Note: to remove all documents from the index, it is faster and more
-     * convenient to call {@link MiniSearch.removeAll} with no argument, instead
-     * of passing all IDs to this method.
-     */
-    discardAll(ids) {
-      const autoVacuum = this._options.autoVacuum;
-      try {
-        this._options.autoVacuum = false;
-        for (const id of ids) {
-          this.discard(id);
-        }
-      } finally {
-        this._options.autoVacuum = autoVacuum;
-      }
-      this.maybeAutoVacuum();
-    }
-    /**
-     * It replaces an existing document with the given updated version
-     *
-     * It works by discarding the current version and adding the updated one, so
-     * it is functionally equivalent to calling {@link MiniSearch#discard}
-     * followed by {@link MiniSearch#add}. The ID of the updated document should
-     * be the same as the original one.
-     *
-     * Since it uses {@link MiniSearch#discard} internally, this method relies on
-     * vacuuming to clean up obsolete document references from the index, allowing
-     * memory to be released (see {@link MiniSearch#discard}).
-     *
-     * @param updatedDocument  The updated document to replace the old version
-     * with
-     */
-    replace(updatedDocument) {
-      const { idField, extractField } = this._options;
-      const id = extractField(updatedDocument, idField);
-      this.discard(id);
-      this.add(updatedDocument);
-    }
-    /**
-     * Triggers a manual vacuuming, cleaning up references to discarded documents
-     * from the inverted index
-     *
-     * Vacuuming is only useful for applications that use the {@link
-     * MiniSearch#discard} or {@link MiniSearch#replace} methods.
-     *
-     * By default, vacuuming is performed automatically when needed (controlled by
-     * the `autoVacuum` field in {@link Options}), so there is usually no need to
-     * call this method, unless one wants to make sure to perform vacuuming at a
-     * specific moment.
-     *
-     * Vacuuming traverses all terms in the inverted index in batches, and cleans
-     * up references to discarded documents from the posting list, allowing memory
-     * to be released.
-     *
-     * The method takes an optional object as argument with the following keys:
-     *
-     *   - `batchSize`: the size of each batch (1000 by default)
-     *
-     *   - `batchWait`: the number of milliseconds to wait between batches (10 by
-     *   default)
-     *
-     * On large indexes, vacuuming could have a non-negligible cost: batching
-     * avoids blocking the thread for long, diluting this cost so that it is not
-     * negatively affecting the application. Nonetheless, this method should only
-     * be called when necessary, and relying on automatic vacuuming is usually
-     * better.
-     *
-     * It returns a promise that resolves (to undefined) when the clean up is
-     * completed. If vacuuming is already ongoing at the time this method is
-     * called, a new one is enqueued immediately after the ongoing one, and a
-     * corresponding promise is returned. However, no more than one vacuuming is
-     * enqueued on top of the ongoing one, even if this method is called more
-     * times (enqueuing multiple ones would be useless).
-     *
-     * @param options  Configuration options for the batch size and delay. See
-     * {@link VacuumOptions}.
-     */
-    vacuum(options = {}) {
-      return this.conditionalVacuum(options);
-    }
-    conditionalVacuum(options, conditions) {
-      if (this._currentVacuum) {
-        this._enqueuedVacuumConditions = this._enqueuedVacuumConditions && conditions;
-        if (this._enqueuedVacuum != null) {
-          return this._enqueuedVacuum;
-        }
-        this._enqueuedVacuum = this._currentVacuum.then(() => {
-          const conditions2 = this._enqueuedVacuumConditions;
-          this._enqueuedVacuumConditions = defaultVacuumConditions;
-          return this.performVacuuming(options, conditions2);
-        });
-        return this._enqueuedVacuum;
-      }
-      if (this.vacuumConditionsMet(conditions) === false) {
-        return Promise.resolve();
-      }
-      this._currentVacuum = this.performVacuuming(options);
-      return this._currentVacuum;
-    }
-    async performVacuuming(options, conditions) {
-      const initialDirtCount = this._dirtCount;
-      if (this.vacuumConditionsMet(conditions)) {
-        const batchSize = options.batchSize || defaultVacuumOptions.batchSize;
-        const batchWait = options.batchWait || defaultVacuumOptions.batchWait;
-        let i2 = 1;
-        for (const [term, fieldsData] of this._index) {
-          for (const [fieldId, fieldIndex] of fieldsData) {
-            for (const [shortId] of fieldIndex) {
-              if (this._documentIds.has(shortId)) {
-                continue;
-              }
-              if (fieldIndex.size <= 1) {
-                fieldsData.delete(fieldId);
-              } else {
-                fieldIndex.delete(shortId);
-              }
-            }
-          }
-          if (this._index.get(term).size === 0) {
-            this._index.delete(term);
-          }
-          if (i2 % batchSize === 0) {
-            await new Promise((resolve) => setTimeout(resolve, batchWait));
-          }
-          i2 += 1;
-        }
-        this._dirtCount -= initialDirtCount;
-      }
-      await null;
-      this._currentVacuum = this._enqueuedVacuum;
-      this._enqueuedVacuum = null;
-    }
-    vacuumConditionsMet(conditions) {
-      if (conditions == null) {
-        return true;
-      }
-      let { minDirtCount, minDirtFactor } = conditions;
-      minDirtCount = minDirtCount || defaultAutoVacuumOptions.minDirtCount;
-      minDirtFactor = minDirtFactor || defaultAutoVacuumOptions.minDirtFactor;
-      return this.dirtCount >= minDirtCount && this.dirtFactor >= minDirtFactor;
-    }
-    /**
-     * Is `true` if a vacuuming operation is ongoing, `false` otherwise
-     */
-    get isVacuuming() {
-      return this._currentVacuum != null;
-    }
-    /**
-     * The number of documents discarded since the most recent vacuuming
-     */
-    get dirtCount() {
-      return this._dirtCount;
-    }
-    /**
-     * A number between 0 and 1 giving an indication about the proportion of
-     * documents that are discarded, and can therefore be cleaned up by vacuuming.
-     * A value close to 0 means that the index is relatively clean, while a higher
-     * value means that the index is relatively dirty, and vacuuming could release
-     * memory.
-     */
-    get dirtFactor() {
-      return this._dirtCount / (1 + this._documentCount + this._dirtCount);
-    }
-    /**
-     * Returns `true` if a document with the given ID is present in the index and
-     * available for search, `false` otherwise
-     *
-     * @param id  The document ID
-     */
-    has(id) {
-      return this._idToShortId.has(id);
-    }
-    /**
-     * Returns the stored fields (as configured in the `storeFields` constructor
-     * option) for the given document ID. Returns `undefined` if the document is
-     * not present in the index.
-     *
-     * @param id  The document ID
-     */
-    getStoredFields(id) {
-      const shortId = this._idToShortId.get(id);
-      if (shortId == null) {
-        return void 0;
-      }
-      return this._storedFields.get(shortId);
-    }
-    /**
-     * Search for documents matching the given search query.
-     *
-     * The result is a list of scored document IDs matching the query, sorted by
-     * descending score, and each including data about which terms were matched and
-     * in which fields.
-     *
-     * ### Basic usage:
-     *
-     * ```javascript
-     * // Search for "zen art motorcycle" with default options: terms have to match
-     * // exactly, and individual terms are joined with OR
-     * miniSearch.search('zen art motorcycle')
-     * // => [ { id: 2, score: 2.77258, match: { ... } }, { id: 4, score: 1.38629, match: { ... } } ]
-     * ```
-     *
-     * ### Restrict search to specific fields:
-     *
-     * ```javascript
-     * // Search only in the 'title' field
-     * miniSearch.search('zen', { fields: ['title'] })
-     * ```
-     *
-     * ### Field boosting:
-     *
-     * ```javascript
-     * // Boost a field
-     * miniSearch.search('zen', { boost: { title: 2 } })
-     * ```
-     *
-     * ### Prefix search:
-     *
-     * ```javascript
-     * // Search for "moto" with prefix search (it will match documents
-     * // containing terms that start with "moto" or "neuro")
-     * miniSearch.search('moto neuro', { prefix: true })
-     * ```
-     *
-     * ### Fuzzy search:
-     *
-     * ```javascript
-     * // Search for "ismael" with fuzzy search (it will match documents containing
-     * // terms similar to "ismael", with a maximum edit distance of 0.2 term.length
-     * // (rounded to nearest integer)
-     * miniSearch.search('ismael', { fuzzy: 0.2 })
-     * ```
-     *
-     * ### Combining strategies:
-     *
-     * ```javascript
-     * // Mix of exact match, prefix search, and fuzzy search
-     * miniSearch.search('ismael mob', {
-     *  prefix: true,
-     *  fuzzy: 0.2
-     * })
-     * ```
-     *
-     * ### Advanced prefix and fuzzy search:
-     *
-     * ```javascript
-     * // Perform fuzzy and prefix search depending on the search term. Here
-     * // performing prefix and fuzzy search only on terms longer than 3 characters
-     * miniSearch.search('ismael mob', {
-     *  prefix: term => term.length > 3
-     *  fuzzy: term => term.length > 3 ? 0.2 : null
-     * })
-     * ```
-     *
-     * ### Combine with AND:
-     *
-     * ```javascript
-     * // Combine search terms with AND (to match only documents that contain both
-     * // "motorcycle" and "art")
-     * miniSearch.search('motorcycle art', { combineWith: 'AND' })
-     * ```
-     *
-     * ### Combine with AND_NOT:
-     *
-     * There is also an AND_NOT combinator, that finds documents that match the
-     * first term, but do not match any of the other terms. This combinator is
-     * rarely useful with simple queries, and is meant to be used with advanced
-     * query combinations (see later for more details).
-     *
-     * ### Filtering results:
-     *
-     * ```javascript
-     * // Filter only results in the 'fiction' category (assuming that 'category'
-     * // is a stored field)
-     * miniSearch.search('motorcycle art', {
-     *   filter: (result) => result.category === 'fiction'
-     * })
-     * ```
-     *
-     * ### Wildcard query
-     *
-     * Searching for an empty string (assuming the default tokenizer) returns no
-     * results. Sometimes though, one needs to match all documents, like in a
-     * "wildcard" search. This is possible by passing the special value
-     * {@link MiniSearch.wildcard} as the query:
-     *
-     * ```javascript
-     * // Return search results for all documents
-     * miniSearch.search(MiniSearch.wildcard)
-     * ```
-     *
-     * Note that search options such as `filter` and `boostDocument` are still
-     * applied, influencing which results are returned, and their order:
-     *
-     * ```javascript
-     * // Return search results for all documents in the 'fiction' category
-     * miniSearch.search(MiniSearch.wildcard, {
-     *   filter: (result) => result.category === 'fiction'
-     * })
-     * ```
-     *
-     * ### Advanced combination of queries:
-     *
-     * It is possible to combine different subqueries with OR, AND, and AND_NOT,
-     * and even with different search options, by passing a query expression
-     * tree object as the first argument, instead of a string.
-     *
-     * ```javascript
-     * // Search for documents that contain "zen" and ("motorcycle" or "archery")
-     * miniSearch.search({
-     *   combineWith: 'AND',
-     *   queries: [
-     *     'zen',
-     *     {
-     *       combineWith: 'OR',
-     *       queries: ['motorcycle', 'archery']
-     *     }
-     *   ]
-     * })
-     *
-     * // Search for documents that contain ("apple" or "pear") but not "juice" and
-     * // not "tree"
-     * miniSearch.search({
-     *   combineWith: 'AND_NOT',
-     *   queries: [
-     *     {
-     *       combineWith: 'OR',
-     *       queries: ['apple', 'pear']
-     *     },
-     *     'juice',
-     *     'tree'
-     *   ]
-     * })
-     * ```
-     *
-     * Each node in the expression tree can be either a string, or an object that
-     * supports all {@link SearchOptions} fields, plus a `queries` array field for
-     * subqueries.
-     *
-     * Note that, while this can become complicated to do by hand for complex or
-     * deeply nested queries, it provides a formalized expression tree API for
-     * external libraries that implement a parser for custom query languages.
-     *
-     * @param query  Search query
-     * @param searchOptions  Search options. Each option, if not given, defaults to the corresponding value of `searchOptions` given to the constructor, or to the library default.
-     */
-    search(query, searchOptions = {}) {
-      const { searchOptions: globalSearchOptions } = this._options;
-      const searchOptionsWithDefaults = { ...globalSearchOptions, ...searchOptions };
-      const rawResults = this.executeQuery(query, searchOptions);
-      const results = [];
-      for (const [docId, { score, terms, match }] of rawResults) {
-        const quality = terms.length || 1;
-        const result = {
-          id: this._documentIds.get(docId),
-          score: score * quality,
-          terms: Object.keys(match),
-          queryTerms: terms,
-          match
-        };
-        Object.assign(result, this._storedFields.get(docId));
-        if (searchOptionsWithDefaults.filter == null || searchOptionsWithDefaults.filter(result)) {
-          results.push(result);
-        }
-      }
-      if (query === _MiniSearch.wildcard && searchOptionsWithDefaults.boostDocument == null) {
-        return results;
-      }
-      results.sort(byScore);
-      return results;
-    }
-    /**
-     * Provide suggestions for the given search query
-     *
-     * The result is a list of suggested modified search queries, derived from the
-     * given search query, each with a relevance score, sorted by descending score.
-     *
-     * By default, it uses the same options used for search, except that by
-     * default it performs prefix search on the last term of the query, and
-     * combine terms with `'AND'` (requiring all query terms to match). Custom
-     * options can be passed as a second argument. Defaults can be changed upon
-     * calling the {@link MiniSearch} constructor, by passing a
-     * `autoSuggestOptions` option.
-     *
-     * ### Basic usage:
-     *
-     * ```javascript
-     * // Get suggestions for 'neuro':
-     * miniSearch.autoSuggest('neuro')
-     * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 0.46240 } ]
-     * ```
-     *
-     * ### Multiple words:
-     *
-     * ```javascript
-     * // Get suggestions for 'zen ar':
-     * miniSearch.autoSuggest('zen ar')
-     * // => [
-     * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
-     * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
-     * // ]
-     * ```
-     *
-     * ### Fuzzy suggestions:
-     *
-     * ```javascript
-     * // Correct spelling mistakes using fuzzy search:
-     * miniSearch.autoSuggest('neromancer', { fuzzy: 0.2 })
-     * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 1.03998 } ]
-     * ```
-     *
-     * ### Filtering:
-     *
-     * ```javascript
-     * // Get suggestions for 'zen ar', but only within the 'fiction' category
-     * // (assuming that 'category' is a stored field):
-     * miniSearch.autoSuggest('zen ar', {
-     *   filter: (result) => result.category === 'fiction'
-     * })
-     * // => [
-     * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
-     * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
-     * // ]
-     * ```
-     *
-     * @param queryString  Query string to be expanded into suggestions
-     * @param options  Search options. The supported options and default values
-     * are the same as for the {@link MiniSearch#search} method, except that by
-     * default prefix search is performed on the last term in the query, and terms
-     * are combined with `'AND'`.
-     * @return  A sorted array of suggestions sorted by relevance score.
-     */
-    autoSuggest(queryString, options = {}) {
-      options = { ...this._options.autoSuggestOptions, ...options };
-      const suggestions = /* @__PURE__ */ new Map();
-      for (const { score, terms } of this.search(queryString, options)) {
-        const phrase = terms.join(" ");
-        const suggestion = suggestions.get(phrase);
-        if (suggestion != null) {
-          suggestion.score += score;
-          suggestion.count += 1;
-        } else {
-          suggestions.set(phrase, { score, terms, count: 1 });
-        }
-      }
-      const results = [];
-      for (const [suggestion, { score, terms, count: count3 }] of suggestions) {
-        results.push({ suggestion, terms, score: score / count3 });
-      }
-      results.sort(byScore);
-      return results;
-    }
-    /**
-     * Total number of documents available to search
-     */
-    get documentCount() {
-      return this._documentCount;
-    }
-    /**
-     * Number of terms in the index
-     */
-    get termCount() {
-      return this._index.size;
-    }
-    /**
-     * Deserializes a JSON index (serialized with `JSON.stringify(miniSearch)`)
-     * and instantiates a MiniSearch instance. It should be given the same options
-     * originally used when serializing the index.
-     *
-     * ### Usage:
-     *
-     * ```javascript
-     * // If the index was serialized with:
-     * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
-     * miniSearch.addAll(documents)
-     *
-     * const json = JSON.stringify(miniSearch)
-     * // It can later be deserialized like this:
-     * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
-     * ```
-     *
-     * @param json  JSON-serialized index
-     * @param options  configuration options, same as the constructor
-     * @return An instance of MiniSearch deserialized from the given JSON.
-     */
-    static loadJSON(json, options) {
-      if (options == null) {
-        throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
-      }
-      return this.loadJS(JSON.parse(json), options);
-    }
-    /**
-     * Async equivalent of {@link MiniSearch.loadJSON}
-     *
-     * This function is an alternative to {@link MiniSearch.loadJSON} that returns
-     * a promise, and loads the index in batches, leaving pauses between them to avoid
-     * blocking the main thread. It tends to be slower than the synchronous
-     * version, but does not block the main thread, so it can be a better choice
-     * when deserializing very large indexes.
-     *
-     * @param json  JSON-serialized index
-     * @param options  configuration options, same as the constructor
-     * @return A Promise that will resolve to an instance of MiniSearch deserialized from the given JSON.
-     */
-    static async loadJSONAsync(json, options) {
-      if (options == null) {
-        throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
-      }
-      return this.loadJSAsync(JSON.parse(json), options);
-    }
-    /**
-     * Returns the default value of an option. It will throw an error if no option
-     * with the given name exists.
-     *
-     * @param optionName  Name of the option
-     * @return The default value of the given option
-     *
-     * ### Usage:
-     *
-     * ```javascript
-     * // Get default tokenizer
-     * MiniSearch.getDefault('tokenize')
-     *
-     * // Get default term processor
-     * MiniSearch.getDefault('processTerm')
-     *
-     * // Unknown options will throw an error
-     * MiniSearch.getDefault('notExisting')
-     * // => throws 'MiniSearch: unknown option "notExisting"'
-     * ```
-     */
-    static getDefault(optionName) {
-      if (defaultOptions2.hasOwnProperty(optionName)) {
-        return getOwnProperty(defaultOptions2, optionName);
-      } else {
-        throw new Error(`MiniSearch: unknown option "${optionName}"`);
-      }
-    }
-    /**
-     * @ignore
-     */
-    static loadJS(js, options) {
-      const { index: index2, documentIds, fieldLength, storedFields, serializationVersion } = js;
-      const miniSearch = this.instantiateMiniSearch(js, options);
-      miniSearch._documentIds = objectToNumericMap(documentIds);
-      miniSearch._fieldLength = objectToNumericMap(fieldLength);
-      miniSearch._storedFields = objectToNumericMap(storedFields);
-      for (const [shortId, id] of miniSearch._documentIds) {
-        miniSearch._idToShortId.set(id, shortId);
-      }
-      for (const [term, data] of index2) {
-        const dataMap = /* @__PURE__ */ new Map();
-        for (const fieldId of Object.keys(data)) {
-          let indexEntry = data[fieldId];
-          if (serializationVersion === 1) {
-            indexEntry = indexEntry.ds;
-          }
-          dataMap.set(parseInt(fieldId, 10), objectToNumericMap(indexEntry));
-        }
-        miniSearch._index.set(term, dataMap);
-      }
-      return miniSearch;
-    }
-    /**
-     * @ignore
-     */
-    static async loadJSAsync(js, options) {
-      const { index: index2, documentIds, fieldLength, storedFields, serializationVersion } = js;
-      const miniSearch = this.instantiateMiniSearch(js, options);
-      miniSearch._documentIds = await objectToNumericMapAsync(documentIds);
-      miniSearch._fieldLength = await objectToNumericMapAsync(fieldLength);
-      miniSearch._storedFields = await objectToNumericMapAsync(storedFields);
-      for (const [shortId, id] of miniSearch._documentIds) {
-        miniSearch._idToShortId.set(id, shortId);
-      }
-      let count3 = 0;
-      for (const [term, data] of index2) {
-        const dataMap = /* @__PURE__ */ new Map();
-        for (const fieldId of Object.keys(data)) {
-          let indexEntry = data[fieldId];
-          if (serializationVersion === 1) {
-            indexEntry = indexEntry.ds;
-          }
-          dataMap.set(parseInt(fieldId, 10), await objectToNumericMapAsync(indexEntry));
-        }
-        if (++count3 % 1e3 === 0)
-          await wait(0);
-        miniSearch._index.set(term, dataMap);
-      }
-      return miniSearch;
-    }
-    /**
-     * @ignore
-     */
-    static instantiateMiniSearch(js, options) {
-      const { documentCount, nextId, fieldIds, averageFieldLength, dirtCount, serializationVersion } = js;
-      if (serializationVersion !== 1 && serializationVersion !== 2) {
-        throw new Error("MiniSearch: cannot deserialize an index created with an incompatible version");
-      }
-      const miniSearch = new _MiniSearch(options);
-      miniSearch._documentCount = documentCount;
-      miniSearch._nextId = nextId;
-      miniSearch._idToShortId = /* @__PURE__ */ new Map();
-      miniSearch._fieldIds = fieldIds;
-      miniSearch._avgFieldLength = averageFieldLength;
-      miniSearch._dirtCount = dirtCount || 0;
-      miniSearch._index = new SearchableMap();
-      return miniSearch;
-    }
-    /**
-     * @ignore
-     */
-    executeQuery(query, searchOptions = {}) {
-      if (query === _MiniSearch.wildcard) {
-        return this.executeWildcardQuery(searchOptions);
-      }
-      if (typeof query !== "string") {
-        const options2 = { ...searchOptions, ...query, queries: void 0 };
-        const results2 = query.queries.map((subquery) => this.executeQuery(subquery, options2));
-        return this.combineResults(results2, options2.combineWith);
-      }
-      const { tokenize: tokenize2, processTerm, searchOptions: globalSearchOptions } = this._options;
-      const options = { tokenize: tokenize2, processTerm, ...globalSearchOptions, ...searchOptions };
-      const { tokenize: searchTokenize, processTerm: searchProcessTerm } = options;
-      const terms = searchTokenize(query).flatMap((term) => searchProcessTerm(term)).filter((term) => !!term);
-      const queries = terms.map(termToQuerySpec(options));
-      const results = queries.map((query2) => this.executeQuerySpec(query2, options));
-      return this.combineResults(results, options.combineWith);
-    }
-    /**
-     * @ignore
-     */
-    executeQuerySpec(query, searchOptions) {
-      const options = { ...this._options.searchOptions, ...searchOptions };
-      const boosts = (options.fields || this._options.fields).reduce((boosts2, field) => ({ ...boosts2, [field]: getOwnProperty(options.boost, field) || 1 }), {});
-      const { boostDocument, weights, maxFuzzy, bm25: bm25params } = options;
-      const { fuzzy: fuzzyWeight, prefix: prefixWeight } = { ...defaultSearchOptions.weights, ...weights };
-      const data = this._index.get(query.term);
-      const results = this.termResults(query.term, query.term, 1, query.termBoost, data, boosts, boostDocument, bm25params);
-      let prefixMatches;
-      let fuzzyMatches;
-      if (query.prefix) {
-        prefixMatches = this._index.atPrefix(query.term);
-      }
-      if (query.fuzzy) {
-        const fuzzy = query.fuzzy === true ? 0.2 : query.fuzzy;
-        const maxDistance = fuzzy < 1 ? Math.min(maxFuzzy, Math.round(query.term.length * fuzzy)) : fuzzy;
-        if (maxDistance)
-          fuzzyMatches = this._index.fuzzyGet(query.term, maxDistance);
-      }
-      if (prefixMatches) {
-        for (const [term, data2] of prefixMatches) {
-          const distance = term.length - query.term.length;
-          if (!distance) {
-            continue;
-          }
-          fuzzyMatches === null || fuzzyMatches === void 0 ? void 0 : fuzzyMatches.delete(term);
-          const weight = prefixWeight * term.length / (term.length + 0.3 * distance);
-          this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
-        }
-      }
-      if (fuzzyMatches) {
-        for (const term of fuzzyMatches.keys()) {
-          const [data2, distance] = fuzzyMatches.get(term);
-          if (!distance) {
-            continue;
-          }
-          const weight = fuzzyWeight * term.length / (term.length + distance);
-          this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
-        }
-      }
-      return results;
-    }
-    /**
-     * @ignore
-     */
-    executeWildcardQuery(searchOptions) {
-      const results = /* @__PURE__ */ new Map();
-      const options = { ...this._options.searchOptions, ...searchOptions };
-      for (const [shortId, id] of this._documentIds) {
-        const score = options.boostDocument ? options.boostDocument(id, "", this._storedFields.get(shortId)) : 1;
-        results.set(shortId, {
-          score,
-          terms: [],
-          match: {}
-        });
-      }
-      return results;
-    }
-    /**
-     * @ignore
-     */
-    combineResults(results, combineWith = OR) {
-      if (results.length === 0) {
-        return /* @__PURE__ */ new Map();
-      }
-      const operator = combineWith.toLowerCase();
-      const combinator = combinators[operator];
-      if (!combinator) {
-        throw new Error(`Invalid combination operator: ${combineWith}`);
-      }
-      return results.reduce(combinator) || /* @__PURE__ */ new Map();
-    }
-    /**
-     * Allows serialization of the index to JSON, to possibly store it and later
-     * deserialize it with {@link MiniSearch.loadJSON}.
-     *
-     * Normally one does not directly call this method, but rather call the
-     * standard JavaScript `JSON.stringify()` passing the {@link MiniSearch}
-     * instance, and JavaScript will internally call this method. Upon
-     * deserialization, one must pass to {@link MiniSearch.loadJSON} the same
-     * options used to create the original instance that was serialized.
-     *
-     * ### Usage:
-     *
-     * ```javascript
-     * // Serialize the index:
-     * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
-     * miniSearch.addAll(documents)
-     * const json = JSON.stringify(miniSearch)
-     *
-     * // Later, to deserialize it:
-     * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
-     * ```
-     *
-     * @return A plain-object serializable representation of the search index.
-     */
-    toJSON() {
-      const index2 = [];
-      for (const [term, fieldIndex] of this._index) {
-        const data = {};
-        for (const [fieldId, freqs] of fieldIndex) {
-          data[fieldId] = Object.fromEntries(freqs);
-        }
-        index2.push([term, data]);
-      }
-      return {
-        documentCount: this._documentCount,
-        nextId: this._nextId,
-        documentIds: Object.fromEntries(this._documentIds),
-        fieldIds: this._fieldIds,
-        fieldLength: Object.fromEntries(this._fieldLength),
-        averageFieldLength: this._avgFieldLength,
-        storedFields: Object.fromEntries(this._storedFields),
-        dirtCount: this._dirtCount,
-        index: index2,
-        serializationVersion: 2
-      };
-    }
-    /**
-     * @ignore
-     */
-    termResults(sourceTerm, derivedTerm, termWeight, termBoost, fieldTermData, fieldBoosts, boostDocumentFn, bm25params, results = /* @__PURE__ */ new Map()) {
-      if (fieldTermData == null)
-        return results;
-      for (const field of Object.keys(fieldBoosts)) {
-        const fieldBoost = fieldBoosts[field];
-        const fieldId = this._fieldIds[field];
-        const fieldTermFreqs = fieldTermData.get(fieldId);
-        if (fieldTermFreqs == null)
-          continue;
-        let matchingFields = fieldTermFreqs.size;
-        const avgFieldLength = this._avgFieldLength[fieldId];
-        for (const docId of fieldTermFreqs.keys()) {
-          if (!this._documentIds.has(docId)) {
-            this.removeTerm(fieldId, docId, derivedTerm);
-            matchingFields -= 1;
-            continue;
-          }
-          const docBoost = boostDocumentFn ? boostDocumentFn(this._documentIds.get(docId), derivedTerm, this._storedFields.get(docId)) : 1;
-          if (!docBoost)
-            continue;
-          const termFreq = fieldTermFreqs.get(docId);
-          const fieldLength = this._fieldLength.get(docId)[fieldId];
-          const rawScore = calcBM25Score(termFreq, matchingFields, this._documentCount, fieldLength, avgFieldLength, bm25params);
-          const weightedScore = termWeight * termBoost * fieldBoost * docBoost * rawScore;
-          const result = results.get(docId);
-          if (result) {
-            result.score += weightedScore;
-            assignUniqueTerm(result.terms, sourceTerm);
-            const match = getOwnProperty(result.match, derivedTerm);
-            if (match) {
-              match.push(field);
-            } else {
-              result.match[derivedTerm] = [field];
-            }
-          } else {
-            results.set(docId, {
-              score: weightedScore,
-              terms: [sourceTerm],
-              match: { [derivedTerm]: [field] }
-            });
-          }
-        }
-      }
-      return results;
-    }
-    /**
-     * @ignore
-     */
-    addTerm(fieldId, documentId, term) {
-      const indexData = this._index.fetch(term, createMap);
-      let fieldIndex = indexData.get(fieldId);
-      if (fieldIndex == null) {
-        fieldIndex = /* @__PURE__ */ new Map();
-        fieldIndex.set(documentId, 1);
-        indexData.set(fieldId, fieldIndex);
-      } else {
-        const docs = fieldIndex.get(documentId);
-        fieldIndex.set(documentId, (docs || 0) + 1);
-      }
-    }
-    /**
-     * @ignore
-     */
-    removeTerm(fieldId, documentId, term) {
-      if (!this._index.has(term)) {
-        this.warnDocumentChanged(documentId, fieldId, term);
-        return;
-      }
-      const indexData = this._index.fetch(term, createMap);
-      const fieldIndex = indexData.get(fieldId);
-      if (fieldIndex == null || fieldIndex.get(documentId) == null) {
-        this.warnDocumentChanged(documentId, fieldId, term);
-      } else if (fieldIndex.get(documentId) <= 1) {
-        if (fieldIndex.size <= 1) {
-          indexData.delete(fieldId);
-        } else {
-          fieldIndex.delete(documentId);
-        }
-      } else {
-        fieldIndex.set(documentId, fieldIndex.get(documentId) - 1);
-      }
-      if (this._index.get(term).size === 0) {
-        this._index.delete(term);
-      }
-    }
-    /**
-     * @ignore
-     */
-    warnDocumentChanged(shortDocumentId, fieldId, term) {
-      for (const fieldName of Object.keys(this._fieldIds)) {
-        if (this._fieldIds[fieldName] === fieldId) {
-          this._options.logger("warn", `MiniSearch: document with ID ${this._documentIds.get(shortDocumentId)} has changed before removal: term "${term}" was not present in field "${fieldName}". Removing a document after it has changed can corrupt the index!`, "version_conflict");
-          return;
-        }
-      }
-    }
-    /**
-     * @ignore
-     */
-    addDocumentId(documentId) {
-      const shortDocumentId = this._nextId;
-      this._idToShortId.set(documentId, shortDocumentId);
-      this._documentIds.set(shortDocumentId, documentId);
-      this._documentCount += 1;
-      this._nextId += 1;
-      return shortDocumentId;
-    }
-    /**
-     * @ignore
-     */
-    addFields(fields) {
-      for (let i2 = 0; i2 < fields.length; i2++) {
-        this._fieldIds[fields[i2]] = i2;
-      }
-    }
-    /**
-     * @ignore
-     */
-    addFieldLength(documentId, fieldId, count3, length) {
-      let fieldLengths = this._fieldLength.get(documentId);
-      if (fieldLengths == null)
-        this._fieldLength.set(documentId, fieldLengths = []);
-      fieldLengths[fieldId] = length;
-      const averageFieldLength = this._avgFieldLength[fieldId] || 0;
-      const totalFieldLength = averageFieldLength * count3 + length;
-      this._avgFieldLength[fieldId] = totalFieldLength / (count3 + 1);
-    }
-    /**
-     * @ignore
-     */
-    removeFieldLength(documentId, fieldId, count3, length) {
-      if (count3 === 1) {
-        this._avgFieldLength[fieldId] = 0;
-        return;
-      }
-      const totalFieldLength = this._avgFieldLength[fieldId] * count3 - length;
-      this._avgFieldLength[fieldId] = totalFieldLength / (count3 - 1);
-    }
-    /**
-     * @ignore
-     */
-    saveStoredFields(documentId, doc) {
-      const { storeFields, extractField } = this._options;
-      if (storeFields == null || storeFields.length === 0) {
-        return;
-      }
-      let documentFields = this._storedFields.get(documentId);
-      if (documentFields == null)
-        this._storedFields.set(documentId, documentFields = {});
-      for (const fieldName of storeFields) {
-        const fieldValue = extractField(doc, fieldName);
-        if (fieldValue !== void 0)
-          documentFields[fieldName] = fieldValue;
-      }
-    }
-  };
-  MiniSearch.wildcard = Symbol("*");
-  var getOwnProperty = (object, property) => Object.prototype.hasOwnProperty.call(object, property) ? object[property] : void 0;
-  var combinators = {
-    [OR]: (a2, b3) => {
-      for (const docId of b3.keys()) {
-        const existing = a2.get(docId);
-        if (existing == null) {
-          a2.set(docId, b3.get(docId));
-        } else {
-          const { score, terms, match } = b3.get(docId);
-          existing.score = existing.score + score;
-          existing.match = Object.assign(existing.match, match);
-          assignUniqueTerms(existing.terms, terms);
-        }
-      }
-      return a2;
-    },
-    [AND]: (a2, b3) => {
-      const combined = /* @__PURE__ */ new Map();
-      for (const docId of b3.keys()) {
-        const existing = a2.get(docId);
-        if (existing == null)
-          continue;
-        const { score, terms, match } = b3.get(docId);
-        assignUniqueTerms(existing.terms, terms);
-        combined.set(docId, {
-          score: existing.score + score,
-          terms: existing.terms,
-          match: Object.assign(existing.match, match)
-        });
-      }
-      return combined;
-    },
-    [AND_NOT]: (a2, b3) => {
-      for (const docId of b3.keys())
-        a2.delete(docId);
-      return a2;
-    }
-  };
-  var defaultBM25params = { k: 1.2, b: 0.7, d: 0.5 };
-  var calcBM25Score = (termFreq, matchingCount, totalCount, fieldLength, avgFieldLength, bm25params) => {
-    const { k: k3, b: b3, d: d3 } = bm25params;
-    const invDocFreq = Math.log(1 + (totalCount - matchingCount + 0.5) / (matchingCount + 0.5));
-    return invDocFreq * (d3 + termFreq * (k3 + 1) / (termFreq + k3 * (1 - b3 + b3 * fieldLength / avgFieldLength)));
-  };
-  var termToQuerySpec = (options) => (term, i2, terms) => {
-    const fuzzy = typeof options.fuzzy === "function" ? options.fuzzy(term, i2, terms) : options.fuzzy || false;
-    const prefix = typeof options.prefix === "function" ? options.prefix(term, i2, terms) : options.prefix === true;
-    const termBoost = typeof options.boostTerm === "function" ? options.boostTerm(term, i2, terms) : 1;
-    return { term, fuzzy, prefix, termBoost };
-  };
-  var defaultOptions2 = {
-    idField: "id",
-    extractField: (document2, fieldName) => document2[fieldName],
-    stringifyField: (fieldValue, fieldName) => fieldValue.toString(),
-    tokenize: (text2) => text2.split(SPACE_OR_PUNCTUATION),
-    processTerm: (term) => term.toLowerCase(),
-    fields: void 0,
-    searchOptions: void 0,
-    storeFields: [],
-    logger: (level, message) => {
-      if (typeof (console === null || console === void 0 ? void 0 : console[level]) === "function")
-        console[level](message);
-    },
-    autoVacuum: true
-  };
-  var defaultSearchOptions = {
-    combineWith: OR,
-    prefix: false,
-    fuzzy: false,
-    maxFuzzy: 6,
-    boost: {},
-    weights: { fuzzy: 0.45, prefix: 0.375 },
-    bm25: defaultBM25params
-  };
-  var defaultAutoSuggestOptions = {
-    combineWith: AND,
-    prefix: (term, i2, terms) => i2 === terms.length - 1
-  };
-  var defaultVacuumOptions = { batchSize: 1e3, batchWait: 10 };
-  var defaultVacuumConditions = { minDirtFactor: 0.1, minDirtCount: 20 };
-  var defaultAutoVacuumOptions = { ...defaultVacuumOptions, ...defaultVacuumConditions };
-  var assignUniqueTerm = (target, term) => {
-    if (!target.includes(term))
-      target.push(term);
-  };
-  var assignUniqueTerms = (target, source) => {
-    for (const term of source) {
-      if (!target.includes(term))
-        target.push(term);
-    }
-  };
-  var byScore = ({ score: a2 }, { score: b3 }) => b3 - a2;
-  var createMap = () => /* @__PURE__ */ new Map();
-  var objectToNumericMap = (object) => {
-    const map2 = /* @__PURE__ */ new Map();
-    for (const key of Object.keys(object)) {
-      map2.set(parseInt(key, 10), object[key]);
-    }
-    return map2;
-  };
-  var objectToNumericMapAsync = async (object) => {
-    const map2 = /* @__PURE__ */ new Map();
-    let count3 = 0;
-    for (const key of Object.keys(object)) {
-      map2.set(parseInt(key, 10), object[key]);
-      if (++count3 % 1e3 === 0) {
-        await wait(0);
-      }
-    }
-    return map2;
-  };
-  var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
-
-  // src/utils/localMemoryUtils.ts
-  var BOOKMARK_FOLDER_TYPES = /* @__PURE__ */ new Set(["hub_item", "bookmark_folder_item"]);
-  function sanitizeKeyPart(value) {
-    return value.replace(/\|/g, "%7C");
-  }
-  function normalizeTextForKey(text2) {
-    return text2.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 256);
-  }
-  function normalizeMemoryName(value) {
-    return (value || "").trim().toLowerCase();
-  }
-  function isBookmarkFolderType(rawType) {
-    return BOOKMARK_FOLDER_TYPES.has((rawType || "").toLowerCase());
-  }
-  function getMemoryDocSource(doc) {
-    const rawType = String(doc?.metadata?.type || "memory").toLowerCase();
-    if (isBookmarkFolderType(rawType)) {
-      return "bookmark-folder";
-    }
-    return rawType;
-  }
-  function getMemoryDocFolderName(doc) {
-    return normalizeMemoryName(
-      String(doc?.metadata?.folderName || doc?.metadata?.hubName || "")
-    );
-  }
-  function getMemoryDocUrl(doc) {
-    return String(doc?.url || doc?.metadata?.url || "").trim();
-  }
-  function computeMemoryDedupeKey(doc) {
-    const source = getMemoryDocSource(doc);
-    const folder = getMemoryDocFolderName(doc);
-    const url = getMemoryDocUrl(doc);
-    const contentKey = url || `text:${normalizeTextForKey(String(doc?.text || ""))}`;
-    return `${sanitizeKeyPart(source)}|${sanitizeKeyPart(folder)}|${sanitizeKeyPart(contentKey)}`;
-  }
-
-  // src/types/runtime.ts
-  function getBrowserWindow(globalRef = globalThis) {
-    const maybeWindow = globalRef.window;
-    const win = maybeWindow || globalRef;
-    const services = win.Services || win.top?.Services;
-    if (services?.wm) {
-      return services.wm.getMostRecentWindow("navigator:browser");
-    }
-    return win.top || win;
-  }
-
-  // src/utils/assistantLogger.ts
-  var DEBUG_PREF_NAME = "browser.oasis.assistant.debug";
-  function isDebugEnabled(globalRef = globalThis) {
-    try {
-      const host = globalRef;
-      const prefs = host.window?.Services?.prefs || host.Services?.prefs;
-      if (!prefs?.getBoolPref) {
-        return false;
-      }
-      return !!prefs.getBoolPref(DEBUG_PREF_NAME, false);
-    } catch {
-      return false;
-    }
-  }
-  function formatPrefix(scope, message) {
-    return `[Assistant:${scope}] ${message}`;
-  }
-  function write(level, scope, message, meta) {
-    if ((level === "debug" || level === "info") && !isDebugEnabled()) {
-      return;
-    }
-    const text2 = formatPrefix(scope, message);
-    if (meta !== void 0) {
-      console[level](text2, meta);
-      return;
-    }
-    console[level](text2);
-  }
-  var assistantLogger = {
-    debug(scope, message, meta) {
-      write("debug", scope, message, meta);
-    },
-    info(scope, message, meta) {
-      write("info", scope, message, meta);
-    },
-    warn(scope, message, meta) {
-      write("warn", scope, message, meta);
-    },
-    error(scope, message, meta) {
-      write("error", scope, message, meta);
-    },
-    isDebugEnabled
-  };
-
-  // src/services/localMemory.ts
-  function getChrome() {
-    const topWin = getBrowserWindow();
-    const gBrowser = topWin?.gBrowser;
-    const PlacesUtils = topWin?.PlacesUtils;
-    return { topWin, gBrowser, PlacesUtils };
-  }
-  function toUrlString(value) {
-    if (!value) return "";
-    if (typeof value === "string") return value.trim();
-    const fromSpec = String(value.spec || "").trim();
-    if (fromSpec) return fromSpec;
-    const fromHref = String(value.href || "").trim();
-    if (fromHref) return fromHref;
-    return String(value.toString?.() || "").trim();
-  }
-  var logDebug = (message, ...meta) => {
-    assistantLogger.debug(
-      "local-memory",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var logWarn = (message, ...meta) => {
-    assistantLogger.warn(
-      "local-memory",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var logError = (message, ...meta) => {
-    assistantLogger.error(
-      "local-memory",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var OASIS_MANAGED_BOOKMARK_ROOT = "Oasis Hubs";
-  var LocalMemoryService = class {
-    dbPromise;
-    miniSearch;
-    isIndexDirty = true;
-    constructor() {
-      try {
-        this.dbPromise = openDB("oasis-memory", 3, {
-          upgrade(db, oldVersion, _newVersion, transaction) {
-            if (oldVersion < 1) {
-              const store2 = db.createObjectStore("documents", {
-                keyPath: "id",
-                autoIncrement: true
-              });
-              store2.createIndex("by-timestamp", "timestamp");
-              store2.createIndex("by-url", "url", { unique: false });
-            }
-            if (oldVersion < 2) {
-              db.createObjectStore("usage", { keyPath: "userId" });
-            }
-            if (oldVersion < 3) {
-              const docsStore = transaction.objectStore("documents");
-              if (!docsStore.indexNames.contains("by-dedupe-key")) {
-                docsStore.createIndex("by-dedupe-key", "dedupeKey", {
-                  unique: true
-                });
-              }
-            }
-          }
-        });
-      } catch (error) {
-        logError("[LocalMemory] IndexedDB unavailable in this context", error);
-        this.dbPromise = Promise.reject(error);
-      }
-      this.miniSearch = new MiniSearch({
-        fields: ["text", "title", "description"],
-        storeFields: ["text", "metadata", "url", "timestamp", "dedupeKey"],
-        extractField: (doc, fieldName) => {
-          if (fieldName === "title") return doc.metadata?.title;
-          if (fieldName === "description") return doc.metadata?.description;
-          return doc[fieldName];
-        },
-        tokenize: (text2) => this.tokenize(text2),
-        searchOptions: {
-          boost: { title: 2 },
-          fuzzy: 0.2,
-          prefix: true,
-          tokenize: (text2) => this.tokenize(text2)
-        }
-      });
-      this.backfillDedupeKeys().then(() => this.ensureIndex()).then(() => {
-        setTimeout(() => this.indexAll(), 5e3);
-      }).catch((error) => {
-        logError("[LocalMemory] initialization failed", error);
-      });
-    }
-    // Simple tokenizer: lowercase, replace punctuation with spaces, split by whitespace
-    tokenize(text2) {
-      return text2.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).filter((t2) => t2.length > 2);
-    }
-    async backfillDedupeKeys() {
-      const db = await this.dbPromise;
-      const tx = db.transaction("documents", "readwrite");
-      const store2 = tx.store;
-      const winners = /* @__PURE__ */ new Map();
-      let cursor = await store2.openCursor();
-      let updated = 0;
-      let removed = 0;
-      while (cursor) {
-        const id = Number(cursor.primaryKey);
-        const doc = cursor.value;
-        const dedupeKey = computeMemoryDedupeKey(doc);
-        const timestamp2 = Number(doc.timestamp || 0);
-        const winner = winners.get(dedupeKey);
-        if (winner) {
-          if (timestamp2 > winner.timestamp) {
-            await store2.delete(winner.id);
-            winners.set(dedupeKey, { id, timestamp: timestamp2 });
-            if (doc.dedupeKey !== dedupeKey) {
-              await cursor.update({ ...doc, dedupeKey });
-              updated++;
-            }
-          } else {
-            await cursor.delete();
-          }
-          removed++;
-          cursor = await cursor.continue();
-          continue;
-        }
-        winners.set(dedupeKey, { id, timestamp: timestamp2 });
-        if (doc.dedupeKey !== dedupeKey) {
-          await cursor.update({ ...doc, dedupeKey });
-          updated++;
-        }
-        cursor = await cursor.continue();
-      }
-      await tx.done;
-      if (updated > 0 || removed > 0) {
-        this.isIndexDirty = true;
-        logDebug(
-          `[LocalMemory] dedupe backfill updated=${updated} removed_duplicates=${removed}`
-        );
-      }
-    }
-    async upsertDocumentByDedupeKey(doc) {
-      const db = await this.dbPromise;
-      const tx = db.transaction("documents", "readwrite");
-      const docsStore = tx.store;
-      const index2 = docsStore.index("by-dedupe-key");
-      const existing = doc.dedupeKey ? await index2.get(doc.dedupeKey) : null;
-      if (existing?.id != null) {
-        await docsStore.put({ ...doc, id: existing.id });
-        await tx.done;
-        return "updated";
-      }
-      await docsStore.add(doc);
-      await tx.done;
-      return "inserted";
-    }
-    async mutateDocuments(mutator) {
-      const db = await this.dbPromise;
-      const tx = db.transaction("documents", "readwrite");
-      let cursor = await tx.store.openCursor();
-      let changed = 0;
-      while (cursor) {
-        const doc = cursor.value;
-        const nextDoc = mutator(doc);
-        if (nextDoc === null) {
-          await cursor.delete();
-          changed++;
-        } else if (nextDoc !== doc) {
-          await cursor.update(nextDoc);
-          changed++;
-        }
-        cursor = await cursor.continue();
-      }
-      await tx.done;
-      if (changed > 0) {
-        this.isIndexDirty = true;
-      }
-      return changed;
-    }
-    async ensureIndex() {
-      if (!this.isIndexDirty) return;
-      const db = await this.dbPromise;
-      const docs = await db.getAll("documents");
-      this.miniSearch.removeAll();
-      if (docs.length > 0) {
-        this.miniSearch.addAll(
-          docs.map((d3) => ({
-            id: d3.id,
-            text: d3.text,
-            metadata: d3.metadata,
-            url: d3.url,
-            timestamp: d3.timestamp,
-            dedupeKey: d3.dedupeKey
-          }))
-        );
-      }
-      this.isIndexDirty = false;
-      logDebug(`[LocalMemory] Index rebuilt with ${docs.length} documents`);
-    }
-    async addDocument(text2, metadata = {}, url) {
-      const tokens = this.tokenize(text2);
-      const doc = {
-        text: text2,
-        tokens,
-        metadata,
-        timestamp: Date.now(),
-        url,
-        dedupeKey: computeMemoryDedupeKey({ text: text2, metadata, url })
-      };
-      const upsertResult = await this.upsertDocumentByDedupeKey(doc);
-      this.isIndexDirty = true;
-      if (upsertResult === "updated") {
-        logDebug(
-          `[LocalMemory] dedupe hit source=${getMemoryDocSource(doc)} key=${doc.dedupeKey}`
-        );
-      }
-    }
-    async removeDocumentByUrl(url) {
-      const db = await this.dbPromise;
-      const tx = db.transaction("documents", "readwrite");
-      const index2 = tx.store.index("by-url");
-      let cursor = await index2.openCursor(url);
-      while (cursor) {
-        await cursor.delete();
-        cursor = await cursor.continue();
-      }
-      await tx.done;
-      this.isIndexDirty = true;
-      logDebug(`Removed documents for URL: ${url}`);
-    }
-    async removeBookmarkFolderDocuments(folderName) {
-      const targetFolder = normalizeMemoryName(folderName);
-      if (!targetFolder) return 0;
-      const removed = await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
-        if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
-        return null;
-      });
-      if (removed > 0) {
-        logDebug(
-          `[LocalMemory] Removed ${removed} documents for folder: ${folderName}`
-        );
-      }
-      return removed;
-    }
-    async removeAllBookmarkFolderDocuments() {
-      const removed = await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
-        return null;
-      });
-      if (removed > 0) {
-        logDebug(
-          `[LocalMemory] Removed all bookmark-folder documents: ${removed}`
-        );
-      }
-      return removed;
-    }
-    async removeBookmarkFolderDocumentByUrl(folderName, url) {
-      const targetFolder = normalizeMemoryName(folderName);
-      if (!targetFolder || !url) return 0;
-      const removed = await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
-        if (getMemoryDocFolderName(doc) !== targetFolder) return doc;
-        const docUrl = getMemoryDocUrl(doc);
-        if (docUrl !== url) return doc;
-        return null;
-      });
-      if (removed > 0) {
-        logDebug(
-          `[LocalMemory] Removed ${removed} folder documents for URL: ${url}`
-        );
-      }
-      return removed;
-    }
-    async renameBookmarkFolderDocuments(oldName, newName) {
-      const from = normalizeMemoryName(oldName);
-      const to = (newName || "").trim();
-      const toNorm = normalizeMemoryName(newName);
-      if (!from || !toNorm) return 0;
-      const updated = await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
-        if (getMemoryDocFolderName(doc) !== from) return doc;
-        const metadata = { ...doc.metadata || {} };
-        metadata.folderName = to;
-        metadata.hubName = to;
-        if (typeof metadata.context === "string" && metadata.context.toLowerCase().startsWith("bookmark folder:")) {
-          metadata.context = `Bookmark Folder: ${to}`;
-        }
-        return {
-          ...doc,
-          metadata,
-          dedupeKey: computeMemoryDedupeKey({ ...doc, metadata })
-        };
-      });
-      if (updated > 0) {
-        logDebug(
-          `[LocalMemory] Renamed ${updated} folder documents: ${oldName} -> ${newName}`
-        );
-      }
-      return updated;
-    }
-    async syncBookmarkFolderDocuments(entries2) {
-      const byGuid = /* @__PURE__ */ new Map();
-      for (const entry of entries2) {
-        const guid = String(entry.bookmarkGuid || "").trim();
-        const url = String(entry.url || "").trim();
-        const folderName = String(entry.folderName || "").trim();
-        if (!guid || !url || !folderName) continue;
-        byGuid.set(guid, { ...entry, bookmarkGuid: guid, url, folderName });
-      }
-      const seen = /* @__PURE__ */ new Set();
-      let updated = 0;
-      let removed = 0;
-      await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark-folder") return doc;
-        const bookmarkGuid = String(doc.metadata?.bookmarkGuid || "").trim();
-        if (!bookmarkGuid) {
-          removed++;
-          return null;
-        }
-        const nextEntry = byGuid.get(bookmarkGuid);
-        if (!nextEntry) {
-          removed++;
-          return null;
-        }
-        seen.add(bookmarkGuid);
-        const previousMetadata = doc.metadata || {};
-        const nextMetadata = {
-          ...previousMetadata,
-          type: "bookmark_folder_item",
-          title: nextEntry.title,
-          url: nextEntry.url,
-          hub: nextEntry.parentGuid,
-          hubName: nextEntry.folderName,
-          folderName: nextEntry.folderName,
-          bookmarkGuid: nextEntry.bookmarkGuid,
-          parentGuid: nextEntry.parentGuid,
-          context: `Bookmark Folder: ${nextEntry.folderName}`,
-          description: nextEntry.description ?? previousMetadata.description ?? ""
-        };
-        const nextText = `Title: ${nextEntry.title}
-URL: ${nextEntry.url}
-Content: ${nextMetadata.description || ""}`;
-        const nextDoc = {
-          ...doc,
-          text: nextText,
-          metadata: nextMetadata,
-          url: nextEntry.url,
-          dedupeKey: computeMemoryDedupeKey({
-            text: nextText,
-            metadata: nextMetadata,
-            url: nextEntry.url
-          })
-        };
-        const unchanged = doc.text === nextDoc.text && doc.url === nextDoc.url && doc.metadata?.title === nextMetadata.title && doc.metadata?.folderName === nextMetadata.folderName && doc.metadata?.bookmarkGuid === nextMetadata.bookmarkGuid && doc.metadata?.parentGuid === nextMetadata.parentGuid;
-        if (unchanged) return doc;
-        updated++;
-        return nextDoc;
-      });
-      let added = 0;
-      for (const entry of byGuid.values()) {
-        if (seen.has(entry.bookmarkGuid)) continue;
-        const text2 = `Title: ${entry.title}
-URL: ${entry.url}
-Content: ${entry.description || ""}`;
-        await this.addDocument(
-          text2,
-          {
-            type: "bookmark_folder_item",
-            title: entry.title,
-            url: entry.url,
-            hub: entry.parentGuid,
-            hubName: entry.folderName,
-            folderName: entry.folderName,
-            bookmarkGuid: entry.bookmarkGuid,
-            parentGuid: entry.parentGuid,
-            context: `Bookmark Folder: ${entry.folderName}`,
-            description: entry.description || ""
-          },
-          entry.url
-        );
-        added++;
-      }
-      if (added > 0 || updated > 0 || removed > 0) {
-        logDebug(
-          `[LocalMemory] bookmark-folder sync added=${added} updated=${updated} removed=${removed}`
-        );
-      }
-      return { added, updated, removed };
-    }
-    async removeStaleBookmarkSourceDocuments(validDedupeKeys) {
-      const removed = await this.mutateDocuments((doc) => {
-        if (getMemoryDocSource(doc) !== "bookmark") return doc;
-        const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
-        if (validDedupeKeys.has(key)) return doc;
-        return null;
-      });
-      if (removed > 0) {
-        logDebug(
-          `[LocalMemory] Removed stale bookmark-source documents: ${removed}`
-        );
-      }
-      return removed;
-    }
-    async removeStaleLiveSourceDocuments(validDedupeKeys) {
-      const removed = await this.mutateDocuments((doc) => {
-        const source = getMemoryDocSource(doc);
-        if (source !== "tab" && source !== "tab-group") return doc;
-        const key = String(doc.dedupeKey || computeMemoryDedupeKey(doc));
-        if (validDedupeKeys.has(key)) return doc;
-        return null;
-      });
-      if (removed > 0) {
-        logDebug(
-          `[LocalMemory] Removed stale live tab/tab-group documents: ${removed}`
-        );
-      }
-      return removed;
-    }
-    async search(query, limit = 5, filter) {
-      await this.ensureIndex();
-      const folderFilter = filter?.folder || filter?.hub;
-      const results = this.miniSearch.search(query, {
-        filter: (result) => {
-          if (folderFilter) {
-            const name = normalizeMemoryName(
-              String(
-                result.metadata?.folderName || result.metadata?.hubName || ""
-              )
-            );
-            return name === normalizeMemoryName(folderFilter);
-          }
-          return true;
-        }
-      });
-      const seenKeys = /* @__PURE__ */ new Set();
-      const uniqueResults = [];
-      for (const r2 of results) {
-        const stored = r2;
-        const metadata = stored.metadata || {};
-        const key = String(
-          stored.dedupeKey || computeMemoryDedupeKey({
-            text: stored.text || "",
-            url: stored.url,
-            metadata
-          })
-        );
-        if (seenKeys.has(key)) continue;
-        seenKeys.add(key);
-        uniqueResults.push(stored);
-        if (uniqueResults.length >= limit) break;
-      }
-      return uniqueResults.map((r2) => ({
-        text: r2.text || "",
-        score: r2.score,
-        metadata: r2.metadata || {},
-        url: r2.url
-      }));
-    }
-    async getUsage(userId) {
-      const db = await this.dbPromise;
-      const record = await db.get("usage", userId);
-      return record?.count || 0;
-    }
-    async saveUsage(userId, count3) {
-      const db = await this.dbPromise;
-      await db.put("usage", { userId, count: count3, timestamp: Date.now() });
-      logDebug(`[LocalMemory] Saved usage for ${userId}: ${count3}`);
-    }
-    // --- Indexing from Browser ---
-    async indexHistory(maxItems = 1e3) {
-      const win = window;
-      const PlacesUtils = getChrome().PlacesUtils ?? win.PlacesUtils;
-      if (!PlacesUtils?.history) return;
-      const options = PlacesUtils.history.getNewQueryOptions();
-      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
-      options.maxResults = maxItems;
-      options.includeHidden = false;
-      const query = PlacesUtils.history.getNewQuery();
-      const result = PlacesUtils.history.executeQuery(query, options);
-      const root = result.root;
-      try {
-        root.containerOpen = true;
-        for (let i2 = 0; i2 < root.childCount; i2++) {
-          const node = root.getChild(i2);
-          const uri2 = node.uri ? String(node.uri) : "";
-          if (!uri2) continue;
-          const title = node.title != null ? String(node.title) : "";
-          const rawTime = typeof node.time === "number" ? node.time : Number(node.time) || 0;
-          const visitTimeMs = Math.floor(rawTime / 1e3);
-          await this.addDocument(
-            `${title} ${uri2}`,
-            {
-              type: "history",
-              title,
-              url: uri2,
-              timestamp: visitTimeMs,
-              context: "Browsing History"
-            },
-            uri2
-          );
-        }
-        logDebug(`[LocalMemory] Indexed ${root.childCount} history items.`);
-      } catch (e2) {
-        logError("[LocalMemory] Failed to index history:", e2);
-      } finally {
-        root.containerOpen = false;
-      }
-    }
-    async indexBookmarks() {
-      const { PlacesUtils } = getChrome();
-      const win = window;
-      const PM = win.PlacesUtils || win.top?.PlacesUtils;
-      if (!PlacesUtils?.bookmarks && !PM?.bookmarks) return;
-      const PU = PlacesUtils || PM;
-      if (!PU?.bookmarks) return;
-      const bookmarksApi = PU.bookmarks;
-      try {
-        const validBookmarkKeys = /* @__PURE__ */ new Set();
-        const unfiledGuid = bookmarksApi.unfiledGuid;
-        let hadTraversalFailure = false;
-        const processFolder = async (folderGuid, folderName) => {
-          try {
-            const fetched = await bookmarksApi.fetch({ parentGuid: folderGuid });
-            const children = Array.isArray(fetched) ? fetched : fetched ? [fetched] : [];
-            if (children.length === 0) return;
-            for (const child of children) {
-              if (child.type === bookmarksApi.TYPE_FOLDER) {
-                const childName = String(child.title || "Untitled");
-                const isManagedRoot = folderGuid === unfiledGuid && normalizeMemoryName(childName) === normalizeMemoryName(OASIS_MANAGED_BOOKMARK_ROOT);
-                if (isManagedRoot) {
-                  continue;
-                }
-                await processFolder(child.guid, childName);
-              } else if (child.type === bookmarksApi.TYPE_BOOKMARK && child.url) {
-                const url = toUrlString(child.url);
-                if (!url) continue;
-                const metadata = {
-                  type: "bookmark",
-                  title: child.title,
-                  url,
-                  timestamp: child.dateAdded,
-                  context: `Bookmark Folder: ${folderName}`,
-                  folderName,
-                  hubName: folderName
-                };
-                const text2 = (child.title || "") + " " + url;
-                validBookmarkKeys.add(
-                  computeMemoryDedupeKey({
-                    text: text2,
-                    metadata,
-                    url
-                  })
-                );
-                await this.addDocument(text2, metadata, url);
-              }
-            }
-          } catch (e2) {
-            hadTraversalFailure = true;
-            logWarn(`Failed to fetch bookmarks for ${folderGuid}:`, e2);
-          }
-        };
-        await processFolder(bookmarksApi.menuGuid, "Bookmarks Menu");
-        await processFolder(bookmarksApi.toolbarGuid, "Bookmarks Toolbar");
-        await processFolder(bookmarksApi.unfiledGuid, "Other Bookmarks");
-        if (!hadTraversalFailure) {
-          await this.removeStaleBookmarkSourceDocuments(validBookmarkKeys);
-        } else {
-          logWarn(
-            "[LocalMemory] Skipped stale bookmark cleanup due to traversal failures."
-          );
-        }
-        logDebug("[LocalMemory] Bookmarks indexed.");
-      } catch (e2) {
-        logError("[LocalMemory] Failed to index bookmarks:", e2);
-      }
-    }
-    async indexTabGroups() {
-      const { gBrowser } = getChrome();
-      if (!gBrowser) return;
-      try {
-        const validLiveKeys = /* @__PURE__ */ new Set();
-        const groups = Array.from(
-          gBrowser.tabGroups || []
-        );
-        for (const group of groups) {
-          const groupName = group.label || "(unnamed group)";
-          const groupMetadata = {
-            type: "tab-group",
-            title: groupName,
-            id: group.id
-          };
-          const groupUrl = `about:tab-group?id=${group.id}`;
-          const groupText = `Tab Group: ${groupName}`;
-          validLiveKeys.add(
-            computeMemoryDedupeKey({
-              text: groupText,
-              metadata: groupMetadata,
-              url: groupUrl
-            })
-          );
-          await this.addDocument(groupText, groupMetadata, groupUrl);
-        }
-        const tabs = Array.from(gBrowser.tabs || []);
-        for (const tab of tabs) {
-          const url = tab.linkedBrowser?.currentURI?.spec;
-          const title = tab.label || "(untitled)";
-          let context = "Open Tab";
-          if (tab.group) {
-            const gName = tab.group.label || "Unnamed Group";
-            context = `Tab Group: ${gName}`;
-          }
-          if (url && !url.startsWith("about:")) {
-            const tabMetadata = {
-              type: "tab",
-              title,
-              url,
-              timestamp: Date.now(),
-              context
-            };
-            const tabText = title + " " + url;
-            validLiveKeys.add(
-              computeMemoryDedupeKey({
-                text: tabText,
-                metadata: tabMetadata,
-                url
-              })
-            );
-            await this.addDocument(tabText, tabMetadata, url);
-          }
-        }
-        await this.removeStaleLiveSourceDocuments(validLiveKeys);
-        logDebug(`[LocalMemory] Indexed tabs and groups.`);
-      } catch (e2) {
-        logError("[LocalMemory] Failed to index tab groups:", e2);
-      }
-    }
-    async indexAll() {
-      await this.indexTabGroups();
-      await this.indexBookmarks();
-      await this.indexHistory();
-    }
-  };
-  var localMemory = new LocalMemoryService();
-
-  // src/services/firefoxFacade.ts
-  function getAssistantWindow() {
-    return window;
-  }
-  function getChromeContext() {
-    const topWin = getBrowserWindow();
-    const assistantWindow2 = getAssistantWindow();
-    const Services = topWin?.Services || assistantWindow2.Services || assistantWindow2.top?.Services || null;
-    const PlacesUtils = topWin?.PlacesUtils || assistantWindow2.PlacesUtils || assistantWindow2.top?.PlacesUtils || null;
-    const gBrowser = topWin?.gBrowser || null;
-    return { topWin, gBrowser, PlacesUtils, Services };
-  }
-  function toUrlString2(value) {
-    if (!value) return "";
-    if (typeof value === "string") return value.trim();
-    if (typeof value === "object") {
-      const uri2 = value;
-      const fromSpec = String(uri2.spec || "").trim();
-      if (fromSpec) return fromSpec;
-      const fromHref = String(uri2.href || "").trim();
-      if (fromHref) return fromHref;
-      const fromToString = String(uri2.toString?.() || "").trim();
-      if (fromToString && fromToString !== "[object Object]") return fromToString;
-    }
-    return "";
-  }
-  function normalizeName(value) {
-    return (value || "").trim().toLowerCase();
-  }
-  function getTabs(gBrowser) {
-    if (!gBrowser?.tabs) return [];
-    return Array.from(gBrowser.tabs);
-  }
-  function getTabGroups(gBrowser) {
-    if (!gBrowser) return [];
-    const groups = gBrowser.getAllTabGroups ? gBrowser.getAllTabGroups() : gBrowser.tabGroups || [];
-    return Array.from(groups);
-  }
-  function tabUrl(tab) {
-    return toUrlString2(tab?.linkedBrowser?.currentURI);
-  }
-  function tabTitle(tab) {
-    return tab?.label || tab?.linkedBrowser?.contentTitle || tabUrl(tab) || "(untitled)";
-  }
-  function findTabByIndex(gBrowser, index2) {
-    const tabs = getTabs(gBrowser);
-    if (!tabs.length) return null;
-    if (index2 == null) return gBrowser?.selectedTab || tabs[0] || null;
-    const i2 = Math.max(1, Math.floor(index2));
-    if (i2 > tabs.length) return null;
-    return tabs[i2 - 1] || null;
-  }
-  function findTabsByQuery(gBrowser, query) {
-    const target = normalizeName(query);
-    if (!target) return [];
-    return getTabs(gBrowser).filter((tab) => {
-      const title = normalizeName(tabTitle(tab));
-      const url = normalizeName(tabUrl(tab));
-      return title.includes(target) || url.includes(target);
-    });
-  }
-  function findGroupByName(gBrowser, name) {
-    const target = normalizeName(name);
-    if (!target) return null;
-    return getTabGroups(gBrowser).find((group) => normalizeName(group.label || "") === target) || null;
-  }
-  function withUriFixup(rawInput, services) {
-    let input = String(rawInput || "").trim();
-    if (!input) return "";
-    const info = services?.uriFixup?.getFixupURIInfo?.(input, 2 | 4);
-    const fixed = toUrlString2(info?.preferredURI);
-    return fixed || input;
-  }
-  function getSystemPrincipal(services) {
-    return services?.scriptSecurityManager?.getSystemPrincipal?.();
-  }
-  async function fetchChildrenBookmarks(places, parentGuid) {
-    if (!places?.bookmarks?.fetch || !parentGuid) return [];
-    const collected = [];
-    const fetched = await places.bookmarks.fetch({ parentGuid }, (bookmark) => {
-      collected.push(bookmark);
-    });
-    if (collected.length > 0) {
-      return collected;
-    }
-    if (Array.isArray(fetched)) {
-      return fetched;
-    }
-    return fetched ? [fetched] : [];
-  }
-  async function fetchBookmarkByGuid(places, guid) {
-    if (!places?.bookmarks?.fetch || !guid) return null;
-    const fetched = await places.bookmarks.fetch(guid);
-    if (!fetched) return null;
-    if (Array.isArray(fetched)) {
-      return fetched[0] || null;
-    }
-    return fetched;
-  }
-
-  // ../shared/contracts.ts
-  var OASIS_EVENT_CLARIFICATION_UPDATE = "oasis-clarification-update";
-  var OASIS_EVENT_HISTORY_UPDATE = "oasis-history-update";
-  var OASIS_EVENT_CONFIRMATION_UPDATE = "oasis-confirmation-update";
-  var OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED = "oasis-bookmark-folders-changed";
-
   // src/bookmarkFolders.ts
+  init_localMemory();
+  init_firefoxFacade();
+  init_assistantLogger();
+  init_contracts();
   var ROOT_FOLDER_NAME = "Oasis Hubs";
   function hostOf(url) {
     try {
@@ -42725,1329 +48099,9 @@ Content: ${content}`;
   };
   var bookmarkFolders = new BookmarkFolderManager();
 
-  // node_modules/@supabase/supabase-js/dist/esm/wrapper.mjs
-  var index = __toESM(require_main5(), 1);
-  var {
-    PostgrestError,
-    FunctionsHttpError,
-    FunctionsFetchError,
-    FunctionsRelayError,
-    FunctionsError,
-    FunctionRegion,
-    SupabaseClient,
-    createClient,
-    GoTrueAdminApi,
-    GoTrueClient,
-    AuthAdminApi,
-    AuthClient,
-    navigatorLock,
-    NavigatorLockAcquireTimeoutError,
-    lockInternals,
-    processLock,
-    SIGN_OUT_SCOPES,
-    AuthError,
-    AuthApiError,
-    AuthUnknownError,
-    CustomAuthError,
-    AuthSessionMissingError,
-    AuthInvalidTokenResponseError,
-    AuthInvalidCredentialsError,
-    AuthImplicitGrantRedirectError,
-    AuthPKCEGrantCodeExchangeError,
-    AuthRetryableFetchError,
-    AuthWeakPasswordError,
-    AuthInvalidJwtError,
-    isAuthError,
-    isAuthApiError,
-    isAuthSessionMissingError,
-    isAuthImplicitGrantRedirectError,
-    isAuthRetryableFetchError,
-    isAuthWeakPasswordError,
-    RealtimePresence,
-    RealtimeChannel,
-    RealtimeClient,
-    REALTIME_LISTEN_TYPES,
-    REALTIME_POSTGRES_CHANGES_LISTEN_EVENT,
-    REALTIME_PRESENCE_LISTEN_EVENTS,
-    REALTIME_SUBSCRIBE_STATES,
-    REALTIME_CHANNEL_STATES
-  } = index.default || index;
-
-  // src/config/env.ts
-  var ENV = {
-    SUPABASE_URL: "https://wvclepquxxczgrukfqyr.supabase.co",
-    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y2xlcHF1eHhjemdydWtmcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwODU5OTksImV4cCI6MjA3MDY2MTk5OX0.T-hZ_8QxtVnOt0mtCY_Zch87SYEcsyQZwnvvFAtZiNY",
-    APP_VERSION: "1.0.0",
-    LOG_LEVEL: "info",
-    /** Collect rich per-interaction telemetry (tab URL, platform, latency).
-     *  Identifiable fields gated by Privacy pref datareporting.healthreport.uploadEnabled. */
-    RICH_TELEMETRY_ENABLED: true,
-    validate() {
-      if (!this.SUPABASE_URL) {
-        throw new Error("SUPABASE_URL is required");
-      }
-      if (!this.SUPABASE_ANON_KEY) {
-        throw new Error("SUPABASE_ANON_KEY is required");
-      }
-    }
-  };
-
-  // src/services/supabase.ts
-  var SupabaseAuth = class _SupabaseAuth {
-    static instance;
-    supabase;
-    currentSession = null;
-    authStateCallbacks = [];
-    lastTrackedSessionUserId = null;
-    sessionTrackInFlight = null;
-    oauthCallbackBaseUrl = null;
-    activeOAuthLaunch = null;
-    constructor() {
-      this.supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
-      this.supabase.auth.onAuthStateChange((event, session) => {
-        console.log("Auth state changed:", event);
-        this.handleAuthStateChange(event, session);
-      });
-    }
-    static getInstance() {
-      if (!_SupabaseAuth.instance) {
-        _SupabaseAuth.instance = new _SupabaseAuth();
-      }
-      return _SupabaseAuth.instance;
-    }
-    setOAuthCallbackBaseUrl(url) {
-      const normalized = this.normalizeOAuthCallbackBaseUrl(url);
-      this.oauthCallbackBaseUrl = normalized;
-      if (typeof window !== "undefined") {
-        window.__oasisOAuthCallbackBaseUrl = normalized;
-      }
-      return this.getOAuthCallbackBaseUrl();
-    }
-    getOAuthCallbackBaseUrl() {
-      if (this.oauthCallbackBaseUrl) {
-        return this.oauthCallbackBaseUrl;
-      }
-      if (typeof window !== "undefined") {
-        const runtimeOverride = window.__oasisOAuthCallbackBaseUrl;
-        const normalizedRuntime = this.normalizeOAuthCallbackBaseUrl(runtimeOverride);
-        if (normalizedRuntime) {
-          this.oauthCallbackBaseUrl = normalizedRuntime;
-          return normalizedRuntime;
-        }
-        try {
-          const override = window.localStorage?.getItem(
-            "oasis_oauth_callback_base_url"
-          );
-          const normalizedStorage = this.normalizeOAuthCallbackBaseUrl(override);
-          if (normalizedStorage) {
-            this.oauthCallbackBaseUrl = normalizedStorage;
-            return normalizedStorage;
-          }
-        } catch (e2) {
-        }
-      }
-      return "https://kahana.co";
-    }
-    normalizeOAuthCallbackBaseUrl(url) {
-      if (!url || !/^https?:\/\//i.test(url)) {
-        return null;
-      }
-      return url.replace(/\/+$/, "");
-    }
-    createOAuthFlowId() {
-      return `oauth_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    }
-    getActiveOAuthLaunch(provider, target) {
-      if (!this.activeOAuthLaunch) {
-        return null;
-      }
-      if (Date.now() - this.activeOAuthLaunch.startedAt > 6e5) {
-        this.activeOAuthLaunch = null;
-        return null;
-      }
-      if (this.activeOAuthLaunch.provider === provider && this.activeOAuthLaunch.target === target) {
-        return this.activeOAuthLaunch;
-      }
-      return null;
-    }
-    beginOAuthLaunch(provider, target) {
-      const existingLaunch = this.getActiveOAuthLaunch(provider, target);
-      if (existingLaunch) {
-        console.warn(
-          `[Oasis OAuth][${existingLaunch.flowId}] Reusing active OAuth launcher URL`
-        );
-        return existingLaunch;
-      }
-      const flowId = this.createOAuthFlowId();
-      this.setFirefoxOAuthMarker(target, provider, flowId);
-      const launcherUrl = this.getOAuthLauncherUrl(provider, target, flowId);
-      const launch = {
-        provider,
-        target,
-        flowId,
-        launcherUrl,
-        startedAt: Date.now()
-      };
-      this.activeOAuthLaunch = launch;
-      return launch;
-    }
-    clearActiveOAuthLaunch(flowId) {
-      if (!this.activeOAuthLaunch) {
-        return;
-      }
-      if (!flowId || this.activeOAuthLaunch.flowId === flowId) {
-        this.activeOAuthLaunch = null;
-      }
-    }
-    getOAuthRedirectUrl(target = "assistant", flowId) {
-      const params = new URLSearchParams({
-        flow: "assistant",
-        handoff_target: target
-      });
-      if (flowId) {
-        params.set("flow_id", flowId);
-      }
-      return `${this.getOAuthCallbackBaseUrl()}/oauth-callback?${params.toString()}`;
-    }
-    getOAuthLauncherUrl(provider, target = "assistant", flowId) {
-      const params = new URLSearchParams({
-        flow: "assistant",
-        handoff_target: target,
-        provider
-      });
-      if (flowId) {
-        params.set("flow_id", flowId);
-      }
-      return `${this.getOAuthCallbackBaseUrl()}/oasis-auth?${params.toString()}`;
-    }
-    setFirefoxOAuthMarker(target, provider, flowId) {
-      if (typeof window === "undefined") {
-        return;
-      }
-      const Services = window.Services || (globalThis.ChromeUtils ? globalThis.ChromeUtils.import(
-        "resource://gre/modules/Services.jsm"
-      ).Services : null);
-      const Ci = window.Ci || globalThis.Ci;
-      if (!Services?.cookies || !Ci?.nsICookie) {
-        return;
-      }
-      const payload = encodeURIComponent(
-        JSON.stringify({
-          target,
-          provider,
-          flowId,
-          timestamp: Date.now(),
-          callbackBaseUrl: this.getOAuthCallbackBaseUrl()
-        })
-      );
-      const expiry = Date.now() + 3 * 60 * 1e3;
-      const writeCookie = (baseUrl) => {
-        try {
-          const parsed = new URL(baseUrl);
-          const schemeMap = parsed.protocol === "https:" ? Ci.nsICookie.SCHEME_HTTPS : Ci.nsICookie.SCHEME_HTTP;
-          Services.cookies.add(
-            parsed.hostname,
-            "/",
-            "oasis_firefox_oauth_target",
-            payload,
-            parsed.protocol === "https:",
-            false,
-            false,
-            expiry,
-            {},
-            Ci.nsICookie.SAMESITE_LAX,
-            schemeMap
-          );
-        } catch (e2) {
-          console.warn("Failed to set Firefox OAuth marker cookie:", e2);
-        }
-      };
-      const callbackBaseUrl = this.getOAuthCallbackBaseUrl();
-      writeCookie(callbackBaseUrl);
-      if (!callbackBaseUrl.includes("kahana.co")) {
-        writeCookie("https://kahana.co");
-      }
-    }
-    // Google OAuth Authentication
-    async signInWithGoogle(target = "assistant") {
-      try {
-        const launch = this.beginOAuthLaunch("google", target);
-        const { flowId, launcherUrl } = launch;
-        console.log(
-          `[Oasis OAuth][${flowId}] Preparing Google OAuth launcher URL`
-        );
-        const currentUser = await this.getCurrentUser();
-        if (currentUser) {
-          console.log(
-            `[Oasis OAuth][${flowId}] User already authenticated:`,
-            currentUser.id
-          );
-          return { user: currentUser, error: null };
-        }
-        console.log(
-          `[Oasis OAuth][${flowId}] Generated launcher URL:`,
-          launcherUrl
-        );
-        return {
-          user: null,
-          error: new Error(`GOOGLE_OAUTH_URL:${launcherUrl}`)
-        };
-      } catch (error) {
-        console.error("Google sign in error:", error);
-        return { user: null, error };
-      }
-    }
-    async signInWithAzure(target = "assistant") {
-      try {
-        const launch = this.beginOAuthLaunch("azure", target);
-        const { flowId, launcherUrl } = launch;
-        console.log(
-          `[Oasis OAuth][${flowId}] Preparing Azure OAuth launcher URL`
-        );
-        const currentUser = await this.getCurrentUser();
-        if (currentUser) {
-          console.log(
-            `[Oasis OAuth][${flowId}] User already authenticated:`,
-            currentUser.id
-          );
-          return { user: currentUser, error: null };
-        }
-        console.log(
-          `[Oasis OAuth][${flowId}] Generated launcher URL:`,
-          launcherUrl
-        );
-        return {
-          user: null,
-          error: new Error(`AZURE_OAUTH_URL:${launcherUrl}`)
-        };
-      } catch (error) {
-        console.error("Azure sign in error:", error);
-        return { user: null, error };
-      }
-    }
-    async signInWithApple(target = "assistant") {
-      try {
-        const launch = this.beginOAuthLaunch("apple", target);
-        const { flowId, launcherUrl } = launch;
-        console.log(
-          `[Oasis OAuth][${flowId}] Preparing Apple OAuth launcher URL`
-        );
-        const currentUser = await this.getCurrentUser();
-        if (currentUser) {
-          console.log(
-            `[Oasis OAuth][${flowId}] User already authenticated:`,
-            currentUser.id
-          );
-          return { user: currentUser, error: null };
-        }
-        console.log(
-          `[Oasis OAuth][${flowId}] Generated launcher URL:`,
-          launcherUrl
-        );
-        return {
-          user: null,
-          error: new Error(`APPLE_OAUTH_URL:${launcherUrl}`)
-        };
-      } catch (error) {
-        console.error("Apple sign in error:", error);
-        return { user: null, error };
-      }
-    }
-    // Email/Password Authentication
-    async signInWithEmail(email, password) {
-      try {
-        console.log("Attempting email sign in for:", email);
-        const { data, error } = await this.supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        if (error) {
-          console.error("Email sign in error:", error.message);
-          return { user: null, error };
-        }
-        if (data.user) {
-          await this.updateLastLogin(data.user.id);
-          await this.createSession(data.user.id);
-          console.log("Email sign in successful for user:", data.user.id);
-        }
-        return { user: data.user, error: null };
-      } catch (error) {
-        console.error("Sign in error:", error);
-        return { user: null, error };
-      }
-    }
-    async signUp(email, password, name) {
-      try {
-        console.log("Attempting sign up for:", email);
-        const { data, error } = await this.supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name: name || email.split("@")[0]
-            }
-          }
-        });
-        if (error) {
-          console.error("Sign up error:", error.message);
-          return { user: null, error };
-        }
-        if (data.user) {
-          await this.createUserProfile(data.user, name);
-          console.log("Sign up successful for user:", data.user.id);
-        }
-        return { user: data.user, error: null };
-      } catch (error) {
-        console.error("Sign up error:", error);
-        return { user: null, error };
-      }
-    }
-    async resetPasswordForEmail(email) {
-      try {
-        console.log("Attempting password reset for:", email);
-        const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: "https://kahana.co/update-password"
-        });
-        if (error) {
-          console.error("Password reset error:", error.message);
-          return { error };
-        }
-        console.log("Password reset email sent");
-        return { error: null };
-      } catch (error) {
-        console.error("Password reset error:", error);
-        return { error };
-      }
-    }
-    async signOut() {
-      try {
-        console.log("Attempting sign out");
-        if (this.currentSession) {
-          await this.endSession(this.currentSession.session_id);
-        }
-        const { error } = await this.supabase.auth.signOut();
-        if (error) {
-          console.error("Sign out error:", error.message);
-          return { error };
-        }
-        this.currentSession = null;
-        console.log("Sign out successful");
-        return { error: null };
-      } catch (error) {
-        console.error("Sign out error:", error);
-        return { error };
-      }
-    }
-    // Session Management
-    async getCurrentUser() {
-      const {
-        data: { user }
-      } = await this.supabase.auth.getUser();
-      return user;
-    }
-    async getSession() {
-      const {
-        data: { session }
-      } = await this.supabase.auth.getSession();
-      return session;
-    }
-    async isAuthenticated() {
-      const user = await this.getCurrentUser();
-      return user !== null;
-    }
-    normalizeOAuthCallbackPayload(authData) {
-      const out = {};
-      if (!authData || typeof authData !== "object") {
-        return out;
-      }
-      if (typeof authData.code === "string" && authData.code) {
-        out.code = authData.code;
-      }
-      if (authData.access_token && authData.refresh_token) {
-        out.access_token = authData.access_token;
-        out.refresh_token = authData.refresh_token;
-        return out;
-      }
-      const tryParseHash = (raw) => {
-        const h2 = raw.replace(/^#/, "");
-        const params = new URLSearchParams(h2);
-        const at = params.get("access_token");
-        const rt = params.get("refresh_token");
-        if (at && rt) {
-          out.access_token = at;
-          out.refresh_token = rt;
-          return true;
-        }
-        return false;
-      };
-      const urlLike = typeof authData.redirect_url === "string" ? authData.redirect_url : typeof authData.redirectUrl === "string" ? authData.redirectUrl : typeof authData.url === "string" ? authData.url : typeof authData.callback_url === "string" ? authData.callback_url : null;
-      if (urlLike?.includes("#")) {
-        const frag = urlLike.split("#")[1];
-        if (frag) {
-          tryParseHash(frag);
-        }
-      }
-      if (!out.access_token && typeof authData.fragment === "string" && authData.fragment) {
-        tryParseHash(authData.fragment);
-      }
-      if (authData.access_token) {
-        out.access_token = authData.access_token;
-      }
-      if (authData.refresh_token) {
-        out.refresh_token = authData.refresh_token;
-      }
-      return out;
-    }
-    /**
-     * Handle OAuth callback data (similar to Electron's handleOAuthRedirectCallback)
-     * Processes auth data from manual input and exchanges it for a session
-     */
-    async handleOAuthCallbackData(authData) {
-      const flowId = authData?.flow_id || authData?.flowId || "unknown";
-      try {
-        console.log(`[Oasis OAuth][${flowId}] Handling callback data:`, authData);
-        const normalized = this.normalizeOAuthCallbackPayload(authData);
-        if (!normalized.code && !(normalized.access_token && normalized.refresh_token)) {
-          const safeKeys = Object.keys(authData || {}).filter(
-            (k3) => !/^(access_token|refresh_token|provider_token)$/i.test(k3)
-          );
-          console.warn(
-            `[Oasis OAuth][${flowId}] Incomplete handoff (no code or tokens). Keys: ${safeKeys.join(", ")}`
-          );
-          this.clearActiveOAuthLaunch(flowId);
-          return {
-            success: false,
-            error: "Complete sign-in in the browser window that opened, then return here."
-          };
-        }
-        if (normalized.code) {
-          console.log(
-            `[Oasis OAuth][${flowId}] Exchanging auth code for session...`
-          );
-          const { data, error } = await this.supabase.auth.exchangeCodeForSession(
-            normalized.code
-          );
-          if (error) {
-            console.error(
-              `[Oasis OAuth][${flowId}] Failed to exchange code for session:`,
-              error.message
-            );
-            this.clearActiveOAuthLaunch(flowId);
-            return { success: false, error: error.message };
-          } else {
-            console.log(
-              `[Oasis OAuth][${flowId}] Exchanged code for session for user:`,
-              data.user?.id
-            );
-            if (data.user) {
-              await this.rpcEnsureUserProfile(data.user);
-              const existingProfile = await this.getUserProfile();
-              if (!existingProfile) {
-                await this.createUserProfile(
-                  data.user,
-                  data.user.user_metadata?.name
-                );
-                console.log(
-                  `[Oasis OAuth][${flowId}] Created user profile from OAuth callback`
-                );
-              }
-              await this.updateLastLogin(data.user.id);
-              await this.createSession(data.user.id);
-            }
-            this.clearActiveOAuthLaunch(flowId);
-            return { success: true };
-          }
-        }
-        if (normalized.access_token && normalized.refresh_token) {
-          console.log(`[Oasis OAuth][${flowId}] Setting session from tokens...`);
-          const { data, error } = await this.supabase.auth.setSession({
-            access_token: normalized.access_token,
-            refresh_token: normalized.refresh_token
-          });
-          if (error) {
-            console.error(
-              `[Oasis OAuth][${flowId}] Failed to set session from tokens:`,
-              error.message
-            );
-            this.clearActiveOAuthLaunch(flowId);
-            return { success: false, error: error.message };
-          } else {
-            console.log(
-              `[Oasis OAuth][${flowId}] Set session from tokens for user:`,
-              data.user?.id
-            );
-            if (data.user) {
-              await this.rpcEnsureUserProfile(data.user);
-              const existingProfile = await this.getUserProfile();
-              if (!existingProfile) {
-                await this.createUserProfile(
-                  data.user,
-                  data.user.user_metadata?.name
-                );
-                console.log(
-                  `[Oasis OAuth][${flowId}] Created user profile from tokens`
-                );
-              }
-              await this.updateLastLogin(data.user.id);
-              await this.createSession(data.user.id);
-            }
-            this.clearActiveOAuthLaunch(flowId);
-            return { success: true };
-          }
-        }
-        console.warn(
-          `[Oasis OAuth][${flowId}] No valid OAuth data after normalization`
-        );
-        this.clearActiveOAuthLaunch(flowId);
-        return {
-          success: false,
-          error: "Complete sign-in in the browser window that opened, then return here."
-        };
-      } catch (error) {
-        console.error(
-          `[Oasis OAuth][${flowId}] Error handling callback data:`,
-          error
-        );
-        this.clearActiveOAuthLaunch(flowId);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error"
-        };
-      }
-    }
-    // User Profile Management
-    async getUserProfile() {
-      try {
-        const user = await this.getCurrentUser();
-        if (!user) return null;
-        const { data, error } = await this.supabase.from("users").select("*").eq("user_id", user.id).single();
-        if (error) {
-          console.error("Error fetching user profile:", error.message);
-          return null;
-        }
-        return data;
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-        return null;
-      }
-    }
-    // Auth State Management
-    onAuthStateChange(callback) {
-      this.authStateCallbacks.push(callback);
-    }
-    async handleAuthStateChange(event, session) {
-      const user = session?.user || null;
-      const authState = {
-        user,
-        session,
-        isAuthenticated: user !== null
-      };
-      this.authStateCallbacks.forEach((callback) => {
-        try {
-          callback(authState);
-        } catch (error) {
-          console.error("Error in auth state callback:", error);
-        }
-      });
-      if (event === "SIGNED_IN" && user) {
-        await this.rpcEnsureUserProfile(user);
-        await this.trackSessionForUser(user.id);
-      } else if (event === "SIGNED_OUT" && this.currentSession) {
-        this.lastTrackedSessionUserId = null;
-        await this.endSession(this.currentSession.session_id);
-        this.currentSession = null;
-      } else if (event === "SIGNED_OUT") {
-        this.lastTrackedSessionUserId = null;
-      }
-    }
-    async rpcEnsureUserProfile(user) {
-      try {
-        const meta = user.user_metadata;
-        const fullName = typeof meta?.full_name === "string" ? meta.full_name : void 0;
-        const metaName = typeof meta?.name === "string" ? meta.name : void 0;
-        const { error } = await this.supabase.rpc("ensure_user_profile", {
-          p_email: user.email ?? "",
-          p_name: fullName ?? metaName ?? null
-        });
-        if (error) {
-          console.warn("ensure_user_profile RPC:", error.message);
-        }
-      } catch (error) {
-        console.warn("ensure_user_profile RPC failed:", error);
-      }
-    }
-    // Database Operations
-    async createUserProfile(user, name) {
-      try {
-        const { error } = await this.supabase.from("users").insert({
-          user_id: user.id,
-          email: user.email,
-          name: name || user.user_metadata?.name || user.email.split("@")[0],
-          password_hash: "",
-          // Supabase handles this
-          status: "active"
-        });
-        if (error) {
-          console.error("Error creating user profile:", error.message);
-        } else {
-          console.log("User profile created successfully");
-        }
-      } catch (error) {
-        console.error("Error creating user profile:", error);
-      }
-    }
-    async updateLastLogin(userId) {
-      try {
-        const { error } = await this.supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("user_id", userId);
-        if (error) {
-          console.error("Error updating last login:", error.message);
-        }
-      } catch (error) {
-        console.error("Error updating last login:", error);
-      }
-    }
-    async trackSessionForUser(userId) {
-      if (this.currentSession?.user_id === userId && !this.currentSession?.ended_at) {
-        this.lastTrackedSessionUserId = userId;
-        return;
-      }
-      if (this.lastTrackedSessionUserId === userId) {
-        return;
-      }
-      if (this.sessionTrackInFlight?.userId === userId) {
-        await this.sessionTrackInFlight.promise;
-        return;
-      }
-      const pendingTrack = {
-        userId,
-        promise: Promise.resolve()
-      };
-      pendingTrack.promise = this.createSession(userId).finally(() => {
-        if (this.sessionTrackInFlight === pendingTrack) {
-          this.sessionTrackInFlight = null;
-        }
-      });
-      this.sessionTrackInFlight = pendingTrack;
-      await pendingTrack.promise;
-      this.lastTrackedSessionUserId = userId;
-    }
-    async createSession(userId) {
-      try {
-        const deviceInfo = {
-          platform: "browser",
-          version: ENV.APP_VERSION,
-          userAgent: window.navigator.userAgent
-        };
-        const { data, error } = await this.supabase.from("sessions").insert({
-          user_id: userId,
-          device_info: deviceInfo
-        }).select().single();
-        if (error) {
-          if (error.message.includes("row-level security policy")) {
-            console.warn(
-              "Session tracking skipped due to RLS policy (non-critical):",
-              error.message
-            );
-          } else {
-            console.error("Error creating session:", error.message);
-          }
-        } else if (data) {
-          this.currentSession = data;
-          console.log("Session created:", data.session_id);
-        }
-      } catch (error) {
-        console.error("Error creating session:", error);
-      }
-    }
-    async endSession(sessionId) {
-      try {
-        const { error } = await this.supabase.from("sessions").update({ ended_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("session_id", sessionId);
-        if (error) {
-          console.error("Error ending session:", error.message);
-        } else {
-          console.log("Session ended:", sessionId);
-        }
-      } catch (error) {
-        console.error("Error ending session:", error);
-      }
-    }
-    // Utility Methods
-    handleAuthError(error) {
-      if (error.message && (error.message.startsWith("GOOGLE_OAUTH_URL:") || error.message.startsWith("AZURE_OAUTH_URL:") || error.message.startsWith("APPLE_OAUTH_URL:"))) {
-        return error.message;
-      }
-      switch (error.message) {
-        case "Invalid login credentials":
-          return "Invalid email or password. Please try again.";
-        case "Email not confirmed":
-          return "Please check your email and click the confirmation link.";
-        case "User already registered":
-          return "An account with this email already exists.";
-        case "Password should be at least 6 characters":
-          return "Password must be at least 6 characters long.";
-        case "Unable to validate email address: invalid format":
-          return "Please enter a valid email address.";
-        case "OAuth provider not found":
-          return "Google sign-in is not configured. Please contact support.";
-        case "OAuth account not linked":
-          return "This Google account is not linked to an existing account.";
-        case "Google sign-in is blocked by browser security. Please use email/password authentication instead.":
-          return "Google sign-in is blocked by browser security. Please use email/password authentication instead.";
-        case "Popup blocked. Please allow popups for this site and try again.":
-          return "Popup blocked. Please allow popups for this site and try again.";
-        case "Google sign-in was cancelled or failed. Please try again.":
-          return "Google sign-in was cancelled or failed. Please try again.";
-        case "Google sign-in timed out. Please try again.":
-          return "Google sign-in timed out. Please try again.";
-        case "Failed to generate OAuth URL":
-          return "Failed to generate OAuth URL. Please try again.";
-        case "Failed to open OAuth URL. Please allow popups and try again.":
-          return "Failed to open OAuth URL. Please allow popups and try again.";
-        default:
-          return error.message || "An unexpected error occurred. Please try again.";
-      }
-    }
-  };
-  var supabaseAuth = SupabaseAuth.getInstance();
-  if (typeof window !== "undefined") {
-    window.supabaseAuth = supabaseAuth;
-  }
-
-  // src/services/telemetryConsent.ts
-  var OASIS_DATA_COLLECTION_PREF = "datareporting.healthreport.uploadEnabled";
-  function isOasisDataCollectionIdentified() {
-    const { Services } = getChromeContext();
-    if (!Services?.prefs?.getBoolPref) {
-      return false;
-    }
-    try {
-      return Services.prefs.getBoolPref(OASIS_DATA_COLLECTION_PREF, false);
-    } catch {
-      return false;
-    }
-  }
-
-  // src/services/subscription.ts
-  var PLAN_LIMITS = {
-    free: 50,
-    basic: 1500,
-    // $20/mo
-    pro: 3e3
-    // $40/mo
-  };
-  var PLAN_DAILY_TOKEN_LIMITS = {
-    free: 1e5,
-    basic: 1e6,
-    pro: 2e6
-  };
-  var DEFAULT_LIMIT = 50;
-  var DEFAULT_DAILY_TOKEN_LIMIT = 1e5;
-  var COST_TEXT = 1;
-  var COST_VOICE = 10;
-  var logDebug2 = (message, ...meta) => {
-    assistantLogger.debug(
-      "subscription",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var logWarn2 = (message, ...meta) => {
-    assistantLogger.warn(
-      "subscription",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var logError2 = (message, ...meta) => {
-    assistantLogger.error(
-      "subscription",
-      String(message ?? ""),
-      meta.length === 0 ? void 0 : meta.length === 1 ? meta[0] : meta
-    );
-  };
-  var OPTIMISTIC_FEEDBACK_BONUS_KEY = "oasis.daily_training_bonus.verified.";
-  function utcCalendarDateString() {
-    const d3 = /* @__PURE__ */ new Date();
-    d3.setUTCHours(0, 0, 0, 0);
-    return d3.toISOString().slice(0, 10);
-  }
-  function readOptimisticFeedbackBonusTokensToday() {
-    try {
-      const raw = sessionStorage.getItem(
-        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString()
-      );
-      const n2 = parseInt(String(raw || "0"), 10);
-      return Number.isFinite(n2) && n2 >= 0 ? n2 : 0;
-    } catch {
-      return 0;
-    }
-  }
-  function writeOptimisticFeedbackBonusTokensToday(total) {
-    try {
-      sessionStorage.setItem(
-        OPTIMISTIC_FEEDBACK_BONUS_KEY + utcCalendarDateString(),
-        String(Math.max(0, Math.floor(total)))
-      );
-    } catch {
-    }
-  }
-  var SubscriptionService = class _SubscriptionService {
-    static instance;
-    // Cache current plan details to avoid hitting DB on every keystroke
-    cachedLimit = null;
-    cachedUsage = 0;
-    lastFetchTime = 0;
-    CACHE_TTL = 60 * 1e3;
-    // 1 minute cache
-    cachedDailyLimit = null;
-    cachedDailyUsedFromApi = null;
-    cachedDailyRemainingFromApi = null;
-    cachedDailyTokensFromDb = 0;
-    cachedDailyTokensFromDbOk = false;
-    cachedDailyTokenLimitSupabase = null;
-    cachedFeedbackBonusTokensToday = 0;
-    cachedPlanNameKey = "free";
-    constructor() {
-    }
-    static getInstance() {
-      if (!_SubscriptionService.instance) {
-        _SubscriptionService.instance = new _SubscriptionService();
-      }
-      return _SubscriptionService.instance;
-    }
-    /**
-     * Call after a qualifying training save succeeds so the daily bar reflects bonus tokens
-     * even when `feedback_token_grants` is unavailable. Persists for the current UTC calendar day.
-     */
-    appendOptimisticTrainingBonus(amount) {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return;
-      }
-      const add = Math.floor(amount);
-      const prevCached = this.cachedFeedbackBonusTokensToday;
-      writeOptimisticFeedbackBonusTokensToday(
-        readOptimisticFeedbackBonusTokensToday() + add
-      );
-      const fromStorage = readOptimisticFeedbackBonusTokensToday();
-      this.cachedFeedbackBonusTokensToday = Math.max(
-        prevCached + add,
-        fromStorage
-      );
-      if (this.cachedDailyLimit != null && this.cachedDailyLimit > 0 && Number.isFinite(this.cachedDailyLimit)) {
-        this.cachedDailyLimit += add;
-        if (this.cachedDailyRemainingFromApi != null && Number.isFinite(this.cachedDailyRemainingFromApi)) {
-          this.cachedDailyRemainingFromApi += add;
-        }
-      }
-    }
-    getUsageBarSnapshot() {
-      return this.getDailyTokenUsageForDisplay();
-    }
-    updateFromQuota(quota) {
-      if (!quota) return;
-      if (quota.monthly_limit !== void 0) {
-        this.cachedLimit = quota.monthly_limit;
-      }
-      if (quota.monthly_used !== void 0) {
-        this.cachedUsage = quota.monthly_used;
-      }
-      if (quota.daily_limit !== void 0) {
-        this.cachedDailyLimit = quota.daily_limit;
-      }
-      if (quota.daily_used !== void 0) {
-        this.cachedDailyUsedFromApi = quota.daily_used;
-      }
-      if (quota.daily_remaining !== void 0) {
-        this.cachedDailyRemainingFromApi = quota.daily_remaining;
-      }
-      this.lastFetchTime = Date.now();
-      logDebug2(
-        `updateFromQuota: monthly limit=${this.cachedLimit} used=${this.cachedUsage}; daily limit=${this.cachedDailyLimit} used=${this.cachedDailyUsedFromApi}`
-      );
-    }
-    /**
-     * Apply `usage_stats` from Supabase Edge assist (post-`record_llm_usage`).
-     * Avoid calling `trackUsage` for the same request when this object is present.
-     */
-    updateFromAssistUsageStats(stats) {
-      if (!stats || typeof stats !== "object") {
-        return;
-      }
-      const patch = {};
-      if (typeof stats.total_tokens === "number" && Number.isFinite(stats.total_tokens)) {
-        patch.daily_used = stats.total_tokens;
-      }
-      if (typeof stats.limit === "number" && Number.isFinite(stats.limit)) {
-        patch.daily_limit = stats.limit;
-      }
-      if (typeof stats.remaining === "number" && Number.isFinite(stats.remaining)) {
-        patch.daily_remaining = stats.remaining;
-      }
-      if (Object.keys(patch).length > 0) {
-        this.updateFromQuota(patch);
-      }
-    }
-    getDailyTokenUsageForDisplay() {
-      const fromSupabaseLimit = this.cachedDailyTokenLimitSupabase !== null && this.cachedDailyTokenLimitSupabase > 0 ? this.cachedDailyTokenLimitSupabase : null;
-      const baseLimit = Math.max(
-        1,
-        fromSupabaseLimit ?? DEFAULT_DAILY_TOKEN_LIMIT
-      );
-      const bonusTokens = Math.max(0, this.cachedFeedbackBonusTokensToday);
-      const limit = baseLimit + bonusTokens;
-      const fromApi = this.cachedDailyUsedFromApi ?? 0;
-      const fromDb = this.cachedDailyTokensFromDb;
-      const used = Math.max(
-        0,
-        this.cachedDailyTokensFromDbOk ? fromDb : Math.max(fromApi, fromDb)
-      );
-      const remaining = Math.max(0, limit - used);
-      const percentOfBase = baseLimit > 0 ? Math.min(9999, Math.round(used / baseLimit * 1e3) / 10) : 0;
-      const percentUsed = limit > 0 ? Math.min(9999, Math.round(used / limit * 1e3) / 10) : 0;
-      const local = {
-        used,
-        limit,
-        baseLimit,
-        bonusTokens,
-        remaining,
-        percentUsed,
-        percentOfBase
-      };
-      const qLimit = this.cachedDailyLimit;
-      const qUsed = this.cachedDailyUsedFromApi;
-      const qRem = this.cachedDailyRemainingFromApi;
-      if (qLimit != null && qLimit > 0 && qUsed != null && qRem != null && Number.isFinite(qUsed) && Number.isFinite(qRem) && Math.abs(qUsed + qRem - qLimit) <= 2) {
-        const effectiveLimit = Math.max(local.limit, qLimit);
-        const qBonus = Math.max(0, qLimit - local.baseLimit);
-        const effectiveBonus = Math.max(
-          local.bonusTokens,
-          effectiveLimit - local.baseLimit,
-          qBonus
-        );
-        const effectiveRemaining = Math.max(0, effectiveLimit - qUsed);
-        const percentOfBaseMerged = local.baseLimit > 0 ? Math.min(9999, Math.round(qUsed / local.baseLimit * 1e3) / 10) : 0;
-        const percentUsedMerged = effectiveLimit > 0 ? Math.min(9999, Math.round(qUsed / effectiveLimit * 1e3) / 10) : 0;
-        return {
-          used: qUsed,
-          limit: effectiveLimit,
-          baseLimit: local.baseLimit,
-          bonusTokens: effectiveBonus,
-          remaining: effectiveRemaining,
-          percentUsed: percentUsedMerged,
-          percentOfBase: percentOfBaseMerged
-        };
-      }
-      return local;
-    }
-    async getUsageBarData() {
-      await this.forceRefresh();
-      return this.getUsageBarSnapshot();
-    }
-    getCachedPlanName() {
-      return this.cachedPlanNameKey;
-    }
-    getOptInPersonalizedTraining() {
-      return isOasisDataCollectionIdentified();
-    }
-    /**
-     * Track usage for a command
-     * @param type 'text' or 'voice'
-     * @param model Optional model name for record keeping
-     */
-    /**
-     * Log Gemini tokens for assist **routing** only (`usage_count` / monthly units stay 0).
-     * Final assistant turns still use `trackUsage` from the graph stream.
-     */
-    recordAssistRoutingTokens(meta) {
-      void this.recordAssistRoutingTokensAsync(meta);
-    }
-    async recordAssistRoutingTokensAsync(meta) {
-      const user = await supabaseAuth.getCurrentUser();
-      if (!user) {
-        logWarn2("recordAssistRoutingTokens: No user found.");
-        return;
-      }
-      const input = Number(meta.input_tokens ?? 0);
-      const output = Number(meta.output_tokens ?? 0);
-      if (!Number.isFinite(input) || !Number.isFinite(output) || input <= 0 && output <= 0) {
-        return;
-      }
-      const supabase = supabaseAuth.supabase;
-      const { error } = await supabase.from("llm_usage").insert({
-        user_id: user.id,
-        tokens_used: 0,
-        usage_count: 0,
-        model_used: "assist-router",
-        success: true,
-        command_type: meta.command_type ?? null,
-        user_intent: meta.user_intent ?? null,
-        input_tokens: input,
-        output_tokens: output
-      });
-      if (error) {
-        logError2("recordAssistRoutingTokens: DB insert failed", error);
-      } else {
-        logDebug2("recordAssistRoutingTokens: logged routing tokens", {
-          input,
-          output
-        });
-      }
-    }
-    async trackUsage(type, model = "gemini-1.5-flash", meta) {
-      const user = await supabaseAuth.getCurrentUser();
-      if (!user) {
-        logWarn2("trackUsage: No user found.");
-        return;
-      }
-      const units = type === "voice" ? COST_VOICE : COST_TEXT;
-      logDebug2(
-        `trackUsage: Tracking ${units} units for ${type} (User: ${user.id})`
-      );
-      this.cachedUsage += units;
-      logDebug2(`trackUsage: cachedUsage is now ${this.cachedUsage}`);
-      localMemory.saveUsage(user.id, this.cachedUsage).catch((e2) => logError2("Failed to save local usage:", e2));
-      const supabase = supabaseAuth.supabase;
-      const telemetryIdentified = meta?.telemetry_identified ?? isOasisDataCollectionIdentified();
-      const rowUserId = telemetryIdentified ? user.id : null;
-      supabase.from("llm_usage").insert({
-        user_id: rowUserId,
-        tokens_used: units,
-        usage_count: units,
-        model_used: `${type}:${model}`,
-        success: true,
-        command_type: meta?.command_type ?? null,
-        user_intent: meta?.user_intent ?? null,
-        input_tokens: meta?.input_tokens ?? 0,
-        output_tokens: meta?.output_tokens ?? 0,
-        interaction_id: meta?.interaction_id ?? null,
-        ...meta?.interaction_payload ? { interaction_data: meta.interaction_payload } : {}
-      }).then(({ error }) => {
-        if (error) logError2("Failed to track usage (DB Insert):", error);
-        else logDebug2("trackUsage: DB insert successful");
-      });
-    }
-    /**
-     * Check if the user can proceed with a command
-     */
-    async checkAvailability() {
-      const user = await supabaseAuth.getCurrentUser();
-      if (!user) {
-        return { totalUnits: 0, limit: 0, remaining: 0, isLimitReached: true };
-      }
-      if (this.lastFetchTime === 0 || Date.now() - this.lastFetchTime > this.CACHE_TTL) {
-        await this.refreshUsageData(user.id);
-      }
-      const limit = this.cachedLimit ?? DEFAULT_LIMIT;
-      const remaining = Math.max(0, limit - this.cachedUsage);
-      return {
-        totalUnits: this.cachedUsage,
-        limit,
-        remaining,
-        isLimitReached: this.cachedUsage >= limit
-      };
-    }
-    getSubscriptionUrl() {
-      return "https://kahana.co/oasis-pricing";
-    }
-    async forceRefresh() {
-      const user = await supabaseAuth.getCurrentUser();
-      if (user) {
-        this.lastFetchTime = 0;
-        await this.refreshUsageData(user.id);
-      }
-    }
-    async refreshUsageData(userId) {
-      const supabase = supabaseAuth.supabase;
-      logDebug2("refreshUsageData: syncing usage...");
-      let limit = DEFAULT_LIMIT;
-      const { data: planData, error: planError } = await supabase.from("user_plans").select(
-        `
-                plan_id,
-                stripe_subscription_id,
-                is_active,
-                plans ( name, llm_call_limit )
-            `
-      ).eq("user_id", userId).eq("is_active", true).maybeSingle();
-      logDebug2(`refreshUsageData: Primary query result:`, {
-        planData,
-        planError,
-        hasPlansJoin: planData && planData.plans ? true : false,
-        userId
-      });
-      let planNameKey = "free";
-      let planIdForDaily = null;
-      if (planData) {
-        if (planData.plan_id != null) {
-          planIdForDaily = String(planData.plan_id);
-        }
-        const joined = planData.plans;
-        if (joined && typeof joined.name === "string" && joined.name) {
-          planNameKey = joined.name.toLowerCase();
-        }
-      }
-      if (planData && planData.plans) {
-        const dbLimit = planData.plans.llm_call_limit;
-        const planName = (planData.plans.name || "").toLowerCase();
-        if (dbLimit) {
-          limit = dbLimit;
-          logDebug2(`refreshUsageData: Using plan limit from DB: ${limit}`);
-        } else if (PLAN_LIMITS[planName]) {
-          limit = PLAN_LIMITS[planName];
-          logDebug2(
-            `refreshUsageData: Using plan limit from name mapping: ${limit}`
-          );
-        }
-      } else if (planData && planData.is_active) {
-        const stripeSubId = planData.stripe_subscription_id;
-        const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
-        logDebug2(
-          `refreshUsageData: Plans join failed but planData exists, checking stripe_subscription_id:`,
-          {
-            stripeSubId,
-            hasStripeSubscription,
-            is_active: planData.is_active
-          }
-        );
-        if (hasStripeSubscription) {
-          limit = PLAN_LIMITS["basic"];
-          planNameKey = "basic";
-          logDebug2(
-            `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id from primary query: ${stripeSubId}`
-          );
-        } else {
-          logWarn2(
-            "refreshUsageData: Plan data exists but no valid stripe_subscription_id, trying fallback query"
-          );
-        }
-      }
-      if (limit === DEFAULT_LIMIT) {
-        logWarn2(
-          "refreshUsageData: Limit still at default, trying fallback query without join"
-        );
-        const { data: fallbackData, error: fallbackError } = await supabase.from("user_plans").select("plan_id, stripe_subscription_id, is_active").eq("user_id", userId).eq("is_active", true).maybeSingle();
-        logDebug2(`refreshUsageData: Fallback query result:`, {
-          fallbackData,
-          fallbackError,
-          userId
-        });
-        if (fallbackError) {
-          logError2("refreshUsageData: Fallback query error:", fallbackError);
-        }
-        if (fallbackData && fallbackData.is_active) {
-          if (planIdForDaily === null && fallbackData.plan_id != null) {
-            planIdForDaily = String(fallbackData.plan_id);
-          }
-          const stripeSubId = fallbackData.stripe_subscription_id;
-          const hasStripeSubscription = stripeSubId && typeof stripeSubId === "string" && stripeSubId.trim() !== "";
-          logDebug2(`refreshUsageData: Checking stripe_subscription_id:`, {
-            stripeSubId,
-            hasStripeSubscription,
-            type: typeof stripeSubId
-          });
-          if (hasStripeSubscription) {
-            limit = PLAN_LIMITS["basic"];
-            planNameKey = "basic";
-            logDebug2(
-              `refreshUsageData: Using Basic plan limit (1500) based on stripe_subscription_id: ${stripeSubId}`
-            );
-          } else {
-            logWarn2(
-              "refreshUsageData: Active plan found but no valid stripe_subscription_id, using free plan limit"
-            );
-          }
-        } else {
-          logWarn2(
-            "refreshUsageData: No active plan found for user, using free plan limit",
-            {
-              fallbackData,
-              userId
-            }
-          );
-        }
-      }
-      logDebug2(`refreshUsageData: Final limit set to: ${limit}`);
-      this.cachedLimit = limit;
-      let dbTotal = 0;
-      const startOfMonth = /* @__PURE__ */ new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const { data: usageData, error: usageError } = await supabase.from("llm_usage").select("usage_count").eq("user_id", userId).gte("created_at", startOfMonth.toISOString());
-      if (usageData) {
-        dbTotal = usageData.reduce(
-          (acc, row) => acc + (row.usage_count || 0),
-          0
-        );
-      }
-      const localTotal = await localMemory.getUsage(userId);
-      if (!usageError && usageData) {
-        this.cachedUsage = dbTotal;
-        localMemory.saveUsage(userId, dbTotal).catch((e2) => logWarn2("refreshUsageData: sync local:", e2));
-      } else {
-        if (usageError) {
-          logWarn2(
-            "refreshUsageData: DB fetch failed (RLS?), using local only.",
-            usageError.message
-          );
-        }
-        this.cachedUsage = Math.max(dbTotal, localTotal);
-      }
-      logDebug2(
-        `refreshUsageData: DB=${dbTotal}, Local=${localTotal} -> Final=${this.cachedUsage}`
-      );
-      let dailyTokLimit = null;
-      if (planIdForDaily) {
-        const { data: planRow, error: planRowErr } = await supabase.from("plans").select("daily_token_limit").eq("id", planIdForDaily).maybeSingle();
-        if (!planRowErr && planRow && planRow.daily_token_limit != null) {
-          const n2 = Number(planRow.daily_token_limit);
-          if (Number.isFinite(n2) && n2 > 0) {
-            dailyTokLimit = n2;
-          }
-        }
-      }
-      this.cachedPlanNameKey = planNameKey;
-      this.cachedDailyTokenLimitSupabase = dailyTokLimit ?? PLAN_DAILY_TOKEN_LIMITS[planNameKey] ?? DEFAULT_DAILY_TOKEN_LIMIT;
-      const startOfUtcDay = /* @__PURE__ */ new Date();
-      startOfUtcDay.setUTCHours(0, 0, 0, 0);
-      const utcGrantDate = startOfUtcDay.toISOString().slice(0, 10);
-      let grantSum = 0;
-      const { data: grantRows, error: grantErr } = await supabase.from("feedback_token_grants").select("tokens").eq("user_id", userId).eq("grant_date_utc", utcGrantDate);
-      if (!grantErr && grantRows) {
-        grantSum = grantRows.reduce(
-          (acc, row) => acc + (Number(row.tokens) || 0),
-          0
-        );
-      } else if (grantErr) {
-        logDebug2(
-          "refreshUsageData: feedback_token_grants unavailable or error",
-          grantErr.message
-        );
-      }
-      const optimistic = readOptimisticFeedbackBonusTokensToday();
-      this.cachedFeedbackBonusTokensToday = Math.max(
-        grantSum,
-        optimistic,
-        this.cachedFeedbackBonusTokensToday
-      );
-      this.cachedDailyTokensFromDbOk = false;
-      const { data: dayRows, error: dayErr } = await supabase.from("llm_usage").select("input_tokens, output_tokens").eq("user_id", userId).gte("created_at", startOfUtcDay.toISOString());
-      if (!dayErr && dayRows) {
-        this.cachedDailyTokensFromDbOk = true;
-        this.cachedDailyTokensFromDb = dayRows.reduce(
-          (acc, row) => acc + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
-          0
-        );
-      } else {
-        if (dayErr) {
-          logWarn2(
-            "refreshUsageData: daily token aggregate failed",
-            dayErr.message
-          );
-        }
-      }
-      this.lastFetchTime = Date.now();
-    }
-  };
-  var subscriptionService = SubscriptionService.getInstance();
+  // src/commands.ts
+  init_localMemory();
+  init_subscription();
 
   // src/services/historyCollector.ts
   function getPlacesUtils() {
@@ -49338,6 +53392,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   window.semanticHistorySearch = semanticHistorySearch;
 
   // src/utils/searchMemoryUtils.ts
+  init_localMemoryUtils();
   function hasBookmarkFolderCandidates(results) {
     return results.some((r2) => {
       const rawType = String(r2.metadata?.type || "").toLowerCase();
@@ -49383,268 +53438,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     return { results: filtered, dropped };
   }
 
-  // src/utils/intentParser.ts
-  var ACTION_WORD_RE = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|organize|copy|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
-  var ACTION_OBJECT_RE = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|url|result|split)\b/i;
-  var LIST_VERB_RE = /^list\b/i;
-  var SHOW_VERB_RE = /^show\b/i;
-  var LIST_OBJECT_RE = /\b(?:tabs?|tab\s*groups?|groups?|bookmark\s*folders?|folders?|hubs?)\b/i;
-  var SEARCH_FAMILY_RE = /^(?:search|find|look\s*up)\b|^have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked|read|looked\s+at)\b|^do\s+i\s+have\b|^what(?:'s|\s+is|\s+did\s+i\s+(?:save|read|visit|look\s+at|browse))\s+/i;
-  var HISTORY_FAMILY_RE = /\b(?:visited|browsed|looked\s+at|read|viewed)\b.*\b(?:page|pages|site|sites|article|articles|earlier|before|recently|yesterday|last\s+week|previously)\b|\b(?:page|pages|site|sites|article|articles)\s+(?:i|i've|i\s+have)\s+(?:visited|read|seen|looked\s+at|browsed|viewed)\b|\b(?:pull|get|find|show)\s+that\s+(?:page|article|site)\b|\bwhat\s+(?:was|were|is)\s+that\s+.{2,}\s+(?:i\s+was|i've\s+been)\s+(?:reading|looking\s+at|browsing|viewing)\b|\b(?:my|the)\s+(?:browsing\s+)?history\b|\bpages\s+(?:i(?:'ve)?\s+)?visited\b|\bwhat\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\b/i;
-  var MUTATION_FAMILY_RE = /^(?:add|save|move|put|close|delete|remove|rename|create|make|split|unsplit|ungroup|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|unload)\b/i;
-  var GROUP_LABEL_RE = /\btab\s*group\b|\bgroup\b/i;
-  var FOLDER_LABEL_RE = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i;
-  var GENERIC_FOLDER_NAME_RE = /^(?:bookmark(?:\s+folders?)?|folders?|hubs?)$/i;
-  function cleanCaptured(text2) {
-    return String(text2 || "").replace(/["']/g, "").replace(/^\s*(?:my|the)\s+/i, "").trim();
-  }
-  function extractContainerType(text2) {
-    const hasGroup = GROUP_LABEL_RE.test(text2);
-    const hasFolder = FOLDER_LABEL_RE.test(text2);
-    if (hasGroup && hasFolder) {
-      return null;
-    }
-    if (hasGroup) {
-      return "tab-group";
-    }
-    if (hasFolder) {
-      return "bookmark-folder";
-    }
-    return null;
-  }
-  function extractTargetName(raw) {
-    let name = cleanCaptured(raw);
-    name = name.replace(/^bookmark\s+folder\s+/i, "");
-    name = name.replace(/^bookmarks?\s+/i, "");
-    name = name.replace(/^tab\s*group\s+/i, "");
-    name = name.replace(/^folder\s+/i, "");
-    name = name.replace(/^hub\s+/i, "");
-    name = name.replace(/^group\s+/i, "");
-    name = name.replace(/\s+bookmarks?\s*$/i, "");
-    name = name.replace(/\s+bookmark\s+folder\s*$/i, "");
-    name = name.replace(/\s+tab\s*group\s*$/i, "");
-    name = name.replace(/\s+folder\s*$/i, "");
-    name = name.replace(/\s+hub\s*$/i, "");
-    name = name.replace(/\s+group\s*$/i, "");
-    return name.trim();
-  }
-  function isNonContainerTarget(rawTarget) {
-    return /\bnew\s+window\b|\bwindow\b|\bsplit\s*view\b/i.test(rawTarget);
-  }
-  function looksActionableText(text2) {
-    const input = String(text2 || "");
-    return ACTION_WORD_RE.test(input) && ACTION_OBJECT_RE.test(input);
-  }
-  var LIST_OPEN_TABS_QUESTION_RE = /^(?:what|which)\s+tabs\b|\btabs\s+do\s+i\s+have\s+open\b|\btabs\s+are\s+open\b/i;
-  function classifyCommandFamily(commandText) {
-    const input = String(commandText || "").trim();
-    if (!input) {
-      return "other";
-    }
-    if (LIST_OPEN_TABS_QUESTION_RE.test(input)) {
-      return "list";
-    }
-    if (LIST_VERB_RE.test(input)) {
-      return "list";
-    }
-    if (SHOW_VERB_RE.test(input) && LIST_OBJECT_RE.test(input)) {
-      return "list";
-    }
-    if (SEARCH_FAMILY_RE.test(input) || HISTORY_FAMILY_RE.test(input)) {
-      return "search";
-    }
-    if (MUTATION_FAMILY_RE.test(input)) {
-      return "mutation";
-    }
-    return "other";
-  }
-  function normalizeRouteName(value) {
-    return String(value || "").trim().toLowerCase();
-  }
-  function parseContainerAddIntent(commandText) {
-    const input = String(commandText || "").trim();
-    if (!input) return null;
-    const allMatch = input.match(
-      /^(?<verb>add|save|move|put)\s+all\s+(?:tabs?|existing\s+tabs?)\s+to\s+(?<target>.+)$/i
-    );
-    if (allMatch?.groups) {
-      if (isNonContainerTarget(allMatch.groups.target)) {
-        return null;
-      }
-      const explicitContainer = extractContainerType(allMatch.groups.target);
-      const targetName = extractTargetName(allMatch.groups.target);
-      if (!targetName) return null;
-      return {
-        rawText: input,
-        normalizedText: input.toLowerCase(),
-        verb: allMatch.groups.verb.toLowerCase(),
-        isActionLike: true,
-        explicitContainer,
-        targetName,
-        all: true,
-        kind: "container_add"
-      };
-    }
-    const currentMatch = input.match(
-      /^(?<verb>add|save|move|put)\s+(?:this|current|active)\s+tab\s+to\s+(?<target>.+)$/i
-    );
-    if (currentMatch?.groups) {
-      if (isNonContainerTarget(currentMatch.groups.target)) {
-        return null;
-      }
-      const explicitContainer = extractContainerType(currentMatch.groups.target);
-      const targetName = extractTargetName(currentMatch.groups.target);
-      if (!targetName) return null;
-      return {
-        rawText: input,
-        normalizedText: input.toLowerCase(),
-        verb: currentMatch.groups.verb.toLowerCase(),
-        isActionLike: true,
-        explicitContainer,
-        targetName,
-        current: true,
-        kind: "container_add"
-      };
-    }
-    const queryMatch = input.match(
-      /^(?<verb>add|save|move|put)\s+(?<query>.+?)\s+to\s+(?<target>.+)$/i
-    );
-    if (queryMatch?.groups) {
-      if (isNonContainerTarget(queryMatch.groups.target)) {
-        return null;
-      }
-      const explicitContainer = extractContainerType(queryMatch.groups.target);
-      const targetName = extractTargetName(queryMatch.groups.target);
-      const query = cleanCaptured(queryMatch.groups.query);
-      if (!targetName || !query) return null;
-      return {
-        rawText: input,
-        normalizedText: input.toLowerCase(),
-        verb: queryMatch.groups.verb.toLowerCase(),
-        isActionLike: true,
-        explicitContainer,
-        targetName,
-        all: /^(?:all\s+tabs?|all\s+existing\s+tabs?)$/i.test(query),
-        current: /^(?:this|current|active)\s+tab$/i.test(query),
-        query,
-        kind: "container_add"
-      };
-    }
-    return null;
-  }
-  function parseCloseDeleteTargetIntent(commandText) {
-    const input = String(commandText || "").trim();
-    if (!input) return null;
-    const match = input.match(/^(?<verb>close|delete|remove)\s+(?<target>.+)$/i);
-    if (!match?.groups) return null;
-    const verb = match.groups.verb.toLowerCase();
-    const target = cleanCaptured(match.groups.target);
-    if (!target) return null;
-    return {
-      rawText: input,
-      normalizedText: input.toLowerCase(),
-      verb,
-      isActionLike: true,
-      explicitContainer: extractContainerType(target),
-      targetName: extractTargetName(target),
-      kind: "close_delete_target"
-    };
-  }
-  function parseSearchFolderSlots(commandText) {
-    const input = String(commandText || "").trim();
-    if (!input) return null;
-    const quotedQueryFirst = input.match(
-      /^(?:search|find|look\s*up)\s+(?:for\s+)?(?<query>.+?)\s+(?:in|inside|within|from)\s+(?:my\s+)?(?:the\s+)?["'](?<folder>[^"']+?)["']\s*(?:bookmark\s+folder|folder|hub|bookmarks?)?\s*$/i
-    );
-    if (quotedQueryFirst?.groups) {
-      const folder = cleanCaptured(quotedQueryFirst.groups.folder);
-      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
-        return null;
-      }
-      return {
-        query: cleanCaptured(quotedQueryFirst.groups.query),
-        folder
-      };
-    }
-    const quotedFolderFirst = input.match(
-      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?["'](?<folder>[^"']+?)["']\s*(?:bookmark\s+folder|folder|hub|bookmarks?)?\s+(?:for\s+)?(?<query>.+?)\s*$/i
-    );
-    if (quotedFolderFirst?.groups) {
-      const folder = cleanCaptured(quotedFolderFirst.groups.folder);
-      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
-        return null;
-      }
-      return {
-        query: cleanCaptured(quotedFolderFirst.groups.query),
-        folder
-      };
-    }
-    const queryFirst = input.match(
-      /^(?:search|find|look\s*up)\s+(?:for\s+)?(?<query>.+?)\s+(?:in|inside|within|from)\s+(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s*$/i
-    );
-    if (queryFirst?.groups) {
-      const folder = cleanCaptured(queryFirst.groups.folder);
-      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
-        return null;
-      }
-      return {
-        query: cleanCaptured(queryFirst.groups.query),
-        folder
-      };
-    }
-    const folderFirst = input.match(
-      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s+(?:for\s+)?(?<query>.+?)\s*$/i
-    );
-    if (folderFirst?.groups) {
-      const folder = cleanCaptured(folderFirst.groups.folder);
-      if (!folder || GENERIC_FOLDER_NAME_RE.test(folder)) {
-        return null;
-      }
-      return {
-        query: cleanCaptured(folderFirst.groups.query),
-        folder
-      };
-    }
-    return null;
-  }
-  function parseSearchMemoryIntent(commandText) {
-    const input = String(commandText || "").trim();
-    if (!input) {
-      return null;
-    }
-    const folderSourceScope = input.match(
-      /^(?:search|find|look\s*up)\s+(?:(?:in|inside|within|from)\s+)?(?:my\s+)?(?:the\s+)?(?:bookmark\s+folders?|folders?|hubs?|bookmarks?)\s+(?:for\s+)?(?<query>.+?)\s*$/i
-    );
-    if (folderSourceScope?.groups?.query) {
-      const scopedQuery = cleanCaptured(folderSourceScope.groups.query);
-      if (scopedQuery) {
-        return { query: scopedQuery, source: "bookmark-folder" };
-      }
-    }
-    const folderSlots = parseSearchFolderSlots(input);
-    if (folderSlots) {
-      return folderSlots;
-    }
-    const wildcard = input.match(
-      /what(?:'s|\s+is|\s+did\s+i\s+save)\s+in\s+(?:my\s+)?(?:the\s+)?(?<folder>[\w\s-]+?)\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\b/i
-    );
-    const wildcardFolder = wildcard?.groups?.folder;
-    if (wildcardFolder) {
-      return { query: "*", folder: cleanCaptured(wildcardFolder) };
-    }
-    const queryMatch = input.match(
-      /(?:search|find|look\s*up)\s+(?:for\s+)?(?:(?:in|inside|within|from)\s+(?:my\s+)?(?:history|bookmarks?|memory|tabs?)\s+)?"?(?<query>.+?)"?\s*$/i
-    ) || input.match(
-      /have\s+i\s+(?:visited|been\s+to|seen|saved|bookmarked)\s+(?:any\s+)?"?(?<query>.+?)"?\s*$/i
-    ) || input.match(
-      /(?:do\s+i\s+have)\s+(?:any(?:thing)?\s+(?:about|on|related\s+to)\s+)?"?(?<query>.+?)"?\s*(?:saved|bookmarked|in\s+my)/i
-    );
-    const query = cleanCaptured(queryMatch?.groups?.query || "");
-    if (!query) {
-      return null;
-    }
-    return { query };
-  }
+  // src/commands.ts
+  init_localMemoryUtils();
+  init_assistantLogger();
+
+  // src/utils/decisionEngine.ts
+  init_intentParser();
 
   // src/utils/knownSites.ts
   var SITE_NAMES = [
@@ -49987,6 +53786,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     return null;
   }
 
+  // src/utils/manifestListResolver.ts
+  init_intentParser();
+
+  // src/utils/manifestResolver.ts
+  init_intentParser();
+
   // src/utils/commandManifest.ts
   var COMMAND_MANIFEST = [
     {
@@ -50187,6 +53992,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
 
   // src/utils/manifestListResolver.ts
+  init_runtime();
   var WINDOW_SCOPE_ALIASES = /* @__PURE__ */ new Set([
     "window",
     "current window",
@@ -50412,6 +54218,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
 
   // src/utils/manifestSearchResolver.ts
+  init_intentParser();
+  init_runtime();
   function cleanSearchTarget(value) {
     const cleaned = String(value || "").replace(/["']/g, "").replace(/^\s*(?:my|the)\s+/i, "").trim();
     return cleaned.replace(/\s+(?:bookmark\s+folder|folder|hub|bookmarks?)\s*$/i, "").trim();
@@ -50570,7 +54378,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     };
   }
 
+  // src/utils/manifestMutationResolver.ts
+  init_intentParser();
+
   // src/utils/entityResolver.ts
+  init_intentParser();
+  init_runtime();
   function resolveTargetName(targetName, snapshot) {
     const normalizedTarget = normalizeRouteName(targetName);
     const topWin = getBrowserWindow();
@@ -51091,10 +54904,23 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : void 0;
   }
+  function normalizeExactSummaryInput(input) {
+    return input.trim().toLowerCase().replace(/[.!?]+$/g, "").trim();
+  }
   var SUMMARIZE_ROUTES = [
     {
-      reason: "summarize-current-tab",
-      resolve: (input) => /summarize\s+(?:the\s+)?(?:current|this|active)\s+tab/i.test(input) ? {} : null
+      reason: "summarize-current-page",
+      resolve: (input) => {
+        const normalized = normalizeExactSummaryInput(input);
+        return (/* @__PURE__ */ new Set([
+          "summarize this page",
+          "summarize this tab",
+          "summarize current page",
+          "summarize current tab",
+          "summarize active page",
+          "summarize active tab"
+        ])).has(normalized) ? { query: input.trim() } : null;
+      }
     },
     {
       reason: "summarize-tab-index",
@@ -51104,27 +54930,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           return null;
         }
         const index2 = numberArg2(match.groups?.index) ?? 1;
-        return { index: index2 };
+        return { index: index2, query: input.trim() };
       }
-    },
-    {
-      reason: "summarize-tab-query",
-      resolve: (input) => {
-        const match = input.match(
-          /summarize\s+(?:the\s+)?"?(?<query>[^"\d][^"]+?)"?\s*tab/i
-        );
-        const query = match?.groups?.query?.trim();
-        if (!query || /^(?:current|this|active)$/i.test(query)) {
-          return null;
-        }
-        return { query };
-      }
-    },
-    {
-      reason: "summarize-page",
-      resolve: (input) => /summarize\s+(?:this\s+)?(?:page|article|website|site)?|(?:what\s+is|tell\s+me\s+about)\s+this\s+(?:page|article|website|site)|give\s+(?:me\s+)?(?:a\s+)?summary/i.test(
-        input
-      ) ? {} : null
     }
   ];
   function resolveExplicitSummarizeRoute(input) {
@@ -51133,6 +54940,603 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (args) {
         return toolDecision4("summarize_page", route.reason, args);
       }
+    }
+    return null;
+  }
+
+  // src/utils/researchBriefExplicitResolver.ts
+  init_intentParser();
+  init_researchBriefTopicPolicy();
+  init_researchBriefTabResolve();
+
+  // src/utils/researchBriefUtterances.ts
+  var VERB_PREFIX = "(?:create|make|build|write|generate|draft|prepare)\\s+(?:me\\s+)?(?:a\\s+)?(?:new\\s+)?(?:document\\s+for\\s+(?:a\\s+)?)?";
+  var PRODUCT_NOUN_ALT = "(?:research\\s+)?(?:brief|report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)";
+  var PRODUCT_START = `(?:${VERB_PREFIX})?(?:a\\s+)?${PRODUCT_NOUN_ALT}`;
+  var TOPIC_SEGMENT = "(?:on|about|for)\\s+(?<topic>.+?)";
+  var SCOPE_PREP = "(?:from|in|using|based\\s+on|for\\s+my)\\s+";
+  var ACROSS_SCOPE = "(?:across|over)\\s+";
+  var GROUP_NAME = `['"]?(?<name>[^'"]+?)['"]?`;
+  var TAB_GROUP_SUFFIX = `(?:the\\s+)?(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}`;
+  var SYNTHESIS_VERB = "(?:consolidat(?:e|ing)|synthesiz(?:e|ing)|compil(?:e|ing)|merg(?:e|ing)|combin(?:e|ing)|distill(?:ing)?)";
+  var SYNTHESIS_START = `(?:please\\s+)?${SYNTHESIS_VERB}\\s*(?:the\\s+)?(?:findings|research|notes|tabs?|pages?|sources?)?\\s*`;
+  var BRIEF_SYNONYM_NOUN_RE = /\b(?:research\s+)?(?:report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)\b/i;
+  var MULTI_TAB_SYNTHESIS_VERB_RE = /\b(?:consolidat(?:e|ing)|synthesiz(?:e|ing)|compil(?:e|ing)|merg(?:e|ing)|combin(?:e|ing)|distill(?:ing)?)\b/i;
+  var SINGLE_TAB_SUMMARIZE_RE = /\bsummariz(?:e|ing)\s+(?:the\s+)?(?:this|current|active)\s+(?:page|tab)\b/i;
+  var SINGLE_TAB_INDEX_SUMMARIZE_RE = /\bsummariz(?:e|ing)\s+(?:the\s+)?tab\s+\d+\b/i;
+  function normalizeResearchBriefInput(input) {
+    return String(input || "").trim().replace(/\s+/g, " ").replace(/\bresearhc\b/gi, "research");
+  }
+  function hasMultiTabScope(normalized) {
+    return /\b(?:tab\s+)?group\b/i.test(normalized) || /\b(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(normalized) || /\bwindow\b/i.test(normalized) || /\bfrom\s+tabs?\b/i.test(normalized) || /\bacross\s+(?:these\s+)?tabs?\b/i.test(normalized) || /\ball\s+tabs?\s+(?:in|from)\b/i.test(normalized) || /\beverything\s+in\s+(?:(?:this|current|my)\s+)?(?:tab\s+)?group\b/i.test(
+      normalized
+    ) || /\bacross\s+(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(normalized) || /\btab\s+(?:titled|named|called)\b/i.test(normalized) || /\btabs?\s+matching\b/i.test(normalized);
+  }
+  function isBriefSynonymNoun(normalized) {
+    return BRIEF_SYNONYM_NOUN_RE.test(normalized);
+  }
+  function isMultiTabSynthesisVerb(normalized) {
+    return MULTI_TAB_SYNTHESIS_VERB_RE.test(normalized);
+  }
+  function isMultiTabSummarizePhrase(normalized) {
+    if (!/\bsummariz(?:e|ing)\b/i.test(normalized)) {
+      return false;
+    }
+    if (SINGLE_TAB_SUMMARIZE_RE.test(normalized)) {
+      return false;
+    }
+    if (SINGLE_TAB_INDEX_SUMMARIZE_RE.test(normalized)) {
+      return false;
+    }
+    return hasMultiTabScope(normalized);
+  }
+  function isScopedSummaryPhrase(normalized) {
+    if (!/\bsummary\b/i.test(normalized)) {
+      return false;
+    }
+    if (/\b(?:this|current)\s+(?:page|tab)\b/i.test(normalized)) {
+      return false;
+    }
+    return hasMultiTabScope(normalized);
+  }
+  function looksLikeResearchBriefCommand(input) {
+    const normalized = normalizeResearchBriefInput(input);
+    if (/research\s+brief/i.test(normalized)) {
+      return true;
+    }
+    if (/\bbrief\b/i.test(normalized)) {
+      return /^(?:create|make|build|write|generate|draft|prepare)\b/i.test(normalized) || /\bbrief\s+(?:based\s+on|from|for|about|on)\b/i.test(normalized) || hasMultiTabScope(normalized);
+    }
+    if (isMultiTabSummarizePhrase(normalized)) {
+      return true;
+    }
+    if (isMultiTabSynthesisVerb(normalized) && hasMultiTabScope(normalized)) {
+      return true;
+    }
+    if (isBriefSynonymNoun(normalized) && hasMultiTabScope(normalized)) {
+      return true;
+    }
+    if (isScopedSummaryPhrase(normalized)) {
+      return true;
+    }
+    return false;
+  }
+  function isObviousResearchBriefRequest(userText) {
+    const normalized = normalizeResearchBriefInput(userText);
+    if (!looksLikeResearchBriefCommand(normalized)) {
+      return false;
+    }
+    return hasMultiTabScope(normalized);
+  }
+
+  // src/utils/researchBriefExplicitResolver.ts
+  function toolDecision5(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function trimQuotes2(value) {
+    return String(value || "").trim().replace(/^["']|["']$/g, "").trim();
+  }
+  function activeGroupArgs(topic) {
+    const args = {
+      scope: "tab-group",
+      use_active_tab_group: true,
+      infer_topic_from_content: true
+    };
+    if (topic) {
+      args.topic = topic;
+      delete args.infer_topic_from_content;
+    }
+    return args;
+  }
+  function tabGroupArgs(name, topic) {
+    const args = {
+      scope: "tab-group",
+      name,
+      infer_topic_from_content: true
+    };
+    if (topic) {
+      args.topic = topic;
+      delete args.infer_topic_from_content;
+    }
+    return args;
+  }
+  function extractResearchBriefOutlineHint(input) {
+    const trimmed = normalizeResearchBriefInput(input);
+    const patterns = [
+      /\s+with\s+sections?\s+for\s+(.+)$/i,
+      /\s+organized\s+as\s+(.+)$/i,
+      /\s+outline:\s*(.+)$/i
+    ];
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (match && match.index != null) {
+        return {
+          body: trimmed.slice(0, match.index).trim(),
+          outlineHint: trimQuotes2(match[1] || "")
+        };
+      }
+    }
+    return { body: trimmed, outlineHint: "" };
+  }
+  function splitResearchBriefExcludeClause(input) {
+    const trimmed = normalizeResearchBriefInput(input);
+    const exceptMatch = trimmed.match(/\s+except\s+(.+)$/i);
+    if (!exceptMatch || exceptMatch.index == null) {
+      return { body: trimmed, excludeIndices: [], excludeQueries: [] };
+    }
+    const body = trimmed.slice(0, exceptMatch.index).trim();
+    const clause = exceptMatch[1].trim();
+    if (/^tabs?\b/i.test(clause) || /^\d/.test(clause)) {
+      const indices = [...clause.matchAll(/\d+/g)].map((match) => parseInt(match[0], 10)).filter((n2) => Number.isFinite(n2) && n2 >= 1);
+      return { body, excludeIndices: indices, excludeQueries: [] };
+    }
+    const queries = clause.split(/\s*,\s*|\s+and\s+/i).map((part) => trimQuotes2(part)).filter((part) => part.length >= 3);
+    return { body, excludeIndices: [], excludeQueries: queries };
+  }
+  function mergeExcludeArgs(args, excludeIndices, excludeQueries) {
+    const merged = { ...args };
+    if (excludeIndices.length > 0) {
+      merged.exclude_indices = excludeIndices;
+    }
+    if (excludeQueries.length > 0) {
+      merged.exclude_queries = excludeQueries;
+    }
+    return merged;
+  }
+  function findGroupNameInSnapshot(topic, snapshot) {
+    const normalized = normalizeRouteName(topic);
+    if (!normalized) {
+      return null;
+    }
+    const exact = [];
+    for (const name of snapshot.groupNames) {
+      if (normalizeRouteName(name) === normalized) {
+        exact.push(name);
+      }
+    }
+    if (exact.length === 1) {
+      return exact[0];
+    }
+    const partial = [];
+    for (const name of snapshot.groupNames) {
+      const groupNorm = normalizeRouteName(name);
+      if (groupNorm.includes(normalized) || normalized.includes(groupNorm)) {
+        partial.push(name);
+      }
+    }
+    if (partial.length === 1) {
+      return partial[0];
+    }
+    return null;
+  }
+  function applyTopicPolicy(args, snapshot) {
+    const scope = args.scope === "window" ? "window" : args.scope === "tabs" ? "tabs" : "tab-group";
+    let groupName = String(args.name || "").trim();
+    const userTopicRaw = String(args.topic || "").trim();
+    if (scope === "tab-group" && !groupName && userTopicRaw) {
+      const inferredGroup = findGroupNameInSnapshot(userTopicRaw, snapshot);
+      if (inferredGroup) {
+        groupName = inferredGroup;
+      }
+    }
+    const scopeLabel = scope === "tab-group" && groupName ? `Tab group: ${groupName}` : scope === "tabs" ? "Tabs" : scope === "window" ? "Current window" : "";
+    const topicFields = resolveBriefTopicFields({
+      userTopic: userTopicRaw,
+      scopeLabel,
+      groupName,
+      scope
+    });
+    const merged = { ...args, scope };
+    if (topicFields.topic) {
+      merged.topic = topicFields.topic;
+    } else {
+      delete merged.topic;
+    }
+    if (topicFields.inferTopicFromContent) {
+      merged.infer_topic_from_content = true;
+    }
+    if (args.use_active_tab_group === true) {
+      merged.use_active_tab_group = true;
+      merged.scope = "tab-group";
+      delete merged.name;
+    } else if (scope === "tab-group") {
+      if (!groupName && !userTopicRaw) {
+        return null;
+      }
+      if (!groupName && userTopicRaw) {
+        return null;
+      }
+      merged.name = groupName;
+      if (!String(merged.name || "").trim()) {
+        return null;
+      }
+    }
+    if (scope === "tabs") {
+      const queries = Array.isArray(merged.tab_queries) ? merged.tab_queries : [];
+      const indices = Array.isArray(merged.tab_indices) ? merged.tab_indices : [];
+      if (queries.length === 0 && indices.length === 0) {
+        return null;
+      }
+    }
+    if (scope === "window" && !topicFields.topic && !topicFields.inferTopicFromContent) {
+      return null;
+    }
+    if (!topicFields.topic && !topicFields.inferTopicFromContent) {
+      return null;
+    }
+    return merged;
+  }
+  function finalizeResearchBriefArgs(args, snapshot) {
+    return applyTopicPolicy(args, snapshot);
+  }
+  var RESEARCH_BRIEF_PATTERNS = [
+    {
+      reason: "synthesis-active-tab-group",
+      match: new RegExp(
+        `^${SYNTHESIS_START}(?:${SCOPE_PREP}|${ACROSS_SCOPE})(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: () => activeGroupArgs()
+    },
+    {
+      reason: "draft-outline-from-group",
+      match: new RegExp(
+        `^${VERB_PREFIX}an\\s+outline\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "synthesis-tab-group-named",
+      match: new RegExp(
+        `^${SYNTHESIS_START}(?:${SCOPE_PREP})?${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "summarize-active-tab-group",
+      match: new RegExp(
+        `^summariz(?:e|ing)\\s+(?:across\\s+|everything\\s+in\\s+)?(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: () => activeGroupArgs()
+    },
+    {
+      reason: "summarize-everything-in-named-group",
+      match: new RegExp(
+        `^summariz(?:e|ing)\\s+everything\\s+in\\s+(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "summarize-tab-group-named",
+      match: new RegExp(
+        `^summariz(?:e|ing)\\s+(?:the\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "summarize-tabs-in-group",
+      match: new RegExp(
+        `^summariz(?:e|ing)\\s+(?:all\\s+)?tabs?\\s+in\\s+(?:(?:the\\s+)?(?:tab\\s+)?group\\s+)?${GROUP_NAME}(?:\\s+group)?\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "summary-of-tab-group",
+      match: new RegExp(
+        `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        return name ? tabGroupArgs(name) : null;
+      }
+    },
+    {
+      reason: "summary-of-active-group",
+      match: new RegExp(
+        `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: () => activeGroupArgs()
+    },
+    {
+      reason: "research-brief-active-tab-group",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        return activeGroupArgs(topic || void 0);
+      }
+    },
+    {
+      reason: "research-brief-tab-titled",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+from\\s+tab\\s+(?:titled|named|called)\\s+["'](?<query>[^"']+)["']\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const query = trimQuotes2(match.groups?.query || "");
+        if (!query) {
+          return null;
+        }
+        const args = {
+          scope: "tabs",
+          tab_queries: [query]
+        };
+        const topic = trimQuotes2(match.groups?.topic || "");
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-tabs-matching",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+from\\s+tabs\\s+matching\\s+(?<query>.+?)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const query = trimQuotes2(match.groups?.query || "");
+        if (!query) {
+          return null;
+        }
+        const args = {
+          scope: "tabs",
+          tab_queries: [query]
+        };
+        const topic = trimQuotes2(match.groups?.topic || "");
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-tab-indices",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+from\\s+tabs\\s+(?<clause>[\\d,\\sand]+)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const clause = match.groups?.clause || "";
+        if (!isIndicesOnlyClause(clause)) {
+          return null;
+        }
+        const indices = parseTabIndicesFromClause(clause);
+        if (indices.length === 0) {
+          return null;
+        }
+        const args = { scope: "tabs", tab_indices: indices };
+        const topic = trimQuotes2(match.groups?.topic || "");
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-on-topic-from-tabs",
+      match: new RegExp(
+        `^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s+from\\s+tabs\\s+(?<list>.+?)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        const list = trimQuotes2(match.groups?.list || "");
+        if (!topic || !list) {
+          return null;
+        }
+        if (isIndicesOnlyClause(list)) {
+          return {
+            topic,
+            scope: "tabs",
+            tab_indices: parseTabIndicesFromClause(list)
+          };
+        }
+        return {
+          topic,
+          scope: "tabs",
+          tab_queries: parseTabQueryList(list)
+        };
+      }
+    },
+    {
+      reason: "research-brief-from-tabs-list",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+from\\s+tabs\\s+(?<list>.+?)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const list = trimQuotes2(match.groups?.list || "");
+        if (!list || isIndicesOnlyClause(list)) {
+          return null;
+        }
+        const queries = parseTabQueryList(list);
+        if (queries.length === 0) {
+          return null;
+        }
+        const args = { scope: "tabs", tab_queries: queries };
+        const topic = trimQuotes2(match.groups?.topic || "");
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-for-group",
+      match: new RegExp(
+        `^${PRODUCT_START}\\s+for\\s+${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes2(match.groups?.name || "");
+        if (!name) {
+          return null;
+        }
+        return { scope: "tab-group", name };
+      }
+    },
+    {
+      reason: "research-brief-group-trailing",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:the\\s+)?(?:my\\s+)?${GROUP_NAME}\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        const name = trimQuotes2(match.groups?.name || "");
+        if (!name) {
+          return null;
+        }
+        const args = { scope: "tab-group", name };
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-tab-group-named",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        const name = trimQuotes2(match.groups?.name || "");
+        if (!name) {
+          return null;
+        }
+        const args = { scope: "tab-group", name };
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-topic-then-group",
+      match: new RegExp(
+        `^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        const name = trimQuotes2(match.groups?.name || "");
+        if (!topic || !name) {
+          return null;
+        }
+        return { topic, scope: "tab-group", name };
+      }
+    },
+    {
+      reason: "research-brief-window",
+      match: new RegExp(
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:this\\s+)?window\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        const args = { scope: "window" };
+        if (topic) {
+          args.topic = topic;
+        }
+        return args;
+      }
+    },
+    {
+      reason: "research-brief-topic-only",
+      match: new RegExp(`^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s*$`, "i"),
+      resolve: (match) => {
+        const topic = trimQuotes2(match.groups?.topic || "");
+        if (!topic) {
+          return null;
+        }
+        return { topic, scope: "tab-group" };
+      }
+    }
+  ];
+  function resolveExplicitResearchBriefRoute(input, snapshot) {
+    const regenerateMatch = normalizeResearchBriefInput(input).match(
+      /^regenerate\s+research\s+brief\s+section\s+(\w+)\s*$/i
+    );
+    if (regenerateMatch) {
+      return toolDecision5("regenerate_research_brief_section", "regenerate-section", {
+        section: regenerateMatch[1]
+      });
+    }
+    const { body: afterOutline, outlineHint } = extractResearchBriefOutlineHint(input);
+    const { body, excludeIndices, excludeQueries } = splitResearchBriefExcludeClause(afterOutline);
+    const trimmed = body.trim();
+    if (!trimmed) {
+      return null;
+    }
+    for (const pattern of RESEARCH_BRIEF_PATTERNS) {
+      const match = trimmed.match(pattern.match);
+      if (!match) {
+        continue;
+      }
+      const rawArgs = pattern.resolve(match);
+      if (!rawArgs) {
+        continue;
+      }
+      const args = finalizeResearchBriefArgs(rawArgs, snapshot);
+      if (!args) {
+        continue;
+      }
+      if (outlineHint) {
+        args.outline_hint = outlineHint;
+      }
+      return toolDecision5(
+        "build_research_brief",
+        pattern.reason,
+        mergeExcludeArgs(args, excludeIndices, excludeQueries)
+      );
     }
     return null;
   }
@@ -51148,6 +55552,21 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     const input = String(commandText || "").trim();
     if (!input) {
       return { type: "no_match", actionable: false, reason: "empty-input" };
+    }
+    if (looksLikeResearchBriefCommand(input)) {
+      const researchBriefEarly = resolveExplicitResearchBriefRoute(
+        input,
+        snapshot
+      );
+      if (researchBriefEarly) {
+        return researchBriefEarly;
+      }
+      return {
+        type: "chat",
+        actionable: true,
+        reason: "research-brief-unresolved",
+        message: "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`."
+      };
     }
     const family = classifyCommandFamily(input);
     const familyHandler = FAMILY_HANDLERS[family];
@@ -51165,6 +55584,13 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     if (summarizeExplicit) {
       return summarizeExplicit;
     }
+    const researchBriefExplicit = resolveExplicitResearchBriefRoute(
+      input,
+      snapshot
+    );
+    if (researchBriefExplicit) {
+      return researchBriefExplicit;
+    }
     const explicit = resolveExplicitRoute(input);
     if (explicit) {
       return explicit;
@@ -51174,7 +55600,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         type: "chat",
         actionable: true,
         reason: `${family}-family-unresolved`,
-        message: family === "list" ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)" : family === "search" ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)" : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)"
+        message: family === "list" ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)" : family === "search" ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)" : looksLikeResearchBriefCommand(input) ? "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`." : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)"
       };
     }
     const actionable = looksActionableText(input);
@@ -51190,6 +55616,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
 
   // src/utils/routingStateCache.ts
+  init_runtime();
+  init_contracts();
+  init_intentParser();
+  init_assistantLogger();
   var RoutingStateCache = class {
     folderNames = /* @__PURE__ */ new Set();
     groupNames = /* @__PURE__ */ new Set();
@@ -51410,7 +55840,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     routingStateCache.applyMutation(mutation);
   }
 
+  // src/commands.ts
+  init_firefoxFacade();
+
   // src/services/interactionState.ts
+  init_contracts();
+  init_assistantLogger();
   var InteractionStateStore = class {
     pendingConfirmation = null;
     pendingAmbiguity = null;
@@ -51619,6 +56054,288 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     return Array.from(commandExecutors.keys());
   }
 
+  // src/utils/pageContextRequest.ts
+  var PAGE_CONTEXT_REQUEST_MARKER = "__PAGE_CONTEXT_REQUEST__";
+  function buildPageContextRequestMessage(payload) {
+    return `${PAGE_CONTEXT_REQUEST_MARKER}
+${JSON.stringify(payload)}`;
+  }
+  function hasPageContextRequest(text2) {
+    return String(text2 || "").includes(PAGE_CONTEXT_REQUEST_MARKER);
+  }
+
+  // src/commands.ts
+  init_pageContentExtract();
+  init_researchBrief();
+  init_researchBriefDigestCache();
+  init_researchBriefFormat();
+
+  // src/utils/researchBriefRequest.ts
+  var RESEARCH_BRIEF_MARKER = "__RESEARCH_BRIEF__";
+  function buildResearchBriefToolMessage(payload) {
+    return `${RESEARCH_BRIEF_MARKER}
+${JSON.stringify(payload)}`;
+  }
+  function parseResearchBriefToolMessage(text2) {
+    const input = String(text2 || "");
+    const markerIndex = input.indexOf(RESEARCH_BRIEF_MARKER);
+    if (markerIndex < 0) {
+      return null;
+    }
+    const jsonText = input.slice(markerIndex + RESEARCH_BRIEF_MARKER.length).trim();
+    try {
+      const raw = JSON.parse(jsonText);
+      if (typeof raw.markdown === "string" && raw.brief && typeof raw.brief === "object") {
+        return {
+          markdown: raw.markdown,
+          brief: raw.brief,
+          briefId: typeof raw.briefId === "string" ? raw.briefId : void 0,
+          digests: Array.isArray(raw.digests) ? raw.digests : void 0
+        };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  function displayMarkdownFromResearchBriefToolMessage(text2) {
+    const parsed = parseResearchBriefToolMessage(text2);
+    if (parsed?.markdown) {
+      return parsed.markdown;
+    }
+    const markerIndex = String(text2 || "").indexOf(RESEARCH_BRIEF_MARKER);
+    if (markerIndex >= 0) {
+      return String(text2 || "").slice(0, markerIndex).trim();
+    }
+    return String(text2 || "").trim();
+  }
+
+  // src/commands.ts
+  init_researchBriefProgress();
+
+  // src/utils/researchBriefScopePreview.ts
+  init_firefoxFacade();
+  var PREVIEW_TAB_THRESHOLD = 6;
+  var PREVIEW_TABS_SCOPE_MATCH_THRESHOLD = 3;
+  function shouldConfirmResearchBriefScope(input) {
+    if (input.usedFuzzyGroupMatch) {
+      return true;
+    }
+    if (input.tabsOmittedByLimit > 0) {
+      return true;
+    }
+    if (input.urlsDeduplicated > 0 && input.tabCount >= 4) {
+      return true;
+    }
+    if (input.scope === "tabs" && input.tabQueriesCount > 0 && input.tabCount > PREVIEW_TABS_SCOPE_MATCH_THRESHOLD) {
+      return true;
+    }
+    if (input.tabCount > PREVIEW_TAB_THRESHOLD) {
+      return true;
+    }
+    return false;
+  }
+  function formatTabTitlesForPreview(tabs, maxShown = 5) {
+    const titles = tabs.map((tab) => tabTitle(tab)).filter(Boolean);
+    const shown = titles.slice(0, maxShown);
+    const suffix = titles.length > maxShown ? `, +${titles.length - maxShown} more` : "";
+    return `${shown.join(", ")}${suffix}`;
+  }
+  function buildScopePreviewDescription(params) {
+    const lines = [
+      `I'll build a research brief from ${params.tabs.length} tab(s) in ${params.scopeLabel}.`,
+      `Tabs: ${formatTabTitlesForPreview(params.tabs)}.`
+    ];
+    if (params.tabsOmittedByLimit > 0) {
+      lines.push(
+        `${params.tabsOmittedByLimit} tab(s) in scope will be skipped due to the tab limit.`
+      );
+    }
+    if (params.urlsDeduplicated > 0) {
+      lines.push(
+        `${params.urlsDeduplicated} duplicate URL(s) were removed.`
+      );
+    }
+    lines.push("Continue?");
+    return lines.join(" ");
+  }
+
+  // src/commands.ts
+  init_researchBriefResume();
+
+  // src/services/researchBriefSectionSynthesis.ts
+  init_messageUtils();
+  init_proxyClient();
+  init_researchBriefProgress();
+  init_syncAssistUsage();
+  init_subscription();
+  init_researchBriefPrompt();
+  var SECTION_SCHEMAS = {
+    executiveSummary: {
+      type: "object",
+      properties: {
+        executiveSummary: { type: "string" }
+      },
+      required: ["executiveSummary"]
+    },
+    outline: {
+      type: "object",
+      properties: {
+        outline: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              heading: { type: "string" },
+              bullets: { type: "array", items: { type: "string" } }
+            },
+            required: ["heading", "bullets"]
+          }
+        }
+      },
+      required: ["outline"]
+    },
+    themes: {
+      type: "object",
+      properties: {
+        themes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              synthesis: { type: "string" },
+              sourceUrls: { type: "array", items: { type: "string" } }
+            },
+            required: ["label", "synthesis", "sourceUrls"]
+          }
+        }
+      },
+      required: ["themes"]
+    },
+    sources: {
+      type: "object",
+      properties: {
+        sources: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              url: { type: "string" },
+              status: { type: "string" },
+              failureReason: { type: "string" },
+              keyClaims: { type: "array", items: { type: "string" } },
+              quotes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    text: { type: "string" },
+                    context: { type: "string" }
+                  },
+                  required: ["text"]
+                }
+              }
+            },
+            required: ["title", "url", "status", "keyClaims", "quotes"]
+          }
+        }
+      },
+      required: ["sources"]
+    },
+    gapsAndContradictions: {
+      type: "object",
+      properties: {
+        gapsAndContradictions: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["gapsAndContradictions"]
+    }
+  };
+  function parseSectionContent(res) {
+    if (!isRecord(res)) {
+      return null;
+    }
+    const content = res.content;
+    if (isRecord(content)) {
+      return content;
+    }
+    if (typeof content === "string") {
+      try {
+        return JSON.parse(content);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+  async function synthesizeResearchBriefSection(params) {
+    throwIfResearchBriefAborted(params.signal);
+    const system = [
+      "You regenerate one section of a multi-tab research brief.",
+      `Return ONLY valid JSON for the "${params.section}" section.`,
+      "Ground content ONLY in the provided tab digests.",
+      "Do not invent URLs or quotes."
+    ].join("\n");
+    const userMessage = [
+      buildResearchBriefUserMessage({
+        topic: params.topic,
+        scopeLabel: params.scopeLabel,
+        digests: params.digests
+      }),
+      "",
+      "Current brief section snapshot (for consistency):",
+      JSON.stringify({ [params.section]: params.existingBrief[params.section] })
+    ].join("\n");
+    const res = await assistRemote(
+      system,
+      [{ role: "user", content: userMessage }],
+      ["chat"],
+      [],
+      {
+        responseMimeType: "application/json",
+        responseJsonSchema: SECTION_SCHEMAS[params.section]
+      },
+      void 0,
+      params.signal
+    );
+    throwIfResearchBriefAborted(params.signal);
+    if (res.quota) {
+      subscriptionService.updateFromQuota(res.quota);
+    }
+    syncSubscriptionFromAssistResponse(res);
+    const parsed = parseSectionContent(res);
+    if (!parsed || !isRecord(parsed)) {
+      throw new Error(`Could not parse regenerated ${params.section} section.`);
+    }
+    return parsed[params.section] ?? parsed;
+  }
+
+  // src/services/researchBriefSectionMerge.ts
+  function mergeSectionIntoBrief(existing, section, payload) {
+    if (section === "executiveSummary") {
+      const text2 = typeof payload === "string" ? payload : typeof payload.executiveSummary === "string" ? payload.executiveSummary : existing.executiveSummary;
+      return { ...existing, executiveSummary: text2 };
+    }
+    if (section === "outline") {
+      const outline = Array.isArray(payload) ? payload : Array.isArray(payload.outline) ? payload.outline ?? [] : existing.outline;
+      return { ...existing, outline };
+    }
+    if (section === "themes") {
+      const themes = Array.isArray(payload) ? payload : Array.isArray(payload.themes) ? payload.themes ?? [] : existing.themes;
+      return { ...existing, themes };
+    }
+    if (section === "sources") {
+      const sources = Array.isArray(payload) ? payload : Array.isArray(payload.sources) ? payload.sources ?? [] : existing.sources;
+      return { ...existing, sources };
+    }
+    const gaps = Array.isArray(payload) ? payload : Array.isArray(payload.gapsAndContradictions) ? payload.gapsAndContradictions ?? [] : existing.gapsAndContradictions;
+    return { ...existing, gapsAndContradictions: gaps };
+  }
+
   // src/commands.ts
   function getChrome2() {
     const { topWin, gBrowser, Services, PlacesUtils } = getChromeContext();
@@ -51643,6 +56360,11 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       (item) => typeof item === "number" && Number.isFinite(item) ? item : null
     ).filter((item) => item != null);
   }
+  function stringArrayArg(args, key) {
+    const value = args[key];
+    if (!Array.isArray(value)) return [];
+    return value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+  }
   function ambiguityTargetArg(args) {
     const value = stringArg(args, "target");
     if (!value) {
@@ -51666,9 +56388,6 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   }
   function asTabOps(gBrowser) {
     return gBrowser;
-  }
-  function normalizeQuery(value) {
-    return (value || "").trim().toLowerCase();
   }
   function toWebSearchUrl(query) {
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
@@ -51862,7 +56581,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         win.resizeTo(windowWidth, availHeight);
         win.moveTo(xPos, availTop);
       }
-      return { message: `I've arranged your ${numWindows} windows side-by-side.` };
+      return {
+        message: `I've arranged your ${numWindows} windows side-by-side.`
+      };
     }
   };
   var ShowURLCommand = class {
@@ -51914,7 +56635,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         return { message: "Missing 'query' argument." };
       }
       if (!topWin?.openTrustedLinkIn) {
-        return { message: "Cannot open web search (openTrustedLinkIn not found)." };
+        return {
+          message: "Cannot open web search (openTrustedLinkIn not found)."
+        };
       }
       const searchUrl = toWebSearchUrl(query);
       topWin.openTrustedLinkIn(searchUrl, "tab");
@@ -52027,7 +56750,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const tab = tabByIndexOrCurrent(gb, idx);
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
-      if (!tab.pinned) return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
+      if (!tab.pinned)
+        return { message: `That tab isn't pinned: ${tabTitle(tab)}` };
       gb.unpinTab(tab);
       return { message: `I've unpinned that tab for you: ${tabTitle(tab)}` };
     }
@@ -52045,7 +56769,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       await gb.explicitUnloadTabs([tab]);
-      return { message: `I've unloaded that tab to save memory: ${tabTitle(tab)}` };
+      return {
+        message: `I've unloaded that tab to save memory: ${tabTitle(tab)}`
+      };
     }
   };
   var NewTabToRightCommand = class {
@@ -52063,7 +56789,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.addAdjacentNewTab(tab);
-      return { message: `I've opened a new tab to the right of: ${tabTitle(tab)}` };
+      return {
+        message: `I've opened a new tab to the right of: ${tabTitle(tab)}`
+      };
     }
   };
   var DuplicateTabCommand = class {
@@ -52109,7 +56837,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (!tab)
         return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
       gb.moveTabToStart(tab);
-      return { message: `I've moved that tab to the beginning: ${tabTitle(tab)}` };
+      return {
+        message: `I've moved that tab to the beginning: ${tabTitle(tab)}`
+      };
     }
   };
   var MoveTabToEndCommand = class {
@@ -52266,7 +56996,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       }
       clearPendingConfirmation();
       gb.removeAllTabsBut(tab, { skipWarnAboutClosingTabs: true });
-      return { message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.` };
+      return {
+        message: `I've closed the other tabs and kept "${tabTitle(tab)}" for you.`
+      };
     }
   };
   var ReopenClosedTabCommand = class {
@@ -52281,7 +57013,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         };
       const index2 = numberArg3(args, "index");
       const reopened = ss.undoCloseTab(topWin, index2 ?? 0);
-      if (!reopened) return { message: "I didn't find any recently closed tabs to reopen." };
+      if (!reopened)
+        return { message: "I didn't find any recently closed tabs to reopen." };
       return { message: "I've reopened the last tab you closed." };
     }
   };
@@ -52335,7 +57068,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const newWin = topWin.OpenBrowserWindow();
       await new Promise((r2) => setTimeout(r2, 250));
       newWin.gBrowser?.adoptTab?.(tab, 0);
-      return { message: `I've moved the tab "${title}" to a new window for you.` };
+      return {
+        message: `I've moved the tab "${title}" to a new window for you.`
+      };
     }
   };
   var CopyTabUrlsCommand = class {
@@ -52348,10 +57083,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const text2 = urls.join("\n");
       try {
         await navigator.clipboard.writeText(text2);
-        return { message: `I've copied ${urls.length} URL(s) to your clipboard.` };
+        return {
+          message: `I've copied ${urls.length} URL(s) to your clipboard.`
+        };
       } catch {
-        return { message: `I couldn't access the clipboard, but here are the URLs:
-${text2}` };
+        return {
+          message: `I couldn't access the clipboard, but here are the URLs:
+${text2}`
+        };
       }
     }
   };
@@ -52396,7 +57135,8 @@ ${text2}` };
       clearPendingConfirmation();
       const closeTabs = booleanArg(args, "closeTabs") === true;
       const res = await bookmarkFolders.delete(name, { closeTabs });
-      if (res.removed === 0) return { message: `I couldn't find a folder named "${name}".` };
+      if (res.removed === 0)
+        return { message: `I couldn't find a folder named "${name}".` };
       applyRoutingStateMutation({
         kind: "delete",
         entity: "folder",
@@ -52412,7 +57152,8 @@ ${text2}` };
     description = "List all managed bookmark folders. Accepts no arguments.";
     async execute(_args) {
       const items = await bookmarkFolders.list();
-      if (!items.length) return { message: "You don't have any bookmark folders yet." };
+      if (!items.length)
+        return { message: "You don't have any bookmark folders yet." };
       return {
         message: JSON.stringify(items.map((h2) => `${h2.name} (${h2.count})`))
       };
@@ -52425,7 +57166,9 @@ ${text2}` };
       const from = stringArg(args, "from");
       const to = stringArg(args, "to");
       if (!from || !to)
-        return { message: "Please tell me the current name and the new name for the folder." };
+        return {
+          message: "Please tell me the current name and the new name for the folder."
+        };
       const r2 = await bookmarkFolders.rename(from, to);
       if (r2.ok) {
         applyRoutingStateMutation({
@@ -52466,16 +57209,20 @@ ${text2}` };
           tabsToAdd = [current];
         }
       }
-      if (tabsToAdd.length === 0) return { message: "I don't see any tabs to add." };
+      if (tabsToAdd.length === 0)
+        return { message: "I don't see any tabs to add." };
       const r2 = await bookmarkFolders.addTabs(name, tabsToAdd);
-      if (!r2.ok) return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
+      if (!r2.ok)
+        return { message: `I'm sorry, I couldn't add the tabs to "${name}".` };
       applyRoutingStateMutation({
         kind: "upsert",
         entity: "folder",
         name
       });
       const count3 = tabsToAdd.length;
-      return { message: `I've added ${count3} tab(s) to your bookmark folder "${name}".` };
+      return {
+        message: `I've added ${count3} tab(s) to your bookmark folder "${name}".`
+      };
     }
   };
   var RemoveTabFromBookmarkFolderCommand = class {
@@ -52523,7 +57270,9 @@ ${text2}` };
         false
       );
       if (!splitViewEnabled) {
-        return { message: "I'm sorry, split view isn't enabled in this browser." };
+        return {
+          message: "I'm sorry, split view isn't enabled in this browser."
+        };
       }
       let tab1 = null;
       let tab2 = null;
@@ -52599,7 +57348,9 @@ ${text2}` };
       }
       try {
         splitview.unsplitTabs();
-        return { message: "I've removed the split view and separated your tabs." };
+        return {
+          message: "I've removed the split view and separated your tabs."
+        };
       } catch (e2) {
         return { message: `I couldn't remove the split view: ${e2}` };
       }
@@ -52659,83 +57410,275 @@ ${text2}` };
         win.gBrowser?.adoptTab?.(tab, 0);
       }
       const tabTitles = windows.map((w3) => w3.title).join(", ");
-      return { message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.` };
+      return {
+        message: `I've split ${numTabs} tabs side-by-side for you: ${tabTitles}.`
+      };
     }
   };
   var SummarizePageCommand = class {
     commandName = "summarize_page";
-    description = "Summarize the content of a webpage. Accepts arguments: { index?: number, query?: string }. Use 'index' for tab number (1-based), 'query' to find tab by title/URL. If no arguments, summarizes current tab.";
+    description = "Read the current page and answer from it. Use for explicit summaries, questions about the active page, and grounded evaluations based on the page content. Arguments: { index?: number, query?: string }. Use index only when the user explicitly refers to a numbered tab. If index is omitted, always use the current active tab. Put the user's page-grounded question or task in query.";
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI not available." };
       const idx = numberArg3(args, "index");
       let tab = tabByIndexOrCurrent(gBrowser, idx);
       if (idx != null && !tab) return { message: `I couldn't find tab ${idx}.` };
-      const query = normalizeQuery(stringArg(args, "query"));
-      if (query && !idx) {
-        tab = findTabsByQuery(gBrowser, query)[0] || null;
-        if (!tab) {
-          return {
-            message: `I couldn't find a tab matching "${stringArg(args, "query") || ""}".`
-          };
-        }
-      }
       const browser = tab?.linkedBrowser;
       if (!browser) return { message: "I couldn't find an active tab." };
-      const url = browser.currentURI?.spec || "";
-      const title = tabTitle(tab);
-      if (url.startsWith("about:") || url.startsWith("chrome://") || url.startsWith("moz-extension://")) {
-        return { message: "I'm sorry, I can't summarize internal browser pages." };
-      }
+      const userQuery = (stringArg(args, "query") || "").trim();
       try {
-        const currentWindowContext = browser.browsingContext?.currentWindowContext;
-        if (!currentWindowContext) {
+        const extracted = await extractPageContentFromTab(tab);
+        if (extracted.status === "skipped") {
           return {
-            message: "I can't access the page content right now. Is it still loading?"
+            message: "I'm sorry, I can't read internal browser pages."
           };
         }
-        const pageExtractor = currentWindowContext.getActor("PageExtractor");
-        if (!pageExtractor) {
-          return { message: "The page content extractor isn't available." };
-        }
-        let content = "";
-        try {
-          content = await pageExtractor.getReaderModeContent?.() || "";
-        } catch (e2) {
-          assistantLogger.warn(
-            "commands",
-            "Reader mode extraction failed, trying full text",
-            e2
-          );
-        }
-        if (!content || content.length < 50) {
-          try {
-            const result = await pageExtractor.getText?.();
-            content = typeof result === "string" ? result : result?.text || "";
-          } catch (e2) {
-            assistantLogger.warn("commands", "Full text extraction failed", e2);
-          }
-        }
-        content = content.replace(/\s+/g, " ").replace(/\n\s*\n/g, "\n").trim();
-        if (!content || content.length < 50) {
+        if (extracted.status !== "ok" || !extracted.content) {
           return {
-            message: "I didn't find enough content on this page to summarize."
+            message: extracted.failureReason || "I didn't find enough content on this page to answer from."
           };
-        }
-        const maxLength = 12e3;
-        if (content.length > maxLength) {
-          content = content.substring(0, maxLength) + "...";
         }
         return {
-          message: `__SUMMARIZE_REQUEST__
-Title: ${title}
-URL: ${url}
-
-Content:
-${content}`
+          message: buildPageContextRequestMessage({
+            title: extracted.title,
+            url: extracted.url,
+            userQuery,
+            content: extracted.content
+          })
         };
       } catch (e2) {
-        return { message: `I'm sorry, I couldn't extract the page content: ${e2}` };
+        return {
+          message: `I'm sorry, I couldn't extract the page content: ${e2}`
+        };
+      }
+    }
+  };
+  function normalizeResearchScope(raw) {
+    const scope = String(raw || "").trim().toLowerCase().replace(/_/g, "-");
+    if (scope === "tabs" || scope === "tab") {
+      return "tabs";
+    }
+    if (scope === "window" || scope === "current-window" || scope === "this-window") {
+      return "window";
+    }
+    return "tab-group";
+  }
+  function researchBriefClarificationFromScopePreview(preview, args) {
+    if (!preview.ok && preview.code === "ambiguous_group" && preview.candidates) {
+      const candidates = preview.candidates.map((c3) => ({
+        id: `brief_group:${encodeURIComponent(c3.name)}`,
+        label: `${c3.label} (${c3.tabCount} tabs)`,
+        name: c3.name,
+        tabCount: c3.tabCount
+      }));
+      const { options, message } = buildAmbiguousGroupClarification(
+        String(args.name || "group"),
+        candidates
+      );
+      setResearchBriefResume({
+        args: { ...args, scope_confirmed: true },
+        reason: "ambiguous_group"
+      });
+      setPendingClarification({
+        originalMessage: String(args.topic || "research brief"),
+        options
+      });
+      return { message };
+    }
+    return null;
+  }
+  function researchBriefClarificationFromBuildFailure(result, args) {
+    if (result.code === "over_quota" && result.estimate != null && result.remaining != null && result.suggestedTabCount != null) {
+      const stashArgs = {
+        ...args,
+        scope_confirmed: true,
+        suggested_max_tabs: result.suggestedTabCount
+      };
+      const { options, message } = buildOverQuotaClarification({
+        estimate: result.estimate,
+        remaining: result.remaining,
+        suggestedTabCount: result.suggestedTabCount
+      });
+      setResearchBriefResume({ args: stashArgs, reason: "over_quota" });
+      setPendingClarification({
+        originalMessage: String(args.topic || "research brief"),
+        options
+      });
+      return { message };
+    }
+    return null;
+  }
+  function buildResearchBriefOptionsFromArgs(args, gBrowser) {
+    const quotaRaw = stringArg(args, "quota_mode");
+    const quotaMode = quotaRaw === "truncate" || quotaRaw === "fewer_tabs" ? quotaRaw : "default";
+    return {
+      gBrowser,
+      scope: normalizeResearchScope(stringArg(args, "scope")),
+      name: stringArg(args, "name"),
+      topic: stringArg(args, "topic")?.trim(),
+      inferTopicFromContent: booleanArg(args, "infer_topic_from_content") === true,
+      tabQueries: stringArrayArg(args, "tab_queries"),
+      tabIndices: numberArrayArg(args, "tab_indices"),
+      outlineHint: stringArg(args, "outline_hint"),
+      maxTabs: numberArg3(args, "max_tabs"),
+      excludeIndices: numberArrayArg(args, "exclude_indices"),
+      excludeQueries: stringArrayArg(args, "exclude_queries"),
+      scopeConfirmed: booleanArg(args, "scope_confirmed") === true,
+      quotaMode,
+      useActiveTabGroup: booleanArg(args, "use_active_tab_group") === true
+    };
+  }
+  var BuildResearchBriefCommand = class {
+    commandName = "build_research_brief";
+    description = "Build a structured research brief (outline, themes, sourced quotes) from open tabs. Arguments: { topic?: string, infer_topic_from_content?: boolean, scope?: 'tab-group'|'window'|'tabs', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], outline_hint?: string, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=tabs uses tab_queries (title/URL substrings) and/or tab_indices (1-based window positions). When infer_topic_from_content is true, topic may be omitted and will be derived from page content after extraction.";
+    async execute(args) {
+      const { gBrowser } = getChrome2();
+      const options = buildResearchBriefOptionsFromArgs(args, gBrowser);
+      const topic = options.topic;
+      const inferTopicFromContent = options.inferTopicFromContent === true;
+      if (!topic && !inferTopicFromContent) {
+        return {
+          message: "What topic should the research brief focus on?"
+        };
+      }
+      if (options.scope === "tabs" && (options.tabQueries?.length ?? 0) === 0 && (options.tabIndices?.length ?? 0) === 0) {
+        return {
+          message: "Which tabs should I use? Provide tab_queries (title/URL keywords) or tab_indices (positions)."
+        };
+      }
+      if (!options.scopeConfirmed) {
+        const preview = previewResearchBriefScope(options);
+        const scopeClarify = researchBriefClarificationFromScopePreview(
+          preview,
+          args
+        );
+        if (scopeClarify) {
+          return scopeClarify;
+        }
+        if (preview.ok && shouldConfirmResearchBriefScope(preview)) {
+          const confirmArgs = {
+            ...args,
+            scope_confirmed: true
+          };
+          setPendingConfirmation({
+            command: this.commandName,
+            args: confirmArgs,
+            description: buildScopePreviewDescription({
+              scopeLabel: preview.scopeLabel,
+              tabs: preview.tabs,
+              tabsOmittedByLimit: preview.tabsOmittedByLimit,
+              urlsDeduplicated: preview.urlsDeduplicated
+            })
+          });
+          return {
+            message: buildScopePreviewDescription({
+              scopeLabel: preview.scopeLabel,
+              tabs: preview.tabs,
+              tabsOmittedByLimit: preview.tabsOmittedByLimit,
+              urlsDeduplicated: preview.urlsDeduplicated
+            }),
+            requiresConfirmation: true
+          };
+        }
+      }
+      const signal = beginResearchBriefRun();
+      const onProgress = createResearchBriefProgressReporter(signal);
+      try {
+        const result = await buildResearchBrief({
+          ...options,
+          onProgress,
+          signal
+        });
+        if (!result.ok) {
+          const quotaClarify = researchBriefClarificationFromBuildFailure(
+            result,
+            args
+          );
+          if (quotaClarify) {
+            return quotaClarify;
+          }
+          return { message: result.message };
+        }
+        const cached = getCachedResearchBriefRun(result.briefId);
+        return {
+          message: buildResearchBriefToolMessage({
+            markdown: result.markdown,
+            brief: result.brief,
+            briefId: result.briefId,
+            digests: cached?.digests ?? []
+          })
+        };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+  };
+  var RegenerateResearchBriefSectionCommand = class {
+    commandName = "regenerate_research_brief_section";
+    description = 'Regenerate one section of a stored research brief. Arguments: { brief_id?: string, section: "executiveSummary"|"outline"|"themes"|"sources"|"gapsAndContradictions" }.';
+    async execute(args) {
+      const section = stringArg(args, "section");
+      const briefId = stringArg(args, "brief_id");
+      const cached = getCachedResearchBriefRun(briefId);
+      if (!cached) {
+        return {
+          message: "No stored research brief found. Build a research brief first, then ask to regenerate a section."
+        };
+      }
+      const allowed = /* @__PURE__ */ new Set([
+        "executiveSummary",
+        "outline",
+        "themes",
+        "sources",
+        "gapsAndContradictions"
+      ]);
+      if (!section || !allowed.has(section)) {
+        return {
+          message: `Which section should I regenerate? Use one of: ${[...allowed].join(", ")}.`
+        };
+      }
+      const signal = beginResearchBriefRun();
+      const onProgress = createResearchBriefProgressReporter(signal);
+      try {
+        onProgress({ phase: "synthesizing", label: `Regenerating ${section}\u2026` });
+        const sectionPayload = await synthesizeResearchBriefSection({
+          section,
+          topic: cached.brief.topic,
+          scopeLabel: cached.brief.scopeLabel,
+          digests: cached.digests,
+          existingBrief: cached.brief,
+          signal
+        });
+        const merged = mergeSectionIntoBrief(
+          cached.brief,
+          section,
+          sectionPayload
+        );
+        const markdown = researchBriefToMarkdown(merged);
+        storeResearchBriefRun({
+          briefId: cached.briefId,
+          brief: merged,
+          digests: cached.digests,
+          markdown
+        });
+        return {
+          message: buildResearchBriefToolMessage({
+            markdown,
+            brief: merged,
+            briefId: cached.briefId,
+            digests: cached.digests
+          })
+        };
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return { message: "Research brief cancelled." };
+        }
+        return {
+          message: error instanceof Error ? error.message : "Could not regenerate that section."
+        };
+      } finally {
+        endResearchBriefRun();
       }
     }
   };
@@ -52747,7 +57690,8 @@ ${content}`
       const folder = stringArg(args, "folder");
       const source = stringArg(args, "source");
       const sourceScope = source === "bookmark-folder" ? "bookmark-folder" : void 0;
-      if (!query) return { message: "Please tell me what you'd like to search for." };
+      if (!query)
+        return { message: "Please tell me what you'd like to search for." };
       let results = await localMemory.search(
         query,
         10,
@@ -53089,7 +58033,8 @@ ${content}`
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const name = stringArg(args, "name");
-      if (!name) return { message: "Which tab group would you like me to delete?" };
+      if (!name)
+        return { message: "Which tab group would you like me to delete?" };
       const group = findGroupByName(gBrowser, name);
       if (!group) {
         return { message: `I couldn't find a tab group named "${name}".` };
@@ -53510,7 +58455,9 @@ ${content}`
     search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
     get_recent_search_results: `{"limit?":"number"}`,
     open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
-    summarize_page: `{"index?":"number","query?":"string"}`,
+    summarize_page: `{"index?":"number","query?":"string (the user's page-grounded question or task)"}`,
+    build_research_brief: `{"topic?":"string","infer_topic_from_content?":"boolean","scope?":"tab-group|window|tabs","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","outline_hint?":"string","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
+    regenerate_research_brief_section: `{"brief_id?":"string","section":"executiveSummary|outline|themes|sources|gapsAndContradictions"}`,
     show_subscription: `{}`,
     search_history: `{"query":"string (optional; omit or "" for recent visits)"}`
   };
@@ -53573,6 +58520,8 @@ ${content}`
       new GetRecentSearchResultsCommand(),
       new OpenSearchResultCommand(),
       new SummarizePageCommand(),
+      new BuildResearchBriefCommand(),
+      new RegenerateResearchBriefSectionCommand(),
       new ShowSubscriptionCommand(),
       // Semantic history search (local embeddings + vector DB)
       new SearchHistorySemanticCommand()
@@ -53595,6 +58544,7 @@ ${content}`
   var STREAM_GUARD_MESSAGE = "I stopped this request to avoid a routing loop. Please rephrase and try again.";
 
   // src/assistant/agentLoopDriver.ts
+  init_assistantLogger();
   var AGENT_END = "__end__";
   function mergeAgentState(prev, patch) {
     return {
@@ -53666,1124 +58616,9 @@ ${content}`
     yield { __end__: true };
   }
 
-  // src/voiceLambdaIamFetch.ts
-  init_module2();
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentity.js
-  init_dist_es2();
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/resolveLogins.js
-  function resolveLogins(logins) {
-    return Promise.all(Object.keys(logins).reduce((arr2, name) => {
-      const tokenOrProvider = logins[name];
-      if (typeof tokenOrProvider === "string") {
-        arr2.push([name, tokenOrProvider]);
-      } else {
-        arr2.push(tokenOrProvider().then((token) => [name, token]));
-      }
-      return arr2;
-    }, [])).then((resolvedPairs) => resolvedPairs.reduce((logins2, [key, value]) => {
-      logins2[key] = value;
-      return logins2;
-    }, {}));
-  }
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentity.js
-  function fromCognitoIdentity(parameters) {
-    return async (awsIdentityProperties) => {
-      parameters.logger?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
-      const { GetCredentialsForIdentityCommand: GetCredentialsForIdentityCommand2, CognitoIdentityClient: CognitoIdentityClient2 } = await Promise.resolve().then(() => (init_loadCognitoIdentity(), loadCognitoIdentity_exports));
-      const fromConfigs = (property) => parameters.clientConfig?.[property] ?? parameters.parentClientConfig?.[property] ?? awsIdentityProperties?.callerClientConfig?.[property];
-      const { Credentials: { AccessKeyId = throwOnMissingAccessKeyId(parameters.logger), Expiration, SecretKey = throwOnMissingSecretKey(parameters.logger), SessionToken } = throwOnMissingCredentials(parameters.logger) } = await (parameters.client ?? new CognitoIdentityClient2(Object.assign({}, parameters.clientConfig ?? {}, {
-        region: fromConfigs("region"),
-        profile: fromConfigs("profile")
-      }))).send(new GetCredentialsForIdentityCommand2({
-        CustomRoleArn: parameters.customRoleArn,
-        IdentityId: parameters.identityId,
-        Logins: parameters.logins ? await resolveLogins(parameters.logins) : void 0
-      }));
-      return {
-        identityId: parameters.identityId,
-        accessKeyId: AccessKeyId,
-        secretAccessKey: SecretKey,
-        sessionToken: SessionToken,
-        expiration: Expiration
-      };
-    };
-  }
-  function throwOnMissingAccessKeyId(logger2) {
-    throw new CredentialsProviderError("Response from Amazon Cognito contained no access key ID", { logger: logger2 });
-  }
-  function throwOnMissingCredentials(logger2) {
-    throw new CredentialsProviderError("Response from Amazon Cognito contained no credentials", { logger: logger2 });
-  }
-  function throwOnMissingSecretKey(logger2) {
-    throw new CredentialsProviderError("Response from Amazon Cognito contained no secret key", { logger: logger2 });
-  }
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js
-  init_dist_es2();
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/IndexedDbStorage.js
-  var STORE_NAME = "IdentityIds";
-  var IndexedDbStorage = class {
-    dbName;
-    constructor(dbName = "aws:cognito-identity-ids") {
-      this.dbName = dbName;
-    }
-    getItem(key) {
-      return this.withObjectStore("readonly", (store2) => {
-        const req = store2.get(key);
-        return new Promise((resolve) => {
-          req.onerror = () => resolve(null);
-          req.onsuccess = () => resolve(req.result ? req.result.value : null);
-        });
-      }).catch(() => null);
-    }
-    removeItem(key) {
-      return this.withObjectStore("readwrite", (store2) => {
-        const req = store2.delete(key);
-        return new Promise((resolve, reject) => {
-          req.onerror = () => reject(req.error);
-          req.onsuccess = () => resolve();
-        });
-      });
-    }
-    setItem(id, value) {
-      return this.withObjectStore("readwrite", (store2) => {
-        const req = store2.put({ id, value });
-        return new Promise((resolve, reject) => {
-          req.onerror = () => reject(req.error);
-          req.onsuccess = () => resolve();
-        });
-      });
-    }
-    getDb() {
-      const openDbRequest = self.indexedDB.open(this.dbName, 1);
-      return new Promise((resolve, reject) => {
-        openDbRequest.onsuccess = () => {
-          resolve(openDbRequest.result);
-        };
-        openDbRequest.onerror = () => {
-          reject(openDbRequest.error);
-        };
-        openDbRequest.onblocked = () => {
-          reject(new Error("Unable to access DB"));
-        };
-        openDbRequest.onupgradeneeded = () => {
-          const db = openDbRequest.result;
-          db.onerror = () => {
-            reject(new Error("Failed to create object store"));
-          };
-          db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        };
-      });
-    }
-    withObjectStore(mode, action) {
-      return this.getDb().then((db) => {
-        const tx = db.transaction(STORE_NAME, mode);
-        tx.oncomplete = () => db.close();
-        return new Promise((resolve, reject) => {
-          tx.onerror = () => reject(tx.error);
-          resolve(action(tx.objectStore(STORE_NAME)));
-        }).catch((err) => {
-          db.close();
-          throw err;
-        });
-      });
-    }
-  };
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/InMemoryStorage.js
-  var InMemoryStorage = class {
-    store;
-    constructor(store2 = {}) {
-      this.store = store2;
-    }
-    getItem(key) {
-      if (key in this.store) {
-        return this.store[key];
-      }
-      return null;
-    }
-    removeItem(key) {
-      delete this.store[key];
-    }
-    setItem(key, value) {
-      this.store[key] = value;
-    }
-  };
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/localStorage.js
-  var inMemoryStorage = new InMemoryStorage();
-  function localStorage2() {
-    if (typeof self === "object" && self.indexedDB) {
-      return new IndexedDbStorage();
-    }
-    if (typeof window === "object" && window.localStorage) {
-      return window.localStorage;
-    }
-    return inMemoryStorage;
-  }
-
-  // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js
-  function fromCognitoIdentityPool({ accountId, cache: cache2 = localStorage2(), client: client2, clientConfig, customRoleArn, identityPoolId: identityPoolId2, logins, userIdentifier = !logins || Object.keys(logins).length === 0 ? "ANONYMOUS" : void 0, logger: logger2, parentClientConfig }) {
-    logger2?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
-    const cacheKey = userIdentifier ? `aws:cognito-identity-credentials:${identityPoolId2}:${userIdentifier}` : void 0;
-    let provider = async (awsIdentityProperties) => {
-      const { GetIdCommand: GetIdCommand2, CognitoIdentityClient: CognitoIdentityClient2 } = await Promise.resolve().then(() => (init_loadCognitoIdentity(), loadCognitoIdentity_exports));
-      const fromConfigs = (property) => clientConfig?.[property] ?? parentClientConfig?.[property] ?? awsIdentityProperties?.callerClientConfig?.[property];
-      const _client = client2 ?? new CognitoIdentityClient2(Object.assign({}, clientConfig ?? {}, {
-        region: fromConfigs("region"),
-        profile: fromConfigs("profile")
-      }));
-      let identityId = cacheKey && await cache2.getItem(cacheKey);
-      if (!identityId) {
-        const { IdentityId = throwOnMissingId(logger2) } = await _client.send(new GetIdCommand2({
-          AccountId: accountId,
-          IdentityPoolId: identityPoolId2,
-          Logins: logins ? await resolveLogins(logins) : void 0
-        }));
-        identityId = IdentityId;
-        if (cacheKey) {
-          Promise.resolve(cache2.setItem(cacheKey, identityId)).catch(() => {
-          });
-        }
-      }
-      provider = fromCognitoIdentity({
-        client: _client,
-        customRoleArn,
-        logins,
-        identityId
-      });
-      return provider(awsIdentityProperties);
-    };
-    return (awsIdentityProperties) => provider(awsIdentityProperties).catch(async (err) => {
-      if (cacheKey) {
-        Promise.resolve(cache2.removeItem(cacheKey)).catch(() => {
-        });
-      }
-      throw err;
-    });
-  }
-  function throwOnMissingId(logger2) {
-    throw new CredentialsProviderError("Response from Amazon Cognito contained no identity ID", { logger: logger2 });
-  }
-
-  // node_modules/@aws-sdk/protocol-http/dist-es/FieldPosition.js
-  var FieldPosition2;
-  (function(FieldPosition3) {
-    FieldPosition3[FieldPosition3["HEADER"] = 0] = "HEADER";
-    FieldPosition3[FieldPosition3["TRAILER"] = 1] = "TRAILER";
-  })(FieldPosition2 || (FieldPosition2 = {}));
-
-  // node_modules/@aws-sdk/protocol-http/dist-es/httpRequest.js
-  var HttpRequest2 = class _HttpRequest {
-    constructor(options) {
-      this.method = options.method || "GET";
-      this.hostname = options.hostname || "localhost";
-      this.port = options.port;
-      this.query = options.query || {};
-      this.headers = options.headers || {};
-      this.body = options.body;
-      this.protocol = options.protocol ? options.protocol.slice(-1) !== ":" ? `${options.protocol}:` : options.protocol : "https:";
-      this.path = options.path ? options.path.charAt(0) !== "/" ? `/${options.path}` : options.path : "/";
-      this.username = options.username;
-      this.password = options.password;
-      this.fragment = options.fragment;
-    }
-    static isInstance(request) {
-      if (!request)
-        return false;
-      const req = request;
-      return "method" in req && "protocol" in req && "hostname" in req && "path" in req && typeof req["query"] === "object" && typeof req["headers"] === "object";
-    }
-    clone() {
-      const cloned = new _HttpRequest({
-        ...this,
-        headers: { ...this.headers }
-      });
-      if (cloned.query)
-        cloned.query = cloneQuery2(cloned.query);
-      return cloned;
-    }
-  };
-  function cloneQuery2(query) {
-    return Object.keys(query).reduce((carry, paramName) => {
-      const param = query[paramName];
-      return {
-        ...carry,
-        [paramName]: Array.isArray(param) ? [...param] : param
-      };
-    }, {});
-  }
-
-  // node_modules/@aws-sdk/eventstream-codec/dist-es/EventStreamCodec.js
-  var import_crc322 = __toESM(require_build2());
-
-  // node_modules/@aws-sdk/util-hex-encoding/dist-es/index.js
-  var SHORT_TO_HEX2 = {};
-  var HEX_TO_SHORT2 = {};
-  for (let i2 = 0; i2 < 256; i2++) {
-    let encodedByte = i2.toString(16).toLowerCase();
-    if (encodedByte.length === 1) {
-      encodedByte = `0${encodedByte}`;
-    }
-    SHORT_TO_HEX2[i2] = encodedByte;
-    HEX_TO_SHORT2[encodedByte] = i2;
-  }
-  function fromHex2(encoded) {
-    if (encoded.length % 2 !== 0) {
-      throw new Error("Hex encoded strings must have an even number length");
-    }
-    const out = new Uint8Array(encoded.length / 2);
-    for (let i2 = 0; i2 < encoded.length; i2 += 2) {
-      const encodedByte = encoded.slice(i2, i2 + 2).toLowerCase();
-      if (encodedByte in HEX_TO_SHORT2) {
-        out[i2 / 2] = HEX_TO_SHORT2[encodedByte];
-      } else {
-        throw new Error(`Cannot decode unrecognized sequence ${encodedByte} as hexadecimal`);
-      }
-    }
-    return out;
-  }
-  function toHex2(bytes) {
-    let out = "";
-    for (let i2 = 0; i2 < bytes.byteLength; i2++) {
-      out += SHORT_TO_HEX2[bytes[i2]];
-    }
-    return out;
-  }
-
-  // node_modules/@aws-sdk/eventstream-codec/dist-es/Int64.js
-  var Int642 = class _Int64 {
-    constructor(bytes) {
-      this.bytes = bytes;
-      if (bytes.byteLength !== 8) {
-        throw new Error("Int64 buffers must be exactly 8 bytes");
-      }
-    }
-    static fromNumber(number) {
-      if (number > 9223372036854776e3 || number < -9223372036854776e3) {
-        throw new Error(`${number} is too large (or, if negative, too small) to represent as an Int64`);
-      }
-      const bytes = new Uint8Array(8);
-      for (let i2 = 7, remaining = Math.abs(Math.round(number)); i2 > -1 && remaining > 0; i2--, remaining /= 256) {
-        bytes[i2] = remaining;
-      }
-      if (number < 0) {
-        negate2(bytes);
-      }
-      return new _Int64(bytes);
-    }
-    valueOf() {
-      const bytes = this.bytes.slice(0);
-      const negative = bytes[0] & 128;
-      if (negative) {
-        negate2(bytes);
-      }
-      return parseInt(toHex2(bytes), 16) * (negative ? -1 : 1);
-    }
-    toString() {
-      return String(this.valueOf());
-    }
-  };
-  function negate2(bytes) {
-    for (let i2 = 0; i2 < 8; i2++) {
-      bytes[i2] ^= 255;
-    }
-    for (let i2 = 7; i2 > -1; i2--) {
-      bytes[i2]++;
-      if (bytes[i2] !== 0)
-        break;
-    }
-  }
-
-  // node_modules/@aws-sdk/eventstream-codec/dist-es/HeaderMarshaller.js
-  var HeaderMarshaller = class {
-    constructor(toUtf83, fromUtf85) {
-      this.toUtf8 = toUtf83;
-      this.fromUtf8 = fromUtf85;
-    }
-    format(headers) {
-      const chunks = [];
-      for (const headerName of Object.keys(headers)) {
-        const bytes = this.fromUtf8(headerName);
-        chunks.push(Uint8Array.from([bytes.byteLength]), bytes, this.formatHeaderValue(headers[headerName]));
-      }
-      const out = new Uint8Array(chunks.reduce((carry, bytes) => carry + bytes.byteLength, 0));
-      let position = 0;
-      for (const chunk of chunks) {
-        out.set(chunk, position);
-        position += chunk.byteLength;
-      }
-      return out;
-    }
-    formatHeaderValue(header) {
-      switch (header.type) {
-        case "boolean":
-          return Uint8Array.from([header.value ? 0 : 1]);
-        case "byte":
-          return Uint8Array.from([2, header.value]);
-        case "short":
-          const shortView = new DataView(new ArrayBuffer(3));
-          shortView.setUint8(0, 3);
-          shortView.setInt16(1, header.value, false);
-          return new Uint8Array(shortView.buffer);
-        case "integer":
-          const intView = new DataView(new ArrayBuffer(5));
-          intView.setUint8(0, 4);
-          intView.setInt32(1, header.value, false);
-          return new Uint8Array(intView.buffer);
-        case "long":
-          const longBytes = new Uint8Array(9);
-          longBytes[0] = 5;
-          longBytes.set(header.value.bytes, 1);
-          return longBytes;
-        case "binary":
-          const binView = new DataView(new ArrayBuffer(3 + header.value.byteLength));
-          binView.setUint8(0, 6);
-          binView.setUint16(1, header.value.byteLength, false);
-          const binBytes = new Uint8Array(binView.buffer);
-          binBytes.set(header.value, 3);
-          return binBytes;
-        case "string":
-          const utf8Bytes = this.fromUtf8(header.value);
-          const strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
-          strView.setUint8(0, 7);
-          strView.setUint16(1, utf8Bytes.byteLength, false);
-          const strBytes = new Uint8Array(strView.buffer);
-          strBytes.set(utf8Bytes, 3);
-          return strBytes;
-        case "timestamp":
-          const tsBytes = new Uint8Array(9);
-          tsBytes[0] = 8;
-          tsBytes.set(Int642.fromNumber(header.value.valueOf()).bytes, 1);
-          return tsBytes;
-        case "uuid":
-          if (!UUID_PATTERN2.test(header.value)) {
-            throw new Error(`Invalid UUID received: ${header.value}`);
-          }
-          const uuidBytes = new Uint8Array(17);
-          uuidBytes[0] = 9;
-          uuidBytes.set(fromHex2(header.value.replace(/\-/g, "")), 1);
-          return uuidBytes;
-      }
-    }
-    parse(headers) {
-      const out = {};
-      let position = 0;
-      while (position < headers.byteLength) {
-        const nameLength = headers.getUint8(position++);
-        const name = this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, nameLength));
-        position += nameLength;
-        switch (headers.getUint8(position++)) {
-          case 0:
-            out[name] = {
-              type: BOOLEAN_TAG,
-              value: true
-            };
-            break;
-          case 1:
-            out[name] = {
-              type: BOOLEAN_TAG,
-              value: false
-            };
-            break;
-          case 2:
-            out[name] = {
-              type: BYTE_TAG,
-              value: headers.getInt8(position++)
-            };
-            break;
-          case 3:
-            out[name] = {
-              type: SHORT_TAG,
-              value: headers.getInt16(position, false)
-            };
-            position += 2;
-            break;
-          case 4:
-            out[name] = {
-              type: INT_TAG,
-              value: headers.getInt32(position, false)
-            };
-            position += 4;
-            break;
-          case 5:
-            out[name] = {
-              type: LONG_TAG,
-              value: new Int642(new Uint8Array(headers.buffer, headers.byteOffset + position, 8))
-            };
-            position += 8;
-            break;
-          case 6:
-            const binaryLength = headers.getUint16(position, false);
-            position += 2;
-            out[name] = {
-              type: BINARY_TAG,
-              value: new Uint8Array(headers.buffer, headers.byteOffset + position, binaryLength)
-            };
-            position += binaryLength;
-            break;
-          case 7:
-            const stringLength = headers.getUint16(position, false);
-            position += 2;
-            out[name] = {
-              type: STRING_TAG,
-              value: this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, stringLength))
-            };
-            position += stringLength;
-            break;
-          case 8:
-            out[name] = {
-              type: TIMESTAMP_TAG,
-              value: new Date(new Int642(new Uint8Array(headers.buffer, headers.byteOffset + position, 8)).valueOf())
-            };
-            position += 8;
-            break;
-          case 9:
-            const uuidBytes = new Uint8Array(headers.buffer, headers.byteOffset + position, 16);
-            position += 16;
-            out[name] = {
-              type: UUID_TAG,
-              value: `${toHex2(uuidBytes.subarray(0, 4))}-${toHex2(uuidBytes.subarray(4, 6))}-${toHex2(uuidBytes.subarray(6, 8))}-${toHex2(uuidBytes.subarray(8, 10))}-${toHex2(uuidBytes.subarray(10))}`
-            };
-            break;
-          default:
-            throw new Error(`Unrecognized header type tag`);
-        }
-      }
-      return out;
-    }
-  };
-  var HEADER_VALUE_TYPE2;
-  (function(HEADER_VALUE_TYPE3) {
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["boolTrue"] = 0] = "boolTrue";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["boolFalse"] = 1] = "boolFalse";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["byte"] = 2] = "byte";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["short"] = 3] = "short";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["integer"] = 4] = "integer";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["long"] = 5] = "long";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["byteArray"] = 6] = "byteArray";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["string"] = 7] = "string";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["timestamp"] = 8] = "timestamp";
-    HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["uuid"] = 9] = "uuid";
-  })(HEADER_VALUE_TYPE2 || (HEADER_VALUE_TYPE2 = {}));
-  var BOOLEAN_TAG = "boolean";
-  var BYTE_TAG = "byte";
-  var SHORT_TAG = "short";
-  var INT_TAG = "integer";
-  var LONG_TAG = "long";
-  var BINARY_TAG = "binary";
-  var STRING_TAG = "string";
-  var TIMESTAMP_TAG = "timestamp";
-  var UUID_TAG = "uuid";
-  var UUID_PATTERN2 = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-
-  // node_modules/@aws-sdk/eventstream-codec/dist-es/splitMessage.js
-  var import_crc32 = __toESM(require_build2());
-  var PRELUDE_MEMBER_LENGTH = 4;
-  var PRELUDE_LENGTH = PRELUDE_MEMBER_LENGTH * 2;
-  var CHECKSUM_LENGTH = 4;
-  var MINIMUM_MESSAGE_LENGTH = PRELUDE_LENGTH + CHECKSUM_LENGTH * 2;
-
-  // node_modules/@aws-sdk/util-middleware/dist-es/normalizeProvider.js
-  var normalizeProvider3 = (input) => {
-    if (typeof input === "function")
-      return input;
-    const promisified = Promise.resolve(input);
-    return () => promisified;
-  };
-
-  // node_modules/@aws-sdk/util-utf8/dist-es/fromUtf8.browser.js
-  var fromUtf84 = (input) => new TextEncoder().encode(input);
-
-  // node_modules/@aws-sdk/util-utf8/dist-es/toUint8Array.js
-  var toUint8Array2 = (data) => {
-    if (typeof data === "string") {
-      return fromUtf84(data);
-    }
-    if (ArrayBuffer.isView(data)) {
-      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength / Uint8Array.BYTES_PER_ELEMENT);
-    }
-    return new Uint8Array(data);
-  };
-
-  // node_modules/@aws-sdk/util-utf8/dist-es/toUtf8.browser.js
-  var toUtf82 = (input) => new TextDecoder("utf-8").decode(input);
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/constants.js
-  var ALGORITHM_QUERY_PARAM2 = "X-Amz-Algorithm";
-  var CREDENTIAL_QUERY_PARAM2 = "X-Amz-Credential";
-  var AMZ_DATE_QUERY_PARAM2 = "X-Amz-Date";
-  var SIGNED_HEADERS_QUERY_PARAM2 = "X-Amz-SignedHeaders";
-  var EXPIRES_QUERY_PARAM2 = "X-Amz-Expires";
-  var SIGNATURE_QUERY_PARAM2 = "X-Amz-Signature";
-  var TOKEN_QUERY_PARAM2 = "X-Amz-Security-Token";
-  var AUTH_HEADER2 = "authorization";
-  var AMZ_DATE_HEADER2 = AMZ_DATE_QUERY_PARAM2.toLowerCase();
-  var DATE_HEADER2 = "date";
-  var GENERATED_HEADERS2 = [AUTH_HEADER2, AMZ_DATE_HEADER2, DATE_HEADER2];
-  var SIGNATURE_HEADER2 = SIGNATURE_QUERY_PARAM2.toLowerCase();
-  var SHA256_HEADER2 = "x-amz-content-sha256";
-  var TOKEN_HEADER2 = TOKEN_QUERY_PARAM2.toLowerCase();
-  var ALWAYS_UNSIGNABLE_HEADERS2 = {
-    authorization: true,
-    "cache-control": true,
-    connection: true,
-    expect: true,
-    from: true,
-    "keep-alive": true,
-    "max-forwards": true,
-    pragma: true,
-    referer: true,
-    te: true,
-    trailer: true,
-    "transfer-encoding": true,
-    upgrade: true,
-    "user-agent": true,
-    "x-amzn-trace-id": true
-  };
-  var PROXY_HEADER_PATTERN2 = /^proxy-/;
-  var SEC_HEADER_PATTERN2 = /^sec-/;
-  var ALGORITHM_IDENTIFIER2 = "AWS4-HMAC-SHA256";
-  var EVENT_ALGORITHM_IDENTIFIER2 = "AWS4-HMAC-SHA256-PAYLOAD";
-  var UNSIGNED_PAYLOAD2 = "UNSIGNED-PAYLOAD";
-  var MAX_CACHE_SIZE2 = 50;
-  var KEY_TYPE_IDENTIFIER2 = "aws4_request";
-  var MAX_PRESIGNED_TTL2 = 60 * 60 * 24 * 7;
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/credentialDerivation.js
-  var signingKeyCache2 = {};
-  var cacheQueue2 = [];
-  var createScope2 = (shortDate, region2, service) => `${shortDate}/${region2}/${service}/${KEY_TYPE_IDENTIFIER2}`;
-  var getSigningKey2 = async (sha256Constructor, credentials, shortDate, region2, service) => {
-    const credsHash = await hmac2(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
-    const cacheKey = `${shortDate}:${region2}:${service}:${toHex2(credsHash)}:${credentials.sessionToken}`;
-    if (cacheKey in signingKeyCache2) {
-      return signingKeyCache2[cacheKey];
-    }
-    cacheQueue2.push(cacheKey);
-    while (cacheQueue2.length > MAX_CACHE_SIZE2) {
-      delete signingKeyCache2[cacheQueue2.shift()];
-    }
-    let key = `AWS4${credentials.secretAccessKey}`;
-    for (const signable of [shortDate, region2, service, KEY_TYPE_IDENTIFIER2]) {
-      key = await hmac2(sha256Constructor, key, signable);
-    }
-    return signingKeyCache2[cacheKey] = key;
-  };
-  var hmac2 = (ctor, secret, data) => {
-    const hash = new ctor(secret);
-    hash.update(toUint8Array2(data));
-    return hash.digest();
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalHeaders.js
-  var getCanonicalHeaders2 = ({ headers }, unsignableHeaders, signableHeaders) => {
-    const canonical = {};
-    for (const headerName of Object.keys(headers).sort()) {
-      if (headers[headerName] == void 0) {
-        continue;
-      }
-      const canonicalHeaderName = headerName.toLowerCase();
-      if (canonicalHeaderName in ALWAYS_UNSIGNABLE_HEADERS2 || unsignableHeaders?.has(canonicalHeaderName) || PROXY_HEADER_PATTERN2.test(canonicalHeaderName) || SEC_HEADER_PATTERN2.test(canonicalHeaderName)) {
-        if (!signableHeaders || signableHeaders && !signableHeaders.has(canonicalHeaderName)) {
-          continue;
-        }
-      }
-      canonical[canonicalHeaderName] = headers[headerName].trim().replace(/\s+/g, " ");
-    }
-    return canonical;
-  };
-
-  // node_modules/@aws-sdk/util-uri-escape/dist-es/escape-uri.js
-  var escapeUri2 = (uri2) => encodeURIComponent(uri2).replace(/[!'()*]/g, hexEncode2);
-  var hexEncode2 = (c3) => `%${c3.charCodeAt(0).toString(16).toUpperCase()}`;
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/getCanonicalQuery.js
-  var getCanonicalQuery2 = ({ query = {} }) => {
-    const keys = [];
-    const serialized = {};
-    for (const key of Object.keys(query).sort()) {
-      if (key.toLowerCase() === SIGNATURE_HEADER2) {
-        continue;
-      }
-      keys.push(key);
-      const value = query[key];
-      if (typeof value === "string") {
-        serialized[key] = `${escapeUri2(key)}=${escapeUri2(value)}`;
-      } else if (Array.isArray(value)) {
-        serialized[key] = value.slice(0).sort().reduce((encoded, value2) => encoded.concat([`${escapeUri2(key)}=${escapeUri2(value2)}`]), []).join("&");
-      }
-    }
-    return keys.map((key) => serialized[key]).filter((serialized2) => serialized2).join("&");
-  };
-
-  // node_modules/@aws-sdk/is-array-buffer/dist-es/index.js
-  var isArrayBuffer2 = (arg) => typeof ArrayBuffer === "function" && arg instanceof ArrayBuffer || Object.prototype.toString.call(arg) === "[object ArrayBuffer]";
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/getPayloadHash.js
-  var getPayloadHash2 = async ({ headers, body }, hashConstructor) => {
-    for (const headerName of Object.keys(headers)) {
-      if (headerName.toLowerCase() === SHA256_HEADER2) {
-        return headers[headerName];
-      }
-    }
-    if (body == void 0) {
-      return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    } else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer2(body)) {
-      const hashCtor = new hashConstructor();
-      hashCtor.update(toUint8Array2(body));
-      return toHex2(await hashCtor.digest());
-    }
-    return UNSIGNED_PAYLOAD2;
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/headerUtil.js
-  var hasHeader2 = (soughtHeader, headers) => {
-    soughtHeader = soughtHeader.toLowerCase();
-    for (const headerName of Object.keys(headers)) {
-      if (soughtHeader === headerName.toLowerCase()) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/cloneRequest.js
-  var cloneRequest = ({ headers, query, ...rest }) => ({
-    ...rest,
-    headers: { ...headers },
-    query: query ? cloneQuery3(query) : void 0
-  });
-  var cloneQuery3 = (query) => Object.keys(query).reduce((carry, paramName) => {
-    const param = query[paramName];
-    return {
-      ...carry,
-      [paramName]: Array.isArray(param) ? [...param] : param
-    };
-  }, {});
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/moveHeadersToQuery.js
-  var moveHeadersToQuery2 = (request, options = {}) => {
-    const { headers, query = {} } = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
-    for (const name of Object.keys(headers)) {
-      const lname = name.toLowerCase();
-      if (lname.slice(0, 6) === "x-amz-" && !options.unhoistableHeaders?.has(lname)) {
-        query[name] = headers[name];
-        delete headers[name];
-      }
-    }
-    return {
-      ...request,
-      headers,
-      query
-    };
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/prepareRequest.js
-  var prepareRequest2 = (request) => {
-    request = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
-    for (const headerName of Object.keys(request.headers)) {
-      if (GENERATED_HEADERS2.indexOf(headerName.toLowerCase()) > -1) {
-        delete request.headers[headerName];
-      }
-    }
-    return request;
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/utilDate.js
-  var iso86012 = (time2) => toDate2(time2).toISOString().replace(/\.\d{3}Z$/, "Z");
-  var toDate2 = (time2) => {
-    if (typeof time2 === "number") {
-      return new Date(time2 * 1e3);
-    }
-    if (typeof time2 === "string") {
-      if (Number(time2)) {
-        return new Date(Number(time2) * 1e3);
-      }
-      return new Date(time2);
-    }
-    return time2;
-  };
-
-  // node_modules/@aws-sdk/signature-v4/dist-es/SignatureV4.js
-  var SignatureV42 = class {
-    constructor({ applyChecksum, credentials, region: region2, service, sha256, uriEscapePath = true }) {
-      this.headerMarshaller = new HeaderMarshaller(toUtf82, fromUtf84);
-      this.service = service;
-      this.sha256 = sha256;
-      this.uriEscapePath = uriEscapePath;
-      this.applyChecksum = typeof applyChecksum === "boolean" ? applyChecksum : true;
-      this.regionProvider = normalizeProvider3(region2);
-      this.credentialProvider = normalizeProvider3(credentials);
-    }
-    async presign(originalRequest, options = {}) {
-      const { signingDate = /* @__PURE__ */ new Date(), expiresIn = 3600, unsignableHeaders, unhoistableHeaders, signableHeaders, signingRegion, signingService } = options;
-      const credentials = await this.credentialProvider();
-      this.validateResolvedCredentials(credentials);
-      const region2 = signingRegion ?? await this.regionProvider();
-      const { longDate, shortDate } = formatDate(signingDate);
-      if (expiresIn > MAX_PRESIGNED_TTL2) {
-        return Promise.reject("Signature version 4 presigned URLs must have an expiration date less than one week in the future");
-      }
-      const scope = createScope2(shortDate, region2, signingService ?? this.service);
-      const request = moveHeadersToQuery2(prepareRequest2(originalRequest), { unhoistableHeaders });
-      if (credentials.sessionToken) {
-        request.query[TOKEN_QUERY_PARAM2] = credentials.sessionToken;
-      }
-      request.query[ALGORITHM_QUERY_PARAM2] = ALGORITHM_IDENTIFIER2;
-      request.query[CREDENTIAL_QUERY_PARAM2] = `${credentials.accessKeyId}/${scope}`;
-      request.query[AMZ_DATE_QUERY_PARAM2] = longDate;
-      request.query[EXPIRES_QUERY_PARAM2] = expiresIn.toString(10);
-      const canonicalHeaders = getCanonicalHeaders2(request, unsignableHeaders, signableHeaders);
-      request.query[SIGNED_HEADERS_QUERY_PARAM2] = getCanonicalHeaderList(canonicalHeaders);
-      request.query[SIGNATURE_QUERY_PARAM2] = await this.getSignature(longDate, scope, this.getSigningKey(credentials, region2, shortDate, signingService), this.createCanonicalRequest(request, canonicalHeaders, await getPayloadHash2(originalRequest, this.sha256)));
-      return request;
-    }
-    async sign(toSign, options) {
-      if (typeof toSign === "string") {
-        return this.signString(toSign, options);
-      } else if (toSign.headers && toSign.payload) {
-        return this.signEvent(toSign, options);
-      } else if (toSign.message) {
-        return this.signMessage(toSign, options);
-      } else {
-        return this.signRequest(toSign, options);
-      }
-    }
-    async signEvent({ headers, payload }, { signingDate = /* @__PURE__ */ new Date(), priorSignature, signingRegion, signingService }) {
-      const region2 = signingRegion ?? await this.regionProvider();
-      const { shortDate, longDate } = formatDate(signingDate);
-      const scope = createScope2(shortDate, region2, signingService ?? this.service);
-      const hashedPayload = await getPayloadHash2({ headers: {}, body: payload }, this.sha256);
-      const hash = new this.sha256();
-      hash.update(headers);
-      const hashedHeaders = toHex2(await hash.digest());
-      const stringToSign = [
-        EVENT_ALGORITHM_IDENTIFIER2,
-        longDate,
-        scope,
-        priorSignature,
-        hashedHeaders,
-        hashedPayload
-      ].join("\n");
-      return this.signString(stringToSign, { signingDate, signingRegion: region2, signingService });
-    }
-    async signMessage(signableMessage, { signingDate = /* @__PURE__ */ new Date(), signingRegion, signingService }) {
-      const promise = this.signEvent({
-        headers: this.headerMarshaller.format(signableMessage.message.headers),
-        payload: signableMessage.message.body
-      }, {
-        signingDate,
-        signingRegion,
-        signingService,
-        priorSignature: signableMessage.priorSignature
-      });
-      return promise.then((signature) => {
-        return { message: signableMessage.message, signature };
-      });
-    }
-    async signString(stringToSign, { signingDate = /* @__PURE__ */ new Date(), signingRegion, signingService } = {}) {
-      const credentials = await this.credentialProvider();
-      this.validateResolvedCredentials(credentials);
-      const region2 = signingRegion ?? await this.regionProvider();
-      const { shortDate } = formatDate(signingDate);
-      const hash = new this.sha256(await this.getSigningKey(credentials, region2, shortDate, signingService));
-      hash.update(toUint8Array2(stringToSign));
-      return toHex2(await hash.digest());
-    }
-    async signRequest(requestToSign, { signingDate = /* @__PURE__ */ new Date(), signableHeaders, unsignableHeaders, signingRegion, signingService } = {}) {
-      const credentials = await this.credentialProvider();
-      this.validateResolvedCredentials(credentials);
-      const region2 = signingRegion ?? await this.regionProvider();
-      const request = prepareRequest2(requestToSign);
-      const { longDate, shortDate } = formatDate(signingDate);
-      const scope = createScope2(shortDate, region2, signingService ?? this.service);
-      request.headers[AMZ_DATE_HEADER2] = longDate;
-      if (credentials.sessionToken) {
-        request.headers[TOKEN_HEADER2] = credentials.sessionToken;
-      }
-      const payloadHash = await getPayloadHash2(request, this.sha256);
-      if (!hasHeader2(SHA256_HEADER2, request.headers) && this.applyChecksum) {
-        request.headers[SHA256_HEADER2] = payloadHash;
-      }
-      const canonicalHeaders = getCanonicalHeaders2(request, unsignableHeaders, signableHeaders);
-      const signature = await this.getSignature(longDate, scope, this.getSigningKey(credentials, region2, shortDate, signingService), this.createCanonicalRequest(request, canonicalHeaders, payloadHash));
-      request.headers[AUTH_HEADER2] = `${ALGORITHM_IDENTIFIER2} Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${getCanonicalHeaderList(canonicalHeaders)}, Signature=${signature}`;
-      return request;
-    }
-    createCanonicalRequest(request, canonicalHeaders, payloadHash) {
-      const sortedHeaders = Object.keys(canonicalHeaders).sort();
-      return `${request.method}
-${this.getCanonicalPath(request)}
-${getCanonicalQuery2(request)}
-${sortedHeaders.map((name) => `${name}:${canonicalHeaders[name]}`).join("\n")}
-
-${sortedHeaders.join(";")}
-${payloadHash}`;
-    }
-    async createStringToSign(longDate, credentialScope, canonicalRequest) {
-      const hash = new this.sha256();
-      hash.update(toUint8Array2(canonicalRequest));
-      const hashedRequest = await hash.digest();
-      return `${ALGORITHM_IDENTIFIER2}
-${longDate}
-${credentialScope}
-${toHex2(hashedRequest)}`;
-    }
-    getCanonicalPath({ path }) {
-      if (this.uriEscapePath) {
-        const normalizedPathSegments = [];
-        for (const pathSegment of path.split("/")) {
-          if (pathSegment?.length === 0)
-            continue;
-          if (pathSegment === ".")
-            continue;
-          if (pathSegment === "..") {
-            normalizedPathSegments.pop();
-          } else {
-            normalizedPathSegments.push(pathSegment);
-          }
-        }
-        const normalizedPath = `${path?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path?.endsWith("/") ? "/" : ""}`;
-        const doubleEncoded = encodeURIComponent(normalizedPath);
-        return doubleEncoded.replace(/%2F/g, "/");
-      }
-      return path;
-    }
-    async getSignature(longDate, credentialScope, keyPromise, canonicalRequest) {
-      const stringToSign = await this.createStringToSign(longDate, credentialScope, canonicalRequest);
-      const hash = new this.sha256(await keyPromise);
-      hash.update(toUint8Array2(stringToSign));
-      return toHex2(await hash.digest());
-    }
-    getSigningKey(credentials, region2, shortDate, service) {
-      return getSigningKey2(this.sha256, credentials, shortDate, region2, service || this.service);
-    }
-    validateResolvedCredentials(credentials) {
-      if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
-        throw new Error("Resolved credential object is not valid");
-      }
-    }
-  };
-  var formatDate = (now2) => {
-    const longDate = iso86012(now2).replace(/[\-:]/g, "");
-    return {
-      longDate,
-      shortDate: longDate.slice(0, 8)
-    };
-  };
-  var getCanonicalHeaderList = (headers) => Object.keys(headers).sort().join(";");
-
-  // src/voiceLambdaIamFetch.ts
-  var region = "us-east-2";
-  var identityPoolId = "us-east-2:21ce1894-9a97-48ac-8741-b69f7eafea1c";
-  function cognitoCredentials() {
-    if (!region || !identityPoolId) {
-      throw new Error(
-        "Missing AWS_REGION or COGNITO_IDENTITY_POOL_ID for voice Lambda signing."
-      );
-    }
-    return fromCognitoIdentityPool({
-      clientConfig: { region },
-      identityPoolId
-    });
-  }
-  var signerPromise = null;
-  function getSigner() {
-    if (!signerPromise) {
-      signerPromise = Promise.resolve(
-        new SignatureV42({
-          credentials: cognitoCredentials(),
-          region,
-          service: "lambda",
-          sha256: Sha256,
-          applyChecksum: false
-        })
-      );
-    }
-    return signerPromise;
-  }
-  async function postVoiceLambdaWithIam(endpoint, body, jwtAccessToken) {
-    const url = new URL(
-      endpoint.startsWith("http") ? endpoint : `https://${endpoint}`
-    );
-    const path = url.pathname && url.pathname.length > 0 ? url.pathname : "/";
-    const headers = {
-      host: url.host,
-      "content-type": "application/json"
-    };
-    if (jwtAccessToken) {
-      headers["x-oasis-authorization"] = `Bearer ${jwtAccessToken}`;
-    }
-    const req = new HttpRequest2({
-      protocol: url.protocol,
-      hostname: url.hostname,
-      port: url.port ? parseInt(url.port, 10) : void 0,
-      method: "POST",
-      path,
-      headers,
-      body
-    });
-    const signer = await getSigner();
-    const signed = await signer.sign(req);
-    const portPart = signed.port != null && signed.port !== 80 && signed.port !== 443 ? `:${signed.port}` : "";
-    const signedUrl = `${signed.protocol}//${signed.hostname}${portPart}${signed.path}`;
-    return fetch(signedUrl, {
-      method: signed.method,
-      headers: signed.headers,
-      body: signed.body
-    });
-  }
-
-  // src/awsSignedFetch.ts
-  var QuotaExceededError = class extends Error {
-    quota;
-    isQuotaError = true;
-    constructor(message, quota) {
-      super(message);
-      this.name = "QuotaExceededError";
-      this.quota = quota;
-    }
-  };
-  var normalizeEndpoint = (value) => String(value || "").trim().replace(/\/+$/, "");
-  var assistantUrl = normalizeEndpoint("https://wvclepquxxczgrukfqyr.supabase.co/functions/v1/oasis-assist-test");
-  var transcribeUrl = normalizeEndpoint("https://ic3fypkh4rz24odos4m3u5xsma0edmnn.lambda-url.us-east-2.on.aws/");
-  var supabaseAuth2 = SupabaseAuth.getInstance();
-  var endpointByOperation = {
-    assist: assistantUrl,
-    transcribe: transcribeUrl,
-    tts: transcribeUrl
-  };
-  var endpointEnvByOperation = {
-    assist: "OASIS_ASSIST_URL",
-    transcribe: "OASIS_TRANSCRIBE_URL",
-    tts: "OASIS_TRANSCRIBE_URL"
-  };
-  function getAssistantApiBase() {
-    return assistantUrl;
-  }
-  async function postSigned(op, payload) {
-    const endpoint = endpointByOperation[op];
-    if (!endpoint) {
-      throw new Error(
-        `Endpoint not configured for operation "${op}". Missing ${endpointEnvByOperation[op]}.`
-      );
-    }
-    const body = JSON.stringify({ op, ...payload });
-    const session = await supabaseAuth2.getSession();
-    const token = session?.access_token;
-    const requiresJwt = op !== "assist";
-    if (requiresJwt && !token) {
-      throw new Error("Authentication required: No JWT found");
-    }
-    const headers = {
-      "content-type": "application/json"
-    };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    const res = op === "transcribe" || op === "tts" ? await postVoiceLambdaWithIam(endpoint, body, token) : await fetch(endpoint, { method: "POST", headers, body });
-    if (!res.ok) {
-      const errorBody = await res.text();
-      if (res.status === 429 && op === "assist") {
-        try {
-          const parsed = JSON.parse(errorBody);
-          if (parsed.error === "quota_exceeded") {
-            throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
-          }
-        } catch (e2) {
-          if (e2.isQuotaError) throw e2;
-        }
-      }
-      assistantLogger.error("transport", "Assistant backend error", {
-        op,
-        status: res.status,
-        errorBody
-      });
-      throw new Error(`Assistant backend ${res.status} ${errorBody}`);
-    }
-    return res.json();
-  }
-
-  // src/proxyClient.ts
-  function getAssistLoopOptionsFromBuildEnv() {
-    const rawMax = String(
-      true ? "" : ""
-    ).trim();
-    const rawRefine = String(
-      true ? "" : ""
-    ).trim();
-    const refine = rawRefine === "1" || /^true$/i.test(rawRefine);
-    let max;
-    if (rawMax !== "") {
-      const n2 = parseInt(rawMax, 10);
-      if (Number.isFinite(n2) && n2 >= 1) {
-        max = Math.min(8, n2);
-      }
-    }
-    if (refine && (max == null || max < 2)) {
-      max = 3;
-    }
-    if (max == null && !refine) {
-      return void 0;
-    }
-    const out = {};
-    if (max != null) {
-      out.max_inner_rounds = max;
-    }
-    if (refine) {
-      out.refine_after_route = true;
-    }
-    return Object.keys(out).length ? out : void 0;
-  }
-  var supabaseAuth3 = SupabaseAuth.getInstance();
-  async function ensureAuthenticated() {
-    const isAuthenticated = await supabaseAuth3.isAuthenticated();
-    if (!isAuthenticated) {
-      throw new Error("Authentication required: Please sign in to use voice features");
-    }
-  }
-  async function assistRemote(system, messages, options, tools = [], generationConfig, assistLoop) {
-    return postSigned("assist", {
-      system,
-      messages,
-      options,
-      tools,
-      ...generationConfig ? { generation_config: generationConfig } : {},
-      ...assistLoop?.max_inner_rounds != null ? { max_inner_rounds: assistLoop.max_inner_rounds } : {},
-      ...assistLoop?.refine_after_route ? { refine_after_route: true } : {}
-    });
-  }
-  async function transcribeAudio(audioBlob, options = {}) {
-    await ensureAuthenticated();
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const base64Audio = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
-    const result = await postSigned("transcribe", {
-      audio: base64Audio,
-      mimeType: audioBlob.type,
-      ...options.language ? { language: options.language } : {},
-      ...options.captureMeta ? { captureMeta: options.captureMeta } : {},
-      ...options.source != null ? { source: options.source } : {},
-      ...options.utteranceSeq != null ? { utteranceSeq: options.utteranceSeq } : {}
-    });
-    return result;
-  }
-  async function textToSpeech(text2) {
-    await ensureAuthenticated();
-    const result = await postSigned("tts", { text: text2 });
-    const audioData = atob(result.audio);
-    const arrayBuffer = new Uint8Array(audioData.length);
-    for (let i2 = 0; i2 < audioData.length; i2++) {
-      arrayBuffer[i2] = audioData.charCodeAt(i2);
-    }
-    return new Blob([arrayBuffer], { type: result.mimeType || "audio/mpeg" });
-  }
+  // src/assistant/graph.ts
+  init_proxyClient();
+  init_assistantLogger();
 
   // src/utils/routingUtils.ts
   var CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
@@ -54819,6 +58654,28 @@ ${toHex2(hashedRequest)}`;
     ) || KNOWN_SITES_HINT_RE.test(input);
     return hasAction && hasObjectOrTarget;
   }
+  var PAGE_CONTEXT_REFERENCE_RE = /\b(?:this|that|current|active)\s+(?:page|site|website|article|tab)\b|\bon\s+this\s+(?:page|site|website|article|tab)\b/i;
+  var PAGE_CONTEXT_DEICTIC_RE = /^(?:show|tell|give|find|what|which|who|when|where|why|how|does|do|is|are|based\s+on)\b.*\b(?:of|on|from|about)\s+this\b/i;
+  function looksLikePageContextRequest(text2) {
+    const input = String(text2 || "").trim();
+    if (!input) {
+      return false;
+    }
+    return PAGE_CONTEXT_REFERENCE_RE.test(input) || PAGE_CONTEXT_DEICTIC_RE.test(input);
+  }
+  function shouldAskAssistRouter(text2) {
+    const input = String(text2 || "").trim();
+    if (!input) {
+      return false;
+    }
+    if (looksLikeNewActionCommand(input)) {
+      return true;
+    }
+    return looksLikePageContextRequest(input);
+  }
+
+  // src/assistant/graph.ts
+  init_awsSignedFetch();
 
   // src/prompts/chatPrompt.ts
   function currentDateString() {
@@ -54928,18 +58785,22 @@ user_intent \u2014 the user's underlying goal:
 Use "other" only when genuinely uncertain. Output ONLY the JSON object.`;
   }
 
+  // src/assistant/graph.ts
+  init_subscription();
+
   // src/prompts/hiddenInstructions.ts
-  var SUMMARIZE_INSTRUCTION = `The content above is from a webpage that the user wants summarized. Please provide a clear, concise summary that:
-1. Captures the main topic and key points
-2. Uses bullet points for easy reading
-3. Keeps it to 3-5 paragraphs max
-4. Highlights any important facts, dates, or conclusions
-Do NOT mention that you received page content or reference this instruction. Just provide the summary naturally.`;
+  var PAGE_CONTEXT_INSTRUCTION = `The content above is from the user's active webpage. The hidden page payload is JSON with title, url, userQuery, and content fields.
+
+If the user's query is empty or is an explicit summary request, explicit summary requests summarize the page clearly and concisely.
+
+If the user's query is a question or evaluation request, answer only from the page content. If the page does not contain the answer, say that the page does not contain the answer instead of guessing.
+
+Do not mention hidden payloads, extracted content, or this instruction. Respond naturally.`;
   var TOOL_OUTPUT_INSTRUCTION = "The command context above contains the result of a browser action. Synthesize this data into a friendly, conversational response that directly addresses the user's original request. If the data is JSON, parse and present it beautifully. Do NOT echo raw trace data or reference this instruction.";
   var DEFAULT_INSTRUCTION = "Please respond to the user's message naturally and helpfully. IMPORTANT: NEVER claim to have performed a browser action (closing tabs, bookmarks, etc.) if there is no internal command result confirming it in the context above. Do NOT reference this instruction.";
   function buildHiddenInstruction(ctx) {
-    if (ctx.hasSummarizeRequest) {
-      return SUMMARIZE_INSTRUCTION;
+    if (ctx.hasPageContextRequest) {
+      return PAGE_CONTEXT_INSTRUCTION;
     }
     if (ctx.hasToolOutput) {
       return TOOL_OUTPUT_INSTRUCTION;
@@ -54980,11 +58841,24 @@ Do NOT mention that you received page content or reference this instruction. Jus
       "Prefer open_url for explicit URLs/domains and web_search for plain-language queries.",
       "For follow-ups like 'open it' after search results, prefer open_search_result with index (default 1).",
       "If the user asks to inspect previous search results, use get_recent_search_results.",
-      "For ambiguous destructive/container targets, prefer safe commands like resolve_ambiguity instead of guessing."
+      "For ambiguous destructive/container targets, prefer safe commands like resolve_ambiguity instead of guessing.",
+      "PAGE CONTEXT:",
+      "- Use summarize_page for explicit summaries of the active page, such as 'summarize this page' or 'summarize this tab'.",
+      "- Use summarize_page for active-page questions grounded in what is currently open, such as 'show me the price of this', 'what does this page say about refunds?', or 'based on this page, is this legit?'.",
+      "- For summarize_page, put the user's page-grounded question or task into query. Only use index when the user explicitly points to a numbered tab. If index is omitted, the current active tab will be used.",
+      "RESEARCH BRIEF (multi-tab):",
+      "- Use build_research_brief when the user wants an outline, themes, and sourced quotes across multiple open tabs (tab group, named tabs, or window), not a single-page summary.",
+      "- Args: topic (optional if infer_topic_from_content), infer_topic_from_content, scope (tab-group|window|tabs), name (tab group), tab_queries (title/URL keywords), tab_indices (1-based), outline_hint, max_tabs.",
+      "- Set infer_topic_from_content when the user did not give a substantive topic or only named a short tab group label.",
+      "- When the user says except/skip tabs: set exclude_indices (1-based positions within the group/window list) and/or exclude_queries (title/URL substrings, min 3 chars).",
+      "- Do NOT use repeated summarize_page calls for multi-tab research; use build_research_brief once.",
+      "- Examples: 'consolidate findings from this tab group', 'build a report from tab group Sports', 'summarize tabs in tab group sports', 'give me a summary of my tab group'.",
+      "- Single-page only: 'summarize this page' or 'summarize tab 3' \u2192 summarize_page, not build_research_brief."
     ].join(" ");
   }
 
   // src/assistant/agentGraphSupport.ts
+  init_assistantLogger();
   function splitInternalArgs(args) {
     const commandArgs = {};
     let chainNotice = null;
@@ -55024,6 +58898,7 @@ Do NOT mention that you received page content or reference this instruction. Jus
   }
 
   // src/assistant/agentSteps.ts
+  init_assistantLogger();
   function createCommandToolAgent(command, deps) {
     const { assistantWindow: assistantWindow2, messageId } = deps;
     return async (state) => {
@@ -55105,26 +58980,8 @@ ${result.message}` : result.message;
     };
   }
 
-  // src/utils/quotaUserMessage.ts
-  function formatQuotaExceededMessage(raw) {
-    const s2 = String(raw || "").trim().toLowerCase();
-    if (!s2) {
-      return "You have reached your AI usage limit for this plan.";
-    }
-    if (s2.includes("daily_limit") || s2 === "daily_limit_exceeded") {
-      return "You have reached your daily AI usage limit. Your allocation resets every day.";
-    }
-    if (s2.includes("monthly_limit") || s2 === "monthly_limit_exceeded") {
-      return "You have reached your monthly AI usage limit. Your allocation resets at the start of your next billing cycle.";
-    }
-    if (s2.includes("quota_exceeded") || s2.includes("quota exceeded")) {
-      return "You have reached your AI usage limit for this plan.";
-    }
-    if (/^[a-z0-9_]+$/.test(String(raw || "").trim())) {
-      return "You have reached your AI usage limit for this plan.";
-    }
-    return String(raw || "").trim();
-  }
+  // src/assistant/graph.ts
+  init_quotaUserMessage();
 
   // src/utils/oasisCapabilitiesFaq.ts
   var OASIS_CAPABILITIES_REPLY = `I'm Oasis AI, your assistant in this browser. Here's what I focus on:
@@ -55162,247 +59019,8 @@ What would you like to try first?`;
     return OASIS_CAPABILITIES_REPLY;
   }
 
-  // src/assistant/messageUtils.ts
-  function isRecord(value) {
-    return !!value && typeof value === "object";
-  }
-  function asToolResultPayload(value) {
-    if (!isRecord(value)) {
-      return null;
-    }
-    const kind = value.kind;
-    const commandName = value.commandName;
-    const message = value.message;
-    if (kind !== "tool_result") {
-      return null;
-    }
-    if (typeof commandName !== "string" || !commandName.trim()) {
-      return null;
-    }
-    if (typeof message !== "string") {
-      return null;
-    }
-    return {
-      kind,
-      commandName,
-      message
-    };
-  }
-  function getToolResultPayload(message) {
-    if (!message) {
-      return null;
-    }
-    const rawKwargs = message.additional_kwargs;
-    if (!isRecord(rawKwargs)) {
-      return null;
-    }
-    return asToolResultPayload(rawKwargs.oasisToolResult);
-  }
-  function msgText(m3) {
-    if (!m3) return "";
-    const toolResult = getToolResultPayload(m3);
-    if (toolResult) {
-      return toolResult.message;
-    }
-    const c3 = m3.content;
-    if (typeof c3 === "string") return c3;
-    if (Array.isArray(c3)) {
-      return c3.map(
-        (v6) => typeof v6 === "string" ? v6 : typeof v6 === "object" && v6 && "text" in v6 ? String(v6.text || "") : ""
-      ).join("");
-    }
-    return String(c3 ?? "");
-  }
-  function toWire(messages) {
-    return messages.map((m3) => {
-      const role = m3._getType() === "human" ? "user" : "model";
-      const toolResult = getToolResultPayload(m3);
-      if (toolResult) {
-        return {
-          role,
-          content: `Internal command result
-Command: ${toolResult.commandName}
-Result: ${toolResult.message}`
-        };
-      }
-      return { role, content: msgText(m3) };
-    });
-  }
-  function extractChatContent(response) {
-    if (typeof response === "string") {
-      return response;
-    }
-    if (response && typeof response === "object" && "content" in response) {
-      return String(response.content ?? "");
-    }
-    return "";
-  }
-  var VALID_COMMAND_TYPES = /* @__PURE__ */ new Set([
-    "info_retrieval",
-    "navigation",
-    "organization",
-    "content_transform",
-    "content_create",
-    "search",
-    "automation",
-    "system",
-    "help",
-    "other"
-  ]);
-  var VALID_USER_INTENTS = /* @__PURE__ */ new Set([
-    "learning",
-    "research",
-    "work",
-    "dev",
-    "marketing",
-    "shopping",
-    "personal",
-    "entertainment",
-    "meta",
-    "other"
-  ]);
-  function extractTokenCountsFromUsageMetadata(usage) {
-    let inputTokens = null;
-    let outputTokens = null;
-    if (!isRecord(usage)) {
-      return { input_tokens: null, output_tokens: null };
-    }
-    if (typeof usage.prompt_token_count === "number") {
-      inputTokens = usage.prompt_token_count;
-    } else if (typeof usage.promptTokenCount === "number") {
-      inputTokens = usage.promptTokenCount;
-    }
-    if (typeof usage.candidates_token_count === "number") {
-      outputTokens = usage.candidates_token_count;
-    } else if (typeof usage.candidatesTokenCount === "number") {
-      outputTokens = usage.candidatesTokenCount;
-    }
-    return { input_tokens: inputTokens, output_tokens: outputTokens };
-  }
-  function extractTokenCountsFromAssistPayload(payload) {
-    if (!isRecord(payload)) {
-      return { input_tokens: null, output_tokens: null };
-    }
-    return extractTokenCountsFromUsageMetadata(payload.usage_metadata);
-  }
-  function parseChatEnvelope(response) {
-    const defaultMeta = {
-      command_type: "other",
-      user_intent: "other",
-      input_tokens: null,
-      output_tokens: null
-    };
-    const tokenCounts = extractTokenCountsFromAssistPayload(response);
-    const tokenMeta = {
-      input_tokens: tokenCounts.input_tokens,
-      output_tokens: tokenCounts.output_tokens
-    };
-    if (!isRecord(response)) {
-      return {
-        text: extractChatContent(response),
-        meta: { ...defaultMeta, ...tokenMeta }
-      };
-    }
-    const contentField = response.content;
-    if (isRecord(contentField)) {
-      return extractFromParsed(contentField, tokenMeta, defaultMeta);
-    }
-    if (typeof contentField !== "string" || !contentField.trim()) {
-      return {
-        text: extractChatContent(response),
-        meta: { ...defaultMeta, ...tokenMeta }
-      };
-    }
-    let jsonStr = contentField.trim();
-    const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-    if (fenceMatch) {
-      jsonStr = fenceMatch[1].trim();
-    }
-    const direct = tryJsonParse(jsonStr);
-    if (direct !== null) {
-      return extractFromParsed(direct, tokenMeta, defaultMeta);
-    }
-    const repaired = jsonStr.replace(/\r\n/g, "\\n").replace(/\r/g, "\\n").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
-    const fromRepair = tryJsonParse(repaired);
-    if (fromRepair !== null) {
-      return extractFromParsed(fromRepair, tokenMeta, defaultMeta);
-    }
-    const regexResult = extractViaRegex(jsonStr, tokenMeta, defaultMeta);
-    if (regexResult !== null) {
-      return regexResult;
-    }
-    return {
-      text: jsonStr || contentField,
-      meta: { ...defaultMeta, ...tokenMeta }
-    };
-  }
-  function tryJsonParse(str) {
-    try {
-      return JSON.parse(str);
-    } catch {
-      return null;
-    }
-  }
-  function extractFromParsed(parsed, tokenMeta, defaultMeta) {
-    if (!isRecord(parsed) || typeof parsed.response !== "string") {
-      return {
-        text: typeof parsed === "string" ? parsed : "",
-        meta: { ...defaultMeta, ...tokenMeta }
-      };
-    }
-    const commandType = VALID_COMMAND_TYPES.has(
-      String(parsed.command_type ?? "")
-    ) ? parsed.command_type : "other";
-    const userIntent = VALID_USER_INTENTS.has(
-      String(parsed.user_intent ?? "")
-    ) ? parsed.user_intent : "other";
-    return {
-      text: parsed.response,
-      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
-    };
-  }
-  function extractViaRegex(str, tokenMeta, defaultMeta) {
-    const responseMatch = str.match(
-      /"response"\s*:\s*"([\s\S]*?)"\s*,\s*"command_type"/
-    );
-    if (!responseMatch) {
-      return null;
-    }
-    const responseText = responseMatch[1].replace(/\\n/g, "\n").replace(/\\t/g, "	").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-    const cmdMatch = str.match(/"command_type"\s*:\s*"([^"]+)"/);
-    const intentMatch = str.match(/"user_intent"\s*:\s*"([^"]+)"/);
-    const commandType = cmdMatch && VALID_COMMAND_TYPES.has(cmdMatch[1]) ? cmdMatch[1] : "other";
-    const userIntent = intentMatch && VALID_USER_INTENTS.has(intentMatch[1]) ? intentMatch[1] : "other";
-    return {
-      text: responseText || str,
-      meta: { command_type: commandType, user_intent: userIntent, ...tokenMeta }
-    };
-  }
-  function stripLeadingEchoedPayload(value, payloads) {
-    let text2 = String(value || "").trim();
-    if (!text2 || payloads.length === 0) {
-      return text2;
-    }
-    for (const payload of payloads) {
-      const candidate = String(payload || "").trim();
-      if (!candidate) {
-        continue;
-      }
-      if (text2.startsWith(candidate)) {
-        if (text2.length === candidate.length) {
-          continue;
-        }
-        text2 = text2.slice(candidate.length).replace(/^[\s:.,;!-]+/, "").trim();
-        break;
-      }
-    }
-    return text2;
-  }
-  function hasMessages(value) {
-    return !!value && typeof value === "object" && Array.isArray(value.messages);
-  }
-
   // src/assistant/extractLatestActionableText.ts
+  init_messageUtils();
   var ACTIONABLE_ENTITY_PATTERN = /(tab\s*group|group|tabs?|bookmark|folder|window|search|memory)/i;
   var ACTIONABLE_VERB_PATTERN = /(delete|remove|create|make|new|add|save|move|put|list|open|close|rename|show|split|find|summarize)/i;
   function extractLatestActionableText(messages) {
@@ -55475,6 +59093,9 @@ Result: ${toolResult.message}`
     const optMatch = CLARIFY_OPTION_RE.exec(confirmationText.trim());
     if (optMatch) {
       const idx = parseInt(optMatch[1] || optMatch[2], 10) - 1;
+      if (idx === pendingClarification.options.length) {
+        return { kind: "cancel" };
+      }
       const option = pendingClarification.options[idx];
       if (option) {
         return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
@@ -55486,13 +59107,37 @@ Result: ${toolResult.message}`
         return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
       }
     }
-    if (looksLikeNewActionCommand(commandText)) {
-      return { kind: "clear" };
+    const briefOptions = pendingClarification.options.filter(
+      (o2) => /research\s+brief/i.test(o2.label)
+    );
+    if (CONFIRM_RE.test(confirmationText.trim())) {
+      if (briefOptions.length === 1) {
+        return {
+          kind: "resolved",
+          resolvedPrompt: briefOptions[0].resolvedPrompt
+        };
+      }
+      const second2 = pendingClarification.options[1];
+      if (second2 && /research\s+brief/i.test(second2.label)) {
+        return { kind: "resolved", resolvedPrompt: second2.resolvedPrompt };
+      }
     }
-    return { kind: "cancel" };
+    const minFuzzyLen = 8;
+    if (lower.length >= minFuzzyLen) {
+      for (const option of pendingClarification.options) {
+        const labelLower = option.label.toLowerCase();
+        if (labelLower.includes(lower) || lower.includes(labelLower)) {
+          return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+        }
+      }
+    }
+    return { kind: "clear" };
   }
 
   // src/assistant/clarificationClassifier.ts
+  init_proxyClient();
+  init_assistantLogger();
+  init_messageUtils();
   var CLARIFICATION_SYSTEM_PROMPT = [
     "You are a disambiguation classifier for a browser assistant.",
     "Given the user's latest message and conversation context, decide whether the request is clear enough to act on immediately, or whether it needs clarification.",
@@ -55500,7 +59145,7 @@ Result: ${toolResult.message}`
     "If the request is CLEAR (single unambiguous action, specific enough to execute), respond:",
     '{"need_clarification": false}',
     "",
-    "If the request is AMBIGUOUS (multiple plausible interpretations, missing critical details, or could lead to unintended results), respond with exactly 2-3 candidate interpretations:",
+    "If the request is AMBIGUOUS (multiple materially different interpretations, missing critical details, or could lead to unintended results), respond with exactly 2 candidate interpretations:",
     '{"need_clarification": true, "options": [{"id": "opt_1", "label": "<short summary>", "resolvedPrompt": "<fully self-contained reformulation>"},  ...]}',
     "",
     "Rules:",
@@ -55509,6 +59154,7 @@ Result: ${toolResult.message}`
     "- Do NOT clarify trivial things; only clarify when there is genuine ambiguity about WHAT the user wants done.",
     "- Simple greetings, questions, or clearly specified commands should always return need_clarification: false.",
     "- Common commands (close tab, search X, open Y) are unambiguous \u2014 do NOT clarify those.",
+    "- Requests that clearly ask for a research brief from a tab group or window are unambiguous \u2014 return need_clarification: false.",
     "- Only return JSON; no prose before or after."
   ].join("\n");
   var CLARIFICATION_GENERATION_CONFIG = {
@@ -55531,7 +59177,7 @@ Result: ${toolResult.message}`
             },
             required: ["id", "label", "resolvedPrompt"]
           },
-          description: "2-3 candidate interpretations when need_clarification is true."
+          description: "2 candidate interpretations when need_clarification is true."
         }
       },
       required: ["need_clarification"]
@@ -55539,6 +59185,9 @@ Result: ${toolResult.message}`
   };
   async function classifyClarificationNeed(params) {
     const { messages, userText } = params;
+    if (isObviousResearchBriefRequest(userText)) {
+      return { needsClarification: false };
+    }
     if (userText.split(/\s+/).length <= 3) {
       return { needsClarification: false };
     }
@@ -55565,7 +59214,7 @@ Result: ${toolResult.message}`
       if (!Array.isArray(options) || options.length < 2) {
         return { needsClarification: false };
       }
-      const validOptions = options.slice(0, 3).filter(
+      const validOptions = options.slice(0, 2).filter(
         (opt) => typeof opt.id === "string" && typeof opt.label === "string" && typeof opt.resolvedPrompt === "string"
       ).map((opt) => ({
         id: opt.id,
@@ -55585,6 +59234,9 @@ Result: ${toolResult.message}`
       return { needsClarification: false };
     }
   }
+
+  // src/assistant/graph.ts
+  init_researchBriefResume();
 
   // src/assistant/commandChain.ts
   var CHAIN_VERBS = [
@@ -55694,6 +59346,9 @@ Result: ${toolResult.message}`
     return looksLikeNewActionCommand(commandText);
   }
 
+  // src/assistant/supervisorAssist.ts
+  init_proxyClient();
+
   // src/services/assistEndpointState.ts
   var ASSIST_UNSUPPORTED_RETRY_MS = 6e4;
   var endpointStates = /* @__PURE__ */ new Map();
@@ -55732,6 +59387,11 @@ Result: ${toolResult.message}`
   function getAssistCapability(endpointKey) {
     return readEntry(endpointKey).capability;
   }
+
+  // src/assistant/supervisorAssist.ts
+  init_assistantLogger();
+  init_intentParser();
+  init_messageUtils();
 
   // src/assistant/plannedActions.ts
   var PLAN_PREFIX = "__oasis_plan__:";
@@ -55794,6 +59454,9 @@ Result: ${toolResult.message}`
   }
 
   // src/assistant/supervisorAssist.ts
+  init_awsSignedFetch();
+  init_subscription();
+  init_quotaUserMessage();
   var PLAN_TOOL_NAME = "route_action_plan";
   var LIST_FAMILY_TOOLS = /* @__PURE__ */ new Set([
     "list_tabs",
@@ -55963,7 +59626,7 @@ Result: ${toolResult.message}`
       maxPlanActions,
       railroadMemoryBlock = ""
     } = params;
-    const shouldTryAssistRouting = commandQueueLength <= 1 && looksLikeNewActionCommand(activeCommandText);
+    const shouldTryAssistRouting = commandQueueLength <= 1 && shouldAskAssistRouter(activeCommandText);
     if (!shouldTryAssistRouting) {
       return { kind: "none" };
     }
@@ -56084,6 +59747,7 @@ Result: ${toolResult.message}`
   }
 
   // src/assistant/graph.ts
+  init_messageUtils();
   var CHAT_GENERATION_CONFIG = {
     responseMimeType: "application/json",
     responseJsonSchema: {
@@ -56129,6 +59793,13 @@ Result: ${toolResult.message}`
       required: ["response", "command_type", "user_intent"]
     }
   };
+  function tryConsumeResearchBriefResumeFromGate(resolvedPrompt) {
+    const optionId = parseResearchBriefResumePrompt(resolvedPrompt);
+    if (!optionId) {
+      return null;
+    }
+    return consumeResearchBriefResume(optionId);
+  }
   function buildAssistantGraph(commands2, assistantWindow2, messageId, assistToolDefs = [], options) {
     const railroadMemoryBlock = String(options?.railroadMemoryBlock || "");
     const toolAgents = {};
@@ -56161,7 +59832,7 @@ Result: ${toolResult.message}`
       const lastMsgText = msgText(lastMsg);
       const toolPayload = getToolResultPayload(lastMsg);
       const hasToolOutput = Boolean(toolPayload);
-      const hasSummarizeRequest = lastMsgText.includes("__SUMMARIZE_REQUEST__");
+      const includesPageContextRequest = hasPageContextRequest(lastMsgText);
       const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
       if (capabilitiesReply) {
         return {
@@ -56170,8 +59841,18 @@ Result: ${toolResult.message}`
           commandQueue: []
         };
       }
+      if (toolPayload?.commandName === "build_research_brief") {
+        const markdown = displayMarkdownFromResearchBriefToolMessage(
+          toolPayload.message
+        );
+        return {
+          messages: [new AIMessage(markdown || "Research brief is ready.")],
+          lastWorker: "chat",
+          commandQueue: []
+        };
+      }
       const hiddenInstruction = buildHiddenInstruction({
-        hasSummarizeRequest,
+        hasPageContextRequest: includesPageContextRequest,
         hasToolOutput
       });
       const messagesWithPrompt = [
@@ -56288,7 +59969,17 @@ Result: ${toolResult.message}`
         commandText
       });
       if (clarificationGate.kind === "resolved") {
+        const resumeArgs = tryConsumeResearchBriefResumeFromGate(
+          clarificationGate.resolvedPrompt
+        );
         clearPendingClarification();
+        if (resumeArgs) {
+          return {
+            next: "build_research_brief",
+            args: resumeArgs,
+            commandQueue: []
+          };
+        }
         return {
           next: "supervisor",
           args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },
@@ -56323,7 +60014,8 @@ Result: ${toolResult.message}`
       const effectiveCommandLine = clarifiedPrompt || commandLine;
       const topLevelActionText = effectiveCommandLine.toLowerCase();
       const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
-      if (!hasQueuedCommands && effectiveCommandLine && !clarifiedPrompt && topLevelActionLike) {
+      const topLevelPageContextRequest = looksLikePageContextRequest(effectiveCommandLine);
+      if (!hasQueuedCommands && effectiveCommandLine && !clarifiedPrompt && topLevelActionLike && !topLevelPageContextRequest) {
         const clarification = await classifyClarificationNeed({
           messages: state.messages,
           userText: effectiveCommandLine
@@ -64063,6 +67755,9 @@ Answer:`;
   }
 
   // src/services/railroadMemory.ts
+  init_proxyClient();
+  init_assistantLogger();
+  init_messageUtils();
   var sessionCache = /* @__PURE__ */ new Map();
   var extractionTurnCounts = /* @__PURE__ */ new Map();
   var RAILROAD_EXTRACTION_GEN_CONFIG = {
@@ -64254,6 +67949,9 @@ ${a2}`.slice(0, 12e4);
   }
 
   // src/assistant/session.ts
+  init_contracts();
+  init_assistantLogger();
+  init_messageUtils();
   function createFallbackSessionStore() {
     let messages = [];
     const CAP = 24;
@@ -64424,6 +68122,8 @@ ${a2}`.slice(0, 12e4);
   }
 
   // src/assistant/stream.ts
+  init_assistantLogger();
+  init_messageUtils();
   function extractMessageText(msg) {
     if (typeof msg?.content === "string") {
       return msg.content;
@@ -64642,7 +68342,14 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
 
 `;
 
+  // src/assistant.ts
+  init_supabase();
+  init_subscription();
+  init_firefoxFacade();
+
   // src/services/voiceInput.ts
+  init_proxyClient();
+  init_assistantLogger();
   function eventBlob(event) {
     const data = event.data;
     return data instanceof Blob ? data : null;
@@ -64766,6 +68473,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     }
   };
   var voiceInput_default = new VoiceInputService();
+
+  // src/services/voiceAgent.ts
+  init_proxyClient();
+  init_assistantLogger();
 
   // src/utils/voiceVadDebounce.ts
   function advanceVadSpeechDebounce(streak, speechFrame, debounceFrames) {
@@ -66111,6 +69822,12 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   var voiceAgent_default = voiceAgent;
 
   // src/assistant.ts
+  init_proxyClient();
+  init_env();
+  init_telemetryConsent();
+  init_contracts();
+  init_researchBriefProgress();
+  init_researchBriefDigestCache();
   var supabaseAuth4 = SupabaseAuth.getInstance();
   var assistantWindow = window;
   assistantWindow.supabaseAuth = supabaseAuth4;
@@ -66285,6 +70002,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
     return combined;
   }
   assistantWindow.runAssistantStream = runAssistantStream;
+  assistantWindow.oasisAbortResearchBrief = () => {
+    abortResearchBriefRun();
+  };
+  assistantWindow.oasisStoreResearchBriefRun = storeResearchBriefRun;
   voiceAgent_default.setRunAssistant(runAssistantStream);
   assistantWindow.voiceAgent = voiceAgent_default;
 })();

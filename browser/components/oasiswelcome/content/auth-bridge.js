@@ -25,7 +25,12 @@
   const LOGIN_USERNAME = "oasis_assistant_session";
   const OAUTH_CALLBACK_KEY = "oasis_auth_callback";
   const OAUTH_ERROR_KEY = "oasis_auth_error";
-  const OAUTH_HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
+  const OasisOAuthHandoff =
+    typeof ChromeUtils !== "undefined"
+      ? ChromeUtils.importESModule(
+          "resource:///modules/OasisOAuthHandoff.sys.mjs"
+        )
+      : null;
   let bundleLoadPromise = null;
   let loggedStorageUnavailable = false;
 
@@ -309,7 +314,26 @@
   function readStoredOAuthValue(key) {
     try {
       const value = localStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
+      if (!value) {
+        return null;
+      }
+      const parsed = JSON.parse(value);
+      if (key === OAUTH_CALLBACK_KEY && parsed) {
+        console.warn(
+          "Oasis Welcome: localStorage OAuth handoff is deprecated; use cookie handoff"
+        );
+        const check = OasisOAuthHandoff?.validateHandoffPayload(parsed, {
+          expectedTarget: "onboarding",
+        });
+        if (check && !check.ok) {
+          console.warn(
+            "Oasis Welcome: Ignoring expired localStorage OAuth handoff:",
+            check.error
+          );
+          return null;
+        }
+      }
+      return parsed;
     } catch (e) {
       if (isStorageUnavailableError(e)) {
         if (!loggedStorageUnavailable) {
@@ -337,39 +361,21 @@
   }
 
   function readCookieOAuthValue(target, allowFallbackTarget = false) {
-    if (!Services?.cookies) {
+    if (!Services?.cookies || !OasisOAuthHandoff) {
       return null;
     }
 
     try {
-      let latest = null;
-      let latestFallback = null;
-      for (const cookie of Services.cookies.cookies) {
-        if (cookie.name !== OAUTH_HANDOFF_COOKIE_NAME) {
-          continue;
-        }
-        try {
-          const payload = JSON.parse(decodeURIComponent(cookie.value));
-          const timestamp = payload?.timestamp || 0;
-          const matchesTarget = !payload?.target || payload.target === target;
-          if (!matchesTarget) {
-            if (
-              allowFallbackTarget &&
-              (!latestFallback ||
-                timestamp > (latestFallback.payload?.timestamp || 0))
-            ) {
-              latestFallback = { cookie, payload };
-            }
-            continue;
-          }
-          if (!latest || timestamp > (latest.payload?.timestamp || 0)) {
-            latest = { cookie, payload };
-          }
-        } catch (e) {
-          console.error("Oasis Welcome: Failed to parse OAuth cookie:", e);
-        }
-      }
-      return latest || latestFallback;
+      const callbackBaseUrl =
+        window.supabaseAuth?.getOAuthCallbackBaseUrl?.() || null;
+      const expectedFlowId =
+        window.supabaseAuth?.getActiveOAuthFlowId?.() || undefined;
+      return OasisOAuthHandoff.selectHandoffCookie(Services.cookies, {
+        expectedTarget: target,
+        allowFallbackTarget,
+        callbackBaseUrl,
+        expectedFlowId,
+      });
     } catch (e) {
       console.error("Oasis Welcome: Failed to read OAuth cookies:", e);
     }
@@ -377,20 +383,7 @@
   }
 
   function clearCookieOAuthValue(cookie) {
-    if (!Services?.cookies || !cookie) {
-      return;
-    }
-
-    try {
-      Services.cookies.remove(
-        cookie.host,
-        cookie.name,
-        cookie.path,
-        cookie.originAttributes || {}
-      );
-    } catch (e) {
-      console.error("Oasis Welcome: Failed to clear OAuth cookie:", e);
-    }
+    OasisOAuthHandoff?.clearHandoffCookie(Services?.cookies, cookie);
   }
 
   function extractOAuthUrl(message) {
@@ -481,15 +474,10 @@
   // This ensures window.oasisWelcomeAuth is defined even if Supabase isn't ready yet
   window.oasisWelcomeAuth = {
     async setOAuthCallbackBaseUrl(url) {
-      const normalized =
-        typeof url === "string" && /^https?:\/\//i.test(url)
-          ? url.replace(/\/+$/, "")
-          : null;
-      window.__oasisOAuthCallbackBaseUrl = normalized;
       if (window.supabaseAuth?.setOAuthCallbackBaseUrl) {
-        return window.supabaseAuth.setOAuthCallbackBaseUrl(normalized);
+        return window.supabaseAuth.setOAuthCallbackBaseUrl(url);
       }
-      return normalized || "https://kahana.co";
+      return "https://kahana.co";
     },
 
     async getOAuthCallbackBaseUrl() {

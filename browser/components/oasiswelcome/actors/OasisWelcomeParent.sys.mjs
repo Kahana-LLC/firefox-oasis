@@ -3,6 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { navigatePostAuthLanding } from "resource:///modules/oasiswelcome/OasisPostAuthLanding.sys.mjs";
+import {
+  clearHandoffCookie,
+  selectHandoffCookie,
+} from "resource:///modules/OasisOAuthHandoff.sys.mjs";
 
 const DID_SEE_OASIS_WELCOME_PREF = "browser.oasis.welcome.didSee";
 const DID_COMPLETE_OASIS_ONBOARDING_PREF = "browser.oasis.welcome.completed";
@@ -10,8 +14,6 @@ const PREF_POST_AUTH_OPEN_ASSISTANT = "browser.oasis.postAuthOpenAssistant";
 const LOGIN_HOSTNAME = "https://kahana.co";
 const LOGIN_REALM = "Oasis Assistant";
 const LOGIN_USERNAME = "oasis_assistant_session";
-const OAUTH_HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
-
 const lazy = {};
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
@@ -87,51 +89,14 @@ export class OasisWelcomeParent extends JSWindowActorParent {
     };
 
     try {
-      let latest = null;
-      let latestFallback = null;
-      for (const cookie of Services.cookies.cookies) {
-        if (cookie.name !== OAUTH_HANDOFF_COOKIE_NAME) {
-          continue;
-        }
-
-        try {
-          const payload = JSON.parse(decodeURIComponent(cookie.value));
-          const timestamp = payload?.timestamp || 0;
-          const matchesTarget = !payload?.target || payload.target === target;
-
-          if (!matchesTarget) {
-            if (
-              allowFallbackTarget &&
-              (!latestFallback ||
-                timestamp > (latestFallback.payload?.timestamp || 0))
-            ) {
-              latestFallback = { cookie, payload };
-            }
-            continue;
-          }
-
-          if (!latest || timestamp > (latest.payload?.timestamp || 0)) {
-            latest = { cookie, payload };
-          }
-        } catch (e) {
-          lazy.log.error("Failed to parse OAuth handoff cookie:", e);
-        }
-      }
-
-      const selected = latest || latestFallback;
+      const selected = selectHandoffCookie(Services.cookies, {
+        expectedTarget: target,
+        allowFallbackTarget,
+      });
       if (selected?.payload) {
         response.cookiePayload = selected.payload;
         if (consumeCookie) {
-          try {
-            Services.cookies.remove(
-              selected.cookie.host,
-              selected.cookie.name,
-              selected.cookie.path,
-              selected.cookie.originAttributes || {}
-            );
-          } catch (e) {
-            lazy.log.error("Failed to clear OAuth handoff cookie:", e);
-          }
+          clearHandoffCookie(Services.cookies, selected.cookie);
         }
       }
     } catch (e) {

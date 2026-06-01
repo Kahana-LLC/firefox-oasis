@@ -1,5 +1,13 @@
 import { h, Fragment } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import {
+  copyMarkdownToClipboard,
+  isResearchBriefMarkdown,
+  textForClipboard,
+} from '../utils/copyToClipboard';
+import { parseResearchBriefToolMessage } from '../../../build/src/utils/researchBriefRequest.js';
+import type { MarkdownSection } from '../utils/markdownSectionSplit';
+import { ResearchBriefView } from './ResearchBriefView';
 import { Feedback } from './Feedback';
 import type { TrainingSubmittedPayload } from './Feedback';
 import { ActiveToolIndicator } from './ActiveToolIndicator';
@@ -77,6 +85,10 @@ export function ChatTimeline({
   onTrainingSubmitted,
   trainingFocusTick,
   trainingFocusMessageId,
+  onRegenerateBriefSection,
+  pinnedBriefId,
+  briefPinned,
+  onToggleBriefPin,
 }: {
   messages: AssistantMessage[];
   isAuthenticated: boolean;
@@ -89,9 +101,57 @@ export function ChatTimeline({
   onTrainingSubmitted?: (payload: TrainingSubmittedPayload) => void;
   trainingFocusTick?: number;
   trainingFocusMessageId?: string;
+  onRegenerateBriefSection?: (sectionId: string) => void;
+  pinnedBriefId?: string | null;
+  briefPinned?: boolean;
+  onToggleBriefPin?: (content: string) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
   const lastAiRef = useRef<HTMLDivElement | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [copyFailedMsgId, setCopyFailedMsgId] = useState<string | null>(null);
+  const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
+  const [sectionCopyFailedId, setSectionCopyFailedId] = useState<string | null>(
+    null
+  );
+
+  const handleCopy = async (messageId: string, content: string) => {
+    const ok = await copyMarkdownToClipboard(content);
+    if (ok) {
+      setCopyFailedMsgId(null);
+      setCopiedMsgId(messageId);
+      window.setTimeout(() => {
+        setCopiedMsgId(current => (current === messageId ? null : current));
+      }, 2000);
+      return;
+    }
+    setCopiedMsgId(null);
+    setCopyFailedMsgId(messageId);
+    window.setTimeout(() => {
+      setCopyFailedMsgId(current => (current === messageId ? null : current));
+    }, 2000);
+  };
+
+  const handleSectionCopy = async (section: MarkdownSection) => {
+    const ok = await copyMarkdownToClipboard(section.markdown);
+    if (ok) {
+      setSectionCopyFailedId(null);
+      setCopiedSectionId(section.id);
+      window.setTimeout(() => {
+        setCopiedSectionId(current =>
+          current === section.id ? null : current
+        );
+      }, 2000);
+      return;
+    }
+    setCopiedSectionId(null);
+    setSectionCopyFailedId(section.id);
+    window.setTimeout(() => {
+      setSectionCopyFailedId(current =>
+        current === section.id ? null : current
+      );
+    }, 2000);
+  };
 
   useEffect(() => {
     const log = logRef.current;
@@ -205,13 +265,18 @@ export function ChatTimeline({
           const isLegacyCapabilitiesBubbles =
             isCapabilitiesOverview && message.content.includes(CAPABILITIES_BLOCK_DELIMITER);
 
+          const displayContent = textForClipboard(message.content);
+          const isResearchBrief =
+            isResearchBriefMarkdown(message.content) &&
+            displayContent.length > 0;
+
           let useMarkdownHtml = Boolean(
             oasisWindow.marked &&
               oasisWindow.DOMPurify &&
               !(isCapabilitiesOverview && isLegacyCapabilitiesBubbles)
           );
           let htmlContent = '';
-          if (useMarkdownHtml) {
+          if (useMarkdownHtml && !isResearchBrief) {
             try {
               const raw = oasisWindow.marked!.parse(message.content);
               htmlContent = oasisWindow.DOMPurify!.sanitize(raw);
@@ -237,7 +302,26 @@ export function ChatTimeline({
                 data-oasis-assistant-msg={message.id}
               >
                 <div className="ai-response-container" onClick={onLinkClick}>
-                  {useMarkdownHtml && htmlContent ? (
+                  {isResearchBrief && useMarkdownHtml ? (
+                    <ResearchBriefView
+                      markdown={displayContent}
+                      onSectionCopy={section => {
+                        void handleSectionCopy(section);
+                      }}
+                      copiedSectionId={copiedSectionId}
+                      sectionCopyFailedId={sectionCopyFailedId}
+                      onRegenerateSection={onRegenerateBriefSection}
+                      pinned={
+                        parseResearchBriefToolMessage(message.content)
+                          ?.briefId === pinnedBriefId && Boolean(briefPinned)
+                      }
+                      onTogglePin={
+                        onToggleBriefPin
+                          ? () => onToggleBriefPin(message.content)
+                          : undefined
+                      }
+                    />
+                  ) : useMarkdownHtml && htmlContent ? (
                     <div
                       className={markdownBodyClass}
                       dangerouslySetInnerHTML={{ __html: htmlContent }}
@@ -308,7 +392,33 @@ export function ChatTimeline({
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div className="message-action-row">
+                  {!busy && message.content && (
+                    <button
+                      className="copy-btn"
+                      type="button"
+                      onClick={() => void handleCopy(message.id, message.content)}
+                      title={
+                        copiedMsgId === message.id
+                          ? 'Copied!'
+                          : copyFailedMsgId === message.id
+                            ? 'Copy failed'
+                            : 'Copy'
+                      }
+                      aria-label="Copy response"
+                    >
+                      {copiedMsgId === message.id ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   {!busy && message.content && onTtsClick && (
                     <button
                       className="tts-btn"

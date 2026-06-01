@@ -131,19 +131,24 @@ export async function assistRemote(
   options: string[],
   tools: AssistTool[] = [],
   generationConfig?: Record<string, unknown>,
-  assistLoop?: AssistRemoteOptions
+  assistLoop?: AssistRemoteOptions,
+  signal?: AbortSignal
 ): Promise<AssistResponse> {
-  return postSigned<AssistResponse>("assist", {
-    system,
-    messages,
-    options,
-    tools,
-    ...(generationConfig ? { generation_config: generationConfig } : {}),
-    ...(assistLoop?.max_inner_rounds != null
-      ? { max_inner_rounds: assistLoop.max_inner_rounds }
-      : {}),
-    ...(assistLoop?.refine_after_route ? { refine_after_route: true } : {}),
-  });
+  return postSigned<AssistResponse>(
+    "assist",
+    {
+      system,
+      messages,
+      options,
+      tools,
+      ...(generationConfig ? { generation_config: generationConfig } : {}),
+      ...(assistLoop?.max_inner_rounds != null
+        ? { max_inner_rounds: assistLoop.max_inner_rounds }
+        : {}),
+      ...(assistLoop?.refine_after_route ? { refine_after_route: true } : {}),
+    },
+    signal
+  );
 }
 
 export async function transcribeAudio(

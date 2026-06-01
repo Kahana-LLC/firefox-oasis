@@ -161,6 +161,27 @@ document.addEventListener(
             adoptedTabGroup.select();
           }
           break;
+        case "open-tab-group-context-menu_buildResearchBrief":
+          {
+            let { tabGroupId } = event.target.parentElement.triggerNode.dataset;
+            let tabGroup = gBrowser.getTabGroupById(tabGroupId);
+            let label = tabGroup?.label || "Untitled";
+            let prompt = `Build a research brief from tab group "${label}"`;
+            let sidebarCmd = document.getElementById(
+              "viewOasisAssistantSidebar"
+            );
+            if (sidebarCmd?.doCommand) {
+              sidebarCmd.doCommand();
+            } else if (window.SidebarController?.show) {
+              window.SidebarController.show("viewOasisAssistantSidebar");
+            }
+            window.dispatchEvent(
+              new CustomEvent("oasis-assistant-submit", {
+                detail: { prompt },
+              })
+            );
+          }
+          break;
         case "open-tab-group-context-menu_delete":
           {
             let { tabGroupId } = event.target.parentElement.triggerNode.dataset;

@@ -13,6 +13,8 @@ import { useAssistantRuntime } from './hooks/useAssistantRuntime';
 import { postOasisOverlayChromeMessage } from './utils/postOasisOverlayChrome';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
+import { useResearchBriefProgress } from './hooks/useResearchBriefProgress';
+import { OASIS_EVENT_ASSISTANT_SUBMIT } from '../../shared/contracts.js';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import type {
   AuthState,
@@ -27,7 +29,20 @@ import './App.css';
 import './themes.css';
 
 import { applyAssistantThemeToDocument } from './utils/applyAssistantTheme';
-
+import { chatUserKey } from './utils/chatUserKey';
+import {
+  isResearchBriefToolMessage,
+  pinnedEntryFromToolMessage,
+} from './utils/researchBriefPersist';
+import {
+  hydrateResearchBriefCacheFromPinned,
+  toolMessageFromPinned,
+} from './utils/researchBriefRestore';
+import {
+  loadPinnedResearchBrief,
+  savePinnedResearchBrief,
+  type PinnedResearchBrief,
+} from './researchBriefPinStore';
 const oasisWindow: OasisWindow = window;
 
 const SIGNED_IN_BANNER_AUTO_DISMISS_MS = 5000;
@@ -436,6 +451,11 @@ export function App() {
   const [trainLatestComposerHint, setTrainLatestComposerHint] = useState(false);
   const [starterChipsHighlight, setStarterChipsHighlight] = useState(false);
   const [onboardingCollapseTick, setOnboardingCollapseTick] = useState(0);
+  const [restoreOffer, setRestoreOffer] = useState<PinnedResearchBrief | null>(
+    null
+  );
+  const [pinnedBriefId, setPinnedBriefId] = useState<string | null>(null);
+  const [briefPinnedFlag, setBriefPinnedFlag] = useState(false);
 
   const originalResetRef = useRef(oasisWindow.resetAssistantSession);
   const handleAuthenticated = useCallback(() => {
@@ -448,6 +468,113 @@ export function App() {
     setPendingConfirmation,
     originalResetAssistantSession: originalResetRef.current,
   });
+
+  const { briefProgressLabel } = useResearchBriefProgress();
+  const activeToolLabel =
+    briefProgressLabel || runtime.activeToolAction?.label || null;
+
+  const chatUid = auth.isAuthenticated ? chatUserKey(auth.user) : null;
+
+  useEffect(() => {
+    if (!chatUid || runtime.messages.length > 0) {
+      setRestoreOffer(null);
+      return;
+    }
+    let cancelled = false;
+    void loadPinnedResearchBrief(chatUid).then(row => {
+      if (!cancelled && row?.markdown) {
+        setRestoreOffer(row);
+        setPinnedBriefId(row.briefId);
+        setBriefPinnedFlag(Boolean(row.pinned));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatUid, runtime.messages.length]);
+
+  useEffect(() => {
+    if (!chatUid) {
+      return;
+    }
+    const lastBrief = [...runtime.messages]
+      .reverse()
+      .find(
+        message =>
+          message.role === 'ai' && isResearchBriefToolMessage(message.content)
+      );
+    if (!lastBrief) {
+      return;
+    }
+    const entry = pinnedEntryFromToolMessage(chatUid, lastBrief.content, [], false);
+    if (!entry) {
+      return;
+    }
+    setPinnedBriefId(prev => {
+      if (prev !== entry.briefId) {
+        setBriefPinnedFlag(false);
+      }
+      return entry.briefId;
+    });
+    void loadPinnedResearchBrief(chatUid).then(existing => {
+      const pinned =
+        existing?.briefId === entry.briefId ? Boolean(existing.pinned) : false;
+      const row = { ...entry, pinned };
+      void savePinnedResearchBrief(row);
+      hydrateResearchBriefCacheFromPinned(row);
+      if (pinned) {
+        setBriefPinnedFlag(true);
+      }
+    });
+  }, [chatUid, runtime.messages]);
+
+  const handleRestorePinnedBrief = useCallback(() => {
+    if (!restoreOffer) {
+      return;
+    }
+    hydrateResearchBriefCacheFromPinned(restoreOffer);
+    const content = toolMessageFromPinned(restoreOffer);
+    runtime.setMessages([
+      {
+        id: `restore-${restoreOffer.briefId}`,
+        role: 'ai',
+        content,
+      },
+    ]);
+    setPinnedBriefId(restoreOffer.briefId);
+    setBriefPinnedFlag(Boolean(restoreOffer.pinned));
+    setRestoreOffer(null);
+  }, [restoreOffer, runtime.setMessages]);
+
+  const handleToggleBriefPin = useCallback(
+    (content: string) => {
+      if (!chatUid) {
+        return;
+      }
+      const entry = pinnedEntryFromToolMessage(chatUid, content, [], true);
+      if (!entry) {
+        return;
+      }
+      const nextPinned = pinnedBriefId === entry.briefId ? !briefPinnedFlag : true;
+      setBriefPinnedFlag(nextPinned);
+      setPinnedBriefId(entry.briefId);
+      void savePinnedResearchBrief({ ...entry, pinned: nextPinned });
+    },
+    [chatUid, pinnedBriefId, briefPinnedFlag]
+  );
+
+  useEffect(() => {
+    const onSubmit = (event: Event) => {
+      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
+      if (detail?.prompt?.trim()) {
+        void runtime.send(detail.prompt.trim());
+      }
+    };
+    window.addEventListener(OASIS_EVENT_ASSISTANT_SUBMIT, onSubmit);
+    return () => {
+      window.removeEventListener(OASIS_EVENT_ASSISTANT_SUBMIT, onSubmit);
+    };
+  }, [runtime.send]);
 
   const handleUserChanged = useCallback(() => {
     setBannerVisible(true);
@@ -771,17 +898,41 @@ export function App() {
                 <Banner email={userEmail} onClose={() => setBannerVisible(false)} />
               )}
 
+              {restoreOffer ? (
+                <div className="research-brief-restore-banner" role="status">
+                  <span>Restore last research brief</span>
+                  <button type="button" onClick={handleRestorePinnedBrief}>
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    className="research-brief-restore-dismiss"
+                    onClick={() => setRestoreOffer(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
+
               <ChatTimeline
                 messages={runtime.messages}
                 isAuthenticated={auth.isAuthenticated}
                 busy={runtime.busy}
-                activeToolLabel={runtime.activeToolAction?.label || null}
+                activeToolLabel={activeToolLabel}
                 responseStreaming={runtime.responseStreaming}
                 onLinkClick={handleLinkClick}
+                onRegenerateBriefSection={sectionId => {
+                  void runtime.send(
+                    `regenerate research brief section ${sectionId}`
+                  );
+                }}
                 speakingMsgId={runtime.speakingMsgId}
                 onTtsClick={handleTtsFromTimeline}
                 trainingFocusTick={trainingFocusTick}
                 trainingFocusMessageId={trainingFocusMessageId}
+                pinnedBriefId={pinnedBriefId}
+                briefPinned={briefPinnedFlag}
+                onToggleBriefPin={handleToggleBriefPin}
               />
             </div>
           )}
@@ -790,8 +941,12 @@ export function App() {
         {view !== 'auth' && (
           <AssistantBusyBar
             busy={runtime.busy}
-            activeToolLabel={runtime.activeToolAction?.label || null}
+            activeToolLabel={activeToolLabel}
             responseStreaming={runtime.responseStreaming}
+            showBriefCancel={runtime.busy && !!briefProgressLabel}
+            onCancelBrief={() => {
+              oasisWindow.oasisAbortResearchBrief?.();
+            }}
           />
         )}
         {view !== 'auth' && (

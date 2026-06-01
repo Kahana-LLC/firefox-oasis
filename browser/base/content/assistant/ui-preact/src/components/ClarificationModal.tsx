@@ -104,8 +104,11 @@ export function ClarificationModal({
           What did you mean?
         </h3>
 
-        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#666' }}>
+        <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
           I want to make sure I understand your request correctly. Please pick the best match:
+        </p>
+        <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#888' }}>
+          Click an option or press 1 or 2 on your keyboard.
         </p>
 
         <div

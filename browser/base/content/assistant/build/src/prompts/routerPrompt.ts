@@ -71,5 +71,13 @@ export function buildAssistRouterPrompt(
     "- Use summarize_page for explicit summaries of the active page, such as 'summarize this page' or 'summarize this tab'.",
     "- Use summarize_page for active-page questions grounded in what is currently open, such as 'show me the price of this', 'what does this page say about refunds?', or 'based on this page, is this legit?'.",
     "- For summarize_page, put the user's page-grounded question or task into query. Only use index when the user explicitly points to a numbered tab. If index is omitted, the current active tab will be used.",
+    "RESEARCH BRIEF (multi-tab):",
+    "- Use build_research_brief when the user wants an outline, themes, and sourced quotes across multiple open tabs (tab group, named tabs, or window), not a single-page summary.",
+    "- Args: topic (optional if infer_topic_from_content), infer_topic_from_content, scope (tab-group|window|tabs), name (tab group), tab_queries (title/URL keywords), tab_indices (1-based), outline_hint, max_tabs.",
+    "- Set infer_topic_from_content when the user did not give a substantive topic or only named a short tab group label.",
+    "- When the user says except/skip tabs: set exclude_indices (1-based positions within the group/window list) and/or exclude_queries (title/URL substrings, min 3 chars).",
+    "- Do NOT use repeated summarize_page calls for multi-tab research; use build_research_brief once.",
+    "- Examples: 'consolidate findings from this tab group', 'build a report from tab group Sports', 'summarize tabs in tab group sports', 'give me a summary of my tab group'.",
+    "- Single-page only: 'summarize this page' or 'summarize tab 3' → summarize_page, not build_research_brief.",
   ].join(" ");
 }

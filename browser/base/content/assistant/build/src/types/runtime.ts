@@ -264,6 +264,13 @@ export type AssistantWindowLike = Window & {
   ) => void;
   oasisGetPendingConfirmation?: () => PendingConfirmationPayload | null;
   oasisClearPendingConfirmation?: () => void;
+  oasisAbortResearchBrief?: () => void;
+  oasisStoreResearchBriefRun?: (run: {
+    briefId: string;
+    brief: import("../services/researchBriefTypes.js").ResearchBrief;
+    digests: import("../services/researchBriefTypes.js").TabDigest[];
+    markdown: string;
+  }) => void;
   oasisGetPendingAmbiguity?: () => PendingAmbiguityPayload | null;
   oasisVoiceAssistantTurnBegin?: (userTranscript: string) => string;
   oasisVoiceAssistantStreamChunk?: (messageId: string, chunk: string) => void;

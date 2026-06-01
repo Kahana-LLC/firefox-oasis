@@ -32,6 +32,7 @@ import type { AssistantWindowLike } from "../types/runtime.js";
 import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { hasPageContextRequest } from "../utils/pageContextRequest.js";
+import { displayMarkdownFromResearchBriefToolMessage } from "../utils/researchBriefRequest.js";
 import {
   looksLikeNewActionCommand,
   looksLikePageContextRequest,
@@ -107,6 +108,20 @@ import {
 } from "./supervisorGates.js";
 import { classifyClarificationNeed } from "./clarificationClassifier.js";
 import {
+  consumeResearchBriefResume,
+  parseResearchBriefResumePrompt,
+} from "../utils/researchBriefResume.js";
+
+function tryConsumeResearchBriefResumeFromGate(
+  resolvedPrompt: string
+): Record<string, unknown> | null {
+  const optionId = parseResearchBriefResumePrompt(resolvedPrompt);
+  if (!optionId) {
+    return null;
+  }
+  return consumeResearchBriefResume(optionId);
+}
+import {
   buildCommandQueuePlan,
   shouldClearContinuationQueue,
 } from "./supervisorQueue.js";
@@ -177,6 +192,17 @@ export function buildAssistantGraph(
     if (capabilitiesReply) {
       return {
         messages: [new AIMessage(capabilitiesReply)],
+        lastWorker: "chat",
+        commandQueue: [],
+      };
+    }
+
+    if (toolPayload?.commandName === "build_research_brief") {
+      const markdown = displayMarkdownFromResearchBriefToolMessage(
+        toolPayload.message
+      );
+      return {
+        messages: [new AIMessage(markdown || "Research brief is ready.")],
         lastWorker: "chat",
         commandQueue: [],
       };
@@ -311,7 +337,17 @@ export function buildAssistantGraph(
       commandText,
     });
     if (clarificationGate.kind === "resolved") {
+      const resumeArgs = tryConsumeResearchBriefResumeFromGate(
+        clarificationGate.resolvedPrompt
+      );
       clearPendingClarification();
+      if (resumeArgs) {
+        return {
+          next: "build_research_brief",
+          args: resumeArgs,
+          commandQueue: [],
+        };
+      }
       return {
         next: "supervisor",
         args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },

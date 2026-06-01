@@ -126,12 +126,157 @@ export function findGroupByName(
   gBrowser: GBrowserLike | null | undefined,
   name: string
 ): BrowserTabGroupLike | null {
-  const target = normalizeName(name);
-  if (!target) return null;
-  return (
-    getTabGroups(gBrowser).find(group => normalizeName(group.label || "") === target) ||
-    null
+  const match = findGroupByNameFuzzy(gBrowser, name);
+  return match.group;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const matrix: number[][] = Array.from({ length: rows }, () =>
+    Array(cols).fill(0)
   );
+  for (let i = 0; i < rows; i++) {
+    matrix[i][0] = i;
+  }
+  for (let j = 0; j < cols; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[rows - 1][cols - 1];
+}
+
+export type FuzzyGroupMatch = {
+  group: BrowserTabGroupLike | null;
+  matchKind: "exact" | "substring" | "fuzzy" | "none";
+  alternatives: BrowserTabGroupLike[];
+  closestLabel: string | null;
+};
+
+export function findGroupByNameFuzzy(
+  gBrowser: GBrowserLike | null | undefined,
+  name: string
+): FuzzyGroupMatch {
+  const target = normalizeName(name);
+  const groups = getTabGroups(gBrowser);
+  if (!target || groups.length === 0) {
+    return {
+      group: null,
+      matchKind: "none",
+      alternatives: [],
+      closestLabel: null,
+    };
+  }
+
+  const exact = groups.find(
+    group => normalizeName(group.label || "") === target
+  );
+  if (exact) {
+    return {
+      group: exact,
+      matchKind: "exact",
+      alternatives: [],
+      closestLabel: exact.label || null,
+    };
+  }
+
+  const substringMatches = groups.filter(group => {
+    const label = normalizeName(group.label || "");
+    return label.includes(target) || target.includes(label);
+  });
+  if (substringMatches.length === 1) {
+    return {
+      group: substringMatches[0],
+      matchKind: "substring",
+      alternatives: [],
+      closestLabel: substringMatches[0].label || null,
+    };
+  }
+  if (substringMatches.length > 1) {
+    return {
+      group: null,
+      matchKind: "substring",
+      alternatives: substringMatches.slice(0, 3),
+      closestLabel: substringMatches[0].label || null,
+    };
+  }
+
+  const scored = groups
+    .map(group => {
+      const label = normalizeName(group.label || "");
+      return {
+        group,
+        distance: levenshtein(target, label),
+      };
+    })
+    .filter(item => item.distance <= 2)
+    .sort((a, b) => a.distance - b.distance);
+
+  if (scored.length === 1) {
+    return {
+      group: scored[0].group,
+      matchKind: "fuzzy",
+      alternatives: [],
+      closestLabel: scored[0].group.label || null,
+    };
+  }
+  if (scored.length > 1) {
+    return {
+      group: null,
+      matchKind: "fuzzy",
+      alternatives: scored.slice(0, 3).map(item => item.group),
+      closestLabel: scored[0].group.label || null,
+    };
+  }
+
+  const closest = groups
+    .map(group => ({
+      group,
+      distance: levenshtein(target, normalizeName(group.label || "")),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+
+  return {
+    group: null,
+    matchKind: "none",
+    alternatives: [],
+    closestLabel: closest?.group.label || null,
+  };
+}
+
+export function resolveActiveTabGroup(
+  gBrowser: GBrowserLike | null | undefined
+): BrowserTabGroupLike | null {
+  const groups = getTabGroups(gBrowser);
+  if (!groups.length) {
+    return null;
+  }
+  const selected = gBrowser?.selectedTab;
+  if (selected) {
+    const containing = groups.find(group =>
+      Array.from(group.tabs || []).some(tab => tab === selected)
+    );
+    if (containing) {
+      return containing;
+    }
+  }
+  return groups.reduce((largest, group) => {
+    const count = Array.from(group.tabs || []).length;
+    const largestCount = Array.from(largest.tabs || []).length;
+    return count > largestCount ? group : largest;
+  });
 }
 
 export function withUriFixup(rawInput: string, services: ServicesLike | null): string {

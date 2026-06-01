@@ -159,5 +159,34 @@ export function resolvePendingClarificationGate(params: {
     }
   }
 
+  const briefOptions = pendingClarification.options.filter(o =>
+    /research\s+brief/i.test(o.label)
+  );
+  if (CONFIRM_RE.test(confirmationText.trim())) {
+    if (briefOptions.length === 1) {
+      return {
+        kind: "resolved",
+        resolvedPrompt: briefOptions[0].resolvedPrompt,
+      };
+    }
+    const second = pendingClarification.options[1];
+    if (second && /research\s+brief/i.test(second.label)) {
+      return { kind: "resolved", resolvedPrompt: second.resolvedPrompt };
+    }
+  }
+
+  const minFuzzyLen = 8;
+  if (lower.length >= minFuzzyLen) {
+    for (const option of pendingClarification.options) {
+      const labelLower = option.label.toLowerCase();
+      if (
+        labelLower.includes(lower) ||
+        lower.includes(labelLower)
+      ) {
+        return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
+      }
+    }
+  }
+
   return { kind: "clear" };
 }

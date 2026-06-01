@@ -8,6 +8,13 @@ import {
 } from "@supabase/supabase-js";
 import { ENV } from "../config/env.js";
 import { UserProfile, UserSession, AuthState } from "../types/auth.js";
+import {
+  DEFAULT_CALLBACK_BASE_URL,
+  getHandoffFlowId,
+  isOAuthDevEnvironment,
+  normalizeAllowedCallbackBaseUrl,
+  validateHandoffPayload,
+} from "../utils/oauthHandoff.js";
 
 export default class SupabaseAuth {
   private static instance: SupabaseAuth;
@@ -47,45 +54,63 @@ export default class SupabaseAuth {
   }
 
   public setOAuthCallbackBaseUrl(url?: string | null): string {
-    const normalized = this.normalizeOAuthCallbackBaseUrl(url);
+    const normalized = normalizeAllowedCallbackBaseUrl(url);
+    if (!normalized) {
+      console.warn(
+        "OAuth callback base URL rejected (not on allowlist):",
+        url
+      );
+      return this.getOAuthCallbackBaseUrl();
+    }
     this.oauthCallbackBaseUrl = normalized;
     if (typeof window !== "undefined") {
       (window as any).__oasisOAuthCallbackBaseUrl = normalized;
     }
-    return this.getOAuthCallbackBaseUrl();
+    return normalized;
   }
 
   public getOAuthCallbackBaseUrl(): string {
     if (this.oauthCallbackBaseUrl) {
-      return this.oauthCallbackBaseUrl;
+      const cached = normalizeAllowedCallbackBaseUrl(this.oauthCallbackBaseUrl);
+      if (cached) {
+        return cached;
+      }
+      this.oauthCallbackBaseUrl = null;
     }
     if (typeof window !== "undefined") {
       const runtimeOverride = (window as any).__oasisOAuthCallbackBaseUrl;
       const normalizedRuntime =
-        this.normalizeOAuthCallbackBaseUrl(runtimeOverride);
+        normalizeAllowedCallbackBaseUrl(runtimeOverride);
       if (normalizedRuntime) {
         this.oauthCallbackBaseUrl = normalizedRuntime;
         return normalizedRuntime;
       }
-      try {
-        const override = window.localStorage?.getItem(
-          "oasis_oauth_callback_base_url"
-        );
-        const normalizedStorage = this.normalizeOAuthCallbackBaseUrl(override);
-        if (normalizedStorage) {
-          this.oauthCallbackBaseUrl = normalizedStorage;
-          return normalizedStorage;
-        }
-      } catch (e) {}
+      if (isOAuthDevEnvironment()) {
+        try {
+          const override = window.localStorage?.getItem(
+            "oasis_oauth_callback_base_url"
+          );
+          const normalizedStorage =
+            normalizeAllowedCallbackBaseUrl(override);
+          if (normalizedStorage) {
+            this.oauthCallbackBaseUrl = normalizedStorage;
+            return normalizedStorage;
+          }
+        } catch (e) {}
+      }
     }
-    return "https://kahana.co";
+    return DEFAULT_CALLBACK_BASE_URL;
   }
 
-  private normalizeOAuthCallbackBaseUrl(url?: string | null): string | null {
-    if (!url || !/^https?:\/\//i.test(url)) {
+  public getActiveOAuthFlowId(): string | null {
+    if (!this.activeOAuthLaunch) {
       return null;
     }
-    return url.replace(/\/+$/, "");
+    if (Date.now() - this.activeOAuthLaunch.startedAt > 600000) {
+      this.activeOAuthLaunch = null;
+      return null;
+    }
+    return this.activeOAuthLaunch.flowId;
   }
 
   private createOAuthFlowId(): string {
@@ -569,6 +594,40 @@ export default class SupabaseAuth {
     try {
       console.log(`[Oasis OAuth][${flowId}] Handling callback data:`, authData);
 
+      const activeFlowId = this.getActiveOAuthFlowId();
+      if (activeFlowId) {
+        const payloadFlowId = getHandoffFlowId(
+          authData && typeof authData === "object" ? authData : {}
+        );
+        if (!payloadFlowId || payloadFlowId !== activeFlowId) {
+          console.warn(
+            `[Oasis OAuth][${flowId}] Handoff flow_id does not match active OAuth launch`
+          );
+          return {
+            success: false,
+            error: "Authentication failed. Please try signing in again.",
+          };
+        }
+      }
+
+      if (authData && typeof authData === "object" && authData.timestamp) {
+        const handoffCheck = validateHandoffPayload(authData, {
+          expectedFlowId: activeFlowId || undefined,
+          callbackBaseUrl: this.getOAuthCallbackBaseUrl(),
+        });
+        if (!handoffCheck.ok) {
+          console.warn(
+            `[Oasis OAuth][${flowId}] Handoff validation failed:`,
+            handoffCheck.error
+          );
+          this.clearActiveOAuthLaunch(flowId);
+          return {
+            success: false,
+            error: "Authentication failed. Please try signing in again.",
+          };
+        }
+      }
+
       const normalized = this.normalizeOAuthCallbackPayload(authData);
       if (
         !normalized.code &&
@@ -633,8 +692,11 @@ export default class SupabaseAuth {
         }
       }
 
-      // Handle direct token setting (fallback)
+      // Handle direct token setting (fallback; deprecated)
       if (normalized.access_token && normalized.refresh_token) {
+        console.warn(
+          `[Oasis OAuth][${flowId}] Token handoff is deprecated; use authorization code`
+        );
         console.log(`[Oasis OAuth][${flowId}] Setting session from tokens...`);
         const { data, error } = await this.supabase.auth.setSession({
           access_token: normalized.access_token,
