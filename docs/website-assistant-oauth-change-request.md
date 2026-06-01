@@ -66,27 +66,27 @@ After the shared callback logic succeeds for `flow=assistant`, the website must 
 
 - `chrome://browser/content/assistant/auth-callback.html`
 
-The website must include:
+The website must include only navigation parameters on the chrome redirect:
 
 - `target=assistant` or `target=onboarding`
-- the callback payload needed to complete auth automatically
+- optional `flow_id` for logging/UX correlation
 
-The payload may be forwarded in either supported callback shape:
+Do **not** pass secrets on the chrome redirect URL:
 
-- auth code
-- access token and refresh token
+- no `access_token`
+- no `refresh_token`
+- no `code`
 
-The important requirement is that the Firefox callback page receives enough information to complete auth without user input.
+Secrets must be delivered only via the `oasis_assistant_handoff` cookie (see [`docs/website-oauth-security-handoff.md`](website-oauth-security-handoff.md)).
 
 ### 4. Assistant and Onboarding Completion
 
-The Firefox callback page will take responsibility for:
+The Firefox callback page (`auth-callback.html`) only:
 
-- storing the OAuth handoff in browser-owned state
-- routing back into the assistant or onboarding surface
-- letting the browser-owned auth service finish the sign-in automatically
+- validates `target`
+- redirects back into the assistant or onboarding surface
 
-This is Firefox-side behavior and does not need website-specific implementation beyond the redirect contract.
+Firefox consumes the `oasis_assistant_handoff` cookie and completes sign-in via `handleOAuthCallbackData`.
 
 ## Website Behavior Rules
 
@@ -144,6 +144,8 @@ This change must preserve all existing website auth safety rules:
 - missing-email handling
 
 The Firefox redirect target should only be used when the callback is explicitly marked as assistant-originated.
+
+Handoff cookie and chrome redirect requirements are documented in [`docs/website-oauth-security-handoff.md`](website-oauth-security-handoff.md).
 
 ## Non-Goals
 

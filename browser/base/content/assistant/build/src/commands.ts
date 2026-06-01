@@ -48,6 +48,7 @@ import {
   getPendingConfirmation,
   setRecentSearchResults,
   setPendingConfirmation,
+  setPendingClarification,
   type AmbiguityTarget,
   type InteractionCommandArgs,
   type RecentSearchResult,
@@ -62,6 +63,33 @@ import type {
   BrowserWindowLike,
 } from "./types/runtime";
 import { buildPageContextRequestMessage } from "./utils/pageContextRequest";
+import { extractPageContentFromTab } from "./services/pageContentExtract";
+import {
+  buildResearchBrief,
+  previewResearchBriefScope,
+  type BuildResearchBriefOptions,
+  type ResearchScope,
+} from "./services/researchBrief";
+import { getCachedResearchBriefRun, storeResearchBriefRun } from "./services/researchBriefDigestCache.js";
+import { researchBriefToMarkdown } from "./services/researchBriefFormat.js";
+import { buildResearchBriefToolMessage } from "./utils/researchBriefRequest";
+import {
+  beginResearchBriefRun,
+  createResearchBriefProgressReporter,
+  endResearchBriefRun,
+} from "./utils/researchBriefProgress.js";
+import {
+  buildScopePreviewDescription,
+  shouldConfirmResearchBriefScope,
+} from "./utils/researchBriefScopePreview.js";
+import {
+  buildAmbiguousGroupClarification,
+  buildOverQuotaClarification,
+  setResearchBriefResume,
+} from "./utils/researchBriefResume.js";
+import type { ResolveResearchTabsResult } from "./services/researchBriefTypes.js";
+import { synthesizeResearchBriefSection } from "./services/researchBriefSectionSynthesis.js";
+import { mergeSectionIntoBrief } from "./services/researchBriefSectionMerge.js";
 
 type CommandArgs = InteractionCommandArgs;
 type SearchResultItem = {
@@ -114,6 +142,14 @@ function numberArrayArg(args: CommandArgs, key: string): number[] {
       typeof item === "number" && Number.isFinite(item) ? item : null
     )
     .filter((item): item is number => item != null);
+}
+
+function stringArrayArg(args: CommandArgs, key: string): string[] {
+  const value = args[key];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
 }
 
 function ambiguityTargetArg(
@@ -1451,90 +1487,328 @@ export class SummarizePageCommand implements Command {
     const browser = tab?.linkedBrowser;
     if (!browser) return { message: "I couldn't find an active tab." };
 
-    const url = browser.currentURI?.spec || "";
-    const title = tabTitle(tab);
     const userQuery = (stringArg(args, "query") || "").trim();
 
-    if (
-      url.startsWith("about:") ||
-      url.startsWith("chrome://") ||
-      url.startsWith("moz-extension://")
-    ) {
-      return {
-        message: "I'm sorry, I can't read internal browser pages.",
-      };
-    }
-
     try {
-      // Use PageExtractor actor for Fission-compatible content extraction
-      const currentWindowContext =
-        browser.browsingContext?.currentWindowContext;
-
-      if (!currentWindowContext) {
+      const extracted = await extractPageContentFromTab(tab);
+      if (extracted.status === "skipped") {
+        return {
+          message: "I'm sorry, I can't read internal browser pages.",
+        };
+      }
+      if (extracted.status !== "ok" || !extracted.content) {
         return {
           message:
-            "I can't access the page content right now. Is it still loading?",
+            extracted.failureReason ||
+            "I didn't find enough content on this page to answer from.",
         };
-      }
-
-      const pageExtractor = currentWindowContext.getActor("PageExtractor");
-
-      if (!pageExtractor) {
-        return { message: "The page content extractor isn't available." };
-      }
-
-      // Try Reader Mode first (cleaner content), fall back to full text
-      let content = "";
-      try {
-        content = (await pageExtractor.getReaderModeContent?.()) || "";
-      } catch (e) {
-        assistantLogger.warn(
-          "commands",
-          "Reader mode extraction failed, trying full text",
-          e
-        );
-      }
-
-      // If reader mode failed or returned empty, try full text extraction
-      if (!content || content.length < 50) {
-        try {
-          const result = await pageExtractor.getText?.();
-          content = typeof result === "string" ? result : result?.text || "";
-        } catch (e) {
-          assistantLogger.warn("commands", "Full text extraction failed", e);
-        }
-      }
-
-      // Clean up whitespace
-      content = content
-        .replace(/\s+/g, " ")
-        .replace(/\n\s*\n/g, "\n")
-        .trim();
-
-      if (!content || content.length < 50) {
-        return {
-          message: "I didn't find enough content on this page to answer from.",
-        };
-      }
-
-      // Truncate to reasonable length for LLM (roughly 10k chars ≈ 2.5k tokens)
-      const maxLength = 12000;
-      if (content.length > maxLength) {
-        content = content.substring(0, maxLength) + "...";
       }
 
       return {
         message: buildPageContextRequestMessage({
-          title,
-          url,
+          title: extracted.title,
+          url: extracted.url,
           userQuery,
-          content,
+          content: extracted.content,
         }),
       };
     } catch (e) {
       return {
         message: `I'm sorry, I couldn't extract the page content: ${e}`,
       };
+    }
+  }
+}
+
+function normalizeResearchScope(raw: string | undefined): ResearchScope {
+  const scope = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, "-");
+  if (scope === "tabs" || scope === "tab") {
+    return "tabs";
+  }
+  if (
+    scope === "window" ||
+    scope === "current-window" ||
+    scope === "this-window"
+  ) {
+    return "window";
+  }
+  return "tab-group";
+}
+
+function researchBriefClarificationFromScopePreview(
+  preview: ResolveResearchTabsResult,
+  args: CommandArgs
+): CmdResult | null {
+  if (!preview.ok && preview.code === "ambiguous_group" && preview.candidates) {
+    const candidates = preview.candidates.map(c => ({
+      id: `brief_group:${encodeURIComponent(c.name)}`,
+      label: `${c.label} (${c.tabCount} tabs)`,
+      name: c.name,
+      tabCount: c.tabCount,
+    }));
+    const { options, message } = buildAmbiguousGroupClarification(
+      String(args.name || "group"),
+      candidates
+    );
+    setResearchBriefResume({
+      args: { ...args, scope_confirmed: true },
+      reason: "ambiguous_group",
+    });
+    setPendingClarification({
+      originalMessage: String(args.topic || "research brief"),
+      options,
+    });
+    return { message };
+  }
+  return null;
+}
+
+function researchBriefClarificationFromBuildFailure(
+  result: {
+    ok: false;
+    message: string;
+    code?: string;
+    estimate?: number;
+    remaining?: number;
+    suggestedTabCount?: number;
+  },
+  args: CommandArgs
+): CmdResult | null {
+  if (
+    result.code === "over_quota" &&
+    result.estimate != null &&
+    result.remaining != null &&
+    result.suggestedTabCount != null
+  ) {
+    const stashArgs = {
+      ...args,
+      scope_confirmed: true,
+      suggested_max_tabs: result.suggestedTabCount,
+    };
+    const { options, message } = buildOverQuotaClarification({
+      estimate: result.estimate,
+      remaining: result.remaining,
+      suggestedTabCount: result.suggestedTabCount,
+    });
+    setResearchBriefResume({ args: stashArgs, reason: "over_quota" });
+    setPendingClarification({
+      originalMessage: String(args.topic || "research brief"),
+      options,
+    });
+    return { message };
+  }
+  return null;
+}
+
+function buildResearchBriefOptionsFromArgs(
+  args: CommandArgs,
+  gBrowser: GBrowserLike | null
+): BuildResearchBriefOptions {
+  const quotaRaw = stringArg(args, "quota_mode");
+  const quotaMode =
+    quotaRaw === "truncate" || quotaRaw === "fewer_tabs"
+      ? quotaRaw
+      : "default";
+  return {
+    gBrowser,
+    scope: normalizeResearchScope(stringArg(args, "scope")),
+    name: stringArg(args, "name"),
+    topic: stringArg(args, "topic")?.trim(),
+    inferTopicFromContent: booleanArg(args, "infer_topic_from_content") === true,
+    tabQueries: stringArrayArg(args, "tab_queries"),
+    tabIndices: numberArrayArg(args, "tab_indices"),
+    outlineHint: stringArg(args, "outline_hint"),
+    maxTabs: numberArg(args, "max_tabs"),
+    excludeIndices: numberArrayArg(args, "exclude_indices"),
+    excludeQueries: stringArrayArg(args, "exclude_queries"),
+    scopeConfirmed: booleanArg(args, "scope_confirmed") === true,
+    quotaMode,
+    useActiveTabGroup: booleanArg(args, "use_active_tab_group") === true,
+  };
+}
+
+export class BuildResearchBriefCommand implements Command {
+  commandName = "build_research_brief";
+  description =
+    "Build a structured research brief (outline, themes, sourced quotes) from open tabs. Arguments: { topic?: string, infer_topic_from_content?: boolean, scope?: 'tab-group'|'window'|'tabs', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], outline_hint?: string, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=tabs uses tab_queries (title/URL substrings) and/or tab_indices (1-based window positions). When infer_topic_from_content is true, topic may be omitted and will be derived from page content after extraction.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    const options = buildResearchBriefOptionsFromArgs(args, gBrowser);
+    const topic = options.topic;
+    const inferTopicFromContent = options.inferTopicFromContent === true;
+
+    if (!topic && !inferTopicFromContent) {
+      return {
+        message: "What topic should the research brief focus on?",
+      };
+    }
+
+    if (
+      options.scope === "tabs" &&
+      (options.tabQueries?.length ?? 0) === 0 &&
+      (options.tabIndices?.length ?? 0) === 0
+    ) {
+      return {
+        message:
+          "Which tabs should I use? Provide tab_queries (title/URL keywords) or tab_indices (positions).",
+      };
+    }
+
+    if (!options.scopeConfirmed) {
+      const preview = previewResearchBriefScope(options);
+      const scopeClarify = researchBriefClarificationFromScopePreview(
+        preview,
+        args
+      );
+      if (scopeClarify) {
+        return scopeClarify;
+      }
+      if (preview.ok && shouldConfirmResearchBriefScope(preview)) {
+        const confirmArgs = {
+          ...args,
+          scope_confirmed: true,
+        };
+        setPendingConfirmation({
+          command: this.commandName,
+          args: confirmArgs,
+          description: buildScopePreviewDescription({
+            scopeLabel: preview.scopeLabel,
+            tabs: preview.tabs,
+            tabsOmittedByLimit: preview.tabsOmittedByLimit,
+            urlsDeduplicated: preview.urlsDeduplicated,
+          }),
+        });
+        return {
+          message: buildScopePreviewDescription({
+            scopeLabel: preview.scopeLabel,
+            tabs: preview.tabs,
+            tabsOmittedByLimit: preview.tabsOmittedByLimit,
+            urlsDeduplicated: preview.urlsDeduplicated,
+          }),
+          requiresConfirmation: true,
+        };
+      }
+    }
+
+    const signal = beginResearchBriefRun();
+    const onProgress = createResearchBriefProgressReporter(signal);
+    try {
+      const result = await buildResearchBrief({
+        ...options,
+        onProgress,
+        signal,
+      });
+
+      if (!result.ok) {
+        const quotaClarify = researchBriefClarificationFromBuildFailure(
+          result,
+          args
+        );
+        if (quotaClarify) {
+          return quotaClarify;
+        }
+        return { message: result.message };
+      }
+
+      const cached = getCachedResearchBriefRun(result.briefId);
+      return {
+        message: buildResearchBriefToolMessage({
+          markdown: result.markdown,
+          brief: result.brief,
+          briefId: result.briefId,
+          digests: cached?.digests ?? [],
+        }),
+      };
+    } finally {
+      endResearchBriefRun();
+    }
+  }
+}
+
+export class RegenerateResearchBriefSectionCommand implements Command {
+  commandName = "regenerate_research_brief_section";
+  description =
+    'Regenerate one section of a stored research brief. Arguments: { brief_id?: string, section: "executiveSummary"|"outline"|"themes"|"sources"|"gapsAndContradictions" }.';
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const section = stringArg(args, "section");
+    const briefId = stringArg(args, "brief_id");
+    const cached = getCachedResearchBriefRun(briefId);
+    if (!cached) {
+      return {
+        message:
+          "No stored research brief found. Build a research brief first, then ask to regenerate a section.",
+      };
+    }
+    const allowed = new Set([
+      "executiveSummary",
+      "outline",
+      "themes",
+      "sources",
+      "gapsAndContradictions",
+    ]);
+    if (!section || !allowed.has(section)) {
+      return {
+        message: `Which section should I regenerate? Use one of: ${[...allowed].join(", ")}.`,
+      };
+    }
+
+    const signal = beginResearchBriefRun();
+    const onProgress = createResearchBriefProgressReporter(signal);
+    try {
+      onProgress({ phase: "synthesizing", label: `Regenerating ${section}…` });
+      const sectionPayload = await synthesizeResearchBriefSection({
+        section: section as
+          | "executiveSummary"
+          | "outline"
+          | "themes"
+          | "sources"
+          | "gapsAndContradictions",
+        topic: cached.brief.topic,
+        scopeLabel: cached.brief.scopeLabel,
+        digests: cached.digests,
+        existingBrief: cached.brief,
+        signal,
+      });
+      const merged = mergeSectionIntoBrief(
+        cached.brief,
+        section as
+          | "executiveSummary"
+          | "outline"
+          | "themes"
+          | "sources"
+          | "gapsAndContradictions",
+        sectionPayload
+      );
+      const markdown = researchBriefToMarkdown(merged);
+      storeResearchBriefRun({
+        briefId: cached.briefId,
+        brief: merged,
+        digests: cached.digests,
+        markdown,
+      });
+      return {
+        message: buildResearchBriefToolMessage({
+          markdown,
+          brief: merged,
+          briefId: cached.briefId,
+          digests: cached.digests,
+        }),
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return { message: "Research brief cancelled." };
+      }
+      return {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not regenerate that section.",
+      };
+    } finally {
+      endResearchBriefRun();
     }
   }
 }

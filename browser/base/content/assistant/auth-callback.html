@@ -24,6 +24,7 @@
         border-radius: 1rem;
         backdrop-filter: blur(10px);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        max-width: 28rem;
       }
       .spinner {
         border: 3px solid rgba(255, 255, 255, 0.3);
@@ -42,115 +43,36 @@
           transform: rotate(360deg);
         }
       }
-      .message {
+      #status {
         font-size: 1.1rem;
-        margin-bottom: 1rem;
-      }
-      .error {
-        color: #ff6b6b;
-        background: rgba(255, 107, 107, 0.1);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-top: 1rem;
-      }
-      .success {
-        color: #51cf66;
-        background: rgba(81, 207, 102, 0.1);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-top: 1rem;
-      }
-      .note {
-        margin-top: 1rem;
-        opacity: 0.85;
-        font-size: 0.95rem;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="spinner"></div>
-      <div class="message">Processing authentication...</div>
-      <div id="status"></div>
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="status">Completing sign-in...</div>
     </div>
 
     <script>
-      const urlParams = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const error = urlParams.get("error") || hashParams.get("error");
-      const errorDescription =
-        urlParams.get("error_description") ||
-        hashParams.get("error_description");
-      const accessToken =
-        urlParams.get("access_token") || hashParams.get("access_token");
-      const refreshToken =
-        urlParams.get("refresh_token") || hashParams.get("refresh_token");
-      const code = urlParams.get("code") || hashParams.get("code");
-      const target = urlParams.get("target") || "assistant";
-      const statusDiv = document.getElementById("status");
-      const destinations = {
+      const ALLOWED_TARGETS = {
         assistant: "chrome://browser/content/assistant/assistant.xhtml",
         onboarding: "chrome://browser/content/oasiswelcome/oasiswelcome.html",
       };
-      const destination = destinations[target] || destinations.assistant;
 
-      function persist(key, value) {
-        try {
-          localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {
-          console.log("Could not persist OAuth handoff data:", e);
-        }
-      }
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawTarget = urlParams.get("target");
+      const target =
+        rawTarget && Object.hasOwn(ALLOWED_TARGETS, rawTarget)
+          ? rawTarget
+          : "assistant";
 
-      function redirectToDestination() {
-        setTimeout(() => {
-          window.location.href = destination;
-        }, 500);
-      }
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = "Returning to Oasis Browser...";
 
-      if (error) {
-        persist("oasis_auth_error", {
-          error,
-          description: errorDescription || "",
-          target,
-          timestamp: Date.now(),
-        });
-        statusDiv.innerHTML = `
-                <div class="error">
-                    <strong>Authentication Error:</strong><br>
-                    ${error}<br>
-                    ${errorDescription ? `<small>${errorDescription}</small>` : ""}
-                </div>
-                <div class="note">Returning to Oasis...</div>
-            `;
-        redirectToDestination();
-      } else if (accessToken || code) {
-        persist("oasis_auth_callback", {
-          timestamp: Date.now(),
-          target,
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          code,
-          url: window.location.href,
-        });
-        statusDiv.innerHTML = `
-                <div class="success">
-                    <strong>Authentication Successful!</strong><br>
-                    Returning to Oasis...
-                </div>
-                <div class="note">Completing sign-in automatically.</div>
-            `;
-        redirectToDestination();
-      } else {
-        statusDiv.innerHTML = `
-                <div class="error">
-                    <strong>No authentication data found.</strong><br>
-                    Please try signing in again.
-                </div>
-                <div class="note">Returning to Oasis...</div>
-            `;
-        redirectToDestination();
-      }
+      setTimeout(() => {
+        window.location.href = ALLOWED_TARGETS[target];
+      }, 500);
     </script>
   </body>
 </html>

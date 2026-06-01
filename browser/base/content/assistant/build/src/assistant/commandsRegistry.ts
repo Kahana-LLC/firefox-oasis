@@ -58,6 +58,8 @@ import {
   ShowSubscriptionCommand,
   ShowURLCommand,
   SplitTabsCommand,
+  BuildResearchBriefCommand,
+  RegenerateResearchBriefSectionCommand,
   SummarizePageCommand,
   ToggleMuteTabCommand,
   UnloadTabCommand,
@@ -106,6 +108,8 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   get_recent_search_results: `{"limit?":"number"}`,
   open_search_result: `{"url?":"string","index?":"number","type?":"tab","bookmarkGuid?":"string"}`,
   summarize_page: `{"index?":"number","query?":"string (the user's page-grounded question or task)"}`,
+  build_research_brief: `{"topic?":"string","infer_topic_from_content?":"boolean","scope?":"tab-group|window|tabs","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","outline_hint?":"string","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
+  regenerate_research_brief_section: `{"brief_id?":"string","section":"executiveSummary|outline|themes|sources|gapsAndContradictions"}`,
   show_subscription: `{}`,
   search_history: `{"query":"string (optional; omit or \"\" for recent visits)"}`,
 };
@@ -170,6 +174,8 @@ export function createAssistantCommandsRegistry(): AssistantCommandsRegistry {
     new GetRecentSearchResultsCommand(),
     new OpenSearchResultCommand(),
     new SummarizePageCommand(),
+    new BuildResearchBriefCommand(),
+    new RegenerateResearchBriefSectionCommand(),
     new ShowSubscriptionCommand(),
     // Semantic history search (local embeddings + vector DB)
     new SearchHistorySemanticCommand(),

@@ -629,8 +629,11 @@ mpTrack("assistant_ui_loaded_preact");
 const LOGIN_HOSTNAME = "https://kahana.co";
 const LOGIN_REALM = "Oasis Assistant";
 const LOGIN_USERNAME = "oasis_assistant_session";
-const OAUTH_HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
 const ASSISTANT_OAUTH_TARGET = "assistant";
+
+const OasisOAuthHandoff = ChromeUtils.importESModule(
+  "resource:///modules/OasisOAuthHandoff.sys.mjs"
+);
 
 let assistantOAuthHandoffInFlight = false;
 
@@ -639,26 +642,15 @@ function readAssistantOAuthHandoffEntry() {
     return null;
   }
   try {
-    let latest = null;
-    for (const cookie of Services.cookies.cookies) {
-      if (cookie.name !== OAUTH_HANDOFF_COOKIE_NAME) {
-        continue;
-      }
-      try {
-        const payload = JSON.parse(decodeURIComponent(cookie.value));
-        const timestamp = payload?.timestamp || 0;
-        const handoffTarget = payload.handoff_target || payload.target;
-        if (handoffTarget && handoffTarget !== ASSISTANT_OAUTH_TARGET) {
-          continue;
-        }
-        if (!latest || timestamp > (latest.payload?.timestamp || 0)) {
-          latest = { cookie, payload };
-        }
-      } catch (e) {
-        console.error("Assistant: Failed to parse OAuth handoff cookie:", e);
-      }
-    }
-    return latest;
+    const callbackBaseUrl =
+      window.supabaseAuth?.getOAuthCallbackBaseUrl?.() || null;
+    const expectedFlowId =
+      window.supabaseAuth?.getActiveOAuthFlowId?.() || undefined;
+    return OasisOAuthHandoff.selectHandoffCookie(Services.cookies, {
+      expectedTarget: ASSISTANT_OAUTH_TARGET,
+      callbackBaseUrl,
+      expectedFlowId,
+    });
   } catch (e) {
     console.error("Assistant: Failed to read OAuth handoff cookies:", e);
   }
@@ -666,19 +658,7 @@ function readAssistantOAuthHandoffEntry() {
 }
 
 function clearAssistantHandoffCookie(cookie) {
-  if (!Services?.cookies || !cookie) {
-    return;
-  }
-  try {
-    Services.cookies.remove(
-      cookie.host,
-      cookie.name,
-      cookie.path,
-      cookie.originAttributes || {}
-    );
-  } catch (e) {
-    console.error("Assistant: Failed to clear OAuth handoff cookie:", e);
-  }
+  OasisOAuthHandoff.clearHandoffCookie(Services?.cookies, cookie);
 }
 
 function dispatchAssistantAuthError(message) {

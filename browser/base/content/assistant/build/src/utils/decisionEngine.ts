@@ -18,6 +18,10 @@ import { resolveManifestSearchRoute } from "./manifestSearchResolver.js";
 import { resolveManifestMutationRoute } from "./manifestMutationResolver.js";
 import { resolveExplicitSearchResultRoute } from "./searchResultExplicitResolver.js";
 import { resolveExplicitSummarizeRoute } from "./summarizeExplicitResolver.js";
+import {
+  looksLikeResearchBriefCommand,
+  resolveExplicitResearchBriefRoute,
+} from "./researchBriefExplicitResolver.js";
 import type {
   DeterministicRouteDecision,
   IntentFamily,
@@ -47,6 +51,23 @@ export function decideDeterministicRoute(
     return { type: "no_match", actionable: false, reason: "empty-input" };
   }
 
+  if (looksLikeResearchBriefCommand(input)) {
+    const researchBriefEarly = resolveExplicitResearchBriefRoute(
+      input,
+      snapshot
+    );
+    if (researchBriefEarly) {
+      return researchBriefEarly;
+    }
+    return {
+      type: "chat",
+      actionable: true,
+      reason: "research-brief-unresolved",
+      message:
+        'I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.',
+    };
+  }
+
   const family = classifyCommandFamily(input);
   const familyHandler = FAMILY_HANDLERS[family];
   if (familyHandler) {
@@ -66,6 +87,14 @@ export function decideDeterministicRoute(
     return summarizeExplicit;
   }
 
+  const researchBriefExplicit = resolveExplicitResearchBriefRoute(
+    input,
+    snapshot
+  );
+  if (researchBriefExplicit) {
+    return researchBriefExplicit;
+  }
+
   const explicit = resolveExplicitRoute(input);
   if (explicit) {
     return explicit;
@@ -81,7 +110,9 @@ export function decideDeterministicRoute(
           ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)"
           : family === "search"
             ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)"
-            : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
+            : looksLikeResearchBriefCommand(input)
+              ? 'I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.'
+              : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
     };
   }
 

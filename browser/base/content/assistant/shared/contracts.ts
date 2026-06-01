@@ -38,6 +38,28 @@ export type PendingClarificationPayload = {
 export const OASIS_EVENT_CLARIFICATION_UPDATE =
   "oasis-clarification-update" as const;
 
+export type ResearchBriefProgressPhase =
+  | "resolving"
+  | "extracting"
+  | "synthesizing"
+  | "topic";
+
+export type ResearchBriefProgressDetail = {
+  phase: ResearchBriefProgressPhase;
+  current?: number;
+  total?: number;
+  label?: string;
+};
+
+export type OasisAssistantSubmitDetail = {
+  prompt?: string;
+  command?: string;
+  args?: InteractionCommandArgs;
+};
+
+export const OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress" as const;
+export const OASIS_EVENT_ASSISTANT_SUBMIT = "oasis-assistant-submit" as const;
+
 export type OasisRecordToolActionStart = (
   commandName: string,
   messageId?: string,
@@ -80,7 +102,9 @@ export type OasisEventName =
   | typeof OASIS_EVENT_HISTORY_UPDATE
   | typeof OASIS_EVENT_CONFIRMATION_UPDATE
   | typeof OASIS_EVENT_CLARIFICATION_UPDATE
-  | typeof OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
+  | typeof OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED
+  | typeof OASIS_EVENT_BRIEF_PROGRESS
+  | typeof OASIS_EVENT_ASSISTANT_SUBMIT;
 
 export type BookmarkFoldersChangedDetail = {
   folderNames?: string[];
@@ -92,4 +116,6 @@ export type OasisEventDetailMap = {
   [OASIS_EVENT_CONFIRMATION_UPDATE]: PendingConfirmationPayload | null;
   [OASIS_EVENT_CLARIFICATION_UPDATE]: PendingClarificationPayload | null;
   [OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED]: BookmarkFoldersChangedDetail;
+  [OASIS_EVENT_BRIEF_PROGRESS]: ResearchBriefProgressDetail | null;
+  [OASIS_EVENT_ASSISTANT_SUBMIT]: OasisAssistantSubmitDetail;
 };

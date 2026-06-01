@@ -8,12 +8,16 @@ type AssistantBusyBarProps = {
   busy: boolean;
   activeToolLabel: string | null;
   responseStreaming: boolean;
+  showBriefCancel?: boolean;
+  onCancelBrief?: () => void;
 };
 
 export function AssistantBusyBar({
   busy,
   activeToolLabel,
   responseStreaming,
+  showBriefCancel = false,
+  onCancelBrief,
 }: AssistantBusyBarProps) {
   const [elapsedTier, setElapsedTier] = useState(0);
   const startedAtRef = useRef<number | null>(null);
@@ -126,6 +130,15 @@ export function AssistantBusyBar({
             <div className="assistant-busy-bar-tier">{tier2Line}</div>
           ) : null}
         </div>
+        {showBriefCancel && onCancelBrief ? (
+          <button
+            type="button"
+            className="assistant-busy-bar-cancel"
+            onClick={onCancelBrief}
+          >
+            Cancel
+          </button>
+        ) : null}
       </div>
     </div>
   );

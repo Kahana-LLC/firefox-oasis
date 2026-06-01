@@ -31,6 +31,7 @@ const TOOL_LABELS: Record<string, string> = {
   search_memory: "Searching memory",
   open_search_result: "Opening result",
   summarize_page: "Reading page",
+  build_research_brief: "Building research brief",
   show_subscription: "Showing subscription",
   confirm_action: "Confirming action",
 

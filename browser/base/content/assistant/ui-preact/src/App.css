@@ -1415,6 +1415,146 @@ body {
   margin-right: auto;
 }
 
+.message-action-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.research-brief-view .brief-section {
+  margin-top: var(--space-medium, 12px);
+}
+
+.brief-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.brief-section-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-headings, inherit);
+}
+
+.brief-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.brief-regenerate-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--neutral-300, #ccc);
+  background: var(--surface-page, #fff);
+  cursor: pointer;
+  color: var(--text-body, #333);
+}
+
+.research-brief-disclosure {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--primary-50, #f7f9ec);
+  font-size: 13px;
+  color: var(--text-body, #444);
+}
+
+.research-brief-disclosure button {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--primary-green, #7a9200);
+  background: transparent;
+  cursor: pointer;
+  color: var(--primary-green, #7a9200);
+}
+
+.research-brief-restore-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--primary-50, #f7f9ec);
+  font-size: 13px;
+  color: var(--text-body, #444);
+}
+
+.research-brief-restore-banner button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--primary-green, #7a9200);
+  background: var(--surface-page, #fff);
+  cursor: pointer;
+  color: var(--primary-green, #7a9200);
+}
+
+.research-brief-restore-dismiss {
+  border-color: var(--neutral-300, #ccc) !important;
+  color: var(--text-body, #666) !important;
+}
+
+.research-brief-toolbar {
+  margin-bottom: 8px;
+}
+
+.brief-pin-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--neutral-300, #ccc);
+  background: var(--surface-page, #fff);
+  cursor: pointer;
+}
+
+.assistant-busy-bar-cancel {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--neutral-300, #ccc);
+  background: var(--surface-page, #fff);
+  cursor: pointer;
+}
+
+.copy-btn,
+.tts-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--neutral-500);
+}
+
+.copy-btn:hover,
+.tts-btn:hover {
+  color: var(--text-headings);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.copy-btn:focus-visible,
+.tts-btn:focus-visible {
+  outline: 2px solid var(--primary-green);
+  outline-offset: 1px;
+}
+
 /* Input Bar */
 .input-bar {
   /* position: fixed; bottom: 16px; left: 16px; right: 16px; */
@@ -1703,6 +1843,7 @@ body {
   display: flex;
   align-items: flex-start;
   gap: var(--space-small);
+  width: 100%;
 }
 
 .assistant-busy-bar-spinner {

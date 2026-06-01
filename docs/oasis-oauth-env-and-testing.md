@@ -59,6 +59,36 @@ Do not rely on:
 
 Assistant vs onboarding routing is now inferred from the Firefox marker cookie instead.
 
+## Security Invariants (Firefox)
+
+Implementation: [`browser/modules/OasisOAuthHandoff.sys.mjs`](../browser/modules/OasisOAuthHandoff.sys.mjs)
+
+- OAuth callback base URL must be on the allowlist:
+  - `https://kahana.co`
+  - `http://localhost:3000`
+  - `http://127.0.0.1:3000`
+- `localStorage` override of the callback base URL works only in chrome dev contexts (assistant/onboarding frames), not arbitrary web pages.
+- Handoff cookie `oasis_assistant_handoff` is accepted only when:
+  - cookie host matches an allowlisted callback host
+  - `timestamp` is younger than 10 minutes
+  - `flow_id` matches the active Firefox OAuth launch when one is in flight
+  - `handoff_target` / `target` matches the consuming surface (`assistant` or `onboarding`)
+- Sessions are stored in Firefox Password Manager, not in OAuth callback HTML pages.
+- Legacy chrome callback pages (`oauth-callback.html`, `kahana-interceptor.html`) were removed.
+
+### Negative Tests (manual)
+
+1. Start assistant OAuth, then in Browser Toolbox set a fake handoff cookie on `evil.test` — assistant must ignore it.
+2. Tamper `flow_id` in a valid-looking handoff cookie — handoff must fail with a generic auth error.
+3. Set `window.oasisSetOAuthCallbackBaseUrl("https://evil.example")` — value must remain `https://kahana.co` (or current allowlisted dev URL).
+
+### Unit Tests
+
+```bash
+cd browser/base/content/assistant/build
+npm run test:oauth-handoff
+```
+
 ## Local Website Environment
 
 Start the website on port `3000`:

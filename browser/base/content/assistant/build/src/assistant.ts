@@ -48,6 +48,8 @@ import {
   OASIS_EVENT_HISTORY_UPDATE,
   type VoiceUiDelivery,
 } from "../../shared/contracts.js";
+import { abortResearchBriefRun } from "./utils/researchBriefProgress.js";
+import { storeResearchBriefRun } from "./services/researchBriefDigestCache.js";
 
 const supabaseAuth = SupabaseAuth.getInstance();
 const assistantWindow = window as AssistantWindowLike;
@@ -270,6 +272,10 @@ export async function runAssistantStream(
   return combined;
 }
 assistantWindow.runAssistantStream = runAssistantStream;
+assistantWindow.oasisAbortResearchBrief = () => {
+  abortResearchBriefRun();
+};
+assistantWindow.oasisStoreResearchBriefRun = storeResearchBriefRun;
 
 voiceAgent.setRunAssistant(runAssistantStream);
 assistantWindow.voiceAgent = voiceAgent;

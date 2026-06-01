@@ -11,6 +11,11 @@ import { assistRemote } from "../proxyClient.js";
 import type { ClarificationOption } from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { toWire } from "./messageUtils.js";
+import {
+  isObviousResearchBriefRequest,
+} from "../utils/researchBriefExplicitResolver.js";
+
+export { isObviousResearchBriefRequest } from "../utils/researchBriefExplicitResolver.js";
 
 const CLARIFICATION_SYSTEM_PROMPT = [
   "You are a disambiguation classifier for a browser assistant.",
@@ -28,6 +33,7 @@ const CLARIFICATION_SYSTEM_PROMPT = [
   "- Do NOT clarify trivial things; only clarify when there is genuine ambiguity about WHAT the user wants done.",
   "- Simple greetings, questions, or clearly specified commands should always return need_clarification: false.",
   "- Common commands (close tab, search X, open Y) are unambiguous — do NOT clarify those.",
+  "- Requests that clearly ask for a research brief from a tab group or window are unambiguous — return need_clarification: false.",
   "- Only return JSON; no prose before or after.",
 ].join("\n");
 
@@ -68,6 +74,10 @@ export async function classifyClarificationNeed(params: {
   userText: string;
 }): Promise<ClarificationResult> {
   const { messages, userText } = params;
+
+  if (isObviousResearchBriefRequest(userText)) {
+    return { needsClarification: false };
+  }
 
   if (userText.split(/\s+/).length <= 3) {
     return { needsClarification: false };

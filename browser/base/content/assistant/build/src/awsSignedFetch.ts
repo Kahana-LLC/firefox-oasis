@@ -40,7 +40,8 @@ export function getAssistantApiBase(): string {
 
 export async function postSigned<TResponse = Record<string, unknown>>(
   op: SignedOperation,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<TResponse> {
   const endpoint = endpointByOperation[op];
   if (!endpoint) {
@@ -69,7 +70,7 @@ export async function postSigned<TResponse = Record<string, unknown>>(
   const res =
     op === "transcribe" || op === "tts"
       ? await postVoiceLambdaWithIam(endpoint, body, token)
-      : await fetch(endpoint, { method: "POST", headers, body });
+      : await fetch(endpoint, { method: "POST", headers, body, signal });
 
   if (!res.ok) {
     const errorBody = await res.text();

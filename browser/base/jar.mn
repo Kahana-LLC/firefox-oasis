@@ -19,6 +19,7 @@ browser.jar:
         content/browser/assistant/dist/assistant.ui.bundle.js (content/assistant/dist/assistant.ui.bundle.js)
         content/browser/assistant/dist/assistant.ui.bundle.css (content/assistant/dist/assistant.ui.bundle.css)
         content/browser/assistant/assistant.xhtml        (content/assistant/assistant.xhtml)
+        content/browser/assistant/auth-callback.html   (content/assistant/auth-callback.html)
         content/browser/assistant/auth-guard.js         (content/assistant/auth-guard.js)
         content/browser/assistant/bootstrap.js           (content/assistant/bootstrap.js)
         content/browser/assistant/images/empty-state-bg.png (content/assistant/images/empty-state-bg.png)
