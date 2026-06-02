@@ -1,0 +1,15 @@
+export {
+  ORGANIZE_VERB,
+  ORGANIZE_SCOPE,
+  FOCUS_SEGMENT,
+  GROUP_NAME,
+  TAB_GROUP_SUFFIX,
+  SPLIT_FROM_REST,
+  normalizeOrganizeTabsInput,
+  prepareOrganizeTabsCommandBody,
+  isOrganizeTabsNegative,
+  looksLikeOrganizeTabsCommand,
+  extractOrganizeTabsFocus,
+  inferOrganizeTabsMode,
+  trimOrganizeFocus,
+} from "./organizeTabsQuery.js";
