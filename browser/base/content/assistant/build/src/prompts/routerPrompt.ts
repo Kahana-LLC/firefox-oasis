@@ -56,6 +56,7 @@ export function buildAssistRouterPrompt(
     "- search_memory does NOT search browsing history — use search_history instead.",
     "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) → search_history.",
     "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' → search_memory.",
+    "- For `search history for [term]`, use search_history with query=[term] and mode=keyword.",
 
     "SPLIT VIEW:",
     "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
@@ -79,5 +80,13 @@ export function buildAssistRouterPrompt(
     "- Do NOT use repeated summarize_page calls for multi-tab research; use build_research_brief once.",
     "- Examples: 'consolidate findings from this tab group', 'build a report from tab group Sports', 'summarize tabs in tab group sports', 'give me a summary of my tab group'.",
     "- Single-page only: 'summarize this page' or 'summarize tab 3' → summarize_page, not build_research_brief.",
+    "ORGANIZE TABS:",
+    "- Use organize_tabs when the user wants to group, sort, cluster, or organize open tabs by topic — not for research briefs or manual create_tab_group.",
+    "- Args: mode (single_focus | multi_topic | research_vs_other), focus (topic), name (group label), scope (window | tab-group | tabs | ungrouped_only), use_active_tab_group, tab_queries, tab_indices, exclude_indices, exclude_queries.",
+    "- single_focus: group tabs about one topic (e.g. 'Group all tabs related to LLM research', 'can you group tabs about OAuth?', 'group all tabs reltated to LLMs').",
+    "- multi_topic: discover several topic groups (e.g. 'Organize my open tabs by topic', 'please tidy up my tabs').",
+    "- research_vs_other: split focus work from the rest (e.g. 'Separate my LLM research from everything else').",
+    "- Do NOT reply that you cannot group tabs — call organize_tabs with the best mode/focus args.",
+    "- Do NOT use organize_tabs for 'organize windows' (use organize_windows) or 'create tab group called X' (use create_tab_group).",
   ].join(" ");
 }

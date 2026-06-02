@@ -68,6 +68,7 @@ Source of truth: [`commandsRegistry.ts`](../../browser/base/content/assistant/bu
 | `copy_tab_urls` | Copy URLs from tabs |
 | `new_window` | Open a new browser window |
 | `organize_windows` | Organize windows (assistant-driven layout) |
+| `organize_tabs` | AI-organize open tabs into tab groups by topic |
 | `show_url` | Show/navigate to URL |
 
 ### Split view
@@ -83,6 +84,7 @@ Source of truth: [`commandsRegistry.ts`](../../browser/base/content/assistant/bu
 | Command | User intent |
 |---------|-------------|
 | `list_tab_groups` | List tab groups |
+| `organize_tabs` | AI-organize tabs into topic groups (preview + confirm) |
 | `create_tab_group` | Create group from tabs |
 | `delete_tab_group` | Delete a tab group |
 | `add_tab_to_group` / `remove_tab_from_group` | Move tabs in/out of groups |
@@ -104,7 +106,7 @@ Source of truth: [`commandsRegistry.ts`](../../browser/base/content/assistant/bu
 | Command | User intent |
 |---------|-------------|
 | `search_memory` | Search memory (bookmarks/history embeddings) |
-| `search_history` | Search or list browsing history |
+| `search_history` | Search or list browsing history. Keyword: `search history for [term]`. Semantic: `what did I read about [topic]`. Recent: `search history` / `show my browsing history`. |
 | `get_recent_search_results` | Recent assistant search results |
 | `open_search_result` | Open a prior search result |
 | `summarize_page` | Summarize page content (optional query) |

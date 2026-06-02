@@ -15,7 +15,13 @@
 | [ai-assistant.md](ai-assistant.md) | 52 tools, clarification, voice, limits, UI |
 | [training-and-feedback.md](training-and-feedback.md) | Thumbs training, modes, token grants |
 | [browser-privacy-security.md](browser-privacy-security.md) | Firefox ETP, cookies, inherited protections |
+| [apple-credentials-macos.md](apple-credentials-macos.md) | Apple Passwords extension, passkeys, Mac troubleshooting |
+| [passkeys-mac-engineering-notes.md](passkeys-mac-engineering-notes.md) | Touch ID / WebAuthn root cause and verification |
+| [mac-release-qa-checklist.md](mac-release-qa-checklist.md) | Pre-promote passkey and Apple Passwords QA |
+| [apple-passwords-allowlist-request.md](apple-passwords-allowlist-request.md) | Apple allowlist PR template for `com.oasis.browser` |
 | [research-brief-mvp.md](research-brief-mvp.md) | Research brief from tab group (draft MVP spec) |
+| [organize-tabs-mvp.md](organize-tabs-mvp.md) | Organize tabs by topic (assistant command) |
+| [organize-tabs-utterance-catalog.md](organize-tabs-utterance-catalog.md) | Organize tabs routing QA catalog |
 | [../marketing/b2c-magical-gifts-mapping.md](../marketing/b2c-magical-gifts-mapping.md) | §4 obstacles → gifts (marketing crosswalk) |
 | [../../b2c-narrative-spine.md](../../b2c-narrative-spine.md) | Emotional B2C story (no feature dump) |
 
@@ -39,9 +45,13 @@
 | Enhanced Tracking Protection | shipped | Firefox | [browser-privacy](browser-privacy-security.md) |
 | Strict cookie / tracker defaults | shipped | Firefox (profile) | [browser-privacy](browser-privacy-security.md) |
 | Fingerprinting / cryptomining blockers | shipped | Firefox | [browser-privacy](browser-privacy-security.md) |
+| macOS passkeys / Touch ID (WebAuthn platform) | shipped | Oasis + Firefox | [passkeys-mac-engineering-notes](passkeys-mac-engineering-notes.md) |
+| Apple Passwords (iCloud Keychain via extension) | **partial** | Apple extension + macOS helper | [apple-credentials-macos](apple-credentials-macos.md) |
+| Safari-identical Passwords AutoFill | **gap** | — | [apple-credentials-macos](apple-credentials-macos.md) |
 | Contacts kept out of browser profile | **gap** | — | [gift mapping](../marketing/b2c-magical-gifts-mapping.md) |
 | Block all retargeting ads | partial | Firefox ETP | [gift mapping](../marketing/b2c-magical-gifts-mapping.md) |
 | Research brief from tab group | **planned** | Oasis (spec) | [research-brief-mvp](research-brief-mvp.md) |
+| Organize tabs by topic (AI tab groups) | shipped | Oasis | [organize-tabs-mvp](organize-tabs-mvp.md) |
 | Mozilla Toolkit telemetry | N/A in build | — | Privacy UI hidden when `!MOZ_TELEMETRY_REPORTING` |
 
 **Legend:** `shipped` = in v1.0.0.12 code path · `partial` = helps but does not fully solve obstacle · `gap` = not productized · `planned` = spec only, not in build
@@ -57,6 +67,8 @@
 | Where is ad blocking? | Firefox **Enhanced Tracking Protection** (not a separate Oasis ad blocker) |
 | How do I train the assistant? | Thumbs on replies; optional anonymous vs personalized training |
 | How many browser actions can AI run? | **52** tool commands (see ai-assistant doc) |
+| How do I use Apple Passwords on Mac? | Install Apple’s iCloud Passwords extension; see [apple-credentials-macos](apple-credentials-macos.md) |
+| Touch ID passkeys not working? | Update Oasis; see [passkeys-mac-engineering-notes](passkeys-mac-engineering-notes.md) |
 
 ---
 

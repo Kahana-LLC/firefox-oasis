@@ -114,6 +114,7 @@ const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {
   add_split_view: "organization",
   remove_split_view: "organization",
   organize_windows: "organization",
+  organize_tabs: "organization",
   create_bookmark_folder: "organization",
   delete_bookmark_folder: "organization",
   rename_bookmark_folder: "organization",
@@ -284,9 +285,10 @@ export type ParsedChatEnvelope = {
 /**
  * Token counts from a Gemini `usage_metadata` object (snake_case REST or camelCase SDK).
  */
-export function extractTokenCountsFromUsageMetadata(
-  usage: unknown
-): { input_tokens: number | null; output_tokens: number | null } {
+export function extractTokenCountsFromUsageMetadata(usage: unknown): {
+  input_tokens: number | null;
+  output_tokens: number | null;
+} {
   let inputTokens: number | null = null;
   let outputTokens: number | null = null;
   if (!isRecord(usage)) {
@@ -306,9 +308,10 @@ export function extractTokenCountsFromUsageMetadata(
 }
 
 /** Reads `usage_metadata` from an assist or chat API payload. */
-export function extractTokenCountsFromAssistPayload(
-  payload: unknown
-): { input_tokens: number | null; output_tokens: number | null } {
+export function extractTokenCountsFromAssistPayload(payload: unknown): {
+  input_tokens: number | null;
+  output_tokens: number | null;
+} {
   if (!isRecord(payload)) {
     return { input_tokens: null, output_tokens: null };
   }

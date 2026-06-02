@@ -43,6 +43,7 @@ import {
   OpenTabCommand,
   OpenTabNoteCommand,
   OrganizeWindowsCommand,
+  OrganizeTabsCommand,
   PinTabCommand,
   ReloadTabCommand,
   RemoveSplitViewCommand,
@@ -103,6 +104,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   new_window: `{}`,
   new_tab_to_right: `{"index?":"number"}`,
   organize_windows: `{}`,
+  organize_tabs: `{"mode?":"single_focus|multi_topic|research_vs_other","focus?":"string","name?":"string","scope?":"window|tab-group|tabs|ungrouped_only","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","max_groups?":"number","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","use_snippets?":"boolean","preview_confirmed?":"boolean","confirmed?":"boolean"}`,
   show_url: `{"url":"string"}`,
   search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
   get_recent_search_results: `{"limit?":"number"}`,
@@ -111,7 +113,7 @@ const COMMAND_ARG_SCHEMA: Readonly<Record<string, string>> = {
   build_research_brief: `{"topic?":"string","infer_topic_from_content?":"boolean","scope?":"tab-group|window|tabs","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","outline_hint?":"string","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
   regenerate_research_brief_section: `{"brief_id?":"string","section":"executiveSummary|outline|themes|sources|gapsAndContradictions"}`,
   show_subscription: `{}`,
-  search_history: `{"query":"string (optional; omit or \"\" for recent visits)"}`,
+  search_history: `{"query?":"string","mode?":"keyword|semantic|recent|auto","domain?":"string","since?":"string","extra?":"string","refined?":"boolean","skipRefinement?":"boolean"}`,
 };
 
 function toAssistToolDescription(command: Command): string {
@@ -169,6 +171,7 @@ export function createAssistantCommandsRegistry(): AssistantCommandsRegistry {
     new ConfirmActionCommand(),
     new NewWindowCommand(),
     new OrganizeWindowsCommand(),
+    new OrganizeTabsCommand(),
     new ShowURLCommand(),
     new SearchMemoryCommand(),
     new GetRecentSearchResultsCommand(),

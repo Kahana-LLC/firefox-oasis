@@ -50,7 +50,8 @@ function firstSentenceOrCap(text: string): string {
 }
 
 export function summarizeForUser(description: string): string {
-  const beforeArgs = description.split(" Args JSON:")[0]?.trim() || description.trim();
+  const beforeArgs =
+    description.split(" Args JSON:")[0]?.trim() || description.trim();
   let s = stripLlmArgumentClauses(beforeArgs);
   s = s.replace(/\.\s*$/, "").trim();
   if (!s) {
@@ -137,16 +138,19 @@ export function buildCapabilitiesOverviewMarkdown(
     "Group tabs, split the view, and arrange how you work across tabs and panes.",
     "",
     "- Tab groups, e.g. `Create a tab group called Research`",
+    "- Smart tab groups, e.g. `Group all tabs related to LLM research` or `Organize my open tabs by topic`",
     "- Split view shows two tabs side by side; you can choose which tabs. Try: `split view`",
   ].join("\n");
 
   const memory = [
     "### Memory and history",
     "",
-    "Search across open tabs, tab groups, browsing history, and saved memory. For cross-source recall, ask in your own words. For history only, start your request with `search history` (plain find is not wired to history yet).",
+    "Search across open tabs, tab groups, browsing history, and saved memory. For keyword history lookup, try `search history for agents`. For conceptual recall, ask `what did I read about AI safety`. For recent visits, try `search history`.",
     "",
     "- Cross-source recall, e.g. `Find anything about budgets across my tabs and history`",
-    "- History-only search, e.g. `search history for pages I read about taxes last month`",
+    "- Keyword history search, e.g. `search history for agents`",
+    "- If there are many matches, Oasis asks for a site, date, or extra keyword to narrow down",
+    "- Semantic history recall, e.g. `what did I read about taxes last month`",
   ].join("\n");
 
   const supportAndFeedback = [

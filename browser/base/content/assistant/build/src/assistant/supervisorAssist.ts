@@ -73,6 +73,7 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "resolve_ambiguity",
   "new_window",
   "organize_windows",
+  "organize_tabs",
   "reload_tab",
   "toggle_mute_tab",
   "pin_tab",
@@ -94,7 +95,7 @@ const SEARCH_WEB_HINT_RE =
 const SEARCH_LOCAL_HINT_RE =
   /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
 const SEARCH_HISTORY_HINT_RE =
-  /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that)\b/i;
+  /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that|search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history)\b/i;
 const SEARCH_BOOKMARKS_HINT_RE =
   /\b(?:bookmark|bookmarks|folder|saved|bookmarked|in\s+(?:my\s+)?(?:bookmark\s+)?folder|what'?s\s+in)\b/i;
 

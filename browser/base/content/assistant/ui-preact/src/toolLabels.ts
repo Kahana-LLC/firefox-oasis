@@ -3,6 +3,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_tabs: "Listing tabs",
   new_window: "Opening new window",
   organize_windows: "Organizing windows",
+  organize_tabs: "Organizing tabs",
   show_url: "Opening URL",
   open_tab: "Opening tab",
   close_tab: "Closing tab",

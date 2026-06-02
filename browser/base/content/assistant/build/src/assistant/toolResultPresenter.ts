@@ -121,17 +121,17 @@ function formatListTabs(message: string): string {
 }
 
 function formatSearchResults(message: string): string {
-  const parsed = safeParseJson(message) as
-    | {
-      summary?: unknown;
-      results?: unknown;
-    }
-    | null;
+  const parsed = safeParseJson(message) as {
+    summary?: unknown;
+    results?: unknown;
+  } | null;
   if (!parsed || typeof parsed !== "object") {
     return message;
   }
   const summary =
-    typeof parsed.summary === "string" ? parsed.summary.trim() : "I found these results for you:";
+    typeof parsed.summary === "string"
+      ? parsed.summary.trim()
+      : "I found these results for you:";
   const rows = toObjectList<SearchResultRow>(parsed.results).slice(0, 10);
   if (rows.length === 0) {
     return summary || message;
@@ -156,25 +156,83 @@ type HistorySearchRow = {
   url?: string;
   relevance?: string;
   visited?: string;
+  matchType?: string;
+  excerpt?: string;
 };
+
+type HistoryRefinementPayload = {
+  needsRefinement?: boolean;
+  prompt?: string;
+  preview?: HistorySearchRow[];
+  totalMatches?: number;
+  results?: HistorySearchRow[];
+  note?: string;
+};
+
+function historyMatchLabel(matchType?: string): string {
+  if (matchType === "title") {
+    return " (title match)";
+  }
+  if (matchType === "url") {
+    return " (URL match)";
+  }
+  if (matchType === "snippet") {
+    return " (page text match)";
+  }
+  return "";
+}
+
+function formatHistorySearchRow(row: HistorySearchRow): string {
+  const idx = typeof row.index === "number" ? `${row.index}. ` : "";
+  const title = typeof row.title === "string" ? row.title : "(untitled)";
+  const url = typeof row.url === "string" ? row.url : "";
+  const relevance =
+    typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
+  const matchNote = historyMatchLabel(row.matchType);
+  const excerpt =
+    typeof row.excerpt === "string" &&
+    row.excerpt &&
+    row.matchType === "snippet"
+      ? ` — "${row.excerpt}"`
+      : "";
+  const visited =
+    typeof row.visited === "string" ? ` — visited ${row.visited}` : "";
+  const label = matchNote || relevance;
+  return url
+    ? `${idx}[**${title}**](${url})${label}${excerpt}${visited}`
+    : `${idx}**${title}**${label}${excerpt}${visited}`;
+}
 
 function formatHistorySearchResults(message: string): string {
   const parsed = safeParseJson(message);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const payload = parsed as HistoryRefinementPayload;
+    if (payload.needsRefinement) {
+      const prompt =
+        typeof payload.prompt === "string"
+          ? payload.prompt
+          : "I found several history matches. Add a site, date, or extra keyword to narrow down.";
+      const previewRows = toObjectList<HistorySearchRow>(payload.preview);
+      const previewLines =
+        previewRows.length > 0
+          ? `\n\nExamples:\n\n${previewRows.map(formatHistorySearchRow).join("\n\n")}`
+          : "";
+      return `${prompt}${previewLines}`;
+    }
+    if (Array.isArray(payload.results)) {
+      const lines = payload.results.map(formatHistorySearchRow);
+      const note =
+        typeof payload.note === "string" ? `\n\n${payload.note}` : "";
+      return `I've looked through your history and found these matches:\n\n${lines.join("\n\n")}${note}`;
+    }
+  }
+
   const rows = toObjectList<HistorySearchRow>(parsed);
   if (rows.length === 0) {
     return message;
   }
 
-  const lines = rows.map(row => {
-    const idx = typeof row.index === "number" ? `${row.index}. ` : "";
-    const title = typeof row.title === "string" ? row.title : "(untitled)";
-    const url = typeof row.url === "string" ? row.url : "";
-    const relevance = typeof row.relevance === "string" ? ` (${row.relevance} match)` : "";
-    const visited = typeof row.visited === "string" ? ` — visited ${row.visited}` : "";
-    return url
-      ? `${idx}[**${title}**](${url})${relevance}${visited}`
-      : `${idx}**${title}**${relevance}${visited}`;
-  });
+  const lines = rows.map(formatHistorySearchRow);
   return `I've looked through your history and found these matches:\n\n${lines.join("\n\n")}`;
 }
 

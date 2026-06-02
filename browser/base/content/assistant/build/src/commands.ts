@@ -16,6 +16,20 @@ import { subscriptionService } from "./services/subscription";
 import { fetchRecentHistory } from "./services/historyCollector";
 import { semanticHistorySearch } from "./services/semanticHistorySearch";
 import {
+  parseHistorySearchQuery,
+  inferHistorySearchMode,
+  looksLikeHistoryKeywordSearch,
+  type HistorySearchMode,
+} from "./utils/historySearchQuery";
+import {
+  applyHistorySearchFilters,
+  buildHistoryRefinementPrompt,
+  clearPendingHistoryRefinement,
+  parseHistorySearchFiltersFromArgs,
+  setPendingHistoryRefinement,
+  shouldPromptHistoryRefinement,
+} from "./utils/historySearchRefinement";
+import {
   buildFolderUrlMap,
   filterStaleBookmarkFolderResults,
   hasBookmarkFolderCandidates,
@@ -70,7 +84,10 @@ import {
   type BuildResearchBriefOptions,
   type ResearchScope,
 } from "./services/researchBrief";
-import { getCachedResearchBriefRun, storeResearchBriefRun } from "./services/researchBriefDigestCache.js";
+import {
+  getCachedResearchBriefRun,
+  storeResearchBriefRun,
+} from "./services/researchBriefDigestCache.js";
 import { researchBriefToMarkdown } from "./services/researchBriefFormat.js";
 import { buildResearchBriefToolMessage } from "./utils/researchBriefRequest";
 import {
@@ -90,6 +107,19 @@ import {
 import type { ResolveResearchTabsResult } from "./services/researchBriefTypes.js";
 import { synthesizeResearchBriefSection } from "./services/researchBriefSectionSynthesis.js";
 import { mergeSectionIntoBrief } from "./services/researchBriefSectionMerge.js";
+import {
+  buildOrganizeTabsOptionsFromArgs,
+  countTabsMovingFromExistingGroups,
+  organizeTabs,
+} from "./services/organizeTabs.js";
+import {
+  buildCrossGroupMoveDescription,
+  buildOrganizeTabsPreviewDescription,
+} from "./utils/organizeTabsScopePreview.js";
+import {
+  buildAmbiguousGroupOrganizeClarification,
+  setOrganizeTabsResume,
+} from "./utils/organizeTabsResume.js";
 
 type CommandArgs = InteractionCommandArgs;
 type SearchResultItem = {
@@ -294,8 +324,16 @@ export class ListTabsCommand implements Command {
     const name = normalizeListTargetName(stringArg(args, "name") || "");
 
     const listWindowTabs = (): CmdResult => {
-      const titles = getTabs(gBrowser).map(tab => tabTitle(tab));
-      return { message: JSON.stringify(titles.slice(0, 50)) };
+      const tabs = getTabs(gBrowser)
+        .slice(0, 50)
+        .map((tab, i) => ({
+          index: i + 1,
+          title: tabTitle(tab),
+          url: tabUrl(tab),
+          group: tab.group?.label || null,
+          pinned: !!tab.pinned,
+        }));
+      return { message: JSON.stringify(tabs) };
     };
 
     const listGroupTabs = (groupName: string): CmdResult => {
@@ -1609,15 +1647,14 @@ function buildResearchBriefOptionsFromArgs(
 ): BuildResearchBriefOptions {
   const quotaRaw = stringArg(args, "quota_mode");
   const quotaMode =
-    quotaRaw === "truncate" || quotaRaw === "fewer_tabs"
-      ? quotaRaw
-      : "default";
+    quotaRaw === "truncate" || quotaRaw === "fewer_tabs" ? quotaRaw : "default";
   return {
     gBrowser,
     scope: normalizeResearchScope(stringArg(args, "scope")),
     name: stringArg(args, "name"),
     topic: stringArg(args, "topic")?.trim(),
-    inferTopicFromContent: booleanArg(args, "infer_topic_from_content") === true,
+    inferTopicFromContent:
+      booleanArg(args, "infer_topic_from_content") === true,
     tabQueries: stringArrayArg(args, "tab_queries"),
     tabIndices: numberArrayArg(args, "tab_indices"),
     outlineHint: stringArg(args, "outline_hint"),
@@ -1628,6 +1665,101 @@ function buildResearchBriefOptionsFromArgs(
     quotaMode,
     useActiveTabGroup: booleanArg(args, "use_active_tab_group") === true,
   };
+}
+
+export class OrganizeTabsCommand implements Command {
+  commandName = "organize_tabs";
+  description =
+    "Organize open tabs into tab groups by topic using AI. Arguments: { mode?: 'single_focus'|'multi_topic'|'research_vs_other', focus?: string, name?: string, scope?: 'window'|'tab-group'|'tabs'|'ungrouped_only', use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], max_groups?: number, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], use_snippets?: boolean, preview_confirmed?: boolean, confirmed?: boolean }. Use single_focus to group tabs about one topic; multi_topic to discover several groups; research_vs_other to split focus work from everything else.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    const options = buildOrganizeTabsOptionsFromArgs(args, gBrowser);
+    const signal = beginResearchBriefRun();
+    const onProgress = createResearchBriefProgressReporter(signal);
+    try {
+      const result = await organizeTabs({
+        ...options,
+        onProgress: detail => {
+          if (detail.phase === "resolving") {
+            onProgress({ phase: "resolving", label: detail.label });
+          } else if (detail.phase === "extracting") {
+            onProgress({
+              phase: "extracting",
+              current: detail.current,
+              total: detail.total,
+              label: detail.label,
+            });
+          } else if (detail.phase === "clustering") {
+            onProgress({ phase: "synthesizing", label: detail.label });
+          } else if (detail.phase === "applying") {
+            onProgress({ phase: "synthesizing", label: detail.label });
+          }
+        },
+        signal,
+      });
+
+      if (!result.ok) {
+        if (result.code === "ambiguous_group" && result.candidates) {
+          const query = String(args.name || args.focus || "tab group");
+          const { options: clarifyOptions, message } =
+            buildAmbiguousGroupOrganizeClarification(
+              query,
+              result.candidates.map(candidate => ({
+                id: `organize_group:${encodeURIComponent(candidate.name)}`,
+                label: candidate.label,
+                name: candidate.name,
+                tabCount: candidate.tabCount,
+              }))
+            );
+          setOrganizeTabsResume({
+            args: { ...args, preview_confirmed: false },
+            reason: "ambiguous_group",
+          });
+          setPendingClarification({
+            originalMessage: query,
+            options: clarifyOptions,
+          });
+          return { message };
+        }
+        return { message: result.message };
+      }
+
+      if ("needsPreview" in result && result.needsPreview) {
+        const description = buildOrganizeTabsPreviewDescription({
+          scopeLabel: result.scopeLabel,
+          plan: result.plan,
+          catalog: result.catalog,
+          tabsMovingFromExistingGroups: countTabsMovingFromExistingGroups(
+            result.plan,
+            gBrowser
+          ),
+        });
+        setPendingConfirmation({
+          command: this.commandName,
+          args: { ...args, preview_confirmed: true },
+          description,
+        });
+        return { message: description, requiresConfirmation: true };
+      }
+
+      if ("needsCrossGroupConfirm" in result && result.needsCrossGroupConfirm) {
+        const description = buildCrossGroupMoveDescription({
+          affectedGroups: result.affectedGroups,
+          emptiedGroups: result.emptiedGroups,
+        });
+        setPendingConfirmation({
+          command: this.commandName,
+          args: { ...args, preview_confirmed: true, confirmed: true },
+          description,
+        });
+        return { message: description, requiresConfirmation: true };
+      }
+
+      return { message: result.message };
+    } finally {
+      endResearchBriefRun();
+    }
+  }
 }
 
 export class BuildResearchBriefCommand implements Command {
@@ -2650,13 +2782,35 @@ function formatRelativeVisitTime(visitDate: number): string {
 export class SearchHistorySemanticCommand implements Command {
   commandName = "search_history";
   description =
-    'Search the user\'s recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as "" to return recent visits.';
+    'Search browsing history by keyword or semantic similarity. Use mode keyword for "search history for [term]", semantic for conceptual recall, recent for listing visits. Optional filters: domain, since, extra. Arguments: { query?: string, mode?: "keyword"|"semantic"|"recent"|"auto", domain?, since?, extra?, refined?, skipRefinement? }. Empty query lists recent visits.';
 
   async execute(args: CommandArgs): Promise<CmdResult> {
-    const qVal = (args as Record<string, unknown>)?.query;
-    const query = typeof qVal === "string" ? qVal.trim() : "";
+    const record = args as Record<string, unknown>;
+    const explicitMode =
+      typeof record.mode === "string" ? record.mode.trim() : undefined;
+    const utterance =
+      typeof record.utterance === "string"
+        ? record.utterance.trim()
+        : typeof record.query === "string"
+          ? record.query.trim()
+          : "";
+    const rawQuery =
+      typeof record.query === "string" ? record.query.trim() : "";
 
-    if (!query) {
+    let query = rawQuery;
+    let mode: HistorySearchMode = inferHistorySearchMode(query, explicitMode);
+
+    if (!explicitMode) {
+      const reparsed = parseHistorySearchQuery(utterance);
+      if (reparsed) {
+        query = reparsed.query;
+        mode = reparsed.mode;
+      } else if (looksLikeHistoryKeywordSearch(utterance)) {
+        mode = "keyword";
+      }
+    }
+
+    if (!query || mode === "recent") {
       try {
         const entries = await fetchRecentHistory(15, false);
         if (entries.length === 0) {
@@ -2682,13 +2836,49 @@ export class SearchHistorySemanticCommand implements Command {
     }
 
     try {
-      const results = await semanticHistorySearch.search(query, 10);
+      const skipRefinement =
+        record.skipRefinement === true || record.refined === true;
+      const filters = parseHistorySearchFiltersFromArgs(record);
+      const searchMode = mode === "recent" ? "auto" : mode;
+      const searchLimit = skipRefinement ? 10 : 25;
+      const results = await semanticHistorySearch.search(query, searchLimit, {
+        mode: searchMode,
+      });
 
-      const MIN_RELEVANCE = 0.3;
+      const MIN_RELEVANCE = mode === "keyword" ? 0.5 : 0.3;
       const MAX_RESULTS = 5;
-      const filtered = results
-        .filter(r => r.score >= MIN_RELEVANCE)
-        .slice(0, MAX_RESULTS);
+      let qualifying = results.filter(r => r.score >= MIN_RELEVANCE);
+      qualifying = applyHistorySearchFilters(qualifying, filters);
+
+      if (
+        !skipRefinement &&
+        shouldPromptHistoryRefinement(qualifying, { skip: false })
+      ) {
+        setPendingHistoryRefinement({
+          query,
+          mode,
+          filters,
+          totalMatches: qualifying.length,
+        });
+        const preview = qualifying.slice(0, 3).map((r, i) => ({
+          index: i + 1,
+          title: r.title,
+          url: r.url,
+          visited: formatRelativeVisitTime(r.visitDate),
+        }));
+        return {
+          message: JSON.stringify({
+            needsRefinement: true,
+            prompt: buildHistoryRefinementPrompt(query, qualifying.length),
+            query,
+            totalMatches: qualifying.length,
+            preview,
+          }),
+        };
+      }
+
+      clearPendingHistoryRefinement();
+      const filtered = qualifying.slice(0, MAX_RESULTS);
 
       if (filtered.length === 0) {
         let recent: Awaited<ReturnType<typeof fetchRecentHistory>> = [];
@@ -2707,24 +2897,43 @@ export class SearchHistorySemanticCommand implements Command {
         }
         return {
           message:
+            (record.refined
+              ? `No pages matched "${query}" with those filters. Try fewer hints or say show all. `
+              : "") +
             `No history entries matched "${query}" among recent visits (Places has ${recent.length} recent URLs indexed for lookup). ` +
             "Try a shorter keyword (e.g. domain name), visit the page again, or check Library → History.",
         };
       }
 
+      const stillMany = qualifying.length > MAX_RESULTS;
       const formatted = filtered.map((r, i) => ({
         index: i + 1,
         title: r.title,
         url: r.url,
         relevance: Math.round(r.score * 100) + "%",
         visited: formatRelativeVisitTime(r.visitDate),
+        matchType: r.matchType,
+        excerpt: r.excerpt,
       }));
 
-      return { message: JSON.stringify(formatted) };
+      return {
+        message: JSON.stringify(
+          stillMany
+            ? {
+                results: formatted,
+                note: `Showing the ${formatted.length} best matches from ${qualifying.length} pages.`,
+              }
+            : formatted
+        ),
+      };
     } catch (e: any) {
       console.error("[SearchHistorySemantic] Search failed:", e);
       return {
-        message: `History search failed: ${e.message || "Unknown error"}. The embedding model may still be loading — please try again in a moment.`,
+        message:
+          `Could not search browsing history for "${query}". ` +
+          (mode === "keyword"
+            ? "Places keyword search failed — check the Browser Console for [HistoryCollector] errors."
+            : "Semantic search is unavailable right now — try `search history for ${query}` for a keyword lookup."),
       };
     }
   }
