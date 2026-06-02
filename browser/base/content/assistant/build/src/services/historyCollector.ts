@@ -15,6 +15,7 @@ export interface HistoryEntry {
   url: string;
   visitDate: number; // epoch ms
   snippet: string; // first ~500 chars of page body text
+  matchField?: "title" | "url";
 }
 
 /**
@@ -125,6 +126,78 @@ async function fetchPageSnippet(url: string): Promise<string> {
     return textContent;
   } catch {
     return ""; // Silently fail — title+url fallback is fine
+  }
+}
+
+function detectMatchField(
+  terms: string,
+  title: string,
+  url: string
+): "title" | "url" {
+  const lowerTerms = terms.toLowerCase();
+  const tokens = lowerTerms.split(/\s+/).filter(Boolean);
+  const titleLower = title.toLowerCase();
+  const urlLower = url.toLowerCase();
+  const titleMatch =
+    tokens.length > 0 && tokens.every(token => titleLower.includes(token));
+  if (titleMatch) {
+    return "title";
+  }
+  return "url";
+}
+
+export async function searchHistoryByKeyword(
+  terms: string,
+  maxResults = 20
+): Promise<HistoryEntry[]> {
+  const PlacesUtils = getPlacesUtils();
+  const searchTerms = String(terms || "").trim();
+  if (!PlacesUtils || !searchTerms) {
+    return [];
+  }
+
+  try {
+    const options = PlacesUtils.history.getNewQueryOptions();
+    options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+    options.maxResults = maxResults * 2;
+    options.includeHidden = false;
+
+    const query = PlacesUtils.history.getNewQuery();
+    query.searchTerms = searchTerms;
+
+    const result = PlacesUtils.history.executeQuery(query, options);
+    const root = result.root;
+    root.containerOpen = true;
+
+    const entries: HistoryEntry[] = [];
+    const seenUrls = new Set<string>();
+
+    for (let i = 0; i < root.childCount && entries.length < maxResults; i++) {
+      const node = root.getChild(i);
+      const url = node.uri;
+      if (!isUserVisibleUrl(url)) {
+        continue;
+      }
+      if (seenUrls.has(url)) {
+        continue;
+      }
+      seenUrls.add(url);
+
+      const title = node.title || url;
+      entries.push({
+        title,
+        url,
+        visitDate: Math.floor(node.time / 1000),
+        snippet: "",
+        matchField: detectMatchField(searchTerms, title, url),
+      });
+    }
+
+    root.containerOpen = false;
+    return entries;
+  } catch (e) {
+    console.error("[HistoryCollector] Keyword search failed:", e);
+    return [];
   }
 }
 
