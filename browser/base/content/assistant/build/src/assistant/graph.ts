@@ -111,6 +111,20 @@ import {
   consumeResearchBriefResume,
   parseResearchBriefResumePrompt,
 } from "../utils/researchBriefResume.js";
+import {
+  consumeOrganizeTabsResume,
+  parseOrganizeTabsResumePrompt,
+} from "../utils/organizeTabsResume.js";
+import {
+  getPendingHistoryRefinement,
+  resolvePendingHistoryRefinementGate,
+} from "../utils/historySearchRefinement.js";
+import {
+  mergeDeterministicHistorySearchArgs,
+  mergeDeterministicOrganizeTabsArgs,
+  tryPreferDeterministicToolRoute,
+  tryResolveEarlyDeterministicSupervisorRoute,
+} from "../utils/preferDeterministicRoute.js";
 
 function tryConsumeResearchBriefResumeFromGate(
   resolvedPrompt: string
@@ -120,6 +134,16 @@ function tryConsumeResearchBriefResumeFromGate(
     return null;
   }
   return consumeResearchBriefResume(optionId);
+}
+
+function tryConsumeOrganizeTabsResumeFromGate(
+  resolvedPrompt: string
+): Record<string, unknown> | null {
+  const optionId = parseOrganizeTabsResumePrompt(resolvedPrompt);
+  if (!optionId) {
+    return null;
+  }
+  return consumeOrganizeTabsResume(optionId);
 }
 import {
   buildCommandQueuePlan,
@@ -137,6 +161,16 @@ import {
   type GraphArgs,
   type MessageLike,
 } from "./messageUtils.js";
+
+function applyDeterministicAssistOverride(
+  activeCommand: string,
+  route: ReturnType<typeof routeDeterministically>
+): Record<string, unknown> | null {
+  return (
+    mergeDeterministicHistorySearchArgs(activeCommand, route) ||
+    mergeDeterministicOrganizeTabsArgs(activeCommand, route)
+  );
+}
 
 export function buildAssistantGraph(
   commands: Command[],
@@ -348,6 +382,16 @@ export function buildAssistantGraph(
           commandQueue: [],
         };
       }
+      const organizeResumeArgs = tryConsumeOrganizeTabsResumeFromGate(
+        clarificationGate.resolvedPrompt
+      );
+      if (organizeResumeArgs) {
+        return {
+          next: "organize_tabs",
+          args: organizeResumeArgs,
+          commandQueue: [],
+        };
+      }
       return {
         next: "supervisor",
         args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },
@@ -360,6 +404,27 @@ export function buildAssistantGraph(
     }
     if (clarificationGate.kind === "clear") {
       clearPendingClarification();
+    }
+
+    const historyRefinementGate = resolvePendingHistoryRefinementGate({
+      pending: getPendingHistoryRefinement(),
+      userText: commandText,
+    });
+    if (historyRefinementGate.kind === "search") {
+      return {
+        next: "search_history",
+        args: historyRefinementGate.args,
+        commandQueue: [],
+      };
+    }
+    if (historyRefinementGate.kind === "cancel") {
+      return {
+        next: "chat",
+        args: {
+          routerMessage: "Okay, I cancelled the history search.",
+        },
+        commandQueue: [],
+      };
     }
 
     const pendingContinuationQueue = getContinuationQueue();
@@ -400,6 +465,21 @@ export function buildAssistantGraph(
     const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
     const topLevelPageContextRequest =
       looksLikePageContextRequest(effectiveCommandLine);
+
+    if (!hasQueuedCommands && effectiveCommandLine) {
+      const earlyRoute = routeDeterministically(effectiveCommandLine);
+      const earlyResolved = tryResolveEarlyDeterministicSupervisorRoute(
+        effectiveCommandLine,
+        earlyRoute
+      );
+      if (earlyResolved) {
+        return {
+          next: earlyResolved.next,
+          args: earlyResolved.args,
+          commandQueue: [],
+        };
+      }
+    }
 
     if (
       !hasQueuedCommands &&
@@ -461,6 +541,17 @@ export function buildAssistantGraph(
 
       if (topLevelAssist.kind === "tool") {
         const guardRoute = routeDeterministically(commandLine);
+        const deterministicOverride = applyDeterministicAssistOverride(
+          commandLine,
+          guardRoute
+        );
+        if (deterministicOverride && guardRoute.type === "tool") {
+          return {
+            next: guardRoute.next,
+            args: deterministicOverride,
+            commandQueue: [commandLine],
+          };
+        }
         if (
           guardRoute.type === "tool" &&
           guardRoute.next === "resolve_ambiguity" &&
@@ -549,6 +640,17 @@ export function buildAssistantGraph(
 
     const route = routeDeterministically(activeCommand);
     if (assistRoute.kind === "tool") {
+      const deterministicOverride = applyDeterministicAssistOverride(
+        activeCommand,
+        route
+      );
+      if (deterministicOverride && route.type === "tool") {
+        return {
+          next: route.next,
+          args: applyNoticeToArgs(deterministicOverride),
+          commandQueue,
+        };
+      }
       if (
         route.type === "tool" &&
         route.next === "resolve_ambiguity" &&
@@ -586,9 +688,13 @@ export function buildAssistantGraph(
       if (route.pendingAmbiguity) {
         setRoutePendingAmbiguity(route.pendingAmbiguity);
       }
+      const args =
+        route.next === "search_history"
+          ? { ...route.args, utterance: activeCommand }
+          : route.args;
       return {
         next: route.next,
-        args: applyNoticeToArgs(route.args),
+        args: applyNoticeToArgs(args),
         commandQueue,
       };
     }

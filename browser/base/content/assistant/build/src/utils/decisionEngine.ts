@@ -22,6 +22,10 @@ import {
   looksLikeResearchBriefCommand,
   resolveExplicitResearchBriefRoute,
 } from "./researchBriefExplicitResolver.js";
+import {
+  looksLikeOrganizeTabsCommand,
+  resolveExplicitOrganizeTabsRoute,
+} from "./organizeTabsExplicitResolver.js";
 import type {
   DeterministicRouteDecision,
   IntentFamily,
@@ -64,7 +68,21 @@ export function decideDeterministicRoute(
       actionable: true,
       reason: "research-brief-unresolved",
       message:
-        'I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.',
+        "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.",
+    };
+  }
+
+  if (looksLikeOrganizeTabsCommand(input)) {
+    const organizeEarly = resolveExplicitOrganizeTabsRoute(input, snapshot);
+    if (organizeEarly) {
+      return organizeEarly;
+    }
+    return {
+      type: "chat",
+      actionable: true,
+      reason: "organize-tabs-unresolved",
+      message:
+        "I could not match that to tab organizing. Try: `Group all tabs related to LLM research` or `Organize my open tabs by topic`.",
     };
   }
 
@@ -95,6 +113,14 @@ export function decideDeterministicRoute(
     return researchBriefExplicit;
   }
 
+  const organizeTabsExplicit = resolveExplicitOrganizeTabsRoute(
+    input,
+    snapshot
+  );
+  if (organizeTabsExplicit) {
+    return organizeTabsExplicit;
+  }
+
   const explicit = resolveExplicitRoute(input);
   if (explicit) {
     return explicit;
@@ -111,7 +137,7 @@ export function decideDeterministicRoute(
           : family === "search"
             ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)"
             : looksLikeResearchBriefCommand(input)
-              ? 'I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.'
+              ? "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`."
               : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
     };
   }

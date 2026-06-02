@@ -10,6 +10,8 @@
  */
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 import { resolveKnownSiteToUrl } from "./knownSites.js";
+import { parseHistorySearchQuery } from "./historySearchQuery.js";
+import { enrichOrganizeTabsRouteArgs } from "./organizeTabsQuery.js";
 
 type ExplicitRouteRule = {
   next: string;
@@ -109,6 +111,32 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
         )
       ) {
         return {};
+      }
+      return null;
+    },
+  },
+  {
+    next: "organize_tabs",
+    reason: "explicit-organize-tabs",
+    resolve: input => {
+      if (/\borganize\s+windows?\b/i.test(input)) {
+        return null;
+      }
+      if (
+        /\b(?:group|organize|sort|cluster|tidy|clean\s+up)\b.*\btabs?\b/i.test(
+          input
+        ) ||
+        /\bgroup\s+(?:all\s+)?tabs?\s+(?:about|on|related\s+to|for)\b/i.test(
+          input
+        ) ||
+        /\b(?:separate|split|isolate)\s+.+\s+(?:from|and)\s+(?:everything\s+else|the\s+rest|other|unrelated)\b/i.test(
+          input
+        )
+      ) {
+        return enrichOrganizeTabsRouteArgs(input, {
+          mode: "multi_topic",
+          scope: "window",
+        });
       }
       return null;
     },
@@ -241,6 +269,26 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     },
   },
   // ─────────────────────────────────────────────────────────────────────────
+  // HISTORY KEYWORD SEARCH (search history for [term])
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    next: "search_history",
+    reason: "explicit-history-keyword-search",
+    resolve: input => {
+      const parsed = parseHistorySearchQuery(input);
+      if (!parsed) {
+        return null;
+      }
+      if (parsed.mode === "recent") {
+        return { query: "", mode: "recent" };
+      }
+      if (parsed.mode === "keyword") {
+        return { query: parsed.query, mode: "keyword" };
+      }
+      return null;
+    },
+  },
+  // ─────────────────────────────────────────────────────────────────────────
   // BROWSING HISTORY SEARCH (search_history)
   // Matches queries about pages the user VISITED (not bookmarked)
   // Examples: "what did I read about X", "find that article I visited"
@@ -250,15 +298,34 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     reason: "explicit-history-search",
     resolve: input => {
       const patterns: Array<{ re: RegExp; queryGroup?: string }> = [
-        { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
-        { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
-        { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
-        { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
-        { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
-        { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
-        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
-        { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
-        { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" },
+        {
+          re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i,
+        },
+        {
+          re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i,
+        },
+        {
+          re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i,
+        },
+        {
+          re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i,
+        },
+        {
+          re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i,
+        },
+        {
+          re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i,
+        },
+        {
+          re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i,
+        },
+        {
+          re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i,
+        },
+        {
+          re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i,
+          queryGroup: "recent browsing history",
+        },
       ];
       for (const { re, queryGroup } of patterns) {
         const match = input.match(re);
@@ -269,8 +336,14 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       }
       if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
         const cleaned = input
-          .replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "")
-          .replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "")
+          .replace(
+            /^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i,
+            ""
+          )
+          .replace(
+            /\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i,
+            ""
+          )
           .replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "")
           .replace(/^(?:for|about|on|regarding)\s+/i, "")
           .trim();

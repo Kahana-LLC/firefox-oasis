@@ -245,7 +245,11 @@ function applyTopicPolicy(
     }
   }
 
-  if (scope === "window" && !topicFields.topic && !topicFields.inferTopicFromContent) {
+  if (
+    scope === "window" &&
+    !topicFields.topic &&
+    !topicFields.inferTopicFromContent
+  ) {
     return null;
   }
 
@@ -354,6 +358,14 @@ const RESEARCH_BRIEF_PATTERNS: Array<{
     reason: "summary-of-active-group",
     match: new RegExp(
       `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+      "i"
+    ),
+    resolve: () => activeGroupArgs(),
+  },
+  {
+    reason: "research-brief-on-active-tab-group",
+    match: new RegExp(
+      `^${PRODUCT_START}\\s+on\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
       "i"
     ),
     resolve: () => activeGroupArgs(),
@@ -588,9 +600,13 @@ export function resolveExplicitResearchBriefRoute(
     /^regenerate\s+research\s+brief\s+section\s+(\w+)\s*$/i
   );
   if (regenerateMatch) {
-    return toolDecision("regenerate_research_brief_section", "regenerate-section", {
-      section: regenerateMatch[1],
-    });
+    return toolDecision(
+      "regenerate_research_brief_section",
+      "regenerate-section",
+      {
+        section: regenerateMatch[1],
+      }
+    );
   }
 
   const { body: afterOutline, outlineHint } =

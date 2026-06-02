@@ -40,7 +40,7 @@ export function parseAmbiguityResolution(
 export function looksLikeNewActionCommand(text: string): boolean {
   const input = String(text || "");
   const hasAction =
-    /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|copy|unload)\b/i.test(
+    /\b(?:open|close|delete|remove|create|make|build|write|generate|draft|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|copy|unload)\b/i.test(
       input
     );
   const hasObjectOrTarget =

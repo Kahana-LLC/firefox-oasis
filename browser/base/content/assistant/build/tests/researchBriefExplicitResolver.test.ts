@@ -12,7 +12,7 @@ import type { RoutingStateSnapshot } from "../src/utils/routerTypes.js";
 
 const snapshot: RoutingStateSnapshot = {
   folderNames: new Set<string>(),
-  groupNames: new Set(["ai privacy", "research", "sports"]),
+  groupNames: new Set(["ai privacy", "research", "sports", "github"]),
   stale: false,
 };
 
@@ -55,7 +55,9 @@ function assertBriefRoute(
 
 test("normalizeResearchBriefInput fixes researhc typo", () => {
   assert.equal(
-    normalizeResearchBriefInput("create a researhc brief from tab group sports"),
+    normalizeResearchBriefInput(
+      "create a researhc brief from tab group sports"
+    ),
     "create a research brief from tab group sports"
   );
 });
@@ -177,6 +179,27 @@ test("create a brief based on this tab group routes to active group", () => {
     assert.equal(route.args?.use_active_tab_group, true);
     assert.equal(route.args?.infer_topic_from_content, true);
   }
+});
+
+test("build a research brief on this tab group routes to active group", () => {
+  const route = resolveExplicitResearchBriefRoute(
+    "build a research brief on this tab group",
+    snapshot
+  );
+  assert.equal(route?.type, "tool");
+  if (route?.type === "tool") {
+    assert.equal(route.next, "build_research_brief");
+    assert.equal(route.args?.use_active_tab_group, true);
+    assert.equal(route.args?.infer_topic_from_content, true);
+  }
+});
+
+test("create a research brief based on the github tab group", () => {
+  assertBriefRoute("create a research brief based on the github tab group", {
+    inferTopic: true,
+    name: "github",
+    scope: "tab-group",
+  });
 });
 
 test("looksLikeResearchBriefCommand accepts brief without research keyword", () => {

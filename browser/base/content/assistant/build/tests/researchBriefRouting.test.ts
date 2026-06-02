@@ -71,6 +71,38 @@ test("create research brief based on tab group sports routes deterministically",
   assert.equal(route.args?.name, "sports");
 });
 
+test("create research brief based on the github tab group routes deterministically", () => {
+  const route = decideDeterministicRoute(
+    "create a research brief based on the github tab group",
+    {
+      folderNames: new Set<string>(),
+      groupNames: new Set(["github"]),
+      stale: false,
+    }
+  );
+  assert.equal(route.type, "tool");
+  if (route.type !== "tool") {
+    return;
+  }
+  assert.equal(route.next, "build_research_brief");
+  assert.equal(route.args?.name, "github");
+  assert.equal(route.args?.infer_topic_from_content, true);
+});
+
+test("build a research brief on this tab group routes deterministically", () => {
+  const route = decideDeterministicRoute(
+    "build a research brief on this tab group",
+    snapshot
+  );
+  assert.equal(route.type, "tool");
+  if (route.type !== "tool") {
+    return;
+  }
+  assert.equal(route.next, "build_research_brief");
+  assert.equal(route.args?.use_active_tab_group, true);
+  assert.equal(route.args?.infer_topic_from_content, true);
+});
+
 test("research brief from tab group sports without topic", () => {
   const route = decideDeterministicRoute(
     "research brief from tab group sports",
@@ -101,7 +133,10 @@ test("research brief from named tabs routes to tabs scope", () => {
 });
 
 test("summarize tabs in sports group routes to research brief", () => {
-  const route = decideDeterministicRoute("summarize tabs in sports group", snapshot);
+  const route = decideDeterministicRoute(
+    "summarize tabs in sports group",
+    snapshot
+  );
   assert.equal(route.type, "tool");
   if (route.type !== "tool") {
     return;
