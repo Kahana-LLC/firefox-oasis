@@ -100,9 +100,9 @@ jobs:
           set -euo pipefail
           npm ci --prefix browser/base/content/assistant/ui-preact
           npm run build --prefix browser/base/content/assistant/ui-preact
-      npm ci --prefix browser/base/content/assistant/build
-      npm run test:search-history --prefix browser/base/content/assistant/build
-      npm run build --prefix browser/base/content/assistant/build
+          npm ci --prefix browser/base/content/assistant/build
+          npm run test:search-history --prefix browser/base/content/assistant/build
+          npm run build --prefix browser/base/content/assistant/build
 
       - name: Check DMG layout env present
         run: |
