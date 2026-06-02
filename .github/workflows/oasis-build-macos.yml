@@ -422,7 +422,12 @@ jobs:
             echo "${ENTITLEMENTS}" >&2
             exit 1
           fi
-          BUNDLE_ID="$(defaults read "${PKG_APP}/Contents/Info.plist" CFBundleIdentifier)"
+          INFO_PLIST="${PKG_APP}/Contents/Info.plist"
+          if [ ! -f "${INFO_PLIST}" ]; then
+            echo "Missing Info.plist at ${INFO_PLIST}" >&2
+            exit 1
+          fi
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "${INFO_PLIST}")"
           echo "Distributable entitlements verified for bundle ${BUNDLE_ID} on ${EXECUTABLE_PATH}"
 
       - name: Prepare notary API key
