@@ -11,9 +11,7 @@ import { assistRemote } from "../proxyClient.js";
 import type { ClarificationOption } from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { toWire } from "./messageUtils.js";
-import {
-  isObviousResearchBriefRequest,
-} from "../utils/researchBriefExplicitResolver.js";
+import { isObviousResearchBriefRequest } from "../utils/researchBriefExplicitResolver.js";
 
 export { isObviousResearchBriefRequest } from "../utils/researchBriefExplicitResolver.js";
 

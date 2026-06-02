@@ -6,7 +6,13 @@ export function normalizeBriefUrl(url: string): string {
   try {
     const parsed = new URL(raw);
     parsed.hash = "";
-    const dropParams = [/^utm/i, /^fbclid$/i, /^gclid$/i, /^mc_eid$/i, /^ref$/i];
+    const dropParams = [
+      /^utm/i,
+      /^fbclid$/i,
+      /^gclid$/i,
+      /^mc_eid$/i,
+      /^ref$/i,
+    ];
     const kept: string[] = [];
     parsed.searchParams.forEach((_, key) => {
       if (!dropParams.some(re => re.test(key))) {

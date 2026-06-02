@@ -88,7 +88,9 @@ export function isMapReduceEnabled(): boolean {
   try {
     const Services = (
       window as {
-        Services?: { prefs?: { getBoolPref?: (k: string, d: boolean) => boolean } };
+        Services?: {
+          prefs?: { getBoolPref?: (k: string, d: boolean) => boolean };
+        };
       }
     ).Services;
     return (
@@ -109,7 +111,11 @@ export async function synthesizeResearchBriefWithBudget(params: {
   digests: TabDigest[];
   maxTotalChars: number;
   signal?: AbortSignal;
-}): Promise<{ brief: ResearchBrief; digests: TabDigest[]; truncated: boolean }> {
+}): Promise<{
+  brief: ResearchBrief;
+  digests: TabDigest[];
+  truncated: boolean;
+}> {
   const totalChars = params.digests.reduce(
     (sum, d) => sum + String(d.content || "").length,
     0

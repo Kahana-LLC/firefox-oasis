@@ -7,92 +7,94 @@ import { buildResearchBriefUserMessage } from "../prompts/researchBriefPrompt.js
 import type { ResearchBrief, TabDigest } from "./researchBriefTypes.js";
 import type { ResearchBriefSectionId } from "./researchBriefSectionMerge.js";
 
-const SECTION_SCHEMAS: Record<ResearchBriefSectionId, Record<string, unknown>> =
-  {
-    executiveSummary: {
-      type: "object",
-      properties: {
-        executiveSummary: { type: "string" },
-      },
-      required: ["executiveSummary"],
+const SECTION_SCHEMAS: Record<
+  ResearchBriefSectionId,
+  Record<string, unknown>
+> = {
+  executiveSummary: {
+    type: "object",
+    properties: {
+      executiveSummary: { type: "string" },
     },
-    outline: {
-      type: "object",
-      properties: {
-        outline: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              heading: { type: "string" },
-              bullets: { type: "array", items: { type: "string" } },
-            },
-            required: ["heading", "bullets"],
+    required: ["executiveSummary"],
+  },
+  outline: {
+    type: "object",
+    properties: {
+      outline: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            heading: { type: "string" },
+            bullets: { type: "array", items: { type: "string" } },
           },
+          required: ["heading", "bullets"],
         },
       },
-      required: ["outline"],
     },
-    themes: {
-      type: "object",
-      properties: {
-        themes: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              label: { type: "string" },
-              synthesis: { type: "string" },
-              sourceUrls: { type: "array", items: { type: "string" } },
-            },
-            required: ["label", "synthesis", "sourceUrls"],
+    required: ["outline"],
+  },
+  themes: {
+    type: "object",
+    properties: {
+      themes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            synthesis: { type: "string" },
+            sourceUrls: { type: "array", items: { type: "string" } },
           },
+          required: ["label", "synthesis", "sourceUrls"],
         },
       },
-      required: ["themes"],
     },
-    sources: {
-      type: "object",
-      properties: {
-        sources: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              url: { type: "string" },
-              status: { type: "string" },
-              failureReason: { type: "string" },
-              keyClaims: { type: "array", items: { type: "string" } },
-              quotes: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    text: { type: "string" },
-                    context: { type: "string" },
-                  },
-                  required: ["text"],
+    required: ["themes"],
+  },
+  sources: {
+    type: "object",
+    properties: {
+      sources: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            url: { type: "string" },
+            status: { type: "string" },
+            failureReason: { type: "string" },
+            keyClaims: { type: "array", items: { type: "string" } },
+            quotes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: { type: "string" },
+                  context: { type: "string" },
                 },
+                required: ["text"],
               },
             },
-            required: ["title", "url", "status", "keyClaims", "quotes"],
           },
+          required: ["title", "url", "status", "keyClaims", "quotes"],
         },
       },
-      required: ["sources"],
     },
-    gapsAndContradictions: {
-      type: "object",
-      properties: {
-        gapsAndContradictions: {
-          type: "array",
-          items: { type: "string" },
-        },
+    required: ["sources"],
+  },
+  gapsAndContradictions: {
+    type: "object",
+    properties: {
+      gapsAndContradictions: {
+        type: "array",
+        items: { type: "string" },
       },
-      required: ["gapsAndContradictions"],
     },
-  };
+    required: ["gapsAndContradictions"],
+  },
+};
 
 function parseSectionContent(res: unknown): unknown {
   if (!isRecord(res)) {

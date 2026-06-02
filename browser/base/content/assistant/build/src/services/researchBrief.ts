@@ -45,7 +45,12 @@ import { finalizeResolvedTabList } from "./researchBriefResolve.js";
 import { storeResearchBriefRun } from "./researchBriefDigestCache.js";
 import { suggestTabCountForQuota } from "../utils/researchBriefClarify.js";
 
-export type { ResearchBrief, TabDigest, ResearchScope, ResolveResearchTabsResult } from "./researchBriefTypes.js";
+export type {
+  ResearchBrief,
+  TabDigest,
+  ResearchScope,
+  ResolveResearchTabsResult,
+} from "./researchBriefTypes.js";
 export {
   clampMaxTabs,
   DEFAULT_MAX_TABS,
@@ -571,10 +576,7 @@ export async function buildResearchBrief(
 
     return { ok: true, brief, markdown, briefId };
   } catch (error) {
-    if (
-      error instanceof DOMException &&
-      error.name === "AbortError"
-    ) {
+    if (error instanceof DOMException && error.name === "AbortError") {
       return { ok: false, message: "Research brief cancelled." };
     }
     if (

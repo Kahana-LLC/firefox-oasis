@@ -21,10 +21,7 @@ test("isDistinctTopic rejects topic that equals group label", () => {
 });
 
 test("isDistinctTopic accepts substantive topic beyond group", () => {
-  assert.equal(
-    isDistinctTopic("college football recruiting", "sports"),
-    true
-  );
+  assert.equal(isDistinctTopic("college football recruiting", "sports"), true);
 });
 
 test("resolveBriefTopicFields infers for group without user topic", () => {

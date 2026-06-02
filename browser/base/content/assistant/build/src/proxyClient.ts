@@ -73,8 +73,7 @@ export function getAssistLoopOptionsFromBuildEnv():
       ? process.env.OASIS_ASSIST_REFINE_AFTER_ROUTE
       : ""
   ).trim();
-  const refine =
-    rawRefine === "1" || /^true$/i.test(rawRefine);
+  const refine = rawRefine === "1" || /^true$/i.test(rawRefine);
 
   let max: number | undefined;
   if (rawMax !== "") {
@@ -121,7 +120,9 @@ let ttsWarmed = false;
 async function ensureAuthenticated(): Promise<void> {
   const isAuthenticated = await supabaseAuth.isAuthenticated();
   if (!isAuthenticated) {
-    throw new Error("Authentication required: Please sign in to use voice features");
+    throw new Error(
+      "Authentication required: Please sign in to use voice features"
+    );
   }
 }
 
@@ -156,13 +157,16 @@ export async function transcribeAudio(
   options: TranscribeAudioOptions = {}
 ): Promise<{ transcript: string }> {
   await ensureAuthenticated();
-  
+
   // Convert blob to base64
   const arrayBuffer = await audioBlob.arrayBuffer();
   const base64Audio = btoa(
-    new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    new Uint8Array(arrayBuffer).reduce(
+      (data, byte) => data + String.fromCharCode(byte),
+      ""
+    )
   );
-  
+
   // Call lambda with op: "transcribe"
   const result = await postSigned<{ transcript: string }>("transcribe", {
     audio: base64Audio,
@@ -170,26 +174,28 @@ export async function transcribeAudio(
     ...(options.language ? { language: options.language } : {}),
     ...(options.captureMeta ? { captureMeta: options.captureMeta } : {}),
     ...(options.source != null ? { source: options.source } : {}),
-    ...(options.utteranceSeq != null ? { utteranceSeq: options.utteranceSeq } : {}),
+    ...(options.utteranceSeq != null
+      ? { utteranceSeq: options.utteranceSeq }
+      : {}),
   });
-  
+
   // Backend returns { transcript: "..." }
   return result;
 }
 
 export async function textToSpeech(text: string): Promise<Blob> {
   await ensureAuthenticated();
-  
+
   const result = await postSigned<TtsResponse>("tts", { text });
-  
+
   // The lambda should return base64 encoded audio
   const audioData = atob(result.audio);
   const arrayBuffer = new Uint8Array(audioData.length);
   for (let i = 0; i < audioData.length; i++) {
     arrayBuffer[i] = audioData.charCodeAt(i);
   }
-  
-  return new Blob([arrayBuffer], { type: result.mimeType || 'audio/mpeg' });
+
+  return new Blob([arrayBuffer], { type: result.mimeType || "audio/mpeg" });
 }
 
 export async function warmTextToSpeech(): Promise<void> {
@@ -198,7 +204,7 @@ export async function warmTextToSpeech(): Promise<void> {
     return;
   }
   if (!ttsWarmPromise) {
-    ttsWarmPromise = textToSpeech('Okay.')
+    ttsWarmPromise = textToSpeech("Okay.")
       .then(() => {
         ttsWarmed = true;
       })

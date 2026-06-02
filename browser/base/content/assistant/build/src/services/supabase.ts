@@ -56,10 +56,7 @@ export default class SupabaseAuth {
   public setOAuthCallbackBaseUrl(url?: string | null): string {
     const normalized = normalizeAllowedCallbackBaseUrl(url);
     if (!normalized) {
-      console.warn(
-        "OAuth callback base URL rejected (not on allowlist):",
-        url
-      );
+      console.warn("OAuth callback base URL rejected (not on allowlist):", url);
       return this.getOAuthCallbackBaseUrl();
     }
     this.oauthCallbackBaseUrl = normalized;
@@ -90,8 +87,7 @@ export default class SupabaseAuth {
           const override = window.localStorage?.getItem(
             "oasis_oauth_callback_base_url"
           );
-          const normalizedStorage =
-            normalizeAllowedCallbackBaseUrl(override);
+          const normalizedStorage = normalizeAllowedCallbackBaseUrl(override);
           if (normalizedStorage) {
             this.oauthCallbackBaseUrl = normalizedStorage;
             return normalizedStorage;

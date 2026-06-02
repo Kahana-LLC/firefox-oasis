@@ -41,7 +41,11 @@ type ConsumeAssistantStreamArgs = {
   inputType: AssistantInputType;
   toolCommandNames: Set<string>;
   pushCurrentTurn: (user: string, assistant: string) => void;
-  trackUsage: (inputType: AssistantInputType, meta?: UsageMeta, content?: StreamContentData) => void;
+  trackUsage: (
+    inputType: AssistantInputType,
+    meta?: UsageMeta,
+    content?: StreamContentData
+  ) => void;
 };
 
 function extractMessageText(msg: MessageLike): string {
@@ -112,7 +116,10 @@ export async function consumeAssistantGraphStream(
     if ("__end__" in state) {
       if (combinedSessionString && !isSaved) {
         pushCurrentTurn(prompt, combinedSessionString);
-        trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
+        trackUsage(inputType, lastUsageMeta, {
+          responseText: combinedSessionString,
+          toolTrace,
+        });
         isSaved = true;
       }
       break;
@@ -157,10 +164,16 @@ export async function consumeAssistantGraphStream(
           lastUsageMeta = newMeta;
         } else {
           lastUsageMeta = {
-            command_type: lastUsageMeta.command_type !== "other" && newMeta.command_type === "other"
-              ? lastUsageMeta.command_type : newMeta.command_type,
-            user_intent: lastUsageMeta.user_intent !== "other" && newMeta.user_intent === "other"
-              ? lastUsageMeta.user_intent : newMeta.user_intent,
+            command_type:
+              lastUsageMeta.command_type !== "other" &&
+              newMeta.command_type === "other"
+                ? lastUsageMeta.command_type
+                : newMeta.command_type,
+            user_intent:
+              lastUsageMeta.user_intent !== "other" &&
+              newMeta.user_intent === "other"
+                ? lastUsageMeta.user_intent
+                : newMeta.user_intent,
             input_tokens: newMeta.input_tokens ?? lastUsageMeta.input_tokens,
             output_tokens: newMeta.output_tokens ?? lastUsageMeta.output_tokens,
           };
@@ -186,7 +199,8 @@ export async function consumeAssistantGraphStream(
               invocation_index: toolTrace.length,
               status: "success",
               latency_ms: Date.now() - currentToolStartTime,
-              output_summary: currentToolOutput.trim().slice(0, 300) || undefined,
+              output_summary:
+                currentToolOutput.trim().slice(0, 300) || undefined,
             });
           }
           currentToolName = resolvedToolName;
@@ -253,7 +267,10 @@ export async function consumeAssistantGraphStream(
 
   if (combinedSessionString && !isSaved) {
     pushCurrentTurn(prompt, combinedSessionString);
-    trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
+    trackUsage(inputType, lastUsageMeta, {
+      responseText: combinedSessionString,
+      toolTrace,
+    });
   }
 
   assistantLogger.debug("stream", "Run summary", {

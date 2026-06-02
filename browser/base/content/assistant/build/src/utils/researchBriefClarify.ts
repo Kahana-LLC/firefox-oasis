@@ -45,4 +45,7 @@ export function suggestTabCountForQuota(
   return Math.max(1, best);
 }
 
-export { buildAmbiguousGroupClarification, buildOverQuotaClarification } from "./researchBriefResume.js";
+export {
+  buildAmbiguousGroupClarification,
+  buildOverQuotaClarification,
+} from "./researchBriefResume.js";

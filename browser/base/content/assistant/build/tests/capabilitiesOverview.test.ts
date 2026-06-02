@@ -34,7 +34,7 @@ test("summarizeForUser strips Accepts arguments", () => {
 
 test("summarizeForUser removes Args JSON tail", () => {
   const s = summarizeForUser(
-    "Open a URL. Accepts arguments: { url: string } Args JSON: {\"url\":\"https://x\"}"
+    'Open a URL. Accepts arguments: { url: string } Args JSON: {"url":"https://x"}'
   );
   assert.ok(!/args json/i.test(s));
   assert.ok(!/\{[^}]*url[^}]*\}/i.test(s));
@@ -83,7 +83,10 @@ test("capabilities markdown uses headings, code, links; no legacy delimiter", ()
 test("capabilities digest has no bookmark wording", () => {
   const md = buildCapabilitiesOverviewMarkdown([
     { name: "list_tabs", description: listTabsDesc },
-    { name: "list_bookmark_folders", description: "List all managed bookmark folders. Accepts no arguments." },
+    {
+      name: "list_bookmark_folders",
+      description: "List all managed bookmark folders. Accepts no arguments.",
+    },
   ]);
   assert.ok(!/bookmark/i.test(md));
 });

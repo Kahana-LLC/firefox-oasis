@@ -1,8 +1,4 @@
-import {
-  findTabByIndex,
-  findTabsByQuery,
-  tabTitle,
-} from "./firefoxFacade.js";
+import { findTabByIndex, findTabsByQuery, tabTitle } from "./firefoxFacade.js";
 import type { BrowserTabLike, GBrowserLike } from "../types/runtime.js";
 import {
   filterExcludedTabs,
@@ -14,8 +10,8 @@ import { finalizeResolvedTabList } from "./researchBriefResolve.js";
 const MIN_TAB_QUERY_LEN = 3;
 
 function tabKey(tab: BrowserTabLike): string {
-  const id = (tab as { linkedBrowser?: { permanentKey?: unknown } }).linkedBrowser
-    ?.permanentKey;
+  const id = (tab as { linkedBrowser?: { permanentKey?: unknown } })
+    .linkedBrowser?.permanentKey;
   if (id != null) {
     return String(id);
   }
@@ -57,9 +53,7 @@ function buildTabsBaseLabel(
       .slice(0, 4)
       .map(q => `"${q}"`)
       .join(", ");
-    parts.push(
-      tabQueries.length > 4 ? `${shown}, …` : shown
-    );
+    parts.push(tabQueries.length > 4 ? `${shown}, …` : shown);
   }
   if (tabIndices.length > 0) {
     parts.push(`indices ${tabIndices.join(", ")}`);

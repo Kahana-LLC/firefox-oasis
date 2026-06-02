@@ -78,7 +78,10 @@ export async function postSigned<TResponse = Record<string, unknown>>(
       try {
         const parsed = JSON.parse(errorBody);
         if (parsed.error === "quota_exceeded") {
-          throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+          throw new QuotaExceededError(
+            parsed.message || "Usage limit reached.",
+            parsed.quota
+          );
         }
       } catch (e: any) {
         if (e.isQuotaError) throw e;

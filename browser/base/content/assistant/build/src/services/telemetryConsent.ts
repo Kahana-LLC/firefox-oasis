@@ -4,7 +4,8 @@
  */
 import { getChromeContext } from "./firefoxFacade.js";
 
-export const OASIS_DATA_COLLECTION_PREF = "datareporting.healthreport.uploadEnabled";
+export const OASIS_DATA_COLLECTION_PREF =
+  "datareporting.healthreport.uploadEnabled";
 
 /** True when the user opted in to identifiable Oasis data collection (pref ON). */
 export function isOasisDataCollectionIdentified(): boolean {

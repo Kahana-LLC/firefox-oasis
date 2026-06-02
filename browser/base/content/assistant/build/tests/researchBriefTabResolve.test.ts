@@ -46,13 +46,7 @@ test("resolveTabsScope unions queries and indices", () => {
     mockTab("ESPN scores", "https://espn.com/nfl"),
     mockTab("Privacy law overview", "https://law.example/privacy"),
   ];
-  const result = resolveTabsScope(
-    mockGBrowser(tabs),
-    ["espn"],
-    [1],
-    10,
-    {}
-  );
+  const result = resolveTabsScope(mockGBrowser(tabs), ["espn"], [1], 10, {});
   assert.equal(result.ok, true);
   if (!result.ok) {
     return;

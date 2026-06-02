@@ -6096,9 +6096,12 @@ Content: ${entry.description || ""}`;
   async function fetchChildrenBookmarks(places, parentGuid) {
     if (!places?.bookmarks?.fetch || !parentGuid) return [];
     const collected = [];
-    const fetched = await places.bookmarks.fetch({ parentGuid }, (bookmark) => {
-      collected.push(bookmark);
-    });
+    const fetched = await places.bookmarks.fetch(
+      { parentGuid },
+      (bookmark) => {
+        collected.push(bookmark);
+      }
+    );
     if (collected.length > 0) {
       return collected;
     }
@@ -19860,10 +19863,7 @@ ${suffix}`;
         setOAuthCallbackBaseUrl(url) {
           const normalized = normalizeAllowedCallbackBaseUrl(url);
           if (!normalized) {
-            console.warn(
-              "OAuth callback base URL rejected (not on allowlist):",
-              url
-            );
+            console.warn("OAuth callback base URL rejected (not on allowlist):", url);
             return this.getOAuthCallbackBaseUrl();
           }
           this.oauthCallbackBaseUrl = normalized;
@@ -22076,7 +22076,13 @@ Result: ${toolResult.message}`
     try {
       const parsed = new URL(raw);
       parsed.hash = "";
-      const dropParams = [/^utm/i, /^fbclid$/i, /^gclid$/i, /^mc_eid$/i, /^ref$/i];
+      const dropParams = [
+        /^utm/i,
+        /^fbclid$/i,
+        /^gclid$/i,
+        /^mc_eid$/i,
+        /^ref$/i
+      ];
       const kept = [];
       parsed.searchParams.forEach((_2, key) => {
         if (!dropParams.some((re2) => re2.test(key))) {
@@ -22186,9 +22192,7 @@ Result: ${toolResult.message}`
     const parts = [];
     if (tabQueries.length > 0) {
       const shown = tabQueries.slice(0, 4).map((q3) => `"${q3}"`).join(", ");
-      parts.push(
-        tabQueries.length > 4 ? `${shown}, \u2026` : shown
-      );
+      parts.push(tabQueries.length > 4 ? `${shown}, \u2026` : shown);
     }
     if (tabIndices.length > 0) {
       parts.push(`indices ${tabIndices.join(", ")}`);
@@ -35434,7 +35438,10 @@ ${toHex2(hashedRequest)}`;
         try {
           const parsed = JSON.parse(errorBody);
           if (parsed.error === "quota_exceeded") {
-            throw new QuotaExceededError(parsed.message || "Usage limit reached.", parsed.quota);
+            throw new QuotaExceededError(
+              parsed.message || "Usage limit reached.",
+              parsed.quota
+            );
           }
         } catch (e2) {
           if (e2.isQuotaError) throw e2;
@@ -35516,7 +35523,9 @@ ${toHex2(hashedRequest)}`;
   async function ensureAuthenticated() {
     const isAuthenticated = await supabaseAuth3.isAuthenticated();
     if (!isAuthenticated) {
-      throw new Error("Authentication required: Please sign in to use voice features");
+      throw new Error(
+        "Authentication required: Please sign in to use voice features"
+      );
     }
   }
   async function assistRemote(system, messages, options, tools = [], generationConfig, assistLoop, signal) {
@@ -35538,7 +35547,10 @@ ${toHex2(hashedRequest)}`;
     await ensureAuthenticated();
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64Audio = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      new Uint8Array(arrayBuffer).reduce(
+        (data, byte) => data + String.fromCharCode(byte),
+        ""
+      )
     );
     const result = await postSigned("transcribe", {
       audio: base64Audio,
@@ -47618,15 +47630,18 @@ ${error.stack}` : "");
       "Group tabs, split the view, and arrange how you work across tabs and panes.",
       "",
       "- Tab groups, e.g. `Create a tab group called Research`",
+      "- Smart tab groups, e.g. `Group all tabs related to LLM research` or `Organize my open tabs by topic`",
       "- Split view shows two tabs side by side; you can choose which tabs. Try: `split view`"
     ].join("\n");
     const memory = [
       "### Memory and history",
       "",
-      "Search across open tabs, tab groups, browsing history, and saved memory. For cross-source recall, ask in your own words. For history only, start your request with `search history` (plain find is not wired to history yet).",
+      "Search across open tabs, tab groups, browsing history, and saved memory. For keyword history lookup, try `search history for agents`. For conceptual recall, ask `what did I read about AI safety`. For recent visits, try `search history`.",
       "",
       "- Cross-source recall, e.g. `Find anything about budgets across my tabs and history`",
-      "- History-only search, e.g. `search history for pages I read about taxes last month`"
+      "- Keyword history search, e.g. `search history for agents`",
+      "- If there are many matches, Oasis asks for a site, date, or extra keyword to narrow down",
+      "- Semantic history recall, e.g. `what did I read about taxes last month`"
     ].join("\n");
     const supportAndFeedback = [
       SUPPORT_AND_FEEDBACK_HEADING,
@@ -47679,10 +47694,12 @@ ${error.stack}` : "");
     return existing?.guid || null;
   }
   async function ensureRootFolderId(places) {
-    if (!places?.bookmarks) throw new Error("PlacesUtils.bookmarks not available");
+    if (!places?.bookmarks)
+      throw new Error("PlacesUtils.bookmarks not available");
     const existing = await findRootFolderId(places);
     if (existing) return existing;
-    if (!places.bookmarks.insert) throw new Error("Bookmarks insert API not available");
+    if (!places.bookmarks.insert)
+      throw new Error("Bookmarks insert API not available");
     const root = await places.bookmarks.insert({
       title: ROOT_FOLDER_NAME,
       type: places.bookmarks.TYPE_FOLDER,
@@ -47701,7 +47718,8 @@ ${error.stack}` : "");
     }));
   }
   async function createBookmark(places, details) {
-    if (!places?.bookmarks?.insert) throw new Error("Bookmarks insert API not available");
+    if (!places?.bookmarks?.insert)
+      throw new Error("Bookmarks insert API not available");
     const created = await places.bookmarks.insert({
       parentGuid: details.parentGuid,
       title: details.title,
@@ -47715,7 +47733,8 @@ ${error.stack}` : "");
     await places.bookmarks.remove(guid);
   }
   async function updateBookmark(places, guid, changes) {
-    if (!places?.bookmarks?.update) throw new Error("Bookmarks update API not available");
+    if (!places?.bookmarks?.update)
+      throw new Error("Bookmarks update API not available");
     const updated = await places.bookmarks.update({ guid, ...changes });
     return { ...updated, uri: bookmarkUri(updated) };
   }
@@ -47737,7 +47756,11 @@ ${error.stack}` : "");
           })
         );
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "failed to emit folder change event", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "failed to emit folder change event",
+          error
+        );
       }
     }
     ensurePlacesObserver() {
@@ -47774,7 +47797,11 @@ ${error.stack}` : "");
         if (!isRelevant) return;
         this.scheduleManagedFolderSync("places-event");
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "places event processing failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "places event processing failed",
+          error
+        );
       }
     };
     scheduleManagedFolderSync(reason) {
@@ -47800,7 +47827,10 @@ ${error.stack}` : "");
         return null;
       }
       if (this.rootFolderId) {
-        const existing = await fetchBookmarkByGuid(PlacesUtils, this.rootFolderId);
+        const existing = await fetchBookmarkByGuid(
+          PlacesUtils,
+          this.rootFolderId
+        );
         if (existing) return this.rootFolderId;
         this.rootFolderId = null;
       }
@@ -47879,7 +47909,11 @@ ${error.stack}` : "");
           `sync complete reason=${reason} folders=${folderNames.length} added=${syncResult.added} updated=${syncResult.updated} removed=${syncResult.removed}`
         );
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "managed folder sync failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "managed folder sync failed",
+          error
+        );
       } finally {
         this.syncInFlight = false;
       }
@@ -47896,7 +47930,11 @@ ${error.stack}` : "");
         }
         return result;
       } catch (error) {
-        assistantLogger.error("bookmark-folders", "Failed to list bookmark folders", error);
+        assistantLogger.error(
+          "bookmark-folders",
+          "Failed to list bookmark folders",
+          error
+        );
         return [];
       }
     }
@@ -47905,7 +47943,11 @@ ${error.stack}` : "");
         const rootId = await this.ensureRootFolder();
         return await this.collectFolders(rootId);
       } catch (error) {
-        assistantLogger.error("bookmark-folders", "Failed to get all bookmark folders", error);
+        assistantLogger.error(
+          "bookmark-folders",
+          "Failed to get all bookmark folders",
+          error
+        );
         return [];
       }
     }
@@ -47916,7 +47958,11 @@ ${error.stack}` : "");
         const folders = await this.collectFolders(rootId);
         return { ok: true, folders };
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "read-only folder lookup failed", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "read-only folder lookup failed",
+          error
+        );
         return { ok: false, folders: [] };
       }
     }
@@ -47956,7 +48002,9 @@ ${error.stack}` : "");
       const items = await getBookmarkChildren(context.PlacesUtils, folder.guid);
       const bookmarks = items.filter((bookmark) => !!bookmark.uri);
       if (opts?.closeTabs) {
-        const hostSet = new Set(bookmarks.map((bookmark) => hostOf(String(bookmark.uri))));
+        const hostSet = new Set(
+          bookmarks.map((bookmark) => hostOf(String(bookmark.uri)))
+        );
         for (const tab of getTabs(context.gBrowser)) {
           if (hostSet.has(hostOf(tabUrl(tab)))) {
             context.gBrowser?.removeTab?.(tab);
@@ -47978,8 +48026,13 @@ ${error.stack}` : "");
       if (!folder) return { ok: false };
       const existing = await this.findFolderNode(rootId, normalizedNew);
       if (existing) return { ok: false, msg: "Target exists" };
-      await updateBookmark(context.PlacesUtils, folder.guid, { title: normalizedNew });
-      await localMemory.renameBookmarkFolderDocuments(folder.title || normalizedOld, normalizedNew);
+      await updateBookmark(context.PlacesUtils, folder.guid, {
+        title: normalizedNew
+      });
+      await localMemory.renameBookmarkFolderDocuments(
+        folder.title || normalizedOld,
+        normalizedNew
+      );
       this.scheduleManagedFolderSync("rename-folder");
       return { ok: true };
     }
@@ -48004,13 +48057,19 @@ ${error.stack}` : "");
       const rootId = await this.ensureRootFolder();
       const folder = await this.findFolderNode(rootId, normalizedName);
       if (!folder) return { ok: false };
-      const bookmarks = await getBookmarkChildren(getChromeContext().PlacesUtils, folder.guid);
+      const bookmarks = await getBookmarkChildren(
+        getChromeContext().PlacesUtils,
+        folder.guid
+      );
       const toRemove = bookmarks.filter((bookmark) => bookmark.uri === url);
       for (const bookmark of toRemove) {
         await removeBookmark(getChromeContext().PlacesUtils, bookmark.guid);
       }
       if (toRemove.length > 0) {
-        await localMemory.removeBookmarkFolderDocumentByUrl(folder.title || normalizedName, url);
+        await localMemory.removeBookmarkFolderDocumentByUrl(
+          folder.title || normalizedName,
+          url
+        );
         this.scheduleManagedFolderSync("remove-url");
       }
       return { ok: toRemove.length > 0 };
@@ -48021,7 +48080,10 @@ ${error.stack}` : "");
       const rootId = await this.ensureRootFolder();
       const folder = await this.findFolderNode(rootId, normalizedName);
       if (!folder) return { ok: false };
-      const bookmarks = await getBookmarkChildren(context.PlacesUtils, folder.guid);
+      const bookmarks = await getBookmarkChildren(
+        context.PlacesUtils,
+        folder.guid
+      );
       const urls = bookmarks.filter((bookmark) => !!bookmark.uri).map((bookmark) => String(bookmark.uri));
       if (urls.length === 0) return { ok: true };
       let targetBrowser = context.gBrowser;
@@ -48042,14 +48104,22 @@ ${error.stack}` : "");
           });
           if (tab) openedTabs.push(tab);
         } catch (error) {
-          assistantLogger.error("bookmark-folders", `Failed to open tab for URL: ${url}`, error);
+          assistantLogger.error(
+            "bookmark-folders",
+            `Failed to open tab for URL: ${url}`,
+            error
+          );
         }
       }
       if (where === "tabgroup" && openedTabs.length > 0) {
         try {
           targetBrowser.addTabGroup?.(openedTabs, { label: normalizedName });
         } catch (error) {
-          assistantLogger.warn("bookmark-folders", "Failed to group opened tabs", error);
+          assistantLogger.warn(
+            "bookmark-folders",
+            "Failed to group opened tabs",
+            error
+          );
         }
       }
       return { ok: true };
@@ -48072,7 +48142,11 @@ ${error.stack}` : "");
         const bodyText = tab.linkedBrowser?.contentDocument?.body?.innerText || "";
         content = String(bodyText).substring(0, 5e3);
       } catch (error) {
-        assistantLogger.warn("bookmark-folders", "Failed to extract tab content", error);
+        assistantLogger.warn(
+          "bookmark-folders",
+          "Failed to extract tab content",
+          error
+        );
       }
       const text2 = `Title: ${title}
 URL: ${url}
@@ -48161,6 +48235,61 @@ Content: ${content}`;
       return textContent;
     } catch {
       return "";
+    }
+  }
+  function detectMatchField(terms, title, url) {
+    const lowerTerms = terms.toLowerCase();
+    const tokens = lowerTerms.split(/\s+/).filter(Boolean);
+    const titleLower = title.toLowerCase();
+    const urlLower = url.toLowerCase();
+    const titleMatch = tokens.length > 0 && tokens.every((token) => titleLower.includes(token));
+    if (titleMatch) {
+      return "title";
+    }
+    return "url";
+  }
+  async function searchHistoryByKeyword(terms, maxResults = 20) {
+    const PlacesUtils = getPlacesUtils();
+    const searchTerms = String(terms || "").trim();
+    if (!PlacesUtils || !searchTerms) {
+      return [];
+    }
+    try {
+      const options = PlacesUtils.history.getNewQueryOptions();
+      options.sortingMode = options.SORT_BY_DATE_DESCENDING;
+      options.maxResults = maxResults * 2;
+      options.includeHidden = false;
+      const query = PlacesUtils.history.getNewQuery();
+      query.searchTerms = searchTerms;
+      const result = PlacesUtils.history.executeQuery(query, options);
+      const root = result.root;
+      root.containerOpen = true;
+      const entries2 = [];
+      const seenUrls = /* @__PURE__ */ new Set();
+      for (let i2 = 0; i2 < root.childCount && entries2.length < maxResults; i2++) {
+        const node = root.getChild(i2);
+        const url = node.uri;
+        if (!isUserVisibleUrl(url)) {
+          continue;
+        }
+        if (seenUrls.has(url)) {
+          continue;
+        }
+        seenUrls.add(url);
+        const title = node.title || url;
+        entries2.push({
+          title,
+          url,
+          visitDate: Math.floor(node.time / 1e3),
+          snippet: "",
+          matchField: detectMatchField(searchTerms, title, url)
+        });
+      }
+      root.containerOpen = false;
+      return entries2;
+    } catch (e2) {
+      console.error("[HistoryCollector] Keyword search failed:", e2);
+      return [];
     }
   }
   async function fetchRecentHistory(maxResults = 200, includeSnippets = false) {
@@ -48262,38 +48391,58 @@ Content: ${content}`;
           this.browser.setAttribute("src", EMBEDDING_WORKER_PAGE_URL);
           this.browser.style.cssText = "display:none; width:0; height:0; position:fixed; visibility:hidden;";
           browserWin.document.documentElement.appendChild(this.browser);
-          console.log("[EmbeddingService] Browser element appended, waiting for init...");
+          console.log(
+            "[EmbeddingService] Browser element appended, waiting for init..."
+          );
           setTimeout(() => {
             try {
               if (!this.browser.messageManager) {
-                console.error("[EmbeddingService] messageManager not available after timeout");
+                console.error(
+                  "[EmbeddingService] messageManager not available after timeout"
+                );
                 reject(new Error("messageManager not available"));
                 return;
               }
               console.log("[EmbeddingService] Loading frame script...");
-              this.browser.messageManager.loadFrameScript(FRAME_SCRIPT_URL, false);
-              this.browser.messageManager.addMessageListener("EmbedWorkerReady", () => {
-                if (this.ready) return;
-                console.log("[EmbeddingService] \u2705 Worker ready in content process!");
-                this.ready = true;
-                resolve();
-              });
-              this.browser.messageManager.addMessageListener("EmbedModelLoaded", () => {
-                console.log("[EmbeddingService] Model loaded in content process");
-                this.modelLoaded = true;
-              });
-              this.browser.messageManager.addMessageListener("EmbedResponse", (msg) => {
-                const { id, embedding, error } = msg.data;
-                const pending = this.pendingRequests.get(id);
-                if (pending) {
-                  this.pendingRequests.delete(id);
-                  if (error) {
-                    pending.reject(new Error(error));
-                  } else {
-                    pending.resolve(embedding);
+              this.browser.messageManager.loadFrameScript(
+                FRAME_SCRIPT_URL,
+                false
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedWorkerReady",
+                () => {
+                  if (this.ready) return;
+                  console.log(
+                    "[EmbeddingService] \u2705 Worker ready in content process!"
+                  );
+                  this.ready = true;
+                  resolve();
+                }
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedModelLoaded",
+                () => {
+                  console.log(
+                    "[EmbeddingService] Model loaded in content process"
+                  );
+                  this.modelLoaded = true;
+                }
+              );
+              this.browser.messageManager.addMessageListener(
+                "EmbedResponse",
+                (msg) => {
+                  const { id, embedding, error } = msg.data;
+                  const pending = this.pendingRequests.get(id);
+                  if (pending) {
+                    this.pendingRequests.delete(id);
+                    if (error) {
+                      pending.reject(new Error(error));
+                    } else {
+                      pending.resolve(embedding);
+                    }
                   }
                 }
-              });
+              );
               console.log("[EmbeddingService] Message listeners set up");
             } catch (err) {
               console.error("[EmbeddingService] Setup failed:", err);
@@ -48302,8 +48451,12 @@ Content: ${content}`;
           }, 1e3);
           setTimeout(() => {
             if (!this.ready) {
-              console.error("[EmbeddingService] Timeout: never received EmbedWorkerReady");
-              reject(new Error("Embedding browser failed to initialize within 60s"));
+              console.error(
+                "[EmbeddingService] Timeout: never received EmbedWorkerReady"
+              );
+              reject(
+                new Error("Embedding browser failed to initialize within 60s")
+              );
             }
           }, 6e4);
         } catch (err) {
@@ -48318,7 +48471,10 @@ Content: ${content}`;
       const id = `embed-${++this.requestCounter}`;
       return new Promise((resolve, reject) => {
         this.pendingRequests.set(id, { resolve, reject });
-        this.browser.messageManager.sendAsyncMessage("EmbedRequest", { id, text: text2 });
+        this.browser.messageManager.sendAsyncMessage("EmbedRequest", {
+          id,
+          text: text2
+        });
         const timeout = this.modelLoaded ? 3e4 : 12e4;
         setTimeout(() => {
           if (this.pendingRequests.has(id)) {
@@ -48344,7 +48500,10 @@ Content: ${content}`;
       if (this.ready || this.readyPromise) return;
       console.log("[EmbeddingService] \u{1F680} Background pre-warming started...");
       this.ensureBrowser().catch((err) => {
-        console.warn("[EmbeddingService] Pre-warming failed (will retry on search):", err);
+        console.warn(
+          "[EmbeddingService] Pre-warming failed (will retry on search):",
+          err
+        );
         this.readyPromise = null;
       });
     }
@@ -52989,7 +53148,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           score: hit.score
         }));
       } catch (err) {
-        console.warn("[HistoryVectorStore] Hybrid search failed, falling back to vector:", err);
+        console.warn(
+          "[HistoryVectorStore] Hybrid search failed, falling back to vector:",
+          err
+        );
         return this.search(queryEmbedding, limit, 0.1);
       }
     }
@@ -53063,7 +53225,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         const urls = urlsJson ? new Set(JSON.parse(urlsJson)) : /* @__PURE__ */ new Set();
         return urls;
       } catch (err) {
-        console.warn("[HistoryVectorStore] Failed to restore from IndexedDB:", err);
+        console.warn(
+          "[HistoryVectorStore] Failed to restore from IndexedDB:",
+          err
+        );
         this.db = null;
         return null;
       }
@@ -53145,8 +53310,116 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   };
   var historyVectorStore = new HistoryVectorStore();
 
+  // src/services/historyKeywordSearch.ts
+  var EXCERPT_RADIUS = 60;
+  function tokenizeQuery(query) {
+    return String(query || "").toLowerCase().split(/\s+/).filter((token) => token.length >= 2);
+  }
+  function allTokensMatch(text2, tokens) {
+    if (tokens.length === 0) {
+      return true;
+    }
+    const lower = text2.toLowerCase();
+    return tokens.every((token) => lower.includes(token));
+  }
+  function buildExcerpt(snippet, query) {
+    const text2 = String(snippet || "").trim();
+    if (!text2) {
+      return void 0;
+    }
+    const tokens = tokenizeQuery(query);
+    const needle = tokens[0] || query.toLowerCase();
+    const idx = text2.toLowerCase().indexOf(needle);
+    if (idx < 0) {
+      return text2.slice(0, EXCERPT_RADIUS * 2);
+    }
+    const start = Math.max(0, idx - EXCERPT_RADIUS);
+    const end = Math.min(text2.length, idx + needle.length + EXCERPT_RADIUS);
+    const slice = text2.slice(start, end).trim();
+    const prefix = start > 0 ? "\u2026" : "";
+    const suffix = end < text2.length ? "\u2026" : "";
+    return `${prefix}${slice}${suffix}`;
+  }
+  function normalizeOramaScore(score) {
+    if (!Number.isFinite(score)) {
+      return 0.7;
+    }
+    return Math.min(0.95, Math.max(0.65, score));
+  }
+  function mergeKeywordHistoryResults(params) {
+    const tokens = tokenizeQuery(params.query);
+    const byUrl = /* @__PURE__ */ new Map();
+    for (const entry of params.places) {
+      if (!allTokensMatch(`${entry.title} ${entry.url}`, tokens)) {
+        continue;
+      }
+      const score = entry.matchField === "title" ? 1 : 0.85;
+      byUrl.set(entry.url, {
+        title: entry.title,
+        url: entry.url,
+        visitDate: entry.visitDate,
+        score,
+        matchType: entry.matchField || "title",
+        excerpt: entry.title
+      });
+    }
+    for (const hit of params.orama) {
+      if (!allTokensMatch(`${hit.title} ${hit.url} ${hit.snippet}`, tokens)) {
+        continue;
+      }
+      const excerpt = buildExcerpt(hit.snippet, params.query);
+      const matchType = hit.snippet ? "snippet" : allTokensMatch(hit.title, tokens) ? "title" : "url";
+      const score = normalizeOramaScore(hit.score);
+      const existing = byUrl.get(hit.url);
+      if (!existing || score > existing.score) {
+        byUrl.set(hit.url, {
+          title: hit.title,
+          url: hit.url,
+          visitDate: hit.visitDate,
+          score: Math.max(existing?.score || 0, score),
+          matchType,
+          excerpt: excerpt || existing?.excerpt
+        });
+      } else if (existing && excerpt && !existing.excerpt) {
+        existing.excerpt = excerpt;
+        existing.matchType = "snippet";
+      }
+    }
+    return [...byUrl.values()].sort((a2, b3) => b3.score - a2.score || b3.visitDate - a2.visitDate).slice(0, params.limit);
+  }
+  async function searchHistoryByKeywordHybrid(query, limit = 10) {
+    const trimmed = String(query || "").trim();
+    if (!trimmed) {
+      return [];
+    }
+    const fetchLimit = Math.max(limit * 2, 10);
+    const placesPromise = searchHistoryByKeyword(trimmed, fetchLimit);
+    let oramaHits = [];
+    try {
+      oramaHits = await tryOramaKeywordSearch(trimmed, fetchLimit);
+    } catch (err) {
+      console.warn("[HistoryKeywordSearch] Orama keyword search failed:", err);
+    }
+    const places = await placesPromise;
+    return mergeKeywordHistoryResults({
+      places,
+      orama: oramaHits,
+      query: trimmed,
+      limit
+    });
+  }
+  async function tryOramaKeywordSearch(query, limit) {
+    await historyVectorStore.init();
+    const restored = await historyVectorStore.restoreFromStorage();
+    if (!restored || restored.size === 0) {
+      return [];
+    }
+    return historyVectorStore.keywordSearch(query, limit);
+  }
+
   // src/services/semanticHistorySearch.ts
   var MAX_HISTORY_ENTRIES = 500;
+  var KEYWORD_AUTO_MIN_RESULTS = 2;
   function buildEmbeddingText(title, url, snippet) {
     if (snippet) {
       return `${title} ${snippet}`;
@@ -53217,7 +53490,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         console.timeEnd("[SemanticSearch] Restore from IndexedDB");
         this.indexedUrls = restoredUrls;
         this.indexed = true;
-        console.log(`[SemanticSearch] \u2705 Restored ${restoredUrls.size} entries from IndexedDB \u2014 skipping full index`);
+        console.log(
+          `[SemanticSearch] \u2705 Restored ${restoredUrls.size} entries from IndexedDB \u2014 skipping full index`
+        );
         await this.doIncrementalIndex();
         return;
       }
@@ -53246,7 +53521,11 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         for (let i2 = 0; i2 < entries2.length; i2++) {
           const entry = entries2[i2];
           try {
-            const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
+            const textToEmbed = buildEmbeddingText(
+              entry.title,
+              entry.url,
+              entry.snippet
+            );
             const embedding = await embeddingService.embed(textToEmbed);
             await historyVectorStore.addItem({
               title: entry.title,
@@ -53278,7 +53557,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         this.lastIndexTime = Date.now();
       } catch (err) {
         console.error("[SemanticSearch] Indexing failed:", err);
-        throw err;
+        this.indexed = true;
       }
     }
     /**
@@ -53298,7 +53577,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
             try {
               const response = await fetch(entry.url, {
                 signal: AbortSignal.timeout(5e3),
-                headers: { "Accept": "text/html" }
+                headers: { Accept: "text/html" }
               });
               if (!response.ok) return entry;
               const ct = response.headers.get("content-type") || "";
@@ -53316,7 +53595,11 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         let successCount = 0;
         for (const entry of newEntries) {
           try {
-            const textToEmbed = buildEmbeddingText(entry.title, entry.url, entry.snippet);
+            const textToEmbed = buildEmbeddingText(
+              entry.title,
+              entry.url,
+              entry.snippet
+            );
             const embedding = await embeddingService.embed(textToEmbed);
             await historyVectorStore.addItem({
               title: entry.title,
@@ -53356,19 +53639,78 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         console.warn("[SemanticSearch] Failed to persist to storage:", err);
       }
     }
-    async search(query, limit = 10) {
+    async search(query, limit = 10, options = {}) {
+      const mode = options.mode || "auto";
+      const trimmed = String(query || "").trim();
+      if (!trimmed) {
+        return [];
+      }
+      try {
+        if (mode === "keyword") {
+          return keywordResultsToSearchResults(
+            await searchHistoryByKeywordHybrid(trimmed, limit)
+          );
+        }
+        if (mode === "auto") {
+          const keywordResults = await searchHistoryByKeywordHybrid(
+            trimmed,
+            limit
+          );
+          if (keywordResults.length >= KEYWORD_AUTO_MIN_RESULTS) {
+            return keywordResultsToSearchResults(keywordResults);
+          }
+          const semanticResults = await this.searchSemanticSafe(trimmed, limit);
+          return mergeSearchResults(
+            keywordResultsToSearchResults(keywordResults),
+            semanticResults,
+            limit
+          );
+        }
+        return await this.searchSemanticSafe(trimmed, limit);
+      } catch (err) {
+        console.error("[SemanticSearch] Search failed:", err);
+        const placesOnly = keywordResultsToSearchResults(
+          await searchHistoryByKeywordHybrid(trimmed, limit)
+        );
+        return placesOnly;
+      }
+    }
+    async searchSemanticSafe(query, limit) {
+      try {
+        return await this.searchSemantic(query, limit);
+      } catch (err) {
+        console.warn("[SemanticSearch] Semantic search unavailable:", err);
+        return [];
+      }
+    }
+    async searchSemantic(query, limit) {
       await this.ensureIndexed();
       console.time("[SemanticSearch] Search");
       const queryEmbedding = await embeddingService.embed(query);
-      let results = await historyVectorStore.hybridSearch(query, queryEmbedding, limit);
+      let results = await historyVectorStore.hybridSearch(
+        query,
+        queryEmbedding,
+        limit
+      );
       if (results.length === 0) {
-        console.log("[SemanticSearch] Hybrid returned 0 \u2014 trying keyword fallback");
-        const keywordResults = await historyVectorStore.keywordSearch(query, limit);
+        console.log(
+          "[SemanticSearch] Hybrid returned 0 \u2014 trying keyword fallback"
+        );
+        const keywordResults = await historyVectorStore.keywordSearch(
+          query,
+          limit
+        );
         results = mergeSearchResults(results, keywordResults, limit);
       }
       if (results.length === 0) {
-        console.log("[SemanticSearch] Still 0 \u2014 trying pure vector with low threshold");
-        const vectorResults = await historyVectorStore.search(queryEmbedding, limit, 0.05);
+        console.log(
+          "[SemanticSearch] Still 0 \u2014 trying pure vector with low threshold"
+        );
+        const vectorResults = await historyVectorStore.search(
+          queryEmbedding,
+          limit,
+          0.05
+        );
         results = mergeSearchResults(results, vectorResults, limit);
       }
       console.timeEnd("[SemanticSearch] Search");
@@ -53388,62 +53730,117 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       return this.indexed;
     }
   };
+  function keywordResultsToSearchResults(results) {
+    return results.map((result) => ({
+      title: result.title,
+      url: result.url,
+      snippet: result.excerpt || result.title,
+      visitDate: result.visitDate,
+      score: result.score,
+      matchType: result.matchType,
+      excerpt: result.excerpt
+    }));
+  }
   var semanticHistorySearch = new SemanticHistorySearch();
   window.semanticHistorySearch = semanticHistorySearch;
 
-  // src/utils/searchMemoryUtils.ts
-  init_localMemoryUtils();
-  function hasBookmarkFolderCandidates(results) {
-    return results.some((r2) => {
-      const rawType = String(r2.metadata?.type || "").toLowerCase();
-      return isBookmarkFolderType(rawType);
-    });
-  }
-  function buildFolderUrlMap(folders) {
-    const folderToUrls = /* @__PURE__ */ new Map();
-    for (const folder of folders) {
-      const name = normalizeMemoryName(folder?.name || "");
-      if (!name) continue;
-      const urls = /* @__PURE__ */ new Set();
-      for (const item of folder.items || []) {
-        const url = String(item?.url || "").trim();
-        if (url) urls.add(url);
-      }
-      folderToUrls.set(name, urls);
+  // src/utils/historySearchQuery.ts
+  var TRAILING_NOISE_RE = /\s+(?:articles?|pages?|sites?|about)\s*$/i;
+  function cleanQuery(raw, quoted) {
+    let query = String(raw || "").trim();
+    if (!quoted) {
+      query = query.replace(TRAILING_NOISE_RE, "").trim();
     }
-    return folderToUrls;
+    return query.replace(/^["']|["']$/g, "").trim();
   }
-  function filterStaleBookmarkFolderResults(results, folderToUrls) {
-    let dropped = 0;
-    const filtered = results.filter((result) => {
-      if (getMemoryDocSource(result) !== "bookmark-folder") {
-        return true;
-      }
-      const folderName = getMemoryDocFolderName(result);
-      const folderUrls = folderToUrls.get(folderName);
-      if (!folderUrls) {
-        dropped++;
-        return false;
-      }
-      const url = getMemoryDocUrl(result);
-      if (!url) {
-        return true;
-      }
-      if (!folderUrls.has(url)) {
-        dropped++;
-        return false;
-      }
+  function parseQuotedQuery(input) {
+    const match = input.match(
+      /^search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history\s+for\s+"(?<query>[^"]+)"\s*$/i
+    );
+    if (!match?.groups?.query) {
+      return null;
+    }
+    const query = cleanQuery(match.groups.query, true);
+    if (!query) {
+      return null;
+    }
+    return { query, mode: "keyword", quoted: true };
+  }
+  var KEYWORD_PATTERNS = [
+    {
+      re: /^search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history\s+for\s+"?(?<query>.+?)"?\s*$/i
+    },
+    {
+      re: /^search\s+history\s+for\s+"?(?<query>.+?)"?\s*$/i
+    },
+    {
+      re: /^find\s+(?:in\s+)?(?:my\s+)?(?:browsing\s+|browser\s+)?history\s+(?:for\s+)?"?(?<query>.+?)"?\s*$/i
+    },
+    {
+      re: /^find\s+(?:in\s+)?(?:my\s+)?history\s+for\s+"?(?<query>.+?)"?\s*$/i
+    }
+  ];
+  var RECENT_PATTERNS = [
+    /^search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history\s*$/i,
+    /^search\s+history\s*$/i,
+    /^show\s+(?:my\s+)?(?:recent\s+)?(?:browsing\s+)?history\s*$/i,
+    /^list\s+(?:my\s+)?(?:recent\s+)?(?:browsing\s+)?history\s*$/i
+  ];
+  function looksLikeHistoryKeywordSearch(input) {
+    const trimmed = String(input || "").trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (parseQuotedQuery(trimmed)) {
       return true;
-    });
-    return { results: filtered, dropped };
+    }
+    for (const { re: re2 } of KEYWORD_PATTERNS) {
+      if (re2.test(trimmed)) {
+        return true;
+      }
+    }
+    return false;
   }
-
-  // src/commands.ts
-  init_localMemoryUtils();
-  init_assistantLogger();
-
-  // src/utils/decisionEngine.ts
-  init_intentParser();
+  function parseHistorySearchQuery(input) {
+    const trimmed = String(input || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    for (const pattern of RECENT_PATTERNS) {
+      if (pattern.test(trimmed)) {
+        return { query: "", mode: "recent", quoted: false };
+      }
+    }
+    const quoted = parseQuotedQuery(trimmed);
+    if (quoted) {
+      return quoted;
+    }
+    for (const { re: re2 } of KEYWORD_PATTERNS) {
+      const match = trimmed.match(re2);
+      if (!match?.groups?.query) {
+        continue;
+      }
+      const isQuoted = /^search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history\s+for\s+"/i.test(
+        trimmed
+      );
+      const query = cleanQuery(match.groups.query, isQuoted);
+      if (!query) {
+        continue;
+      }
+      return { query, mode: "keyword", quoted: isQuoted };
+    }
+    return null;
+  }
+  function inferHistorySearchMode(query, explicitMode) {
+    const mode = String(explicitMode || "").trim();
+    if (mode === "keyword" || mode === "semantic" || mode === "recent" || mode === "auto") {
+      return mode;
+    }
+    if (!query) {
+      return "recent";
+    }
+    return "auto";
+  }
 
   // src/utils/knownSites.ts
   var SITE_NAMES = [
@@ -53534,12 +53931,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   };
   var LOOKUP = new Map([
     ...Object.entries(DEFAULT_URLS),
-    ...Object.entries(TYPO_ALIASES).map(
-      ([typo, canon]) => [
-        typo,
-        DEFAULT_URLS[canon] ?? `https://www.${canon}.com`
-      ]
-    )
+    ...Object.entries(TYPO_ALIASES).map(([typo, canon]) => [
+      typo,
+      DEFAULT_URLS[canon] ?? `https://www.${canon}.com`
+    ])
   ]);
   function resolveKnownSiteToUrl(raw) {
     const key = String(raw || "").trim().toLowerCase().replace(/^["']|["']$/g, "");
@@ -53547,6 +53942,576 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       return null;
     }
     return LOOKUP.get(key) ?? null;
+  }
+
+  // src/utils/routingUtils.ts
+  var CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
+  function parseAmbiguityResolution(text2) {
+    const input = String(text2 || "").trim();
+    if (!input) return null;
+    if (CANCEL_RE.test(input)) {
+      return "cancel";
+    }
+    const hasTabGroup = /\btab\s*group\b/i.test(input);
+    const hasBookmarkFolder = /\bbookmark\s*folder\b/i.test(input);
+    if (hasTabGroup && hasBookmarkFolder) return null;
+    if (hasTabGroup) return "tab-group";
+    if (hasBookmarkFolder) return "bookmark-folder";
+    const hasGroupWord = /\bgroup\b/i.test(input);
+    const hasFolderWord = /\bfolder\b/i.test(input);
+    const hasTabWord = /\btab\b/i.test(input);
+    if (hasGroupWord && hasFolderWord) return null;
+    if (hasGroupWord) return "tab-group";
+    if (hasFolderWord) return "bookmark-folder";
+    if (hasTabWord) return "tab";
+    return null;
+  }
+  function looksLikeNewActionCommand(text2) {
+    const input = String(text2 || "");
+    const hasAction = /\b(?:open|close|delete|remove|create|make|build|write|generate|draft|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|copy|unload)\b/i.test(
+      input
+    );
+    const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
+      input
+    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(
+      input
+    ) || KNOWN_SITES_HINT_RE.test(input);
+    return hasAction && hasObjectOrTarget;
+  }
+  var PAGE_CONTEXT_REFERENCE_RE = /\b(?:this|that|current|active)\s+(?:page|site|website|article|tab)\b|\bon\s+this\s+(?:page|site|website|article|tab)\b/i;
+  var PAGE_CONTEXT_DEICTIC_RE = /^(?:show|tell|give|find|what|which|who|when|where|why|how|does|do|is|are|based\s+on)\b.*\b(?:of|on|from|about)\s+this\b/i;
+  function looksLikePageContextRequest(text2) {
+    const input = String(text2 || "").trim();
+    if (!input) {
+      return false;
+    }
+    return PAGE_CONTEXT_REFERENCE_RE.test(input) || PAGE_CONTEXT_DEICTIC_RE.test(input);
+  }
+  function shouldAskAssistRouter(text2) {
+    const input = String(text2 || "").trim();
+    if (!input) {
+      return false;
+    }
+    if (looksLikeNewActionCommand(input)) {
+      return true;
+    }
+    return looksLikePageContextRequest(input);
+  }
+
+  // src/utils/historySearchRefinement.ts
+  var MS_DAY = 864e5;
+  var REFINEMENT_MATCH_THRESHOLD = 6;
+  var SCORE_BUNCH_DELTA = 0.08;
+  var TIME_PHRASE_RE = /\b(?:today|yesterday|last\s+week|last\s+month|past\s+\d+\s+days?|last\s+\d+\s+days?)\b/gi;
+  var DOMAIN_PHRASE_RE = /\b(?:on|from|at)\s+(?:the\s+)?([a-z0-9][\w.-]*(?:\.[a-z]{2,})?)\b/gi;
+  var pendingRefinement = null;
+  function getPendingHistoryRefinement() {
+    return pendingRefinement;
+  }
+  function setPendingHistoryRefinement(pending) {
+    pendingRefinement = pending;
+  }
+  function clearPendingHistoryRefinement() {
+    pendingRefinement = null;
+  }
+  function parseHistorySearchFiltersFromArgs(args) {
+    const filters = {};
+    const domain = String(args.domain || args.site || "").trim();
+    if (domain) {
+      filters.domain = normalizeDomainHint(domain);
+    }
+    const sinceRaw = String(args.since || "").trim();
+    if (sinceRaw) {
+      const parsed = parseTimeRange(sinceRaw);
+      if (parsed.sinceMs) {
+        filters.sinceMs = parsed.sinceMs;
+      }
+      if (parsed.untilMs) {
+        filters.untilMs = parsed.untilMs;
+      }
+    }
+    const extraRaw = String(args.extra || args.extraTerms || "").trim();
+    if (extraRaw) {
+      filters.extraTerms = tokenizeExtraTerms(extraRaw);
+    }
+    return filters;
+  }
+  function filtersToCommandArgs(filters) {
+    const args = {};
+    if (filters.domain) {
+      args.domain = filters.domain;
+    }
+    if (filters.sinceMs != null) {
+      args.since = new Date(filters.sinceMs).toISOString();
+    }
+    if (filters.extraTerms?.length) {
+      args.extra = filters.extraTerms.join(" ");
+    }
+    return args;
+  }
+  function mergeHistorySearchFilters(base, next) {
+    return {
+      domain: next.domain || base.domain,
+      sinceMs: next.sinceMs ?? base.sinceMs,
+      untilMs: next.untilMs ?? base.untilMs,
+      extraTerms: [...base.extraTerms || [], ...next.extraTerms || []].filter(
+        Boolean
+      )
+    };
+  }
+  function shouldPromptHistoryRefinement(results, options = {}) {
+    if (options.skip) {
+      return false;
+    }
+    if (results.length >= REFINEMENT_MATCH_THRESHOLD) {
+      return true;
+    }
+    const top = results.slice(0, 5);
+    if (top.length >= 5) {
+      const spread = (top[0]?.score || 0) - (top[top.length - 1]?.score || 0);
+      return spread <= SCORE_BUNCH_DELTA;
+    }
+    return false;
+  }
+  function buildHistoryRefinementPrompt(query, totalMatches) {
+    return `I found ${totalMatches} pages in your history matching "${query}". To narrow this down, reply with any details you remember \u2014 for example: **when** you visited (yesterday, last week), **which site** (GitHub, NYT), or **other keywords**. Say **show all** to see the top matches anyway, or **cancel** to stop.`;
+  }
+  function parseHistoryRefinementReply(text2) {
+    const trimmed = String(text2 || "").trim();
+    if (!trimmed) {
+      return {};
+    }
+    const timeRange = parseTimeRange(trimmed);
+    const domain = parseDomainHint(trimmed);
+    let remainder = trimmed.replace(TIME_PHRASE_RE, " ").replace(DOMAIN_PHRASE_RE, " ").replace(/\b(?:on|from|at|the|a|an|about|around|maybe|probably)\b/gi, " ").replace(/\s+/g, " ").trim();
+    const extraTerms = tokenizeExtraTerms(remainder);
+    return {
+      ...timeRange,
+      domain,
+      extraTerms: extraTerms.length > 0 ? extraTerms : void 0
+    };
+  }
+  function applyHistorySearchFilters(results, filters) {
+    if (!filters.domain && filters.sinceMs == null && filters.untilMs == null) {
+      if (!filters.extraTerms?.length) {
+        return results;
+      }
+    }
+    return results.filter((result) => matchesHistorySearchFilters(result, filters));
+  }
+  function matchesHistorySearchFilters(result, filters) {
+    if (filters.domain && !urlMatchesDomain(result.url, filters.domain)) {
+      return false;
+    }
+    if (filters.sinceMs != null && result.visitDate < filters.sinceMs) {
+      return false;
+    }
+    if (filters.untilMs != null && result.visitDate > filters.untilMs) {
+      return false;
+    }
+    if (filters.extraTerms?.length) {
+      const haystack = `${result.title} ${result.url} ${result.snippet || ""} ${result.excerpt || ""}`.toLowerCase();
+      if (!filters.extraTerms.every((term) => haystack.includes(term))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  function resolvePendingHistoryRefinementGate(params) {
+    const { pending, userText } = params;
+    if (!pending) {
+      return { kind: "none" };
+    }
+    const trimmed = String(userText || "").trim();
+    if (looksLikeNewActionCommand(trimmed) && !/^show\s+(?:all|everything|top|matches)\b/i.test(trimmed) && !/^(?:cancel|nevermind|never\s+mind|stop|skip)$/i.test(trimmed)) {
+      clearPendingHistoryRefinement();
+      return { kind: "none" };
+    }
+    if (/^(?:cancel|nevermind|never\s+mind|stop|skip)$/i.test(trimmed)) {
+      clearPendingHistoryRefinement();
+      return { kind: "cancel" };
+    }
+    if (/^show\s+(?:all|everything|top|matches)\b/i.test(trimmed)) {
+      clearPendingHistoryRefinement();
+      return {
+        kind: "search",
+        args: {
+          query: pending.query,
+          mode: pending.mode,
+          ...filtersToCommandArgs(pending.filters),
+          skipRefinement: true,
+          refined: true
+        }
+      };
+    }
+    const parsed = parseHistoryRefinementReply(trimmed);
+    const filters = mergeHistorySearchFilters(pending.filters, parsed);
+    clearPendingHistoryRefinement();
+    return {
+      kind: "search",
+      args: {
+        query: pending.query,
+        mode: pending.mode,
+        ...filtersToCommandArgs(filters),
+        refined: true
+      }
+    };
+  }
+  function parseTimeRange(text2) {
+    const lower = String(text2 || "").toLowerCase();
+    const now2 = Date.now();
+    if (/\byesterday\b/.test(lower)) {
+      const start = startOfDay(/* @__PURE__ */ new Date());
+      start.setDate(start.getDate() - 1);
+      const end = endOfDay(start);
+      return { sinceMs: start.getTime(), untilMs: end.getTime() };
+    }
+    if (/\btoday\b/.test(lower)) {
+      return { sinceMs: startOfDay(/* @__PURE__ */ new Date()).getTime() };
+    }
+    if (/\blast\s+week\b/.test(lower)) {
+      return { sinceMs: now2 - 7 * MS_DAY };
+    }
+    if (/\blast\s+month\b/.test(lower)) {
+      return { sinceMs: now2 - 30 * MS_DAY };
+    }
+    const daysMatch = lower.match(/\b(?:past|last)\s+(\d+)\s+days?\b/);
+    if (daysMatch?.[1]) {
+      return { sinceMs: now2 - parseInt(daysMatch[1], 10) * MS_DAY };
+    }
+    return {};
+  }
+  function parseDomainHint(text2) {
+    const trimmed = String(text2 || "").trim();
+    const onDomain = trimmed.match(
+      /\b(?:on|from|at)\s+(?:the\s+)?([a-z0-9][\w.-]*(?:\.[a-z]{2,})?)\b/i
+    );
+    if (onDomain?.[1]) {
+      return normalizeDomainHint(onDomain[1]);
+    }
+    const onSite = trimmed.match(
+      /\b(?:on|from)\s+(?:the\s+)?([a-z][\w-]{1,})\b/i
+    );
+    if (onSite?.[1] && !isTimeWord(onSite[1])) {
+      return normalizeDomainHint(onSite[1]);
+    }
+    const bareDomain = trimmed.match(/\b([a-z0-9][\w.-]*\.[a-z]{2,})\b/i);
+    if (bareDomain?.[1]) {
+      return normalizeDomainHint(bareDomain[1]);
+    }
+    return void 0;
+  }
+  function normalizeDomainHint(value) {
+    return String(value || "").trim().toLowerCase().replace(/^www\./, "");
+  }
+  function urlMatchesDomain(url, domainHint) {
+    const hint = normalizeDomainHint(domainHint);
+    if (!hint) {
+      return true;
+    }
+    try {
+      const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+      return hostname.includes(hint) || hint.includes(hostname);
+    } catch {
+      return url.toLowerCase().includes(hint);
+    }
+  }
+  function tokenizeExtraTerms(text2) {
+    return String(text2 || "").toLowerCase().split(/\s+/).map((token) => token.replace(/^[^\w]+|[^\w]+$/g, "")).filter((token) => token.length >= 2 && !isTimeWord(token));
+  }
+  function isTimeWord(word) {
+    return /^(?:today|yesterday|week|month|days?|last|past)$/i.test(word);
+  }
+  function startOfDay(date2) {
+    const copy = new Date(date2);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  }
+  function endOfDay(date2) {
+    const copy = new Date(date2);
+    copy.setHours(23, 59, 59, 999);
+    return copy;
+  }
+
+  // src/utils/searchMemoryUtils.ts
+  init_localMemoryUtils();
+  function hasBookmarkFolderCandidates(results) {
+    return results.some((r2) => {
+      const rawType = String(r2.metadata?.type || "").toLowerCase();
+      return isBookmarkFolderType(rawType);
+    });
+  }
+  function buildFolderUrlMap(folders) {
+    const folderToUrls = /* @__PURE__ */ new Map();
+    for (const folder of folders) {
+      const name = normalizeMemoryName(folder?.name || "");
+      if (!name) continue;
+      const urls = /* @__PURE__ */ new Set();
+      for (const item of folder.items || []) {
+        const url = String(item?.url || "").trim();
+        if (url) urls.add(url);
+      }
+      folderToUrls.set(name, urls);
+    }
+    return folderToUrls;
+  }
+  function filterStaleBookmarkFolderResults(results, folderToUrls) {
+    let dropped = 0;
+    const filtered = results.filter((result) => {
+      if (getMemoryDocSource(result) !== "bookmark-folder") {
+        return true;
+      }
+      const folderName = getMemoryDocFolderName(result);
+      const folderUrls = folderToUrls.get(folderName);
+      if (!folderUrls) {
+        dropped++;
+        return false;
+      }
+      const url = getMemoryDocUrl(result);
+      if (!url) {
+        return true;
+      }
+      if (!folderUrls.has(url)) {
+        dropped++;
+        return false;
+      }
+      return true;
+    });
+    return { results: filtered, dropped };
+  }
+
+  // src/commands.ts
+  init_localMemoryUtils();
+  init_assistantLogger();
+
+  // src/utils/decisionEngine.ts
+  init_intentParser();
+
+  // src/utils/organizeTabsQuery.ts
+  var ORGANIZE_VERB = "(?:group|organize|organise|sort|cluster|tidy|clean\\s+up|bundle|categorize|consolidate|combine|collect|gather|arrange)";
+  var ORGANIZE_SCOPE = "(?:my\\s+)?(?:open\\s+)?(?:the\\s+)?tabs?(?:\\s+in\\s+(?:this\\s+)?(?:window|browser))?";
+  var FOCUS_PREPOSITION = "(?:about|on|related\\s+to|reltated\\s+to|relatd\\s+to|realted\\s+to|for|around|involving|regarding|concerning|pertaining\\s+to|dealing\\s+with)";
+  var FOCUS_SEGMENT = `${FOCUS_PREPOSITION}\\s+(?<focus>.+?)`;
+  var GROUP_NAME = `['"]?(?<name>[^'"]+?)['"]?`;
+  var TAB_GROUP_SUFFIX = `(?:the\\s+)?(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}`;
+  var SPLIT_FROM_REST = "(?:from|and)\\s+(?:everything\\s+else|the\\s+rest|other\\s+(?:tabs?|work|stuff)|unrelated\\s+(?:tabs?|work)?)";
+  var PREFIX_RE = /^(?:please\s+|(?:can|could)\s+you\s+|help\s+me\s+|(?:i\s+(?:want|need)\s+to\s+)|(?:i\s+(?:would|'d)\s+like\s+to\s+))+/i;
+  var SUFFIX_RE = /(?:\s+please|\s+thanks|\s+thank\s+you|\s+now)?[\s?.!]*$/i;
+  var CREATE_TAB_GROUP_RE = /\b(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(?:tab\s+)?(?:group|gorup|gruop)\b/i;
+  var ADD_TO_GROUP_RE = /\badd\s+(?:all\s+)?tabs?\s+.*\s+to\s+(?:the\s+)?(?:tab\s+)?group\b/i;
+  var RESEARCH_BRIEF_RE = /\b(?:research\s+)?(?:brief|report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)\b/i;
+  var ORGANIZE_WINDOWS_RE = /\borganize\s+windows?\b/i;
+  var LIST_TABS_RE = /^\s*(?:what|which|list|show)\s+(?:tabs?|pages?)\s+(?:do\s+i\s+have\s+)?(?:open)?/i;
+  var FOCUS_HEURISTIC_PATTERNS = [
+    new RegExp(
+      `\\b(?:group|organize|sort|cluster|bundle|categorize|collect|gather|combine|consolidate|arrange)\\s+(?:all\\s+)?(?:the\\s+)?tabs?\\s+${FOCUS_PREPOSITION}\\s+["']?(?<focus>.+?)["']?(?:\\s+except|\\s+in\\s+(?:a\\s+)?(?:tab\\s+)?group|$)`,
+      "i"
+    ),
+    new RegExp(
+      `\\btabs?\\s+(?:that\\s+are|which\\s+are)\\s+${FOCUS_PREPOSITION}\\s+["']?(?<focus>.+?)["']?(?:\\s+except|$)`,
+      "i"
+    ),
+    new RegExp(
+      `\\b(?:group|organize)\\s+(?:all\\s+)?(?:the\\s+)?tabs?\\s+["'](?<focus>[^"']+)["']`,
+      "i"
+    ),
+    new RegExp(
+      `\\b(?:put|collect|gather|bundle)\\s+(?:all\\s+)?(?:my\\s+)?(?<focus>.+?)\\s+tabs?\\s+(?:together|into\\s+(?:a\\s+)?(?:tab\\s+)?group)`,
+      "i"
+    ),
+    new RegExp(
+      `\\b(?:all\\s+)?(?:the\\s+)?tabs?\\s+${FOCUS_PREPOSITION}\\s+["']?(?<focus>.+?)["']?\\s*[\u2014-]\\s*(?:group|organize)\\s+(?:them|those|these)?`,
+      "i"
+    )
+  ];
+  function trimQuotes2(value) {
+    return String(value || "").trim().replace(/^["']|["']$/g, "").trim();
+  }
+  function stripTrailingFocusNoise(value) {
+    return String(value || "").replace(/\s+in\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called|named)\s+.+$/i, "").replace(/\s+into\s+(?:a\s+)?(?:tab\s+)?group\s*$/i, "").replace(/\s+except\s+.+$/i, "").replace(
+      /\s*[—-]\s*(?:group|organize)\s+(?:them|those|these|my\s+tabs?)\s*$/i,
+      ""
+    ).trim();
+  }
+  function trimOrganizeFocus(value) {
+    return stripTrailingFocusNoise(trimQuotes2(value));
+  }
+  function normalizeOrganizeTabsInput(input) {
+    return String(input || "").trim().replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, " ").replace(/\borganise\b/gi, "organize").replace(/\breltated\b/gi, "related").replace(/\brelatd\b/gi, "related").replace(/\brealted\b/gi, "related").replace(/\bgorup\b/gi, "group").replace(/\bgruop\b/gi, "group").replace(/\btabbs\b/gi, "tabs");
+  }
+  function prepareOrganizeTabsCommandBody(input) {
+    let body = normalizeOrganizeTabsInput(input);
+    body = body.replace(PREFIX_RE, "").trim();
+    body = body.replace(SUFFIX_RE, "").trim();
+    body = body.replace(/\ball the tabs\b/gi, "all tabs");
+    return body.trim();
+  }
+  function isOrganizeTabsNegative(normalized) {
+    if (CREATE_TAB_GROUP_RE.test(normalized)) {
+      return true;
+    }
+    if (ADD_TO_GROUP_RE.test(normalized)) {
+      return true;
+    }
+    if (RESEARCH_BRIEF_RE.test(normalized)) {
+      return true;
+    }
+    if (ORGANIZE_WINDOWS_RE.test(normalized)) {
+      return true;
+    }
+    if (LIST_TABS_RE.test(normalized)) {
+      return true;
+    }
+    return false;
+  }
+  function looksLikeOrganizeTabsCommand(input) {
+    const normalized = prepareOrganizeTabsCommandBody(input);
+    if (!normalized || isOrganizeTabsNegative(normalized)) {
+      return false;
+    }
+    if (new RegExp(`^${ORGANIZE_VERB}\\s+(?:all\\s+)?${ORGANIZE_SCOPE}`, "i").test(
+      normalized
+    )) {
+      return true;
+    }
+    if (new RegExp(
+      `\\bgroup\\s+(?:all\\s+)?(?:the\\s+)?tabs?\\s+${FOCUS_PREPOSITION}\\b`,
+      "i"
+    ).test(normalized)) {
+      return true;
+    }
+    if (/\b(?:separate|split|isolate)\s+.+\s+(?:from|and)\s+(?:everything\s+else|the\s+rest|other)\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:organize|sort|cluster|group)\b.+\bby\s+topic\b/i.test(normalized)) {
+      return true;
+    }
+    if (/\b(?:sort|cluster)\s+(?:these|my|the)?\s*tabs?\s+into\s+groups?\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\btidy\s+up\s+(?:my\s+)?(?:open\s+)?tabs?\b/i.test(normalized)) {
+      return true;
+    }
+    if (/\borganize\s+(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(normalized)) {
+      return true;
+    }
+    if (/\b(?:separate|split|isolate)\s+.+\s+(?:from|and)\s+(?:unrelated|other)\s+tabs?\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:i'?m|i\s+am)\s+(?:doing\s+)?(?:research(?:ing)?|working)\s+(?:on|about)\s+.+\b(?:group|organize)\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:organize|sort|cluster|group)\s+(?:tabs?\s+)?(?:in|from|within)\s+(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:organize|sort|cluster)\s+(?:ungrouped|un\s*grouped)\s+tabs?\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:organize|sort|cluster)\s+tabs?\s+in\s+(?:tab\s+)?group\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\bput\s+(?:my\s+)?(?:.+?\s+)?tabs?\s+in\s+(?:a\s+)?(?:tab\s+)?group\s+(?:called|named)\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (/\b(?:put|collect|gather|bundle)\s+(?:all\s+)?(?:my\s+)?\S+\s+tabs?\s+(?:together|into\s+(?:a\s+)?(?:tab\s+)?group)\b/i.test(
+      normalized
+    )) {
+      return true;
+    }
+    if (new RegExp(
+      `\\btabs?\\s+(?:that\\s+are|which\\s+are)\\s+${FOCUS_PREPOSITION}\\b`,
+      "i"
+    ).test(normalized)) {
+      return true;
+    }
+    if (new RegExp(
+      `(?:all\\s+)?(?:the\\s+)?tabs?\\s+${FOCUS_PREPOSITION}\\s+.+\\s*[\u2014-]\\s*(?:group|organize)\\s+(?:them|those|these)`,
+      "i"
+    ).test(normalized)) {
+      return true;
+    }
+    if (new RegExp(
+      `\\btabs?\\s+(?:that\\s+are|which\\s+are)\\s+${FOCUS_PREPOSITION}\\b`,
+      "i"
+    ).test(normalized) && /\b(?:group|organize)\b/i.test(normalized)) {
+      return true;
+    }
+    return false;
+  }
+  function extractOrganizeTabsFocus(normalized) {
+    const body = prepareOrganizeTabsCommandBody(normalized);
+    for (const pattern of FOCUS_HEURISTIC_PATTERNS) {
+      const match = body.match(pattern);
+      const focus = trimOrganizeFocus(match?.groups?.focus || "");
+      if (focus.length >= 2) {
+        return focus;
+      }
+    }
+    return null;
+  }
+  function inferOrganizeTabsMode(args, normalized) {
+    const focus = String(args.focus || "").trim();
+    if (args.mode === "research_vs_other") {
+      return "research_vs_other";
+    }
+    if (focus) {
+      return "single_focus";
+    }
+    if (args.mode) {
+      return args.mode;
+    }
+    if (/\b(?:separate|split|isolate)\b/i.test(normalized) && /\b(?:from|and)\s+(?:everything\s+else|the\s+rest|other)\b/i.test(
+      normalized
+    )) {
+      return "research_vs_other";
+    }
+    if (/\bby\s+topic\b/i.test(normalized)) {
+      return "multi_topic";
+    }
+    if (/\b(?:organize|sort|cluster|group)\b/i.test(normalized)) {
+      return "multi_topic";
+    }
+    return "single_focus";
+  }
+  function enrichOrganizeTabsRouteArgs(utterance, args) {
+    const normalized = prepareOrganizeTabsCommandBody(utterance);
+    const enriched = { ...args };
+    if (!enriched.focus) {
+      const focus = extractOrganizeTabsFocus(normalized);
+      if (focus) {
+        enriched.focus = focus;
+      }
+    }
+    const mode = inferOrganizeTabsMode(
+      {
+        mode: enriched.mode,
+        focus: String(enriched.focus || "")
+      },
+      normalized
+    );
+    if (!enriched.mode || enriched.focus) {
+      enriched.mode = mode;
+    }
+    if (!enriched.scope) {
+      enriched.scope = "window";
+    }
+    return enriched;
   }
 
   // src/utils/explicitRouteRules.ts
@@ -53614,6 +54579,28 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           s2
         )) {
           return {};
+        }
+        return null;
+      }
+    },
+    {
+      next: "organize_tabs",
+      reason: "explicit-organize-tabs",
+      resolve: (input) => {
+        if (/\borganize\s+windows?\b/i.test(input)) {
+          return null;
+        }
+        if (/\b(?:group|organize|sort|cluster|tidy|clean\s+up)\b.*\btabs?\b/i.test(
+          input
+        ) || /\bgroup\s+(?:all\s+)?tabs?\s+(?:about|on|related\s+to|for)\b/i.test(
+          input
+        ) || /\b(?:separate|split|isolate)\s+.+\s+(?:from|and)\s+(?:everything\s+else|the\s+rest|other|unrelated)\b/i.test(
+          input
+        )) {
+          return enrichOrganizeTabsRouteArgs(input, {
+            mode: "multi_topic",
+            scope: "window"
+          });
         }
         return null;
       }
@@ -53741,6 +54728,26 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       }
     },
     // ─────────────────────────────────────────────────────────────────────────
+    // HISTORY KEYWORD SEARCH (search history for [term])
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      next: "search_history",
+      reason: "explicit-history-keyword-search",
+      resolve: (input) => {
+        const parsed = parseHistorySearchQuery(input);
+        if (!parsed) {
+          return null;
+        }
+        if (parsed.mode === "recent") {
+          return { query: "", mode: "recent" };
+        }
+        if (parsed.mode === "keyword") {
+          return { query: parsed.query, mode: "keyword" };
+        }
+        return null;
+      }
+    },
+    // ─────────────────────────────────────────────────────────────────────────
     // BROWSING HISTORY SEARCH (search_history)
     // Matches queries about pages the user VISITED (not bookmarked)
     // Examples: "what did I read about X", "find that article I visited"
@@ -53750,15 +54757,34 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       reason: "explicit-history-search",
       resolve: (input) => {
         const patterns = [
-          { re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i },
-          { re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i },
-          { re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
-          { re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i },
-          { re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i },
-          { re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i },
-          { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
-          { re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i },
-          { re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i, queryGroup: "recent browsing history" }
+          {
+            re: /(?:what|which)\s+(?:was|were|is)\s+that\s+(?<query>.+?)\s+(?:i\s+was|i've\s+been|i\s+have\s+been)\s+(?:reading|looking\s+at|browsing|viewing)/i
+          },
+          {
+            re: /(?:pull|get|find|show)\s+(?:up\s+)?(?:me\s+)?(?:that\s+)?(?:page|article|site)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:from|in)\s+(?:my\s+)?history)?$/i
+          },
+          {
+            re: /(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i
+          },
+          {
+            re: /(?:can\s+you\s+)?(?:pull|get|find|show|look)\s+(?:up\s+)?(?:for\s+)?(?:me\s+)?(?<query>.+?)\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history/i
+          },
+          {
+            re: /(?:search|find|look\s*up)\s+(?:my\s+)?(?:browsing\s+)?history\s+(?:for|about)\s+(?<query>.+)/i
+          },
+          {
+            re: /(?:i\s+was\s+(?:reading|looking\s+at|browsing|viewing))\s+(?:something|a\s+page|an?\s+article|a\s+site)\s+(?:about|on|regarding)\s+(?<query>.+)/i
+          },
+          {
+            re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i|i)\s+(?:visited?|read|browsed?|looked?\s+at|viewed?|seen)\s+(?:about|on|regarding)\s+(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i
+          },
+          {
+            re: /what\s+(?:did\s+i|have\s+i)\s+(?:visit|read|browse|look\s+at|view)\s+(?:about\s+)?(?<query>.+?)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i
+          },
+          {
+            re: /what\s+(?:pages?|sites?|articles?)\s+(?:have\s+i|did\s+i)\s+(?:visited?|read|browsed?|viewed?|seen)(?:\s+(?:recently|earlier|before|previously|yesterday))?$/i,
+            queryGroup: "recent browsing history"
+          }
         ];
         for (const { re: re2, queryGroup } of patterns) {
           const match = input.match(re2);
@@ -53768,7 +54794,13 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           }
         }
         if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
-          const cleaned = input.replace(/^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i, "").replace(/\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i, "").replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "").replace(/^(?:for|about|on|regarding)\s+/i, "").trim();
+          const cleaned = input.replace(
+            /^(?:can\s+you\s+)?(?:search|find|look\s*(?:up|for)?|show|pull\s*up?|get)\s+/i,
+            ""
+          ).replace(
+            /\s+(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*/i,
+            ""
+          ).replace(/\s*(?:my|the)\s+(?:browsing\s+)?history\s*/i, "").replace(/^(?:for|about|on|regarding)\s+/i, "").trim();
           return { query: cleaned || "recent browsing history" };
         }
         return null;
@@ -53846,7 +54878,14 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       id: "list.container.tabs",
       family: "list",
       commandName: "list_tabs",
-      phrases: ["list tabs in", "show tabs in", "list my", "show my", "list the", "show the"],
+      phrases: [
+        "list tabs in",
+        "show tabs in",
+        "list my",
+        "show my",
+        "list the",
+        "show the"
+      ],
       slots: [
         { name: "name", type: "target_name", source: "rest", optional: true },
         { name: "scope", type: "scope", source: "rest", optional: true }
@@ -53876,6 +54915,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "articles i read",
         "browsing history",
         "search history",
+        "search history for",
+        "search my browsing history for",
+        "find in my history for",
         "search my history",
         "search my browser history",
         "search my browsing history",
@@ -53922,7 +54964,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       phrases: ["add", "save", "move", "put"],
       slots: [
         { name: "name", type: "target_name", source: "rest", optional: true },
-        { name: "query", type: "string", source: "quoted_or_rest", optional: true }
+        {
+          name: "query",
+          type: "string",
+          source: "quoted_or_rest",
+          optional: true
+        }
       ]
     },
     {
@@ -53930,7 +54977,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       family: "mutation",
       commandName: "resolve_ambiguity",
       phrases: ["close", "delete", "remove"],
-      slots: [{ name: "target", type: "target_name", source: "rest", optional: true }]
+      slots: [
+        { name: "target", type: "target_name", source: "rest", optional: true }
+      ]
     }
   ];
 
@@ -54026,7 +55075,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     if (/\btab\s*groups?\b/i.test(command) && !/\btabs?\s+(?:in|from)\b/i.test(command)) {
       return null;
     }
-    const tabsWithTarget = command.match(/\btabs?\s+(?:in|from)\s+(?<target>.+)$/i);
+    const tabsWithTarget = command.match(
+      /\btabs?\s+(?:in|from)\s+(?<target>.+)$/i
+    );
     if (tabsWithTarget?.groups?.target) {
       const rawTarget = cleanTargetName(tabsWithTarget.groups.target);
       if (!rawTarget) {
@@ -54338,12 +55389,24 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       return null;
     }
     if (candidate.definition.commandName === "search_history") {
-      const parsed2 = parseSearchMemoryIntent(input);
-      const query = parsed2?.query || input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim();
+      const parsed2 = parseHistorySearchQuery(input);
+      if (parsed2) {
+        return {
+          type: "tool",
+          next: "search_history",
+          args: {
+            query: parsed2.query,
+            mode: parsed2.mode === "recent" ? "recent" : parsed2.mode,
+            utterance: input
+          },
+          reason: "search-manifest-history"
+        };
+      }
+      const query = input.replace(/^(?:find|search|what|did\s+i)\s+/i, "").trim() || "";
       return {
         type: "tool",
         next: "search_history",
-        args: { query },
+        args: { query, mode: inferHistorySearchMode(query), utterance: input },
         reason: "search-manifest-history"
       };
     }
@@ -54394,7 +55457,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       for (let i2 = 0; i2 < tabs.length; i2++) {
         const tab = tabs[i2];
         const title = normalizeRouteName(tab?.label || "");
-        const url = normalizeRouteName(tab?.linkedBrowser?.currentURI?.spec || "");
+        const url = normalizeRouteName(
+          tab?.linkedBrowser?.currentURI?.spec || ""
+        );
         if (title === normalizedTarget || url === normalizedTarget || normalizedTarget.length > 2 && (title.includes(normalizedTarget) || url.includes(normalizedTarget))) {
           tabMatches.push(i2 + 1);
         }
@@ -54956,8 +56021,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   var TOPIC_SEGMENT = "(?:on|about|for)\\s+(?<topic>.+?)";
   var SCOPE_PREP = "(?:from|in|using|based\\s+on|for\\s+my)\\s+";
   var ACROSS_SCOPE = "(?:across|over)\\s+";
-  var GROUP_NAME = `['"]?(?<name>[^'"]+?)['"]?`;
-  var TAB_GROUP_SUFFIX = `(?:the\\s+)?(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}`;
+  var GROUP_NAME2 = `['"]?(?<name>[^'"]+?)['"]?`;
+  var TAB_GROUP_SUFFIX2 = `(?:the\\s+)?(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME2}`;
   var SYNTHESIS_VERB = "(?:consolidat(?:e|ing)|synthesiz(?:e|ing)|compil(?:e|ing)|merg(?:e|ing)|combin(?:e|ing)|distill(?:ing)?)";
   var SYNTHESIS_START = `(?:please\\s+)?${SYNTHESIS_VERB}\\s*(?:the\\s+)?(?:findings|research|notes|tabs?|pages?|sources?)?\\s*`;
   var BRIEF_SYNONYM_NOUN_RE = /\b(?:research\s+)?(?:report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)\b/i;
@@ -55005,7 +56070,9 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       return true;
     }
     if (/\bbrief\b/i.test(normalized)) {
-      return /^(?:create|make|build|write|generate|draft|prepare)\b/i.test(normalized) || /\bbrief\s+(?:based\s+on|from|for|about|on)\b/i.test(normalized) || hasMultiTabScope(normalized);
+      return /^(?:create|make|build|write|generate|draft|prepare)\b/i.test(
+        normalized
+      ) || /\bbrief\s+(?:based\s+on|from|for|about|on)\b/i.test(normalized) || hasMultiTabScope(normalized);
     }
     if (isMultiTabSummarizePhrase(normalized)) {
       return true;
@@ -55033,7 +56100,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   function toolDecision5(next, reason, args) {
     return { type: "tool", next, args, reason };
   }
-  function trimQuotes2(value) {
+  function trimQuotes3(value) {
     return String(value || "").trim().replace(/^["']|["']$/g, "").trim();
   }
   function activeGroupArgs(topic) {
@@ -55072,7 +56139,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       if (match && match.index != null) {
         return {
           body: trimmed.slice(0, match.index).trim(),
-          outlineHint: trimQuotes2(match[1] || "")
+          outlineHint: trimQuotes3(match[1] || "")
         };
       }
     }
@@ -55090,7 +56157,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       const indices = [...clause.matchAll(/\d+/g)].map((match) => parseInt(match[0], 10)).filter((n2) => Number.isFinite(n2) && n2 >= 1);
       return { body, excludeIndices: indices, excludeQueries: [] };
     }
-    const queries = clause.split(/\s*,\s*|\s+and\s+/i).map((part) => trimQuotes2(part)).filter((part) => part.length >= 3);
+    const queries = clause.split(/\s*,\s*|\s+and\s+/i).map((part) => trimQuotes3(part)).filter((part) => part.length >= 3);
     return { body, excludeIndices: [], excludeQueries: queries };
   }
   function mergeExcludeArgs(args, excludeIndices, excludeQueries) {
@@ -55201,22 +56268,22 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "draft-outline-from-group",
       match: new RegExp(
-        `^${VERB_PREFIX}an\\s+outline\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        `^${VERB_PREFIX}an\\s+outline\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
     {
       reason: "synthesis-tab-group-named",
       match: new RegExp(
-        `^${SYNTHESIS_START}(?:${SCOPE_PREP})?${TAB_GROUP_SUFFIX}\\s*$`,
+        `^${SYNTHESIS_START}(?:${SCOPE_PREP})?${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
@@ -55231,44 +56298,44 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "summarize-everything-in-named-group",
       match: new RegExp(
-        `^summariz(?:e|ing)\\s+everything\\s+in\\s+(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}\\s*$`,
+        `^summariz(?:e|ing)\\s+everything\\s+in\\s+(?:my\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
     {
       reason: "summarize-tab-group-named",
       match: new RegExp(
-        `^summariz(?:e|ing)\\s+(?:the\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME}\\s*$`,
+        `^summariz(?:e|ing)\\s+(?:the\\s+)?(?:tab\\s+)?group\\s+${GROUP_NAME2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
     {
       reason: "summarize-tabs-in-group",
       match: new RegExp(
-        `^summariz(?:e|ing)\\s+(?:all\\s+)?tabs?\\s+in\\s+(?:(?:the\\s+)?(?:tab\\s+)?group\\s+)?${GROUP_NAME}(?:\\s+group)?\\s*$`,
+        `^summariz(?:e|ing)\\s+(?:all\\s+)?tabs?\\s+in\\s+(?:(?:the\\s+)?(?:tab\\s+)?group\\s+)?${GROUP_NAME2}(?:\\s+group)?\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
     {
       reason: "summary-of-tab-group",
       match: new RegExp(
-        `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+${TAB_GROUP_SUFFIX}\\s*$`,
+        `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         return name ? tabGroupArgs(name) : null;
       }
     },
@@ -55281,13 +56348,21 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       resolve: () => activeGroupArgs()
     },
     {
+      reason: "research-brief-on-active-tab-group",
+      match: new RegExp(
+        `^${PRODUCT_START}\\s+on\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: () => activeGroupArgs()
+    },
+    {
       reason: "research-brief-active-tab-group",
       match: new RegExp(
         `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         return activeGroupArgs(topic || void 0);
       }
     },
@@ -55298,7 +56373,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "i"
       ),
       resolve: (match) => {
-        const query = trimQuotes2(match.groups?.query || "");
+        const query = trimQuotes3(match.groups?.query || "");
         if (!query) {
           return null;
         }
@@ -55306,7 +56381,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           scope: "tabs",
           tab_queries: [query]
         };
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         if (topic) {
           args.topic = topic;
         }
@@ -55320,7 +56395,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "i"
       ),
       resolve: (match) => {
-        const query = trimQuotes2(match.groups?.query || "");
+        const query = trimQuotes3(match.groups?.query || "");
         if (!query) {
           return null;
         }
@@ -55328,7 +56403,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           scope: "tabs",
           tab_queries: [query]
         };
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         if (topic) {
           args.topic = topic;
         }
@@ -55351,7 +56426,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           return null;
         }
         const args = { scope: "tabs", tab_indices: indices };
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         if (topic) {
           args.topic = topic;
         }
@@ -55365,8 +56440,8 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
-        const list = trimQuotes2(match.groups?.list || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
+        const list = trimQuotes3(match.groups?.list || "");
         if (!topic || !list) {
           return null;
         }
@@ -55391,7 +56466,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "i"
       ),
       resolve: (match) => {
-        const list = trimQuotes2(match.groups?.list || "");
+        const list = trimQuotes3(match.groups?.list || "");
         if (!list || isIndicesOnlyClause(list)) {
           return null;
         }
@@ -55400,7 +56475,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           return null;
         }
         const args = { scope: "tabs", tab_queries: queries };
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         if (topic) {
           args.topic = topic;
         }
@@ -55410,11 +56485,11 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "research-brief-for-group",
       match: new RegExp(
-        `^${PRODUCT_START}\\s+for\\s+${TAB_GROUP_SUFFIX}\\s*$`,
+        `^${PRODUCT_START}\\s+for\\s+${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const name = trimQuotes2(match.groups?.name || "");
+        const name = trimQuotes3(match.groups?.name || "");
         if (!name) {
           return null;
         }
@@ -55424,12 +56499,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "research-brief-group-trailing",
       match: new RegExp(
-        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:the\\s+)?(?:my\\s+)?${GROUP_NAME}\\s+(?:tab\\s+)?group\\s*$`,
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}(?:the\\s+)?(?:my\\s+)?${GROUP_NAME2}\\s+(?:tab\\s+)?group\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
-        const name = trimQuotes2(match.groups?.name || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
+        const name = trimQuotes3(match.groups?.name || "");
         if (!name) {
           return null;
         }
@@ -55443,12 +56518,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "research-brief-tab-group-named",
       match: new RegExp(
-        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        `^${PRODUCT_START}(?:\\s+${TOPIC_SEGMENT})?\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
-        const name = trimQuotes2(match.groups?.name || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
+        const name = trimQuotes3(match.groups?.name || "");
         if (!name) {
           return null;
         }
@@ -55462,12 +56537,12 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     {
       reason: "research-brief-topic-then-group",
       match: new RegExp(
-        `^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX}\\s*$`,
+        `^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s+${SCOPE_PREP}${TAB_GROUP_SUFFIX2}\\s*$`,
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
-        const name = trimQuotes2(match.groups?.name || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
+        const name = trimQuotes3(match.groups?.name || "");
         if (!topic || !name) {
           return null;
         }
@@ -55481,7 +56556,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         "i"
       ),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         const args = { scope: "window" };
         if (topic) {
           args.topic = topic;
@@ -55493,7 +56568,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       reason: "research-brief-topic-only",
       match: new RegExp(`^${PRODUCT_START}\\s+${TOPIC_SEGMENT}\\s*$`, "i"),
       resolve: (match) => {
-        const topic = trimQuotes2(match.groups?.topic || "");
+        const topic = trimQuotes3(match.groups?.topic || "");
         if (!topic) {
           return null;
         }
@@ -55506,9 +56581,13 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       /^regenerate\s+research\s+brief\s+section\s+(\w+)\s*$/i
     );
     if (regenerateMatch) {
-      return toolDecision5("regenerate_research_brief_section", "regenerate-section", {
-        section: regenerateMatch[1]
-      });
+      return toolDecision5(
+        "regenerate_research_brief_section",
+        "regenerate-section",
+        {
+          section: regenerateMatch[1]
+        }
+      );
     }
     const { body: afterOutline, outlineHint } = extractResearchBriefOutlineHint(input);
     const { body, excludeIndices, excludeQueries } = splitResearchBriefExcludeClause(afterOutline);
@@ -55541,6 +56620,331 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     return null;
   }
 
+  // src/utils/organizeTabsExplicitResolver.ts
+  init_intentParser();
+  init_researchBriefTabResolve();
+  function toolDecision6(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function trimQuotes4(value) {
+    return trimOrganizeFocus(value);
+  }
+  function mergeExcludeArgs2(args, excludeIndices, excludeQueries) {
+    const merged = { ...args };
+    if (excludeIndices.length > 0) {
+      merged.exclude_indices = excludeIndices;
+    }
+    if (excludeQueries.length > 0) {
+      merged.exclude_queries = excludeQueries;
+    }
+    return merged;
+  }
+  function inferMode(args, normalized) {
+    const mode = inferOrganizeTabsMode(
+      {
+        mode: args.mode,
+        focus: String(args.focus || "")
+      },
+      normalized
+    );
+    return { ...args, mode };
+  }
+  function finalizeOrganizeArgs(args, normalized, excludeIndices, excludeQueries) {
+    const withMode = inferMode(args, normalized);
+    if (!withMode.scope) {
+      withMode.scope = "window";
+    }
+    return mergeExcludeArgs2(withMode, excludeIndices, excludeQueries);
+  }
+  var ORGANIZE_TABS_PATTERNS = [
+    {
+      reason: "group-tabs-about-with-name",
+      match: new RegExp(
+        `^group\\s+(?:all\\s+)?tabs?\\s+${FOCUS_SEGMENT}\\s+in\\s+(?:a\\s+)?(?:tab\\s+)?group\\s+(?:called|named)\\s+${GROUP_NAME}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        const name = trimQuotes4(match.groups?.name || "");
+        if (!focus || !name) {
+          return null;
+        }
+        return { mode: "single_focus", focus, name };
+      }
+    },
+    {
+      reason: "organize-focus-with-name",
+      match: new RegExp(
+        `^put\\s+(?:my\\s+)?(?<focus>.+?)\\s+tabs?\\s+in\\s+(?:a\\s+)?(?:tab\\s+)?group\\s+(?:called|named)\\s+${GROUP_NAME}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        const name = trimQuotes4(match.groups?.name || "");
+        if (!focus || !name) {
+          return null;
+        }
+        return { mode: "single_focus", focus, name };
+      }
+    },
+    {
+      reason: "put-tabs-together",
+      match: new RegExp(
+        `^(?:put|collect|gather|bundle)\\s+(?:all\\s+)?(?:my\\s+)?(?<focus>.+?)\\s+tabs?\\s+together\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "organize-group-tabs-about",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:all\\s+)?tabs?\\s+${FOCUS_SEGMENT}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "group-tabs-related-to",
+      match: new RegExp(
+        `^group\\s+(?:all\\s+)?(?:the\\s+)?tabs?\\s+(?:related\\s+to|about|on|for|around|involving|regarding|concerning|pertaining\\s+to|dealing\\s+with)\\s+(?<focus>.+?)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "group-quoted-topic",
+      match: /^group\s+(?:all\s+)?(?:the\s+)?tabs?\s+["'](?<focus>[^"']+)["']\s*$/i,
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "research-narrative-group",
+      match: new RegExp(
+        `^(?:i'?m|i\\s+am)\\s+(?:doing\\s+)?(?:research(?:ing)?|working)\\s+(?:on|about)\\s+(?<focus>.+?)\\s*[\u2014-]\\s*(?:group|organize)\\s+(?:those|these|my)?\\s*tabs?\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "collect-tabs-into-group",
+      match: new RegExp(
+        `^collect\\s+tabs?\\s+${FOCUS_SEGMENT}\\s+into\\s+(?:a\\s+)?(?:tab\\s+)?group\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "tabs-that-are-about-group",
+      match: new RegExp(
+        `^tabs?\\s+(?:that\\s+are|which\\s+are)\\s+${FOCUS_SEGMENT}\\s*[\u2014-]\\s*(?:group|organize)\\s+(?:them|those|these)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "narrative-group-them",
+      match: new RegExp(
+        `^(?:all\\s+)?(?:the\\s+)?tabs?\\s+${FOCUS_SEGMENT}\\s*[\u2014-]\\s*(?:group|organize)\\s+(?:them|those|these)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "single_focus", focus } : null;
+      }
+    },
+    {
+      reason: "separate-from-unrelated-tabs",
+      match: new RegExp(
+        `^(?:separate|split|isolate)\\s+(?:my\\s+)?(?<focus>.+?)\\s+from\\s+unrelated\\s+tabs?\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "research_vs_other", focus } : { mode: "research_vs_other" };
+      }
+    },
+    {
+      reason: "tidy-open-tabs",
+      match: /^tidy\s+up\s+(?:my\s+)?(?:open\s+)?tabs?\s*$/i,
+      resolve: () => ({ mode: "multi_topic", scope: "window" })
+    },
+    {
+      reason: "research-vs-other-explicit",
+      match: new RegExp(
+        `^(?:separate|split|isolate)\\s+(?:my\\s+)?(?<focus>.+?)\\s+${SPLIT_FROM_REST}\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        return focus ? { mode: "research_vs_other", focus } : { mode: "research_vs_other" };
+      }
+    },
+    {
+      reason: "split-research-from-rest",
+      match: new RegExp(
+        `^(?:split|separate)\\s+(?:my\\s+)?(?:research|researching)?\\s*tabs?\\s+from\\s+(?:the\\s+)?rest\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "research_vs_other" })
+    },
+    {
+      reason: "organize-by-topic-window",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:my\\s+)?${ORGANIZE_SCOPE}\\s+by\\s+topic\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "multi_topic", scope: "window" })
+    },
+    {
+      reason: "sort-tabs-into-groups",
+      match: new RegExp(
+        `^(?:sort|cluster)\\s+(?:these|my|the)?\\s*tabs?\\s+into\\s+groups?\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "multi_topic", scope: "window" })
+    },
+    {
+      reason: "organize-window-tabs",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:my\\s+)?(?:open\\s+)?tabs?\\s+in\\s+(?:this\\s+)?window\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "multi_topic", scope: "window" })
+    },
+    {
+      reason: "organize-ungrouped-only",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:ungrouped|un\\s*grouped)\\s+tabs?\\s*(?:only|by\\s+topic)?\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "multi_topic", scope: "ungrouped_only" })
+    },
+    {
+      reason: "organize-active-tab-group",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*(?:by\\s+topic)?\\s*$`,
+        "i"
+      ),
+      resolve: () => ({
+        mode: "multi_topic",
+        scope: "tab-group",
+        use_active_tab_group: true
+      })
+    },
+    {
+      reason: "organize-named-tab-group",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:tabs?\\s+)?(?:in|from|within)\\s+(?:tab\\s+)?group\\s+${GROUP_NAME}(?:\\s+by\\s+topic)?\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes4(match.groups?.name || "");
+        return name ? { mode: "multi_topic", scope: "tab-group", name } : null;
+      }
+    },
+    {
+      reason: "organize-tabs-in-named-group",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+tabs?\\s+in\\s+(?:tab\\s+)?group\\s+${GROUP_NAME}\\s+by\\s+topic\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const name = trimQuotes4(match.groups?.name || "");
+        return name ? { mode: "multi_topic", scope: "tab-group", name } : null;
+      }
+    },
+    {
+      reason: "organize-tabs-except-indices",
+      match: new RegExp(
+        `^group\\s+tabs?\\s+${FOCUS_SEGMENT}\\s+except\\s+tabs?\\s+(?<clause>[\\d,\\sand]+)\\s*$`,
+        "i"
+      ),
+      resolve: (match) => {
+        const focus = trimQuotes4(match.groups?.focus || "");
+        const clause = match.groups?.clause || "";
+        if (!focus || !isIndicesOnlyClause(clause)) {
+          return null;
+        }
+        return {
+          mode: "single_focus",
+          focus,
+          exclude_indices: parseTabIndicesFromClause(clause)
+        };
+      }
+    },
+    {
+      reason: "organize-generic-tabs",
+      match: new RegExp(
+        `^${ORGANIZE_VERB}\\s+(?:my\\s+)?${ORGANIZE_SCOPE}\\s*$`,
+        "i"
+      ),
+      resolve: () => ({ mode: "multi_topic", scope: "window" })
+    }
+  ];
+  function buildOrganizeTabsFallbackArgs(normalized) {
+    const focus = extractOrganizeTabsFocus(normalized);
+    if (focus) {
+      return { mode: "single_focus", focus, scope: "window" };
+    }
+    return { mode: "multi_topic", scope: "window" };
+  }
+  function resolveExplicitOrganizeTabsRoute(input, _snapshot) {
+    const { body, excludeIndices, excludeQueries } = splitResearchBriefExcludeClause(normalizeOrganizeTabsInput(input));
+    const trimmed = prepareOrganizeTabsCommandBody(body);
+    if (!trimmed || !looksLikeOrganizeTabsCommand(trimmed)) {
+      return null;
+    }
+    for (const pattern of ORGANIZE_TABS_PATTERNS) {
+      const match = trimmed.match(pattern.match);
+      if (!match) {
+        continue;
+      }
+      const rawArgs = pattern.resolve(match, trimmed);
+      if (!rawArgs) {
+        continue;
+      }
+      return toolDecision6(
+        "organize_tabs",
+        pattern.reason,
+        finalizeOrganizeArgs(rawArgs, trimmed, excludeIndices, excludeQueries)
+      );
+    }
+    if (looksLikeOrganizeTabsCommand(trimmed)) {
+      const fallbackArgs = buildOrganizeTabsFallbackArgs(trimmed);
+      return toolDecision6(
+        "organize_tabs",
+        fallbackArgs.focus ? "organize-tabs-focus-heuristic" : "organize-tabs-fallback",
+        finalizeOrganizeArgs(
+          fallbackArgs,
+          trimmed,
+          excludeIndices,
+          excludeQueries
+        )
+      );
+    }
+    return null;
+  }
+
   // src/utils/decisionEngine.ts
   var FAMILY_HANDLERS = {
     list: resolveManifestListRoute,
@@ -55568,6 +56972,18 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
         message: "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`."
       };
     }
+    if (looksLikeOrganizeTabsCommand(input)) {
+      const organizeEarly = resolveExplicitOrganizeTabsRoute(input, snapshot);
+      if (organizeEarly) {
+        return organizeEarly;
+      }
+      return {
+        type: "chat",
+        actionable: true,
+        reason: "organize-tabs-unresolved",
+        message: "I could not match that to tab organizing. Try: `Group all tabs related to LLM research` or `Organize my open tabs by topic`."
+      };
+    }
     const family = classifyCommandFamily(input);
     const familyHandler = FAMILY_HANDLERS[family];
     if (familyHandler) {
@@ -55590,6 +57006,13 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
     );
     if (researchBriefExplicit) {
       return researchBriefExplicit;
+    }
+    const organizeTabsExplicit = resolveExplicitOrganizeTabsRoute(
+      input,
+      snapshot
+    );
+    if (organizeTabsExplicit) {
+      return organizeTabsExplicit;
     }
     const explicit = resolveExplicitRoute(input);
     if (explicit) {
@@ -55714,7 +57137,10 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
           (event) => {
             const detail = event.detail;
             if (Array.isArray(detail?.folderNames)) {
-              this.replaceFolderNames(detail.folderNames, "bookmark-folders-event");
+              this.replaceFolderNames(
+                detail.folderNames,
+                "bookmark-folders-event"
+              );
               return;
             }
             this.markDirty("bookmark-folders-event");
@@ -56152,9 +57578,7 @@ ${JSON.stringify(payload)}`;
       );
     }
     if (params.urlsDeduplicated > 0) {
-      lines.push(
-        `${params.urlsDeduplicated} duplicate URL(s) were removed.`
-      );
+      lines.push(`${params.urlsDeduplicated} duplicate URL(s) were removed.`);
     }
     lines.push("Continue?");
     return lines.join(" ");
@@ -56332,8 +57756,786 @@ ${JSON.stringify(payload)}`;
       const sources = Array.isArray(payload) ? payload : Array.isArray(payload.sources) ? payload.sources ?? [] : existing.sources;
       return { ...existing, sources };
     }
-    const gaps = Array.isArray(payload) ? payload : Array.isArray(payload.gapsAndContradictions) ? payload.gapsAndContradictions ?? [] : existing.gapsAndContradictions;
+    const gaps = Array.isArray(payload) ? payload : Array.isArray(
+      payload.gapsAndContradictions
+    ) ? payload.gapsAndContradictions ?? [] : existing.gapsAndContradictions;
     return { ...existing, gapsAndContradictions: gaps };
+  }
+
+  // src/services/organizeTabs.ts
+  init_awsSignedFetch();
+  init_messageUtils();
+  init_proxyClient();
+
+  // src/prompts/organizeTabsPrompt.ts
+  var ORGANIZE_TABS_SYSTEM_PROMPT = [
+    "You organize open browser tabs into tab groups by topic.",
+    "You receive a catalog of tabs with index, title, URL, domain, current group, and optional page snippets.",
+    "Return a grouping plan as JSON only. Every tab index may appear in at most one group.",
+    "Respect the requested mode:",
+    "- single_focus: create one group for tabs matching the focus topic; leave unrelated tabs ungrouped.",
+    "- multi_topic: discover 2-6 coherent topic groups; leave truly unrelated tabs ungrouped when sensible.",
+    "- research_vs_other: create exactly two groups when possible \u2014 one for the focus/research topic and one named Other for the rest.",
+    "Use concise group names (2-4 words). Do not invent tab indices not in the catalog.",
+    "Skip pinned tabs if marked pinned."
+  ].join("\n");
+  var ORGANIZE_TABS_GENERATION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        mode: {
+          type: "string",
+          enum: ["single_focus", "multi_topic", "research_vs_other"]
+        },
+        groups: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              tabIndices: { type: "array", items: { type: "number" } },
+              rationale: { type: "string" }
+            },
+            required: ["name", "tabIndices"]
+          }
+        },
+        ungroupedIndices: { type: "array", items: { type: "number" } },
+        warnings: { type: "array", items: { type: "string" } }
+      },
+      required: ["mode", "groups", "ungroupedIndices", "warnings"]
+    }
+  };
+  function buildOrganizeTabsUserMessage(params) {
+    const lines = [
+      `Mode: ${params.mode}`,
+      `Scope: ${params.scopeLabel}`,
+      `Max groups: ${params.maxGroups}`
+    ];
+    if (params.focus) {
+      lines.push(`Focus topic: ${params.focus}`);
+    }
+    if (params.suggestedGroupName) {
+      lines.push(`Suggested group name: ${params.suggestedGroupName}`);
+    }
+    lines.push(
+      "",
+      "Tab catalog (JSON):",
+      JSON.stringify(params.catalog, null, 0)
+    );
+    return lines.join("\n");
+  }
+
+  // src/services/organizeTabs.ts
+  init_assistantLogger();
+  init_quotaUserMessage();
+  init_researchBriefProgress();
+  init_pageContentExtract();
+  init_researchBrief();
+  init_subscription();
+  init_syncAssistUsage();
+  init_firefoxFacade();
+
+  // src/utils/organizeTabsScopePreview.ts
+  init_firefoxFacade();
+  var PREVIEW_TAB_THRESHOLD2 = 3;
+  var PREVIEW_GROUP_THRESHOLD = 1;
+  function shouldConfirmOrganizeTabsPlan(params) {
+    if (params.tabsMovingFromExistingGroups > 0) {
+      return true;
+    }
+    if (params.plan.groups.length > PREVIEW_GROUP_THRESHOLD) {
+      return true;
+    }
+    if (params.totalTabsAffected > PREVIEW_TAB_THRESHOLD2) {
+      return true;
+    }
+    return false;
+  }
+  function formatGroupPreview(group, catalogByIndex) {
+    const titles = group.tabIndices.map((idx) => catalogByIndex.get(idx)?.title || `Tab ${idx}`).filter(Boolean);
+    const shown = titles.slice(0, 4);
+    const suffix = titles.length > shown.length ? `, +${titles.length - shown.length} more` : "";
+    return `"${group.name}" (${group.tabIndices.length} tabs): ${shown.join(", ")}${suffix}`;
+  }
+  function buildOrganizeTabsPreviewDescription(params) {
+    const catalogByIndex = new Map(
+      params.catalog.map((entry) => [entry.index, entry])
+    );
+    const lines = [
+      `I'll organize tabs in ${params.scopeLabel} into ${params.plan.groups.length} group(s):`
+    ];
+    for (const group of params.plan.groups) {
+      lines.push(`- ${formatGroupPreview(group, catalogByIndex)}`);
+    }
+    if (params.plan.ungroupedIndices.length > 0) {
+      lines.push(
+        `- ${params.plan.ungroupedIndices.length} tab(s) will stay ungrouped`
+      );
+    }
+    if (params.tabsMovingFromExistingGroups > 0) {
+      lines.push(
+        `${params.tabsMovingFromExistingGroups} tab(s) will move from existing group(s).`
+      );
+    }
+    if (params.plan.warnings.length > 0) {
+      lines.push(params.plan.warnings[0]);
+    }
+    lines.push("Continue?");
+    return lines.join("\n");
+  }
+  function buildCrossGroupMoveDescription(params) {
+    let msg = `Some tabs will move from existing group(s): ${params.affectedGroups.join(", ")}.`;
+    if (params.emptiedGroups.length > 0) {
+      msg += ` Empty group(s) will be removed: ${params.emptiedGroups.join(", ")}.`;
+    }
+    msg += " Proceed?";
+    return msg;
+  }
+
+  // src/services/organizeTabsPlanCache.ts
+  var cachedPlan = null;
+  function storeOrganizeTabsPlan(params) {
+    cachedPlan = params;
+  }
+  function consumeOrganizeTabsPlan() {
+    const value = cachedPlan;
+    cachedPlan = null;
+    return value;
+  }
+  function peekOrganizeTabsPlan() {
+    return cachedPlan;
+  }
+
+  // src/services/organizeTabsPlanUtils.ts
+  init_messageUtils();
+  var GENERIC_TITLE_RE = /^(new tab|\(untitled\)|untitled|about:blank|loading…?|mozilla firefox)$/i;
+  function isAmbiguousTab(entry) {
+    const title = String(entry.title || "").trim();
+    if (!title || GENERIC_TITLE_RE.test(title)) {
+      return true;
+    }
+    if (title.length < 12 && entry.domain) {
+      return true;
+    }
+    if (title.toLowerCase() === entry.domain.toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+  function parseOrganizeTabsClusterPlan(raw, mode) {
+    if (!isRecord(raw)) {
+      return null;
+    }
+    const groupsRaw = Array.isArray(raw.groups) ? raw.groups : [];
+    const groups = [];
+    for (const item of groupsRaw) {
+      if (!isRecord(item)) {
+        continue;
+      }
+      const name = String(item.name || "").trim();
+      const tabIndices = Array.isArray(item.tabIndices) ? item.tabIndices.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1) : [];
+      if (!name || tabIndices.length === 0) {
+        continue;
+      }
+      groups.push({
+        name,
+        tabIndices: [...new Set(tabIndices)],
+        rationale: String(item.rationale || "").trim() || void 0
+      });
+    }
+    const ungroupedIndices = Array.isArray(raw.ungroupedIndices) ? [
+      ...new Set(
+        raw.ungroupedIndices.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1)
+      )
+    ] : [];
+    const warnings = Array.isArray(raw.warnings) ? raw.warnings.map((value) => String(value)).filter(Boolean) : [];
+    if (groups.length === 0) {
+      return null;
+    }
+    return {
+      mode: String(raw.mode || mode) || mode,
+      groups,
+      ungroupedIndices,
+      warnings
+    };
+  }
+  function validateClusterPlan(plan, catalog, maxGroups) {
+    const validIndices = new Set(
+      catalog.filter((entry) => !entry.pinned).map((entry) => entry.index)
+    );
+    const seen = /* @__PURE__ */ new Set();
+    const sanitizedGroups = [];
+    for (const group of plan.groups.slice(0, maxGroups)) {
+      const indices = group.tabIndices.filter((idx) => {
+        if (!validIndices.has(idx) || seen.has(idx)) {
+          return false;
+        }
+        seen.add(idx);
+        return true;
+      });
+      if (indices.length === 0) {
+        continue;
+      }
+      sanitizedGroups.push({ ...group, tabIndices: indices });
+    }
+    if (sanitizedGroups.length === 0) {
+      return {
+        ok: false,
+        message: "I couldn't find any tabs to group from that plan. Try naming a focus topic or opening more related tabs."
+      };
+    }
+    const ungroupedIndices = plan.ungroupedIndices.filter(
+      (idx) => validIndices.has(idx) && !seen.has(idx)
+    );
+    return {
+      ok: true,
+      plan: {
+        ...plan,
+        groups: sanitizedGroups,
+        ungroupedIndices
+      }
+    };
+  }
+
+  // src/services/organizeTabs.ts
+  var DEFAULT_MAX_GROUPS = 6;
+  var DEFAULT_ORGANIZE_MAX_TABS = 40;
+  var SNIPPET_MAX_CHARS = 800;
+  var EXTRACT_CONCURRENCY2 = 3;
+  function tryJsonParseLoose4(str) {
+    const trimmed = String(str || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : trimmed;
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      return null;
+    }
+  }
+  function parseAssistResponseContent3(res) {
+    if (!isRecord(res)) {
+      return null;
+    }
+    const content = res.content;
+    if (isRecord(content)) {
+      return content;
+    }
+    if (typeof content === "string") {
+      return tryJsonParseLoose4(content);
+    }
+    return null;
+  }
+  function extractDomain(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  }
+  function normalizeOrganizeScope(scope) {
+    if (scope === "ungrouped_only") {
+      return "window";
+    }
+    return scope;
+  }
+  function buildOrganizeTabsOptionsFromArgs(args, gBrowser) {
+    const modeRaw = String(args.mode || "").trim();
+    const mode = modeRaw === "single_focus" || modeRaw === "multi_topic" || modeRaw === "research_vs_other" ? modeRaw : void 0;
+    const scopeRaw = String(args.scope || "window").trim();
+    const scope = scopeRaw === "tab-group" || scopeRaw === "tabs" || scopeRaw === "ungrouped_only" ? scopeRaw : "window";
+    return {
+      gBrowser,
+      mode,
+      focus: String(args.focus || "").trim() || void 0,
+      name: String(args.name || "").trim() || void 0,
+      scope,
+      useActiveTabGroup: args.use_active_tab_group === true,
+      tabQueries: Array.isArray(args.tab_queries) ? args.tab_queries : [],
+      tabIndices: Array.isArray(args.tab_indices) ? args.tab_indices : [],
+      maxGroups: typeof args.max_groups === "number" ? args.max_groups : DEFAULT_MAX_GROUPS,
+      maxTabs: typeof args.max_tabs === "number" ? args.max_tabs : DEFAULT_ORGANIZE_MAX_TABS,
+      excludeIndices: Array.isArray(args.exclude_indices) ? args.exclude_indices : [],
+      excludeQueries: Array.isArray(args.exclude_queries) ? args.exclude_queries : [],
+      useSnippets: args.use_snippets !== false,
+      previewConfirmed: args.preview_confirmed === true,
+      confirmed: args.confirmed === true
+    };
+  }
+  function toBriefOptions(options) {
+    return {
+      gBrowser: options.gBrowser,
+      scope: normalizeOrganizeScope(options.scope),
+      name: options.name,
+      tabQueries: options.tabQueries,
+      tabIndices: options.tabIndices,
+      maxTabs: options.maxTabs ?? DEFAULT_ORGANIZE_MAX_TABS,
+      excludeIndices: options.excludeIndices,
+      excludeQueries: options.excludeQueries,
+      useActiveTabGroup: options.useActiveTabGroup
+    };
+  }
+  function previewOrganizeTabsScope(options) {
+    const resolved = previewResearchBriefScope(toBriefOptions(options));
+    if (!resolved.ok) {
+      return resolved;
+    }
+    if (options.scope === "ungrouped_only") {
+      const ungrouped = resolved.tabs.filter((tab) => !tab.pinned && !tab.group);
+      if (ungrouped.length === 0) {
+        return {
+          ok: false,
+          message: "There are no ungrouped tabs to organize in this window."
+        };
+      }
+      return {
+        ok: true,
+        tabs: ungrouped,
+        scopeLabel: "Ungrouped tabs in current window",
+        tabsOmittedByLimit: resolved.tabsOmittedByLimit,
+        urlsDeduplicated: resolved.urlsDeduplicated,
+        usedFuzzyGroupMatch: resolved.usedFuzzyGroupMatch,
+        totalBeforeCap: resolved.totalBeforeCap
+      };
+    }
+    return resolved;
+  }
+  function attachWindowIndices(gBrowser, tabs) {
+    const allTabs = getTabs(gBrowser);
+    return tabs.map((tab) => {
+      const windowIndex = allTabs.indexOf(tab);
+      return {
+        tab,
+        index: windowIndex >= 0 ? windowIndex + 1 : 0,
+        title: tabTitle(tab),
+        url: tabUrl(tab)
+      };
+    });
+  }
+  function buildTabCatalog(descriptors) {
+    const domainCounts = /* @__PURE__ */ new Map();
+    for (const descriptor of descriptors) {
+      const domain = extractDomain(descriptor.url);
+      domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
+    }
+    return descriptors.filter((descriptor) => descriptor.index >= 1).map((descriptor) => {
+      const domain = extractDomain(descriptor.url);
+      const entry = {
+        index: descriptor.index,
+        title: descriptor.title,
+        url: descriptor.url,
+        domain,
+        currentGroup: descriptor.tab.group?.label || null,
+        pinned: !!descriptor.tab.pinned
+      };
+      if ((domainCounts.get(domain) || 0) > 2 && isAmbiguousTab(entry)) {
+        return entry;
+      }
+      if (isAmbiguousTab(entry)) {
+        return entry;
+      }
+      return entry;
+    });
+  }
+  async function enrichCatalogWithSnippets(catalog, descriptors, options) {
+    if (!options.useSnippets) {
+      return catalog;
+    }
+    const descriptorByIndex = new Map(
+      descriptors.map((descriptor) => [descriptor.index, descriptor])
+    );
+    const ambiguousIndices = catalog.filter((entry) => !entry.pinned && isAmbiguousTab(entry)).map((entry) => entry.index);
+    if (ambiguousIndices.length === 0) {
+      return catalog;
+    }
+    const enriched = catalog.map((entry) => ({ ...entry }));
+    const byIndex = new Map(enriched.map((entry) => [entry.index, entry]));
+    let completed = 0;
+    const total = ambiguousIndices.length;
+    let next = 0;
+    async function worker() {
+      while (next < ambiguousIndices.length) {
+        throwIfResearchBriefAborted(options.signal);
+        const idx = ambiguousIndices[next++];
+        const descriptor = descriptorByIndex.get(idx);
+        if (!descriptor) {
+          continue;
+        }
+        const extracted = await extractPageContentFromTab(descriptor.tab);
+        const entry = byIndex.get(idx);
+        if (entry && extracted.status === "ok" && extracted.content) {
+          entry.snippet = extracted.content.slice(0, SNIPPET_MAX_CHARS);
+        }
+        completed += 1;
+        options.onProgress?.(completed, total);
+      }
+    }
+    const workers = Array.from(
+      { length: Math.min(EXTRACT_CONCURRENCY2, ambiguousIndices.length) },
+      () => worker()
+    );
+    await Promise.all(workers);
+    return enriched;
+  }
+  function analyzeGroupMoveImpact(tabsToMove) {
+    const affectedGroups = /* @__PURE__ */ new Set();
+    const emptiedGroups = /* @__PURE__ */ new Set();
+    for (const tab of tabsToMove) {
+      const group = tab.group;
+      if (!group) {
+        continue;
+      }
+      const groupName = group.label || "(unnamed)";
+      affectedGroups.add(groupName);
+      const groupTabs = group.tabs || [];
+      const movingTabs = groupTabs.filter(
+        (groupTab) => tabsToMove.includes(groupTab)
+      );
+      if (groupTabs.length > 0 && movingTabs.length === groupTabs.length) {
+        emptiedGroups.add(groupName);
+      }
+    }
+    return {
+      affectedGroups: [...affectedGroups],
+      emptiedGroups: [...emptiedGroups]
+    };
+  }
+  function tabsAffectedByPlan(plan, gBrowser) {
+    const allTabs = getTabs(gBrowser);
+    const tabs = [];
+    for (const group of plan.groups) {
+      for (const idx of group.tabIndices) {
+        const tab = allTabs[idx - 1];
+        if (tab && !tab.pinned) {
+          tabs.push(tab);
+        }
+      }
+    }
+    return tabs;
+  }
+  function countTabsMovingFromExistingGroups(plan, gBrowser) {
+    return tabsAffectedByPlan(plan, gBrowser).filter((tab) => !!tab.group).length;
+  }
+  function applyOrganizeTabsPlan(gBrowser, plan) {
+    if (!gBrowser?.addTabGroup) {
+      throw new Error("Tab groups are not available in this browser.");
+    }
+    const allTabs = getTabs(gBrowser);
+    const groupsCreated = [];
+    let tabsGrouped = 0;
+    let tabsSkipped = 0;
+    for (const groupPlan of plan.groups) {
+      const tabsToGroup = [];
+      for (const idx of groupPlan.tabIndices) {
+        const tab = allTabs[idx - 1];
+        if (!tab || tab.pinned) {
+          tabsSkipped += 1;
+          continue;
+        }
+        tabsToGroup.push(tab);
+      }
+      if (tabsToGroup.length === 0) {
+        continue;
+      }
+      gBrowser.addTabGroup(tabsToGroup, { label: groupPlan.name });
+      groupsCreated.push(groupPlan.name);
+      tabsGrouped += tabsToGroup.length;
+      applyRoutingStateMutation({
+        kind: "upsert",
+        entity: "group",
+        name: groupPlan.name
+      });
+    }
+    return { groupsCreated, tabsGrouped, tabsSkipped };
+  }
+  async function clusterTabsViaAssist(params) {
+    throwIfResearchBriefAborted(params.signal);
+    const userMessage = buildOrganizeTabsUserMessage({
+      mode: params.mode,
+      focus: params.focus,
+      suggestedGroupName: params.suggestedGroupName,
+      maxGroups: params.maxGroups,
+      scopeLabel: params.scopeLabel,
+      catalog: params.catalog
+    });
+    const res = await assistRemote(
+      ORGANIZE_TABS_SYSTEM_PROMPT,
+      [{ role: "user", content: userMessage }],
+      ["chat"],
+      [],
+      ORGANIZE_TABS_GENERATION_CONFIG,
+      void 0,
+      params.signal
+    );
+    throwIfResearchBriefAborted(params.signal);
+    if (res.quota) {
+      subscriptionService.updateFromQuota(res.quota);
+    }
+    syncSubscriptionFromAssistResponse(res);
+    const parsed = parseOrganizeTabsClusterPlan(
+      parseAssistResponseContent3(res),
+      params.mode
+    );
+    if (!parsed) {
+      throw new Error(
+        "I couldn't parse a tab grouping plan from the AI response."
+      );
+    }
+    return parsed;
+  }
+  function inferMode2(options) {
+    if (options.mode) {
+      return options.mode;
+    }
+    if (options.focus) {
+      return "single_focus";
+    }
+    return "multi_topic";
+  }
+  function defaultGroupName(options) {
+    if (options.name) {
+      return options.name;
+    }
+    if (options.focus && options.mode !== "multi_topic") {
+      return options.focus.slice(0, 40);
+    }
+    return void 0;
+  }
+  async function organizeTabs(options) {
+    const report = options.onProgress;
+    const mode = inferMode2(options);
+    try {
+      report?.({ phase: "resolving", label: "Finding tabs\u2026" });
+      throwIfResearchBriefAborted(options.signal);
+      const resolved = previewOrganizeTabsScope(options);
+      if (!resolved.ok) {
+        if (resolved.code === "ambiguous_group" && resolved.candidates) {
+          return {
+            ok: false,
+            message: resolved.message,
+            code: "ambiguous_group",
+            candidates: resolved.candidates
+          };
+        }
+        return { ok: false, message: resolved.message };
+      }
+      const descriptors = attachWindowIndices(options.gBrowser, resolved.tabs);
+      let catalog = buildTabCatalog(descriptors);
+      if (catalog.filter((entry) => !entry.pinned).length === 0) {
+        return {
+          ok: false,
+          message: "There are no groupable tabs in that scope (pinned tabs are skipped)."
+        };
+      }
+      report?.({ phase: "extracting", label: "Reading ambiguous tabs\u2026" });
+      catalog = await enrichCatalogWithSnippets(catalog, descriptors, {
+        useSnippets: options.useSnippets !== false,
+        signal: options.signal,
+        onProgress: (current, total) => report?.({
+          phase: "extracting",
+          current,
+          total,
+          label: `Reading page ${current} of ${total}\u2026`
+        })
+      });
+      report?.({ phase: "clustering", label: "Planning tab groups\u2026" });
+      let validatedPlan;
+      if (options.previewConfirmed) {
+        const cached = peekOrganizeTabsPlan() || consumeOrganizeTabsPlan();
+        if (cached) {
+          const validated = validateClusterPlan(
+            cached.plan,
+            cached.catalog,
+            options.maxGroups ?? DEFAULT_MAX_GROUPS
+          );
+          if (!validated.ok) {
+            return { ok: false, message: validated.message };
+          }
+          validatedPlan = validated.plan;
+          catalog = cached.catalog;
+        } else {
+          const rawPlan = await clusterTabsViaAssist({
+            mode,
+            focus: options.focus,
+            suggestedGroupName: defaultGroupName({ ...options, mode }),
+            maxGroups: options.maxGroups ?? DEFAULT_MAX_GROUPS,
+            scopeLabel: resolved.scopeLabel,
+            catalog,
+            signal: options.signal
+          });
+          const validated = validateClusterPlan(
+            rawPlan,
+            catalog,
+            options.maxGroups ?? DEFAULT_MAX_GROUPS
+          );
+          if (!validated.ok) {
+            return { ok: false, message: validated.message };
+          }
+          validatedPlan = validated.plan;
+        }
+      } else {
+        const rawPlan = await clusterTabsViaAssist({
+          mode,
+          focus: options.focus,
+          suggestedGroupName: defaultGroupName({ ...options, mode }),
+          maxGroups: options.maxGroups ?? DEFAULT_MAX_GROUPS,
+          scopeLabel: resolved.scopeLabel,
+          catalog,
+          signal: options.signal
+        });
+        const validated = validateClusterPlan(
+          rawPlan,
+          catalog,
+          options.maxGroups ?? DEFAULT_MAX_GROUPS
+        );
+        if (!validated.ok) {
+          return { ok: false, message: validated.message };
+        }
+        validatedPlan = validated.plan;
+      }
+      const tabsMoving = countTabsMovingFromExistingGroups(
+        validatedPlan,
+        options.gBrowser
+      );
+      const totalAffected = validatedPlan.groups.reduce(
+        (sum, group) => sum + group.tabIndices.length,
+        0
+      );
+      if (!options.previewConfirmed && shouldConfirmOrganizeTabsPlan({
+        plan: validatedPlan,
+        tabsMovingFromExistingGroups: tabsMoving,
+        totalTabsAffected: totalAffected
+      })) {
+        storeOrganizeTabsPlan({
+          plan: validatedPlan,
+          catalog,
+          scopeLabel: resolved.scopeLabel
+        });
+        return {
+          ok: true,
+          needsPreview: true,
+          message: "",
+          plan: validatedPlan,
+          catalog,
+          scopeLabel: resolved.scopeLabel
+        };
+      }
+      if (tabsMoving > 0 && !options.confirmed) {
+        storeOrganizeTabsPlan({
+          plan: validatedPlan,
+          catalog,
+          scopeLabel: resolved.scopeLabel
+        });
+        const impact = analyzeGroupMoveImpact(
+          tabsAffectedByPlan(validatedPlan, options.gBrowser).filter(
+            (tab) => !!tab.group
+          )
+        );
+        return {
+          ok: true,
+          needsCrossGroupConfirm: true,
+          message: "",
+          plan: validatedPlan,
+          catalog,
+          scopeLabel: resolved.scopeLabel,
+          affectedGroups: impact.affectedGroups,
+          emptiedGroups: impact.emptiedGroups
+        };
+      }
+      consumeOrganizeTabsPlan();
+      report?.({ phase: "applying", label: "Creating tab groups\u2026" });
+      const applied = applyOrganizeTabsPlan(options.gBrowser, validatedPlan);
+      const groupList = applied.groupsCreated.map((name) => `"${name}"`).join(", ");
+      const message = applied.groupsCreated.length === 0 ? "No tab groups were created." : `I've organized ${applied.tabsGrouped} tab(s) into ${applied.groupsCreated.length} group(s): ${groupList}.` + (applied.tabsSkipped > 0 ? ` ${applied.tabsSkipped} tab(s) were skipped (pinned or unavailable).` : "");
+      return {
+        ok: true,
+        message,
+        plan: validatedPlan,
+        catalog,
+        scopeLabel: resolved.scopeLabel,
+        groupsCreated: applied.groupsCreated,
+        tabsGrouped: applied.tabsGrouped,
+        tabsSkipped: applied.tabsSkipped
+      };
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        return {
+          ok: false,
+          message: formatQuotaExceededMessage(error),
+          code: "over_quota"
+        };
+      }
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return { ok: false, message: "Tab organize cancelled." };
+      }
+      assistantLogger.warn("organize-tabs", "Organize tabs failed", error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Something went wrong while organizing tabs."
+      };
+    }
+  }
+
+  // src/utils/organizeTabsResume.ts
+  var ORGANIZE_TABS_RESUME_SENTINEL = "__ORGANIZE_TABS_RESUME__";
+  var resumeContext2 = null;
+  function setOrganizeTabsResume(context) {
+    resumeContext2 = context;
+  }
+  function clearOrganizeTabsResume() {
+    resumeContext2 = null;
+  }
+  function buildOrganizeTabsResumePrompt(optionId) {
+    return `${ORGANIZE_TABS_RESUME_SENTINEL}|${optionId}`;
+  }
+  function parseOrganizeTabsResumePrompt(resolvedPrompt) {
+    const raw = String(resolvedPrompt || "").trim();
+    if (!raw.startsWith(ORGANIZE_TABS_RESUME_SENTINEL)) {
+      return null;
+    }
+    const parts = raw.split("|");
+    return parts[1]?.trim() || null;
+  }
+  function consumeOrganizeTabsResume(optionId) {
+    const ctx = resumeContext2;
+    if (!ctx) {
+      return null;
+    }
+    clearOrganizeTabsResume();
+    const args = {
+      ...ctx.args,
+      preview_confirmed: true
+    };
+    if (ctx.reason === "ambiguous_group") {
+      const prefix = "organize_group:";
+      if (!optionId.startsWith(prefix)) {
+        return null;
+      }
+      args.name = decodeURIComponent(optionId.slice(prefix.length));
+      return args;
+    }
+    if (optionId === "organize_quota_fewer_tabs") {
+      const maxTabs = args.suggested_max_tabs;
+      if (typeof maxTabs === "number" && Number.isFinite(maxTabs)) {
+        args.max_tabs = maxTabs;
+      }
+      return args;
+    }
+    return null;
+  }
+  function buildAmbiguousGroupOrganizeClarification(query, candidates) {
+    const options = candidates.map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      resolvedPrompt: buildOrganizeTabsResumePrompt(candidate.id)
+    }));
+    return {
+      options,
+      message: `Several tab groups match "${query}". Pick one to organize.`
+    };
   }
 
   // src/commands.ts
@@ -56392,7 +58594,7 @@ ${JSON.stringify(payload)}`;
   function toWebSearchUrl(query) {
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   }
-  function analyzeGroupMoveImpact(tabsToMove) {
+  function analyzeGroupMoveImpact2(tabsToMove) {
     const affectedGroups = /* @__PURE__ */ new Set();
     const emptiedGroups = /* @__PURE__ */ new Set();
     for (const tab of tabsToMove) {
@@ -56443,8 +58645,14 @@ ${JSON.stringify(payload)}`;
       const scope = normalizeName(stringArg(args, "scope") || "");
       const name = normalizeListTargetName(stringArg(args, "name") || "");
       const listWindowTabs = () => {
-        const titles = getTabs(gBrowser).map((tab) => tabTitle(tab));
-        return { message: JSON.stringify(titles.slice(0, 50)) };
+        const tabs = getTabs(gBrowser).slice(0, 50).map((tab, i2) => ({
+          index: i2 + 1,
+          title: tabTitle(tab),
+          url: tabUrl(tab),
+          group: tab.group?.label || null,
+          pinned: !!tab.pinned
+        }));
+        return { message: JSON.stringify(tabs) };
       };
       const listGroupTabs = (groupName) => {
         if (!groupName) {
@@ -57529,6 +59737,94 @@ ${text2}`
       useActiveTabGroup: booleanArg(args, "use_active_tab_group") === true
     };
   }
+  var OrganizeTabsCommand = class {
+    commandName = "organize_tabs";
+    description = "Organize open tabs into tab groups by topic using AI. Arguments: { mode?: 'single_focus'|'multi_topic'|'research_vs_other', focus?: string, name?: string, scope?: 'window'|'tab-group'|'tabs'|'ungrouped_only', use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], max_groups?: number, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], use_snippets?: boolean, preview_confirmed?: boolean, confirmed?: boolean }. Use single_focus to group tabs about one topic; multi_topic to discover several groups; research_vs_other to split focus work from everything else.";
+    async execute(args) {
+      const { gBrowser } = getChrome2();
+      const options = buildOrganizeTabsOptionsFromArgs(args, gBrowser);
+      const signal = beginResearchBriefRun();
+      const onProgress = createResearchBriefProgressReporter(signal);
+      try {
+        const result = await organizeTabs({
+          ...options,
+          onProgress: (detail) => {
+            if (detail.phase === "resolving") {
+              onProgress({ phase: "resolving", label: detail.label });
+            } else if (detail.phase === "extracting") {
+              onProgress({
+                phase: "extracting",
+                current: detail.current,
+                total: detail.total,
+                label: detail.label
+              });
+            } else if (detail.phase === "clustering") {
+              onProgress({ phase: "synthesizing", label: detail.label });
+            } else if (detail.phase === "applying") {
+              onProgress({ phase: "synthesizing", label: detail.label });
+            }
+          },
+          signal
+        });
+        if (!result.ok) {
+          if (result.code === "ambiguous_group" && result.candidates) {
+            const query = String(args.name || args.focus || "tab group");
+            const { options: clarifyOptions, message } = buildAmbiguousGroupOrganizeClarification(
+              query,
+              result.candidates.map((candidate) => ({
+                id: `organize_group:${encodeURIComponent(candidate.name)}`,
+                label: candidate.label,
+                name: candidate.name,
+                tabCount: candidate.tabCount
+              }))
+            );
+            setOrganizeTabsResume({
+              args: { ...args, preview_confirmed: false },
+              reason: "ambiguous_group"
+            });
+            setPendingClarification({
+              originalMessage: query,
+              options: clarifyOptions
+            });
+            return { message };
+          }
+          return { message: result.message };
+        }
+        if ("needsPreview" in result && result.needsPreview) {
+          const description = buildOrganizeTabsPreviewDescription({
+            scopeLabel: result.scopeLabel,
+            plan: result.plan,
+            catalog: result.catalog,
+            tabsMovingFromExistingGroups: countTabsMovingFromExistingGroups(
+              result.plan,
+              gBrowser
+            )
+          });
+          setPendingConfirmation({
+            command: this.commandName,
+            args: { ...args, preview_confirmed: true },
+            description
+          });
+          return { message: description, requiresConfirmation: true };
+        }
+        if ("needsCrossGroupConfirm" in result && result.needsCrossGroupConfirm) {
+          const description = buildCrossGroupMoveDescription({
+            affectedGroups: result.affectedGroups,
+            emptiedGroups: result.emptiedGroups
+          });
+          setPendingConfirmation({
+            command: this.commandName,
+            args: { ...args, preview_confirmed: true, confirmed: true },
+            description
+          });
+          return { message: description, requiresConfirmation: true };
+        }
+        return { message: result.message };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+  };
   var BuildResearchBriefCommand = class {
     commandName = "build_research_brief";
     description = "Build a structured research brief (outline, themes, sourced quotes) from open tabs. Arguments: { topic?: string, infer_topic_from_content?: boolean, scope?: 'tab-group'|'window'|'tabs', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], outline_hint?: string, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=tabs uses tab_queries (title/URL substrings) and/or tab_indices (1-based window positions). When infer_topic_from_content is true, topic may be omitted and will be derived from page content after extraction.";
@@ -57982,7 +60278,7 @@ ${text2}`
       }
       const tabsInGroups = groupableTabs.filter((tab) => !!tab.group);
       if (tabsInGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
-        const impact = analyzeGroupMoveImpact(tabsInGroups);
+        const impact = analyzeGroupMoveImpact2(tabsInGroups);
         const groupNames = impact.affectedGroups.join(", ");
         let warningMsg = `${tabsInGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
         if (impact.emptiedGroups.length > 0) {
@@ -58126,7 +60422,7 @@ ${text2}`
         (tab) => tab.group && tab.group !== group
       );
       if (tabsInOtherGroups.length > 0 && booleanArg(args, "confirmed") !== true) {
-        const impact = analyzeGroupMoveImpact(tabsInOtherGroups);
+        const impact = analyzeGroupMoveImpact2(tabsInOtherGroups);
         const groupNames = impact.affectedGroups.join(", ");
         let warningMsg = `${tabsInOtherGroups.length} tab(s) will be moved from existing group(s): ${groupNames}.`;
         if (impact.emptiedGroups.length > 0) {
@@ -58357,11 +60653,24 @@ ${text2}`
   }
   var SearchHistorySemanticCommand = class {
     commandName = "search_history";
-    description = `Search the user's recent browsing history (AI semantic search). Use for pages visited, articles read, topics in history. Arguments: { query: string }. If the user asks to list or show their history without a topic, pass query as "" to return recent visits.`;
+    description = 'Search browsing history by keyword or semantic similarity. Use mode keyword for "search history for [term]", semantic for conceptual recall, recent for listing visits. Optional filters: domain, since, extra. Arguments: { query?: string, mode?: "keyword"|"semantic"|"recent"|"auto", domain?, since?, extra?, refined?, skipRefinement? }. Empty query lists recent visits.';
     async execute(args) {
-      const qVal = args?.query;
-      const query = typeof qVal === "string" ? qVal.trim() : "";
-      if (!query) {
+      const record = args;
+      const explicitMode = typeof record.mode === "string" ? record.mode.trim() : void 0;
+      const utterance = typeof record.utterance === "string" ? record.utterance.trim() : typeof record.query === "string" ? record.query.trim() : "";
+      const rawQuery = typeof record.query === "string" ? record.query.trim() : "";
+      let query = rawQuery;
+      let mode = inferHistorySearchMode(query, explicitMode);
+      if (!explicitMode) {
+        const reparsed = parseHistorySearchQuery(utterance);
+        if (reparsed) {
+          query = reparsed.query;
+          mode = reparsed.mode;
+        } else if (looksLikeHistoryKeywordSearch(utterance)) {
+          mode = "keyword";
+        }
+      }
+      if (!query || mode === "recent") {
         try {
           const entries2 = await fetchRecentHistory(15, false);
           if (entries2.length === 0) {
@@ -58384,10 +60693,42 @@ ${text2}`
         }
       }
       try {
-        const results = await semanticHistorySearch.search(query, 10);
-        const MIN_RELEVANCE = 0.3;
+        const skipRefinement = record.skipRefinement === true || record.refined === true;
+        const filters = parseHistorySearchFiltersFromArgs(record);
+        const searchMode = mode === "recent" ? "auto" : mode;
+        const searchLimit = skipRefinement ? 10 : 25;
+        const results = await semanticHistorySearch.search(query, searchLimit, {
+          mode: searchMode
+        });
+        const MIN_RELEVANCE = mode === "keyword" ? 0.5 : 0.3;
         const MAX_RESULTS = 5;
-        const filtered = results.filter((r2) => r2.score >= MIN_RELEVANCE).slice(0, MAX_RESULTS);
+        let qualifying = results.filter((r2) => r2.score >= MIN_RELEVANCE);
+        qualifying = applyHistorySearchFilters(qualifying, filters);
+        if (!skipRefinement && shouldPromptHistoryRefinement(qualifying, { skip: false })) {
+          setPendingHistoryRefinement({
+            query,
+            mode,
+            filters,
+            totalMatches: qualifying.length
+          });
+          const preview = qualifying.slice(0, 3).map((r2, i2) => ({
+            index: i2 + 1,
+            title: r2.title,
+            url: r2.url,
+            visited: formatRelativeVisitTime(r2.visitDate)
+          }));
+          return {
+            message: JSON.stringify({
+              needsRefinement: true,
+              prompt: buildHistoryRefinementPrompt(query, qualifying.length),
+              query,
+              totalMatches: qualifying.length,
+              preview
+            })
+          };
+        }
+        clearPendingHistoryRefinement();
+        const filtered = qualifying.slice(0, MAX_RESULTS);
         if (filtered.length === 0) {
           let recent = [];
           try {
@@ -58401,21 +60742,31 @@ ${text2}`
             };
           }
           return {
-            message: `No history entries matched "${query}" among recent visits (Places has ${recent.length} recent URLs indexed for lookup). Try a shorter keyword (e.g. domain name), visit the page again, or check Library \u2192 History.`
+            message: (record.refined ? `No pages matched "${query}" with those filters. Try fewer hints or say show all. ` : "") + `No history entries matched "${query}" among recent visits (Places has ${recent.length} recent URLs indexed for lookup). Try a shorter keyword (e.g. domain name), visit the page again, or check Library \u2192 History.`
           };
         }
+        const stillMany = qualifying.length > MAX_RESULTS;
         const formatted = filtered.map((r2, i2) => ({
           index: i2 + 1,
           title: r2.title,
           url: r2.url,
           relevance: Math.round(r2.score * 100) + "%",
-          visited: formatRelativeVisitTime(r2.visitDate)
+          visited: formatRelativeVisitTime(r2.visitDate),
+          matchType: r2.matchType,
+          excerpt: r2.excerpt
         }));
-        return { message: JSON.stringify(formatted) };
+        return {
+          message: JSON.stringify(
+            stillMany ? {
+              results: formatted,
+              note: `Showing the ${formatted.length} best matches from ${qualifying.length} pages.`
+            } : formatted
+          )
+        };
       } catch (e2) {
         console.error("[SearchHistorySemantic] Search failed:", e2);
         return {
-          message: `History search failed: ${e2.message || "Unknown error"}. The embedding model may still be loading \u2014 please try again in a moment.`
+          message: `Could not search browsing history for "${query}". ` + (mode === "keyword" ? "Places keyword search failed \u2014 check the Browser Console for [HistoryCollector] errors." : "Semantic search is unavailable right now \u2014 try `search history for ${query}` for a keyword lookup.")
         };
       }
     }
@@ -58451,6 +60802,7 @@ ${text2}`
     new_window: `{}`,
     new_tab_to_right: `{"index?":"number"}`,
     organize_windows: `{}`,
+    organize_tabs: `{"mode?":"single_focus|multi_topic|research_vs_other","focus?":"string","name?":"string","scope?":"window|tab-group|tabs|ungrouped_only","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","max_groups?":"number","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","use_snippets?":"boolean","preview_confirmed?":"boolean","confirmed?":"boolean"}`,
     show_url: `{"url":"string"}`,
     search_memory: `{"query":"string","folder?":"string","source?":"bookmark-folder"}`,
     get_recent_search_results: `{"limit?":"number"}`,
@@ -58459,7 +60811,7 @@ ${text2}`
     build_research_brief: `{"topic?":"string","infer_topic_from_content?":"boolean","scope?":"tab-group|window|tabs","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","outline_hint?":"string","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
     regenerate_research_brief_section: `{"brief_id?":"string","section":"executiveSummary|outline|themes|sources|gapsAndContradictions"}`,
     show_subscription: `{}`,
-    search_history: `{"query":"string (optional; omit or "" for recent visits)"}`
+    search_history: `{"query?":"string","mode?":"keyword|semantic|recent|auto","domain?":"string","since?":"string","extra?":"string","refined?":"boolean","skipRefinement?":"boolean"}`
   };
   function toAssistToolDescription(command) {
     const schema4 = COMMAND_ARG_SCHEMA[command.commandName];
@@ -58515,6 +60867,7 @@ ${text2}`
       new ConfirmActionCommand(),
       new NewWindowCommand(),
       new OrganizeWindowsCommand(),
+      new OrganizeTabsCommand(),
       new ShowURLCommand(),
       new SearchMemoryCommand(),
       new GetRecentSearchResultsCommand(),
@@ -58619,62 +60972,6 @@ ${text2}`
   // src/assistant/graph.ts
   init_proxyClient();
   init_assistantLogger();
-
-  // src/utils/routingUtils.ts
-  var CANCEL_RE = /^(?:no|cancel|nevermind|never\s+mind|stop)$/i;
-  function parseAmbiguityResolution(text2) {
-    const input = String(text2 || "").trim();
-    if (!input) return null;
-    if (CANCEL_RE.test(input)) {
-      return "cancel";
-    }
-    const hasTabGroup = /\btab\s*group\b/i.test(input);
-    const hasBookmarkFolder = /\bbookmark\s*folder\b/i.test(input);
-    if (hasTabGroup && hasBookmarkFolder) return null;
-    if (hasTabGroup) return "tab-group";
-    if (hasBookmarkFolder) return "bookmark-folder";
-    const hasGroupWord = /\bgroup\b/i.test(input);
-    const hasFolderWord = /\bfolder\b/i.test(input);
-    const hasTabWord = /\btab\b/i.test(input);
-    if (hasGroupWord && hasFolderWord) return null;
-    if (hasGroupWord) return "tab-group";
-    if (hasFolderWord) return "bookmark-folder";
-    if (hasTabWord) return "tab";
-    return null;
-  }
-  function looksLikeNewActionCommand(text2) {
-    const input = String(text2 || "");
-    const hasAction = /\b(?:open|close|delete|remove|create|make|new|add|save|move|put|rename|list|show|search|find|summarize|split|go\s+to|navigate|visit|organize|reload|mute|unmute|pin|unpin|duplicate|bookmark|reopen|send|copy|unload)\b/i.test(
-      input
-    );
-    const hasObjectOrTarget = /\b(?:tab|tabs|group|folder|bookmark|window|history|memory|page|site|website|url|link)\b/i.test(
-      input
-    ) || /\bhttps?:\/\/[^\s]+\b|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?\b/i.test(
-      input
-    ) || KNOWN_SITES_HINT_RE.test(input);
-    return hasAction && hasObjectOrTarget;
-  }
-  var PAGE_CONTEXT_REFERENCE_RE = /\b(?:this|that|current|active)\s+(?:page|site|website|article|tab)\b|\bon\s+this\s+(?:page|site|website|article|tab)\b/i;
-  var PAGE_CONTEXT_DEICTIC_RE = /^(?:show|tell|give|find|what|which|who|when|where|why|how|does|do|is|are|based\s+on)\b.*\b(?:of|on|from|about)\s+this\b/i;
-  function looksLikePageContextRequest(text2) {
-    const input = String(text2 || "").trim();
-    if (!input) {
-      return false;
-    }
-    return PAGE_CONTEXT_REFERENCE_RE.test(input) || PAGE_CONTEXT_DEICTIC_RE.test(input);
-  }
-  function shouldAskAssistRouter(text2) {
-    const input = String(text2 || "").trim();
-    if (!input) {
-      return false;
-    }
-    if (looksLikeNewActionCommand(input)) {
-      return true;
-    }
-    return looksLikePageContextRequest(input);
-  }
-
-  // src/assistant/graph.ts
   init_awsSignedFetch();
 
   // src/prompts/chatPrompt.ts
@@ -58833,6 +61130,7 @@ Do not mention hidden payloads, extracted content, or this instruction. Respond 
       "- search_memory does NOT search browsing history \u2014 use search_history instead.",
       "- If the query mentions 'visited', 'browsed', 'read', 'looked at' (past tense) \u2192 search_history.",
       "- If the query mentions 'bookmarks', 'folder', 'saved', 'tabs' \u2192 search_memory.",
+      "- For `search history for [term]`, use search_history with query=[term] and mode=keyword.",
       "SPLIT VIEW:",
       "- When the user wants split view, side-by-side tabs, two tabs at once, or a split screen of two pages in one window, prefer add_split_view (not chat). Use indices: [i,j] for two tab numbers, withIndex or withQuery to pair the current tab with another, or {} to split the current tab with a new tab.",
       "- For removing split view or unsplitting, prefer remove_split_view.",
@@ -58853,7 +61151,15 @@ Do not mention hidden payloads, extracted content, or this instruction. Respond 
       "- When the user says except/skip tabs: set exclude_indices (1-based positions within the group/window list) and/or exclude_queries (title/URL substrings, min 3 chars).",
       "- Do NOT use repeated summarize_page calls for multi-tab research; use build_research_brief once.",
       "- Examples: 'consolidate findings from this tab group', 'build a report from tab group Sports', 'summarize tabs in tab group sports', 'give me a summary of my tab group'.",
-      "- Single-page only: 'summarize this page' or 'summarize tab 3' \u2192 summarize_page, not build_research_brief."
+      "- Single-page only: 'summarize this page' or 'summarize tab 3' \u2192 summarize_page, not build_research_brief.",
+      "ORGANIZE TABS:",
+      "- Use organize_tabs when the user wants to group, sort, cluster, or organize open tabs by topic \u2014 not for research briefs or manual create_tab_group.",
+      "- Args: mode (single_focus | multi_topic | research_vs_other), focus (topic), name (group label), scope (window | tab-group | tabs | ungrouped_only), use_active_tab_group, tab_queries, tab_indices, exclude_indices, exclude_queries.",
+      "- single_focus: group tabs about one topic (e.g. 'Group all tabs related to LLM research', 'can you group tabs about OAuth?', 'group all tabs reltated to LLMs').",
+      "- multi_topic: discover several topic groups (e.g. 'Organize my open tabs by topic', 'please tidy up my tabs').",
+      "- research_vs_other: split focus work from the rest (e.g. 'Separate my LLM research from everything else').",
+      "- Do NOT reply that you cannot group tabs \u2014 call organize_tabs with the best mode/focus args.",
+      "- Do NOT use organize_tabs for 'organize windows' (use organize_windows) or 'create tab group called X' (use create_tab_group)."
     ].join(" ");
   }
 
@@ -59238,6 +61544,74 @@ What would you like to try first?`;
   // src/assistant/graph.ts
   init_researchBriefResume();
 
+  // src/utils/preferDeterministicRoute.ts
+  function tryPreferDeterministicToolRoute(commandText, route) {
+    const input = String(commandText || "").trim();
+    if (!input || route.type !== "tool") {
+      return null;
+    }
+    if (route.next === "search_history") {
+      const parsed = parseHistorySearchQuery(input);
+      if (parsed?.mode === "keyword" || looksLikeHistoryKeywordSearch(input)) {
+        return {
+          next: "search_history",
+          args: {
+            ...route.args,
+            query: parsed?.query ?? route.args?.query,
+            mode: "keyword",
+            utterance: input
+          },
+          reason: route.reason
+        };
+      }
+      if (parsed?.mode === "recent") {
+        return {
+          next: "search_history",
+          args: {
+            ...route.args,
+            query: "",
+            mode: "recent",
+            utterance: input
+          },
+          reason: route.reason
+        };
+      }
+    }
+    if (route.next === "organize_tabs" && looksLikeOrganizeTabsCommand(input)) {
+      return {
+        next: "organize_tabs",
+        args: enrichOrganizeTabsRouteArgs(input, {
+          ...route.args,
+          utterance: input
+        }),
+        reason: route.reason
+      };
+    }
+    return {
+      next: route.next,
+      args: { ...route.args, utterance: input },
+      reason: route.reason
+    };
+  }
+  function tryResolveEarlyDeterministicSupervisorRoute(commandText, route) {
+    const preferred = tryPreferDeterministicToolRoute(commandText, route);
+    if (preferred) {
+      return { next: preferred.next, args: preferred.args };
+    }
+    if (route.type === "chat" && route.message?.trim()) {
+      return { next: "chat", args: { routerMessage: route.message.trim() } };
+    }
+    return null;
+  }
+  function mergeDeterministicHistorySearchArgs(activeCommand, route) {
+    const preferred = tryPreferDeterministicToolRoute(activeCommand, route);
+    return preferred?.next === "search_history" ? preferred.args : null;
+  }
+  function mergeDeterministicOrganizeTabsArgs(activeCommand, route) {
+    const preferred = tryPreferDeterministicToolRoute(activeCommand, route);
+    return preferred?.next === "organize_tabs" ? preferred.args : null;
+  }
+
   // src/assistant/commandChain.ts
   var CHAIN_VERBS = [
     "open",
@@ -59491,6 +61865,7 @@ What would you like to try first?`;
     "resolve_ambiguity",
     "new_window",
     "organize_windows",
+    "organize_tabs",
     "reload_tab",
     "toggle_mute_tab",
     "pin_tab",
@@ -59504,7 +61879,7 @@ What would you like to try first?`;
   ]);
   var SEARCH_WEB_HINT_RE = /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
   var SEARCH_LOCAL_HINT_RE = /\b(?:bookmark|folder|hub|tab|tabs|group|groups|history|memory|saved|visited|recent\s+results?)\b/i;
-  var SEARCH_HISTORY_HINT_RE = /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that)\b/i;
+  var SEARCH_HISTORY_HINT_RE = /\b(?:visited|browsed|looked\s+at|read|viewed|pages?\s+i\s+(?:visited|read|browsed|looked\s+at|viewed)|articles?\s+i\s+(?:read|browsed|viewed)|sites?\s+i\s+(?:visited|browsed)|what\s+(?:was|did\s+i)|pull\s+that|get\s+that|search\s+(?:my\s+)?(?:browsing\s+|browser\s+)?history)\b/i;
   var SEARCH_BOOKMARKS_HINT_RE = /\b(?:bookmark|bookmarks|folder|saved|bookmarked|in\s+(?:my\s+)?(?:bookmark\s+)?folder|what'?s\s+in)\b/i;
   function constrainAssistRoutingForFamily(params) {
     const { activeCommandText, assistOptions, assistTools } = params;
@@ -59800,6 +62175,16 @@ What would you like to try first?`;
     }
     return consumeResearchBriefResume(optionId);
   }
+  function tryConsumeOrganizeTabsResumeFromGate(resolvedPrompt) {
+    const optionId = parseOrganizeTabsResumePrompt(resolvedPrompt);
+    if (!optionId) {
+      return null;
+    }
+    return consumeOrganizeTabsResume(optionId);
+  }
+  function applyDeterministicAssistOverride(activeCommand, route) {
+    return mergeDeterministicHistorySearchArgs(activeCommand, route) || mergeDeterministicOrganizeTabsArgs(activeCommand, route);
+  }
   function buildAssistantGraph(commands2, assistantWindow2, messageId, assistToolDefs = [], options) {
     const railroadMemoryBlock = String(options?.railroadMemoryBlock || "");
     const toolAgents = {};
@@ -59980,6 +62365,16 @@ What would you like to try first?`;
             commandQueue: []
           };
         }
+        const organizeResumeArgs = tryConsumeOrganizeTabsResumeFromGate(
+          clarificationGate.resolvedPrompt
+        );
+        if (organizeResumeArgs) {
+          return {
+            next: "organize_tabs",
+            args: organizeResumeArgs,
+            commandQueue: []
+          };
+        }
         return {
           next: "supervisor",
           args: { __clarifiedPrompt: clarificationGate.resolvedPrompt },
@@ -59992,6 +62387,26 @@ What would you like to try first?`;
       }
       if (clarificationGate.kind === "clear") {
         clearPendingClarification();
+      }
+      const historyRefinementGate = resolvePendingHistoryRefinementGate({
+        pending: getPendingHistoryRefinement(),
+        userText: commandText
+      });
+      if (historyRefinementGate.kind === "search") {
+        return {
+          next: "search_history",
+          args: historyRefinementGate.args,
+          commandQueue: []
+        };
+      }
+      if (historyRefinementGate.kind === "cancel") {
+        return {
+          next: "chat",
+          args: {
+            routerMessage: "Okay, I cancelled the history search."
+          },
+          commandQueue: []
+        };
       }
       const pendingContinuationQueue = getContinuationQueue();
       const shouldResumeContinuation = state.lastWorker === "confirm_action" && pendingContinuationQueue.length > 0 && !getPendingConfirmation();
@@ -60015,6 +62430,20 @@ What would you like to try first?`;
       const topLevelActionText = effectiveCommandLine.toLowerCase();
       const topLevelActionLike = looksLikeNewActionCommand(topLevelActionText);
       const topLevelPageContextRequest = looksLikePageContextRequest(effectiveCommandLine);
+      if (!hasQueuedCommands && effectiveCommandLine) {
+        const earlyRoute = routeDeterministically(effectiveCommandLine);
+        const earlyResolved = tryResolveEarlyDeterministicSupervisorRoute(
+          effectiveCommandLine,
+          earlyRoute
+        );
+        if (earlyResolved) {
+          return {
+            next: earlyResolved.next,
+            args: earlyResolved.args,
+            commandQueue: []
+          };
+        }
+      }
       if (!hasQueuedCommands && effectiveCommandLine && !clarifiedPrompt && topLevelActionLike && !topLevelPageContextRequest) {
         const clarification = await classifyClarificationNeed({
           messages: state.messages,
@@ -60066,6 +62495,17 @@ ${optionList}`
         }
         if (topLevelAssist.kind === "tool") {
           const guardRoute = routeDeterministically(commandLine);
+          const deterministicOverride = applyDeterministicAssistOverride(
+            commandLine,
+            guardRoute
+          );
+          if (deterministicOverride && guardRoute.type === "tool") {
+            return {
+              next: guardRoute.next,
+              args: deterministicOverride,
+              commandQueue: [commandLine]
+            };
+          }
           if (guardRoute.type === "tool" && guardRoute.next === "resolve_ambiguity" && guardRoute.pendingAmbiguity) {
             setRoutePendingAmbiguity(guardRoute.pendingAmbiguity);
             return {
@@ -60141,6 +62581,17 @@ ${message}` : message;
       }
       const route = routeDeterministically(activeCommand);
       if (assistRoute.kind === "tool") {
+        const deterministicOverride = applyDeterministicAssistOverride(
+          activeCommand,
+          route
+        );
+        if (deterministicOverride && route.type === "tool") {
+          return {
+            next: route.next,
+            args: applyNoticeToArgs(deterministicOverride),
+            commandQueue
+          };
+        }
         if (route.type === "tool" && route.next === "resolve_ambiguity" && route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
           return {
@@ -60173,9 +62624,10 @@ ${message}` : message;
         if (route.pendingAmbiguity) {
           setRoutePendingAmbiguity(route.pendingAmbiguity);
         }
+        const args = route.next === "search_history" ? { ...route.args, utterance: activeCommand } : route.args;
         return {
           next: route.next,
-          args: applyNoticeToArgs(route.args),
+          args: applyNoticeToArgs(args),
           commandQueue
         };
       }
@@ -68178,7 +70630,10 @@ ${a2}`.slice(0, 12e4);
       if ("__end__" in state) {
         if (combinedSessionString && !isSaved) {
           pushCurrentTurn(prompt, combinedSessionString);
-          trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
+          trackUsage(inputType, lastUsageMeta, {
+            responseText: combinedSessionString,
+            toolTrace
+          });
           isSaved = true;
         }
         break;
@@ -68302,7 +70757,10 @@ ${a2}`.slice(0, 12e4);
     }
     if (combinedSessionString && !isSaved) {
       pushCurrentTurn(prompt, combinedSessionString);
-      trackUsage(inputType, lastUsageMeta, { responseText: combinedSessionString, toolTrace });
+      trackUsage(inputType, lastUsageMeta, {
+        responseText: combinedSessionString,
+        toolTrace
+      });
     }
     assistantLogger.debug("stream", "Run summary", {
       steps: streamGuardState.stepCount,
@@ -68650,7 +71108,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
       [/^Moved tab to end:/i, "Moved that tab to the end."],
       [/^Duplicated tab:/i, "Duplicated that tab."],
       [/^Bookmarked tab:/i, "Bookmarked that tab."],
-      [/^Selected all tabs in this window\.?$/i, "Selected all tabs in this window."],
+      [
+        /^Selected all tabs in this window\.?$/i,
+        "Selected all tabs in this window."
+      ],
       [/^Closed \d+ duplicate tab\(s\)\.?$/i, "Closed the duplicate tabs."],
       [/^Closed \d+ tab\(s\) to the right\.?$/i, "Closed the tabs to the right."],
       [/^Closed \d+ tab\(s\) to the left\.?$/i, "Closed the tabs to the left."],
@@ -68661,7 +71122,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         return replacement;
       }
     }
-    const shortened = raw.replace(/https?:\/\/\S+/gi, (url) => summarizeUrlForSpeech(url));
+    const shortened = raw.replace(
+      /https?:\/\/\S+/gi,
+      (url) => summarizeUrlForSpeech(url)
+    );
     const sentenceMatch = shortened.match(/^([^.!?]+[.!?])(?:\s+.*)?$/s);
     if (sentenceMatch && sentenceMatch[1].length < shortened.length) {
       return sentenceMatch[1].trim();
@@ -68862,7 +71326,11 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         try {
           await this.audioContext.resume();
         } catch (error) {
-          assistantLogger.error("voice-agent", "AudioContext.resume failed", error);
+          assistantLogger.error(
+            "voice-agent",
+            "AudioContext.resume failed",
+            error
+          );
           this.releaseAudioContext();
           this.releaseMic();
           this.emit({
@@ -69102,7 +71570,9 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         this.utteranceBufferStartMs - RECORDER_SLICE_MS,
         now2 - MAX_CAPTURE_HISTORY_MS
       ) : now2 - PRE_ROLL_MS;
-      this.pcmTimeline = this.pcmTimeline.filter((chunk) => chunk.endMs >= keepSince);
+      this.pcmTimeline = this.pcmTimeline.filter(
+        (chunk) => chunk.endMs >= keepSince
+      );
     }
     async startContinuousCapture() {
       if (!this.micStream) {
@@ -69305,7 +71775,12 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         }
         return;
       }
-      await this.processUtteranceBlob(audioBlob, { durationMs, rms }, pcm, manualStop);
+      await this.processUtteranceBlob(
+        audioBlob,
+        { durationMs, rms },
+        pcm,
+        manualStop
+      );
     }
     buildRawUtteranceBlob(audioBlob, details) {
       const mimeType = audioBlob.type || this.recorderMimeType || "audio/webm";
@@ -69466,10 +71941,14 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
           ...prepared.captureMeta,
           originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm"
         });
-        assistantLogger.info("voice-agent", "Submitting utterance for transcription", {
-          ...prepared.captureMeta,
-          originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm"
-        });
+        assistantLogger.info(
+          "voice-agent",
+          "Submitting utterance for transcription",
+          {
+            ...prepared.captureMeta,
+            originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm"
+          }
+        );
         const { transcript } = await transcribeAudio(prepared.blob, {
           captureMeta: prepared.captureMeta
         });
@@ -69489,7 +71968,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         await this.runTurn(transcript);
       } catch (error) {
         assistantLogger.error("voice-agent", "Transcription failed", error);
-        this.emit({ type: "error", message: transcribeFailureUserMessage(error) });
+        this.emit({
+          type: "error",
+          message: transcribeFailureUserMessage(error)
+        });
         this.resumeListeningAfterTurn();
       }
     }
@@ -69531,7 +72013,11 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         try {
           await this.audioContext.resume();
         } catch (error) {
-          assistantLogger.error("voice-agent", "AudioContext.resume failed", error);
+          assistantLogger.error(
+            "voice-agent",
+            "AudioContext.resume failed",
+            error
+          );
           if (!this.aborted) {
             this.stop();
             this.emit({
@@ -69679,7 +72165,11 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
               this.ttsAnalyser = analyser;
               this.ttsAnalyserData = new Uint8Array(analyser.fftSize);
             } catch (error) {
-              assistantLogger.error("voice-agent", "TTS audio graph failed", error);
+              assistantLogger.error(
+                "voice-agent",
+                "TTS audio graph failed",
+                error
+              );
               this.disconnectTtsGraph();
             }
           }
@@ -69988,7 +72478,12 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
             };
           }
           const enrichedMeta = {
-            ...meta ?? { command_type: "other", user_intent: "other", input_tokens: null, output_tokens: null },
+            ...meta ?? {
+              command_type: "other",
+              user_intent: "other",
+              input_tokens: null,
+              output_tokens: null
+            },
             interaction_id: interactionId,
             telemetry_identified: dataCollectionIdentified,
             ...ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}

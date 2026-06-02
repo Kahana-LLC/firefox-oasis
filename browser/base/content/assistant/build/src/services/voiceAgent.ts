@@ -203,10 +203,8 @@ function makeSpeechFriendlyReply(text: string): string {
     return "";
   }
 
-  const missingUrl =
-    "Okay. Tell me the website you'd like me to open.";
-  const missingQuery =
-    "Okay. What should I search for?";
+  const missingUrl = "Okay. Tell me the website you'd like me to open.";
+  const missingQuery = "Okay. What should I search for?";
 
   if (/^Missing 'url' argument\.?$/i.test(raw)) {
     return missingUrl;
@@ -254,7 +252,10 @@ function makeSpeechFriendlyReply(text: string): string {
     [/^Moved tab to end:/i, "Moved that tab to the end."],
     [/^Duplicated tab:/i, "Duplicated that tab."],
     [/^Bookmarked tab:/i, "Bookmarked that tab."],
-    [/^Selected all tabs in this window\.?$/i, "Selected all tabs in this window."],
+    [
+      /^Selected all tabs in this window\.?$/i,
+      "Selected all tabs in this window.",
+    ],
     [/^Closed \d+ duplicate tab\(s\)\.?$/i, "Closed the duplicate tabs."],
     [/^Closed \d+ tab\(s\) to the right\.?$/i, "Closed the tabs to the right."],
     [/^Closed \d+ tab\(s\) to the left\.?$/i, "Closed the tabs to the left."],
@@ -266,7 +267,9 @@ function makeSpeechFriendlyReply(text: string): string {
     }
   }
 
-  const shortened = raw.replace(/https?:\/\/\S+/gi, url => summarizeUrlForSpeech(url));
+  const shortened = raw.replace(/https?:\/\/\S+/gi, url =>
+    summarizeUrlForSpeech(url)
+  );
   const sentenceMatch = shortened.match(/^([^.!?]+[.!?])(?:\s+.*)?$/s);
   if (sentenceMatch && sentenceMatch[1].length < shortened.length) {
     return sentenceMatch[1].trim();
@@ -430,8 +433,7 @@ export class VoiceAgentService {
   }
 
   private getAudioConstraints(): MediaTrackConstraints {
-    const supported =
-      navigator.mediaDevices?.getSupportedConstraints?.() || {};
+    const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
     const constraints: MediaTrackConstraints & Record<string, unknown> = {
       echoCancellation: true,
       noiseSuppression: true,
@@ -507,7 +509,11 @@ export class VoiceAgentService {
       try {
         await this.audioContext.resume();
       } catch (error) {
-        assistantLogger.error("voice-agent", "AudioContext.resume failed", error);
+        assistantLogger.error(
+          "voice-agent",
+          "AudioContext.resume failed",
+          error
+        );
         this.releaseAudioContext();
         this.releaseMic();
         this.emit({
@@ -572,7 +578,8 @@ export class VoiceAgentService {
           return;
         }
         const input = audioEvent.inputBuffer;
-        const sampleRate = input.sampleRate || this.audioContext?.sampleRate || 48000;
+        const sampleRate =
+          input.sampleRate || this.audioContext?.sampleRate || 48000;
         if (!sampleRate || input.length <= 0) {
           return;
         }
@@ -633,7 +640,10 @@ export class VoiceAgentService {
     return Math.sqrt(sum / this.vadData.length);
   }
 
-  private computeRmsFromAnalyser(analyser: AnalyserNode, data: Uint8Array): number {
+  private computeRmsFromAnalyser(
+    analyser: AnalyserNode,
+    data: Uint8Array
+  ): number {
     analyser.getByteTimeDomainData(data);
     let sum = 0;
     for (let index = 0; index < data.length; index++) {
@@ -735,7 +745,10 @@ export class VoiceAgentService {
           this.peakSpeechRms = Math.max(this.peakSpeechRms, rms);
           this.silenceMs = 0;
           this.speechOnFrames += 1;
-          if (!this.speechActive && this.speechOnFrames >= VAD_SPEECH_ON_FRAMES) {
+          if (
+            !this.speechActive &&
+            this.speechOnFrames >= VAD_SPEECH_ON_FRAMES
+          ) {
             this.beginUtteranceRecording(now, rms);
           }
         } else {
@@ -781,7 +794,9 @@ export class VoiceAgentService {
           now - MAX_CAPTURE_HISTORY_MS
         )
       : now - PRE_ROLL_MS;
-    this.pcmTimeline = this.pcmTimeline.filter(chunk => chunk.endMs >= keepSince);
+    this.pcmTimeline = this.pcmTimeline.filter(
+      chunk => chunk.endMs >= keepSince
+    );
   }
 
   private async startContinuousCapture(): Promise<boolean> {
@@ -909,7 +924,8 @@ export class VoiceAgentService {
     if (selected.length === 0) {
       return null;
     }
-    const sampleRate = selected[0]?.sampleRate || this.audioContext?.sampleRate || 48000;
+    const sampleRate =
+      selected[0]?.sampleRate || this.audioContext?.sampleRate || 48000;
     const trimmedChunks: Float32Array[] = [];
     let totalLength = 0;
 
@@ -1006,7 +1022,9 @@ export class VoiceAgentService {
     if (this.aborted) {
       return;
     }
-    const minMs = manualStop ? MANUAL_STOP_MIN_UTTERANCE_MS : VAD_MIN_UTTERANCE_MS;
+    const minMs = manualStop
+      ? MANUAL_STOP_MIN_UTTERANCE_MS
+      : VAD_MIN_UTTERANCE_MS;
     const minBytes = manualStop
       ? MANUAL_STOP_MIN_UTTERANCE_BYTES
       : this.captureMode === "precise"
@@ -1026,7 +1044,12 @@ export class VoiceAgentService {
       return;
     }
 
-    await this.processUtteranceBlob(audioBlob, { durationMs, rms }, pcm, manualStop);
+    await this.processUtteranceBlob(
+      audioBlob,
+      { durationMs, rms },
+      pcm,
+      manualStop
+    );
   }
 
   private buildRawUtteranceBlob(
@@ -1058,7 +1081,8 @@ export class VoiceAgentService {
         "voice-agent",
         "PCM audio was unavailable; falling back to recorded audio upload",
         {
-          originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm",
+          originalMimeType:
+            audioBlob.type || this.recorderMimeType || "audio/webm",
           durationMs: details.durationMs,
         }
       );
@@ -1075,7 +1099,8 @@ export class VoiceAgentService {
           "voice-agent",
           "PCM preprocessing produced no usable WAV; falling back to recorded audio upload",
           {
-            originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm",
+            originalMimeType:
+              audioBlob.type || this.recorderMimeType || "audio/webm",
             durationMs: details.durationMs,
             pcmSampleRate: pcm.sampleRate,
             pcmSamples: pcm.samples.length,
@@ -1216,12 +1241,18 @@ export class VoiceAgentService {
       }
       assistantLogger.info("voice-agent", "Audio preprocessing succeeded", {
         ...prepared.captureMeta,
-        originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm",
+        originalMimeType:
+          audioBlob.type || this.recorderMimeType || "audio/webm",
       });
-      assistantLogger.info("voice-agent", "Submitting utterance for transcription", {
-        ...prepared.captureMeta,
-        originalMimeType: audioBlob.type || this.recorderMimeType || "audio/webm",
-      });
+      assistantLogger.info(
+        "voice-agent",
+        "Submitting utterance for transcription",
+        {
+          ...prepared.captureMeta,
+          originalMimeType:
+            audioBlob.type || this.recorderMimeType || "audio/webm",
+        }
+      );
 
       const { transcript } = await transcribeAudio(prepared.blob, {
         captureMeta: prepared.captureMeta,
@@ -1243,7 +1274,10 @@ export class VoiceAgentService {
       await this.runTurn(transcript);
     } catch (error) {
       assistantLogger.error("voice-agent", "Transcription failed", error);
-      this.emit({ type: "error", message: transcribeFailureUserMessage(error) });
+      this.emit({
+        type: "error",
+        message: transcribeFailureUserMessage(error),
+      });
       this.resumeListeningAfterTurn();
     }
   }
@@ -1293,7 +1327,11 @@ export class VoiceAgentService {
       try {
         await this.audioContext.resume();
       } catch (error) {
-        assistantLogger.error("voice-agent", "AudioContext.resume failed", error);
+        assistantLogger.error(
+          "voice-agent",
+          "AudioContext.resume failed",
+          error
+        );
         if (!this.aborted) {
           this.stop();
           this.emit({
@@ -1461,7 +1499,11 @@ export class VoiceAgentService {
             this.ttsAnalyser = analyser;
             this.ttsAnalyserData = new Uint8Array(analyser.fftSize);
           } catch (error) {
-            assistantLogger.error("voice-agent", "TTS audio graph failed", error);
+            assistantLogger.error(
+              "voice-agent",
+              "TTS audio graph failed",
+              error
+            );
             this.disconnectTtsGraph();
           }
         }
@@ -1544,23 +1586,20 @@ export class VoiceAgentService {
     if (this.micSource) {
       try {
         this.micSource.disconnect();
-      } catch {
-      }
+      } catch {}
       this.micSource = null;
     }
     if (this.pcmProcessor) {
       try {
         this.pcmProcessor.disconnect();
-      } catch {
-      }
+      } catch {}
       this.pcmProcessor.onaudioprocess = null;
       this.pcmProcessor = null;
     }
     if (this.pcmSink) {
       try {
         this.pcmSink.disconnect();
-      } catch {
-      }
+      } catch {}
       this.pcmSink = null;
     }
     if (this.audioContext) {

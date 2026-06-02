@@ -8,7 +8,10 @@ import {
   researchBriefToMarkdown,
   truncateDigestsToBudget,
 } from "../src/services/researchBriefFormat.js";
-import type { ResearchBrief, TabDigest } from "../src/services/researchBriefTypes.js";
+import type {
+  ResearchBrief,
+  TabDigest,
+} from "../src/services/researchBriefTypes.js";
 import {
   buildResearchBriefToolMessage,
   displayMarkdownFromResearchBriefToolMessage,
@@ -78,10 +81,7 @@ test("research brief tool message round-trip", () => {
   assert.ok(parsed);
   assert.equal(parsed?.markdown, markdown);
   assert.equal(parsed?.brief.topic, sampleBrief.topic);
-  assert.equal(
-    displayMarkdownFromResearchBriefToolMessage(wire),
-    markdown
-  );
+  assert.equal(displayMarkdownFromResearchBriefToolMessage(wire), markdown);
 });
 
 test("clampMaxTabs enforces defaults and hard cap", () => {

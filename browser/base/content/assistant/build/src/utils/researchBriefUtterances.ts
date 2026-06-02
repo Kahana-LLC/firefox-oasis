@@ -95,7 +95,9 @@ export function looksLikeResearchBriefCommand(input: string): boolean {
   }
   if (/\bbrief\b/i.test(normalized)) {
     return (
-      /^(?:create|make|build|write|generate|draft|prepare)\b/i.test(normalized) ||
+      /^(?:create|make|build|write|generate|draft|prepare)\b/i.test(
+        normalized
+      ) ||
       /\bbrief\s+(?:based\s+on|from|for|about|on)\b/i.test(normalized) ||
       hasMultiTabScope(normalized)
     );

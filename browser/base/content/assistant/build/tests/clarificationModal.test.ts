@@ -36,7 +36,11 @@ function collectButtons(node: unknown): Array<Record<string, unknown>> {
   }
   const vnode = node as VNodeLike;
   const children = vnode.props?.children;
-  const childNodes = Array.isArray(children) ? children : children ? [children] : [];
+  const childNodes = Array.isArray(children)
+    ? children
+    : children
+      ? [children]
+      : [];
   const nested = childNodes.flatMap(collectButtons);
   return vnode.type === "button" ? [vnode.props ?? {}, ...nested] : nested;
 }
@@ -50,7 +54,11 @@ function collectInputs(node: unknown): Array<Record<string, unknown>> {
   }
   const vnode = node as VNodeLike;
   const children = vnode.props?.children;
-  const childNodes = Array.isArray(children) ? children : children ? [children] : [];
+  const childNodes = Array.isArray(children)
+    ? children
+    : children
+      ? [children]
+      : [];
   const nested = childNodes.flatMap(collectInputs);
   return vnode.type === "input" ? [vnode.props ?? {}, ...nested] : nested;
 }
@@ -61,18 +69,26 @@ function collectNodesByProp(
   propValue: unknown
 ): Array<Record<string, unknown>> {
   if (Array.isArray(node)) {
-    return node.flatMap(child => collectNodesByProp(child, propName, propValue));
+    return node.flatMap(child =>
+      collectNodesByProp(child, propName, propValue)
+    );
   }
   if (!node || typeof node !== "object") {
     return [];
   }
   const vnode = node as VNodeLike;
   const children = vnode.props?.children;
-  const childNodes = Array.isArray(children) ? children : children ? [children] : [];
+  const childNodes = Array.isArray(children)
+    ? children
+    : children
+      ? [children]
+      : [];
   const nested = childNodes.flatMap(child =>
     collectNodesByProp(child, propName, propValue)
   );
-  return vnode.props?.[propName] === propValue ? [vnode.props ?? {}, ...nested] : nested;
+  return vnode.props?.[propName] === propValue
+    ? [vnode.props ?? {}, ...nested]
+    : nested;
 }
 
 test("clarification modal renders generated options plus numbered none option", () => {
@@ -80,8 +96,16 @@ test("clarification modal renders generated options plus numbered none option", 
     data: {
       originalMessage: "show me the price",
       options: [
-        { id: "opt_1", label: "Check this page", resolvedPrompt: "check this page" },
-        { id: "opt_2", label: "Search the web", resolvedPrompt: "search the web" },
+        {
+          id: "opt_1",
+          label: "Check this page",
+          resolvedPrompt: "check this page",
+        },
+        {
+          id: "opt_2",
+          label: "Search the web",
+          resolvedPrompt: "search the web",
+        },
       ],
     },
     onSelect: () => {},
@@ -97,7 +121,11 @@ test("clarification modal renders generated options plus numbered none option", 
     normalizeLabel(flattenText({ props: { children: button.children } }))
   );
 
-  assert.deepEqual(labels, ["1. Check this page", "2. Search the web", "3. None of these"]);
+  assert.deepEqual(labels, [
+    "1. Check this page",
+    "2. Search the web",
+    "3. None of these",
+  ]);
 });
 
 test("clarification modal exposes dialog semantics", () => {
@@ -105,8 +133,16 @@ test("clarification modal exposes dialog semantics", () => {
     data: {
       originalMessage: "show me the price",
       options: [
-        { id: "opt_1", label: "Check this page", resolvedPrompt: "check this page" },
-        { id: "opt_2", label: "Search the web", resolvedPrompt: "search the web" },
+        {
+          id: "opt_1",
+          label: "Check this page",
+          resolvedPrompt: "check this page",
+        },
+        {
+          id: "opt_2",
+          label: "Search the web",
+          resolvedPrompt: "search the web",
+        },
       ],
     },
     onSelect: () => {},
@@ -131,8 +167,16 @@ test("clarification modal direct input submits on Enter", () => {
     data: {
       originalMessage: "show me the price",
       options: [
-        { id: "opt_1", label: "Check this page", resolvedPrompt: "check this page" },
-        { id: "opt_2", label: "Search the web", resolvedPrompt: "search the web" },
+        {
+          id: "opt_1",
+          label: "Check this page",
+          resolvedPrompt: "check this page",
+        },
+        {
+          id: "opt_2",
+          label: "Search the web",
+          resolvedPrompt: "search the web",
+        },
       ],
     },
     onSelect: () => {},
@@ -148,7 +192,12 @@ test("clarification modal direct input submits on Enter", () => {
   const input = collectInputs(tree)[0];
 
   assert.equal(input.placeholder, "Tell Oasis what you meant");
-  (input.onKeyDown as (event: { key: string; preventDefault: () => void }) => void)({
+  (
+    input.onKeyDown as (event: {
+      key: string;
+      preventDefault: () => void;
+    }) => void
+  )({
     key: "Enter",
     preventDefault: () => {
       prevented = true;
@@ -165,8 +214,16 @@ test("clarification modal numeric keys match visible options", () => {
     data: {
       originalMessage: "show me the price",
       options: [
-        { id: "opt_1", label: "Check this page", resolvedPrompt: "check this page" },
-        { id: "opt_2", label: "Search the web", resolvedPrompt: "search the web" },
+        {
+          id: "opt_1",
+          label: "Check this page",
+          resolvedPrompt: "check this page",
+        },
+        {
+          id: "opt_2",
+          label: "Search the web",
+          resolvedPrompt: "search the web",
+        },
       ],
     },
     onSelect: optionId => {

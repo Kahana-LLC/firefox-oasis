@@ -16,8 +16,7 @@ const pendingClarification: PendingClarification = {
     {
       id: "opt_2",
       label: "Create a new document for a research brief on 'sports'",
-      resolvedPrompt:
-        "Build a research brief on sports from tab group sports.",
+      resolvedPrompt: "Build a research brief on sports from tab group sports.",
     },
   ],
 };

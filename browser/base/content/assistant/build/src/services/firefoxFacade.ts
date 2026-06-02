@@ -69,7 +69,9 @@ export function normalizeName(value: string): string {
   return (value || "").trim().toLowerCase();
 }
 
-export function getTabs(gBrowser: GBrowserLike | null | undefined): BrowserTabLike[] {
+export function getTabs(
+  gBrowser: GBrowserLike | null | undefined
+): BrowserTabLike[] {
   if (!gBrowser?.tabs) return [];
   return Array.from(gBrowser.tabs);
 }
@@ -279,7 +281,10 @@ export function resolveActiveTabGroup(
   });
 }
 
-export function withUriFixup(rawInput: string, services: ServicesLike | null): string {
+export function withUriFixup(
+  rawInput: string,
+  services: ServicesLike | null
+): string {
   let input = String(rawInput || "").trim();
   if (!input) return "";
   const info = services?.uriFixup?.getFixupURIInfo?.(input, 2 | 4);
@@ -298,9 +303,12 @@ export async function fetchChildrenBookmarks(
   if (!places?.bookmarks?.fetch || !parentGuid) return [];
 
   const collected: PlacesBookmarkEntry[] = [];
-  const fetched = await places.bookmarks.fetch({ parentGuid }, (bookmark: PlacesBookmarkEntry) => {
-    collected.push(bookmark);
-  });
+  const fetched = await places.bookmarks.fetch(
+    { parentGuid },
+    (bookmark: PlacesBookmarkEntry) => {
+      collected.push(bookmark);
+    }
+  );
 
   if (collected.length > 0) {
     return collected;

@@ -96,12 +96,10 @@ const TYPO_ALIASES: Record<string, string> = {
 
 const LOOKUP: ReadonlyMap<string, string> = new Map<string, string>([
   ...(Object.entries(DEFAULT_URLS) as [string, string][]),
-  ...Object.entries(TYPO_ALIASES).map(
-    ([typo, canon]): [string, string] => [
-      typo,
-      DEFAULT_URLS[canon] ?? `https://www.${canon}.com`,
-    ]
-  ),
+  ...Object.entries(TYPO_ALIASES).map(([typo, canon]): [string, string] => [
+    typo,
+    DEFAULT_URLS[canon] ?? `https://www.${canon}.com`,
+  ]),
 ]);
 
 export function resolveKnownSiteToUrl(raw: string): string | null {

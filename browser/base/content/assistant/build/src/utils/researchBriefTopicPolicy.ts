@@ -11,7 +11,10 @@ export function isShortLabel(value: string): boolean {
     return true;
   }
   const words = text.split(/\s+/).filter(Boolean);
-  return text.length <= SHORT_LABEL_MAX_CHARS || words.length <= SHORT_LABEL_MAX_WORDS;
+  return (
+    text.length <= SHORT_LABEL_MAX_CHARS ||
+    words.length <= SHORT_LABEL_MAX_WORDS
+  );
 }
 
 export function isDistinctTopic(topic: string, scopeLabel: string): boolean {

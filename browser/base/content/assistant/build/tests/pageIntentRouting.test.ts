@@ -80,8 +80,16 @@ test("pending clarification direct text re-enters normal routing", () => {
   const pendingClarification = {
     originalMessage: "show me this",
     options: [
-      { id: "opt_1", label: "Read this page", resolvedPrompt: "read this page" },
-      { id: "opt_2", label: "Search the web", resolvedPrompt: "search the web" },
+      {
+        id: "opt_1",
+        label: "Read this page",
+        resolvedPrompt: "read this page",
+      },
+      {
+        id: "opt_2",
+        label: "Search the web",
+        resolvedPrompt: "search the web",
+      },
     ],
   };
 

@@ -27,5 +27,5 @@ export function getCachedResearchBriefRun(
 }
 
 export function getLatestResearchBriefRun(): CachedResearchBriefRun | null {
-  return latestBriefId ? cache.get(latestBriefId) ?? null : null;
+  return latestBriefId ? (cache.get(latestBriefId) ?? null) : null;
 }

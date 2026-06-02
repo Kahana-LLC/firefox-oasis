@@ -40,12 +40,16 @@ export function isAllowedCallbackHost(hostname: string): boolean {
   });
 }
 
-export function getHandoffTarget(payload: Record<string, unknown>): string | null {
+export function getHandoffTarget(
+  payload: Record<string, unknown>
+): string | null {
   const target = payload.handoff_target ?? payload.target;
   return typeof target === "string" ? target : null;
 }
 
-export function getHandoffFlowId(payload: Record<string, unknown>): string | null {
+export function getHandoffFlowId(
+  payload: Record<string, unknown>
+): string | null {
   const flowId = payload.flow_id ?? payload.flowId;
   return typeof flowId === "string" ? flowId : null;
 }

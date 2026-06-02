@@ -26,7 +26,11 @@ export function shouldConfirmResearchBriefScope(
   if (input.urlsDeduplicated > 0 && input.tabCount >= 4) {
     return true;
   }
-  if (input.scope === "tabs" && input.tabQueriesCount > 0 && input.tabCount > PREVIEW_TABS_SCOPE_MATCH_THRESHOLD) {
+  if (
+    input.scope === "tabs" &&
+    input.tabQueriesCount > 0 &&
+    input.tabCount > PREVIEW_TABS_SCOPE_MATCH_THRESHOLD
+  ) {
     return true;
   }
   if (input.tabCount > PREVIEW_TAB_THRESHOLD) {
@@ -62,9 +66,7 @@ export function buildScopePreviewDescription(params: {
     );
   }
   if (params.urlsDeduplicated > 0) {
-    lines.push(
-      `${params.urlsDeduplicated} duplicate URL(s) were removed.`
-    );
+    lines.push(`${params.urlsDeduplicated} duplicate URL(s) were removed.`);
   }
   lines.push("Continue?");
   return lines.join(" ");

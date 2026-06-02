@@ -122,9 +122,13 @@ class RoutingStateCache {
       win.addEventListener(
         OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED,
         (event: Event) => {
-          const detail = (event as CustomEvent<BookmarkFoldersChangedDetail>).detail;
+          const detail = (event as CustomEvent<BookmarkFoldersChangedDetail>)
+            .detail;
           if (Array.isArray(detail?.folderNames)) {
-            this.replaceFolderNames(detail.folderNames, "bookmark-folders-event");
+            this.replaceFolderNames(
+              detail.folderNames,
+              "bookmark-folders-event"
+            );
             return;
           }
           this.markDirty("bookmark-folders-event");
@@ -148,7 +152,8 @@ class RoutingStateCache {
       return;
     }
 
-    const setRef = mutation.entity === "folder" ? this.folderNames : this.groupNames;
+    const setRef =
+      mutation.entity === "folder" ? this.folderNames : this.groupNames;
 
     if (mutation.kind === "upsert") {
       const normalized = this.normalizeEntityName(mutation.name);
@@ -184,7 +189,9 @@ class RoutingStateCache {
 
     const now = Date.now();
     const stale =
-      this.dirty || now - this.lastRefresh > this.refreshTtlMs || this.lastRefresh === 0;
+      this.dirty ||
+      now - this.lastRefresh > this.refreshTtlMs ||
+      this.lastRefresh === 0;
     if (stale) {
       this.scheduleRefresh("snapshot-stale");
     }

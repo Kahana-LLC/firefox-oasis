@@ -22,7 +22,10 @@ export type AgentState = {
 
 export type AgentNodePatch = Partial<AgentState>;
 
-export function mergeAgentState(prev: AgentState, patch: AgentNodePatch): AgentState {
+export function mergeAgentState(
+  prev: AgentState,
+  patch: AgentNodePatch
+): AgentState {
   return {
     messages:
       patch.messages && patch.messages.length > 0

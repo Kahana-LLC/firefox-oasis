@@ -19,10 +19,7 @@ test("normalizeAllowedCallbackBaseUrl accepts allowlisted origins", () => {
 });
 
 test("normalizeAllowedCallbackBaseUrl rejects unknown origins", () => {
-  assert.equal(
-    normalizeAllowedCallbackBaseUrl("https://evil.example"),
-    null
-  );
+  assert.equal(normalizeAllowedCallbackBaseUrl("https://evil.example"), null);
   assert.equal(normalizeAllowedCallbackBaseUrl("javascript:alert(1)"), null);
 });
 

@@ -20,14 +20,18 @@ export type FolderSnapshot = {
   items: Array<{ url: string }>;
 };
 
-export function hasBookmarkFolderCandidates(results: SearchMemoryResult[]): boolean {
-  return results.some((r) => {
+export function hasBookmarkFolderCandidates(
+  results: SearchMemoryResult[]
+): boolean {
+  return results.some(r => {
     const rawType = String(r.metadata?.type || "").toLowerCase();
     return isBookmarkFolderType(rawType);
   });
 }
 
-export function buildFolderUrlMap(folders: FolderSnapshot[]): Map<string, Set<string>> {
+export function buildFolderUrlMap(
+  folders: FolderSnapshot[]
+): Map<string, Set<string>> {
   const folderToUrls = new Map<string, Set<string>>();
   for (const folder of folders) {
     const name = normalizeMemoryName(folder?.name || "");
@@ -47,7 +51,7 @@ export function filterStaleBookmarkFolderResults(
   folderToUrls: Map<string, Set<string>>
 ): { results: SearchMemoryResult[]; dropped: number } {
   let dropped = 0;
-  const filtered = results.filter((result) => {
+  const filtered = results.filter(result => {
     if (getMemoryDocSource(result) !== "bookmark-folder") {
       return true;
     }

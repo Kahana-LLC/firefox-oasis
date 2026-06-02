@@ -179,10 +179,7 @@ export function resolvePendingClarificationGate(params: {
   if (lower.length >= minFuzzyLen) {
     for (const option of pendingClarification.options) {
       const labelLower = option.label.toLowerCase();
-      if (
-        labelLower.includes(lower) ||
-        lower.includes(labelLower)
-      ) {
+      if (labelLower.includes(lower) || lower.includes(labelLower)) {
         return { kind: "resolved", resolvedPrompt: option.resolvedPrompt };
       }
     }

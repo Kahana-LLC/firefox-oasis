@@ -27,7 +27,7 @@ const TOPIC_INFER_CONFIG = {
 const TOPIC_INFER_SYSTEM = [
   "Given excerpts from open browser tabs, return a concise research topic title (under 80 characters).",
   "Use themes shared across the pages, not a single site name.",
-  "Return only JSON: {\"topic\": \"...\"}",
+  'Return only JSON: {"topic": "..."}',
 ].join("\n");
 
 function isWeakHeuristicTopic(topic: string): boolean {

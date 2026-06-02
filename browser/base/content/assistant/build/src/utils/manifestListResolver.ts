@@ -11,7 +11,10 @@
  */
 import { normalizeRouteName } from "./intentParser.js";
 import { resolveManifestCommand } from "./manifestResolver.js";
-import type { DeterministicRouteDecision, RoutingStateSnapshot } from "./routerTypes.js";
+import type {
+  DeterministicRouteDecision,
+  RoutingStateSnapshot,
+} from "./routerTypes.js";
 import { getBrowserWindow } from "../types/runtime.js";
 
 const WINDOW_SCOPE_ALIASES = new Set([
@@ -49,7 +52,10 @@ function isListTabGroupsCommand(input: string): boolean {
 
 function parseListTabsTarget(
   input: string
-): { targetName?: string; explicitContainer?: "tab-group" | "bookmark-folder" } | null {
+): {
+  targetName?: string;
+  explicitContainer?: "tab-group" | "bookmark-folder";
+} | null {
   const command = String(input || "").trim();
   if (!/^(?:list|show)\b/i.test(command)) {
     return null;
@@ -62,16 +68,19 @@ function parseListTabsTarget(
     return null;
   }
 
-  const tabsWithTarget = command.match(/\btabs?\s+(?:in|from)\s+(?<target>.+)$/i);
+  const tabsWithTarget = command.match(
+    /\btabs?\s+(?:in|from)\s+(?<target>.+)$/i
+  );
   if (tabsWithTarget?.groups?.target) {
     const rawTarget = cleanTargetName(tabsWithTarget.groups.target);
     if (!rawTarget) {
       return {};
     }
     const hasGroup = /\btab\s*group\b|\bgroup\b/i.test(rawTarget);
-    const hasFolder = /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i.test(
-      rawTarget
-    );
+    const hasFolder =
+      /\bbookmark\s*folder\b|\bfolder\b|\bhub\b|\bbookmarks?\b/i.test(
+        rawTarget
+      );
     const explicitContainer =
       hasGroup && !hasFolder
         ? "tab-group"
@@ -100,8 +109,9 @@ function parseListTabsTarget(
   if (containerNameMatch?.groups?.container) {
     const targetName = cleanTargetName(containerNameMatch.groups.name || "");
     const container = normalizeRouteName(containerNameMatch.groups.container);
-    const explicitContainer =
-      container.includes("group") ? "tab-group" : "bookmark-folder";
+    const explicitContainer = container.includes("group")
+      ? "tab-group"
+      : "bookmark-folder";
     if (!targetName) {
       return { explicitContainer };
     }
@@ -149,7 +159,9 @@ export function resolveManifestListRoute(
     };
   }
   const topWin = getBrowserWindow();
-  const tabCount = topWin?.gBrowser?.tabs ? Array.from(topWin.gBrowser.tabs).length : 0;
+  const tabCount = topWin?.gBrowser?.tabs
+    ? Array.from(topWin.gBrowser.tabs).length
+    : 0;
   const candidate = resolveManifestCommand(input, {
     snapshot,
     hasOpenTabs: tabCount > 0,
@@ -171,7 +183,10 @@ export function resolveManifestListRoute(
     };
   }
 
-  if (candidate.definition.id === "list.tab.groups" || isListTabGroupsCommand(input)) {
+  if (
+    candidate.definition.id === "list.tab.groups" ||
+    isListTabGroupsCommand(input)
+  ) {
     return {
       type: "tool",
       next: "list_tab_groups",

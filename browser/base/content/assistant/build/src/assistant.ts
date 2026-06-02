@@ -29,7 +29,10 @@ import {
   type PlainSessionTurn,
 } from "./assistant/session.js";
 import { consumeAssistantGraphStream } from "./assistant/stream.js";
-import type { InteractionPayload, InteractionUser } from "./assistant/messageUtils.js";
+import type {
+  InteractionPayload,
+  InteractionUser,
+} from "./assistant/messageUtils.js";
 import type { StreamContentData } from "./assistant/stream.js";
 import {
   VOICE_CHAT_TEXT_REPLY_ADDENDUM,
@@ -37,7 +40,11 @@ import {
 } from "./prompts/voicePrompt.js";
 import SupabaseAuth from "./services/supabase";
 import { subscriptionService } from "./services/subscription";
-import { getChromeContext, tabUrl, tabTitle } from "./services/firefoxFacade.js";
+import {
+  getChromeContext,
+  tabUrl,
+  tabTitle,
+} from "./services/firefoxFacade.js";
 import voiceInputService from "./services/voiceInput";
 import voiceAgent from "./services/voiceAgent";
 import { textToSpeech } from "./proxyClient.js";
@@ -83,7 +90,8 @@ assistantWindow.getOasisCapabilitiesMarkdown = getOasisCapabilitiesMarkdown;
 function oasisGetInteractionIdForMessage(messageId: string): string | null {
   return interactionIdByMessageId.get(messageId) ?? null;
 }
-assistantWindow.oasisGetInteractionIdForMessage = oasisGetInteractionIdForMessage;
+assistantWindow.oasisGetInteractionIdForMessage =
+  oasisGetInteractionIdForMessage;
 
 function oasisPushLocalChatTurn(
   userText: string,
@@ -254,14 +262,22 @@ export async function runAssistantStream(
               output_tokens: meta?.output_tokens ?? null,
               latency_ms: Date.now() - startTime,
             },
-            tool_trace: content.toolTrace.length > 0 ? content.toolTrace : undefined,
+            tool_trace:
+              content.toolTrace.length > 0 ? content.toolTrace : undefined,
           };
         }
         const enrichedMeta: typeof meta = {
-          ...(meta ?? { command_type: "other", user_intent: "other", input_tokens: null, output_tokens: null }),
+          ...(meta ?? {
+            command_type: "other",
+            user_intent: "other",
+            input_tokens: null,
+            output_tokens: null,
+          }),
           interaction_id: interactionId,
           telemetry_identified: dataCollectionIdentified,
-          ...(ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}),
+          ...(ENV.RICH_TELEMETRY_ENABLED && payload
+            ? { interaction_payload: payload }
+            : {}),
         };
         subscriptionService.trackUsage(nextInputType, undefined, enrichedMeta);
       }

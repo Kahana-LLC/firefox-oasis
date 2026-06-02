@@ -10,7 +10,8 @@ export type UtteranceExpectation = {
 
 export const UTTERANCE_FIXTURES: UtteranceExpectation[] = [
   {
-    phrase: "Build a research brief on AI privacy tools from tab group AI Privacy",
+    phrase:
+      "Build a research brief on AI privacy tools from tab group AI Privacy",
     route: "build_research_brief",
     scope: "tab-group",
     name: "AI Privacy",

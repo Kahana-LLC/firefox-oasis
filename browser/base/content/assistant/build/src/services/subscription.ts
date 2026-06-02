@@ -424,7 +424,9 @@ export class SubscriptionService {
         input_tokens: meta?.input_tokens ?? 0,
         output_tokens: meta?.output_tokens ?? 0,
         interaction_id: meta?.interaction_id ?? null,
-        ...(meta?.interaction_payload ? { interaction_data: meta.interaction_payload } : {}),
+        ...(meta?.interaction_payload
+          ? { interaction_data: meta.interaction_payload }
+          : {}),
       })
       .then(({ error }: any) => {
         if (error) logError("Failed to track usage (DB Insert):", error);

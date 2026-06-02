@@ -32,7 +32,8 @@ export function mergeSectionIntoBrief(
     const outline = Array.isArray(payload)
       ? (payload as ResearchBriefOutlineSection[])
       : Array.isArray((payload as { outline?: unknown }).outline)
-        ? ((payload as { outline: ResearchBriefOutlineSection[] }).outline ?? [])
+        ? ((payload as { outline: ResearchBriefOutlineSection[] }).outline ??
+          [])
         : existing.outline;
     return { ...existing, outline };
   }
@@ -57,9 +58,11 @@ export function mergeSectionIntoBrief(
 
   const gaps = Array.isArray(payload)
     ? (payload as string[])
-    : Array.isArray((payload as { gapsAndContradictions?: unknown }).gapsAndContradictions)
-      ? ((payload as { gapsAndContradictions: string[] }).gapsAndContradictions ??
-        [])
+    : Array.isArray(
+          (payload as { gapsAndContradictions?: unknown }).gapsAndContradictions
+        )
+      ? ((payload as { gapsAndContradictions: string[] })
+          .gapsAndContradictions ?? [])
       : existing.gapsAndContradictions;
   return { ...existing, gapsAndContradictions: gaps };
 }

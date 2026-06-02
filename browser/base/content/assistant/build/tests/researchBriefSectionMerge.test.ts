@@ -11,7 +11,11 @@ const baseBrief: ResearchBrief = {
   executiveSummary: "Original summary",
   outline: [{ heading: "Intro", bullets: ["A"] }],
   themes: [
-    { label: "Theme A", synthesis: "Old theme", sourceUrls: ["https://a.test"] },
+    {
+      label: "Theme A",
+      synthesis: "Old theme",
+      sourceUrls: ["https://a.test"],
+    },
   ],
   sources: [
     {

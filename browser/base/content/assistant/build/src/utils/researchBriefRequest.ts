@@ -1,4 +1,7 @@
-import type { ResearchBrief, TabDigest } from "../services/researchBriefTypes.js";
+import type {
+  ResearchBrief,
+  TabDigest,
+} from "../services/researchBriefTypes.js";
 
 export const RESEARCH_BRIEF_MARKER = "__RESEARCH_BRIEF__";
 

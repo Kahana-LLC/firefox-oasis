@@ -231,7 +231,8 @@ async function runRailroadStructuredExtractionMaybe(
           ? parsed.currentContext
           : undefined,
       userUpdates:
-        parsed.userUpdates && typeof parsed.userUpdates === "object" &&
+        parsed.userUpdates &&
+        typeof parsed.userUpdates === "object" &&
         !Array.isArray(parsed.userUpdates)
           ? (parsed.userUpdates as Record<string, unknown>)
           : undefined,
