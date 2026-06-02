@@ -30,7 +30,7 @@ DMG files are copied to their final names on disk before upload so browser downl
 
 ## Required GitHub Secrets
 
-For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **App ID** `com.oasis.browser` must include the **Passkeys (web-browser.public-key-credential)** capability, and release signing must use `./mach macos-sign -e production` so restricted entitlements are not stripped.
+For macOS **platform passkeys** (Touch ID / system passkey sheet), the Apple **App ID** must include **Passkeys (web-browser.public-key-credential)**, a **Developer ID provisioning profile** must be embedded in the `.app`, and CI may use `./mach macos-sign -e production` with `OASIS_APPLE_TEAM_ID` set. Until that profile exists, CI uses `-e production-without-restricted` so notarized builds launch on user Macs.
 
 - `OASIS_UPDATE_SERVICE_URL`: Supabase function base URL
 - `OASIS_UPDATE_ADMIN_TOKEN`: bearer token for `/admin/*` endpoints

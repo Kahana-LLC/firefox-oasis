@@ -371,6 +371,15 @@ def macos_sign(
 
 
 OASIS_BUNDLE_ID = "com.oasis.browser"
+LEGACY_OASIS_BUNDLE_ID = "org.mozilla.com.oasis.browser"
+
+
+def is_oasis_browser_bundle(bundle_id):
+    if not bundle_id:
+        return False
+    if bundle_id in (OASIS_BUNDLE_ID, LEGACY_OASIS_BUNDLE_ID):
+        return True
+    return bundle_id.endswith(".oasis.browser")
 
 
 def cf_bundle_identifier(app):
@@ -387,7 +396,7 @@ def cf_bundle_identifier(app):
 
 
 def remap_entitlements_for_oasis_browser(app, entitlements_key, entitlement_file):
-    if cf_bundle_identifier(app) != OASIS_BUNDLE_ID:
+    if not is_oasis_browser_bundle(cf_bundle_identifier(app)):
         return entitlement_file
     leaf = os.path.basename(entitlement_file)
     parent = os.path.dirname(entitlement_file)
@@ -396,6 +405,56 @@ def remap_entitlements_for_oasis_browser(app, entitlements_key, entitlement_file
     if entitlements_key == "default" and leaf == "browser.xml":
         return os.path.join(parent, "oasis.browser.xml")
     return entitlement_file
+
+
+def oasis_signing_team_id():
+    return os.environ.get("OASIS_APPLE_TEAM_ID", "").strip()
+
+
+def patch_oasis_application_identifier(entitlement_file, bundle_id, team_id):
+    with open(entitlement_file, "rb") as plist_file_obj:
+        plist_data = plistlib.load(plist_file_obj, fmt=plistlib.FMT_XML)
+    if "com.apple.application-identifier" not in plist_data:
+        return entitlement_file
+    patched = dict(plist_data)
+    patched["com.apple.application-identifier"] = f"{team_id}.{bundle_id}"
+    _, temp_file_path = tempfile.mkstemp(prefix="mach-macos-sign-oasis.", suffix=".xml")
+    with open(temp_file_path, "wb") as temp_file_obj:
+        plistlib.dump(patched, temp_file_obj)
+    return temp_file_path
+
+
+def prepare_entitlement_file(
+    app, entitlements_arg, entitlements_key, entitlement_file
+):
+    entitlement_file = remap_entitlements_for_oasis_browser(
+        app, entitlements_key, entitlement_file
+    )
+    entitlement_file = entitlement_repo_path(entitlements_key, entitlement_file)
+    temp_files_to_cleanup = []
+
+    bundle_id = cf_bundle_identifier(app)
+    if (
+        entitlements_arg == "production"
+        and is_oasis_browser_bundle(bundle_id)
+        and os.path.basename(entitlement_file) == "oasis.browser.xml"
+    ):
+        team_id = oasis_signing_team_id()
+        if team_id:
+            patched = patch_oasis_application_identifier(
+                entitlement_file, bundle_id, team_id
+            )
+            if patched != entitlement_file:
+                temp_files_to_cleanup.append(patched)
+                entitlement_file = patched
+
+    if entitlements_arg == "production-without-restricted":
+        stripped = strip_restricted_entitlements(entitlement_file)
+        if stripped != entitlement_file:
+            temp_files_to_cleanup.append(stripped)
+        entitlement_file = stripped
+
+    return entitlement_file, temp_files_to_cleanup
 
 
 def entitlement_repo_path(entitlements_key, entitlement_file):
@@ -470,7 +529,7 @@ def auto_detect_channel(ctx, app):
         return "devedition"
     elif bundleid == RELEASE_BUNDLEID:
         return "release"
-    elif bundleid == OASIS_BUNDLEID:
+    elif is_oasis_browser_bundle(bundleid):
         return "release"
     else:
         # Couldn't determine the channel from <info_plist>.
@@ -552,21 +611,11 @@ def sign_with_codesign(
                 else:
                     raise ("Unexpected channel")
 
-            # Get a path to the entitlement file in the repo
-            entitlement_file = remap_entitlements_for_oasis_browser(
-                app, entitlements_key, entitlement_file
+            entitlement_file, extra_temp_files = prepare_entitlement_file(
+                app, entitlements_arg, entitlements_key, entitlement_file
             )
-            entitlement_file = entitlement_repo_path(entitlements_key, entitlement_file)
-
-            # We now have an entitlement file for this signing group.
-            # If we are signing using production-without-restricted, strip out
-            # restricted entitlements and save the result in a temporary file.
-            if entitlements_arg == "production-without-restricted":
-                temp_ent_file = strip_restricted_entitlements(entitlement_file)
-                temp_files_to_cleanup.append(temp_ent_file)
-                cs_cmd.append(temp_ent_file)
-            else:
-                cs_cmd.append(entitlement_file)
+            temp_files_to_cleanup.extend(extra_temp_files)
+            cs_cmd.append(entitlement_file)
 
         for pathglob in signing_group["globs"]:
             binary_paths = glob.glob(
@@ -692,18 +741,10 @@ def sign_with_rcodesign(
                 else:
                     raise ("Unexpected channel")
 
-            # Get a path to the entitlement file in the repo
-            entitlement_file = remap_entitlements_for_oasis_browser(
-                app, entitlements_key, entitlement_file
+            entitlement_file, extra_temp_files = prepare_entitlement_file(
+                app, entitlements_arg, entitlements_key, entitlement_file
             )
-            entitlement_file = entitlement_repo_path(entitlements_key, entitlement_file)
-
-            # We now have an entitlement file for this signing group.
-            # If we are signing using production-without-restricted, strip out
-            # restricted entitlements and save the result in a temporary file.
-            if entitlements_arg == "production-without-restricted":
-                entitlement_file = strip_restricted_entitlements(entitlement_file)
-                temp_files_to_cleanup.append(entitlement_file)
+            temp_files_to_cleanup.extend(extra_temp_files)
 
         for pathglob in signing_group["globs"]:
             binary_paths = glob.glob(

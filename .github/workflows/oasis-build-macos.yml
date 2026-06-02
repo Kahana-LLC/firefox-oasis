@@ -392,31 +392,38 @@ jobs:
             echo "Refusing to sign app with symlinks still present: ${PKG_APP}" >&2
             exit 1
           fi
+          OASIS_APPLE_TEAM_ID="${OASIS_APPLE_TEAM_ID:-NV6BDYHYA5}" \
           ./mach macos-sign \
             -a "${PKG_APP}" \
             -r \
             -f "${OASIS_APPLE_DEVELOPER_ID_P12_PATH}" \
             -p "${OASIS_APPLE_DEVELOPER_ID_P12_PASSWORD_FILE}" \
-            -e production \
+            -e production-without-restricted \
             -c release \
             -v
           codesign --verify --deep --strict --verbose=2 "${PKG_APP}"
 
-      - name: Verify passkey entitlement on signed app
+      - name: Verify signed app can launch on consumer Macs
         run: |
           set -euo pipefail
           EXECUTABLE_PATH="${{ steps.meta.outputs.executable_path }}"
           if [ -z "${EXECUTABLE_PATH}" ] || [ ! -f "${EXECUTABLE_PATH}" ]; then
-            echo "Missing executable for passkey entitlement check" >&2
+            echo "Missing executable for entitlement check" >&2
             exit 1
           fi
           ENTITLEMENTS="$(codesign -d --entitlements :- "${EXECUTABLE_PATH}" 2>/dev/null || true)"
-          if ! echo "${ENTITLEMENTS}" | grep -q 'com.apple.developer.web-browser.public-key-credential'; then
-            echo "com.apple.developer.web-browser.public-key-credential missing from signed app" >&2
+          if echo "${ENTITLEMENTS}" | grep -q 'com.apple.developer.web-browser.public-key-credential'; then
+            echo "Restricted passkey entitlement is present without a provisioning profile; AMFI will block launch." >&2
             echo "${ENTITLEMENTS}" >&2
             exit 1
           fi
-          echo "Passkey entitlement verified on ${EXECUTABLE_PATH}"
+          if echo "${ENTITLEMENTS}" | grep -q 'com.apple.application-identifier'; then
+            echo "Restricted application-identifier is present without a provisioning profile; AMFI will block launch." >&2
+            echo "${ENTITLEMENTS}" >&2
+            exit 1
+          fi
+          BUNDLE_ID="$(defaults read "${PKG_APP}/Contents/Info.plist" CFBundleIdentifier)"
+          echo "Distributable entitlements verified for bundle ${BUNDLE_ID} on ${EXECUTABLE_PATH}"
 
       - name: Prepare notary API key
         env:
