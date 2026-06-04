@@ -1,5 +1,4 @@
 name: Oasis Release Publish
-
 on:
   workflow_dispatch:
     inputs:
@@ -7,28 +6,34 @@ on:
         description: Existing release tag to run (vX.Y.Z.N)
         required: true
         type: string
-
 permissions:
   contents: write
-
 env:
   LOCALE: en-US
-
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - build_target: Darwin_aarch64-gcc3
+          # ── macOS builds (unchanged) ──────────────────────────────────────
+          - platform: macos
+            build_target: Darwin_aarch64-gcc3
             arch_slug: aarch64
             runner: macos-15
             objdir: obj-oasis-release-aarch64
-          - build_target: Darwin_x86_64-gcc3
+          - platform: macos
+            build_target: Darwin_x86_64-gcc3
             arch_slug: x86_64
             runner: macos-15-intel
             objdir: obj-oasis-release-x86_64
-    uses: ./.github/workflows/oasis-build-macos.yml
+          # ── Windows builds (new) ──────────────────────────────────────────
+          - platform: windows
+            build_target: WINNT_x86_64-msvc
+            arch_slug: x86_64
+            runner: windows-latest
+            objdir: obj-oasis-release-win-x86_64
+    uses: ${{ matrix.platform == 'windows' && './.github/workflows/oasis-build-windows.yml' || './.github/workflows/oasis-build-macos.yml' }}
     with:
       release_tag: ${{ inputs.release_tag }}
       build_target: ${{ matrix.build_target }}
@@ -38,21 +43,24 @@ jobs:
       update_channel: oasis-stable
       ring: oasis-stable
     secrets: inherit
-
   publish:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Download build artifacts
+      - name: Download macOS build artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: oasis-macos-*
           path: artifacts
           merge-multiple: false
-
+      - name: Download Windows build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oasis-windows-*
+          path: artifacts
+          merge-multiple: false
       - name: Stage artifacts for publish
         run: |
           set -euo pipefail
@@ -66,8 +74,14 @@ jobs:
             fi
             cp -a "${src}/." "${PUBLISH_DIR}/${arch_slug}/"
           done
+          mkdir -p "${PUBLISH_DIR}/windows-x86_64"
+          WIN_SRC="artifacts/oasis-windows-x86_64"
+          if [ ! -d "${WIN_SRC}" ]; then
+            echo "Missing downloaded artifact directory ${WIN_SRC}" >&2
+            exit 1
+          fi
+          cp -a "${WIN_SRC}/." "${PUBLISH_DIR}/windows-x86_64/"
           echo "PUBLISH_DIR=${PUBLISH_DIR}" >> "${GITHUB_ENV}"
-
       - name: Create versioned GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

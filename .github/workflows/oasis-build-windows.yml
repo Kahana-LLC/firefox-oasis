@@ -1,0 +1,306 @@
+name: Oasis Windows Build
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+      build_target:
+        required: true
+        type: string
+      arch_slug:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+      objdir:
+        required: true
+        type: string
+      update_channel:
+        required: true
+        type: string
+      ring:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PRODUCT: Firefox
+  LOCALE: en-US
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    environment: canary-signing
+    env:
+      OBJDIR: ${{ inputs.objdir }}
+      BUILD_TARGET: ${{ inputs.build_target }}
+      ARCH_SLUG: ${{ inputs.arch_slug }}
+      RING: ${{ inputs.ring }}
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ format('refs/tags/{0}', inputs.release_tag) }}
+
+      - name: Resolve version from tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.release_tag }}"
+          if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+){3}$ ]]; then
+            echo "Tag must match vX.Y.Z.N (numeric dot notation)." >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "${VERSION}" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+            echo "Version must match X.Y.Z.N (numeric dot notation)." >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Export build overrides
+        env:
+          OASIS_UPDATE_SERVICE_URL: ${{ secrets.OASIS_UPDATE_SERVICE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${OASIS_UPDATE_SERVICE_URL:-}" ]; then
+            echo "Missing OASIS_UPDATE_SERVICE_URL for build overrides." >&2
+            exit 1
+          fi
+          VERSION="${{ steps.version.outputs.version }}"
+          UPDATE_URL="${OASIS_UPDATE_SERVICE_URL%/}/update/6/%PRODUCT%/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%SYSTEM_CAPABILITIES%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml"
+          echo "OASIS_APP_VERSION=${VERSION}" >> "${GITHUB_ENV}"
+          echo "OASIS_APP_VERSION_DISPLAY=${VERSION}" >> "${GITHUB_ENV}"
+          echo "MOZ_APPUPDATE_URL=${UPDATE_URL}" >> "${GITHUB_ENV}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            browser/base/content/assistant/build/package-lock.json
+            browser/base/content/assistant/ui-preact/package-lock.json
+
+      - name: Build assistant bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix browser/base/content/assistant/ui-preact
+          npm run build --prefix browser/base/content/assistant/ui-preact
+          npm ci --prefix browser/base/content/assistant/build
+          npm run test:search-history --prefix browser/base/content/assistant/build
+          npm run build --prefix browser/base/content/assistant/build
+
+      - name: Verify Oasis branding icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./browser/branding/custom/verify_branding_icons.sh
+
+      - name: Create CI mozconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          CI_MOZCONFIG="${RUNNER_TEMP}/mozconfig-oasis-build"
+          cat > "${CI_MOZCONFIG}" <<EOF
+          mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/${{ inputs.objdir }}
+          ac_add_options --enable-application=browser
+          ac_add_options --with-branding=browser/branding/custom
+          ac_add_options --enable-release
+          ac_add_options --disable-debug
+          ac_add_options --enable-optimize
+          ac_add_options --disable-crashreporter
+          ac_add_options --enable-updater
+          ac_add_options --enable-update-channel=${{ inputs.update_channel }}
+          export MOZ_PKG_APPNAME=oasis
+          export MOZ_INCLUDE_SOURCE_INFO=
+          export MOZ_DISABLE_SOURCE_INFO=1
+          EOF
+          echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
+
+      - name: Build and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset MOZ_AUTOMATION
+          ./mach build
+          # mach package builds the NSIS installer and copies the final .exe
+          # to dist/ as firefox-<version>.en-US.win64.installer.exe
+          python3 mach package
+
+          # Locate the installer .exe produced by mach package
+          INSTALLER_SRC="$(find "${OBJDIR}/dist" -maxdepth 1 -name '*.installer.exe' | head -n1)"
+          if [ -z "${INSTALLER_SRC}" ] || [ ! -f "${INSTALLER_SRC}" ]; then
+            echo "Windows installer .exe not found under ${OBJDIR}/dist" >&2
+            echo "Contents of ${OBJDIR}/dist:" >&2
+            find "${OBJDIR}/dist" -maxdepth 1 -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          VERSION="${{ steps.version.outputs.version }}"
+          WIN_INSTALLER_NAME="oasis-${VERSION}-${ARCH_SLUG}-setup.exe"
+          WIN_INSTALLER_PATH="${OBJDIR}/dist/${WIN_INSTALLER_NAME}"
+          cp "${INSTALLER_SRC}" "${WIN_INSTALLER_PATH}"
+
+          # Also capture the unpackaged app dir for MAR building
+          PACKAGE=$(python3 mach python -c "
+          import subprocess, os
+          result = subprocess.run(
+              ['make', '-s', '-C', os.path.join(os.environ['OBJDIR'], 'browser/installer'), 'echo-variable-PACKAGE'],
+              capture_output=True, text=True
+          )
+          print(result.stdout.strip())
+          " 2>/dev/null || find "${OBJDIR}/dist" -maxdepth 1 -name '*.win64.zip' | head -n1 | xargs basename)
+          PKG_PATH="${OBJDIR}/dist/${PACKAGE}"
+
+          echo "WIN_INSTALLER_PATH=${WIN_INSTALLER_PATH}" >> "${GITHUB_ENV}"
+          echo "WIN_INSTALLER_NAME=${WIN_INSTALLER_NAME}" >> "${GITHUB_ENV}"
+          echo "PKG_PATH=${PKG_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Verify staged version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          # Read build ID from application.ini inside the staged package
+          APP_INI="$(find "${OBJDIR}/dist" -name application.ini | head -n1)"
+          if [ -z "${APP_INI}" ]; then
+            echo "Could not find application.ini under ${OBJDIR}/dist" >&2
+            exit 1
+          fi
+          BUILD_ID="$(awk -F= '/^BuildID=/{print $2}' "${APP_INI}")"
+          STAGED_VERSION="$(awk -F= '/^Version=/{print $2}' "${APP_INI}")"
+          if [ "${STAGED_VERSION}" != "${VERSION}" ]; then
+            echo "Staged version mismatch: expected ${VERSION}, got ${STAGED_VERSION}" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "build_id=${BUILD_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sign Windows installer (Azure Artifact Signing)
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-list: ${{ env.WIN_INSTALLER_PATH }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows installer is signed
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature -FilePath "$env:WIN_INSTALLER_PATH"
+          if ($sig.Status -ne "Valid") {
+            Write-Error "Installer signature status: $($sig.Status). Signing failed."
+            exit 1
+          }
+          Write-Output "Signature valid. Subject: $($sig.SignerCertificate.Subject)"
+
+      - name: Check updater cert material
+        env:
+          ALLOW_DEV_OASIS_CERTS: ${{ vars.ALLOW_DEV_OASIS_CERTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/update-signing/check-oasis-cert-material.sh
+
+      - name: Build complete MAR
+        id: mar
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ci/oasis-release-names.sh
+          VERSION="${{ steps.meta.outputs.version }}"
+          UPDATE_DIR="${OBJDIR}/dist/update"
+          mkdir -p "${UPDATE_DIR}"
+          UNSIGNED_MAR="${UPDATE_DIR}/oasis-${VERSION}-${BUILD_TARGET}-${LOCALE}.complete.mar"
+          SIGNED_MAR="${UPDATE_DIR}/$(oasis_mar_name "${VERSION}" "${BUILD_TARGET}" "${LOCALE}")"
+          scripts/update-signing/build-complete-mar.sh \
+            "${OBJDIR}" \
+            "${PKG_PATH}" \
+            "${UNSIGNED_MAR}" \
+            "${VERSION}" \
+            "${RING}"
+          echo "unsigned_mar=${UNSIGNED_MAR}" >> "${GITHUB_OUTPUT}"
+          echo "signed_mar=${SIGNED_MAR}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sign and verify MAR
+        env:
+          OASIS_MAR_SIGNING_CERT_NICKNAME: ${{ secrets.OASIS_MAR_SIGNING_CERT_NICKNAME }}
+          OASIS_MAR_SIGNING_P12_B64: ${{ secrets.OASIS_MAR_SIGNING_P12_B64 }}
+          OASIS_MAR_SIGNING_P12_PASSWORD: ${{ secrets.OASIS_MAR_SIGNING_P12_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NSS_DB_DIR="${RUNNER_TEMP}/oasis-nssdb"
+          P12_PATH="${RUNNER_TEMP}/oasis-signing.p12"
+          mkdir -p "${NSS_DB_DIR}"
+          python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["OASIS_MAR_SIGNING_P12_B64"]))' > "${P12_PATH}"
+          "${OBJDIR}/dist/bin/certutil" -N -d "sql:${NSS_DB_DIR}" --empty-password
+          "${OBJDIR}/dist/bin/pk12util" -i "${P12_PATH}" -d "sql:${NSS_DB_DIR}" -W "${OASIS_MAR_SIGNING_P12_PASSWORD}"
+          scripts/update-signing/sign-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.unsigned_mar }}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            "${NSS_DB_DIR}" \
+            "${OASIS_MAR_SIGNING_CERT_NICKNAME}"
+          scripts/update-signing/verify-mar.sh \
+            "${OBJDIR}" \
+            "${{ steps.mar.outputs.signed_mar }}" \
+            toolkit/mozapps/update/updater/oasis_primary.der
+          rm -f "${P12_PATH}"
+          rm -rf "${NSS_DB_DIR}"
+
+      - name: Prepare release artifacts
+        id: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ci/oasis-release-names.sh
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD_ID="${{ steps.meta.outputs.build_id }}"
+          EXE_ASSET_NAME="${WIN_INSTALLER_NAME}"
+          MAR_ASSET_NAME="$(oasis_mar_name "${VERSION}" "${BUILD_TARGET}" "${LOCALE}")"
+          STAGING="${RUNNER_TEMP}/oasis-release-artifacts"
+          mkdir -p "${STAGING}"
+          cp "${WIN_INSTALLER_PATH}" "${STAGING}/${EXE_ASSET_NAME}"
+          cp "${{ steps.mar.outputs.signed_mar }}" "${STAGING}/${MAR_ASSET_NAME}"
+          export VERSION BUILD_ID BUILD_TARGET ARCH_SLUG EXE_ASSET_NAME MAR_ASSET_NAME STAGING
+          python3 <<'PY'
+          import json
+          import os
+
+          payload = {
+              "version": os.environ["VERSION"],
+              "build_id": os.environ["BUILD_ID"],
+              "build_target": os.environ["BUILD_TARGET"],
+              "arch_slug": os.environ["ARCH_SLUG"],
+              "exe_asset_name": os.environ["EXE_ASSET_NAME"],
+              "mar_asset_name": os.environ["MAR_ASSET_NAME"],
+          }
+          with open(os.path.join(os.environ["STAGING"], "meta.json"), "w", encoding="utf-8") as fh:
+              json.dump(payload, fh, indent=2)
+          PY
+          echo "staging_dir=${STAGING}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: oasis-windows-${{ inputs.arch_slug }}
+          path: ${{ steps.artifacts.outputs.staging_dir }}
+          retention-days: 7
