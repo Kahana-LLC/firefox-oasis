@@ -121,6 +121,7 @@ jobs:
           ac_add_options --disable-crashreporter
           ac_add_options --enable-updater
           ac_add_options --enable-update-channel=${{ inputs.update_channel }}
+          ac_add_options --enable-bootstrap=no-update
           export MOZ_PKG_APPNAME=oasis
           export MOZ_INCLUDE_SOURCE_INFO=
           export MOZ_DISABLE_SOURCE_INFO=1
