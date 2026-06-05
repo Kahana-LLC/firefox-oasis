@@ -127,6 +127,21 @@ jobs:
           EOF
           echo "MOZCONFIG=${CI_MOZCONFIG}" >> "${GITHUB_ENV}"
 
+      - name: Install MozillaBuild
+        shell: pwsh
+        run: |
+          $url = 'https://ftp.mozilla.org/pub/mozilla/libraries/win32/MozillaBuildSetup-Latest.exe'
+          $installer = "$env:RUNNER_TEMP\MozillaBuildSetup.exe"
+          Write-Output "Downloading MozillaBuild..."
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          Write-Output "Installing MozillaBuild..."
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+          if (-not (Test-Path 'C:\mozilla-build')) {
+            Write-Error 'MozillaBuild installation failed - C:\mozilla-build not found'
+            exit 1
+          }
+          Write-Output "MozillaBuild installed successfully"
+
       - name: Build and package
         shell: bash
         run: |
