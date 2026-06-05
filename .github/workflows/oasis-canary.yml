@@ -14,29 +14,20 @@ env:
   LOCALE: en-US
   RING: oasis-canary
 jobs:
-  build:
+  build-macos:
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── macOS builds (unchanged) ──────────────────────────────────────
-          - platform: macos
-            build_target: Darwin_aarch64-gcc3
+          - build_target: Darwin_aarch64-gcc3
             arch_slug: aarch64
             runner: macos-15
             objdir: obj-oasis-canary-aarch64
-          - platform: macos
-            build_target: Darwin_x86_64-gcc3
+          - build_target: Darwin_x86_64-gcc3
             arch_slug: x86_64
             runner: macos-15-intel
             objdir: obj-oasis-canary-x86_64
-          # ── Windows builds (new) ──────────────────────────────────────────
-          - platform: windows
-            build_target: WINNT_x86_64-msvc
-            arch_slug: x86_64
-            runner: windows-latest
-            objdir: obj-oasis-canary-win-x86_64
-    uses: ${{ matrix.platform == 'windows' && './.github/workflows/oasis-build-windows.yml' || './.github/workflows/oasis-build-macos.yml' }}
+    uses: ./.github/workflows/oasis-build-macos.yml
     with:
       release_tag: ${{ inputs.release_tag }}
       build_target: ${{ matrix.build_target }}
@@ -46,14 +37,35 @@ jobs:
       update_channel: oasis-canary
       ring: oasis-canary
     secrets: inherit
+
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build_target: WINNT_x86_64-msvc
+            arch_slug: x86_64
+            runner: windows-latest
+            objdir: obj-oasis-canary-win-x86_64
+    uses: ./.github/workflows/oasis-build-windows.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      build_target: ${{ matrix.build_target }}
+      arch_slug: ${{ matrix.arch_slug }}
+      runner: ${{ matrix.runner }}
+      objdir: ${{ matrix.objdir }}
+      update_channel: oasis-canary
+      ring: oasis-canary
+    secrets: inherit
+
   publish:
-    needs: build
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     environment: canary-signing
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Download build artifacts
+      - name: Download macOS build artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: oasis-macos-*
@@ -78,7 +90,6 @@ jobs:
             fi
             cp -a "${src}/." "${PUBLISH_DIR}/${arch_slug}/"
           done
-          # Stage Windows artifacts into a dedicated subdir
           mkdir -p "${PUBLISH_DIR}/windows-x86_64"
           WIN_SRC="artifacts/oasis-windows-x86_64"
           if [ ! -d "${WIN_SRC}" ]; then
