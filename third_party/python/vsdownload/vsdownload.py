@@ -696,29 +696,7 @@ def unpackWin10SDK(src, payloads, dest):
             else:
                 cmd = ["msiextract", "-C", dest, srcfile]
             with open(os.path.join(dest, "WinSDK-" + getPayloadName(payload) + "-listing.txt"), "w") as log:
-                if sys.platform == "win32":
-                    try:
-                        subprocess.check_call(cmd, stdout=log)
-                    except subprocess.CalledProcessError:
-                        # msiexec /a (administrative install) fails on restricted
-                        # environments (e.g. GitHub Actions runners) with exit code
-                        # 1603. Fall back to msiextract which is available in
-                        # MozillaBuild and works without elevated privileges.
-                        import shutil
-                        msiextract = shutil.which("msiextract")
-                        if not msiextract:
-                            # Try MozillaBuild path directly
-                            mb = os.environ.get("MOZILLABUILD", "C:\\mozilla-build")
-                            candidate = os.path.join(mb, "msys2", "usr", "bin", "msiextract.exe")
-                            if os.path.exists(candidate):
-                                msiextract = candidate
-                        if msiextract:
-                            fallback_cmd = [msiextract, "-C", dest, srcfile]
-                            subprocess.check_call(fallback_cmd, stdout=log)
-                        else:
-                            raise
-                else:
-                    subprocess.check_call(cmd, stdout=log)
+                subprocess.check_call(cmd, stdout=log)
 
 def unpackWin10WDK(src, dest):
     print("Unpacking WDK installers from", src)
