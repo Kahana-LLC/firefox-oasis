@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Skip on Windows — script uses Unix tools (ImageMagick etc) not available on Windows runner
+          # Skip on Windows — script uses macOS-only sips tool
           echo "Skipping branding icon verification on Windows runner"
 
       - name: Create CI mozconfig
@@ -121,7 +121,6 @@ jobs:
           ac_add_options --disable-crashreporter
           ac_add_options --enable-updater
           ac_add_options --enable-update-channel=${{ inputs.update_channel }}
-          ac_add_options --enable-bootstrap=no-update
           export MOZ_PKG_APPNAME=oasis
           export MOZ_INCLUDE_SOURCE_INFO=
           export MOZ_DISABLE_SOURCE_INFO=1
@@ -143,21 +142,26 @@ jobs:
           }
           Write-Output "MozillaBuild installed successfully"
 
-      - name: Enable admin privileges for msiexec
+      - name: Patch vsdownload to use lessmsi instead of msiexec
         shell: pwsh
         run: |
-          # mach's get_vs.py uses msiexec /a (administrative install) which needs
-          # the runner to be running as a local admin with UAC disabled for scripts.
-          # GitHub Windows runners run as runneradmin but UAC blocks msiexec /a.
-          # Disable UAC for the duration of the build.
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
-            -Name "EnableLUA" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
-            -Name "ConsentPromptBehaviorAdmin" -Value 0 -Force
-          # Enable long paths (required for Firefox build)
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
-            -Name "LongPathsEnabled" -Value 1 -Force
-          Write-Output "Admin privileges configured for build"
+          # GitHub runners block msiexec /a (admin installs) with error 1603.
+          # Install lessmsi which extracts MSI contents without admin rights.
+          pip install lessmsi --quiet
+
+          $vsdownload = "third_party/python/vsdownload/vsdownload.py"
+          $content = [System.IO.File]::ReadAllText((Resolve-Path $vsdownload))
+
+          if ($content -notmatch "lessmsi") {
+            # Find the exact line and replace it with try/except + lessmsi fallback
+            $oldStr = "    subprocess.check_call(cmd, stdout=log)`n"
+            $newStr = "    try:`n        subprocess.check_call(cmd, stdout=log)`n    except subprocess.CalledProcessError:`n        msi_path = next(a for a in cmd if a.endswith('.msi'))`n        lessmsi_cmd = ['lessmsi', 'x', msi_path, dest + '\\'`n        subprocess.check_call(lessmsi_cmd, stdout=log)`n"
+            $content = $content.Replace($oldStr, $newStr)
+            [System.IO.File]::WriteAllText((Resolve-Path $vsdownload), $content)
+            Write-Output "Patched vsdownload.py to use lessmsi"
+          } else {
+            Write-Output "vsdownload.py already patched"
+          }
 
       - name: Build and package
         shell: bash
@@ -183,15 +187,8 @@ jobs:
           WIN_INSTALLER_PATH="${OBJDIR}/dist/${WIN_INSTALLER_NAME}"
           cp "${INSTALLER_SRC}" "${WIN_INSTALLER_PATH}"
 
-          # Also capture the unpackaged app dir for MAR building
-          PACKAGE=$(python3 mach python -c "
-          import subprocess, os
-          result = subprocess.run(
-              ['make', '-s', '-C', os.path.join(os.environ['OBJDIR'], 'browser/installer'), 'echo-variable-PACKAGE'],
-              capture_output=True, text=True
-          )
-          print(result.stdout.strip())
-          " 2>/dev/null || find "${OBJDIR}/dist" -maxdepth 1 -name '*.win64.zip' | head -n1 | xargs basename)
+          # Capture the zip package path for MAR building
+          PACKAGE=$(find "${OBJDIR}/dist" -maxdepth 1 -name '*.win64.zip' | head -n1 | xargs basename 2>/dev/null || true)
           PKG_PATH="${OBJDIR}/dist/${PACKAGE}"
 
           echo "WIN_INSTALLER_PATH=${WIN_INSTALLER_PATH}" >> "${GITHUB_ENV}"
@@ -204,7 +201,6 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          # Read build ID from application.ini inside the staged package
           APP_INI="$(find "${OBJDIR}/dist" -name application.ini | head -n1)"
           if [ -z "${APP_INI}" ]; then
             echo "Could not find application.ini under ${OBJDIR}/dist" >&2
