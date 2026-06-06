@@ -1490,32 +1490,18 @@
     sha256: 78F246955EDC54FF899C889965D57A025B85BCA17FE379192072DC0372F785F3
     size: 1814528
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/724285b1d09a37d6b34043a57ae751bb/winappdeploy-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit Native Components-x64_en-us.msi
-    sha256: BE5EDDF2B5B4FEB0A6EFADDE20D105292D82DEEBC43CFC27F4693F86675979D6
     size: 512000
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/a96ea10c120dcf10798771220d52f294/windows%20app%20certification%20kit%20native%20components-x64_en-us.msi
-  - fileName: Installers\Windows App Certification Kit Native Components-x86_en-us.msi
-    sha256: D4124741847D7081E251C18DA288B661671681FF30ECA2B6CAAFFA03AECB9524
     size: 512000
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/61602bd0e2dea7534cd3a2e177e7d80e/windows%20app%20certification%20kit%20native%20components-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit SupportedApiList x86-x86_en-us.msi
-    sha256: 00357A35F0B55BE7EEB3D1BD6DFB6EA4BD180A50DE151C339D26303AE3C6280D
     size: 450560
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/7bdb723afa51fa8d0c1a84921508e9c1/windows%20app%20certification%20kit%20supportedapilist%20x86-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit x64 (OnecoreUAP)-x86_en-us.msi
-    sha256: 0A7F555D8620A7CF87799C5A488D1F80BD98F386AAB7747BF69D31C9E0E178F6
     size: 462848
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/dd0abc4fbcc43959dded9690bff9c7b6/windows%20app%20certification%20kit%20x64%20%28onecoreuap%29-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit x64-x86_en-us.msi
-    sha256: C3EB3159FA2656ADCD0506F62A49CC150E9D36ED23FE8519B154394FFE3668E5
     size: 581632
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/2d68ea3a8b7705b6f3e95b6b65d68a35/windows%20app%20certification%20kit%20x64-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit x86 (OnecoreUAP)-x86_en-us.msi
-    sha256: 107A4AB6D62A91561000CBDC0F774DA3AF458A92A386AB2ACCF329340A586064
     size: 462848
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/a1cfddef6ae576c677c97edfce1e0dd6/windows%20app%20certification%20kit%20x86%20%28onecoreuap%29-x86_en-us.msi
-  - fileName: Installers\Windows App Certification Kit x86-x86_en-us.msi
-    sha256: 54F4B652673CA6D7E7FB9502A0288EABFE9FE39541B3568F94C62D93D761BD11
     size: 581632
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/157ebb2b89c14b26663f9600db475d87/windows%20app%20certification%20kit%20x86-x86_en-us.msi
   - fileName: Installers\Windows Desktop Extension SDK-x86_en-us.msi
