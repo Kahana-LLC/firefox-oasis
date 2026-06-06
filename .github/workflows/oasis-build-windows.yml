@@ -143,6 +143,22 @@ jobs:
           }
           Write-Output "MozillaBuild installed successfully"
 
+      - name: Enable admin privileges for msiexec
+        shell: pwsh
+        run: |
+          # mach's get_vs.py uses msiexec /a (administrative install) which needs
+          # the runner to be running as a local admin with UAC disabled for scripts.
+          # GitHub Windows runners run as runneradmin but UAC blocks msiexec /a.
+          # Disable UAC for the duration of the build.
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+            -Name "EnableLUA" -Value 0 -Force
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+            -Name "ConsentPromptBehaviorAdmin" -Value 0 -Force
+          # Enable long paths (required for Firefox build)
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -Force
+          Write-Output "Admin privileges configured for build"
+
       - name: Build and package
         shell: bash
         run: |
