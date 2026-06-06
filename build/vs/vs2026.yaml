@@ -1210,28 +1210,16 @@
     sha256: 76897747671F39089F475E87496A30E1159DC82BF88C9BF00806D5244DC7E2A4
     size: 20872
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/ffe31b2a06fd6ee151ab3bc6f6acca02/ac4ddfcf1101c483559a5f6e36f1ef2d.cab
-  - fileName: Installers\Application Verifier arm64 External Package (DesktopEditions)-arm64_en-us.msi
-    sha256: 376A844D0C9A3C44C2582E0D06B77F302CCF79C9AB9F2187D338AF602E30B83B
     size: 593920
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/197ae68a108a2198e043a486d683045d/application%20verifier%20arm64%20external%20package%20%28desktopeditions%29-arm64_en-us.msi
-  - fileName: Installers\Application Verifier arm64 External Package (OnecoreUAP)-arm64_en-us.msi
-    sha256: 7A35ACC6C24482823D0425393D9BCE66EED8BFA2D2F590B0BE5DC1DE750A3C28
     size: 1626112
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/c3f9b02f30362abe3ca45962517e7baa/application%20verifier%20arm64%20external%20package%20%28onecoreuap%29-arm64_en-us.msi
-  - fileName: Installers\Application Verifier x64 External Package (DesktopEditions)-x64_en-us.msi
-    sha256: D01BB8DE83BCA3DE0210C9320AFCD5765F2EC3D6853614EC73A3465AAA873853
     size: 688128
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/5ab10c8d09de9719fb6df58c90b8fc08/application%20verifier%20x64%20external%20package%20%28desktopeditions%29-x64_en-us.msi
-  - fileName: Installers\Application Verifier x64 External Package (OnecoreUAP)-x64_en-us.msi
-    sha256: 73FC224101C92BF78A5C30C365FF6A2D5D4FE346591337649C2E72A38E935BE7
     size: 2424832
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/aecb5c217d971220063c438db117e0f5/application%20verifier%20x64%20external%20package%20%28onecoreuap%29-x64_en-us.msi
-  - fileName: Installers\Application Verifier x86 External Package (DesktopEditions)-x86_en-us.msi
-    sha256: 4071DE13BC767A348BE457D8548A89C644E1367E0E40F83F96D2EF9E86A9D273
     size: 565248
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/974d524f5b9323ac00c6846eb0d923ba/application%20verifier%20x86%20external%20package%20%28desktopeditions%29-x86_en-us.msi
-  - fileName: Installers\Application Verifier x86 External Package (OnecoreUAP)-x86_en-us.msi
-    sha256: 34ED72604EBE9AFE46FCC3BBEB4CC11274D24E9888BBE98C9B7561CC4EB582D2
     size: 1335296
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/6bf2e72ed2ba277dcbbeabc1e99404f8/application%20verifier%20x86%20external%20package%20%28onecoreuap%29-x86_en-us.msi
   - fileName: Installers\b0656253ef2f688d2982eafa2e73f621.cab
@@ -1438,24 +1426,14 @@
     sha256: 62B4EDE368FC3049E38994A7DE1D74B5083BDC3CE16D24C971CA11C5B4DF30FC
     size: 446464
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/1349720da452dfef5673c437cd89ee20/kits%20configuration%20installer-x86_en-us.msi
-  - fileName: Installers\MSI Development Tools-x86_en-us.msi
-    sha256: 4C9DD9E03B8076209E6ADD405175EC89E91043EBAA09E9C544417E6BD944426B
     size: 450560
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/e49397f7ace5f3c7a60d84170c1c80a0/msi%20development%20tools-x86_en-us.msi
-  - fileName: Installers\MsiVal2-x86_en-us.msi
-    sha256: 0BC3B5FFF2982B04FDBBBDDE62B4E641AC4DA9B0F2328863C97BAADBCF311521
     size: 655360
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/8766e126bd7ee07be54b1e2e64b2fdad/msival2-x86_en-us.msi
-  - fileName: Installers\Orca-x86_en-us.msi
-    sha256: 13F259DC3ADF470CAB6109816A54F8CA48C02A5D144523219BF1D287B78636E8
     size: 655360
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/def731ddabb5922ff3368fc942789228/orca-x86_en-us.msi
-  - fileName: Installers\SDK ARM64 Additions-x86_en-us.msi
-    sha256: D62ECF71CCBB67C3ECD4D81B9BBCA7B77FC281DAC3432FA9D84EE2C40AB449BB
     size: 446464
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/489591c14f1889a5a5fa19de34a83493/sdk%20arm64%20additions-x86_en-us.msi
-  - fileName: Installers\SDK ARM64 Redistributables-x86_en-us.msi
-    sha256: 789238A5B1590BCF14507937A1A93A72F050F4F68E58D61DCEC844DC025C2968
     size: 446464
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/cd49d0d6f945382494ba7ba863c9f77d/sdk%20arm64%20redistributables-x86_en-us.msi
   - fileName: Installers\Universal CRT Extension SDK-x86_en-us.msi
@@ -1482,8 +1460,6 @@
     sha256: 8C31FF97074EB1DB98ECF1E7CC60E14433D075A905D22A87040E3C761F889AB9
     size: 450560
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/1cd541a8b94d78e7cb9b674502a99aee/universal%20crt%20tools%20x86-x86_en-us.msi
-  - fileName: Installers\Universal General MIDI DLS Extension SDK-x86_en-us.msi
-    sha256: 54FC0AE795502E10D4F46731D1263C588BEC758EC0DA407D6047140231F199D2
     size: 450560
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/5545d9c4f67a1e14c32dba7c0140daba/universal%20general%20midi%20dls%20extension%20sdk-x86_en-us.msi
     size: 1814528
@@ -1870,16 +1846,10 @@
     sha256: E3AC8E20A9D56208E5B451EDE2704AD85C3CD78624546E95E9DBE8A58EFC64AC
     size: 2266544
     url: https://download.visualstudio.microsoft.com/download/pr/5eeaf3c7-015f-442c-8d63-aea17e5e6aef/13c5812eef5f93d41808e4ae0de889e8/6d946492af1c4bd35fcc60ab2057db4a.cab
-  - fileName: Installers\SDK Debuggers-x86_en-us.msi
-    sha256: 263EA5A2E64E3DB5B5C60F0DDDD4EB9C708B60137C7980FF13E7D590F5DA7141
     size: 606208
     url: https://download.visualstudio.microsoft.com/download/pr/5eeaf3c7-015f-442c-8d63-aea17e5e6aef/e8e98df3eab5cb652127edce12f2a0af/sdk%20debuggers-x86_en-us.msi
-  - fileName: Installers\X86 Debuggers And Tools-x86_en-us.msi
-    sha256: D02E3641850A87E0ED5D2D3C17A489542479542E8110FBCA69E9C3A6F906BBF4
     size: 28200960
     url: https://download.visualstudio.microsoft.com/download/pr/5eeaf3c7-015f-442c-8d63-aea17e5e6aef/5b4c6bed7592095d8aa290154b243ad4/x86%20debuggers%20and%20tools-x86_en-us.msi
-  - fileName: Installers\X64 Debuggers And Tools-x64_en-us.msi
-    sha256: E9EDA93064502A6998DC94C85484B2E46E7C0781041653C28407DF9B6CF4A22D
     size: 32108544
     url: https://download.visualstudio.microsoft.com/download/pr/5eeaf3c7-015f-442c-8d63-aea17e5e6aef/683c3ee73ff9a0e0f4299856e007d278/x64%20debuggers%20and%20tools-x64_en-us.msi
   type: Exe
