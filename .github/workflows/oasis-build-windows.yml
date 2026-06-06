@@ -142,27 +142,6 @@ jobs:
           }
           Write-Output "MozillaBuild installed successfully"
 
-      - name: Patch vsdownload to use lessmsi instead of msiexec
-        shell: pwsh
-        run: |
-          # GitHub runners block msiexec /a (admin installs) with error 1603.
-          # Install lessmsi which extracts MSI contents without admin rights.
-          pip install lessmsi --quiet
-
-          $vsdownload = "third_party/python/vsdownload/vsdownload.py"
-          $content = [System.IO.File]::ReadAllText((Resolve-Path $vsdownload))
-
-          if ($content -notmatch "lessmsi") {
-            # Find the exact line and replace it with try/except + lessmsi fallback
-            $oldStr = "    subprocess.check_call(cmd, stdout=log)`n"
-            $newStr = "    try:`n        subprocess.check_call(cmd, stdout=log)`n    except subprocess.CalledProcessError:`n        msi_path = next(a for a in cmd if a.endswith('.msi'))`n        lessmsi_cmd = ['lessmsi', 'x', msi_path, dest + '\\'`n        subprocess.check_call(lessmsi_cmd, stdout=log)`n"
-            $content = $content.Replace($oldStr, $newStr)
-            [System.IO.File]::WriteAllText((Resolve-Path $vsdownload), $content)
-            Write-Output "Patched vsdownload.py to use lessmsi"
-          } else {
-            Write-Output "vsdownload.py already patched"
-          }
-
       - name: Build and package
         shell: bash
         run: |
