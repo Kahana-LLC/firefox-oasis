@@ -696,7 +696,24 @@ def unpackWin10SDK(src, payloads, dest):
             else:
                 cmd = ["msiextract", "-C", dest, srcfile]
             with open(os.path.join(dest, "WinSDK-" + getPayloadName(payload) + "-listing.txt"), "w") as log:
-                subprocess.check_call(cmd, stdout=log)
+                if sys.platform == "win32":
+                    try:
+                        subprocess.check_call(cmd, stdout=log)
+                    except subprocess.CalledProcessError:
+                        # msiexec /a (administrative install) fails on restricted
+                        # environments (e.g. GitHub Actions runners) with exit code
+                        # 1603. Fall back to extracting the MSI as a ZIP archive,
+                        # which works without elevated privileges.
+                        import zipfile, os as _os
+                        abs_dest = _os.path.abspath(dest)
+                        try:
+                            with zipfile.ZipFile(srcfile, "r") as z:
+                                z.extractall(abs_dest)
+                        except zipfile.BadZipFile:
+                            # Not a ZIP-compatible MSI, re-raise original error
+                            subprocess.check_call(cmd, stdout=log)
+                else:
+                    subprocess.check_call(cmd, stdout=log)
 
 def unpackWin10WDK(src, dest):
     print("Unpacking WDK installers from", src)
