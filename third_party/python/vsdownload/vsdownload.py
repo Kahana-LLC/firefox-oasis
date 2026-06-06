@@ -702,16 +702,21 @@ def unpackWin10SDK(src, payloads, dest):
                     except subprocess.CalledProcessError:
                         # msiexec /a (administrative install) fails on restricted
                         # environments (e.g. GitHub Actions runners) with exit code
-                        # 1603. Fall back to extracting the MSI as a ZIP archive,
-                        # which works without elevated privileges.
-                        import zipfile, os as _os
-                        abs_dest = _os.path.abspath(dest)
-                        try:
-                            with zipfile.ZipFile(srcfile, "r") as z:
-                                z.extractall(abs_dest)
-                        except zipfile.BadZipFile:
-                            # Not a ZIP-compatible MSI, re-raise original error
-                            subprocess.check_call(cmd, stdout=log)
+                        # 1603. Fall back to msiextract which is available in
+                        # MozillaBuild and works without elevated privileges.
+                        import shutil
+                        msiextract = shutil.which("msiextract")
+                        if not msiextract:
+                            # Try MozillaBuild path directly
+                            mb = os.environ.get("MOZILLABUILD", "C:\\mozilla-build")
+                            candidate = os.path.join(mb, "msys2", "usr", "bin", "msiextract.exe")
+                            if os.path.exists(candidate):
+                                msiextract = candidate
+                        if msiextract:
+                            fallback_cmd = [msiextract, "-C", dest, srcfile]
+                            subprocess.check_call(fallback_cmd, stdout=log)
+                        else:
+                            raise
                 else:
                     subprocess.check_call(cmd, stdout=log)
 
