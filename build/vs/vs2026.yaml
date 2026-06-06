@@ -1486,8 +1486,6 @@
     sha256: 54FC0AE795502E10D4F46731D1263C588BEC758EC0DA407D6047140231F199D2
     size: 450560
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/5545d9c4f67a1e14c32dba7c0140daba/universal%20general%20midi%20dls%20extension%20sdk-x86_en-us.msi
-  - fileName: Installers\WinAppDeploy-x86_en-us.msi
-    sha256: 78F246955EDC54FF899C889965D57A025B85BCA17FE379192072DC0372F785F3
     size: 1814528
     url: https://download.visualstudio.microsoft.com/download/pr/3afa4e72-d57a-4ebb-93c5-e7962e7b633b/724285b1d09a37d6b34043a57ae751bb/winappdeploy-x86_en-us.msi
     size: 512000
