@@ -8,6 +8,7 @@ export type ResearchBriefResumeReason = "ambiguous_group" | "over_quota";
 export type ResearchBriefResumeContext = {
   args: InteractionCommandArgs;
   reason: ResearchBriefResumeReason;
+  command?: string;
 };
 
 let resumeContext: ResearchBriefResumeContext | null = null;
@@ -20,6 +21,10 @@ export function setResearchBriefResume(
 
 export function getResearchBriefResume(): ResearchBriefResumeContext | null {
   return resumeContext;
+}
+
+export function peekResearchBriefResumeCommand(): string {
+  return resumeContext?.command || "build_research_brief";
 }
 
 export function clearResearchBriefResume(): void {

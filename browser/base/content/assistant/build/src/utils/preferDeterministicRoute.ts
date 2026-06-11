@@ -1,3 +1,4 @@
+import { extractHistorySearchKeyword } from "./historyQueryExtract.js";
 import {
   looksLikeHistoryKeywordSearch,
   parseHistorySearchQuery,
@@ -30,12 +31,20 @@ export function tryPreferDeterministicToolRoute(
 
   if (route.next === "search_history") {
     const parsed = parseHistorySearchQuery(input);
+    const routeQuery =
+      typeof route.args?.query === "string" ? route.args.query.trim() : "";
+    const extracted = extractHistorySearchKeyword(input);
+    const resolvedQuery =
+      parsed?.query ||
+      (extracted && (!routeQuery || routeQuery.split(/\s+/).length > 6)
+        ? extracted
+        : routeQuery);
     if (parsed?.mode === "keyword" || looksLikeHistoryKeywordSearch(input)) {
       return {
         next: "search_history",
         args: {
           ...route.args,
-          query: parsed?.query ?? route.args?.query,
+          query: resolvedQuery,
           mode: "keyword",
           utterance: input,
         },

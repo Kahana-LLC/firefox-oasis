@@ -8,8 +8,14 @@ import {
 } from "../prompts/organizeTabsPrompt.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
+import { assistWithOutputValidationRetry } from "../utils/assistOutputRetry.js";
+import { validateOrganizeTabsPlan } from "../utils/outputValidators.js";
 import { throwIfResearchBriefAborted } from "../utils/researchBriefProgress.js";
 import { extractPageContentFromTab } from "./pageContentExtract.js";
+import {
+  sanitizeTabCatalog,
+  sanitizeUntrustedMetadata,
+} from "../utils/untrustedContent.js";
 import {
   previewResearchBriefScope,
   type BuildResearchBriefOptions,
@@ -194,7 +200,7 @@ export function previewOrganizeTabsScope(
   return resolved;
 }
 
-function attachWindowIndices(
+export function attachWindowIndices(
   gBrowser: GBrowserLike | null | undefined,
   tabs: BrowserTabLike[]
 ): TabDescriptorWithIndex[] {
@@ -219,13 +225,13 @@ export function buildTabCatalog(
     domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
   }
 
-  return descriptors
+  const catalog = descriptors
     .filter(descriptor => descriptor.index >= 1)
     .map(descriptor => {
       const domain = extractDomain(descriptor.url);
       const entry: TabCatalogEntry = {
         index: descriptor.index,
-        title: descriptor.title,
+        title: sanitizeUntrustedMetadata(descriptor.title),
         url: descriptor.url,
         domain,
         currentGroup: descriptor.tab.group?.label || null,
@@ -239,6 +245,7 @@ export function buildTabCatalog(
       }
       return entry;
     });
+  return sanitizeTabCatalog(catalog);
 }
 
 export async function enrichCatalogWithSnippets(
@@ -282,7 +289,9 @@ export async function enrichCatalogWithSnippets(
       const extracted = await extractPageContentFromTab(descriptor.tab);
       const entry = byIndex.get(idx);
       if (entry && extracted.status === "ok" && extracted.content) {
-        entry.snippet = extracted.content.slice(0, SNIPPET_MAX_CHARS);
+        entry.snippet = sanitizeUntrustedMetadata(
+          extracted.content.slice(0, SNIPPET_MAX_CHARS)
+        );
       }
       completed += 1;
       options.onProgress?.(completed, total);
@@ -412,33 +421,16 @@ export async function clusterTabsViaAssist(params: {
     catalog: params.catalog,
   });
 
-  const res = await assistRemote(
-    ORGANIZE_TABS_SYSTEM_PROMPT,
-    [{ role: "user", content: userMessage }],
-    ["chat"],
-    [],
-    ORGANIZE_TABS_GENERATION_CONFIG,
-    undefined,
-    params.signal
-  );
-
-  throwIfResearchBriefAborted(params.signal);
-
-  if (res.quota) {
-    subscriptionService.updateFromQuota(res.quota);
-  }
-  syncSubscriptionFromAssistResponse(res);
-
-  const parsed = parseOrganizeTabsClusterPlan(
-    parseAssistResponseContent(res),
-    params.mode
-  );
-  if (!parsed) {
-    throw new Error(
-      "I couldn't parse a tab grouping plan from the AI response."
-    );
-  }
-  return parsed;
+  return assistWithOutputValidationRetry({
+    systemPrompt: ORGANIZE_TABS_SYSTEM_PROMPT,
+    userMessage,
+    generationConfig: ORGANIZE_TABS_GENERATION_CONFIG,
+    signal: params.signal,
+    parse: raw => parseOrganizeTabsClusterPlan(raw, params.mode),
+    validate: plan => validateOrganizeTabsPlan(plan, params.catalog),
+    validationErrorMessage:
+      "I couldn't produce a safe tab grouping plan. Please try again.",
+  });
 }
 
 function inferMode(options: BuildOrganizeTabsOptions): OrganizeTabsMode {

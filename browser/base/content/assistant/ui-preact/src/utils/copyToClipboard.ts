@@ -1,34 +1,34 @@
 import type { OasisWindow } from '../types';
-
-const RESEARCH_BRIEF_MARKER = '__RESEARCH_BRIEF__';
+import {
+  displayMarkdownFromResearchBriefToolMessage,
+  hasResearchBriefMarker,
+} from '../../../build/src/utils/researchBriefRequest.js';
+import {
+  displayMarkdownFromOutreachEmailToolMessage,
+  hasOutreachEmailMarker,
+} from '../../../build/src/utils/outreachEmailRequest.js';
 
 const win = window as OasisWindow;
 
 export function textForClipboard(raw: string): string {
   const text = String(raw || '');
-  const markerIndex = text.indexOf(RESEARCH_BRIEF_MARKER);
-  if (markerIndex < 0) {
-    return text.trim();
+  if (hasResearchBriefMarker(text)) {
+    return displayMarkdownFromResearchBriefToolMessage(text);
   }
-
-  const jsonText = text
-    .slice(markerIndex + RESEARCH_BRIEF_MARKER.length)
-    .trim();
-  try {
-    const parsed = JSON.parse(jsonText) as { markdown?: string };
-    if (typeof parsed.markdown === 'string' && parsed.markdown.trim()) {
-      return parsed.markdown.trim();
-    }
-  } catch {
-    // fall through
+  if (hasOutreachEmailMarker(text)) {
+    return displayMarkdownFromOutreachEmailToolMessage(text);
   }
-
-  return text.slice(0, markerIndex).trim();
+  return text.trim();
 }
 
 export function isResearchBriefMarkdown(raw: string): boolean {
   const text = textForClipboard(raw);
   return /^# Research brief:/m.test(text);
+}
+
+export function isOutreachEmailMarkdown(raw: string): boolean {
+  const text = textForClipboard(raw);
+  return /^# Outreach email:/m.test(text);
 }
 
 export function markdownToSafeHtml(markdown: string): string {

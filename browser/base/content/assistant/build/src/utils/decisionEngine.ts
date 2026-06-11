@@ -11,10 +11,17 @@
  *
  * Called by deterministicRouter.ts.
  */
+import {
+  looksLikeCommandChain,
+  splitCommandChain,
+} from "../assistant/commandChain.js";
 import { classifyCommandFamily, looksActionableText } from "./intentParser.js";
 import { resolveExplicitRoute } from "./explicitRouteRules.js";
 import { resolveManifestListRoute } from "./manifestListResolver.js";
 import { resolveManifestSearchRoute } from "./manifestSearchResolver.js";
+import {
+  resolveExplicitMutationRoute,
+} from "./mutationExplicitResolver.js";
 import { resolveManifestMutationRoute } from "./manifestMutationResolver.js";
 import { resolveExplicitSearchResultRoute } from "./searchResultExplicitResolver.js";
 import { resolveExplicitSummarizeRoute } from "./summarizeExplicitResolver.js";
@@ -26,6 +33,12 @@ import {
   looksLikeOrganizeTabsCommand,
   resolveExplicitOrganizeTabsRoute,
 } from "./organizeTabsExplicitResolver.js";
+import {
+  looksLikeOutreachEmailCommand,
+  resolveExplicitOutreachEmailRoute,
+} from "./outreachEmailExplicitResolver.js";
+import { resolveFactualQueryRoute } from "./factualQueryRoute.js";
+import { resolveSiteSearchRoute } from "./siteSearchUrls.js";
 import type {
   DeterministicRouteDecision,
   IntentFamily,
@@ -55,6 +68,44 @@ export function decideDeterministicRoute(
     return { type: "no_match", actionable: false, reason: "empty-input" };
   }
 
+  if (looksLikeCommandChain(input)) {
+    const chain = splitCommandChain(input, 3);
+    if (chain.commands.length > 1) {
+      return {
+        type: "no_match",
+        actionable: true,
+        reason: "compound-deferred",
+      };
+    }
+  }
+
+  const factualRoute = resolveFactualQueryRoute(input);
+  if (factualRoute) {
+    return factualRoute;
+  }
+
+  const siteSearchRoute = resolveSiteSearchRoute(input);
+  if (siteSearchRoute) {
+    return siteSearchRoute;
+  }
+
+  const mutationExplicit = resolveExplicitMutationRoute(input);
+  if (mutationExplicit) {
+    return mutationExplicit;
+  }
+
+  if (looksLikeOutreachEmailCommand(input)) {
+    const outreachEarly = resolveExplicitOutreachEmailRoute(input, snapshot);
+    if (outreachEarly) {
+      return outreachEarly;
+    }
+    return {
+      type: "no_match",
+      actionable: true,
+      reason: "outreach-email-unresolved",
+    };
+  }
+
   if (looksLikeResearchBriefCommand(input)) {
     const researchBriefEarly = resolveExplicitResearchBriefRoute(
       input,
@@ -64,11 +115,9 @@ export function decideDeterministicRoute(
       return researchBriefEarly;
     }
     return {
-      type: "chat",
+      type: "no_match",
       actionable: true,
       reason: "research-brief-unresolved",
-      message:
-        "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`.",
     };
   }
 
@@ -103,6 +152,14 @@ export function decideDeterministicRoute(
   const summarizeExplicit = resolveExplicitSummarizeRoute(input);
   if (summarizeExplicit) {
     return summarizeExplicit;
+  }
+
+  const outreachEmailExplicit = resolveExplicitOutreachEmailRoute(
+    input,
+    snapshot
+  );
+  if (outreachEmailExplicit) {
+    return outreachEmailExplicit;
   }
 
   const researchBriefExplicit = resolveExplicitResearchBriefRoute(

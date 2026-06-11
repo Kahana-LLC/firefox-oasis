@@ -89,7 +89,7 @@ export function createCommandToolAgent(
         lastWorker: command.commandName,
         next: AGENT_END,
         args: {},
-        commandQueue: state.commandQueue,
+        commandQueue: remainingQueue,
       };
     }
 
@@ -113,7 +113,8 @@ export function createCommandToolAgent(
       lastWorker: command.commandName,
       next: "supervisor",
       args: {},
-      commandQueue: state.commandQueue,
+      commandQueue:
+        state.commandQueue.length > 1 ? state.commandQueue.slice(1) : [],
     };
   };
 }

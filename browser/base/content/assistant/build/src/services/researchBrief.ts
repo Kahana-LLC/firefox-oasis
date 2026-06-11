@@ -5,6 +5,7 @@ import {
   clampMaxTabs,
   DEFAULT_MAX_TABS,
   estimateSynthesisTokens,
+  formatUnreadableDigestsMessage,
   parseResearchBriefFromAssistContent,
   researchBriefToMarkdown,
   truncateDigestsToBudget,
@@ -23,6 +24,12 @@ import {
   type ResearchBriefProgressCallback,
 } from "../utils/researchBriefProgress.js";
 import { extractPageContentFromTab } from "./pageContentExtract.js";
+import { assistWithOutputValidationRetry } from "../utils/assistOutputRetry.js";
+import { validateResearchBriefOutput } from "../utils/outputValidators.js";
+import {
+  sanitizeUntrustedMetadata,
+  sanitizeUntrustedWebText,
+} from "../utils/untrustedContent.js";
 import { subscriptionService } from "./subscription.js";
 import { syncSubscriptionFromAssistResponse } from "./syncAssistUsage.js";
 import {
@@ -44,6 +51,7 @@ import { resolveTabsScope } from "./researchBriefTabResolve.js";
 import { finalizeResolvedTabList } from "./researchBriefResolve.js";
 import { storeResearchBriefRun } from "./researchBriefDigestCache.js";
 import { suggestTabCountForQuota } from "../utils/researchBriefClarify.js";
+import { resolveTabsForResearchBrief } from "./researchTabSelection.js";
 
 export type {
   ResearchBrief,
@@ -60,6 +68,8 @@ export {
   researchBriefToMarkdown,
   truncateDigestsToBudget,
 } from "./researchBriefFormat.js";
+
+export { formatUnreadableDigestsMessage } from "./researchBriefFormat.js";
 
 export const MAX_TOTAL_CHARS = 80000;
 export const EXTRACT_CONCURRENCY = 3;
@@ -217,12 +227,37 @@ export async function extractTabDigests(
     if (options.retryOnce !== false && retriable) {
       extracted = await extractPageContentFromTab(tab);
     }
+    const title = sanitizeUntrustedMetadata(extracted.title);
+    const url = extracted.url;
+    if (extracted.status !== "ok" || !extracted.content) {
+      return {
+        title,
+        url,
+        content: extracted.content,
+        status: extracted.status,
+        failureReason: extracted.failureReason,
+      };
+    }
+
+    const sanitized = sanitizeUntrustedWebText(extracted.content);
+    if (sanitized.shouldSkip) {
+      return {
+        title,
+        url,
+        content: "",
+        status: "skipped",
+        failureReason: "Suspicious embedded instructions",
+        injectionRisk: "high",
+      };
+    }
+
     return {
-      title: extracted.title,
-      url: extracted.url,
-      content: extracted.content,
+      title,
+      url,
+      content: sanitized.text,
       status: extracted.status,
       failureReason: extracted.failureReason,
+      injectionRisk: sanitized.assessment.level,
     };
   }
 
@@ -319,6 +354,7 @@ export async function synthesizeResearchBrief(params: {
   outlineHint?: string;
   scopeLabel: string;
   digests: TabDigest[];
+  topicInferred?: boolean;
   signal?: AbortSignal;
 }): Promise<ResearchBrief> {
   throwIfResearchBriefAborted(params.signal);
@@ -329,31 +365,24 @@ export async function synthesizeResearchBrief(params: {
     digests: params.digests,
   });
 
-  const res = await assistRemote(
-    RESEARCH_BRIEF_SYSTEM_PROMPT,
-    [{ role: "user", content: userMessage }],
-    ["chat"],
-    [],
-    RESEARCH_BRIEF_GENERATION_CONFIG,
-    undefined,
-    params.signal
+  const readableDigests = params.digests.filter(
+    d => d.status === "ok" && d.content
   );
 
-  throwIfResearchBriefAborted(params.signal);
-
-  if (res.quota) {
-    subscriptionService.updateFromQuota(res.quota);
-  }
-  syncSubscriptionFromAssistResponse(res);
-
-  const parsed = parseResearchBriefFromAssistContent(
-    parseAssistResponseContent(res)
-  );
-  if (!parsed) {
-    throw new Error(
-      "I couldn't parse the research brief from the AI response."
-    );
-  }
+  const parsed = await assistWithOutputValidationRetry({
+    systemPrompt: RESEARCH_BRIEF_SYSTEM_PROMPT,
+    userMessage,
+    generationConfig: RESEARCH_BRIEF_GENERATION_CONFIG,
+    signal: params.signal,
+    parse: raw => parseResearchBriefFromAssistContent(raw),
+    validate: brief =>
+      validateResearchBriefOutput(brief, readableDigests, {
+        trustedTopic: params.topic,
+        topicInferred: params.topicInferred,
+      }),
+    validationErrorMessage:
+      "I couldn't produce a safe research brief. Please try again.",
+  });
 
   parsed.topic = params.topic;
   parsed.scopeLabel = params.scopeLabel;
@@ -445,27 +474,10 @@ export async function buildResearchBrief(
     report({ phase: "resolving" });
     throwIfResearchBriefAborted(options.signal);
 
-    const resolved = options.useActiveTabGroup
-      ? resolveActiveTabGroupScope(
-          options.gBrowser,
-          options.maxTabs ?? DEFAULT_MAX_TABS,
-          {
-            excludeIndices: options.excludeIndices,
-            excludeQueries: options.excludeQueries,
-          }
-        )
-      : resolveResearchTabs(
-          options.gBrowser,
-          options.scope,
-          options.name,
-          options.maxTabs ?? DEFAULT_MAX_TABS,
-          {
-            excludeIndices: options.excludeIndices,
-            excludeQueries: options.excludeQueries,
-          },
-          options.tabQueries ?? [],
-          options.tabIndices ?? []
-        );
+    const resolved = await resolveTabsForResearchBrief(options, {
+      signal: options.signal,
+      onProgress: report,
+    });
 
     if (!resolved.ok) {
       return { ok: false, message: resolved.message };
@@ -481,8 +493,7 @@ export async function buildResearchBrief(
     if (readable.length === 0) {
       return {
         ok: false,
-        message:
-          "I couldn't read any web pages in that scope. Try a tab group with loaded articles.",
+        message: formatUnreadableDigestsMessage(digests, resolved.scopeLabel),
       };
     }
 
@@ -536,6 +547,7 @@ export async function buildResearchBrief(
       scopeLabel: resolved.scopeLabel,
       digests: budgetDigests,
       maxTotalChars: MAX_TOTAL_CHARS,
+      topicInferred,
       signal: options.signal,
     });
 

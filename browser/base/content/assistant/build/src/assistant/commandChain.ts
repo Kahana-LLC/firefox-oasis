@@ -3,8 +3,8 @@
  *
  * Detects and splits chained user inputs like "do X; then Y" or
  * "open tabs and then list bookmarks" into separate command strings.
- * Uses connector patterns: ";", "and then", "then", "and <verb>".
- * Max 3 commands per chain.
+ * Connector patterns: ";", "and then", "then", "after that", "also",
+ * "plus", "and <verb>", and ", <verb>". Max 3 commands per chain.
  *
  * Called by supervisorQueue.ts to populate the command queue.
  */
@@ -32,14 +32,14 @@ const CHAIN_VERBS = [
 ] as const;
 
 const CHAIN_VERB_PATTERN = CHAIN_VERBS.join("|");
-const CHAIN_CONNECTOR_RE = new RegExp(
-  `(?:\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b))`,
-  "i"
-);
-const CHAIN_SPLIT_RE = new RegExp(
-  `\\s*;\\s*|\\s+(?:and\\s+then|then)\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)|\\s+and\\s+(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)`,
-  "gi"
-);
+const CHAIN_VERB_LOOKAHEAD = `(?=(?:please\\s+)?(?:${CHAIN_VERB_PATTERN})\\b)`;
+const CHAIN_CONNECTOR_BODY =
+  `\\s*;\\s*` +
+  `|\\s+(?:and\\s+then|then|after\\s+that,?|also|plus)\\s+${CHAIN_VERB_LOOKAHEAD}` +
+  `|\\s+and\\s+${CHAIN_VERB_LOOKAHEAD}` +
+  `|\\s*,\\s*(?:and\\s+)?${CHAIN_VERB_LOOKAHEAD}`;
+const CHAIN_CONNECTOR_RE = new RegExp(`(?:${CHAIN_CONNECTOR_BODY})`, "i");
+const CHAIN_SPLIT_RE = new RegExp(CHAIN_CONNECTOR_BODY, "gi");
 
 export type CommandChainResult = {
   commands: string[];

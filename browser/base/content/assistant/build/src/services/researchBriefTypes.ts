@@ -25,7 +25,7 @@ export type ResearchBriefTheme = {
   sourceUrls: string[];
 };
 
-export type ResearchScope = "tab-group" | "window" | "tabs";
+export type ResearchScope = "tab-group" | "window" | "tabs" | "relevant";
 
 export type ResolveResearchTabsResult =
   | {
@@ -37,6 +37,9 @@ export type ResolveResearchTabsResult =
       urlsDeduplicated: number;
       usedFuzzyGroupMatch: boolean;
       tabQueriesCount: number;
+      relevanceRationale?: string;
+      relevanceWarnings?: string[];
+      usedRelevantSelection?: boolean;
     }
   | {
       ok: false;
@@ -61,10 +64,13 @@ export type ResearchBrief = {
   gapsAndContradictions: string[];
 };
 
+export type InjectionRiskLevel = "low" | "medium" | "high";
+
 export type TabDigest = {
   title: string;
   url: string;
   content: string;
   status: "ok" | "skipped" | "failed";
   failureReason?: string;
+  injectionRisk?: InjectionRiskLevel;
 };

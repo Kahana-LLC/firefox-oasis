@@ -22,7 +22,7 @@ export const SYNTHESIS_VERB =
 export const SYNTHESIS_START = `(?:please\\s+)?${SYNTHESIS_VERB}\\s*(?:the\\s+)?(?:findings|research|notes|tabs?|pages?|sources?)?\\s*`;
 
 export const BRIEF_SYNONYM_NOUN_RE =
-  /\b(?:research\s+)?(?:report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)\b/i;
+  /\b(?:research\s+)?(?:report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier|insights)\b/i;
 
 export const MULTI_TAB_SYNTHESIS_VERB_RE =
   /\b(?:consolidat(?:e|ing)|synthesiz(?:e|ing)|compil(?:e|ing)|merg(?:e|ing)|combin(?:e|ing)|distill(?:ing)?)\b/i;
@@ -37,6 +37,9 @@ export function normalizeResearchBriefInput(input: string): string {
   return String(input || "")
     .trim()
     .replace(/\s+/g, " ")
+    .replace(/\bcreat\b/gi, "create")
+    .replace(/\bbulid\b/gi, "build")
+    .replace(/\breserch\b/gi, "research")
     .replace(/\bresearhc\b/gi, "research");
 }
 
@@ -53,7 +56,17 @@ export function hasMultiTabScope(normalized: string): boolean {
     ) ||
     /\bacross\s+(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(normalized) ||
     /\btab\s+(?:titled|named|called)\b/i.test(normalized) ||
-    /\btabs?\s+matching\b/i.test(normalized)
+    /\btabs?\s+matching\b/i.test(normalized) ||
+    /\b(?:shopping|email|work|sports|news|travel)\s+tabs?\b/i.test(
+      normalized
+    ) ||
+    /\bmy\s+\w+\s+tabs?\b/i.test(normalized) ||
+    /\btabs?\s+(?:about|related\s+to)\b/i.test(normalized) ||
+    /\bthese\s+tabs\b/i.test(normalized) ||
+    /\ball\s+my\s+tabs\s+about\b/i.test(normalized) ||
+    /\bmy\s+open\s+tabs\s+about\b/i.test(normalized) ||
+    /\beverything\s+open\b/i.test(normalized) ||
+    /\bopen\s+tabs?\s+about\b/i.test(normalized)
   );
 }
 
@@ -78,11 +91,14 @@ export function isMultiTabSummarizePhrase(normalized: string): boolean {
   return hasMultiTabScope(normalized);
 }
 
+const SINGLE_TAB_SCOPE_RE =
+  /\b(?:this|current)\s+(?:page|tab)(?!\s+group)\b/i;
+
 export function isScopedSummaryPhrase(normalized: string): boolean {
   if (!/\bsummary\b/i.test(normalized)) {
     return false;
   }
-  if (/\b(?:this|current)\s+(?:page|tab)\b/i.test(normalized)) {
+  if (SINGLE_TAB_SCOPE_RE.test(normalized)) {
     return false;
   }
   return hasMultiTabScope(normalized);

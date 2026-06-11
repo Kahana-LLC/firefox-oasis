@@ -4466,3 +4466,84 @@ button.input-field.input-field-signin-prompt:disabled {
 .voice-agent-orb-icon {
   pointer-events: none;
 }
+
+
+.outreach-email-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.outreach-email-disclosure {
+  font-size: 12px;
+  color: var(--assistant-text-secondary, #666);
+  background: var(--assistant-surface-muted, rgba(0, 0, 0, 0.04));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.outreach-email-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.outreach-email-toolbar button {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--assistant-border, #ddd);
+  background: var(--assistant-surface, #fff);
+  cursor: pointer;
+}
+
+.outreach-copy-email-btn {
+  font-weight: 600;
+}
+
+.outreach-email-subject-label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--assistant-text-secondary, #666);
+  margin-bottom: 4px;
+}
+
+.outreach-email-subject-text {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.outreach-email-body {
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.outreach-email-body p {
+  margin: 0 0 12px;
+}
+
+.outreach-email-body p:last-child {
+  margin-bottom: 0;
+}
+
+.outreach-email-meta-toggle {
+  align-self: flex-start;
+  font-size: 12px;
+  background: none;
+  border: none;
+  color: var(--assistant-link, #0b57d0);
+  cursor: pointer;
+  padding: 0;
+}
+
+.outreach-email-meta {
+  font-size: 13px;
+  color: var(--assistant-text-secondary, #555);
+}
+
+.ai-message-wrapper.long-form-artifact {
+  scroll-margin-top: var(--assistant-header-fade-height, 48px);
+}

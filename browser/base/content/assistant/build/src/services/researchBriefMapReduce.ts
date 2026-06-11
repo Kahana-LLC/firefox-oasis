@@ -110,6 +110,7 @@ export async function synthesizeResearchBriefWithBudget(params: {
   scopeLabel: string;
   digests: TabDigest[];
   maxTotalChars: number;
+  topicInferred?: boolean;
   signal?: AbortSignal;
 }): Promise<{
   brief: ResearchBrief;
@@ -131,6 +132,7 @@ export async function synthesizeResearchBriefWithBudget(params: {
       outlineHint: params.outlineHint,
       scopeLabel: params.scopeLabel,
       digests,
+      topicInferred: params.topicInferred,
       signal: params.signal,
     });
     return { brief, digests, truncated };
@@ -157,6 +159,7 @@ export async function synthesizeResearchBriefWithBudget(params: {
     outlineHint: params.outlineHint,
     scopeLabel: params.scopeLabel,
     digests: budgetDigests,
+    topicInferred: params.topicInferred,
     signal: params.signal,
   });
   return { brief, digests: budgetDigests, truncated: truncated || true };

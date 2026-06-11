@@ -42,12 +42,12 @@ export function buildCommandQueuePlan(params: {
   let source: QueueSource;
   let truncated = false;
 
-  if (existingQueue.length > 0) {
-    commandQueue = [...existingQueue];
-    source = "existing";
-  } else if (lastWorker === "confirm_action" && continuationQueue.length > 0) {
+  if (lastWorker === "confirm_action" && continuationQueue.length > 0) {
     commandQueue = [...continuationQueue];
     source = "continuation";
+  } else if (existingQueue.length > 0) {
+    commandQueue = [...existingQueue];
+    source = "existing";
   } else {
     const split = splitCommandChain(latestTextRaw || commandLine, maxCommands);
     commandQueue = [...split.commands];

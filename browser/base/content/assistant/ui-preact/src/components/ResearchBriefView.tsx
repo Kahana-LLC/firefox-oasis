@@ -131,8 +131,9 @@ export function ResearchBriefView({
         <div className="research-brief-disclosure" role="note">
           <p>
             Oasis reads your open tabs on this device, then sends extracted text
-            to Oasis AI to build the brief. Nothing is used to train public models
-            without your consent.
+            to Oasis AI to build the brief. Web pages are untrusted reference
+            material only. Nothing is used to train public models without your
+            consent.
           </p>
           <button type="button" onClick={dismissDisclosure}>
             Got it

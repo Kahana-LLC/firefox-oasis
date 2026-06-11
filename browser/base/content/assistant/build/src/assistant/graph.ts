@@ -21,17 +21,21 @@ import {
   clearContinuationQueue,
   clearPendingAmbiguity,
   clearPendingClarification,
+  clearPendingProposedAction,
   getContinuationQueue,
   getPendingAmbiguity,
   getPendingClarification,
   getPendingConfirmation,
+  getPendingProposedAction,
   setPendingClarification,
+  setPendingProposedAction,
   takeContinuationQueue,
 } from "../services/interactionState.js";
 import type { AssistantWindowLike } from "../types/runtime.js";
 import { routeDeterministically } from "../utils/deterministicRouter.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
 import { hasPageContextRequest } from "../utils/pageContextRequest.js";
+import { mergeTrustedArgsOntoAssist } from "../utils/trustedRouteArgs.js";
 import { displayMarkdownFromResearchBriefToolMessage } from "../utils/researchBriefRequest.js";
 import {
   looksLikeNewActionCommand,
@@ -102,14 +106,29 @@ const CHAT_GENERATION_CONFIG = {
 };
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
 import {
+  looksLikeCommandChain,
+  splitCommandChain,
+} from "./commandChain.js";
+import {
   resolvePendingAmbiguityGate,
   resolvePendingClarificationGate,
   resolvePendingConfirmationGate,
+  resolvePendingProposedActionGate,
 } from "./supervisorGates.js";
+import {
+  detectProposedActionFromText,
+  looksLikeUnbackedActionClaim,
+} from "../utils/proposedActionUtils.js";
 import { classifyClarificationNeed } from "./clarificationClassifier.js";
+import {
+  assessPromptMessiness,
+  normalizeMessyPrompt,
+  refineMessyPrompt,
+} from "./promptRefiner.js";
 import {
   consumeResearchBriefResume,
   parseResearchBriefResumePrompt,
+  peekResearchBriefResumeCommand,
 } from "../utils/researchBriefResume.js";
 import {
   consumeOrganizeTabsResume,
@@ -128,12 +147,17 @@ import {
 
 function tryConsumeResearchBriefResumeFromGate(
   resolvedPrompt: string
-): Record<string, unknown> | null {
+): { command: string; args: Record<string, unknown> } | null {
   const optionId = parseResearchBriefResumePrompt(resolvedPrompt);
   if (!optionId) {
     return null;
   }
-  return consumeResearchBriefResume(optionId);
+  const command = peekResearchBriefResumeCommand();
+  const args = consumeResearchBriefResume(optionId);
+  if (!args) {
+    return null;
+  }
+  return { command, args };
 }
 
 function tryConsumeOrganizeTabsResumeFromGate(
@@ -166,6 +190,10 @@ function applyDeterministicAssistOverride(
   activeCommand: string,
   route: ReturnType<typeof routeDeterministically>
 ): Record<string, unknown> | null {
+  const preferred = tryPreferDeterministicToolRoute(activeCommand, route);
+  if (preferred) {
+    return preferred.args;
+  }
   return (
     mergeDeterministicHistorySearchArgs(activeCommand, route) ||
     mergeDeterministicOrganizeTabsArgs(activeCommand, route)
@@ -338,6 +366,52 @@ export function buildAssistantGraph(
     const justRanTool = memberNameSet.has(state.lastWorker);
     const justRanConfirm = state.lastWorker === "confirm_action";
     const pendingConfirmation = getPendingConfirmation();
+    const pendingContinuationBeforeResume = getContinuationQueue();
+    const proposedActionGate = resolvePendingProposedActionGate({
+      confirmationText,
+      pendingProposedAction: getPendingProposedAction(),
+      pendingConfirmation,
+      hasPendingContinuation: pendingContinuationBeforeResume.length > 0,
+    });
+    if (proposedActionGate.kind === "resolved") {
+      clearPendingProposedAction();
+      if (proposedActionGate.suggestedTool) {
+        const toolArgs =
+          proposedActionGate.suggestedTool === "play_video"
+            ? {
+                query: proposedActionGate.resolvedPrompt
+                  .replace(/^play\s+/i, "")
+                  .replace(/\s+on\s+youtube\s*$/i, "")
+                  .trim(),
+              }
+            : proposedActionGate.suggestedTool === "web_search"
+              ? {
+                  query: proposedActionGate.resolvedPrompt
+                    .replace(/^search\s+(?:the\s+web\s+)?for\s+/i, "")
+                    .trim(),
+                }
+              : { utterance: proposedActionGate.resolvedPrompt };
+        return {
+          next: proposedActionGate.suggestedTool,
+          args: toolArgs,
+          commandQueue: [],
+        };
+      }
+      return {
+        next: "supervisor",
+        args: { __clarifiedPrompt: proposedActionGate.resolvedPrompt },
+        commandQueue: [],
+      };
+    }
+    if (proposedActionGate.kind === "cancel") {
+      clearPendingProposedAction();
+      return {
+        next: "chat",
+        args: { routerMessage: "Okay, I won't do that." },
+        commandQueue: [],
+      };
+    }
+
     const confirmationGate = resolvePendingConfirmationGate({
       confirmationText,
       pendingConfirmation,
@@ -371,14 +445,14 @@ export function buildAssistantGraph(
       commandText,
     });
     if (clarificationGate.kind === "resolved") {
-      const resumeArgs = tryConsumeResearchBriefResumeFromGate(
+      const resume = tryConsumeResearchBriefResumeFromGate(
         clarificationGate.resolvedPrompt
       );
       clearPendingClarification();
-      if (resumeArgs) {
+      if (resume) {
         return {
-          next: "build_research_brief",
-          args: resumeArgs,
+          next: resume.command,
+          args: resume.args,
           commandQueue: [],
         };
       }
@@ -444,15 +518,32 @@ export function buildAssistantGraph(
       clearContinuationQueue();
     }
 
-    if (justRanTool) {
-      if (state.commandQueue.length <= 1 && !shouldResumeContinuation) {
-        return { next: "chat", args: {}, commandQueue: [] };
-      }
+    const hasChainRemaining =
+      pendingContinuationQueue.length > 0 || state.commandQueue.length > 1;
+
+    if (justRanTool && !hasChainRemaining) {
+      return { next: "chat", args: {}, commandQueue: [] };
     }
 
     const continuationQueue = shouldResumeContinuation
       ? takeContinuationQueue()
       : [];
+
+    if (shouldResumeContinuation && continuationQueue.length > 0) {
+      const nextCommand = continuationQueue[0];
+      const nextRoute = routeDeterministically(nextCommand);
+      const nextResolved = tryResolveEarlyDeterministicSupervisorRoute(
+        nextCommand,
+        nextRoute
+      );
+      if (nextResolved) {
+        return {
+          next: nextResolved.next,
+          args: nextResolved.args,
+          commandQueue: continuationQueue,
+        };
+      }
+    }
     const hasQueuedCommands =
       state.commandQueue.length > 0 || continuationQueue.length > 0;
 
@@ -466,18 +557,115 @@ export function buildAssistantGraph(
     const topLevelPageContextRequest =
       looksLikePageContextRequest(effectiveCommandLine);
 
-    if (!hasQueuedCommands && effectiveCommandLine) {
-      const earlyRoute = routeDeterministically(effectiveCommandLine);
-      const earlyResolved = tryResolveEarlyDeterministicSupervisorRoute(
-        effectiveCommandLine,
-        earlyRoute
+    if (
+      !hasQueuedCommands &&
+      !clarifiedPrompt &&
+      looksLikeCommandChain(latestTextRaw || effectiveCommandLine)
+    ) {
+      const chain = splitCommandChain(
+        latestTextRaw || effectiveCommandLine,
+        MAX_NESTED_COMMANDS
       );
-      if (earlyResolved) {
+      if (chain.commands.length > 1) {
+        const firstCommand = chain.commands[0];
+        const firstRoute = routeDeterministically(firstCommand);
+        const firstResolved = tryResolveEarlyDeterministicSupervisorRoute(
+          firstCommand,
+          firstRoute
+        );
+        if (firstResolved) {
+          return {
+            next: firstResolved.next,
+            args: firstResolved.args,
+            commandQueue: chain.commands,
+          };
+        }
         return {
-          next: earlyResolved.next,
-          args: earlyResolved.args,
-          commandQueue: [],
+          next: "supervisor",
+          args: {},
+          commandQueue: chain.commands,
         };
+      }
+    }
+
+    if (!hasQueuedCommands && effectiveCommandLine) {
+      const normalizedCommandLine = normalizeMessyPrompt(effectiveCommandLine);
+      const earlyCandidates =
+        normalizedCommandLine &&
+        normalizedCommandLine.toLowerCase() !==
+          effectiveCommandLine.toLowerCase()
+          ? [effectiveCommandLine, normalizedCommandLine]
+          : [effectiveCommandLine];
+      for (const candidateLine of earlyCandidates) {
+        const earlyRoute = routeDeterministically(candidateLine);
+        const earlyResolved = tryResolveEarlyDeterministicSupervisorRoute(
+          candidateLine,
+          earlyRoute
+        );
+        if (earlyResolved) {
+          return {
+            next: earlyResolved.next,
+            args: earlyResolved.args,
+            commandQueue: [],
+          };
+        }
+      }
+    }
+
+    if (
+      !hasQueuedCommands &&
+      effectiveCommandLine &&
+      !clarifiedPrompt &&
+      !topLevelPageContextRequest
+    ) {
+      const refinementInput = latestTextRaw || effectiveCommandLine;
+      const messiness = assessPromptMessiness(refinementInput);
+      const chainAlreadySplit =
+        looksLikeCommandChain(refinementInput) &&
+        splitCommandChain(refinementInput, MAX_NESTED_COMMANDS).commands
+          .length > 1;
+      const shouldRefine =
+        messiness.messy &&
+        !(
+          chainAlreadySplit &&
+          messiness.reasons.length === 1 &&
+          messiness.reasons[0] === "compound"
+        );
+      if (shouldRefine) {
+        const refinement = await refineMessyPrompt({
+          messages: state.messages,
+          userText: refinementInput,
+        });
+        if (refinement.kind === "refined") {
+          if (refinement.intents.length === 1) {
+            return {
+              next: "supervisor",
+              args: { __clarifiedPrompt: refinement.intents[0] },
+              commandQueue: [],
+            };
+          }
+          return {
+            next: "supervisor",
+            args: {},
+            commandQueue: refinement.intents,
+          };
+        }
+        if (refinement.kind === "clarify") {
+          setPendingClarification({
+            originalMessage: effectiveCommandLine,
+            options: refinement.options,
+          });
+          const optionList = refinement.options
+            .map((o, i) => `${i + 1}. ${o.label}`)
+            .join("\n");
+          return {
+            next: "chat",
+            args: {
+              routerMessage: `I'd like to clarify what you mean. Please pick one:\n\n${optionList}`,
+            },
+            commandQueue: [],
+          };
+        }
       }
     }
 
@@ -534,7 +722,11 @@ export function buildAssistantGraph(
         }
         return {
           next: first.next,
-          args: first.args,
+          args: mergeTrustedArgsOntoAssist(
+            first.next,
+            first.args,
+            effectiveCommandLine
+          ),
           commandQueue: encodedQueue,
         };
       }
@@ -566,12 +758,20 @@ export function buildAssistantGraph(
         }
         return {
           next: topLevelAssist.next,
-          args: topLevelAssist.args,
+          args: mergeTrustedArgsOntoAssist(
+            topLevelAssist.next,
+            topLevelAssist.args,
+            effectiveCommandLine
+          ),
           commandQueue: [commandLine],
         };
       }
 
       if (topLevelAssist.kind === "chat" && !topLevelActionLike) {
+        const proposal = detectProposedActionFromText(topLevelAssist.content);
+        if (proposal) {
+          setPendingProposedAction(proposal);
+        }
         return {
           next: "chat",
           args: { routerMessage: topLevelAssist.content },
@@ -586,13 +786,15 @@ export function buildAssistantGraph(
       latestTextRaw,
       commandLine,
       lastWorker: state.lastWorker,
-      justRanTool: justRanTool && state.commandQueue.length > 0,
+      justRanTool:
+        justRanTool &&
+        (state.commandQueue.length > 1 || continuationQueue.length > 0),
       maxCommands: MAX_NESTED_COMMANDS,
     });
     if (!queuePlan) {
       return { next: "chat", args: {}, commandQueue: [] };
     }
-    const { commandQueue, activeCommand, truncationNotice } = queuePlan;
+    const { commandQueue, activeCommand, truncationNotice, source } = queuePlan;
     const applyNoticeToArgs = (args: GraphArgs): GraphArgs =>
       truncationNotice
         ? { ...args, [INTERNAL_CHAIN_NOTICE_ARG]: truncationNotice }
@@ -611,18 +813,24 @@ export function buildAssistantGraph(
 
     const activeCommandText = activeCommand.toLowerCase();
     const actionLikeCommand = looksLikeNewActionCommand(activeCommandText);
-    const assistRoute = await tryResolveAssistRoute({
-      endpointKey,
-      activeCommandText,
-      commandQueueLength: commandQueue.length,
-      messages: state.messages,
-      assistRouterPrompt,
-      assistOptions,
-      assistTools,
-      memberNameSet,
-      maxPlanActions: MAX_NESTED_COMMANDS,
-      railroadMemoryBlock,
-    });
+    const skipAssistForChain =
+      source === "continuation" ||
+      source === "existing" ||
+      commandQueue.length > 1;
+    const assistRoute = skipAssistForChain
+      ? { kind: "none" as const }
+      : await tryResolveAssistRoute({
+          endpointKey,
+          activeCommandText,
+          commandQueueLength: commandQueue.length,
+          messages: state.messages,
+          assistRouterPrompt,
+          assistOptions,
+          assistTools,
+          memberNameSet,
+          maxPlanActions: MAX_NESTED_COMMANDS,
+          railroadMemoryBlock,
+        });
 
     if (assistRoute.kind === "plan") {
       const encodedQueue = assistRoute.actions.map(action =>
@@ -632,7 +840,13 @@ export function buildAssistantGraph(
       if (first) {
         return {
           next: first.next,
-          args: applyNoticeToArgs(first.args),
+          args: applyNoticeToArgs(
+            mergeTrustedArgsOntoAssist(
+              first.next,
+              first.args,
+              activeCommand
+            )
+          ),
           commandQueue: encodedQueue,
         };
       }
@@ -640,32 +854,26 @@ export function buildAssistantGraph(
 
     const route = routeDeterministically(activeCommand);
     if (assistRoute.kind === "tool") {
-      const deterministicOverride = applyDeterministicAssistOverride(
-        activeCommand,
-        route
-      );
-      if (deterministicOverride && route.type === "tool") {
+      if (route.type === "tool") {
+        const deterministicOverride = applyDeterministicAssistOverride(
+          activeCommand,
+          route
+        );
         return {
           next: route.next,
-          args: applyNoticeToArgs(deterministicOverride),
-          commandQueue,
-        };
-      }
-      if (
-        route.type === "tool" &&
-        route.next === "resolve_ambiguity" &&
-        route.pendingAmbiguity
-      ) {
-        setRoutePendingAmbiguity(route.pendingAmbiguity);
-        return {
-          next: route.next,
-          args: applyNoticeToArgs(route.args),
+          args: applyNoticeToArgs(deterministicOverride || route.args),
           commandQueue,
         };
       }
       return {
         next: assistRoute.next,
-        args: applyNoticeToArgs(assistRoute.args),
+        args: applyNoticeToArgs(
+          mergeTrustedArgsOntoAssist(
+            assistRoute.next,
+            assistRoute.args,
+            activeCommand
+          )
+        ),
         commandQueue,
       };
     }
@@ -676,9 +884,27 @@ export function buildAssistantGraph(
           "Ignoring assist chat response for action-like command"
         );
       } else {
+        const chatContent = applyNoticeToMessage(assistRoute.content);
+        const proposal = detectProposedActionFromText(chatContent);
+        if (proposal && commandQueue.length <= 1) {
+          setPendingProposedAction(proposal);
+        }
+        if (
+          looksLikeUnbackedActionClaim(chatContent) &&
+          !justRanTool &&
+          !memberNameSet.has(state.lastWorker)
+        ) {
+          return {
+            next: "supervisor",
+            args: {
+              __clarifiedPrompt: proposal?.proposedPrompt || activeCommand,
+            },
+            commandQueue: [],
+          };
+        }
         return {
           next: "chat",
-          args: { routerMessage: applyNoticeToMessage(assistRoute.content) },
+          args: { routerMessage: chatContent },
           commandQueue: [],
         };
       }
@@ -700,9 +926,21 @@ export function buildAssistantGraph(
     }
 
     if (route.type === "chat") {
+      const routerMessage = applyNoticeToMessage(route.message);
+      if (
+        looksLikeUnbackedActionClaim(routerMessage) &&
+        !justRanTool &&
+        !memberNameSet.has(state.lastWorker)
+      ) {
+        return {
+          next: "supervisor",
+          args: { __clarifiedPrompt: activeCommand },
+          commandQueue: [],
+        };
+      }
       return {
         next: "chat",
-        args: { routerMessage: applyNoticeToMessage(route.message) },
+        args: { routerMessage },
         commandQueue: [],
       };
     }

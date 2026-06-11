@@ -51,13 +51,20 @@ export function resolveBriefTopicFields(params: {
   userTopic?: string;
   scopeLabel?: string;
   groupName?: string;
-  scope: "tab-group" | "window" | "tabs";
+  scope: "tab-group" | "window" | "tabs" | "relevant";
 }): BriefTopicResolution {
   const userTopic = String(params.userTopic || "").trim();
   const groupName = String(params.groupName || "").trim();
   const scopeLabel =
     String(params.scopeLabel || "").trim() ||
     (groupName ? `Tab group: ${groupName}` : "");
+
+  if (params.scope === "relevant") {
+    if (userTopic) {
+      return { topic: userTopic, inferTopicFromContent: true };
+    }
+    return { topic: "", inferTopicFromContent: true };
+  }
 
   if (params.scope === "tabs") {
     if (userTopic && isDistinctTopic(userTopic, scopeLabel)) {

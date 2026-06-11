@@ -933,6 +933,9 @@ export function App() {
                 pinnedBriefId={pinnedBriefId}
                 briefPinned={briefPinnedFlag}
                 onToggleBriefPin={handleToggleBriefPin}
+                onSubmitPrompt={prompt => {
+                  void runtime.send(prompt);
+                }}
               />
             </div>
           )}

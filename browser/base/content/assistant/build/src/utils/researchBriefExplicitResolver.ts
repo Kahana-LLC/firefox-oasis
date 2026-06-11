@@ -71,6 +71,18 @@ function tabGroupArgs(name: string, topic?: string): RouteArgs {
   return args;
 }
 
+function tabsAboutTopicArgs(topic: string): RouteArgs | null {
+  const cleaned = trimQuotes(topic);
+  if (!cleaned) {
+    return null;
+  }
+  return {
+    scope: "relevant",
+    topic: cleaned,
+    infer_topic_from_content: true,
+  };
+}
+
 export function extractResearchBriefOutlineHint(input: string): {
   body: string;
   outlineHint: string;
@@ -175,11 +187,13 @@ function applyTopicPolicy(
   snapshot: RoutingStateSnapshot
 ): RouteArgs | null {
   const scope =
-    args.scope === "window"
-      ? "window"
-      : args.scope === "tabs"
-        ? "tabs"
-        : "tab-group";
+    args.scope === "relevant"
+      ? "relevant"
+      : args.scope === "window"
+        ? "window"
+        : args.scope === "tabs"
+          ? "tabs"
+          : "tab-group";
   let groupName = String(args.name || "").trim();
   const userTopicRaw = String(args.topic || "").trim();
 
@@ -197,7 +211,11 @@ function applyTopicPolicy(
         ? "Tabs"
         : scope === "window"
           ? "Current window"
-          : "";
+          : scope === "relevant" && userTopicRaw
+            ? `Tabs related to: ${userTopicRaw}`
+            : scope === "relevant"
+              ? "Relevant tabs"
+              : "";
 
   const topicFields = resolveBriefTopicFields({
     userTopic: userTopicRaw,
@@ -243,6 +261,17 @@ function applyTopicPolicy(
     if (queries.length === 0 && indices.length === 0) {
       return null;
     }
+  }
+
+  if (scope === "relevant") {
+    if (!userTopicRaw) {
+      return null;
+    }
+    if (!merged.topic) {
+      merged.topic = userTopicRaw;
+    }
+    delete merged.tab_queries;
+    return merged;
   }
 
   if (
@@ -361,6 +390,57 @@ const RESEARCH_BRIEF_PATTERNS: Array<{
       "i"
     ),
     resolve: () => activeGroupArgs(),
+  },
+  {
+    reason: "create-summary-active-tab-group",
+    match: new RegExp(
+      `^${VERB_PREFIX}(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:this|current|my)\\s+(?:tab\\s+)?group\\s*$`,
+      "i"
+    ),
+    resolve: () => activeGroupArgs(),
+  },
+  {
+    reason: "create-summary-these-tabs",
+    match: new RegExp(
+      `^${VERB_PREFIX}(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:these|my(?:\\s+open)?|all(?:\\s+my)?(?:\\s+open)?)\\s+tabs?\\s*$`,
+      "i"
+    ),
+    resolve: () => ({ scope: "window", infer_topic_from_content: true }),
+  },
+  {
+    reason: "create-summary-window",
+    match: new RegExp(
+      `^${VERB_PREFIX}(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:this|current|my)\\s+window\\s*$`,
+      "i"
+    ),
+    resolve: () => ({ scope: "window", infer_topic_from_content: true }),
+  },
+  {
+    reason: "summarize-these-tabs",
+    match: /^summariz(?:e|ing)\s+these\s+tabs\s*$/i,
+    resolve: () => ({ scope: "window", infer_topic_from_content: true }),
+  },
+  {
+    reason: "create-summary-tabs-about-topic",
+    match: new RegExp(
+      `^${VERB_PREFIX}(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:the\\s+|my\\s+)?(?:open\\s+)?tabs?\\s+(?:related\\s+to|about)\\s+(?<topic>.+?)\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
+  },
+  {
+    reason: "summary-tabs-about-topic",
+    match: new RegExp(
+      `^(?:give\\s+me\\s+)?(?:an?\\s+)?summary\\s+(?:of|for)\\s+(?:the\\s+|my\\s+)?(?:open\\s+)?tabs?\\s+(?:related\\s+to|about)\\s+(?<topic>.+?)\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
+  },
+  {
+    reason: "summarize-tabs-related-to-topic",
+    match:
+      /^summariz(?:e|ing)\s+(?:the\s+|my\s+)?(?:open\s+)?tabs?\s+(?:related\s+to|about)\s+(?<topic>.+?)\s*$/i,
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
   },
   {
     reason: "research-brief-on-active-tab-group",
@@ -590,13 +670,89 @@ const RESEARCH_BRIEF_PATTERNS: Array<{
       return { topic, scope: "tab-group" };
     },
   },
+  {
+    reason: "insights-from-category-tabs",
+    match: new RegExp(
+      `^(?:give\\s+me\\s+)?(?:insights|summary|report)\\s+(?:across|from)\\s+(?:my\\s+)?(?<category>[\\w\\s-]+?)\\s+tabs?\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.category || ""),
+  },
+  {
+    reason: "synthesize-open-about-topic",
+    match: new RegExp(
+      `^(?:synthesiz(?:e|ing)|summariz(?:e|ing)|consolidat(?:e|ing))\\s+everything\\s+open\\s+about\\s+(?<topic>.+?)\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
+  },
+  {
+    reason: "synthesize-tabs-about-topic",
+    match: new RegExp(
+      `^(?:synthesiz(?:e|ing)|summariz(?:e|ing)|consolidat(?:e|ing))\\s+(?:the\\s+|my\\s+)?(?:open\\s+)?(?:tabs?|pages?)\\s+(?:about|related\\s+to)\\s+(?<topic>.+?)\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
+  },
+  {
+    reason: "research-brief-open-tabs-about",
+    match: new RegExp(
+      `^${PRODUCT_START}\\s+from\\s+open\\s+tabs?\\s+about\\s+(?<topic>.+?)\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.topic || ""),
+  },
+  {
+    reason: "consolidate-findings-category-tabs",
+    match: new RegExp(
+      `^consolidat(?:e|ing)\\s+findings\\s+across\\s+(?:my\\s+)?(?<category>[\\w\\s-]+?)\\s+tabs?\\s*$`,
+      "i"
+    ),
+    resolve: match => tabsAboutTopicArgs(match.groups?.category || ""),
+  },
 ];
+
+function resolveResearchBriefScopeFallback(input: string): RouteArgs | null {
+  const normalized = normalizeResearchBriefInput(input);
+  if (!looksLikeResearchBriefCommand(normalized)) {
+    return null;
+  }
+  if (/\b(?:this|current|my)\s+(?:tab\s+)?group\b/i.test(normalized)) {
+    return activeGroupArgs();
+  }
+  const categoryMatch = normalized.match(
+    /\b(shopping|email|work|sports|news|travel)\s+tabs?\b/i
+  );
+  if (categoryMatch?.[1]) {
+    return tabsAboutTopicArgs(categoryMatch[1].toLowerCase());
+  }
+  if (
+    /\b(?:these\s+tabs|my\s+(?:open\s+)?tabs|all\s+(?:my\s+)?(?:open\s+)?tabs|everything\s+open|(?:this|current)\s+window)\b/i.test(
+      normalized
+    )
+  ) {
+    return { scope: "window", infer_topic_from_content: true };
+  }
+  const topicScopeMatch = normalized.match(
+    /\b(?:open\s+)?tabs?\s+(?:related\s+to|about)\s+(.+?)\s*$/i
+  );
+  if (
+    topicScopeMatch?.[1] &&
+    (/\b(?:summary|report|digest|brief|insights)\b/i.test(normalized) ||
+      /\bsummariz(?:e|ing)\b/i.test(normalized) ||
+      /\b(?:synthesiz|consolidat|compil)(?:e|ing)\b/i.test(normalized))
+  ) {
+    return tabsAboutTopicArgs(topicScopeMatch[1]);
+  }
+  return null;
+}
 
 export function resolveExplicitResearchBriefRoute(
   input: string,
   snapshot: RoutingStateSnapshot
 ): DeterministicRouteDecision | null {
-  const regenerateMatch = normalizeResearchBriefInput(input).match(
+  const normalizedInput = normalizeResearchBriefInput(input);
+  const regenerateMatch = normalizedInput.match(
     /^regenerate\s+research\s+brief\s+section\s+(\w+)\s*$/i
   );
   if (regenerateMatch) {
@@ -610,7 +766,7 @@ export function resolveExplicitResearchBriefRoute(
   }
 
   const { body: afterOutline, outlineHint } =
-    extractResearchBriefOutlineHint(input);
+    extractResearchBriefOutlineHint(normalizedInput);
   const { body, excludeIndices, excludeQueries } =
     splitResearchBriefExcludeClause(afterOutline);
   const trimmed = body.trim();
@@ -639,6 +795,21 @@ export function resolveExplicitResearchBriefRoute(
       pattern.reason,
       mergeExcludeArgs(args, excludeIndices, excludeQueries)
     );
+  }
+
+  const fallbackArgs = resolveResearchBriefScopeFallback(trimmed);
+  if (fallbackArgs) {
+    const args = finalizeResearchBriefArgs(fallbackArgs, snapshot);
+    if (args) {
+      if (outlineHint) {
+        args.outline_hint = outlineHint;
+      }
+      return toolDecision(
+        "build_research_brief",
+        "research-brief-scope-fallback",
+        mergeExcludeArgs(args, excludeIndices, excludeQueries)
+      );
+    }
   }
 
   return null;

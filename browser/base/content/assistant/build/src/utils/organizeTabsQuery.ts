@@ -46,7 +46,7 @@ const ADD_TO_GROUP_RE =
   /\badd\s+(?:all\s+)?tabs?\s+.*\s+to\s+(?:the\s+)?(?:tab\s+)?group\b/i;
 
 const RESEARCH_BRIEF_RE =
-  /\b(?:research\s+)?(?:brief|report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier)\b/i;
+  /\b(?:research\s+)?(?:brief|report|digest|rundown|outline|briefing|write[- ]?up|memo|dossier|summary|insights)\b/i;
 
 const ORGANIZE_WINDOWS_RE = /\borganize\s+windows?\b/i;
 

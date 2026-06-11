@@ -22,6 +22,7 @@ import {
   OASIS_EVENT_CONFIRMATION_UPDATE,
 } from "../../../shared/contracts.js";
 import { assistantLogger } from "../utils/assistantLogger.js";
+import type { PendingProposedAction } from "../utils/proposedActionUtils.js";
 
 export type { InteractionCommandArgs, AmbiguityTarget };
 
@@ -45,6 +46,7 @@ class InteractionStateStore {
   private pendingConfirmation: PendingConfirmation | null = null;
   private pendingAmbiguity: PendingAmbiguity | null = null;
   private pendingClarification: PendingClarification | null = null;
+  private pendingProposedAction: PendingProposedAction | null = null;
   private continuationQueue: string[] = [];
   private recentSearchResults: RecentSearchResult[] = [];
   private readonly assistantWindow: AssistantWindowLike;
@@ -117,6 +119,18 @@ class InteractionStateStore {
   clearPendingClarification(): void {
     this.pendingClarification = null;
     this.emitClarificationUpdate(null);
+  }
+
+  getPendingProposedAction(): PendingProposedAction | null {
+    return this.pendingProposedAction;
+  }
+
+  setPendingProposedAction(pending: PendingProposedAction | null): void {
+    this.pendingProposedAction = pending;
+  }
+
+  clearPendingProposedAction(): void {
+    this.pendingProposedAction = null;
   }
 
   getContinuationQueue(): string[] {
@@ -250,6 +264,20 @@ export function setPendingClarification(
 
 export function clearPendingClarification(): void {
   interactionState.clearPendingClarification();
+}
+
+export function getPendingProposedAction(): PendingProposedAction | null {
+  return interactionState.getPendingProposedAction();
+}
+
+export function setPendingProposedAction(
+  pending: PendingProposedAction | null
+): void {
+  interactionState.setPendingProposedAction(pending);
+}
+
+export function clearPendingProposedAction(): void {
+  interactionState.clearPendingProposedAction();
 }
 
 export function getContinuationQueue(): string[] {

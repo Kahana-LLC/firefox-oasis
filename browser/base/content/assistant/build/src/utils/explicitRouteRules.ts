@@ -12,6 +12,7 @@ import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 import { resolveKnownSiteToUrl } from "./knownSites.js";
 import { parseHistorySearchQuery } from "./historySearchQuery.js";
 import { enrichOrganizeTabsRouteArgs } from "./organizeTabsQuery.js";
+import { extractHistorySearchKeyword } from "./historyQueryExtract.js";
 
 type ExplicitRouteRule = {
   next: string;
@@ -145,6 +146,53 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
     next: "organize_windows",
     reason: "explicit-organize-windows",
     resolve: input => (/\borganize\s+windows?\b/i.test(input) ? {} : null),
+  },
+  {
+    next: "focus_tab",
+    reason: "explicit-focus-tab-by-query",
+    resolve: input => {
+      const trimmed = input.trim();
+      if (/\bnew\s+tab\b/i.test(trimmed)) {
+        return null;
+      }
+      const match = trimmed.match(/^open\s+(?:my\s+)?(?<query>.+?)\s+tab\s*$/i);
+      const query = match?.groups?.query?.trim();
+      if (query) {
+        return { query };
+      }
+      const emailMatch = trimmed.match(/^open\s+(?:my\s+)?email\s*$/i);
+      if (emailMatch) {
+        return { query: "email" };
+      }
+      const siteMatch = trimmed.match(
+        /^(?:open\s+(?:my\s+)?)?(?<site>gmail|outlook|yahoo(?:\s+mail)?)(?:\s+tab)?\s*$/i
+      );
+      const site = siteMatch?.groups?.site?.trim();
+      return site ? { query: site.replace(/\s+mail$/i, "") } : null;
+    },
+  },
+  {
+    next: "play_video",
+    reason: "explicit-play-video",
+    resolve: input => {
+      const s = input
+        .trim()
+        .replace(/[.!?]+$/g, "")
+        .trim();
+      const wantMatch = s.match(
+        /^(?:i\s+(?:want\s+to\s+)?)?(?:watch|play)\s+(?:the\s+)?(?<query>.+?)(?:\s+on\s+youtube)?$/i
+      );
+      if (wantMatch?.groups?.query) {
+        return { query: wantMatch.groups.query.trim() };
+      }
+      const embeddedMatch = s.match(
+        /\b(?:watch|play)\s+(?<query>.+?\b(?:highlights?|video|clip)s?\b.*)$/i
+      );
+      if (embeddedMatch?.groups?.query) {
+        return { query: embeddedMatch.groups.query.trim() };
+      }
+      return null;
+    },
   },
   {
     next: "show_subscription",
@@ -330,9 +378,19 @@ const EXPLICIT_ROUTE_RULES: ExplicitRouteRule[] = [
       for (const { re, queryGroup } of patterns) {
         const match = input.match(re);
         if (match) {
-          const query = match.groups?.query?.trim() || queryGroup || "";
+          let query = match.groups?.query?.trim() || queryGroup || "";
+          if (query.split(/\s+/).length > 6) {
+            const extracted = extractHistorySearchKeyword(input);
+            if (extracted) {
+              query = extracted;
+            }
+          }
           if (query) return { query };
         }
+      }
+      const extracted = extractHistorySearchKeyword(input);
+      if (extracted) {
+        return { query: extracted };
       }
       if (/\b(?:my|the)\s+(?:browsing\s+)?history\b/i.test(input)) {
         const cleaned = input

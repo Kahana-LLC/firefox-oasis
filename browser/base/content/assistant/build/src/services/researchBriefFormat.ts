@@ -1,4 +1,5 @@
 import { isRecord } from "../assistant/messageUtils.js";
+import { formatUntrustedSourceStatusLabel } from "../utils/untrustedContent.js";
 import type {
   ResearchBrief,
   ResearchBriefQuote,
@@ -9,6 +10,32 @@ import type {
 export const DEFAULT_MAX_TABS = 10;
 export const HARD_MAX_TABS = 15;
 const MAX_QUOTE_CHARS = 500;
+
+export function formatUnreadableDigestsMessage(
+  digests: TabDigest[],
+  scopeLabel?: string
+): string {
+  const checked = digests.map(digest => {
+    const label = digest.title?.trim() || digest.url || "Untitled tab";
+    const reason =
+      digest.failureReason ||
+      (digest.status === "skipped"
+        ? "Internal or non-web page"
+        : "No readable text");
+    return `- ${label}: ${reason}`;
+  });
+  const header = scopeLabel
+    ? `I found ${digests.length} tab(s) in ${scopeLabel} but couldn't read any of them.`
+    : `I found ${digests.length} tab(s) but couldn't read any of them.`;
+  return [
+    header,
+    "",
+    "Tabs checked:",
+    ...checked,
+    "",
+    "Try opening each tab briefly so it loads, then retry. Background or discarded tabs often can't be read.",
+  ].join("\n");
+}
 
 export function clampMaxTabs(value: number | undefined): number {
   if (value == null || !Number.isFinite(value)) {
@@ -121,8 +148,12 @@ export function researchBriefToMarkdown(brief: ResearchBrief): string {
     for (const source of brief.sources) {
       const title = source.title?.trim() || source.url || "Untitled";
       lines.push(`### [${title}](${source.url})`);
-      if (source.status !== "ok" && source.failureReason) {
-        lines.push("", `*${source.failureReason}*`, "");
+      const statusLabel = formatUntrustedSourceStatusLabel(
+        source.status,
+        source.failureReason
+      );
+      if (source.status !== "ok" && statusLabel) {
+        lines.push("", `*${statusLabel}*`, "");
       }
       for (const quote of source.quotes || []) {
         const q = truncateQuote(quote.text);

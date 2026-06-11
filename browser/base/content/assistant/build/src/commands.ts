@@ -22,6 +22,14 @@ import {
   type HistorySearchMode,
 } from "./utils/historySearchQuery";
 import {
+  extractHistorySearchKeyword,
+  historyKeywordFallbacks,
+} from "./utils/historyQueryExtract";
+import {
+  findTabsByIntentQuery,
+  pickBestTabForIntentQuery,
+} from "./utils/tabCategoryQuery";
+import {
   applyHistorySearchFilters,
   buildHistoryRefinementPrompt,
   clearPendingHistoryRefinement,
@@ -84,6 +92,18 @@ import {
   type BuildResearchBriefOptions,
   type ResearchScope,
 } from "./services/researchBrief";
+import {
+  effectiveResearchScope,
+  previewOutreachEmailScopeAsync,
+  previewResearchBriefScopeAsync,
+} from "./services/researchTabSelection";
+import {
+  buildOutreachEmail,
+  type BuildOutreachEmailOptions,
+} from "./services/outreachEmail.js";
+import type { OutreachEmailPurpose } from "./services/outreachEmailTypes.js";
+import { buildOutreachEmailToolMessage } from "./utils/outreachEmailRequest.js";
+import { buildOutreachScopePreviewDescription } from "./utils/outreachEmailScopePreview.js";
 import {
   getCachedResearchBriefRun,
   storeResearchBriefRun,
@@ -150,6 +170,14 @@ function getChrome() {
 function stringArg(args: CommandArgs, key: string): string | undefined {
   const value = args[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function normalizeQuery(value: string | undefined): string {
+  return String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
 }
 
 function numberArg(args: CommandArgs, key: string): number | undefined {
@@ -228,6 +256,7 @@ type GBrowserTabOps = GBrowserLike & {
   explicitUnloadTabs?: (tabs: BrowserTabLike[]) => Promise<void>;
   removeTabs?: (tabs: BrowserTabLike[], opts?: Record<string, unknown>) => void;
   getDuplicateTabsToClose?: (tab: BrowserTabLike) => BrowserTabLike[];
+  getAllDuplicateTabsToClose?: () => BrowserTabLike[];
   _getTabsToTheEndFrom?: (tab: BrowserTabLike) => BrowserTabLike[];
   _getTabsToTheStartFrom?: (tab: BrowserTabLike) => BrowserTabLike[];
   removeAllTabsBut?: (
@@ -638,7 +667,9 @@ export class PlayVideoCommand implements Command {
     if (videoId) {
       const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
       topWin.openTrustedLinkIn(watchUrl, "tab");
-      return { message: `Playing top YouTube result for "${query}": ${watchUrl}` };
+      return {
+        message: `Playing top YouTube result for "${query}": ${watchUrl}`,
+      };
     }
 
     const fallbackUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -672,10 +703,45 @@ export class OpenTabCommand implements Command {
 export class CloseTabCommand implements Command {
   commandName = "close_tab";
   description =
-    "Close the active tab (or a tab by index). Accepts arguments: { index?: number, confirmed?: boolean } (1-based).";
+    "Close the active tab, a tab by index, or tabs matching a title/URL keyword or category (e.g. shopping → Amazon tabs). Accepts arguments: { index?: number, query?: string, confirmed?: boolean } (1-based index).";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const gb = asTabOps(gBrowser);
+    const query = normalizeQuery(stringArg(args, "query"));
+
+    if (query) {
+      const tabs = findTabsByIntentQuery(gBrowser, query);
+      if (tabs.length === 0) {
+        return {
+          message: `I couldn't find any open tabs matching "${query}".`,
+        };
+      }
+      if (booleanArg(args, "confirmed") !== true) {
+        setPendingConfirmation({
+          command: "close_tab",
+          args: { ...args, confirmed: true },
+          description: `Close ${tabs.length} tab(s) matching "${query}"?`,
+        });
+        return {
+          message: `I found ${tabs.length} tab(s) matching "${query}". Should I close them?`,
+          requiresConfirmation: true,
+          confirmationData: { query, count: tabs.length },
+        };
+      }
+      clearPendingConfirmation();
+      if (gb?.removeTabs) {
+        gb.removeTabs(tabs, { isUserTriggered: true });
+      } else {
+        for (const tab of tabs) {
+          gBrowser.removeTab?.(tab);
+        }
+      }
+      return {
+        message: `I've closed ${tabs.length} tab(s) matching "${query}".`,
+      };
+    }
+
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gBrowser, idx);
     if (!tab)
@@ -698,6 +764,51 @@ export class CloseTabCommand implements Command {
     clearPendingConfirmation();
     gBrowser.removeTab?.(tab);
     return { message: `I've closed the tab: ${title}` };
+  }
+}
+
+export class FocusTabCommand implements Command {
+  commandName = "focus_tab";
+  description =
+    'Switch to an already-open tab matching a title, URL keyword, or category (e.g. email → Gmail, shopping → Amazon). Arguments: { query: string }.';
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
+    const query = normalizeQuery(stringArg(args, "query"));
+    if (!query) {
+      return { message: "Which tab should I switch to?" };
+    }
+    const tabs = findTabsByIntentQuery(gBrowser, query);
+    if (tabs.length === 0) {
+      const emailUrls: Record<string, string> = {
+        email: "https://mail.google.com",
+        gmail: "https://mail.google.com",
+        outlook: "https://outlook.live.com/mail/",
+        yahoo: "https://mail.yahoo.com",
+      };
+      const normalizedQuery = normalizeQuery(query) || "";
+      const mailUrl = emailUrls[normalizedQuery];
+      const { topWin } = getChrome();
+      if (mailUrl && topWin?.openTrustedLinkIn) {
+        topWin.openTrustedLinkIn(mailUrl, "tab");
+        return {
+          message: `I've opened ${normalizedQuery} in a new tab for you.`,
+        };
+      }
+      return {
+        message: `I couldn't find an open tab matching "${query}".`,
+      };
+    }
+    const tab = pickBestTabForIntentQuery(tabs, query);
+    if (!tab) {
+      return {
+        message: `I couldn't find an open tab matching "${query}".`,
+      };
+    }
+    gBrowser.selectedTab = tab;
+    return {
+      message: `I've switched to the tab: ${tabTitle(tab)}`,
+    };
   }
 }
 
@@ -914,9 +1025,10 @@ export class CloseDuplicateTabsCommand implements Command {
     }
     const idx = numberArg(args, "index");
     const tab = tabByIndexOrCurrent(gb, idx);
-    if (!tab)
-      return { message: idx != null ? `No tab ${idx}.` : "No active tab." };
-    const dupes = gb.getDuplicateTabsToClose(tab);
+    let dupes = gb.getAllDuplicateTabsToClose?.() ?? [];
+    if (!dupes.length && tab) {
+      dupes = gb.getDuplicateTabsToClose?.(tab) ?? [];
+    }
     if (!dupes.length) {
       return { message: "I didn't find any duplicate tabs to close." };
     }
@@ -1635,12 +1747,17 @@ function normalizeResearchScope(raw: string | undefined): ResearchScope {
   ) {
     return "window";
   }
+  if (scope === "relevant") {
+    return "relevant";
+  }
   return "tab-group";
 }
 
 function researchBriefClarificationFromScopePreview(
   preview: ResolveResearchTabsResult,
-  args: CommandArgs
+  args: CommandArgs,
+  resumeCommand = "build_research_brief",
+  resumeLabel?: string
 ): CmdResult | null {
   if (!preview.ok && preview.code === "ambiguous_group" && preview.candidates) {
     const candidates = preview.candidates.map(c => ({
@@ -1656,9 +1773,11 @@ function researchBriefClarificationFromScopePreview(
     setResearchBriefResume({
       args: { ...args, scope_confirmed: true },
       reason: "ambiguous_group",
+      command: resumeCommand,
     });
     setPendingClarification({
-      originalMessage: String(args.topic || "research brief"),
+      originalMessage:
+        resumeLabel || String(args.topic || "research brief"),
       options,
     });
     return { message };
@@ -1675,7 +1794,9 @@ function researchBriefClarificationFromBuildFailure(
     remaining?: number;
     suggestedTabCount?: number;
   },
-  args: CommandArgs
+  args: CommandArgs,
+  resumeCommand = "build_research_brief",
+  resumeLabel?: string
 ): CmdResult | null {
   if (
     result.code === "over_quota" &&
@@ -1693,14 +1814,69 @@ function researchBriefClarificationFromBuildFailure(
       remaining: result.remaining,
       suggestedTabCount: result.suggestedTabCount,
     });
-    setResearchBriefResume({ args: stashArgs, reason: "over_quota" });
+    setResearchBriefResume({
+      args: stashArgs,
+      reason: "over_quota",
+      command: resumeCommand,
+    });
     setPendingClarification({
-      originalMessage: String(args.topic || "research brief"),
+      originalMessage:
+        resumeLabel || String(args.topic || "research brief"),
       options,
     });
     return { message };
   }
   return null;
+}
+
+const OUTREACH_EMAIL_PURPOSES = new Set<OutreachEmailPurpose>([
+  "networking",
+  "cold",
+  "follow_up",
+  "thank_you",
+  "custom",
+]);
+
+function normalizeOutreachPurpose(raw: string | undefined): OutreachEmailPurpose {
+  const purpose = String(raw || "")
+    .trim()
+    .toLowerCase() as OutreachEmailPurpose;
+  return OUTREACH_EMAIL_PURPOSES.has(purpose) ? purpose : "custom";
+}
+
+function buildOutreachEmailOptionsFromArgs(
+  args: CommandArgs,
+  gBrowser: GBrowserLike | null
+): BuildOutreachEmailOptions {
+  const quotaRaw = stringArg(args, "quota_mode");
+  const quotaMode =
+    quotaRaw === "truncate" || quotaRaw === "fewer_tabs" ? quotaRaw : "default";
+  const toneRaw = stringArg(args, "tone");
+  const tone =
+    toneRaw === "warm" ||
+    toneRaw === "professional" ||
+    toneRaw === "concise" ||
+    toneRaw === "friendly"
+      ? toneRaw
+      : undefined;
+  return {
+    gBrowser,
+    scope: normalizeResearchScope(stringArg(args, "scope")),
+    name: stringArg(args, "name"),
+    purpose: normalizeOutreachPurpose(stringArg(args, "purpose")),
+    purposeNotes: stringArg(args, "purpose_notes"),
+    recipientName: stringArg(args, "recipient_name"),
+    recipientRole: stringArg(args, "recipient_role"),
+    tone,
+    tabQueries: stringArrayArg(args, "tab_queries"),
+    tabIndices: numberArrayArg(args, "tab_indices"),
+    maxTabs: numberArg(args, "max_tabs"),
+    excludeIndices: numberArrayArg(args, "exclude_indices"),
+    excludeQueries: stringArrayArg(args, "exclude_queries"),
+    scopeConfirmed: booleanArg(args, "scope_confirmed") === true,
+    quotaMode,
+    useActiveTabGroup: booleanArg(args, "use_active_tab_group") === true,
+  };
 }
 
 function buildResearchBriefOptionsFromArgs(
@@ -1827,7 +2003,7 @@ export class OrganizeTabsCommand implements Command {
 export class BuildResearchBriefCommand implements Command {
   commandName = "build_research_brief";
   description =
-    "Build a structured research brief (outline, themes, sourced quotes) from open tabs. Arguments: { topic?: string, infer_topic_from_content?: boolean, scope?: 'tab-group'|'window'|'tabs', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], outline_hint?: string, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=tabs uses tab_queries (title/URL substrings) and/or tab_indices (1-based window positions). When infer_topic_from_content is true, topic may be omitted and will be derived from page content after extraction.";
+    "Build a structured research brief (outline, themes, sourced quotes) from open tabs. Arguments: { topic?: string, infer_topic_from_content?: boolean, scope?: 'tab-group'|'window'|'tabs'|'relevant', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], outline_hint?: string, max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=relevant ranks open tabs by topic (e.g. tabs related to software). scope=tabs uses tab_queries (title/URL substrings) and/or tab_indices (1-based window positions). When infer_topic_from_content is true, topic may be omitted and will be derived from page content after extraction.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     const options = buildResearchBriefOptionsFromArgs(args, gBrowser);
@@ -1851,8 +2027,18 @@ export class BuildResearchBriefCommand implements Command {
       };
     }
 
+    if (options.scope === "relevant" && !topic) {
+      return {
+        message: "Which topic should I find relevant tabs for?",
+      };
+    }
+
     if (!options.scopeConfirmed) {
-      const preview = previewResearchBriefScope(options);
+      const previewScope = effectiveResearchScope(options);
+      const preview =
+        previewScope === "relevant"
+          ? await previewResearchBriefScopeAsync(options)
+          : previewResearchBriefScope(options);
       const scopeClarify = researchBriefClarificationFromScopePreview(
         preview,
         args
@@ -1914,6 +2100,101 @@ export class BuildResearchBriefCommand implements Command {
           brief: result.brief,
           briefId: result.briefId,
           digests: cached?.digests ?? [],
+        }),
+      };
+    } finally {
+      endResearchBriefRun();
+    }
+  }
+}
+
+export class DraftOutreachEmailCommand implements Command {
+  commandName = "draft_outreach_email";
+  description =
+    "Draft a personalized outreach email from open tabs (networking, follow-up, thank-you, cold outreach). Arguments: { purpose?: 'networking'|'cold'|'follow_up'|'thank_you'|'custom', purpose_notes?: string, recipient_name?: string, recipient_role?: string, tone?: 'warm'|'professional'|'concise'|'friendly', scope?: 'tab-group'|'window'|'tabs'|'relevant', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=relevant ranks tabs by recipient and purpose. Oasis does not send email — user copies into their mail client.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const { gBrowser } = getChrome();
+    const options = buildOutreachEmailOptionsFromArgs(args, gBrowser);
+
+    if (
+      options.scope === "tabs" &&
+      (options.tabQueries?.length ?? 0) === 0 &&
+      (options.tabIndices?.length ?? 0) === 0
+    ) {
+      return {
+        message:
+          "Which tabs should I use? Provide tab_queries (title/URL keywords) or tab_indices (positions).",
+      };
+    }
+
+    if (!options.scopeConfirmed) {
+      const previewScope = effectiveResearchScope(options);
+      const preview =
+        previewScope === "relevant"
+          ? await previewOutreachEmailScopeAsync(options)
+          : previewResearchBriefScope(options);
+      const resumeLabel = options.recipientName
+        ? `outreach email to ${options.recipientName}`
+        : "outreach email";
+      const scopeClarify = researchBriefClarificationFromScopePreview(
+        preview,
+        args,
+        this.commandName,
+        resumeLabel
+      );
+      if (scopeClarify) {
+        return scopeClarify;
+      }
+      if (preview.ok && shouldConfirmResearchBriefScope(preview)) {
+        const confirmArgs = {
+          ...args,
+          scope_confirmed: true,
+        };
+        const description = buildOutreachScopePreviewDescription({
+          scopeLabel: preview.scopeLabel,
+          tabs: preview.tabs,
+          tabsOmittedByLimit: preview.tabsOmittedByLimit,
+          urlsDeduplicated: preview.urlsDeduplicated,
+        });
+        setPendingConfirmation({
+          command: this.commandName,
+          args: confirmArgs,
+          description,
+        });
+        return { message: description, requiresConfirmation: true };
+      }
+    }
+
+    const signal = beginResearchBriefRun();
+    const onProgress = createResearchBriefProgressReporter(signal);
+    try {
+      const result = await buildOutreachEmail({
+        ...options,
+        onProgress,
+        signal,
+      });
+
+      if (!result.ok) {
+        const quotaClarify = researchBriefClarificationFromBuildFailure(
+          result,
+          args,
+          this.commandName,
+          options.recipientName
+            ? `outreach email to ${options.recipientName}`
+            : "outreach email"
+        );
+        if (quotaClarify) {
+          return quotaClarify;
+        }
+        return { message: result.message };
+      }
+
+      return {
+        message: buildOutreachEmailToolMessage({
+          markdown: result.markdown,
+          plainEmail: result.plainEmail,
+          draft: result.draft,
+          draftId: result.draftId,
         }),
       };
     } finally {
@@ -2869,6 +3150,10 @@ export class SearchHistorySemanticCommand implements Command {
         mode = reparsed.mode;
       } else if (looksLikeHistoryKeywordSearch(utterance)) {
         mode = "keyword";
+        const extracted = extractHistorySearchKeyword(utterance);
+        if (extracted) {
+          query = extracted;
+        }
       }
     }
 
@@ -2903,14 +3188,26 @@ export class SearchHistorySemanticCommand implements Command {
       const filters = parseHistorySearchFiltersFromArgs(record);
       const searchMode = mode === "recent" ? "auto" : mode;
       const searchLimit = skipRefinement ? 10 : 25;
-      const results = await semanticHistorySearch.search(query, searchLimit, {
-        mode: searchMode,
-      });
-
       const MIN_RELEVANCE = mode === "keyword" ? 0.5 : 0.3;
       const MAX_RESULTS = 5;
-      let qualifying = results.filter(r => r.score >= MIN_RELEVANCE);
-      qualifying = applyHistorySearchFilters(qualifying, filters);
+      let activeQuery = query;
+      let qualifying: Awaited<
+        ReturnType<typeof semanticHistorySearch.search>
+      > = [];
+      for (const candidate of [query, ...historyKeywordFallbacks(query)]) {
+        const results = await semanticHistorySearch.search(
+          candidate,
+          searchLimit,
+          { mode: searchMode }
+        );
+        qualifying = results.filter(r => r.score >= MIN_RELEVANCE);
+        qualifying = applyHistorySearchFilters(qualifying, filters);
+        if (qualifying.length > 0) {
+          activeQuery = candidate;
+          break;
+        }
+      }
+      query = activeQuery;
 
       if (
         !skipRefinement &&

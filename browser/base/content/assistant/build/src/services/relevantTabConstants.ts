@@ -1,0 +1,2 @@
+export const RELEVANT_AUTO_UPGRADE_THRESHOLD = 12;
+export const RELEVANT_CATALOG_CAP = 40;

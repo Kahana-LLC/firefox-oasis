@@ -2,11 +2,16 @@ import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   copyMarkdownToClipboard,
+  copyTextToClipboard,
+  isOutreachEmailMarkdown,
   isResearchBriefMarkdown,
   textForClipboard,
 } from '../utils/copyToClipboard';
+import { isLongFormAiArtifact } from '../utils/longFormArtifact';
 import { parseResearchBriefToolMessage } from '../../../build/src/utils/researchBriefRequest.js';
+import { parseOutreachEmailToolMessage } from '../../../build/src/utils/outreachEmailRequest.js';
 import type { MarkdownSection } from '../utils/markdownSectionSplit';
+import { OutreachEmailView } from './OutreachEmailView';
 import { ResearchBriefView } from './ResearchBriefView';
 import { Feedback } from './Feedback';
 import type { TrainingSubmittedPayload } from './Feedback';
@@ -114,6 +119,18 @@ export function ChatTimeline({
   const [sectionCopyFailedId, setSectionCopyFailedId] = useState<string | null>(
     null
   );
+  const [outreachCopiedMsgId, setOutreachCopiedMsgId] = useState<string | null>(
+    null
+  );
+  const [outreachCopyFailedMsgId, setOutreachCopyFailedMsgId] = useState<
+    string | null
+  >(null);
+
+  const EMAIL_COMPOSE_URLS = {
+    gmail: 'https://mail.google.com/mail/?view=cm&fs=1',
+    outlook: 'https://outlook.live.com/mail/0/deeplink/compose',
+    yahoo: 'https://compose.mail.yahoo.com/',
+  } as const;
 
   const handleCopy = async (messageId: string, content: string) => {
     const ok = await copyMarkdownToClipboard(content);
@@ -165,10 +182,18 @@ export function ChatTimeline({
       !activeToolLabel &&
       last?.role === 'ai' &&
       last.content.length > 0;
+    const snapArtifactToTop =
+      shouldSnapToTopOfLastAi && isLongFormAiArtifact(last.content);
 
     if (shouldSnapToTopOfLastAi) {
       requestAnimationFrame(() => {
-        lastAiRef.current?.scrollIntoView({ block: 'nearest', behavior: 'auto', inline: 'nearest' });
+        requestAnimationFrame(() => {
+          lastAiRef.current?.scrollIntoView({
+            block: snapArtifactToTop ? 'start' : 'nearest',
+            behavior: 'auto',
+            inline: 'nearest',
+          });
+        });
       });
       return;
     }
@@ -269,6 +294,13 @@ export function ChatTimeline({
           const isResearchBrief =
             isResearchBriefMarkdown(message.content) &&
             displayContent.length > 0;
+          const isOutreachEmail =
+            isOutreachEmailMarkdown(message.content) &&
+            displayContent.length > 0;
+          const outreachPayload = isOutreachEmail
+            ? parseOutreachEmailToolMessage(message.content)
+            : null;
+          const isLongFormArtifact = isLongFormAiArtifact(message.content);
 
           let useMarkdownHtml = Boolean(
             oasisWindow.marked &&
@@ -276,7 +308,7 @@ export function ChatTimeline({
               !(isCapabilitiesOverview && isLegacyCapabilitiesBubbles)
           );
           let htmlContent = '';
-          if (useMarkdownHtml && !isResearchBrief) {
+          if (useMarkdownHtml && !isResearchBrief && !isOutreachEmail) {
             try {
               const raw = oasisWindow.marked!.parse(message.content);
               htmlContent = oasisWindow.DOMPurify!.sanitize(raw);
@@ -298,11 +330,45 @@ export function ChatTimeline({
             <Fragment key={message.id}>
               <div
                 ref={isLast ? lastAiRef : undefined}
-                className="ai-message-wrapper"
+                className={`ai-message-wrapper${isLongFormArtifact ? ' long-form-artifact' : ''}`}
                 data-oasis-assistant-msg={message.id}
               >
                 <div className="ai-response-container" onClick={onLinkClick}>
-                  {isResearchBrief && useMarkdownHtml ? (
+                  {isOutreachEmail && outreachPayload ? (
+                    <OutreachEmailView
+                      draft={outreachPayload.draft}
+                      plainEmail={outreachPayload.plainEmail}
+                      copiedAll={outreachCopiedMsgId === message.id}
+                      copyAllFailed={outreachCopyFailedMsgId === message.id}
+                      onCopyAll={() => {
+                        void copyTextToClipboard(outreachPayload.plainEmail).then(
+                          ok => {
+                            if (ok) {
+                              setOutreachCopyFailedMsgId(null);
+                              setOutreachCopiedMsgId(message.id);
+                              window.setTimeout(() => {
+                                setOutreachCopiedMsgId(current =>
+                                  current === message.id ? null : current
+                                );
+                              }, 2000);
+                              return;
+                            }
+                            setOutreachCopiedMsgId(null);
+                            setOutreachCopyFailedMsgId(message.id);
+                            window.setTimeout(() => {
+                              setOutreachCopyFailedMsgId(current =>
+                                current === message.id ? null : current
+                              );
+                            }, 2000);
+                          }
+                        );
+                      }}
+                      onOpenEmailClient={provider => {
+                        const url = EMAIL_COMPOSE_URLS[provider];
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
+                    />
+                  ) : isResearchBrief && useMarkdownHtml ? (
                     <ResearchBriefView
                       markdown={displayContent}
                       onSectionCopy={section => {

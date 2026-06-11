@@ -35,7 +35,11 @@ function assertBriefRoute(
   assert.equal(route.next, "build_research_brief");
   if (expected.inferTopic) {
     assert.equal(route.args?.infer_topic_from_content, true);
-    assert.ok(!route.args?.topic);
+    if (expected.topic) {
+      assert.equal(route.args?.topic, expected.topic);
+    } else {
+      assert.ok(!route.args?.topic);
+    }
   } else if (expected.topic !== undefined) {
     assert.equal(route.args?.topic, expected.topic);
   }
@@ -250,6 +254,65 @@ test("consolidate findings from this tab group routes", () => {
     assert.equal(route.next, "build_research_brief");
     assert.equal(route.args?.use_active_tab_group, true);
   }
+});
+
+test("create a summary of these tabs routes to window scope", () => {
+  assertBriefRoute("create a summary of these tabs", {
+    scope: "window",
+    inferTopic: true,
+  });
+});
+
+test("create a summary of this tab group routes to active group", () => {
+  const route = resolveExplicitResearchBriefRoute(
+    "create a summary of this tab group",
+    snapshot
+  );
+  assert.equal(route?.type, "tool");
+  if (route?.type === "tool") {
+    assert.equal(route.next, "build_research_brief");
+    assert.equal(route.args?.use_active_tab_group, true);
+    assert.equal(route.args?.infer_topic_from_content, true);
+  }
+});
+
+test("looksLikeResearchBriefCommand accepts summary of this tab group", () => {
+  assert.equal(
+    looksLikeResearchBriefCommand("create a summary of this tab group"),
+    true
+  );
+});
+
+test("create a summary of tabs related to llms routes by topic", () => {
+  assertBriefRoute("create a summary of the tabs related to llms", {
+    scope: "relevant",
+    topic: "llms",
+    inferTopic: true,
+  });
+});
+
+test("summarize tabs about oauth routes by topic", () => {
+  assertBriefRoute("summarize tabs about oauth", {
+    scope: "relevant",
+    topic: "oauth",
+    inferTopic: true,
+  });
+});
+
+test("consolidate tabs related to machine learning routes by topic", () => {
+  assertBriefRoute("consolidate tabs related to machine learning", {
+    scope: "relevant",
+    topic: "machine learning",
+    inferTopic: true,
+  });
+});
+
+test("create a summary of tabs related to software routes semantically", () => {
+  assertBriefRoute("create a summary of tabs related to software", {
+    scope: "relevant",
+    topic: "software",
+    inferTopic: true,
+  });
 });
 
 test("unrelated commands do not route", () => {

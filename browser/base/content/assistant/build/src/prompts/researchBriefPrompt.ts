@@ -1,3 +1,9 @@
+import {
+  UNTRUSTED_CONTENT_SYSTEM_RULES,
+  buildTrustedUserIntentBlock,
+  wrapUntrustedJsonBlock,
+} from "../utils/untrustedContent.js";
+
 export const RESEARCH_BRIEF_SYSTEM_PROMPT = [
   "You are a research assistant helping a writer draft long-form content.",
   "You receive extracted text from multiple open browser tabs on a single topic.",
@@ -6,6 +12,7 @@ export const RESEARCH_BRIEF_SYSTEM_PROMPT = [
   "Use verbatim quotes when possible (max 500 characters each).",
   "Populate gapsAndContradictions when sources disagree or coverage is thin.",
   "Return only valid JSON matching the required schema.",
+  UNTRUSTED_CONTENT_SYSTEM_RULES,
 ].join("\n");
 
 const quoteSchema = {
@@ -93,10 +100,11 @@ export function buildResearchBriefUserMessage(params: {
     failureReason?: string;
   }>;
 }): string {
-  const lines = [`Topic: ${params.topic}`, `Scope: ${params.scopeLabel}`];
-  if (params.outlineHint?.trim()) {
-    lines.push(`Outline hint: ${params.outlineHint.trim()}`);
-  }
-  lines.push("", "Tab digests (JSON):", JSON.stringify(params.digests));
-  return lines.join("\n");
+  const trusted = buildTrustedUserIntentBlock({
+    topic: params.topic,
+    scope: params.scopeLabel,
+    outline_hint: params.outlineHint,
+  });
+  const digests = wrapUntrustedJsonBlock("Tab digests", params.digests);
+  return [trusted, "", digests].join("\n");
 }

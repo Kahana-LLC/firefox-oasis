@@ -16,6 +16,8 @@ import type {
   PendingClarification,
   PendingConfirmation,
 } from "../services/interactionState.js";
+import type { PendingProposedAction } from "../utils/proposedActionUtils.js";
+import { isAffirmativeFollowUp } from "../utils/proposedActionUtils.js";
 import {
   looksLikeNewActionCommand,
   parseAmbiguityResolution,
@@ -68,6 +70,55 @@ export type ClarificationGateDecision =
   | ClarificationCancelDecision
   | ClearGateDecision
   | NoneGateDecision;
+
+type ProposedActionResolvedDecision = {
+  kind: "resolved";
+  resolvedPrompt: string;
+  suggestedTool?: string;
+};
+
+type ProposedActionCancelDecision = {
+  kind: "cancel";
+};
+
+export type ProposedActionGateDecision =
+  | ProposedActionResolvedDecision
+  | ProposedActionCancelDecision
+  | NoneGateDecision;
+
+export function resolvePendingProposedActionGate(params: {
+  confirmationText: string;
+  pendingProposedAction: PendingProposedAction | null;
+  pendingConfirmation: PendingConfirmation | null;
+  hasPendingContinuation?: boolean;
+}): ProposedActionGateDecision {
+  const {
+    confirmationText,
+    pendingProposedAction,
+    pendingConfirmation,
+    hasPendingContinuation = false,
+  } = params;
+  if (hasPendingContinuation) {
+    return { kind: "none" };
+  }
+  if (!pendingProposedAction || pendingConfirmation) {
+    return { kind: "none" };
+  }
+
+  if (CANCEL_RE.test(confirmationText)) {
+    return { kind: "cancel" };
+  }
+
+  if (isAffirmativeFollowUp(confirmationText)) {
+    return {
+      kind: "resolved",
+      resolvedPrompt: pendingProposedAction.proposedPrompt,
+      suggestedTool: pendingProposedAction.suggestedTool,
+    };
+  }
+
+  return { kind: "none" };
+}
 
 export function resolvePendingConfirmationGate(params: {
   confirmationText: string;

@@ -38,6 +38,7 @@ import { looksLikeCommandChain } from "./commandChain.js";
 import { QuotaExceededError } from "../awsSignedFetch.js";
 import { subscriptionService } from "../services/subscription.js";
 import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
+import { sanitizeAssistRouterMessageContent } from "../utils/routerWireSanitize.js";
 
 const PLAN_TOOL_NAME = "route_action_plan";
 const LIST_FAMILY_TOOLS = new Set([
@@ -65,6 +66,7 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "delete_tab_group",
   "rename_tab_group",
   "close_tab",
+  "focus_tab",
   "move_tab_to_new_window",
   "split_tabs",
   "add_split_view",
@@ -84,6 +86,7 @@ const MUTATION_FAMILY_TOOLS = new Set([
   "open_send_tab_to_device",
   "copy_tab_urls",
   "unload_tab",
+  "close_duplicate_tabs",
 ]);
 // const SEARCH_WEB_HINT_RE =
 //   /\b(?:google|web|internet|online|bing|duckduckgo|search\s+the\s+web)\b/i;
@@ -315,7 +318,10 @@ export async function tryResolveAssistRoute(params: {
   }
 
   try {
-    const assistMessages = toWire(messages.slice(-10));
+    const assistMessages = toWire(messages.slice(-10)).map(message => ({
+      ...message,
+      content: sanitizeAssistRouterMessageContent(message.content),
+    }));
     const optionsForAssist = allowPlanTool
       ? [...effectiveOptions, PLAN_TOOL_NAME]
       : effectiveOptions;

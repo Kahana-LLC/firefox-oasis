@@ -53,6 +53,35 @@ function extractIndices(input: string): number[] {
 
 const MUTATION_EXPLICIT_ROUTES: MutationRoute[] = [
   {
+    next: "close_duplicate_tabs",
+    reason: "mutation-explicit-close-duplicate-tabs",
+    resolve: input =>
+      /^(?:remove|close|delete)\s+(?:any\s+)?duplicate\s+tabs?\s*$/i.test(
+        input.trim()
+      )
+        ? {}
+        : null,
+  },
+  {
+    next: "close_tab",
+    reason: "mutation-explicit-close-tabs-by-query",
+    resolve: input => {
+      const match = input
+        .trim()
+        .match(/^close\s+(?:the\s+)?(?<query>.+?)\s+tabs?\s*$/i);
+      if (!match?.groups?.query) {
+        return null;
+      }
+      const query = match.groups.query.trim();
+      if (
+        /^(?:current|this|active|duplicate|other|all|these|my)$/i.test(query)
+      ) {
+        return null;
+      }
+      return { query };
+    },
+  },
+  {
     next: "split_tabs",
     reason: "mutation-explicit-split-tabs",
     resolve: input => {
@@ -155,8 +184,9 @@ const MUTATION_EXPLICIT_ROUTES: MutationRoute[] = [
     next: "close_tab",
     reason: "mutation-explicit-close-tab",
     resolve: input => {
-      const match = input.match(
-        /close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?/i
+      const trimmed = input.trim();
+      const match = trimmed.match(
+        /^close\s+(?:the\s+)?(?:current\s+)?tab(?:\s+(?<index>\d+))?\s*$/i
       );
       if (!match) {
         return null;

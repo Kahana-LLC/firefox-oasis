@@ -1,3 +1,9 @@
+import {
+  UNTRUSTED_CONTENT_SYSTEM_RULES,
+  buildTrustedUserIntentBlock,
+  wrapUntrustedJsonBlock,
+} from "../utils/untrustedContent.js";
+
 export const ORGANIZE_TABS_SYSTEM_PROMPT = [
   "You organize open browser tabs into tab groups by topic.",
   "You receive a catalog of tabs with index, title, URL, domain, current group, and optional page snippets.",
@@ -8,6 +14,7 @@ export const ORGANIZE_TABS_SYSTEM_PROMPT = [
   "- research_vs_other: create exactly two groups when possible — one for the focus/research topic and one named Other for the rest.",
   "Use concise group names (2-4 words). Do not invent tab indices not in the catalog.",
   "Skip pinned tabs if marked pinned.",
+  UNTRUSTED_CONTENT_SYSTEM_RULES,
 ].join("\n");
 
 export const ORGANIZE_TABS_GENERATION_CONFIG = {
@@ -54,21 +61,13 @@ export function buildOrganizeTabsUserMessage(params: {
     snippet?: string;
   }>;
 }): string {
-  const lines = [
-    `Mode: ${params.mode}`,
-    `Scope: ${params.scopeLabel}`,
-    `Max groups: ${params.maxGroups}`,
-  ];
-  if (params.focus) {
-    lines.push(`Focus topic: ${params.focus}`);
-  }
-  if (params.suggestedGroupName) {
-    lines.push(`Suggested group name: ${params.suggestedGroupName}`);
-  }
-  lines.push(
-    "",
-    "Tab catalog (JSON):",
-    JSON.stringify(params.catalog, null, 0)
-  );
-  return lines.join("\n");
+  const trusted = buildTrustedUserIntentBlock({
+    mode: params.mode,
+    scope: params.scopeLabel,
+    max_groups: String(params.maxGroups),
+    focus_topic: params.focus,
+    suggested_group_name: params.suggestedGroupName,
+  });
+  const catalog = wrapUntrustedJsonBlock("Tab catalog", params.catalog);
+  return [trusted, "", catalog].join("\n");
 }
