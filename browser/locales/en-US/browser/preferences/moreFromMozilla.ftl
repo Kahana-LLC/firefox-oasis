@@ -17,10 +17,10 @@ more-from-moz-firefox-mobile-title-1 = Oasis Mobile
 more-from-moz-mozilla-vpn-title = Contact Sales
 more-from-moz-mozilla-vpn-description = Connect with our sales team to learn about enterprise solutions.
 
-more-from-moz-qr-code-box-firefox-mobile-title = Oasis mobile is coming soon. Visit kahana.co to join the waitlist.
+more-from-moz-qr-code-box-firefox-mobile-title = Oasis mobile is coming soon. Visit kahana.io to join the waitlist.
 more-from-moz-qr-code-box-firefox-mobile-button = Visit Website
 more-from-moz-qr-code-firefox-mobile-img =
-  .alt = QR code to visit kahana.co for Oasis Mobile waitlist
+  .alt = QR code to visit kahana.io for Oasis Mobile waitlist
 
 more-from-moz-button-mozilla-vpn-2 = Contact Sales
 

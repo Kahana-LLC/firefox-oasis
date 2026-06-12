@@ -11,6 +11,7 @@
  *
  * Called by deterministicRouter.ts.
  */
+import { kahanaUrl } from "../../../shared/kahanaSiteOrigin.js";
 import {
   looksLikeCommandChain,
   splitCommandChain,
@@ -190,12 +191,12 @@ export function decideDeterministicRoute(
       reason: `${family}-family-unresolved`,
       message:
         family === "list"
-          ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)"
+          ? `I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](${kahanaUrl("/docs")})`
           : family === "search"
-            ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)"
+            ? `I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](${kahanaUrl("/docs")})`
             : looksLikeResearchBriefCommand(input)
               ? "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`."
-              : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)",
+              : `I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](${kahanaUrl("/docs")})`,
     };
   }
 
@@ -205,8 +206,7 @@ export function decideDeterministicRoute(
       type: "chat",
       actionable: true,
       reason: "actionable-but-unsupported",
-      message:
-        "I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](https://kahana.co/docs)",
+      message: `I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](${kahanaUrl("/docs")})`,
     };
   }
 

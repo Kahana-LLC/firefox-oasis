@@ -17,7 +17,7 @@
         } catch (e) {
           console.error("Failed to set overlay OAuth callback base URL:", e);
         }
-        return "https://kahana.co";
+        return "https://kahana.io";
       };
 
       window.oasisGetOverlayOAuthCallbackBaseUrl = function () {
@@ -31,7 +31,7 @@
         } catch (e) {
           console.error("Failed to get overlay OAuth callback base URL:", e);
         }
-        return "https://kahana.co";
+        return "https://kahana.io";
       };
 
       const assistantToggle = document.getElementById("assistant-button");

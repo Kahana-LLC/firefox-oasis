@@ -1,12 +1,19 @@
 /** Keep in sync with browser/modules/OasisOAuthHandoff.sys.mjs */
 
+import {
+  KAHANA_LEGACY_ORIGIN,
+  KAHANA_PRODUCTION_ORIGIN,
+} from "../../../shared/kahanaSiteOrigin.js";
+
 export const HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
 export const MARKER_COOKIE_NAME = "oasis_firefox_oauth_target";
 export const MAX_HANDOFF_AGE_MS = 10 * 60 * 1000;
-export const DEFAULT_CALLBACK_BASE_URL = "https://kahana.co";
+export const DEFAULT_CALLBACK_BASE_URL = KAHANA_PRODUCTION_ORIGIN;
+export const LEGACY_CALLBACK_BASE_URL = KAHANA_LEGACY_ORIGIN;
 
 const ALLOWED_CALLBACK_BASE_URLS = [
   DEFAULT_CALLBACK_BASE_URL,
+  LEGACY_CALLBACK_BASE_URL,
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ] as const;
@@ -27,13 +34,21 @@ export function normalizeAllowedCallbackBaseUrl(
     : null;
 }
 
-export function isAllowedCallbackHost(hostname: string): boolean {
+function normalizeCookieHost(hostname: string): string {
   if (!hostname) {
+    return "";
+  }
+  return hostname.startsWith(".") ? hostname.slice(1) : hostname;
+}
+
+export function isAllowedCallbackHost(hostname: string): boolean {
+  const normalized = normalizeCookieHost(hostname);
+  if (!normalized) {
     return false;
   }
   return ALLOWED_CALLBACK_BASE_URLS.some(base => {
     try {
-      return new URL(base).hostname === hostname;
+      return new URL(base).hostname === normalized;
     } catch {
       return false;
     }

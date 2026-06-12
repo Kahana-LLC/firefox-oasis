@@ -73,7 +73,7 @@ Users can manage per-site permissions (camera, mic, location, notifications, etc
 | Oasis Assistant | Oasis | Separate privacy doc: [ai-assistant.md](ai-assistant.md) |
 | Oasis Data Collection toggle | Oasis | Assistant `llm_usage` telemetry — [privacy-data-and-telemetry.md](privacy-data-and-telemetry.md) |
 | Custom onboarding | Oasis | `browser/components/oasiswelcome/` |
-| Kahana privacy policy URL | Oasis | `datareporting.policy.firstRunURL` → kahana.co |
+| Kahana privacy policy URL | Oasis | `datareporting.policy.firstRunURL` → kahana.io |
 | Branding / DMG / icons | Oasis | `browser/branding/custom/` |
 
 ---

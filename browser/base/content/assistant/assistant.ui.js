@@ -626,7 +626,7 @@ mpTrack("assistant_ui_loaded_preact");
 // --- Auth State Management & Secure Storage ---
 // SupabaseAuth should be available from assistant.bundle.js
 
-const LOGIN_HOSTNAME = "https://kahana.co";
+const LOGIN_HOSTNAME = "https://kahana.io";
 const LOGIN_REALM = "Oasis Assistant";
 const LOGIN_USERNAME = "oasis_assistant_session";
 const ASSISTANT_OAUTH_TARGET = "assistant";
@@ -646,7 +646,7 @@ function readAssistantOAuthHandoffEntry() {
       window.supabaseAuth?.getOAuthCallbackBaseUrl?.() || null;
     const expectedFlowId =
       window.supabaseAuth?.getActiveOAuthFlowId?.() || undefined;
-    return OasisOAuthHandoff.selectHandoffCookie(Services.cookies, {
+    return OasisOAuthHandoff.selectHandoffCookieFromManager(Services.cookies, {
       expectedTarget: ASSISTANT_OAUTH_TARGET,
       callbackBaseUrl,
       expectedFlowId,

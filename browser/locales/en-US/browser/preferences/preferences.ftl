@@ -1190,7 +1190,7 @@ sync-signedout-account-short =
 #
 # They can be moved within the sentence as needed to adapt
 # to your language, but should not be changed or translated.
-sync-mobile-promo = Visit <a data-l10n-name="kahana-link">kahana.co</a> to learn more about mobile and AR/VR versions of Oasis coming soon.
+sync-mobile-promo = Visit <a data-l10n-name="kahana-link">kahana.io</a> to learn more about mobile and AR/VR versions of Oasis coming soon.
 
 ## Firefox account - Signed in
 

@@ -158,7 +158,7 @@ class Sidebar extends PureComponent {
   renderFooter() {
     const HELP_ICON_SRC = "chrome://global/skin/icons/help.svg";
     const SUPPORT_URL =
-      "https://kahana.co/docs";
+      "https://kahana.io/docs";
 
     return dom.footer(
       {

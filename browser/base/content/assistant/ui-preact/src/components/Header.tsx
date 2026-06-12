@@ -40,7 +40,7 @@ const oasisWindow: OasisWindow = window;
 const LIGHT_THEME_OPTIONS = assistantThemesForScheme('light');
 const DARK_THEME_OPTIONS = assistantThemesForScheme('dark');
 
-const DOCS_URL = 'https://kahana.co/docs';
+const DOCS_URL = 'https://kahana.io/docs';
 const HEADER_COMPACT_WIDTH_PX = 380;
 
 function openDocsHelp(event: MouseEvent) {

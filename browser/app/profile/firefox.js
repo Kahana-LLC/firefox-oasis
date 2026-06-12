@@ -1546,10 +1546,10 @@ pref("toolkit.datacollection.infoURL",
      "https://www.mozilla.org/legal/privacy/firefox.html");
 
 // base URL for web-based support pages
-pref("app.support.baseURL", "https://kahana.co/docs");
+pref("app.support.baseURL", "https://kahana.io/docs");
 
 // base url for web-based feedback pages
-pref("app.feedback.baseURL", "https://kahana.co/oasis-feedback-survey");
+pref("app.feedback.baseURL", "https://kahana.io/oasis-feedback-survey");
 
 pref("security.certerrors.permanentOverride", true);
 pref("security.certerrors.mitm.priming.enabled", true);
@@ -2142,7 +2142,7 @@ pref("browser.oasis.navbarPill.placedNextToVpn", false);
 pref("browser.oasis.hideFxAccountsNavbarButton", true);
 pref(
   "datareporting.policy.firstRunURL",
-  "https://kahana.co/privacy-policy#personal-data-collect"
+  "https://kahana.io/privacy-policy#personal-data-collect"
 );
 pref("datareporting.healthreport.uploadEnabled", false);
 pref("browser.oasis.user.name", "");

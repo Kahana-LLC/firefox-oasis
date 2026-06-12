@@ -20268,6 +20268,22 @@ ${suffix}`;
     }
   });
 
+  // ../shared/kahanaSiteOrigin.ts
+  function kahanaUrl(path) {
+    return `${KAHANA_PRODUCTION_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+  var KAHANA_PRODUCTION_ORIGIN, KAHANA_LEGACY_ORIGIN, KAHANA_PRODUCTION_ORIGINS;
+  var init_kahanaSiteOrigin = __esm({
+    "../shared/kahanaSiteOrigin.ts"() {
+      KAHANA_PRODUCTION_ORIGIN = "https://kahana.io";
+      KAHANA_LEGACY_ORIGIN = "https://kahana.co";
+      KAHANA_PRODUCTION_ORIGINS = [
+        KAHANA_PRODUCTION_ORIGIN,
+        KAHANA_LEGACY_ORIGIN
+      ];
+    }
+  });
+
   // src/utils/oauthHandoff.ts
   function normalizeAllowedCallbackBaseUrl(url) {
     if (!url || !/^https?:\/\//i.test(url)) {
@@ -20332,14 +20348,17 @@ ${suffix}`;
     }
     return false;
   }
-  var MAX_HANDOFF_AGE_MS, DEFAULT_CALLBACK_BASE_URL, ALLOWED_CALLBACK_BASE_URLS;
+  var MAX_HANDOFF_AGE_MS, DEFAULT_CALLBACK_BASE_URL, LEGACY_CALLBACK_BASE_URL, ALLOWED_CALLBACK_BASE_URLS;
   var init_oauthHandoff = __esm({
     "src/utils/oauthHandoff.ts"() {
       "use strict";
+      init_kahanaSiteOrigin();
       MAX_HANDOFF_AGE_MS = 10 * 60 * 1e3;
-      DEFAULT_CALLBACK_BASE_URL = "https://kahana.co";
+      DEFAULT_CALLBACK_BASE_URL = KAHANA_PRODUCTION_ORIGIN;
+      LEGACY_CALLBACK_BASE_URL = KAHANA_LEGACY_ORIGIN;
       ALLOWED_CALLBACK_BASE_URLS = [
         DEFAULT_CALLBACK_BASE_URL,
+        LEGACY_CALLBACK_BASE_URL,
         "http://localhost:3000",
         "http://127.0.0.1:3000"
       ];
@@ -20353,6 +20372,7 @@ ${suffix}`;
       "use strict";
       init_wrapper();
       init_env();
+      init_kahanaSiteOrigin();
       init_oauthHandoff();
       SupabaseAuth = class _SupabaseAuth {
         static instance;
@@ -20539,8 +20559,10 @@ ${suffix}`;
           };
           const callbackBaseUrl = this.getOAuthCallbackBaseUrl();
           writeCookie(callbackBaseUrl);
-          if (!callbackBaseUrl.includes("kahana.co")) {
-            writeCookie("https://kahana.co");
+          for (const origin of KAHANA_PRODUCTION_ORIGINS) {
+            if (origin !== callbackBaseUrl) {
+              writeCookie(origin);
+            }
           }
         }
         // Google OAuth Authentication
@@ -20681,7 +20703,7 @@ ${suffix}`;
           try {
             console.log("Attempting password reset for:", email);
             const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: "https://kahana.co/update-password"
+              redirectTo: "https://kahana.io/update-password"
             });
             if (error) {
               console.error("Password reset error:", error.message);
@@ -21474,7 +21496,7 @@ ${suffix}`;
           };
         }
         getSubscriptionUrl() {
-          return "https://kahana.co/oasis-pricing";
+          return "https://kahana.io/oasis-pricing";
         }
         async forceRefresh() {
           const user = await supabaseAuth.getCurrentUser();
@@ -26860,7 +26882,7 @@ Result: ${toolResult.message}`
         type: "chat",
         actionable: true,
         reason: `${family}-family-unresolved`,
-        message: family === "list" ? "I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](https://kahana.co/docs)" : family === "search" ? "I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](https://kahana.co/docs)" : looksLikeResearchBriefCommand(input) ? "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`." : "I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](https://kahana.co/docs)"
+        message: family === "list" ? `I am not sure what you want listed. Say whether you mean open tabs, a tab group, or a bookmarks folder. [Help](${kahanaUrl("/docs")})` : family === "search" ? `I am not sure what to search for. Include what to find and, if it helps, where (for example a folder or source). [Help](${kahanaUrl("/docs")})` : looksLikeResearchBriefCommand(input) ? "I could not match that to a research brief. Try: `Build a research brief on [topic] from tab group [name]` or `Research brief from tabs ESPN, Bleacher Report`." : `I am not sure which page or control you want to change. Say in plain language what should happen and where (for example which tab, site, or button). [Kahana documentation](${kahanaUrl("/docs")})`
       };
     }
     const actionable = looksActionableText(input);
@@ -26869,7 +26891,7 @@ Result: ${toolResult.message}`
         type: "chat",
         actionable: true,
         reason: "actionable-but-unsupported",
-        message: "I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](https://kahana.co/docs)"
+        message: `I could not match that to one clear, safe step in the browser. Describe what to change and where in more detail. [Help](${kahanaUrl("/docs")})`
       };
     }
     return { type: "no_match", actionable: false, reason: "non-actionable" };
@@ -26878,6 +26900,7 @@ Result: ${toolResult.message}`
   var init_decisionEngine = __esm({
     "src/utils/decisionEngine.ts"() {
       "use strict";
+      init_kahanaSiteOrigin();
       init_commandChain();
       init_intentParser();
       init_explicitRouteRules();
@@ -53866,7 +53889,7 @@ ${error.stack}` : "");
 
   // ../shared/capabilitiesOverviewConstants.ts
   var CAPABILITIES_OVERVIEW_FIRST_LINE = "What Oasis can do in this build";
-  var OASIS_CAPABILITIES_FEATURES_URL = "https://kahana.co/features/oasis-assistant";
+  var OASIS_CAPABILITIES_FEATURES_URL = "https://kahana.io/features/oasis-assistant";
   var OASIS_CAPABILITIES_LINK_LABEL = "Oasis assistant on Kahana";
   var OASIS_CAPABILITIES_FEEDBACK_URL = "https://tally.so/r/3jkNN6";
   var OASIS_CAPABILITIES_FEEDBACK_LINK_LABEL = "Send feedback";

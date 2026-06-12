@@ -3,7 +3,7 @@ export const CAPABILITIES_OVERVIEW_FIRST_LINE = "What Oasis can do in this build
 export const CAPABILITIES_BLOCK_DELIMITER = "\n<<<OASIS_CAP_BLOCK>>>\n";
 
 export const OASIS_CAPABILITIES_FEATURES_URL =
-  "https://kahana.co/features/oasis-assistant";
+  "https://kahana.io/features/oasis-assistant";
 
 export const OASIS_CAPABILITIES_LINK_LABEL = "Oasis assistant on Kahana";
 

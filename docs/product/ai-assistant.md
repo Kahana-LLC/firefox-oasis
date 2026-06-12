@@ -150,5 +150,5 @@ Packaged via `./mach build` per [BUILD_GUIDE.md](../../BUILD_GUIDE.md).
 
 ## External links (product)
 
-- Features page: `https://kahana.co/features/oasis-assistant` (from `capabilitiesOverviewConstants.ts`)
+- Features page: `https://kahana.io/features/oasis-assistant` (from `capabilitiesOverviewConstants.ts`)
 - Feedback: `https://tally.so/r/3jkNN6`

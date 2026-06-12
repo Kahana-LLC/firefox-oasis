@@ -8,6 +8,7 @@ import {
 } from "@supabase/supabase-js";
 import { ENV } from "../config/env.js";
 import { UserProfile, UserSession, AuthState } from "../types/auth.js";
+import { KAHANA_PRODUCTION_ORIGINS } from "../../../shared/kahanaSiteOrigin.js";
 import {
   DEFAULT_CALLBACK_BASE_URL,
   getHandoffFlowId,
@@ -263,8 +264,10 @@ export default class SupabaseAuth {
 
     const callbackBaseUrl = this.getOAuthCallbackBaseUrl();
     writeCookie(callbackBaseUrl);
-    if (!callbackBaseUrl.includes("kahana.co")) {
-      writeCookie("https://kahana.co");
+    for (const origin of KAHANA_PRODUCTION_ORIGINS) {
+      if (origin !== callbackBaseUrl) {
+        writeCookie(origin);
+      }
     }
   }
 
@@ -451,7 +454,7 @@ export default class SupabaseAuth {
     try {
       console.log("Attempting password reset for:", email);
       const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "https://kahana.co/update-password",
+        redirectTo: "https://kahana.io/update-password",
       });
 
       if (error) {

@@ -7,7 +7,7 @@ Engineering brief for moving training streaks, badge progression, and training-l
 - **Training submit:** Successful insert into `feedback_events` (existing table) triggers `recordTrainingSubmission()` in [`ui-preact/src/utils/trainingProgress.ts`](ui-preact/src/utils/trainingProgress.ts).
 - **Persistence today:** Progress is stored in **browser `localStorage`** under key `oasis_training_progress_v1` via `TrainingProgressStore` (`load` / `save`). The module is written so a **Supabase-backed store** can replace `localTrainingProgressStore` without changing milestone math in the UI layer.
 - **State surfaced in UI:** `App.tsx` keeps `trainingProgress` in React state, updated from `onTrainingSubmitted` after each successful training. **Training gallery** (mascot) calls `loadTrainingProgress()` when opened, so it can look stale if local writes fail, caches differ, or multiple profiles/devices are used.
-- **Token messaging:** Copy references a configurable bonus (`TRAINING_BONUS_COMMANDS` in [`ui-preact/src/utils/trainingRewards.ts`](ui-preact/src/utils/trainingRewards.ts)) and opens [Oasis pricing](https://kahana.co/oasis-pricing). **No server credit is applied yet**; messaging is product-facing only until an API exists.
+- **Token messaging:** Copy references a configurable bonus (`TRAINING_BONUS_COMMANDS` in [`ui-preact/src/utils/trainingRewards.ts`](ui-preact/src/utils/trainingRewards.ts)) and opens [Oasis pricing](https://kahana.io/oasis-pricing). **No server credit is applied yet**; messaging is product-facing only until an API exists.
 
 ## Why Supabase
 

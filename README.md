@@ -2,7 +2,7 @@
   <img src="./browser/branding/custom/content/about-wordmark.svg" alt="Oasis" width="180" />
 </p>
 
-**Agentic browser by [Kahana](https://kahana.co).**
+**Agentic browser by [Kahana](https://kahana.io).**
 
 Built on Firefox with Oasis-native AI workflows for browsing, reasoning, and action.
 

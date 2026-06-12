@@ -91,7 +91,7 @@ var gMoreFromMozillaPane = {
           id: "fxMobile",
           type: "link",
           label_string_id: "more-from-moz-learn-more-link",
-          actionURL: "https://kahana.co/oasis-mobile",
+          actionURL: "https://kahana.io/oasis-mobile",
         },
         qrcode: {
           title: {
@@ -104,7 +104,7 @@ var gMoreFromMozillaPane = {
             label: {
               string_id: "more-from-moz-qr-code-box-firefox-mobile-button",
             },
-            actionURL: "https://kahana.co/oasis-mobile",
+            actionURL: "https://kahana.io/oasis-mobile",
           },
         },
       },
@@ -117,7 +117,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "mozillaMonitor",
           label_string_id: "more-from-moz-mozilla-monitor-button",
-          actionURL: "https://kahana.co/schedule-demo",
+          actionURL: "https://kahana.io/schedule-demo",
         },
       },
     ];
@@ -131,7 +131,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "mozillaVPN",
           label_string_id: "more-from-moz-button-mozilla-vpn-2",
-          actionURL: "https://kahana.co/sales",
+          actionURL: "https://kahana.io/sales",
         },
       };
       products.push(vpn);
@@ -146,7 +146,7 @@ var gMoreFromMozillaPane = {
         button: {
           id: "firefoxRelay",
           label_string_id: "more-from-moz-firefox-relay-button",
-          actionURL: "https://kahana.co/oasis-augmented-reality",
+          actionURL: "https://kahana.io/oasis-augmented-reality",
         },
       };
       products.push(relay);
@@ -160,7 +160,7 @@ var gMoreFromMozillaPane = {
       button: {
         id: "soloAI",
         label_string_id: "more-from-moz-solo-button",
-        actionURL: "https://kahana.co/community",
+        actionURL: "https://kahana.io/community",
       },
     });
 
@@ -172,7 +172,7 @@ var gMoreFromMozillaPane = {
       button: {
         id: "mdn",
         label_string_id: "more-from-moz-mdn-button",
-        actionURL: "https://kahana.co/products/enterprise-browser",
+        actionURL: "https://kahana.io/products/enterprise-browser",
       },
     });
 

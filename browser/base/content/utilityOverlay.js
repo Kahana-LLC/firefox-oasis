@@ -503,7 +503,7 @@ function openTroubleshootingPage() {
  * Opens the feedback page for this version of the application.
  */
 function openFeedbackPage() {
-  var url = "https://kahana.co/oasis-feedback-survey";
+  var url = "https://kahana.io/oasis-feedback-survey";
   openTrustedLinkIn(url, "tab");
 }
 

@@ -105,17 +105,17 @@ export default class MozSupportLink extends HTMLAnchorElement {
     
     // Handle custom Kahana support pages
     if (supportPage === "kahana-media-keyboard-control") {
-      this.href = "https://kahana.co/docs/media-keyboard-control";
+      this.href = "https://kahana.io/docs/media-keyboard-control";
       return;
     }
     
     if (supportPage === "kahana-improve-oasis-suggest") {
-      this.href = "https://kahana.co/docs/improve-oasis-suggest";
+      this.href = "https://kahana.io/docs/improve-oasis-suggest";
       return;
     }
     
     if (supportPage === "kahana-global-privacy-control") {
-      this.href = "https://kahana.co/docs/global-privacy-control";
+      this.href = "https://kahana.io/docs/global-privacy-control";
       return;
     }
     

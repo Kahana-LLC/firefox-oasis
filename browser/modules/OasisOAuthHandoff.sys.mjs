@@ -5,10 +5,12 @@
 export const HANDOFF_COOKIE_NAME = "oasis_assistant_handoff";
 export const MARKER_COOKIE_NAME = "oasis_firefox_oauth_target";
 export const MAX_HANDOFF_AGE_MS = 10 * 60 * 1000;
-export const DEFAULT_CALLBACK_BASE_URL = "https://kahana.co";
+export const DEFAULT_CALLBACK_BASE_URL = "https://kahana.io";
+export const LEGACY_CALLBACK_BASE_URL = "https://kahana.co";
 
 const ALLOWED_CALLBACK_BASE_URLS = [
   DEFAULT_CALLBACK_BASE_URL,
+  LEGACY_CALLBACK_BASE_URL,
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ];
@@ -25,17 +27,71 @@ export function normalizeAllowedCallbackBaseUrl(url) {
   return ALLOWED_CALLBACK_BASE_URLS.includes(normalized) ? normalized : null;
 }
 
-export function isAllowedCallbackHost(hostname) {
+function normalizeCookieHost(hostname) {
   if (!hostname || typeof hostname !== "string") {
+    return "";
+  }
+  return hostname.startsWith(".") ? hostname.slice(1) : hostname;
+}
+
+export function isAllowedCallbackHost(hostname) {
+  const normalized = normalizeCookieHost(hostname);
+  if (!normalized) {
     return false;
   }
   return ALLOWED_CALLBACK_BASE_URLS.some(base => {
     try {
-      return new URL(base).hostname === hostname;
+      return new URL(base).hostname === normalized;
     } catch {
       return false;
     }
   });
+}
+
+export function enumerateHandoffCookies(cookieManager) {
+  if (!cookieManager?.getCookiesFromHost) {
+    return [];
+  }
+
+  const handoffCookies = [];
+  const seen = new Set();
+
+  for (const baseUrl of ALLOWED_CALLBACK_BASE_URLS) {
+    let hostname;
+    try {
+      hostname = new URL(baseUrl).hostname;
+    } catch {
+      continue;
+    }
+
+    let hostCookies;
+    try {
+      hostCookies = cookieManager.getCookiesFromHost(hostname, {});
+    } catch {
+      continue;
+    }
+    if (!hostCookies) {
+      continue;
+    }
+
+    for (const cookie of hostCookies) {
+      if (cookie.name !== HANDOFF_COOKIE_NAME) {
+        continue;
+      }
+      const key = `${cookie.host}\0${cookie.path}\0${cookie.name}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      handoffCookies.push(cookie);
+    }
+  }
+
+  return handoffCookies;
+}
+
+export function selectHandoffCookieFromManager(cookieManager, options = {}) {
+  return selectHandoffCookie(enumerateHandoffCookies(cookieManager), options);
 }
 
 export function getHandoffTarget(payload) {

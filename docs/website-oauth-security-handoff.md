@@ -40,7 +40,7 @@ Avoid putting `access_token` / `refresh_token` in the cookie when `code` is avai
 
 ### Host scope
 
-- Production: `kahana.co`
+- Production: `kahana.io` (default); `kahana.co` accepted during domain transition
 - Local dev: `localhost` / `127.0.0.1` on port `3000`
 
 Firefox ignores handoff cookies from any other host.

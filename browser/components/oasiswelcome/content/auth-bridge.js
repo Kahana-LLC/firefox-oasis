@@ -20,7 +20,7 @@
       : null);
   const Ci =
     window.Ci || (typeof globalThis.Ci !== "undefined" ? globalThis.Ci : null);
-  const LOGIN_HOSTNAME = "https://kahana.co";
+  const LOGIN_HOSTNAME = "https://kahana.io";
   const LOGIN_REALM = "Oasis Assistant";
   const LOGIN_USERNAME = "oasis_assistant_session";
   const OAUTH_CALLBACK_KEY = "oasis_auth_callback";
@@ -370,7 +370,7 @@
         window.supabaseAuth?.getOAuthCallbackBaseUrl?.() || null;
       const expectedFlowId =
         window.supabaseAuth?.getActiveOAuthFlowId?.() || undefined;
-      return OasisOAuthHandoff.selectHandoffCookie(Services.cookies, {
+      return OasisOAuthHandoff.selectHandoffCookieFromManager(Services.cookies, {
         expectedTarget: target,
         allowFallbackTarget,
         callbackBaseUrl,
@@ -477,14 +477,14 @@
       if (window.supabaseAuth?.setOAuthCallbackBaseUrl) {
         return window.supabaseAuth.setOAuthCallbackBaseUrl(url);
       }
-      return "https://kahana.co";
+      return "https://kahana.io";
     },
 
     async getOAuthCallbackBaseUrl() {
       if (window.supabaseAuth?.getOAuthCallbackBaseUrl) {
         return window.supabaseAuth.getOAuthCallbackBaseUrl();
       }
-      return window.__oasisOAuthCallbackBaseUrl || "https://kahana.co";
+      return window.__oasisOAuthCallbackBaseUrl || "https://kahana.io";
     },
 
     async signUp(email, password, name) {

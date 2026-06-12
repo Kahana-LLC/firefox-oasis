@@ -467,7 +467,7 @@ export class SubscriptionService {
   }
 
   public getSubscriptionUrl(): string {
-    return "https://kahana.co/oasis-pricing";
+    return "https://kahana.io/oasis-pricing";
   }
 
   public async forceRefresh(): Promise<void> {

@@ -5,13 +5,13 @@
 import { navigatePostAuthLanding } from "resource:///modules/oasiswelcome/OasisPostAuthLanding.sys.mjs";
 import {
   clearHandoffCookie,
-  selectHandoffCookie,
+  selectHandoffCookieFromManager,
 } from "resource:///modules/OasisOAuthHandoff.sys.mjs";
 
 const DID_SEE_OASIS_WELCOME_PREF = "browser.oasis.welcome.didSee";
 const DID_COMPLETE_OASIS_ONBOARDING_PREF = "browser.oasis.welcome.completed";
 const PREF_POST_AUTH_OPEN_ASSISTANT = "browser.oasis.postAuthOpenAssistant";
-const LOGIN_HOSTNAME = "https://kahana.co";
+const LOGIN_HOSTNAME = "https://kahana.io";
 const LOGIN_REALM = "Oasis Assistant";
 const LOGIN_USERNAME = "oasis_assistant_session";
 const lazy = {};
@@ -89,7 +89,7 @@ export class OasisWelcomeParent extends JSWindowActorParent {
     };
 
     try {
-      const selected = selectHandoffCookie(Services.cookies, {
+      const selected = selectHandoffCookieFromManager(Services.cookies, {
         expectedTarget: target,
         allowFallbackTarget,
       });
