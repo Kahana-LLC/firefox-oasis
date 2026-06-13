@@ -44,6 +44,7 @@ import {
   looksLikeNewActionCommand,
   looksLikePageContextRequest,
 } from "../utils/routingUtils.js";
+import { CI_REPORT_COMPACT_SENTINEL } from "../utils/competitiveIntelResume.js";
 import { getAssistantApiBase, QuotaExceededError } from "../awsSignedFetch.js";
 import { getChatSystemPrompt } from "../prompts/chatPrompt.js";
 import { subscriptionService } from "../services/subscription.js";
@@ -477,6 +478,13 @@ export function buildAssistantGraph(
     if (competitiveIntelGate.kind === "route") {
       if (competitiveIntelGate.clearPendingConfirmation) {
         clearPendingConfirmation();
+      }
+      const workflowAction = competitiveIntelGate.args.workflow_action;
+      if (
+        workflowAction === CI_REPORT_COMPACT_SENTINEL ||
+        workflowAction === "regenerate_report"
+      ) {
+        clearPendingClarification();
       }
       return {
         next: "run_competitive_intel",

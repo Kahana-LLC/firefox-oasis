@@ -15,6 +15,7 @@ import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { useResearchBriefProgress } from './hooks/useResearchBriefProgress';
 import { OASIS_EVENT_ASSISTANT_SUBMIT, type OasisAssistantSubmitDetail } from '../../shared/contracts.js';
+import { hasCompetitiveIntelMarker } from '../../build/src/utils/competitiveIntelRequest.js';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import type {
   AuthState,
@@ -484,6 +485,27 @@ export function App() {
     }, 45000);
     return () => window.clearTimeout(timer);
   }, [runtime.busy, briefProgressLabel, runtime]);
+
+  useEffect(() => {
+    if (runtime.busy || !briefProgressLabel) {
+      return;
+    }
+    oasisWindow.oasisAbortResearchBrief?.();
+  }, [runtime.busy, briefProgressLabel]);
+
+  useEffect(() => {
+    if (runtime.busy) {
+      return;
+    }
+    const lastAi = [...runtime.messages]
+      .reverse()
+      .find(message => message.role === 'ai' && message.content?.trim());
+    if (!lastAi || !hasCompetitiveIntelMarker(lastAi.content)) {
+      return;
+    }
+    oasisWindow.oasisClearPendingClarification?.();
+    setPendingClarification(null);
+  }, [runtime.busy, runtime.messages]);
 
   const chatUid = auth.isAuthenticated ? chatUserKey(auth.user) : null;
 

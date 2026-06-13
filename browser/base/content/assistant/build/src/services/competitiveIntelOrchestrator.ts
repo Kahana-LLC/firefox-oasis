@@ -48,7 +48,6 @@ import {
   beginResearchBriefRun,
   emitResearchBriefProgress,
   endResearchBriefRun,
-  finishResearchBriefRunFinalizing,
 } from "../utils/researchBriefProgress.js";
 import {
   applyUrlOverrideToCompanies,
@@ -56,7 +55,10 @@ import {
 } from "../utils/competitiveIntelUrlOverrides.js";
 import { OASIS_EVENT_CI_WORKFLOW_UPDATE } from "../../../shared/contracts.js";
 import { subscriptionService } from "./subscription.js";
-import { setPendingClarification } from "./interactionState.js";
+import {
+  clearPendingClarification,
+  setPendingClarification,
+} from "./interactionState.js";
 import {
   buildCiOverQuotaClarification,
   buildCiReportTokenEstimateBlock,
@@ -279,6 +281,7 @@ async function synthesizeCompetitiveIntelReport(
         ),
       };
     }
+    clearPendingClarification();
     updateCompetitiveIntelWorkflow({
       step: "done",
       reportId: built.reportId,
@@ -314,7 +317,7 @@ async function synthesizeCompetitiveIntelReport(
         : `${reportBody}${expandCta}`,
     };
   } finally {
-    finishResearchBriefRunFinalizing("competitive_intel");
+    endResearchBriefRun();
   }
 }
 

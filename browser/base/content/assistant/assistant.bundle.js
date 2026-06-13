@@ -40782,17 +40782,6 @@ ${JSON.stringify(payload)}`
   function clearResearchBriefRunAbort() {
     activeAbort = null;
   }
-  function finishResearchBriefRunFinalizing(context = "competitive_intel") {
-    clearResearchBriefRunAbort();
-    emitResearchBriefProgress({
-      phase: "synthesizing",
-      context,
-      label: context === "competitive_intel" ? "Finalizing report\u2026" : "Finalizing brief\u2026"
-    });
-    if (context === "competitive_intel") {
-      assistantLogger.debug("competitiveIntel", "ci_finalizing");
-    }
-  }
   function endResearchBriefRun() {
     clearResearchBriefRunAbort();
     emitResearchBriefProgress(null);
@@ -63346,6 +63335,7 @@ ${buildCiReportTokenEstimateBlock({
           )
         };
       }
+      clearPendingClarification();
       updateCompetitiveIntelWorkflow({
         step: "done",
         reportId: built.reportId,
@@ -63381,7 +63371,7 @@ ${buildCiReportTokenEstimateBlock({
 ${reportBody}${expandCta}` : `${reportBody}${expandCta}`
       };
     } finally {
-      finishResearchBriefRunFinalizing("competitive_intel");
+      endResearchBriefRun();
     }
   }
   async function executeCompetitiveIntelWorkflow(args) {
@@ -69406,6 +69396,10 @@ What would you like to try first?`;
       if (competitiveIntelGate.kind === "route") {
         if (competitiveIntelGate.clearPendingConfirmation) {
           clearPendingConfirmation();
+        }
+        const workflowAction = competitiveIntelGate.args.workflow_action;
+        if (workflowAction === CI_REPORT_COMPACT_SENTINEL || workflowAction === "regenerate_report") {
+          clearPendingClarification();
         }
         return {
           next: "run_competitive_intel",
