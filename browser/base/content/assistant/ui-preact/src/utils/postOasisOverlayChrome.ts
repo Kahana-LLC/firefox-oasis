@@ -1,3 +1,16 @@
+export function isOasisAssistantOverlayLayout(): boolean {
+  const bridge = (
+    window as Window & {
+      assistantBridge?: { isOasisAssistantOverlayLayout?: () => boolean };
+    }
+  ).assistantBridge;
+  try {
+    return bridge?.isOasisAssistantOverlayLayout?.() === true;
+  } catch {
+    return false;
+  }
+}
+
 export function postOasisOverlayChromeMessage(
   data: Record<string, unknown>
 ): void {

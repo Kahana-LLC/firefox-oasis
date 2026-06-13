@@ -50,11 +50,15 @@ export async function assistWithOutputValidationRetry<T>(params: {
   parse: (raw: unknown) => T | null;
   validate: (value: T) => { ok: true } | { ok: false; reason: string };
   validationErrorMessage?: string;
+  maxAttempts?: number;
+  onAttempt?: (attempt: number, maxAttempts: number) => void;
 }): Promise<T> {
   let systemPrompt = params.systemPrompt;
+  const maxAttempts = Math.max(1, params.maxAttempts ?? 2);
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     throwIfResearchBriefAborted(params.signal);
+    params.onAttempt?.(attempt + 1, maxAttempts);
 
     const res = await assistRemote(
       systemPrompt,
@@ -75,7 +79,7 @@ export async function assistWithOutputValidationRetry<T>(params: {
 
     const parsed = params.parse(parseAssistResponseContent(res));
     if (!parsed) {
-      if (attempt === 0) {
+      if (attempt < maxAttempts - 1) {
         recordValidatorRetry();
         systemPrompt = `${params.systemPrompt}\n\n${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
         continue;
@@ -92,7 +96,7 @@ export async function assistWithOutputValidationRetry<T>(params: {
       return parsed;
     }
 
-    if (attempt === 0) {
+    if (attempt < maxAttempts - 1) {
       recordValidatorRetry();
       systemPrompt = `${params.systemPrompt}\n\n${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
       continue;

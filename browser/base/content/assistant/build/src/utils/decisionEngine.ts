@@ -20,9 +20,7 @@ import { classifyCommandFamily, looksActionableText } from "./intentParser.js";
 import { resolveExplicitRoute } from "./explicitRouteRules.js";
 import { resolveManifestListRoute } from "./manifestListResolver.js";
 import { resolveManifestSearchRoute } from "./manifestSearchResolver.js";
-import {
-  resolveExplicitMutationRoute,
-} from "./mutationExplicitResolver.js";
+import { resolveExplicitMutationRoute } from "./mutationExplicitResolver.js";
 import { resolveManifestMutationRoute } from "./manifestMutationResolver.js";
 import { resolveExplicitSearchResultRoute } from "./searchResultExplicitResolver.js";
 import { resolveExplicitSummarizeRoute } from "./summarizeExplicitResolver.js";
@@ -38,6 +36,10 @@ import {
   looksLikeOutreachEmailCommand,
   resolveExplicitOutreachEmailRoute,
 } from "./outreachEmailExplicitResolver.js";
+import {
+  looksLikeCompetitiveIntelCommand,
+  resolveExplicitCompetitiveIntelRoute,
+} from "./competitiveIntelExplicitResolver.js";
 import { resolveFactualQueryRoute } from "./factualQueryRoute.js";
 import { resolveSiteSearchRoute } from "./siteSearchUrls.js";
 import type {
@@ -104,6 +106,20 @@ export function decideDeterministicRoute(
       type: "no_match",
       actionable: true,
       reason: "outreach-email-unresolved",
+    };
+  }
+
+  if (looksLikeCompetitiveIntelCommand(input)) {
+    const ciEarly = resolveExplicitCompetitiveIntelRoute(input);
+    if (ciEarly) {
+      return ciEarly;
+    }
+    return {
+      type: "chat",
+      actionable: true,
+      reason: "competitive-intel-unresolved",
+      message:
+        "I can run a competitive intelligence workflow. Try: `I want a competitive intelligence report on [industry]`.",
     };
   }
 

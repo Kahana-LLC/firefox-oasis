@@ -10,11 +10,11 @@ import { Composer } from './components/Composer';
 import { AssistantBusyBar } from './components/AssistantBusyBar';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAssistantRuntime } from './hooks/useAssistantRuntime';
-import { postOasisOverlayChromeMessage } from './utils/postOasisOverlayChrome';
+import { postOasisOverlayChromeMessage, isOasisAssistantOverlayLayout } from './utils/postOasisOverlayChrome';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { useResearchBriefProgress } from './hooks/useResearchBriefProgress';
-import { OASIS_EVENT_ASSISTANT_SUBMIT } from '../../shared/contracts.js';
+import { OASIS_EVENT_ASSISTANT_SUBMIT, type OasisAssistantSubmitDetail } from '../../shared/contracts.js';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import type {
   AuthState,
@@ -469,9 +469,21 @@ export function App() {
     originalResetAssistantSession: originalResetRef.current,
   });
 
-  const { briefProgressLabel } = useResearchBriefProgress();
+  const { briefProgressLabel, progressHeadline, progressSteps } =
+    useResearchBriefProgress();
   const activeToolLabel =
     briefProgressLabel || runtime.activeToolAction?.label || null;
+
+  useEffect(() => {
+    if (!runtime.busy || briefProgressLabel !== 'Finalizing report…') {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      runtime.forceIdle();
+      oasisWindow.oasisAbortResearchBrief?.();
+    }, 45000);
+    return () => window.clearTimeout(timer);
+  }, [runtime.busy, briefProgressLabel, runtime]);
 
   const chatUid = auth.isAuthenticated ? chatUserKey(auth.user) : null;
 
@@ -565,9 +577,12 @@ export function App() {
 
   useEffect(() => {
     const onSubmit = (event: Event) => {
-      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
+      const detail = (event as CustomEvent<OasisAssistantSubmitDetail>).detail;
       if (detail?.prompt?.trim()) {
-        void runtime.send(detail.prompt.trim());
+        void runtime.send(detail.prompt.trim(), {
+          hideUserMessage: detail.hideUserMessage,
+          displayLabel: detail.displayLabel,
+        });
       }
     };
     window.addEventListener(OASIS_EVENT_ASSISTANT_SUBMIT, onSubmit);
@@ -651,6 +666,9 @@ export function App() {
   }, [auth.isAuthenticated]);
 
   const handleResizeStart = (event: PointerEvent) => {
+    if (!isOasisAssistantOverlayLayout()) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     postOasisOverlayChromeMessage({
@@ -659,6 +677,48 @@ export function App() {
       screenY: event.screenY,
     });
   };
+
+  const clearStuckInteractionState = useCallback(() => {
+    setPendingConfirmation(null);
+    setPendingClarification(null);
+    setClarificationDirectInputOpen(false);
+    setClarificationDirectInput('');
+    setVoiceAgentOpen(false);
+    runtime.forceIdle();
+  }, [runtime]);
+
+  useEffect(() => {
+    try {
+      const pending = oasisWindow.oasisGetPendingConfirmation?.();
+      if (pending) {
+        setPendingConfirmation(pending);
+      }
+    } catch {
+      // ignore
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      if (
+        pendingConfirmation ||
+        pendingClarification ||
+        voiceAgentOpen ||
+        runtime.busy
+      ) {
+        event.preventDefault();
+        clearStuckInteractionState();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    clearStuckInteractionState,
+    pendingClarification,
+    pendingConfirmation,
+    runtime.busy,
+    voiceAgentOpen,
+  ]);
 
   const handleFeedback = () => {
     const feedbackUrl = 'https://tally.so/r/3jkNN6';
@@ -946,6 +1006,8 @@ export function App() {
             busy={runtime.busy}
             activeToolLabel={activeToolLabel}
             responseStreaming={runtime.responseStreaming}
+            progressHeadline={progressHeadline}
+            progressSteps={progressSteps}
             showBriefCancel={runtime.busy && !!briefProgressLabel}
             onCancelBrief={() => {
               oasisWindow.oasisAbortResearchBrief?.();

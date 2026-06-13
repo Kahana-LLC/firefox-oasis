@@ -1,5 +1,9 @@
 import { OASIS_EVENT_BRIEF_PROGRESS } from "../../../shared/contracts.js";
-import type { ResearchBriefProgressDetail } from "../../../shared/contracts.js";
+import type {
+  AssistantProgressContext,
+  ResearchBriefProgressDetail,
+} from "../../../shared/contracts.js";
+import { assistantLogger } from "./assistantLogger.js";
 
 let activeAbort: AbortController | null = null;
 
@@ -13,8 +17,29 @@ export function abortResearchBriefRun(): void {
   activeAbort?.abort();
 }
 
-export function endResearchBriefRun(): void {
+export function clearResearchBriefRunAbort(): void {
   activeAbort = null;
+}
+
+export function finishResearchBriefRunFinalizing(
+  context: AssistantProgressContext = "competitive_intel"
+): void {
+  clearResearchBriefRunAbort();
+  emitResearchBriefProgress({
+    phase: "synthesizing",
+    context,
+    label:
+      context === "competitive_intel"
+        ? "Finalizing report…"
+        : "Finalizing brief…",
+  });
+  if (context === "competitive_intel") {
+    assistantLogger.debug("competitiveIntel", "ci_finalizing");
+  }
+}
+
+export function endResearchBriefRun(): void {
+  clearResearchBriefRunAbort();
   emitResearchBriefProgress(null);
 }
 
@@ -47,19 +72,34 @@ export function formatResearchBriefProgressLabel(
   if (detail.label?.trim()) {
     return detail.label.trim();
   }
+  const isCi = detail.context === "competitive_intel";
   if (detail.phase === "resolving") {
-    return "Finding tabs…";
+    return isCi ? "Matching enrichment tabs…" : "Finding tabs…";
   }
   if (detail.phase === "extracting" && detail.current != null && detail.total) {
-    return `Reading page ${detail.current} of ${detail.total}…`;
+    return isCi
+      ? `Reading tab content (${detail.current} of ${detail.total})…`
+      : `Reading page ${detail.current} of ${detail.total}…`;
   }
   if (detail.phase === "topic") {
     return "Choosing topic…";
   }
-  if (detail.phase === "synthesizing") {
-    return "Building your research brief…";
+  if (detail.phase === "validating") {
+    if (detail.attempt != null && detail.maxAttempts) {
+      return isCi
+        ? `Validating report grounding (attempt ${detail.attempt} of ${detail.maxAttempts})…`
+        : `Validating output (attempt ${detail.attempt} of ${detail.maxAttempts})…`;
+    }
+    return isCi ? "Validating report grounding…" : "Validating output…";
   }
-  return "Building research brief…";
+  if (detail.phase === "synthesizing") {
+    return isCi
+      ? "Writing competitive intelligence report…"
+      : "Building your research brief…";
+  }
+  return isCi
+    ? "Generating competitive intelligence report…"
+    : "Building research brief…";
 }
 
 export type ResearchBriefProgressCallback = (

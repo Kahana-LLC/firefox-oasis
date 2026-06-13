@@ -117,6 +117,15 @@ export function useAuthSync(params: {
 
     void checkAuth();
 
+    try {
+      const pending = oasisWindow.oasisGetPendingConfirmation?.();
+      if (pending) {
+        setPendingConfirmation(pending);
+      }
+    } catch {
+      // ignore
+    }
+
     window.addEventListener(OASIS_EVENT_AUTH_UPDATE, updateFromGlobal);
     const handleConfirmationUpdate = (event: Event) => {
       const detail = (event as CustomEvent<ConfirmationData | null>).detail;

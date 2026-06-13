@@ -38,26 +38,50 @@ export type PendingClarificationPayload = {
 export const OASIS_EVENT_CLARIFICATION_UPDATE =
   "oasis-clarification-update" as const;
 
+export type AssistantProgressContext = "research_brief" | "competitive_intel";
+
 export type ResearchBriefProgressPhase =
   | "resolving"
   | "extracting"
   | "synthesizing"
-  | "topic";
+  | "topic"
+  | "validating";
 
 export type ResearchBriefProgressDetail = {
   phase: ResearchBriefProgressPhase;
   current?: number;
   total?: number;
   label?: string;
+  context?: AssistantProgressContext;
+  attempt?: number;
+  maxAttempts?: number;
 };
 
 export type OasisAssistantSubmitDetail = {
   prompt?: string;
   command?: string;
   args?: InteractionCommandArgs;
+  hideUserMessage?: boolean;
+  displayLabel?: string;
+};
+
+export type CompetitiveIntelWorkflowStatus =
+  | "awaiting_continue"
+  | "in_progress"
+  | "awaiting_user"
+  | "complete";
+
+export type CompetitiveIntelWorkflowUpdateDetail = {
+  step: string;
+  industry: string;
+  discoveryQuery: string;
+  openedUrls: string[];
+  status: CompetitiveIntelWorkflowStatus;
 };
 
 export const OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress" as const;
+export const OASIS_EVENT_CI_WORKFLOW_UPDATE =
+  "oasis-ci-workflow-update" as const;
 export const OASIS_EVENT_ASSISTANT_SUBMIT = "oasis-assistant-submit" as const;
 
 export type OasisRecordToolActionStart = (
@@ -104,6 +128,7 @@ export type OasisEventName =
   | typeof OASIS_EVENT_CLARIFICATION_UPDATE
   | typeof OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED
   | typeof OASIS_EVENT_BRIEF_PROGRESS
+  | typeof OASIS_EVENT_CI_WORKFLOW_UPDATE
   | typeof OASIS_EVENT_ASSISTANT_SUBMIT;
 
 export type BookmarkFoldersChangedDetail = {
@@ -117,5 +142,6 @@ export type OasisEventDetailMap = {
   [OASIS_EVENT_CLARIFICATION_UPDATE]: PendingClarificationPayload | null;
   [OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED]: BookmarkFoldersChangedDetail;
   [OASIS_EVENT_BRIEF_PROGRESS]: ResearchBriefProgressDetail | null;
+  [OASIS_EVENT_CI_WORKFLOW_UPDATE]: CompetitiveIntelWorkflowUpdateDetail | null;
   [OASIS_EVENT_ASSISTANT_SUBMIT]: OasisAssistantSubmitDetail;
 };

@@ -6,10 +6,11 @@ export type ComposerInlineSuggestion =
   | { label: string; message: string }
   | { label: string; action: "commandReferenceMarkdown" };
 
-export const COMPOSER_INLINE_SUGGESTIONS: readonly ComposerInlineSuggestion[] = [
-  { label: CAPABILITIES_CHIP_LABEL, message: CAPABILITIES_CHIP_LABEL },
-  { label: HOW_OASIS_WORKS_CHIP_LABEL, action: "commandReferenceMarkdown" },
-];
+export const COMPOSER_INLINE_SUGGESTIONS: readonly ComposerInlineSuggestion[] =
+  [
+    { label: CAPABILITIES_CHIP_LABEL, message: CAPABILITIES_CHIP_LABEL },
+    { label: HOW_OASIS_WORKS_CHIP_LABEL, action: "commandReferenceMarkdown" },
+  ];
 
 export const EXAMPLE_COMMANDS_ROTATION: readonly string[] = [
   CAPABILITIES_CHIP_LABEL,

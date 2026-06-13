@@ -11,6 +11,7 @@
  * Called from assistant.ts after the graph is built.
  */
 import type { AssistantInputType } from "../../../shared/contracts.js";
+import { assistantLogger } from "../utils/assistantLogger.js";
 import {
   advanceStreamGuard,
   createStreamGuardState,
@@ -47,6 +48,21 @@ type ConsumeAssistantStreamArgs = {
     content?: StreamContentData
   ) => void;
 };
+
+const LARGE_UI_CHUNK_CHARS = 24_000;
+
+function emitStreamChunk(onChunk: (text: string) => void, text: string): void {
+  const deferred = text.length >= LARGE_UI_CHUNK_CHARS;
+  assistantLogger.debug("stream", "ci_chunk_emit", {
+    bytes: text.length,
+    deferred,
+  });
+  if (deferred) {
+    queueMicrotask(() => onChunk(text));
+    return;
+  }
+  onChunk(text);
+}
 
 function extractMessageText(msg: MessageLike): string {
   if (typeof msg?.content === "string") {
@@ -242,7 +258,7 @@ export async function consumeAssistantGraphStream(
       }
 
       const newContent = `${sanitizedText}\n`;
-      onChunk(newContent);
+      emitStreamChunk(onChunk, newContent);
       combinedSessionString += newContent;
       emittedChars += newContent.length;
       hasEmittedUserMessage = true;
@@ -258,7 +274,7 @@ export async function consumeAssistantGraphStream(
       const friendlyMessage = sanitizedFallback.endsWith("\n")
         ? sanitizedFallback
         : `${sanitizedFallback}\n`;
-      onChunk(friendlyMessage);
+      emitStreamChunk(onChunk, friendlyMessage);
       combinedSessionString = friendlyMessage;
       hasEmittedUserMessage = true;
       emittedChars += friendlyMessage.length;

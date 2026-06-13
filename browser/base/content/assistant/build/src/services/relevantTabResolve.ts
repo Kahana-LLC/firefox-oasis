@@ -97,10 +97,14 @@ function tabsFromIndices(
   descriptors: ReturnType<typeof attachWindowIndices>,
   indices: number[]
 ): import("../types/runtime.js").BrowserTabLike[] {
-  const byIndex = new Map(descriptors.map(descriptor => [descriptor.index, descriptor.tab]));
+  const byIndex = new Map(
+    descriptors.map(descriptor => [descriptor.index, descriptor.tab])
+  );
   return indices
     .map(index => byIndex.get(index))
-    .filter((tab): tab is import("../types/runtime.js").BrowserTabLike => Boolean(tab));
+    .filter((tab): tab is import("../types/runtime.js").BrowserTabLike =>
+      Boolean(tab)
+    );
 }
 
 function buildRelevantScopeLabel(
@@ -131,8 +135,7 @@ export async function resolveRelevantResearchTabs(
 ): Promise<ResolveResearchTabsResult> {
   const focusQuery = buildRelevantTabFocusQuery(options.context);
   if (options.useCachedSelection) {
-    const cached =
-      peekRelevantTabSelection() || consumeRelevantTabSelection();
+    const cached = peekRelevantTabSelection() || consumeRelevantTabSelection();
     if (cached && cached.focusQuery === focusQuery && cached.tabs.length > 0) {
       return {
         ok: true,
@@ -177,7 +180,8 @@ export async function resolveRelevantResearchTabs(
   if (catalog.filter(entry => !entry.pinned).length === 0) {
     return {
       ok: false,
-      message: "There are no selectable tabs in this window (pinned tabs are skipped).",
+      message:
+        "There are no selectable tabs in this window (pinned tabs are skipped).",
     };
   }
 

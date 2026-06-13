@@ -52,6 +52,7 @@ import { finalizeResolvedTabList } from "./researchBriefResolve.js";
 import { storeResearchBriefRun } from "./researchBriefDigestCache.js";
 import { suggestTabCountForQuota } from "../utils/researchBriefClarify.js";
 import { resolveTabsForResearchBrief } from "./researchTabSelection.js";
+import { applyQuotaBudget } from "./tabDigestPipeline.js";
 
 export type {
   ResearchBrief,
@@ -505,35 +506,24 @@ export async function buildResearchBrief(
       report({ phase: "topic", label: `Topic: ${topic}` });
     }
 
-    let budgetDigests = digests;
-    let truncated = false;
-    if (options.quotaMode === "fewer_tabs") {
-      const half = Math.max(1, Math.floor(readable.length / 2));
-      budgetDigests = digests.slice(0, half);
-    } else {
-      const budget = truncateDigestsToBudget(digests, MAX_TOTAL_CHARS);
-      budgetDigests = budget.digests;
-      truncated = budget.truncated || options.quotaMode === "truncate";
-    }
-
-    const estimate = estimateSynthesisTokens(budgetDigests);
-    const display = subscriptionService.getDailyTokenUsageForDisplay();
-    if (
-      display.remaining > 0 &&
-      estimate > display.remaining &&
-      options.quotaMode === "default"
-    ) {
-      const suggestedTabCount = suggestTabCountForQuota(
-        budgetDigests,
-        display.remaining
-      );
+    const budget = applyQuotaBudget({
+      digests,
+      readable,
+      quotaMode: options.quotaMode,
+      profile: "research_brief",
+      maxTotalChars: MAX_TOTAL_CHARS,
+      remaining: subscriptionService.getDailyTokenUsageForDisplay().remaining,
+    });
+    let budgetDigests = budget.digests;
+    let truncated = budget.truncated;
+    if (budget.overQuota) {
       return {
         ok: false,
         code: "over_quota",
-        message: `This research brief may need about ${estimate.toLocaleString()} tokens, but you have about ${display.remaining.toLocaleString()} remaining today.`,
-        estimate,
-        remaining: display.remaining,
-        suggestedTabCount,
+        message: `This research brief may need about ${budget.overQuota.estimate.toLocaleString()} tokens, but you have about ${budget.overQuota.remaining.toLocaleString()} remaining today.`,
+        estimate: budget.overQuota.estimate,
+        remaining: budget.overQuota.remaining,
+        suggestedTabCount: budget.overQuota.suggestedTabCount,
       };
     }
 

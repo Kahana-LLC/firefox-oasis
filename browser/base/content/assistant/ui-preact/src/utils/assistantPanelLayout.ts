@@ -38,20 +38,14 @@ export function layoutFixedPanelBelowTrigger(
   const maxW = options.maxWidth ?? 280;
   const cr = container.getBoundingClientRect();
   const tr = trigger.getBoundingClientRect();
-  const width = Math.max(
-    minW,
-    Math.min(maxW, Math.floor(cr.width - edge * 2))
-  );
+  const width = Math.max(minW, Math.min(maxW, Math.floor(cr.width - edge * 2)));
   const right = Math.round(window.innerWidth - cr.right + edge);
   const top = Math.round(tr.bottom + gap);
   const innerW = window.innerWidth;
   const leftEdge = innerW - right - width;
   const minLeft = cr.left + edge;
-  const translateX =
-    leftEdge < minLeft ? Math.round(minLeft - leftEdge) : 0;
-  const transform = translateX
-    ? `translateX(${translateX}px)`
-    : undefined;
+  const translateX = leftEdge < minLeft ? Math.round(minLeft - leftEdge) : 0;
+  const transform = translateX ? `translateX(${translateX}px)` : undefined;
 
   let maxHeight = options.maxHeight;
   if (options.maxHeightPxCap != null) {

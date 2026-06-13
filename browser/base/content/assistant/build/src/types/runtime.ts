@@ -278,6 +278,9 @@ export type AssistantWindowLike = Window & {
     userTranscript: string,
     assistantText: string
   ) => void;
+  assistantBridge?: {
+    openTab?: (url: string) => boolean;
+  };
   Services?: ServicesLike;
   ChromeUtils?: {
     importESModule?: (path: string) => Record<string, unknown>;

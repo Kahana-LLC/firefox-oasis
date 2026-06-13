@@ -1,44 +1,28 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from "preact/hooks";
 import {
   OASIS_EVENT_BRIEF_PROGRESS,
   type ResearchBriefProgressDetail,
-} from '../../../shared/contracts.js';
-
-function formatResearchBriefProgressLabel(
-  detail: ResearchBriefProgressDetail
-): string {
-  if (detail.label?.trim()) {
-    return detail.label.trim();
-  }
-  if (detail.phase === 'resolving') {
-    return 'Finding tabs…';
-  }
-  if (detail.phase === 'extracting' && detail.current != null && detail.total) {
-    return `Reading page ${detail.current} of ${detail.total}…`;
-  }
-  if (detail.phase === 'topic') {
-    return 'Choosing topic…';
-  }
-  if (detail.phase === 'synthesizing') {
-    return 'Building your research brief…';
-  }
-  return 'Building research brief…';
-}
+} from "../../../shared/contracts.js";
+import {
+  assistantProgressHeadline,
+  buildCiReportProgressSteps,
+  formatAssistantProgressLabel,
+  type ProgressStepRow,
+} from "../utils/assistantProgressLabel";
 
 export function useResearchBriefProgress() {
-  const [briefProgressLabel, setBriefProgressLabel] = useState<string | null>(
-    null
-  );
+  const [progressDetail, setProgressDetail] =
+    useState<ResearchBriefProgressDetail | null>(null);
 
   useEffect(() => {
     const onProgress = (event: Event) => {
       const detail = (event as CustomEvent<ResearchBriefProgressDetail | null>)
         .detail;
       if (detail === null) {
-        setBriefProgressLabel(null);
+        setProgressDetail(null);
         return;
       }
-      setBriefProgressLabel(formatResearchBriefProgressLabel(detail));
+      setProgressDetail(detail);
     };
     window.addEventListener(OASIS_EVENT_BRIEF_PROGRESS, onProgress);
     return () => {
@@ -46,5 +30,36 @@ export function useResearchBriefProgress() {
     };
   }, []);
 
-  return { briefProgressLabel, setBriefProgressLabel };
+  const briefProgressLabel = useMemo(
+    () =>
+      progressDetail ? formatAssistantProgressLabel(progressDetail) : null,
+    [progressDetail]
+  );
+
+  const progressHeadline = useMemo(
+    () => assistantProgressHeadline(progressDetail?.context),
+    [progressDetail?.context]
+  );
+
+  const progressSteps: ProgressStepRow[] = useMemo(
+    () => buildCiReportProgressSteps(progressDetail),
+    [progressDetail]
+  );
+
+  return {
+    briefProgressLabel,
+    progressDetail,
+    progressHeadline,
+    progressSteps,
+    setBriefProgressLabel: (label: string | null) => {
+      setProgressDetail(
+        label
+          ? {
+              phase: "synthesizing",
+              label,
+            }
+          : null
+      );
+    },
+  };
 }

@@ -127,7 +127,9 @@ export function buildRelevantTabContextFromBrief(args: {
 }
 
 function haystackForEntry(entry: TabCatalogEntry): string {
-  return normalizeName(`${entry.title} ${entry.url} ${entry.domain} ${entry.snippet || ""}`);
+  return normalizeName(
+    `${entry.title} ${entry.url} ${entry.domain} ${entry.snippet || ""}`
+  );
 }
 
 function noisePenalty(entry: TabCatalogEntry, tokens: string[]): number {

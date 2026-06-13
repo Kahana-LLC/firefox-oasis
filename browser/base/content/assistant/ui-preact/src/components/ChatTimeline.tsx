@@ -5,14 +5,23 @@ import {
   copyTextToClipboard,
   isOutreachEmailMarkdown,
   isResearchBriefMarkdown,
+  isCompetitiveIntelMarkdown,
+  isCompetitiveIntelWorkflowMarkdown,
   textForClipboard,
 } from '../utils/copyToClipboard';
 import { isLongFormAiArtifact } from '../utils/longFormArtifact';
 import { parseResearchBriefToolMessage } from '../../../build/src/utils/researchBriefRequest.js';
 import { parseOutreachEmailToolMessage } from '../../../build/src/utils/outreachEmailRequest.js';
+import {
+  hasCompetitiveIntelMarker,
+} from '../../../build/src/utils/competitiveIntelRequest.js';
+import { parseCompetitiveIntelWorkflowMessage } from '../../../build/src/utils/competitiveIntelWorkflowRequest.js';
+import { friendlyLabelForWorkflowSentinel } from '../../../build/src/utils/competitiveIntelResume.js';
 import type { MarkdownSection } from '../utils/markdownSectionSplit';
 import { OutreachEmailView } from './OutreachEmailView';
 import { ResearchBriefView } from './ResearchBriefView';
+import { CompetitiveIntelWorkflowView } from './CompetitiveIntelWorkflowView';
+import { CompetitiveIntelReportMessage } from './CompetitiveIntelReportMessage';
 import { Feedback } from './Feedback';
 import type { TrainingSubmittedPayload } from './Feedback';
 import { ActiveToolIndicator } from './ActiveToolIndicator';
@@ -125,6 +134,10 @@ export function ChatTimeline({
   const [outreachCopyFailedMsgId, setOutreachCopyFailedMsgId] = useState<
     string | null
   >(null);
+  const [ciCopiedMsgId, setCiCopiedMsgId] = useState<string | null>(null);
+  const [ciCopyFailedMsgId, setCiCopyFailedMsgId] = useState<string | null>(
+    null
+  );
 
   const EMAIL_COMPOSE_URLS = {
     gmail: 'https://mail.google.com/mail/?view=cm&fs=1',
@@ -257,10 +270,12 @@ export function ChatTimeline({
         const isLast = index === messages.length - 1;
 
         if (message.role === 'user') {
+          const displayText =
+            friendlyLabelForWorkflowSentinel(message.content) || message.content;
           return (
             <div key={message.id} className="message-bubble message-user">
               <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>
-                {message.content}
+                {displayText}
               </div>
             </div>
           );
@@ -297,6 +312,11 @@ export function ChatTimeline({
           const isOutreachEmail =
             isOutreachEmailMarkdown(message.content) &&
             displayContent.length > 0;
+          const isCiWorkflow = isCompetitiveIntelWorkflowMarkdown(message.content);
+          const ciWorkflowPayload = isCiWorkflow
+            ? parseCompetitiveIntelWorkflowMessage(message.content)
+            : null;
+          const isCiReport = hasCompetitiveIntelMarker(message.content);
           const outreachPayload = isOutreachEmail
             ? parseOutreachEmailToolMessage(message.content)
             : null;
@@ -308,7 +328,7 @@ export function ChatTimeline({
               !(isCapabilitiesOverview && isLegacyCapabilitiesBubbles)
           );
           let htmlContent = '';
-          if (useMarkdownHtml && !isResearchBrief && !isOutreachEmail) {
+          if (useMarkdownHtml && !isResearchBrief && !isOutreachEmail && !isCiWorkflow && !isCiReport) {
             try {
               const raw = oasisWindow.marked!.parse(message.content);
               htmlContent = oasisWindow.DOMPurify!.sanitize(raw);
@@ -366,6 +386,39 @@ export function ChatTimeline({
                       onOpenEmailClient={provider => {
                         const url = EMAIL_COMPOSE_URLS[provider];
                         window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
+                    />
+                  ) : isCiWorkflow && ciWorkflowPayload ? (
+                    <CompetitiveIntelWorkflowView
+                      markdown={ciWorkflowPayload.markdown}
+                      workflow={ciWorkflowPayload.workflow}
+                      discoveryQuery={ciWorkflowPayload.discoveryQuery}
+                      discoveryTools={ciWorkflowPayload.discoveryTools}
+                      status={ciWorkflowPayload.status}
+                    />
+                  ) : isCiReport ? (
+                    <CompetitiveIntelReportMessage
+                      content={message.content}
+                      messageId={message.id}
+                      copiedAll={ciCopiedMsgId === message.id}
+                      copyAllFailed={ciCopyFailedMsgId === message.id}
+                      onCopiedAll={id => {
+                        setCiCopyFailedMsgId(null);
+                        setCiCopiedMsgId(id);
+                        window.setTimeout(() => {
+                          setCiCopiedMsgId(current =>
+                            current === id ? null : current
+                          );
+                        }, 2000);
+                      }}
+                      onCopyAllFailed={id => {
+                        setCiCopiedMsgId(null);
+                        setCiCopyFailedMsgId(id);
+                        window.setTimeout(() => {
+                          setCiCopyFailedMsgId(current =>
+                            current === id ? null : current
+                          );
+                        }, 2000);
                       }}
                     />
                   ) : isResearchBrief && useMarkdownHtml ? (

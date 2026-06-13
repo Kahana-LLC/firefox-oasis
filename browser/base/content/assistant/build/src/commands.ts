@@ -97,6 +97,18 @@ import {
   previewOutreachEmailScopeAsync,
   previewResearchBriefScopeAsync,
 } from "./services/researchTabSelection";
+import { executeCompetitiveIntelWorkflow } from "./services/competitiveIntelOrchestrator.js";
+import { buildCompetitiveIntelReport } from "./services/competitiveIntel.js";
+import {
+  buildCiBriefScopePreviewDescription,
+  previewCiBriefScope,
+} from "./services/competitiveIntelBrief.js";
+import { getCompetitiveIntelWorkflow } from "./services/competitiveIntelWorkflow.js";
+import { buildCompetitiveIntelToolMessage } from "./utils/competitiveIntelRequest.js";
+import { buildCiOverQuotaClarification } from "./utils/ciTokenBudget.js";
+import { normalizeCiQuotaMode } from "./utils/ciTokenBudget.js";
+import { setCiQuotaResume } from "./utils/ciQuotaResume.js";
+import { DEFAULT_COMPETITIVE_TIERS } from "./services/competitiveIntelTypes.js";
 import {
   buildOutreachEmail,
   type BuildOutreachEmailOptions,
@@ -770,7 +782,7 @@ export class CloseTabCommand implements Command {
 export class FocusTabCommand implements Command {
   commandName = "focus_tab";
   description =
-    'Switch to an already-open tab matching a title, URL keyword, or category (e.g. email → Gmail, shopping → Amazon). Arguments: { query: string }.';
+    "Switch to an already-open tab matching a title, URL keyword, or category (e.g. email → Gmail, shopping → Amazon). Arguments: { query: string }.";
   async execute(args: CommandArgs): Promise<CmdResult> {
     const { gBrowser } = getChrome();
     if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
@@ -1776,8 +1788,7 @@ function researchBriefClarificationFromScopePreview(
       command: resumeCommand,
     });
     setPendingClarification({
-      originalMessage:
-        resumeLabel || String(args.topic || "research brief"),
+      originalMessage: resumeLabel || String(args.topic || "research brief"),
       options,
     });
     return { message };
@@ -1820,8 +1831,7 @@ function researchBriefClarificationFromBuildFailure(
       command: resumeCommand,
     });
     setPendingClarification({
-      originalMessage:
-        resumeLabel || String(args.topic || "research brief"),
+      originalMessage: resumeLabel || String(args.topic || "research brief"),
       options,
     });
     return { message };
@@ -1837,7 +1847,9 @@ const OUTREACH_EMAIL_PURPOSES = new Set<OutreachEmailPurpose>([
   "custom",
 ]);
 
-function normalizeOutreachPurpose(raw: string | undefined): OutreachEmailPurpose {
+function normalizeOutreachPurpose(
+  raw: string | undefined
+): OutreachEmailPurpose {
   const purpose = String(raw || "")
     .trim()
     .toLowerCase() as OutreachEmailPurpose;
@@ -2100,6 +2112,136 @@ export class BuildResearchBriefCommand implements Command {
           brief: result.brief,
           briefId: result.briefId,
           digests: cached?.digests ?? [],
+        }),
+      };
+    } finally {
+      endResearchBriefRun();
+    }
+  }
+}
+
+export class RunCompetitiveIntelCommand implements Command {
+  commandName = "run_competitive_intel";
+  description =
+    "Run a guided competitive intelligence workflow for an industry: discovery in AI tools, competitor pool, tiering, enrichment tabs, tab groups, and a grounded report with comparisons and confidence. Arguments: { industry: string, market?: string, focus?: string, max_competitors?: number, workflow_step?: string, workflow_confirmed?: boolean, workflow_action?: string, tier_edit?: string, quota_mode?: 'default'|'compact'|'fewer_tabs'|'truncate' }.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    return executeCompetitiveIntelWorkflow(args);
+  }
+}
+
+function ciBriefClarificationFromBuildFailure(
+  result: {
+    ok: false;
+    message: string;
+    code?: string;
+    estimate?: number;
+    remaining?: number;
+    suggestedTabCount?: number;
+  },
+  args: CommandArgs,
+  resumeLabel?: string
+): CmdResult | null {
+  if (
+    result.code === "over_quota" &&
+    result.estimate != null &&
+    result.remaining != null &&
+    result.suggestedTabCount != null
+  ) {
+    const stashArgs = {
+      ...args,
+      scope_confirmed: true,
+      suggested_max_tabs: result.suggestedTabCount,
+    };
+    const { options, message } = buildCiOverQuotaClarification({
+      estimate: result.estimate,
+      remaining: result.remaining,
+      suggestedTabCount: result.suggestedTabCount,
+    });
+    setCiQuotaResume({
+      args: stashArgs,
+      command: "build_competitive_intel_brief",
+    });
+    setPendingClarification({
+      originalMessage:
+        resumeLabel ||
+        String(args.industry || "competitive intelligence brief"),
+      options,
+    });
+    return { message };
+  }
+  return null;
+}
+
+export class BuildCompetitiveIntelBriefCommand implements Command {
+  commandName = "build_competitive_intel_brief";
+  description =
+    "Build a competitive intelligence battle card from existing CI tier tab groups (CI — High / Medium / Low / Adjacent). Arguments: { industry: string, focus?: string, scope?: 'ci_tab_groups'|'ci_tab_group', name?: string, scope_confirmed?: boolean, quota_mode?: 'default'|'compact'|'fewer_tabs'|'truncate' }. Use after grouping enrichment tabs, without running the full guided workflow.";
+  async execute(args: CommandArgs): Promise<CmdResult> {
+    const industry = stringArg(args, "industry")?.trim();
+    if (!industry) {
+      return {
+        message:
+          "What industry or market should this competitive intelligence brief cover?",
+      };
+    }
+
+    const workflow = getCompetitiveIntelWorkflow();
+    const preview = previewCiBriefScope({
+      scope: stringArg(args, "scope"),
+      groupName: stringArg(args, "name"),
+      enrichmentPlan: workflow?.enrichmentPlan,
+    });
+    if (!preview.ok) {
+      return { message: preview.message };
+    }
+
+    if (!booleanArg(args, "scope_confirmed")) {
+      setPendingConfirmation({
+        command: this.commandName,
+        args: { ...args, scope_confirmed: true },
+        description: buildCiBriefScopePreviewDescription(preview),
+      });
+      return {
+        message: buildCiBriefScopePreviewDescription(preview),
+        requiresConfirmation: true,
+      };
+    }
+
+    const quotaMode = normalizeCiQuotaMode(stringArg(args, "quota_mode"));
+    const signal = beginResearchBriefRun();
+    const onProgress = createResearchBriefProgressReporter(signal);
+    try {
+      const built = await buildCompetitiveIntelReport({
+        industry,
+        focus: stringArg(args, "focus"),
+        companies: preview.companies,
+        enrichmentPlan: workflow?.enrichmentPlan || [],
+        tierLabels: DEFAULT_COMPETITIVE_TIERS,
+        groupName:
+          stringArg(args, "scope") === "ci_tab_group"
+            ? stringArg(args, "name")
+            : undefined,
+        quotaMode,
+        signal,
+      });
+      if (!built.ok) {
+        const quotaClarify = ciBriefClarificationFromBuildFailure(
+          built,
+          args,
+          `competitive intelligence brief for ${industry}`
+        );
+        if (quotaClarify) {
+          return quotaClarify;
+        }
+        return { message: built.message };
+      }
+      return {
+        message: buildCompetitiveIntelToolMessage({
+          markdown: built.markdown,
+          report: built.report,
+          reportId: built.reportId,
+          reportMode: built.reportMode,
+          budgetNote: built.budgetNote,
         }),
       };
     } finally {
@@ -3104,6 +3246,7 @@ export class ConfirmActionCommand implements Command {
       return { message: "Cannot confirm confirm_action recursively." };
     }
 
+    clearPendingConfirmation();
     return await cmd.execute(pending.args);
   }
 }
@@ -3191,9 +3334,8 @@ export class SearchHistorySemanticCommand implements Command {
       const MIN_RELEVANCE = mode === "keyword" ? 0.5 : 0.3;
       const MAX_RESULTS = 5;
       let activeQuery = query;
-      let qualifying: Awaited<
-        ReturnType<typeof semanticHistorySearch.search>
-      > = [];
+      let qualifying: Awaited<ReturnType<typeof semanticHistorySearch.search>> =
+        [];
       for (const candidate of [query, ...historyKeywordFallbacks(query)]) {
         const results = await semanticHistorySearch.search(
           candidate,

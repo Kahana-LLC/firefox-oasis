@@ -91,8 +91,7 @@ export function isMultiTabSummarizePhrase(normalized: string): boolean {
   return hasMultiTabScope(normalized);
 }
 
-const SINGLE_TAB_SCOPE_RE =
-  /\b(?:this|current)\s+(?:page|tab)(?!\s+group)\b/i;
+const SINGLE_TAB_SCOPE_RE = /\b(?:this|current)\s+(?:page|tab)(?!\s+group)\b/i;
 
 export function isScopedSummaryPhrase(normalized: string): boolean {
   if (!/\bsummary\b/i.test(normalized)) {

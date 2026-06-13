@@ -25,7 +25,9 @@ const RAINBOW_HUES = [
 const FALLBACK_ACCENT = "#7a9200";
 const FALLBACK_SOFT = "#e8f0c8";
 
-function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+function parseHexColor(
+  hex: string
+): { r: number; g: number; b: number } | null {
   const normalized = hex.trim().replace(/^#/, "");
   if (!/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(normalized)) {
     return null;
@@ -75,7 +77,9 @@ function buildShadesFromAccent(accent: string, soft: string): string[] {
   const black = { r: 0, g: 0, b: 0 };
   const shades = [
     accent,
-    softRgb ? toHex(softRgb.r, softRgb.g, softRgb.b) : mixRgb(accentRgb, white, 0.55),
+    softRgb
+      ? toHex(softRgb.r, softRgb.g, softRgb.b)
+      : mixRgb(accentRgb, white, 0.55),
     mixRgb(accentRgb, white, 0.35),
     mixRgb(accentRgb, black, 0.22),
     mixRgb(accentRgb, black, 0.38),
@@ -85,7 +89,10 @@ function buildShadesFromAccent(accent: string, soft: string): string[] {
 
 export function getTrainingConfettiPalette(): string[] {
   if (typeof document === "undefined") {
-    return [...buildShadesFromAccent(FALLBACK_ACCENT, FALLBACK_SOFT), ...RAINBOW_HUES];
+    return [
+      ...buildShadesFromAccent(FALLBACK_ACCENT, FALLBACK_SOFT),
+      ...RAINBOW_HUES,
+    ];
   }
   const root = document.documentElement;
   const styles = getComputedStyle(root);

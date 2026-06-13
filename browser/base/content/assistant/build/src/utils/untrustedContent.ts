@@ -22,65 +22,68 @@ export type InjectionAssessment = {
   redactionCount: number;
 };
 
-const INJECTION_PATTERNS: Array<{ id: string; pattern: RegExp; weight: number }> =
-  [
-    {
-      id: "ignore_instructions",
-      pattern:
-        /\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions?\b/gi,
-      weight: 3,
-    },
-    {
-      id: "disregard_instructions",
-      pattern: /\b(?:disregard|forget)\s+(?:all\s+)?(?:previous|prior)\b/gi,
-      weight: 3,
-    },
-    {
-      id: "you_are_now",
-      pattern: /\byou\s+are\s+now\b/gi,
-      weight: 2,
-    },
-    {
-      id: "new_instructions",
-      pattern: /\bnew\s+instructions?\b/gi,
-      weight: 2,
-    },
-    {
-      id: "system_role",
-      pattern: /\b(?:system|assistant)\s*:/gi,
-      weight: 2,
-    },
-    {
-      id: "instruction_heading",
-      pattern: /^#{1,3}\s*(?:system|instructions?)\b/gim,
-      weight: 2,
-    },
-    {
-      id: "jailbreak",
-      pattern: /\bjailbreak\b/gi,
-      weight: 2,
-    },
-    {
-      id: "override",
-      pattern: /\boverride\s+(?:the\s+)?(?:system|rules?|instructions?)\b/gi,
-      weight: 2,
-    },
-    {
-      id: "fake_xml",
-      pattern: /<\/?(?:system|assistant|instruction|tool)[^>]*>/gi,
-      weight: 2,
-    },
-    {
-      id: "inst_tag",
-      pattern: /\[(?:INST|SYS)\]/gi,
-      weight: 2,
-    },
-    {
-      id: "as_an_ai",
-      pattern: /\bas an ai\b/gi,
-      weight: 1,
-    },
-  ];
+const INJECTION_PATTERNS: Array<{
+  id: string;
+  pattern: RegExp;
+  weight: number;
+}> = [
+  {
+    id: "ignore_instructions",
+    pattern:
+      /\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions?\b/gi,
+    weight: 3,
+  },
+  {
+    id: "disregard_instructions",
+    pattern: /\b(?:disregard|forget)\s+(?:all\s+)?(?:previous|prior)\b/gi,
+    weight: 3,
+  },
+  {
+    id: "you_are_now",
+    pattern: /\byou\s+are\s+now\b/gi,
+    weight: 2,
+  },
+  {
+    id: "new_instructions",
+    pattern: /\bnew\s+instructions?\b/gi,
+    weight: 2,
+  },
+  {
+    id: "system_role",
+    pattern: /\b(?:system|assistant)\s*:/gi,
+    weight: 2,
+  },
+  {
+    id: "instruction_heading",
+    pattern: /^#{1,3}\s*(?:system|instructions?)\b/gim,
+    weight: 2,
+  },
+  {
+    id: "jailbreak",
+    pattern: /\bjailbreak\b/gi,
+    weight: 2,
+  },
+  {
+    id: "override",
+    pattern: /\boverride\s+(?:the\s+)?(?:system|rules?|instructions?)\b/gi,
+    weight: 2,
+  },
+  {
+    id: "fake_xml",
+    pattern: /<\/?(?:system|assistant|instruction|tool)[^>]*>/gi,
+    weight: 2,
+  },
+  {
+    id: "inst_tag",
+    pattern: /\[(?:INST|SYS)\]/gi,
+    weight: 2,
+  },
+  {
+    id: "as_an_ai",
+    pattern: /\bas an ai\b/gi,
+    weight: 1,
+  },
+];
 
 const ZERO_WIDTH_RE = /[\u200B-\u200D\uFEFF\u2060]/g;
 const BIDI_OVERRIDE_RE = /[\u202A-\u202E\u2066-\u2069]/g;

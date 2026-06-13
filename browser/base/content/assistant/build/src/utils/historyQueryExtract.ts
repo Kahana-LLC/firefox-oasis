@@ -123,7 +123,9 @@ export function extractHistorySearchKeyword(utterance: string): string | null {
     }
   }
 
-  if (!/\b(?:history|visited|browsing|remember|reading|watching)\b/i.test(input)) {
+  if (
+    !/\b(?:history|visited|browsing|remember|reading|watching)\b/i.test(input)
+  ) {
     return null;
   }
 
@@ -136,7 +138,10 @@ export function extractHistorySearchKeyword(utterance: string): string | null {
     .replace(/^(?:that|the)\b/i, "")
     .replace(/\b(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*$/i, "")
     .replace(/\b(?:my|the)\s+(?:browsing\s+)?history\b/gi, "")
-    .replace(/\b(?:a\s+)?(?:while\s+)?(?:ago|earlier|yesterday|recently)\b/gi, "")
+    .replace(
+      /\b(?:a\s+)?(?:while\s+)?(?:ago|earlier|yesterday|recently)\b/gi,
+      ""
+    )
     .replace(/\s+/g, " ")
     .trim();
 

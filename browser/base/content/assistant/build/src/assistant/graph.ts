@@ -21,6 +21,7 @@ import {
   clearContinuationQueue,
   clearPendingAmbiguity,
   clearPendingClarification,
+  clearPendingConfirmation,
   clearPendingProposedAction,
   getContinuationQueue,
   getPendingAmbiguity,
@@ -37,6 +38,8 @@ import { assistantLogger } from "../utils/assistantLogger.js";
 import { hasPageContextRequest } from "../utils/pageContextRequest.js";
 import { mergeTrustedArgsOntoAssist } from "../utils/trustedRouteArgs.js";
 import { displayMarkdownFromResearchBriefToolMessage } from "../utils/researchBriefRequest.js";
+import { hasCompetitiveIntelMarker } from "../utils/competitiveIntelRequest.js";
+import { hasCompetitiveIntelWorkflowMarker } from "../utils/competitiveIntelWorkflowRequest.js";
 import {
   looksLikeNewActionCommand,
   looksLikePageContextRequest,
@@ -55,6 +58,11 @@ import { setRoutePendingAmbiguity } from "./agentGraphSupport.js";
 import { createCommandToolAgent } from "./agentSteps.js";
 import { formatQuotaExceededMessage } from "../utils/quotaUserMessage.js";
 import { getOasisCapabilitiesReply } from "../utils/oasisCapabilitiesFaq.js";
+import {
+  isSelfContainedToolResultMessage,
+  selfContainedToolResultBytes,
+  SELF_CONTAINED_TOOL_COMMANDS,
+} from "../utils/ciReportDelivery.js";
 
 const CHAT_GENERATION_CONFIG = {
   responseMimeType: "application/json",
@@ -105,11 +113,9 @@ const CHAT_GENERATION_CONFIG = {
   },
 };
 import { extractLatestActionableText } from "./extractLatestActionableText.js";
+import { looksLikeCommandChain, splitCommandChain } from "./commandChain.js";
 import {
-  looksLikeCommandChain,
-  splitCommandChain,
-} from "./commandChain.js";
-import {
+  resolveCompetitiveIntelWorkflowGate,
   resolvePendingAmbiguityGate,
   resolvePendingClarificationGate,
   resolvePendingConfirmationGate,
@@ -131,6 +137,12 @@ import {
   peekResearchBriefResumeCommand,
 } from "../utils/researchBriefResume.js";
 import {
+  consumeCiQuotaResume,
+  parseCiQuotaResumePrompt,
+  peekCiQuotaResumeCommand,
+  clearCiQuotaResume,
+} from "../utils/ciQuotaResume.js";
+import {
   consumeOrganizeTabsResume,
   parseOrganizeTabsResumePrompt,
 } from "../utils/organizeTabsResume.js";
@@ -144,6 +156,21 @@ import {
   tryPreferDeterministicToolRoute,
   tryResolveEarlyDeterministicSupervisorRoute,
 } from "../utils/preferDeterministicRoute.js";
+
+function tryConsumeCiQuotaResumeFromGate(
+  resolvedPrompt: string
+): { command: string; args: Record<string, unknown> } | null {
+  const optionId = parseCiQuotaResumePrompt(resolvedPrompt);
+  if (!optionId) {
+    return null;
+  }
+  const command = peekCiQuotaResumeCommand();
+  const args = consumeCiQuotaResume(optionId);
+  if (!args) {
+    return null;
+  }
+  return { command, args };
+}
 
 function tryConsumeResearchBriefResumeFromGate(
   resolvedPrompt: string
@@ -247,7 +274,15 @@ export function buildAssistantGraph(
     const lastMsg = state.messages[state.messages.length - 1];
     const lastMsgText = msgText(lastMsg as MessageLike);
     const toolPayload = getToolResultPayload(lastMsg as MessageLike);
-    const hasToolOutput = Boolean(toolPayload);
+    const toolCommandName =
+      toolPayload?.commandName ||
+      (typeof (lastMsg as { name?: string }).name === "string"
+        ? String((lastMsg as { name: string }).name)
+        : "");
+    const rawToolMessage = String(
+      toolPayload?.message || lastMsgText || ""
+    ).trim();
+    const hasToolOutput = Boolean(rawToolMessage);
     const includesPageContextRequest = hasPageContextRequest(lastMsgText);
 
     const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
@@ -259,12 +294,30 @@ export function buildAssistantGraph(
       };
     }
 
-    if (toolPayload?.commandName === "build_research_brief") {
-      const markdown = displayMarkdownFromResearchBriefToolMessage(
-        toolPayload.message
-      );
+    if (toolCommandName === "build_research_brief") {
+      const markdown =
+        displayMarkdownFromResearchBriefToolMessage(rawToolMessage);
       return {
         messages: [new AIMessage(markdown || "Research brief is ready.")],
+        lastWorker: "chat",
+        commandQueue: [],
+      };
+    }
+
+    if (
+      hasCompetitiveIntelWorkflowMarker(rawToolMessage) ||
+      hasCompetitiveIntelMarker(rawToolMessage)
+    ) {
+      return {
+        messages: [new AIMessage(rawToolMessage)],
+        lastWorker: "chat",
+        commandQueue: [],
+      };
+    }
+
+    if (SELF_CONTAINED_TOOL_COMMANDS.has(toolCommandName) && rawToolMessage) {
+      return {
+        messages: [new AIMessage(rawToolMessage)],
         lastWorker: "chat",
         commandQueue: [],
       };
@@ -412,6 +465,33 @@ export function buildAssistantGraph(
       };
     }
 
+    const competitiveIntelGate = resolveCompetitiveIntelWorkflowGate({
+      commandText,
+      confirmationText,
+      pendingConfirmation,
+      hasQueuedCommands:
+        state.commandQueue.length > 0 ||
+        pendingContinuationBeforeResume.length > 0,
+      justRanTool,
+    });
+    if (competitiveIntelGate.kind === "route") {
+      if (competitiveIntelGate.clearPendingConfirmation) {
+        clearPendingConfirmation();
+      }
+      return {
+        next: "run_competitive_intel",
+        args: competitiveIntelGate.args,
+        commandQueue: [],
+      };
+    }
+    if (competitiveIntelGate.kind === "block") {
+      return {
+        next: "chat",
+        args: { routerMessage: competitiveIntelGate.message },
+        commandQueue: [],
+      };
+    }
+
     const confirmationGate = resolvePendingConfirmationGate({
       confirmationText,
       pendingConfirmation,
@@ -445,6 +525,32 @@ export function buildAssistantGraph(
       commandText,
     });
     if (clarificationGate.kind === "resolved") {
+      const ciCancelId = parseCiQuotaResumePrompt(
+        clarificationGate.resolvedPrompt
+      );
+      if (ciCancelId === "ci_quota_cancel") {
+        clearPendingClarification();
+        clearCiQuotaResume();
+        return {
+          next: "chat",
+          args: {
+            routerMessage:
+              "Cancelled report generation. You can try again with a compact report or fewer tabs open.",
+          },
+          commandQueue: [],
+        };
+      }
+      const ciResume = tryConsumeCiQuotaResumeFromGate(
+        clarificationGate.resolvedPrompt
+      );
+      clearPendingClarification();
+      if (ciResume) {
+        return {
+          next: ciResume.command,
+          args: ciResume.args,
+          commandQueue: [],
+        };
+      }
       const resume = tryConsumeResearchBriefResumeFromGate(
         clarificationGate.resolvedPrompt
       );
@@ -522,6 +628,18 @@ export function buildAssistantGraph(
       pendingContinuationQueue.length > 0 || state.commandQueue.length > 1;
 
     if (justRanTool && !hasChainRemaining) {
+      const lastMsg = state.messages[state.messages.length - 1] as MessageLike;
+      if (isSelfContainedToolResultMessage(lastMsg)) {
+        const toolPayload = getToolResultPayload(lastMsg);
+        const toolCommandName =
+          toolPayload?.commandName ||
+          (typeof lastMsg.name === "string" ? lastMsg.name : "");
+        assistantLogger.debug("competitiveIntel", "ci_passthrough_end", {
+          commandName: toolCommandName,
+          bytes: selfContainedToolResultBytes(lastMsg),
+        });
+        return { next: AGENT_END, args: {}, commandQueue: [] };
+      }
       return { next: "chat", args: {}, commandQueue: [] };
     }
 
@@ -841,11 +959,7 @@ export function buildAssistantGraph(
         return {
           next: first.next,
           args: applyNoticeToArgs(
-            mergeTrustedArgsOntoAssist(
-              first.next,
-              first.args,
-              activeCommand
-            )
+            mergeTrustedArgsOntoAssist(first.next, first.args, activeCommand)
           ),
           commandQueue: encodedQueue,
         };

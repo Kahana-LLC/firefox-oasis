@@ -129,6 +129,8 @@ const TOOL_COMMAND_TYPE_MAP: Partial<Record<string, CommandType>> = {
   search_history: "search",
   summarize_page: "content_transform",
   build_research_brief: "content_create",
+  build_competitive_intel_brief: "content_create",
+  run_competitive_intel: "content_create",
 };
 
 export function classifyToolAction(commandName: string): UsageMeta {

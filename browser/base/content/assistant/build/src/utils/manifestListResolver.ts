@@ -50,9 +50,7 @@ function isListTabGroupsCommand(input: string): boolean {
   );
 }
 
-function parseListTabsTarget(
-  input: string
-): {
+function parseListTabsTarget(input: string): {
   targetName?: string;
   explicitContainer?: "tab-group" | "bookmark-folder";
 } | null {

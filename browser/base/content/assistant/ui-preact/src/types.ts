@@ -212,11 +212,13 @@ export type OasisWindow = Window & {
   oasisSetPendingConfirmationRelay?: (data: ConfirmationData | null) => void;
   oasisSetPendingClarificationRelay?: (data: ClarificationData | null) => void;
   oasisClearPendingConfirmation?: () => void;
+  oasisClearPendingClarification?: () => void;
+  oasisGetPendingConfirmation?: () => ConfirmationData | null;
   oasisAbortResearchBrief?: () => void;
   oasisStoreResearchBriefRun?: (run: {
     briefId: string;
-    brief: import('../../build/src/services/researchBriefTypes.js').ResearchBrief;
-    digests: import('../../build/src/services/researchBriefTypes.js').TabDigest[];
+    brief: import("../../build/src/services/researchBriefTypes.js").ResearchBrief;
+    digests: import("../../build/src/services/researchBriefTypes.js").TabDigest[];
     markdown: string;
   }) => void;
   oasisGetInteractionIdForMessage?: (messageId: string) => string | null;

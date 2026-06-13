@@ -45,7 +45,10 @@ export function inferOutreachEmailPurpose(input: string): {
   if (/\bcold\b/.test(lower) || /\boutreach\b/.test(lower)) {
     return { purpose: "cold", purposeNotes: normalized };
   }
-  if (/\bnetwork(?:ing)?\b/.test(lower) || /\bintro(?:duction)?\b/.test(lower)) {
+  if (
+    /\bnetwork(?:ing)?\b/.test(lower) ||
+    /\bintro(?:duction)?\b/.test(lower)
+  ) {
     return { purpose: "networking", purposeNotes: normalized };
   }
   return { purpose: "custom", purposeNotes: normalized };
@@ -184,9 +187,7 @@ const OUTREACH_EMAIL_PATTERNS: Array<{
     ),
     resolve: (match, input) => {
       const name = trimQuotes(match.groups?.name || "");
-      return name
-        ? baseEmailArgs(input, { scope: "tab-group", name })
-        : null;
+      return name ? baseEmailArgs(input, { scope: "tab-group", name }) : null;
     },
   },
   {
@@ -197,9 +198,7 @@ const OUTREACH_EMAIL_PATTERNS: Array<{
     ),
     resolve: (match, input) => {
       const name = trimQuotes(match.groups?.name || "");
-      return name
-        ? baseEmailArgs(input, { scope: "tab-group", name })
-        : null;
+      return name ? baseEmailArgs(input, { scope: "tab-group", name }) : null;
     },
   },
   {

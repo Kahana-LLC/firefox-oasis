@@ -27,10 +27,7 @@ import {
   formatUnreadableDigestsMessage,
   truncateDigestsToBudget,
 } from "./researchBriefFormat.js";
-import {
-  MAX_TOTAL_CHARS,
-  extractTabDigests,
-} from "./researchBrief.js";
+import { MAX_TOTAL_CHARS, extractTabDigests } from "./researchBrief.js";
 import type {
   OutreachEmailPurpose,
   OutreachEmailTone,

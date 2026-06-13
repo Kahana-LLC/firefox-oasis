@@ -62,9 +62,7 @@ export function parseRelevantTabSelectResponse(
         ...new Set(
           raw.selectedIndices
             .map(value => Number(value))
-            .filter(
-              value => Number.isFinite(value) && validIndices.has(value)
-            )
+            .filter(value => Number.isFinite(value) && validIndices.has(value))
         ),
       ].slice(0, maxTabs)
     : [];

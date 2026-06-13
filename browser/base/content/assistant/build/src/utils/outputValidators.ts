@@ -6,8 +6,15 @@ import type {
   ResearchBrief,
   TabDigest,
 } from "../services/researchBriefTypes.js";
+import type { CompetitiveIntelReport } from "../services/competitiveIntelTypes.js";
 import type { RelevantTabSelectionPlan } from "../services/relevantTabTypes.js";
 import { containsInjectionBoilerplate } from "./untrustedContent.js";
+import {
+  buildDigestUrlIndex,
+  normalizeCompanyKey,
+  quoteMatchesDigestContent,
+  resolveDigestUrl,
+} from "./competitiveIntelReportAlign.js";
 
 let validatorRetryCount = 0;
 let validatorFailedCount = 0;
@@ -38,14 +45,30 @@ function normalizeForQuoteMatch(text: string): string {
 }
 
 function quoteMatchesDigest(quote: string, digests: TabDigest[]): boolean {
-  const normalized = normalizeForQuoteMatch(quote);
-  if (!normalized || normalized.length < 8) {
+  return quoteMatchesDigestContent(quote, digests);
+}
+
+function companyAllowed(name: string, allowed: Set<string>): boolean {
+  const key = normalizeCompanyKey(name);
+  if (!key || allowed.size === 0) {
+    return allowed.size === 0;
+  }
+  if (allowed.has(key)) {
     return true;
   }
-  return digests.some(digest => {
-    const hay = normalizeForQuoteMatch(digest.content);
-    return hay.includes(normalized);
-  });
+  for (const candidate of allowed) {
+    if (key.includes(candidate) || candidate.includes(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function digestUrlAllowed(
+  url: string,
+  index: ReturnType<typeof buildDigestUrlIndex>
+): boolean {
+  return Boolean(resolveDigestUrl(url, index));
 }
 
 export function validateOutreachEmailOutput(
@@ -67,7 +90,10 @@ export function validateOutreachEmailOutput(
   if (/[\u2014\u2013]/.test(body) || /[\u2014\u2013]/.test(subject)) {
     return { ok: false, reason: "Body or subject contains em/en dashes" };
   }
-  if (containsInjectionBoilerplate(body) || containsInjectionBoilerplate(subject)) {
+  if (
+    containsInjectionBoilerplate(body) ||
+    containsInjectionBoilerplate(subject)
+  ) {
     return { ok: false, reason: "Output contains injection-like boilerplate" };
   }
   if (
@@ -109,7 +135,67 @@ export function validateResearchBriefOutput(
   }
 
   if (containsInjectionBoilerplate(brief.executiveSummary)) {
-    return { ok: false, reason: "Executive summary contains injection boilerplate" };
+    return {
+      ok: false,
+      reason: "Executive summary contains injection boilerplate",
+    };
+  }
+
+  return { ok: true };
+}
+
+export function validateCompetitiveIntelOutput(
+  report: CompetitiveIntelReport,
+  options: { digests: TabDigest[]; allowedCompanies: string[] }
+): { ok: true } | { ok: false; reason: string } {
+  const index = buildDigestUrlIndex(options.digests);
+  const allowed = new Set(
+    options.allowedCompanies.map(name => normalizeCompanyKey(name))
+  );
+
+  for (const source of report.sources || []) {
+    if (!digestUrlAllowed(source.url, index)) {
+      return { ok: false, reason: "Source URL not in digest set" };
+    }
+    for (const quote of source.quotes || []) {
+      if (!quoteMatchesDigest(quote.text, options.digests)) {
+        return { ok: false, reason: "Quote not grounded in digest content" };
+      }
+    }
+  }
+
+  for (const competitor of report.competitors || []) {
+    if (!companyAllowed(competitor.name, allowed)) {
+      return { ok: false, reason: "Competitor not in confirmed pool" };
+    }
+    for (const url of competitor.sourceUrls || []) {
+      if (url && !digestUrlAllowed(url, index)) {
+        return { ok: false, reason: "Competitor source URL not in digest set" };
+      }
+    }
+    for (const quote of competitor.quotes || []) {
+      if (!quoteMatchesDigest(quote, options.digests)) {
+        return { ok: false, reason: "Competitor quote not grounded" };
+      }
+    }
+  }
+
+  for (const cell of report.comparisonMatrix?.cells || []) {
+    for (const url of cell.sourceUrls || []) {
+      if (url && !digestUrlAllowed(url, index)) {
+        return {
+          ok: false,
+          reason: "Matrix cell source URL not in digest set",
+        };
+      }
+    }
+  }
+
+  if (containsInjectionBoilerplate(report.executiveSummary)) {
+    return {
+      ok: false,
+      reason: "Executive summary contains injection boilerplate",
+    };
   }
 
   return { ok: true };

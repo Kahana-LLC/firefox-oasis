@@ -7,21 +7,21 @@ export type MarkdownSection = {
 export function sectionIdFromTitle(title: string): string {
   const slug = title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return slug || 'section';
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || "section";
 }
 
 export function splitMarkdownAtH2(markdown: string): {
   preamble: string;
   sections: MarkdownSection[];
 } {
-  const trimmed = String(markdown || '').trimEnd();
+  const trimmed = String(markdown || "").trimEnd();
   if (!trimmed) {
-    return { preamble: '', sections: [] };
+    return { preamble: "", sections: [] };
   }
 
-  const lines = trimmed.split('\n');
+  const lines = trimmed.split("\n");
   const preambleLines: string[] = [];
   const sections: MarkdownSection[] = [];
   let currentTitle: string | null = null;
@@ -34,14 +34,14 @@ export function splitMarkdownAtH2(markdown: string): {
     sections.push({
       id: sectionIdFromTitle(currentTitle),
       title: currentTitle,
-      markdown: currentLines.join('\n').trimEnd(),
+      markdown: currentLines.join("\n").trimEnd(),
     });
     currentTitle = null;
     currentLines = [];
   };
 
   for (const line of lines) {
-    if (/^## /.test(line) && !line.startsWith('###')) {
+    if (/^## /.test(line) && !line.startsWith("###")) {
       flush();
       currentTitle = line.slice(3).trim();
       currentLines = [line];
@@ -56,7 +56,7 @@ export function splitMarkdownAtH2(markdown: string): {
   flush();
 
   return {
-    preamble: preambleLines.join('\n').trimEnd(),
+    preamble: preambleLines.join("\n").trimEnd(),
     sections,
   };
 }

@@ -59,6 +59,8 @@ class InteractionStateStore {
       this.getPendingConfirmation();
     this.assistantWindow.oasisClearPendingConfirmation = () =>
       this.clearPendingConfirmation();
+    this.assistantWindow.oasisClearPendingClarification = () =>
+      this.clearPendingClarification();
     this.assistantWindow.oasisGetPendingAmbiguity = () =>
       this.getPendingAmbiguity();
   }
@@ -307,3 +309,12 @@ export function setRecentSearchResults(results: RecentSearchResult[]): void {
 export function clearRecentSearchResults(): void {
   interactionState.clearRecentSearchResults();
 }
+
+export {
+  clearCompetitiveIntelWorkflow,
+  getCompetitiveIntelWorkflow,
+  initCompetitiveIntelWorkflow,
+  isCompetitiveIntelWorkflowActive,
+  restoreCompetitiveIntelWorkflowFromStorage,
+  setCompetitiveIntelWorkflow,
+} from "./competitiveIntelWorkflow.js";

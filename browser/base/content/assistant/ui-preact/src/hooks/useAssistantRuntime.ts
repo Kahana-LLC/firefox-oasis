@@ -201,6 +201,24 @@ export function useAssistantRuntime(params: {
   const commandHistoryRef = useRef<string[]>([]);
   const historyNavIndexRef = useRef(-1);
   const draftBeforeHistoryRef = useRef("");
+  const busySinceRef = useRef(0);
+  const streamGenerationRef = useRef(0);
+
+  useEffect(() => {
+    if (!busy) {
+      busySinceRef.current = 0;
+      return;
+    }
+    const startedAt = Date.now();
+    busySinceRef.current = startedAt;
+    const timer = window.setTimeout(() => {
+      if (busySinceRef.current === startedAt) {
+        setBusy(false);
+        setResponseStreaming(false);
+      }
+    }, 300000);
+    return () => window.clearTimeout(timer);
+  }, [busy]);
 
   const chatUid = useMemo(
     () => (auth.isAuthenticated ? chatUserKey(auth.user) : null),
@@ -322,7 +340,10 @@ export function useAssistantRuntime(params: {
   ]);
 
   const appendChunkToMessage = useCallback(
-    (messageId: string, chunk: string) => {
+    (messageId: string, chunk: string, generation: number) => {
+      if (generation !== streamGenerationRef.current) {
+        return;
+      }
       setMessages(previous => {
         const index = previous.findIndex(message => message.id === messageId);
         if (index === -1) {
@@ -336,6 +357,11 @@ export function useAssistantRuntime(params: {
     },
     []
   );
+
+  const bumpStreamGeneration = useCallback(() => {
+    streamGenerationRef.current += 1;
+    return streamGenerationRef.current;
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     if (ttsAudioRef.current) {
@@ -407,6 +433,7 @@ export function useAssistantRuntime(params: {
       }
 
       const aiMessageId = uuid();
+      const generation = streamGenerationRef.current;
       setMessages(previous => [
         ...previous,
         { id: aiMessageId, role: "ai", content: "" },
@@ -416,6 +443,9 @@ export function useAssistantRuntime(params: {
       const fullText = await run(
         prompt,
         (chunk: string) => {
+          if (generation !== streamGenerationRef.current) {
+            return;
+          }
           const normalized = normalizeAssistantChunk(chunk);
           if (!normalized) {
             return;
@@ -424,11 +454,14 @@ export function useAssistantRuntime(params: {
             sawContentChunk = true;
             setResponseStreaming(true);
           }
-          appendChunkToMessage(aiMessageId, normalized);
+          appendChunkToMessage(aiMessageId, normalized, generation);
         },
         inputType,
         aiMessageId
       );
+      if (generation !== streamGenerationRef.current) {
+        return null;
+      }
       const interactionId =
         oasisWindow.oasisGetInteractionIdForMessage?.(aiMessageId) ?? undefined;
       if (interactionId) {
@@ -491,6 +524,8 @@ export function useAssistantRuntime(params: {
   }, []);
 
   const resetAssistantSession = useCallback(async () => {
+    bumpStreamGeneration();
+    oasisWindow.oasisAbortResearchBrief?.();
     setMessages([]);
     messagesRef.current = [];
     setToolActions([]);
@@ -499,6 +534,10 @@ export function useAssistantRuntime(params: {
     activeChatIdRef.current = null;
     setChatConversations([]);
     setChatBootstrapNonce(n => n + 1);
+    setBusy(false);
+    setResponseStreaming(false);
+    oasisWindow.oasisClearPendingConfirmation?.();
+    oasisWindow.oasisClearPendingClarification?.();
     try {
       localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
       localStorage.removeItem(LS_COMPOSER_CHIPS_RETIRED);
@@ -514,7 +553,7 @@ export function useAssistantRuntime(params: {
     if (typeof setHistory === "function") {
       await setHistory([]);
     }
-  }, [originalResetAssistantSession]);
+  }, [bumpStreamGeneration, originalResetAssistantSession]);
 
   const startNewChat = useCallback(async () => {
     const uid = chatUserKey(auth.user);
@@ -522,7 +561,13 @@ export function useAssistantRuntime(params: {
       return;
     }
     stopSpeaking();
+    bumpStreamGeneration();
+    oasisWindow.oasisAbortResearchBrief?.();
     setToolActions([]);
+    setBusy(false);
+    setResponseStreaming(false);
+    oasisWindow.oasisClearPendingConfirmation?.();
+    oasisWindow.oasisClearPendingClarification?.();
     setComposerInlineSends(0);
     try {
       localStorage.removeItem(LS_COMPOSER_CHIPS_COUNT);
@@ -547,6 +592,7 @@ export function useAssistantRuntime(params: {
     flushChatPersistence,
     originalResetAssistantSession,
     stopSpeaking,
+    bumpStreamGeneration,
   ]);
 
   const openConversation = useCallback(
@@ -696,10 +742,15 @@ export function useAssistantRuntime(params: {
   const send = useCallback(
     async (
       textInput?: string,
-      options?: { fromVoice?: boolean; hideUserMessage?: boolean }
+      options?: {
+        fromVoice?: boolean;
+        hideUserMessage?: boolean;
+        displayLabel?: string;
+      }
     ) => {
       const fromVoice = options?.fromVoice ?? false;
       const hideUserMessage = options?.hideUserMessage ?? false;
+      const displayLabel = options?.displayLabel?.trim();
       const text = textInput || input;
       if (!text.trim()) {
         return;
@@ -725,13 +776,18 @@ export function useAssistantRuntime(params: {
       }
       setInput("");
       setResponseStreaming(false);
+      const generation = bumpStreamGeneration();
       setBusy(true);
       setToolActions([]);
-      if (!hideUserMessage) {
+      if (!hideUserMessage || displayLabel) {
         const userMessageId = uuid();
         setMessages(previous => [
           ...previous,
-          { id: userMessageId, role: "user", content: text },
+          {
+            id: userMessageId,
+            role: "user",
+            content: displayLabel || text,
+          },
         ]);
       }
 
@@ -747,19 +803,24 @@ export function useAssistantRuntime(params: {
           void speakText(result.fullText, result.aiMessageId);
         }
       } catch (error) {
-        setMessages(previous => [
-          ...previous,
-          { id: uuid(), role: "ai", content: `Error: ${String(error)}` },
-        ]);
+        if (generation === streamGenerationRef.current) {
+          setMessages(previous => [
+            ...previous,
+            { id: uuid(), role: "ai", content: `Error: ${String(error)}` },
+          ]);
+        }
       } finally {
-        setResponseStreaming(false);
-        setBusy(false);
-        void flushChatPersistence();
-        dispatchOasisUsageUpdate();
+        if (generation === streamGenerationRef.current) {
+          setResponseStreaming(false);
+          setBusy(false);
+          void flushChatPersistence();
+          dispatchOasisUsageUpdate();
+        }
       }
     },
     [
       auth.isAuthenticated,
+      bumpStreamGeneration,
       flushChatPersistence,
       input,
       runStreamTurn,
@@ -934,6 +995,17 @@ export function useAssistantRuntime(params: {
     []
   );
 
+  const forceIdle = useCallback(() => {
+    bumpStreamGeneration();
+    setBusy(false);
+    setResponseStreaming(false);
+    setToolActions([]);
+    stopSpeaking();
+    oasisWindow.oasisClearPendingConfirmation?.();
+    oasisWindow.oasisClearPendingClarification?.();
+    oasisWindow.oasisAbortResearchBrief?.();
+  }, [bumpStreamGeneration, stopSpeaking]);
+
   return {
     messages,
     setMessages,
@@ -966,5 +1038,6 @@ export function useAssistantRuntime(params: {
     voiceTurnBeginForChat,
     voiceStreamChunkForChat,
     voiceSpokenTurnMirrorForChat,
+    forceIdle,
   };
 }

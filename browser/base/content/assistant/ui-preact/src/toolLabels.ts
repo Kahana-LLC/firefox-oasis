@@ -33,6 +33,7 @@ const TOOL_LABELS: Record<string, string> = {
   open_search_result: "Opening result",
   summarize_page: "Reading page",
   build_research_brief: "Building research brief",
+  run_competitive_intel: "Running competitive intelligence workflow",
   show_subscription: "Showing subscription",
   confirm_action: "Confirming action",
 

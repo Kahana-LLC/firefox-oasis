@@ -1,7 +1,10 @@
-import { buildResearchBriefToolMessage } from '../../../build/src/utils/researchBriefRequest.js';
-import type { ResearchBrief, TabDigest } from '../../../build/src/services/researchBriefTypes.js';
-import type { PinnedResearchBrief } from '../researchBriefPinStore';
-import type { OasisWindow } from '../types';
+import { buildResearchBriefToolMessage } from "../../../build/src/utils/researchBriefRequest.js";
+import type {
+  ResearchBrief,
+  TabDigest,
+} from "../../../build/src/services/researchBriefTypes.js";
+import type { PinnedResearchBrief } from "../researchBriefPinStore";
+import type { OasisWindow } from "../types";
 
 const oasisWindow = window as OasisWindow;
 

@@ -231,6 +231,18 @@
         return false;
       }
     },
+    isOasisAssistantOverlayLayout() {
+      try {
+        const win = Services.wm.getMostRecentWindow("navigator:browser");
+        const overlayBrowser = win?.document.getElementById(
+          "oasis-assistant-overlay-browser"
+        );
+        return overlayBrowser?.contentWindow === window;
+      } catch (e) {
+        void e;
+        return false;
+      }
+    },
     getAssistantTheme() {
       try {
         const v = Services.prefs.getStringPref(

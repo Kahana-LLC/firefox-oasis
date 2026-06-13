@@ -1,7 +1,8 @@
 import type { DeterministicRouteDecision, RouteArgs } from "./routerTypes.js";
 
 const SITE_SEARCH_BUILDERS: Record<string, (query: string) => string> = {
-  github: q => `https://github.com/search?q=${encodeURIComponent(q)}&type=repositories`,
+  github: q =>
+    `https://github.com/search?q=${encodeURIComponent(q)}&type=repositories`,
   reddit: q => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}`,
   medium: q => `https://medium.com/search?q=${encodeURIComponent(q)}`,
   amazon: q => `https://www.amazon.com/s?k=${encodeURIComponent(q)}`,
@@ -29,7 +30,10 @@ export function resolveSiteSearchRoute(
   if (!match) {
     return null;
   }
-  const query = match[1]?.trim().replace(/[.!?]+$/g, "").trim();
+  const query = match[1]
+    ?.trim()
+    .replace(/[.!?]+$/g, "")
+    .trim();
   const site = match[2]?.toLowerCase();
   if (!query || !site) {
     return null;

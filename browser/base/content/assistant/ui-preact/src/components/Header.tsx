@@ -6,6 +6,7 @@ import type { ChatConversationRow } from '../chatStore/index';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
 import { SettingsMenuPopover } from './SettingsMenuPopover';
 import {
+  isOasisAssistantOverlayLayout,
   postOasisOverlayChromeMessage,
   runOasisAssistantLayoutToggle,
 } from '../utils/postOasisOverlayChrome';
@@ -206,6 +207,9 @@ export function Header({
       return;
     }
     if (e.button !== 0) return;
+    if (!isOasisAssistantOverlayLayout()) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     postOasisOverlayChromeMessage({

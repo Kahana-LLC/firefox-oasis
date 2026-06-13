@@ -55,7 +55,11 @@ import {
   OASIS_EVENT_HISTORY_UPDATE,
   type VoiceUiDelivery,
 } from "../../shared/contracts.js";
-import { abortResearchBriefRun } from "./utils/researchBriefProgress.js";
+import {
+  abortResearchBriefRun,
+  endResearchBriefRun,
+} from "./utils/researchBriefProgress.js";
+import { assistantLogger } from "./utils/assistantLogger.js";
 import { storeResearchBriefRun } from "./services/researchBriefDigestCache.js";
 
 const supabaseAuth = SupabaseAuth.getInstance();
@@ -237,52 +241,65 @@ export async function runAssistantStream(
     { recursionLimit: ASSISTANT_RECURSION_LIMIT }
   );
 
-  const combined = await consumeAssistantGraphStream({
-    stream,
-    prompt,
-    onChunk,
-    inputType,
-    toolCommandNames,
-    pushCurrentTurn: sessionController.pushCurrentTurn,
-    trackUsage: (nextInputType, meta, content?: StreamContentData) => {
-      if (isAuthenticated) {
-        if (messageId) {
-          storeInteractionId(messageId, interactionId);
-        }
-        let payload = interactionPayload;
-        if (ENV.RICH_TELEMETRY_ENABLED && payload && content) {
-          payload = {
-            ...payload,
-            prompt: {
-              ...payload.prompt!,
-              input_tokens: meta?.input_tokens ?? null,
-            },
-            response: {
-              text: content.responseText,
-              output_tokens: meta?.output_tokens ?? null,
-              latency_ms: Date.now() - startTime,
-            },
-            tool_trace:
-              content.toolTrace.length > 0 ? content.toolTrace : undefined,
+  let combined = "";
+  try {
+    combined = await consumeAssistantGraphStream({
+      stream,
+      prompt,
+      onChunk,
+      inputType,
+      toolCommandNames,
+      pushCurrentTurn: sessionController.pushCurrentTurn,
+      trackUsage: (nextInputType, meta, content?: StreamContentData) => {
+        if (isAuthenticated) {
+          if (messageId) {
+            storeInteractionId(messageId, interactionId);
+          }
+          let payload = interactionPayload;
+          if (ENV.RICH_TELEMETRY_ENABLED && payload && content) {
+            payload = {
+              ...payload,
+              prompt: {
+                ...payload.prompt!,
+                input_tokens: meta?.input_tokens ?? null,
+              },
+              response: {
+                text: content.responseText,
+                output_tokens: meta?.output_tokens ?? null,
+                latency_ms: Date.now() - startTime,
+              },
+              tool_trace:
+                content.toolTrace.length > 0 ? content.toolTrace : undefined,
+            };
+          }
+          const enrichedMeta: typeof meta = {
+            ...(meta ?? {
+              command_type: "other",
+              user_intent: "other",
+              input_tokens: null,
+              output_tokens: null,
+            }),
+            interaction_id: interactionId,
+            telemetry_identified: dataCollectionIdentified,
+            ...(ENV.RICH_TELEMETRY_ENABLED && payload
+              ? { interaction_payload: payload }
+              : {}),
           };
+          subscriptionService.trackUsage(
+            nextInputType,
+            undefined,
+            enrichedMeta
+          );
         }
-        const enrichedMeta: typeof meta = {
-          ...(meta ?? {
-            command_type: "other",
-            user_intent: "other",
-            input_tokens: null,
-            output_tokens: null,
-          }),
-          interaction_id: interactionId,
-          telemetry_identified: dataCollectionIdentified,
-          ...(ENV.RICH_TELEMETRY_ENABLED && payload
-            ? { interaction_payload: payload }
-            : {}),
-        };
-        subscriptionService.trackUsage(nextInputType, undefined, enrichedMeta);
-      }
-    },
-  });
+      },
+    });
+  } finally {
+    endResearchBriefRun();
+    assistantLogger.debug("competitiveIntel", "ci_stream_done", {
+      ms: Date.now() - startTime,
+      chars: combined.length,
+    });
+  }
   void recordRailroadTurn(assistantWindow, prompt, combined);
   maybeRunRailroadStructuredExtraction(assistantWindow, prompt, combined);
   return combined;
@@ -290,6 +307,7 @@ export async function runAssistantStream(
 assistantWindow.runAssistantStream = runAssistantStream;
 assistantWindow.oasisAbortResearchBrief = () => {
   abortResearchBriefRun();
+  endResearchBriefRun();
 };
 assistantWindow.oasisStoreResearchBriefRun = storeResearchBriefRun;
 

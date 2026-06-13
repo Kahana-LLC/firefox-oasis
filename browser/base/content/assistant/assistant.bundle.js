@@ -6127,11 +6127,12 @@ Content: ${entry.description || ""}`;
   });
 
   // ../shared/contracts.ts
-  var OASIS_EVENT_CLARIFICATION_UPDATE, OASIS_EVENT_BRIEF_PROGRESS, OASIS_EVENT_HISTORY_UPDATE, OASIS_EVENT_CONFIRMATION_UPDATE, OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
+  var OASIS_EVENT_CLARIFICATION_UPDATE, OASIS_EVENT_BRIEF_PROGRESS, OASIS_EVENT_CI_WORKFLOW_UPDATE, OASIS_EVENT_HISTORY_UPDATE, OASIS_EVENT_CONFIRMATION_UPDATE, OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
   var init_contracts = __esm({
     "../shared/contracts.ts"() {
       OASIS_EVENT_CLARIFICATION_UPDATE = "oasis-clarification-update";
       OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress";
+      OASIS_EVENT_CI_WORKFLOW_UPDATE = "oasis-ci-workflow-update";
       OASIS_EVENT_HISTORY_UPDATE = "oasis-history-update";
       OASIS_EVENT_CONFIRMATION_UPDATE = "oasis-confirmation-update";
       OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED = "oasis-bookmark-folders-changed";
@@ -21858,7 +21859,10 @@ ${suffix}`;
     let cleaned = input.replace(/^(?:can\s+you\s+)?(?:please\s+)?/i, "").replace(
       /^(?:i\s+)?(?:was\s+)?(?:trying\s+to\s+)?(?:find|remember|recall|look\s+for)\b/i,
       ""
-    ).replace(/^(?:that|the)\b/i, "").replace(/\b(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*$/i, "").replace(/\b(?:my|the)\s+(?:browsing\s+)?history\b/gi, "").replace(/\b(?:a\s+)?(?:while\s+)?(?:ago|earlier|yesterday|recently)\b/gi, "").replace(/\s+/g, " ").trim();
+    ).replace(/^(?:that|the)\b/i, "").replace(/\b(?:from|in)\s+(?:my\s+)?(?:browsing\s+)?history\b.*$/i, "").replace(/\b(?:my|the)\s+(?:browsing\s+)?history\b/gi, "").replace(
+      /\b(?:a\s+)?(?:while\s+)?(?:ago|earlier|yesterday|recently)\b/gi,
+      ""
+    ).replace(/\s+/g, " ").trim();
     const tokens = cleaned.split(/\s+/).map((token) => token.replace(/[^a-z0-9'-]/gi, "")).filter((token) => token && !FILLER_WORDS.has(token.toLowerCase()));
     if (tokens.length === 0 || tokens.length > MAX_KEYWORD_WORDS) {
       return null;
@@ -26699,8 +26703,91 @@ Result: ${toolResult.message}`
     }
   });
 
-  // src/utils/factualQueryRoute.ts
+  // src/utils/competitiveIntelExplicitResolver.ts
+  function trimQuotes6(value) {
+    return String(value || "").trim().replace(/^["']|["']$/g, "").replace(/[.!?]+$/g, "").trim();
+  }
   function toolDecision8(next, reason, args) {
+    return { type: "tool", next, args, reason };
+  }
+  function extractCompetitiveIntelIndustry(input) {
+    const normalized = String(input || "").trim();
+    for (const pattern of INDUSTRY_PATTERNS) {
+      const match = normalized.match(pattern);
+      if (match?.[1]) {
+        const industry = trimQuotes6(match[1]);
+        if (industry.length >= 3) {
+          return industry;
+        }
+      }
+    }
+    return null;
+  }
+  function looksLikeCompetitiveIntelCommand(input) {
+    const normalized = String(input || "").trim().toLowerCase();
+    return /\bcompetitive\s+intelligence\b/.test(normalized) || /\bcompetitive\s+analysis\b/.test(normalized) || /\bbattle\s+card\b/.test(normalized) || /\bwho\s+are\s+the\s+key\s+players\b/.test(normalized) || /\bcompetitive\s+intel\b/.test(normalized);
+  }
+  function looksLikeCiBriefFromGroupsCommand(input) {
+    const normalized = String(input || "").trim();
+    return CI_BRIEF_FROM_GROUPS_RE.test(normalized) || CI_BRIEF_GROUPS_RE.test(normalized) || /\bcompetitive\s+intel(?:ligence)?\s+brief\s+from\s+tab\s+groups?\b/i.test(
+      normalized
+    );
+  }
+  function resolveExplicitCiBriefRoute(input) {
+    if (!looksLikeCiBriefFromGroupsCommand(input)) {
+      return null;
+    }
+    const normalized = String(input || "").trim();
+    const tierMatch = normalized.match(CI_BRIEF_GROUPS_RE);
+    const industry = extractCompetitiveIntelIndustry(normalized) || normalized.match(/\bfor\s+(.+)$/i)?.[1]?.trim() || "competitive intelligence";
+    const args = {
+      industry: trimQuotes6(industry),
+      scope: tierMatch ? "ci_tab_group" : "ci_tab_groups"
+    };
+    if (tierMatch?.[1]) {
+      const tier = tierMatch[1].charAt(0).toUpperCase() + tierMatch[1].slice(1).toLowerCase();
+      args.name = `CI \u2014 ${tier}`;
+    }
+    return toolDecision8(
+      "build_competitive_intel_brief",
+      "ci-brief-from-tab-groups",
+      args
+    );
+  }
+  function resolveExplicitCompetitiveIntelRoute(input) {
+    const briefRoute = resolveExplicitCiBriefRoute(input);
+    if (briefRoute) {
+      return briefRoute;
+    }
+    if (!looksLikeCompetitiveIntelCommand(input)) {
+      return null;
+    }
+    const industry = extractCompetitiveIntelIndustry(input);
+    if (!industry) {
+      return null;
+    }
+    return toolDecision8("run_competitive_intel", "competitive-intel-industry", {
+      industry
+    });
+  }
+  var INDUSTRY_PATTERNS, CI_BRIEF_FROM_GROUPS_RE, CI_BRIEF_GROUPS_RE;
+  var init_competitiveIntelExplicitResolver = __esm({
+    "src/utils/competitiveIntelExplicitResolver.ts"() {
+      "use strict";
+      INDUSTRY_PATTERNS = [
+        /\bcompetitive\s+intelligence\s+report\s+on\s+(.+)$/i,
+        /\bcompetitive\s+analysis\s+of\s+(.+)$/i,
+        /\bbattle\s+card\s+for\s+(?:the\s+)?(.+?)(?:\s+space|\s+market|\s+industry)?$/i,
+        /\bwho\s+are\s+the\s+key\s+players\s+in\s+(.+)$/i,
+        /\bcompetitive\s+intel(?:ligence)?\s+(?:for|on)\s+(.+)$/i
+      ];
+      CI_BRIEF_FROM_GROUPS_RE = /\b(?:competitive\s+intel(?:ligence)?\s+)?(?:brief|battle\s+card)\s+from\s+(?:my\s+)?ci\b/i;
+      CI_BRIEF_GROUPS_RE = /\b(?:brief|battle\s+card)\s+from\s+(?:my\s+)?(?:ci\s*[—-]\s*)?(high|medium|low|adjacent)\b/i;
+    }
+  });
+
+  // src/utils/factualQueryRoute.ts
+  function toolDecision9(next, reason, args) {
     return { type: "tool", next, args, reason };
   }
   function cleanFactualQuery(input) {
@@ -26713,7 +26800,7 @@ Result: ${toolResult.message}`
     }
     for (const pattern of FACTUAL_PATTERNS) {
       if (pattern.test(text2)) {
-        return toolDecision8("web_search", "factual-query", { query: text2 });
+        return toolDecision9("web_search", "factual-query", { query: text2 });
       }
     }
     return null;
@@ -26737,7 +26824,7 @@ Result: ${toolResult.message}`
   });
 
   // src/utils/siteSearchUrls.ts
-  function toolDecision9(next, reason, args) {
+  function toolDecision10(next, reason, args) {
     return { type: "tool", next, args, reason };
   }
   function resolveSiteSearchRoute(input) {
@@ -26754,7 +26841,7 @@ Result: ${toolResult.message}`
     if (!buildUrl) {
       return null;
     }
-    return toolDecision9("open_url", "site-search", { url: buildUrl(query) });
+    return toolDecision10("open_url", "site-search", { url: buildUrl(query) });
   }
   var SITE_SEARCH_BUILDERS, SITE_SEARCH_RE;
   var init_siteSearchUrls = __esm({
@@ -26808,6 +26895,18 @@ Result: ${toolResult.message}`
         type: "no_match",
         actionable: true,
         reason: "outreach-email-unresolved"
+      };
+    }
+    if (looksLikeCompetitiveIntelCommand(input)) {
+      const ciEarly = resolveExplicitCompetitiveIntelRoute(input);
+      if (ciEarly) {
+        return ciEarly;
+      }
+      return {
+        type: "chat",
+        actionable: true,
+        reason: "competitive-intel-unresolved",
+        message: "I can run a competitive intelligence workflow. Try: `I want a competitive intelligence report on [industry]`."
       };
     }
     if (looksLikeResearchBriefCommand(input)) {
@@ -26913,6 +27012,7 @@ Result: ${toolResult.message}`
       init_researchBriefExplicitResolver();
       init_organizeTabsExplicitResolver();
       init_outreachEmailExplicitResolver();
+      init_competitiveIntelExplicitResolver();
       init_factualQueryRoute();
       init_siteSearchUrls();
       FAMILY_HANDLERS = {
@@ -32208,11 +32308,11 @@ Result: ${toolResult.message}`
       createScope = (shortDate, region2, service) => `${shortDate}/${region2}/${service}/${KEY_TYPE_IDENTIFIER}`;
       getSigningKey = async (sha256Constructor, credentials, shortDate, region2, service) => {
         const credsHash = await hmac(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
-        const cacheKey = `${shortDate}:${region2}:${service}:${toHex(credsHash)}:${credentials.sessionToken}`;
-        if (cacheKey in signingKeyCache) {
-          return signingKeyCache[cacheKey];
+        const cacheKey2 = `${shortDate}:${region2}:${service}:${toHex(credsHash)}:${credentials.sessionToken}`;
+        if (cacheKey2 in signingKeyCache) {
+          return signingKeyCache[cacheKey2];
         }
-        cacheQueue.push(cacheKey);
+        cacheQueue.push(cacheKey2);
         while (cacheQueue.length > MAX_CACHE_SIZE) {
           delete signingKeyCache[cacheQueue.shift()];
         }
@@ -32220,7 +32320,7 @@ Result: ${toolResult.message}`
         for (const signable of [shortDate, region2, service, KEY_TYPE_IDENTIFIER]) {
           key = await hmac(sha256Constructor, key, signable);
         }
-        return signingKeyCache[cacheKey] = key;
+        return signingKeyCache[cacheKey2] = key;
       };
       hmac = (ctor, secret, data) => {
         const hash = new ctor(secret);
@@ -38308,7 +38408,7 @@ ${toHex(hashedRequest)}`;
   // node_modules/@aws-sdk/credential-provider-cognito-identity/dist-es/fromCognitoIdentityPool.js
   function fromCognitoIdentityPool({ accountId, cache: cache3 = localStorage2(), client: client2, clientConfig, customRoleArn, identityPoolId: identityPoolId2, logins, userIdentifier = !logins || Object.keys(logins).length === 0 ? "ANONYMOUS" : void 0, logger: logger2, parentClientConfig }) {
     logger2?.debug("@aws-sdk/credential-provider-cognito-identity - fromCognitoIdentity");
-    const cacheKey = userIdentifier ? `aws:cognito-identity-credentials:${identityPoolId2}:${userIdentifier}` : void 0;
+    const cacheKey2 = userIdentifier ? `aws:cognito-identity-credentials:${identityPoolId2}:${userIdentifier}` : void 0;
     let provider = async (awsIdentityProperties) => {
       const { GetIdCommand: GetIdCommand2, CognitoIdentityClient: CognitoIdentityClient2 } = await Promise.resolve().then(() => (init_loadCognitoIdentity(), loadCognitoIdentity_exports));
       const fromConfigs = (property) => clientConfig?.[property] ?? parentClientConfig?.[property] ?? awsIdentityProperties?.callerClientConfig?.[property];
@@ -38316,7 +38416,7 @@ ${toHex(hashedRequest)}`;
         region: fromConfigs("region"),
         profile: fromConfigs("profile")
       }));
-      let identityId = cacheKey && await cache3.getItem(cacheKey);
+      let identityId = cacheKey2 && await cache3.getItem(cacheKey2);
       if (!identityId) {
         const { IdentityId = throwOnMissingId(logger2) } = await _client.send(new GetIdCommand2({
           AccountId: accountId,
@@ -38324,8 +38424,8 @@ ${toHex(hashedRequest)}`;
           Logins: logins ? await resolveLogins(logins) : void 0
         }));
         identityId = IdentityId;
-        if (cacheKey) {
-          Promise.resolve(cache3.setItem(cacheKey, identityId)).catch(() => {
+        if (cacheKey2) {
+          Promise.resolve(cache3.setItem(cacheKey2, identityId)).catch(() => {
           });
         }
       }
@@ -38338,8 +38438,8 @@ ${toHex(hashedRequest)}`;
       return provider(awsIdentityProperties);
     };
     return (awsIdentityProperties) => provider(awsIdentityProperties).catch(async (err) => {
-      if (cacheKey) {
-        Promise.resolve(cache3.removeItem(cacheKey)).catch(() => {
+      if (cacheKey2) {
+        Promise.resolve(cache3.removeItem(cacheKey2)).catch(() => {
         });
       }
       throw err;
@@ -39790,11 +39890,11 @@ ${toHex(hashedRequest)}`;
       createScope2 = (shortDate, region2, service) => `${shortDate}/${region2}/${service}/${KEY_TYPE_IDENTIFIER2}`;
       getSigningKey2 = async (sha256Constructor, credentials, shortDate, region2, service) => {
         const credsHash = await hmac2(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
-        const cacheKey = `${shortDate}:${region2}:${service}:${toHex2(credsHash)}:${credentials.sessionToken}`;
-        if (cacheKey in signingKeyCache2) {
-          return signingKeyCache2[cacheKey];
+        const cacheKey2 = `${shortDate}:${region2}:${service}:${toHex2(credsHash)}:${credentials.sessionToken}`;
+        if (cacheKey2 in signingKeyCache2) {
+          return signingKeyCache2[cacheKey2];
         }
-        cacheQueue2.push(cacheKey);
+        cacheQueue2.push(cacheKey2);
         while (cacheQueue2.length > MAX_CACHE_SIZE2) {
           delete signingKeyCache2[cacheQueue2.shift()];
         }
@@ -39802,7 +39902,7 @@ ${toHex(hashedRequest)}`;
         for (const signable of [shortDate, region2, service, KEY_TYPE_IDENTIFIER2]) {
           key = await hmac2(sha256Constructor, key, signable);
         }
-        return signingKeyCache2[cacheKey] = key;
+        return signingKeyCache2[cacheKey2] = key;
       };
       hmac2 = (ctor, secret, data) => {
         const hash = new ctor(secret);
@@ -40679,8 +40779,22 @@ ${JSON.stringify(payload)}`
   function abortResearchBriefRun() {
     activeAbort?.abort();
   }
-  function endResearchBriefRun() {
+  function clearResearchBriefRunAbort() {
     activeAbort = null;
+  }
+  function finishResearchBriefRunFinalizing(context = "competitive_intel") {
+    clearResearchBriefRunAbort();
+    emitResearchBriefProgress({
+      phase: "synthesizing",
+      context,
+      label: context === "competitive_intel" ? "Finalizing report\u2026" : "Finalizing brief\u2026"
+    });
+    if (context === "competitive_intel") {
+      assistantLogger.debug("competitiveIntel", "ci_finalizing");
+    }
+  }
+  function endResearchBriefRun() {
+    clearResearchBriefRunAbort();
     emitResearchBriefProgress(null);
   }
   function throwIfResearchBriefAborted(signal) {
@@ -40708,6 +40822,7 @@ ${JSON.stringify(payload)}`
     "src/utils/researchBriefProgress.ts"() {
       "use strict";
       init_contracts();
+      init_assistantLogger();
       activeAbort = null;
     }
   });
@@ -40741,6 +40856,140 @@ ${JSON.stringify(payload)}`
     }
   });
 
+  // src/utils/competitiveIntelReportAlign.ts
+  function normalizeForMatch(text2) {
+    return String(text2 || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+  function normalizeDigestUrl(url) {
+    try {
+      const parsed = new URL(url);
+      parsed.hash = "";
+      parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+      if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
+        parsed.pathname = parsed.pathname.slice(0, -1);
+      }
+      return `${parsed.protocol}//${parsed.hostname}${parsed.pathname}${parsed.search}`;
+    } catch {
+      return String(url || "").trim().toLowerCase();
+    }
+  }
+  function normalizeCompanyKey(name) {
+    return normalizeForMatch(name).replace(/\b(inc|llc|ltd|corp|co)\b\.?/g, "").replace(/[^a-z0-9]+/g, "");
+  }
+  function buildDigestUrlIndex(digests) {
+    const normalizedToCanonical = /* @__PURE__ */ new Map();
+    for (const digest of digests) {
+      normalizedToCanonical.set(normalizeDigestUrl(digest.url), digest.url);
+    }
+    return {
+      normalizedToCanonical,
+      canonicalUrls: new Set(digests.map((digest) => digest.url))
+    };
+  }
+  function resolveDigestUrl(url, index2) {
+    const trimmed = String(url || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (index2.canonicalUrls.has(trimmed)) {
+      return trimmed;
+    }
+    const normalized = normalizeDigestUrl(trimmed);
+    const direct = index2.normalizedToCanonical.get(normalized);
+    if (direct) {
+      return direct;
+    }
+    for (const [digestNorm, canonical] of index2.normalizedToCanonical) {
+      if (digestNorm.includes(normalized) || normalized.includes(digestNorm)) {
+        return canonical;
+      }
+    }
+    return null;
+  }
+  function resolveAllowedCompanyName(name, allowedCompanies) {
+    const key = normalizeCompanyKey(name);
+    if (!key) {
+      return null;
+    }
+    for (const candidate of allowedCompanies) {
+      const candidateKey = normalizeCompanyKey(candidate);
+      if (key === candidateKey || key.includes(candidateKey) || candidateKey.includes(key)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  function quoteMatchesDigestContent(quote, digests) {
+    const normalized = normalizeForMatch(quote);
+    if (!normalized || normalized.length < 8) {
+      return true;
+    }
+    if (digests.some(
+      (digest) => normalizeForMatch(digest.content).includes(normalized)
+    )) {
+      return true;
+    }
+    const words = normalized.split(" ").filter((word) => word.length >= 4);
+    if (words.length === 0) {
+      return true;
+    }
+    return digests.some((digest) => {
+      const hay = normalizeForMatch(digest.content);
+      const matched = words.filter((word) => hay.includes(word)).length;
+      return matched / words.length >= 0.6;
+    });
+  }
+  function resolveUrlList(urls, index2) {
+    const resolved = (urls || []).map((url) => resolveDigestUrl(url, index2)).filter((url) => Boolean(url));
+    return [...new Set(resolved)];
+  }
+  function alignCompetitiveIntelReport(report, digests, allowedCompanies) {
+    const index2 = buildDigestUrlIndex(digests);
+    const competitors = (report.competitors || []).map((competitor) => {
+      const resolvedName = resolveAllowedCompanyName(competitor.name, allowedCompanies) || competitor.name;
+      return {
+        ...competitor,
+        name: resolvedName,
+        sourceUrls: resolveUrlList(competitor.sourceUrls, index2),
+        quotes: (competitor.quotes || []).filter(
+          (quote) => quoteMatchesDigestContent(quote, digests)
+        )
+      };
+    });
+    const sources = (report.sources || []).map((source) => {
+      const resolvedUrl = resolveDigestUrl(source.url, index2);
+      if (!resolvedUrl) {
+        return null;
+      }
+      return {
+        ...source,
+        url: resolvedUrl,
+        quotes: (source.quotes || []).filter(
+          (quote) => quoteMatchesDigestContent(quote.text, digests)
+        )
+      };
+    }).filter((source) => Boolean(source));
+    const cells = (report.comparisonMatrix?.cells || []).map((cell) => ({
+      ...cell,
+      competitor: resolveAllowedCompanyName(cell.competitor, allowedCompanies) || cell.competitor,
+      sourceUrls: resolveUrlList(cell.sourceUrls, index2)
+    }));
+    return {
+      ...report,
+      competitors,
+      sources,
+      comparisonMatrix: {
+        dimensions: report.comparisonMatrix?.dimensions || [],
+        cells
+      }
+    };
+  }
+  var init_competitiveIntelReportAlign = __esm({
+    "src/utils/competitiveIntelReportAlign.ts"() {
+      "use strict";
+    }
+  });
+
   // src/utils/outputValidators.ts
   function recordValidatorRetry() {
     validatorRetryCount += 1;
@@ -40754,14 +41003,25 @@ ${JSON.stringify(payload)}`
     return String(text2 || "").replace(/\s+/g, " ").trim().toLowerCase();
   }
   function quoteMatchesDigest(quote, digests) {
-    const normalized = normalizeForQuoteMatch(quote);
-    if (!normalized || normalized.length < 8) {
+    return quoteMatchesDigestContent(quote, digests);
+  }
+  function companyAllowed(name, allowed) {
+    const key = normalizeCompanyKey(name);
+    if (!key || allowed.size === 0) {
+      return allowed.size === 0;
+    }
+    if (allowed.has(key)) {
       return true;
     }
-    return digests.some((digest) => {
-      const hay = normalizeForQuoteMatch(digest.content);
-      return hay.includes(normalized);
-    });
+    for (const candidate of allowed) {
+      if (key.includes(candidate) || candidate.includes(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  function digestUrlAllowed(url, index2) {
+    return Boolean(resolveDigestUrl(url, index2));
   }
   function validateOutreachEmailOutput(draft, trustedRecipientName) {
     const body = draft.body || "";
@@ -40802,7 +41062,58 @@ ${JSON.stringify(payload)}`
       return { ok: false, reason: "Topic does not match trusted input" };
     }
     if (containsInjectionBoilerplate(brief.executiveSummary)) {
-      return { ok: false, reason: "Executive summary contains injection boilerplate" };
+      return {
+        ok: false,
+        reason: "Executive summary contains injection boilerplate"
+      };
+    }
+    return { ok: true };
+  }
+  function validateCompetitiveIntelOutput(report, options) {
+    const index2 = buildDigestUrlIndex(options.digests);
+    const allowed = new Set(
+      options.allowedCompanies.map((name) => normalizeCompanyKey(name))
+    );
+    for (const source of report.sources || []) {
+      if (!digestUrlAllowed(source.url, index2)) {
+        return { ok: false, reason: "Source URL not in digest set" };
+      }
+      for (const quote of source.quotes || []) {
+        if (!quoteMatchesDigest(quote.text, options.digests)) {
+          return { ok: false, reason: "Quote not grounded in digest content" };
+        }
+      }
+    }
+    for (const competitor of report.competitors || []) {
+      if (!companyAllowed(competitor.name, allowed)) {
+        return { ok: false, reason: "Competitor not in confirmed pool" };
+      }
+      for (const url of competitor.sourceUrls || []) {
+        if (url && !digestUrlAllowed(url, index2)) {
+          return { ok: false, reason: "Competitor source URL not in digest set" };
+        }
+      }
+      for (const quote of competitor.quotes || []) {
+        if (!quoteMatchesDigest(quote, options.digests)) {
+          return { ok: false, reason: "Competitor quote not grounded" };
+        }
+      }
+    }
+    for (const cell of report.comparisonMatrix?.cells || []) {
+      for (const url of cell.sourceUrls || []) {
+        if (url && !digestUrlAllowed(url, index2)) {
+          return {
+            ok: false,
+            reason: "Matrix cell source URL not in digest set"
+          };
+        }
+      }
+    }
+    if (containsInjectionBoilerplate(report.executiveSummary)) {
+      return {
+        ok: false,
+        reason: "Executive summary contains injection boilerplate"
+      };
     }
     return { ok: true };
   }
@@ -40850,6 +41161,7 @@ ${JSON.stringify(payload)}`
       "use strict";
       init_assistantLogger();
       init_untrustedContent();
+      init_competitiveIntelReportAlign();
       validatorRetryCount = 0;
       validatorFailedCount = 0;
     }
@@ -40884,8 +41196,10 @@ ${JSON.stringify(payload)}`
   }
   async function assistWithOutputValidationRetry(params) {
     let systemPrompt = params.systemPrompt;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const maxAttempts = Math.max(1, params.maxAttempts ?? 2);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       throwIfResearchBriefAborted(params.signal);
+      params.onAttempt?.(attempt + 1, maxAttempts);
       const res = await assistRemote(
         systemPrompt,
         [{ role: "user", content: params.userMessage }],
@@ -40902,7 +41216,7 @@ ${JSON.stringify(payload)}`
       syncSubscriptionFromAssistResponse(res);
       const parsed = params.parse(parseAssistResponseContent(res));
       if (!parsed) {
-        if (attempt === 0) {
+        if (attempt < maxAttempts - 1) {
           recordValidatorRetry();
           systemPrompt = `${params.systemPrompt}
 
@@ -40918,7 +41232,7 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
       if (validation.ok) {
         return parsed;
       }
-      if (attempt === 0) {
+      if (attempt < maxAttempts - 1) {
         recordValidatorRetry();
         systemPrompt = `${params.systemPrompt}
 
@@ -40966,126 +41280,6 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
       "use strict";
       cache2 = /* @__PURE__ */ new Map();
       latestBriefId = null;
-    }
-  });
-
-  // src/utils/researchBriefResume.ts
-  function setResearchBriefResume(context) {
-    resumeContext = context;
-  }
-  function peekResearchBriefResumeCommand() {
-    return resumeContext?.command || "build_research_brief";
-  }
-  function clearResearchBriefResume() {
-    resumeContext = null;
-  }
-  function buildResearchBriefResumePrompt(optionId) {
-    return `${RESEARCH_BRIEF_RESUME_SENTINEL}|${optionId}`;
-  }
-  function parseResearchBriefResumePrompt(resolvedPrompt) {
-    const raw = String(resolvedPrompt || "").trim();
-    if (!raw.startsWith(RESEARCH_BRIEF_RESUME_SENTINEL)) {
-      return null;
-    }
-    const parts = raw.split("|");
-    return parts[1]?.trim() || null;
-  }
-  function consumeResearchBriefResume(optionId) {
-    const ctx = resumeContext;
-    if (!ctx) {
-      return null;
-    }
-    clearResearchBriefResume();
-    const args = {
-      ...ctx.args,
-      scope_confirmed: true
-    };
-    if (ctx.reason === "ambiguous_group") {
-      const prefix = "brief_group:";
-      if (!optionId.startsWith(prefix)) {
-        return null;
-      }
-      args.name = decodeURIComponent(optionId.slice(prefix.length));
-      return args;
-    }
-    if (optionId === "brief_quota_truncate") {
-      args.quota_mode = "truncate";
-      return args;
-    }
-    if (optionId === "brief_quota_fewer_tabs") {
-      const maxTabs = args.suggested_max_tabs;
-      args.quota_mode = "fewer_tabs";
-      if (typeof maxTabs === "number" && Number.isFinite(maxTabs)) {
-        args.max_tabs = maxTabs;
-      }
-      return args;
-    }
-    return null;
-  }
-  function buildAmbiguousGroupClarification(query, candidates) {
-    const options = candidates.map((candidate) => ({
-      id: candidate.id,
-      label: candidate.label,
-      resolvedPrompt: buildResearchBriefResumePrompt(candidate.id)
-    }));
-    return {
-      options,
-      message: `Several tab groups match "${query}". Pick one to continue.`
-    };
-  }
-  function buildOverQuotaClarification(params) {
-    const options = [
-      {
-        id: "brief_quota_truncate",
-        label: "Proceed with truncated content",
-        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_truncate")
-      },
-      {
-        id: "brief_quota_fewer_tabs",
-        label: `Use first ${params.suggestedTabCount} tabs only`,
-        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_fewer_tabs")
-      }
-    ];
-    return {
-      options,
-      message: `This brief may need about ${params.estimate.toLocaleString()} tokens, but you have about ${params.remaining.toLocaleString()} remaining today. Choose how to continue.`
-    };
-  }
-  var RESEARCH_BRIEF_RESUME_SENTINEL, resumeContext;
-  var init_researchBriefResume = __esm({
-    "src/utils/researchBriefResume.ts"() {
-      "use strict";
-      RESEARCH_BRIEF_RESUME_SENTINEL = "__RESEARCH_BRIEF_RESUME__";
-      resumeContext = null;
-    }
-  });
-
-  // src/utils/researchBriefClarify.ts
-  function suggestTabCountForQuota(digests, remainingTokens) {
-    if (digests.length === 0 || remainingTokens <= 0) {
-      return 1;
-    }
-    let low = 1;
-    let high = digests.length;
-    let best = 1;
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const slice = digests.slice(0, mid);
-      const estimate = estimateSynthesisTokens(slice);
-      if (estimate <= remainingTokens) {
-        best = mid;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-    return Math.max(1, best);
-  }
-  var init_researchBriefClarify = __esm({
-    "src/utils/researchBriefClarify.ts"() {
-      "use strict";
-      init_researchBriefFormat();
-      init_researchBriefResume();
     }
   });
 
@@ -41189,7 +41383,9 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
     };
   }
   function haystackForEntry(entry) {
-    return normalizeName(`${entry.title} ${entry.url} ${entry.domain} ${entry.snippet || ""}`);
+    return normalizeName(
+      `${entry.title} ${entry.url} ${entry.domain} ${entry.snippet || ""}`
+    );
   }
   function noisePenalty(entry, tokens) {
     const hay = haystackForEntry(entry);
@@ -41320,9 +41516,7 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
     );
     const selectedIndices = Array.isArray(raw.selectedIndices) ? [
       ...new Set(
-        raw.selectedIndices.map((value) => Number(value)).filter(
-          (value) => Number.isFinite(value) && validIndices.has(value)
-        )
+        raw.selectedIndices.map((value) => Number(value)).filter((value) => Number.isFinite(value) && validIndices.has(value))
       )
     ].slice(0, maxTabs) : [];
     const rationale = String(raw.rationale || "").trim();
@@ -42113,8 +42307,12 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
     }
   }
   function tabsFromIndices(descriptors, indices) {
-    const byIndex = new Map(descriptors.map((descriptor) => [descriptor.index, descriptor.tab]));
-    return indices.map((index2) => byIndex.get(index2)).filter((tab) => Boolean(tab));
+    const byIndex = new Map(
+      descriptors.map((descriptor) => [descriptor.index, descriptor.tab])
+    );
+    return indices.map((index2) => byIndex.get(index2)).filter(
+      (tab) => Boolean(tab)
+    );
   }
   function buildRelevantScopeLabel(focusQuery, rationale) {
     const shortFocus = focusQuery.length > 60 ? `${focusQuery.slice(0, 57)}\u2026` : focusQuery;
@@ -42341,6 +42539,472 @@ ${OUTPUT_VALIDATION_RETRY_SUFFIX}`;
       init_relevantTabScope();
       init_relevantTabScope();
       init_relevantTabResolve();
+    }
+  });
+
+  // src/utils/researchBriefResume.ts
+  function setResearchBriefResume(context) {
+    resumeContext = context;
+  }
+  function peekResearchBriefResumeCommand() {
+    return resumeContext?.command || "build_research_brief";
+  }
+  function clearResearchBriefResume() {
+    resumeContext = null;
+  }
+  function buildResearchBriefResumePrompt(optionId) {
+    return `${RESEARCH_BRIEF_RESUME_SENTINEL}|${optionId}`;
+  }
+  function parseResearchBriefResumePrompt(resolvedPrompt) {
+    const raw = String(resolvedPrompt || "").trim();
+    if (!raw.startsWith(RESEARCH_BRIEF_RESUME_SENTINEL)) {
+      return null;
+    }
+    const parts = raw.split("|");
+    return parts[1]?.trim() || null;
+  }
+  function consumeResearchBriefResume(optionId) {
+    const ctx = resumeContext;
+    if (!ctx) {
+      return null;
+    }
+    clearResearchBriefResume();
+    const args = {
+      ...ctx.args,
+      scope_confirmed: true
+    };
+    if (ctx.reason === "ambiguous_group") {
+      const prefix = "brief_group:";
+      if (!optionId.startsWith(prefix)) {
+        return null;
+      }
+      args.name = decodeURIComponent(optionId.slice(prefix.length));
+      return args;
+    }
+    if (optionId === "brief_quota_truncate") {
+      args.quota_mode = "truncate";
+      return args;
+    }
+    if (optionId === "brief_quota_fewer_tabs") {
+      const maxTabs = args.suggested_max_tabs;
+      args.quota_mode = "fewer_tabs";
+      if (typeof maxTabs === "number" && Number.isFinite(maxTabs)) {
+        args.max_tabs = maxTabs;
+      }
+      return args;
+    }
+    return null;
+  }
+  function buildAmbiguousGroupClarification(query, candidates) {
+    const options = candidates.map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      resolvedPrompt: buildResearchBriefResumePrompt(candidate.id)
+    }));
+    return {
+      options,
+      message: `Several tab groups match "${query}". Pick one to continue.`
+    };
+  }
+  function buildOverQuotaClarification(params) {
+    const options = [
+      {
+        id: "brief_quota_truncate",
+        label: "Proceed with truncated content",
+        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_truncate")
+      },
+      {
+        id: "brief_quota_fewer_tabs",
+        label: `Use first ${params.suggestedTabCount} tabs only`,
+        resolvedPrompt: buildResearchBriefResumePrompt("brief_quota_fewer_tabs")
+      }
+    ];
+    return {
+      options,
+      message: `This brief may need about ${params.estimate.toLocaleString()} tokens, but you have about ${params.remaining.toLocaleString()} remaining today. Choose how to continue.`
+    };
+  }
+  var RESEARCH_BRIEF_RESUME_SENTINEL, resumeContext;
+  var init_researchBriefResume = __esm({
+    "src/utils/researchBriefResume.ts"() {
+      "use strict";
+      RESEARCH_BRIEF_RESUME_SENTINEL = "__RESEARCH_BRIEF_RESUME__";
+      resumeContext = null;
+    }
+  });
+
+  // src/utils/researchBriefClarify.ts
+  function suggestTabCountForQuota(digests, remainingTokens) {
+    if (digests.length === 0 || remainingTokens <= 0) {
+      return 1;
+    }
+    let low = 1;
+    let high = digests.length;
+    let best = 1;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const slice = digests.slice(0, mid);
+      const estimate = estimateSynthesisTokens(slice);
+      if (estimate <= remainingTokens) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return Math.max(1, best);
+  }
+  var init_researchBriefClarify = __esm({
+    "src/utils/researchBriefClarify.ts"() {
+      "use strict";
+      init_researchBriefFormat();
+      init_researchBriefResume();
+    }
+  });
+
+  // src/utils/ciQuotaResume.ts
+  function setCiQuotaResume(context) {
+    resumeContext2 = context;
+  }
+  function peekCiQuotaResumeCommand() {
+    return resumeContext2?.command || "run_competitive_intel";
+  }
+  function clearCiQuotaResume() {
+    resumeContext2 = null;
+  }
+  function buildCiQuotaResumePrompt(optionId) {
+    return `${CI_QUOTA_RESUME_SENTINEL}|${optionId}`;
+  }
+  function parseCiQuotaResumePrompt(resolvedPrompt) {
+    const raw = String(resolvedPrompt || "").trim();
+    if (!raw.startsWith(CI_QUOTA_RESUME_SENTINEL)) {
+      return null;
+    }
+    const parts = raw.split("|");
+    return parts[1]?.trim() || null;
+  }
+  function consumeCiQuotaResume(optionId) {
+    const ctx = resumeContext2;
+    if (!ctx) {
+      return null;
+    }
+    clearCiQuotaResume();
+    if (optionId === "ci_quota_cancel") {
+      return null;
+    }
+    const args = {
+      ...ctx.args,
+      workflow_confirmed: true
+    };
+    if (optionId === "ci_quota_compact") {
+      args.quota_mode = "compact";
+      return args;
+    }
+    if (optionId === "ci_quota_truncate") {
+      args.quota_mode = "truncate";
+      return args;
+    }
+    if (optionId === "ci_quota_fewer_tabs") {
+      args.quota_mode = "fewer_tabs";
+      const maxTabs = ctx.args.suggested_max_tabs;
+      if (typeof maxTabs === "number" && Number.isFinite(maxTabs)) {
+        args.max_tabs = maxTabs;
+      }
+      return args;
+    }
+    return null;
+  }
+  var CI_QUOTA_RESUME_SENTINEL, resumeContext2;
+  var init_ciQuotaResume = __esm({
+    "src/utils/ciQuotaResume.ts"() {
+      "use strict";
+      CI_QUOTA_RESUME_SENTINEL = "__CI_QUOTA_RESUME__";
+      resumeContext2 = null;
+    }
+  });
+
+  // src/utils/ciTokenBudget.ts
+  function normalizeCiQuotaMode(raw) {
+    if (raw === "compact" || raw === "fewer_tabs" || raw === "truncate") {
+      return raw;
+    }
+    return "default";
+  }
+  function countEnrichmentTabsFromPlan(plan) {
+    if (plan.length === 0) {
+      return 0;
+    }
+    return plan.reduce(
+      (sum, entry) => sum + Math.max(1, entry.urls?.length || 0),
+      0
+    );
+  }
+  function estimateCiTokensFromPlan(enrichmentPlan, _companyCount) {
+    const tabCount = countEnrichmentTabsFromPlan(enrichmentPlan);
+    const min = Math.ceil(tabCount * ASSUMED_CHARS_PER_TAB_MIN / 4) + OUTPUT_TOKEN_BUFFER;
+    const max = Math.ceil(tabCount * ASSUMED_CHARS_PER_TAB_MAX / 4) + OUTPUT_TOKEN_BUFFER;
+    return {
+      min,
+      max,
+      tabCount,
+      midpoint: Math.round((min + max) / 2)
+    };
+  }
+  function classifyTokenBudget(estimate, remaining) {
+    if (remaining <= 0) {
+      return "over_budget";
+    }
+    if (estimate <= remaining * COMFORTABLE_REMAINING_RATIO) {
+      return "comfortable";
+    }
+    if (estimate <= remaining) {
+      return "tight";
+    }
+    return "over_budget";
+  }
+  function tierPriorityFromLabel(tierLabel) {
+    const normalized = String(tierLabel || "").toLowerCase().replace(/^ci\s*[—-]\s*/i, "").trim();
+    return TIER_PRIORITY[normalized] ?? 4;
+  }
+  function prioritizeCiDigests(digests) {
+    return [...digests].sort((left, right) => {
+      const leftPriority = tierPriorityFromLabel(left.tierLabel);
+      const rightPriority = tierPriorityFromLabel(right.tierLabel);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+      return String(left.title || left.url).localeCompare(
+        String(right.title || right.url)
+      );
+    });
+  }
+  function charsBudgetFromRemaining(remaining) {
+    return Math.max(
+      0,
+      Math.floor(
+        (remaining * INPUT_BUDGET_REMAINING_RATIO - OUTPUT_TOKEN_BUFFER) * 4
+      )
+    );
+  }
+  function fitDigestsToTokenBudget(params) {
+    const { digests, remaining, mode } = params;
+    const totalTabCount = digests.length;
+    if (mode === "default" || digests.length === 0) {
+      return {
+        digests,
+        truncated: false,
+        tabCountUsed: digests.length,
+        totalTabCount
+      };
+    }
+    let working = prioritizeCiDigests(digests);
+    let truncated = false;
+    const inputBudget = Math.floor(remaining * INPUT_BUDGET_REMAINING_RATIO);
+    if (mode === "fewer_tabs" || mode === "compact") {
+      const count3 = suggestTabCountForQuota(working, inputBudget);
+      working = working.slice(0, count3);
+    }
+    if (mode === "truncate" || mode === "compact") {
+      const maxChars = charsBudgetFromRemaining(remaining);
+      const budget = truncateDigestsToBudget(working, maxChars);
+      working = budget.digests;
+      truncated = budget.truncated || truncated;
+    }
+    return {
+      digests: working,
+      truncated,
+      tabCountUsed: working.length,
+      totalTabCount
+    };
+  }
+  function buildCiBudgetNote(params) {
+    if (params.reportMode !== "compact") {
+      return void 0;
+    }
+    const parts = [];
+    if (params.tabCountUsed < params.totalTabCount) {
+      parts.push(
+        `used ${params.tabCountUsed} of ${params.totalTabCount} enrichment tabs`
+      );
+    }
+    if (params.truncated) {
+      parts.push("truncated tab content");
+    }
+    if (parts.length === 0) {
+      return "Compact report \u2014 generated with a shorter synthesis profile to fit your daily allowance.";
+    }
+    return `Compact report \u2014 ${parts.join(" and ")} to fit your daily allowance. Regenerate with fewer tabs open for fuller coverage.`;
+  }
+  function buildCiOverQuotaClarification(params) {
+    const options = [
+      {
+        id: "ci_quota_compact",
+        label: "Generate compact report (recommended)",
+        resolvedPrompt: buildCiQuotaResumePrompt("ci_quota_compact")
+      },
+      {
+        id: "ci_quota_fewer_tabs",
+        label: `Use fewer tabs (first ${params.suggestedTabCount})`,
+        resolvedPrompt: buildCiQuotaResumePrompt("ci_quota_fewer_tabs")
+      },
+      {
+        id: "ci_quota_truncate",
+        label: "Truncate tab content",
+        resolvedPrompt: buildCiQuotaResumePrompt("ci_quota_truncate")
+      },
+      {
+        id: "ci_quota_cancel",
+        label: "Cancel",
+        resolvedPrompt: buildCiQuotaResumePrompt("ci_quota_cancel")
+      }
+    ];
+    return {
+      options,
+      message: `This report may need about ${params.estimate.toLocaleString()} tokens, but you have about ${params.remaining.toLocaleString()} remaining today. Choose how to continue.`
+    };
+  }
+  function buildCiReportTokenEstimateBlock(params) {
+    const { min, max, tabCount } = estimateCiTokensFromPlan(
+      params.enrichmentPlan
+    );
+    const tier = classifyTokenBudget(max, params.remaining);
+    const range = min === max ? `~${min.toLocaleString()}` : `~${min.toLocaleString()}\u2013${max.toLocaleString()}`;
+    const lines = [
+      `**Estimated cost:** ${range} tokens (${tabCount} enrichment tab${tabCount === 1 ? "" : "s"})`,
+      `**Your remaining:** ${params.remaining.toLocaleString()} tokens`
+    ];
+    if (tier === "comfortable") {
+      lines.push(
+        "**Recommendation:** A full report should fit comfortably within your allowance."
+      );
+    } else if (tier === "tight") {
+      lines.push(
+        "**Recommendation:** A full report may use most of your allowance. A compact report is also available."
+      );
+    } else {
+      lines.push(
+        "**Recommendation:** A compact report should fit. A full report may exceed your allowance."
+      );
+    }
+    return lines.join("\n");
+  }
+  function formatCiQuotaStillOverMessage(estimate, remaining) {
+    return [
+      `Even a compact report needs about **${estimate.toLocaleString()} tokens**, but you only have about **${remaining.toLocaleString()} remaining** today.`,
+      "",
+      "Close some enrichment tabs and try again, or wait until your daily allowance resets."
+    ].join("\n");
+  }
+  var ASSUMED_CHARS_PER_TAB_MIN, ASSUMED_CHARS_PER_TAB_MAX, OUTPUT_TOKEN_BUFFER, COMFORTABLE_REMAINING_RATIO, INPUT_BUDGET_REMAINING_RATIO, TIER_PRIORITY;
+  var init_ciTokenBudget = __esm({
+    "src/utils/ciTokenBudget.ts"() {
+      "use strict";
+      init_researchBriefFormat();
+      init_researchBriefClarify();
+      init_ciQuotaResume();
+      ASSUMED_CHARS_PER_TAB_MIN = 4e3;
+      ASSUMED_CHARS_PER_TAB_MAX = 12e3;
+      OUTPUT_TOKEN_BUFFER = 4e3;
+      COMFORTABLE_REMAINING_RATIO = 0.7;
+      INPUT_BUDGET_REMAINING_RATIO = 0.8;
+      TIER_PRIORITY = {
+        high: 0,
+        medium: 1,
+        low: 2,
+        adjacent: 3
+      };
+    }
+  });
+
+  // src/services/tabDigestPipeline.ts
+  function applyQuotaBudget(params) {
+    const profile = params.profile || "research_brief";
+    const quotaMode = normalizeCiQuotaMode(params.quotaMode);
+    const maxTotalChars = params.maxTotalChars ?? TAB_DIGEST_MAX_TOTAL_CHARS;
+    const remaining = params.remaining;
+    if (profile === "competitive_intel" && quotaMode !== "default") {
+      const fitted = fitDigestsToTokenBudget({
+        digests: params.readable,
+        remaining,
+        mode: quotaMode
+      });
+      const estimate2 = estimateSynthesisTokens(fitted.digests);
+      if (remaining > 0 && estimate2 > remaining) {
+        return {
+          digests: fitted.digests,
+          truncated: fitted.truncated,
+          estimate: estimate2
+        };
+      }
+      return {
+        digests: fitted.digests,
+        truncated: fitted.truncated,
+        estimate: estimate2
+      };
+    }
+    let budgetDigests = params.digests;
+    let truncated = false;
+    if (quotaMode === "fewer_tabs") {
+      const half = Math.max(1, Math.floor(params.readable.length / 2));
+      budgetDigests = params.digests.slice(0, half);
+    } else {
+      const budget = truncateDigestsToBudget(params.digests, maxTotalChars);
+      budgetDigests = budget.digests;
+      truncated = budget.truncated || quotaMode === "truncate";
+    }
+    const estimate = estimateSynthesisTokens(budgetDigests);
+    if (remaining > 0 && estimate > remaining && quotaMode === "default") {
+      const suggestedTabCount = suggestTabCountForQuota(budgetDigests, remaining);
+      return {
+        digests: budgetDigests,
+        truncated,
+        estimate,
+        overQuota: {
+          estimate,
+          remaining,
+          suggestedTabCount
+        }
+      };
+    }
+    if (profile === "competitive_intel" && quotaMode === "default") {
+      const baseline = truncateDigestsToBudget(params.readable, maxTotalChars);
+      const baselineEstimate = estimateSynthesisTokens(baseline.digests);
+      if (remaining > 0 && baselineEstimate > remaining) {
+        const suggestedTabCount = suggestTabCountForQuota(
+          baseline.digests,
+          remaining
+        );
+        return {
+          digests: baseline.digests,
+          truncated: baseline.truncated,
+          estimate: baselineEstimate,
+          overQuota: {
+            estimate: baselineEstimate,
+            remaining,
+            suggestedTabCount
+          }
+        };
+      }
+      return {
+        digests: baseline.digests,
+        truncated: baseline.truncated,
+        estimate: baselineEstimate
+      };
+    }
+    return {
+      digests: budgetDigests,
+      truncated,
+      estimate
+    };
+  }
+  var TAB_DIGEST_MAX_TOTAL_CHARS;
+  var init_tabDigestPipeline = __esm({
+    "src/services/tabDigestPipeline.ts"() {
+      "use strict";
+      init_researchBriefFormat();
+      init_researchBriefClarify();
+      init_ciTokenBudget();
+      TAB_DIGEST_MAX_TOTAL_CHARS = 8e4;
     }
   });
 
@@ -42784,30 +43448,24 @@ ${note}`.trim()
         topicInferred = true;
         report({ phase: "topic", label: `Topic: ${topic}` });
       }
-      let budgetDigests = digests;
-      let truncated = false;
-      if (options.quotaMode === "fewer_tabs") {
-        const half = Math.max(1, Math.floor(readable.length / 2));
-        budgetDigests = digests.slice(0, half);
-      } else {
-        const budget = truncateDigestsToBudget(digests, MAX_TOTAL_CHARS);
-        budgetDigests = budget.digests;
-        truncated = budget.truncated || options.quotaMode === "truncate";
-      }
-      const estimate = estimateSynthesisTokens(budgetDigests);
-      const display = subscriptionService.getDailyTokenUsageForDisplay();
-      if (display.remaining > 0 && estimate > display.remaining && options.quotaMode === "default") {
-        const suggestedTabCount = suggestTabCountForQuota(
-          budgetDigests,
-          display.remaining
-        );
+      const budget = applyQuotaBudget({
+        digests,
+        readable,
+        quotaMode: options.quotaMode,
+        profile: "research_brief",
+        maxTotalChars: MAX_TOTAL_CHARS,
+        remaining: subscriptionService.getDailyTokenUsageForDisplay().remaining
+      });
+      let budgetDigests = budget.digests;
+      let truncated = budget.truncated;
+      if (budget.overQuota) {
         return {
           ok: false,
           code: "over_quota",
-          message: `This research brief may need about ${estimate.toLocaleString()} tokens, but you have about ${display.remaining.toLocaleString()} remaining today.`,
-          estimate,
-          remaining: display.remaining,
-          suggestedTabCount
+          message: `This research brief may need about ${budget.overQuota.estimate.toLocaleString()} tokens, but you have about ${budget.overQuota.remaining.toLocaleString()} remaining today.`,
+          estimate: budget.overQuota.estimate,
+          remaining: budget.overQuota.remaining,
+          suggestedTabCount: budget.overQuota.suggestedTabCount
         };
       }
       report({ phase: "synthesizing" });
@@ -42895,8 +43553,8 @@ ${note}`.trim()
       init_researchBriefTabResolve();
       init_researchBriefResolve();
       init_researchBriefDigestCache();
-      init_researchBriefClarify();
       init_researchTabSelection();
+      init_tabDigestPipeline();
       init_researchBriefFormat();
       init_researchBriefFormat();
       MAX_TOTAL_CHARS = 8e4;
@@ -53945,6 +54603,15 @@ ${error.stack}` : "");
       "",
       "- Example: `Summarize this page`"
     ].join("\n");
+    const competitiveIntel = [
+      "### Competitive intelligence",
+      "",
+      "Run a guided Oasis-first workflow for an industry or market: Oasis builds the competitor pool, you review tiers, it opens homepage and Wikipedia enrichment tabs, groups them, and produces a grounded report with comparisons and confidence. After the report, you can optionally expand with external AI tools or add G2/Capterra review enrichment.",
+      "",
+      "- Example: `I want a competitive intelligence report on enterprise CRM`",
+      "- Example: `Who are the key players in data observability?`",
+      "- Say **continue** between steps, or **cancel competitive intel** to stop."
+    ].join("\n");
     const navigation = [
       "### Navigation",
       "",
@@ -53985,6 +54652,7 @@ ${error.stack}` : "");
       webSearch,
       generalQuestions,
       summarize,
+      competitiveIntel,
       navigation,
       organization,
       memory,
@@ -59915,6 +60583,128 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
   // src/services/interactionState.ts
   init_contracts();
   init_assistantLogger();
+
+  // src/services/competitiveIntelTypes.ts
+  var DEFAULT_COMPETITIVE_TIERS = [
+    "high",
+    "medium",
+    "low",
+    "adjacent"
+  ];
+  var DEFAULT_MAX_COMPETITORS = 12;
+  var CI_TAB_GROUP_PREFIX = "CI \u2014 ";
+  var CI_MAX_ENRICHMENT_TABS_PER_COMPANY = 3;
+  var CI_ENRICHMENT_BATCH_SIZE = 3;
+  var CI_ENRICHMENT_BATCH_DELAY_MS = 700;
+  var CI_ENRICHMENT_G2_BATCH_DELAY_MS = 3e3;
+  var CI_ENRICHMENT_LARGE_TAB_THRESHOLD = 24;
+  var DEFAULT_ENRICHMENT_PROFILE = "oasis_first";
+
+  // src/services/competitiveIntelWorkflow.ts
+  var activeWorkflow = null;
+  var CI_WORKFLOW_STORAGE_KEY = "oasis.ci.workflow";
+  function persistWorkflowSnapshot() {
+    if (!activeWorkflow) {
+      try {
+        sessionStorage.removeItem(CI_WORKFLOW_STORAGE_KEY);
+      } catch {
+      }
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        CI_WORKFLOW_STORAGE_KEY,
+        JSON.stringify(activeWorkflow)
+      );
+    } catch {
+    }
+  }
+  function restoreCompetitiveIntelWorkflowFromStorage() {
+    if (activeWorkflow) {
+      return activeWorkflow;
+    }
+    try {
+      const raw = sessionStorage.getItem(CI_WORKFLOW_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed?.step) {
+        return null;
+      }
+      activeWorkflow = {
+        ...parsed,
+        enrichmentProfile: parsed.enrichmentProfile || DEFAULT_ENRICHMENT_PROFILE
+      };
+      return activeWorkflow;
+    } catch {
+      return null;
+    }
+  }
+  function createWorkflowId() {
+    return `ci_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+  function buildDiscoveryQuery(industry, focus) {
+    const focusClause = focus?.trim() ? ` Focus on ${focus.trim()}.` : "";
+    return `List the key players and secondary/adjacent companies in ${industry.trim()}.${focusClause} For each company include: company name, one-line description, why they matter, official website URL, G2 product URL, Capterra product URL, Wikipedia article URL, and Gartner Peer Insights URL (if known). Prefer direct product or article links, not search pages. Do not include LinkedIn. Group into: market leaders, strong challengers, niche players, adjacent entrants.`;
+  }
+  function getCompetitiveIntelWorkflow() {
+    return activeWorkflow;
+  }
+  function clearCompetitiveIntelWorkflow() {
+    activeWorkflow = null;
+    persistWorkflowSnapshot();
+  }
+  function initCompetitiveIntelWorkflow(params) {
+    const industry = String(params.industry || "").trim();
+    const workflow = {
+      workflowId: createWorkflowId(),
+      industry,
+      focus: params.focus?.trim() || void 0,
+      market: params.market?.trim() || void 0,
+      step: "intro",
+      discoveryQuery: buildDiscoveryQuery(industry, params.focus),
+      discoveryToolUrls: [],
+      discoveryTabIds: [],
+      companies: [],
+      tierLabels: DEFAULT_COMPETITIVE_TIERS.map(
+        (tier) => tier.charAt(0).toUpperCase() + tier.slice(1)
+      ),
+      enrichmentPlan: [],
+      enrichmentBatchIndex: 0,
+      enrichmentProfile: DEFAULT_ENRICHMENT_PROFILE,
+      maxCompetitors: typeof params.maxCompetitors === "number" && Number.isFinite(params.maxCompetitors) ? Math.max(3, Math.min(20, Math.floor(params.maxCompetitors))) : DEFAULT_MAX_COMPETITORS,
+      createdAt: Date.now()
+    };
+    activeWorkflow = workflow;
+    persistWorkflowSnapshot();
+    return workflow;
+  }
+  function advanceCompetitiveIntelStep(step) {
+    if (!activeWorkflow) {
+      return null;
+    }
+    activeWorkflow = { ...activeWorkflow, step };
+    persistWorkflowSnapshot();
+    return activeWorkflow;
+  }
+  function updateCompetitiveIntelWorkflow(patch) {
+    if (!activeWorkflow) {
+      return null;
+    }
+    activeWorkflow = { ...activeWorkflow, ...patch };
+    persistWorkflowSnapshot();
+    return activeWorkflow;
+  }
+  function isCompetitiveIntelWorkflowActive() {
+    return Boolean(activeWorkflow && activeWorkflow.step !== "done");
+  }
+  function tierIdToLabel(tierId) {
+    const normalized = String(tierId || "").trim().toLowerCase();
+    return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "Medium";
+  }
+
+  // src/services/interactionState.ts
   var InteractionStateStore = class {
     pendingConfirmation = null;
     pendingAmbiguity = null;
@@ -59927,6 +60717,7 @@ Read more at https://docs.orama.com/docs/orama-js/plugins/plugin-secure-proxy#pl
       this.assistantWindow = assistantWindow2;
       this.assistantWindow.oasisGetPendingConfirmation = () => this.getPendingConfirmation();
       this.assistantWindow.oasisClearPendingConfirmation = () => this.clearPendingConfirmation();
+      this.assistantWindow.oasisClearPendingClarification = () => this.clearPendingClarification();
       this.assistantWindow.oasisGetPendingAmbiguity = () => this.getPendingAmbiguity();
     }
     getPendingConfirmation() {
@@ -60171,6 +60962,2851 @@ ${evidence}`;
   init_pageContentExtract();
   init_researchBrief();
   init_researchTabSelection();
+
+  // src/services/competitiveIntelDiscovery.ts
+  init_runtime();
+  init_firefoxFacade();
+  function getAssistantWindow2() {
+    return window;
+  }
+  var DISCOVERY_TOOLS = [
+    { name: "ChatGPT", url: "https://chatgpt.com" },
+    { name: "Perplexity", url: "https://www.perplexity.ai" },
+    { name: "Claude", url: "https://claude.ai" },
+    { name: "Gemini", url: "https://gemini.google.com" },
+    { name: "Grok", url: "https://grok.com" }
+  ];
+  var DISCOVERY_HOST_PATTERNS = [
+    /chatgpt\.com/i,
+    /chat\.openai\.com/i,
+    /perplexity\.ai/i,
+    /claude\.ai/i,
+    /gemini\.google\.com/i,
+    /grok\.com/i,
+    /x\.com/i
+  ];
+  function isDiscoveryToolUrl(url) {
+    return DISCOVERY_HOST_PATTERNS.some((pattern) => pattern.test(url));
+  }
+  function openTrustedLinksInBackground(topWin, urls, max = 8) {
+    const win = topWin || getBrowserWindow();
+    const { gBrowser, Services } = getChromeContext();
+    const bridge = getAssistantWindow2().assistantBridge;
+    if (!win && !gBrowser && !bridge?.openTab) {
+      return [];
+    }
+    const opened = [];
+    const principal = Services?.scriptSecurityManager?.getSystemPrincipal?.() ?? void 0;
+    for (const url of urls.slice(0, max)) {
+      if (!url) continue;
+      let didOpen = false;
+      try {
+        if (bridge?.openTab?.(url)) {
+          didOpen = true;
+        } else if (win?.openTrustedLinkIn) {
+          win.openTrustedLinkIn(url, "tab");
+          didOpen = true;
+        } else if (win?.openWebLinkIn) {
+          win.openWebLinkIn(url, "tab", { inBackground: true });
+          didOpen = true;
+        } else if (gBrowser?.addTrustedTab) {
+          gBrowser.addTrustedTab(url, { inBackground: true });
+          didOpen = true;
+        } else if (gBrowser && typeof gBrowser.addTab === "function") {
+          gBrowser.addTab(url, {
+            triggeringPrincipal: principal,
+            inBackground: true
+          });
+          didOpen = true;
+        }
+        if (didOpen) {
+          opened.push(url);
+        }
+      } catch {
+      }
+    }
+    return opened;
+  }
+  function openDiscoveryToolTabs() {
+    const { topWin } = getChromeContext();
+    const urls = DISCOVERY_TOOLS.map((tool) => tool.url);
+    const openedUrls = openTrustedLinksInBackground(
+      topWin,
+      urls,
+      DISCOVERY_TOOLS.length
+    );
+    const openedSet = new Set(openedUrls);
+    const toolNames = DISCOVERY_TOOLS.filter((tool) => openedSet.has(tool.url)).map(
+      (tool) => tool.name
+    );
+    return { openedUrls, toolNames };
+  }
+  function collectDiscoveryTabIds(discoveryTabIds, openedUrls) {
+    const { gBrowser } = getChromeContext();
+    if (!gBrowser?.tabs) {
+      return discoveryTabIds;
+    }
+    const seen = new Set(discoveryTabIds);
+    const tabs = gBrowser.tabs || [];
+    for (let index2 = 0; index2 < tabs.length; index2 += 1) {
+      const tab = tabs[index2];
+      const url = String(
+        tab?.linkedBrowser?.currentURI?.spec || tab?.linkedBrowser?.documentURI?.spec || ""
+      );
+      if (!url) continue;
+      if (openedUrls.some((opened) => url.startsWith(opened.replace(/\/$/, ""))) || isDiscoveryToolUrl(url)) {
+        const tabId = typeof tab?.linkedBrowser?.outerWindowID === "number" ? tab.linkedBrowser.outerWindowID : index2 + 1;
+        seen.add(tabId);
+      }
+    }
+    return [...seen];
+  }
+
+  // src/services/competitiveIntelPool.ts
+  init_proxyClient();
+  init_syncAssistUsage();
+  init_researchBrief();
+  init_firefoxFacade();
+
+  // src/utils/competitiveIntelEnrichmentSources.ts
+  var BLOCKED_ENRICHMENT_HOSTS = [
+    "google.com",
+    "duckduckgo.com",
+    "bing.com",
+    "chatgpt.com",
+    "chat.openai.com",
+    "perplexity.ai",
+    "claude.ai",
+    "gemini.google.com",
+    "grok.com",
+    "x.com",
+    "twitter.com",
+    "facebook.com",
+    "youtube.com",
+    "linkedin.com"
+  ];
+  var REVIEW_HEAVY_PRIORITY = [
+    "homepage",
+    "g2_product",
+    "capterra_product",
+    "wikipedia_article",
+    "gartner_reviews",
+    "trustradius_product",
+    "g2_search"
+  ];
+  var SLOT_LABELS = {
+    homepage: "homepage",
+    g2_product: "G2 product",
+    g2_search: "G2 search",
+    trustradius_product: "TrustRadius",
+    capterra_product: "Capterra",
+    wikipedia_article: "Wikipedia",
+    wikipedia_search: "Wikipedia search",
+    gartner_reviews: "Gartner",
+    crunchbase_org: "Crunchbase"
+  };
+  function encodeQuery(value) {
+    return encodeURIComponent(String(value || "").trim());
+  }
+  function normalizeEnrichmentUrl(url) {
+    const trimmed = String(url || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return null;
+      }
+      return parsed.href;
+    } catch {
+      return null;
+    }
+  }
+  function isBlockedEnrichmentHost(url) {
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+      return BLOCKED_ENRICHMENT_HOSTS.some(
+        (blocked) => host === blocked || host.endsWith(`.${blocked}`)
+      );
+    } catch {
+      return true;
+    }
+  }
+  function classifyEnrichmentUrl(url) {
+    const normalized = normalizeEnrichmentUrl(url);
+    if (!normalized || isBlockedEnrichmentHost(normalized)) {
+      return null;
+    }
+    const lower = normalized.toLowerCase();
+    if (/linkedin\.com/i.test(lower)) {
+      return null;
+    }
+    if (/g2\.com\/search/i.test(lower)) {
+      return { kind: "g2_search", risk: "high" };
+    }
+    if (/g2\.com\/products\//i.test(lower)) {
+      return { kind: "g2_product", risk: "high" };
+    }
+    if (/trustradius\.com\/products\//i.test(lower)) {
+      return { kind: "trustradius_product", risk: "low" };
+    }
+    if (/capterra\.com\/(software|p)\//i.test(lower)) {
+      return { kind: "capterra_product", risk: "high" };
+    }
+    if (/wikipedia\.org\/wiki\//i.test(lower) && !/special:/i.test(lower)) {
+      return { kind: "wikipedia_article", risk: "low" };
+    }
+    if (/wikipedia\.org\/w\/index\.php\?search=/i.test(lower)) {
+      return { kind: "wikipedia_search", risk: "low" };
+    }
+    if (/gartner\.com\/reviews\/(product|market)\//i.test(lower)) {
+      return { kind: "gartner_reviews", risk: "high" };
+    }
+    if (/crunchbase\.com\/organization\//i.test(lower)) {
+      return { kind: "crunchbase_org", risk: "medium" };
+    }
+    if (/g2\.com|trustradius\.com|capterra\.com|crunchbase\.com|wikipedia\.org|gartner\.com/i.test(
+      lower
+    )) {
+      return null;
+    }
+    return { kind: "homepage", risk: "low" };
+  }
+  function buildG2SearchUrl(companyName) {
+    return `https://www.g2.com/search?query=${encodeQuery(companyName)}`;
+  }
+  function buildWikipediaSearchUrl(companyName) {
+    return `https://en.wikipedia.org/w/index.php?search=${encodeQuery(`${companyName} company`)}`;
+  }
+  function enrichmentUrlLabel(kind) {
+    return SLOT_LABELS[kind] || kind;
+  }
+  function companyToEnrichmentCandidates(company, cited = true) {
+    const candidates = [];
+    const add = (url, forceKind) => {
+      if (!url) return;
+      const classified = classifyEnrichmentUrl(url);
+      if (!classified) return;
+      candidates.push({
+        kind: forceKind || classified.kind,
+        url: normalizeEnrichmentUrl(url),
+        risk: classified.risk,
+        cited
+      });
+    };
+    const urls = company.enrichmentUrls || {};
+    add(urls.homepage || company.websiteUrl);
+    add(urls.g2_product);
+    add(urls.g2_search);
+    add(urls.trustradius_product);
+    add(urls.capterra_product);
+    add(urls.wikipedia_article);
+    add(urls.gartner_reviews);
+    add(urls.crunchbase_org);
+    return candidates;
+  }
+  function rankEnrichmentCandidates(candidates, priority = REVIEW_HEAVY_PRIORITY) {
+    const byKind = /* @__PURE__ */ new Map();
+    for (const candidate of candidates) {
+      const existing = byKind.get(candidate.kind);
+      if (!existing) {
+        byKind.set(candidate.kind, candidate);
+        continue;
+      }
+      if (candidate.cited && !existing.cited) {
+        byKind.set(candidate.kind, candidate);
+      }
+    }
+    const ranked = [];
+    for (const kind of priority) {
+      const match = byKind.get(kind);
+      if (match) {
+        ranked.push(match);
+        byKind.delete(kind);
+      }
+    }
+    for (const leftover of byKind.values()) {
+      ranked.push(leftover);
+    }
+    return ranked;
+  }
+  var OASIS_FIRST_PRIORITY = [
+    "homepage",
+    "wikipedia_article",
+    "wikipedia_search"
+  ];
+  function pickEnrichmentSlots(company, maxSlots = CI_MAX_ENRICHMENT_TABS_PER_COMPANY, profile = "oasis_first") {
+    if (profile === "oasis_first") {
+      return pickOasisFirstSlots(company, Math.min(maxSlots, 2));
+    }
+    return pickReviewDeepenSlots(company, maxSlots);
+  }
+  function pickOasisFirstSlots(company, maxSlots) {
+    const candidates = companyToEnrichmentCandidates(company, true).filter(
+      (candidate) => candidate.kind === "homepage" || candidate.kind === "wikipedia_article" || candidate.kind === "wikipedia_search"
+    );
+    const ranked = rankEnrichmentCandidates(candidates, OASIS_FIRST_PRIORITY);
+    const slots = [];
+    const usedKinds = /* @__PURE__ */ new Set();
+    const usedUrls = /* @__PURE__ */ new Set();
+    for (const candidate of ranked) {
+      if (slots.length >= maxSlots) break;
+      if (usedKinds.has(candidate.kind) || usedUrls.has(candidate.url)) continue;
+      slots.push({
+        kind: candidate.kind,
+        url: candidate.url,
+        label: enrichmentUrlLabel(candidate.kind)
+      });
+      usedKinds.add(candidate.kind);
+      usedUrls.add(candidate.url);
+    }
+    const hasHomepage = slots.some((slot) => slot.kind === "homepage");
+    if (slots.length < maxSlots && !hasHomepage && company.websiteUrl) {
+      const classified = classifyEnrichmentUrl(company.websiteUrl);
+      if (classified?.kind === "homepage") {
+        slots.unshift({
+          kind: "homepage",
+          url: normalizeEnrichmentUrl(company.websiteUrl),
+          label: enrichmentUrlLabel("homepage")
+        });
+      }
+    }
+    const hasWikipedia = slots.some(
+      (slot) => slot.kind === "wikipedia_article" || slot.kind === "wikipedia_search"
+    );
+    if (slots.length < maxSlots && !hasWikipedia) {
+      const wikiSearch = buildWikipediaSearchUrl(company.name);
+      slots.push({
+        kind: "wikipedia_search",
+        url: wikiSearch,
+        label: enrichmentUrlLabel("wikipedia_search")
+      });
+    }
+    return slots.slice(0, maxSlots);
+  }
+  function pickReviewDeepenSlots(company, maxSlots) {
+    const candidates = companyToEnrichmentCandidates(company, true);
+    const ranked = rankEnrichmentCandidates(candidates);
+    const slots = [];
+    const usedKinds = /* @__PURE__ */ new Set();
+    const usedUrls = /* @__PURE__ */ new Set();
+    for (const candidate of ranked) {
+      if (slots.length >= maxSlots) break;
+      if (candidate.kind === "g2_search") continue;
+      if (usedKinds.has(candidate.kind) || usedUrls.has(candidate.url)) continue;
+      slots.push({
+        kind: candidate.kind,
+        url: candidate.url,
+        label: enrichmentUrlLabel(candidate.kind)
+      });
+      usedKinds.add(candidate.kind);
+      usedUrls.add(candidate.url);
+    }
+    const hasG2Product = slots.some((slot) => slot.kind === "g2_product");
+    if (slots.length < maxSlots && !hasG2Product && !usedKinds.has("g2_search")) {
+      const g2Search = buildG2SearchUrl(company.name);
+      slots.push({
+        kind: "g2_search",
+        url: g2Search,
+        label: enrichmentUrlLabel("g2_search")
+      });
+      usedKinds.add("g2_search");
+      usedUrls.add(g2Search);
+    }
+    const hasWikipedia = slots.some(
+      (slot) => slot.kind === "wikipedia_article" || slot.kind === "wikipedia_search"
+    );
+    if (slots.length < maxSlots && !hasWikipedia) {
+      const wikiSearch = buildWikipediaSearchUrl(company.name);
+      slots.push({
+        kind: "wikipedia_search",
+        url: wikiSearch,
+        label: enrichmentUrlLabel("wikipedia_search")
+      });
+    }
+    return slots.slice(0, maxSlots);
+  }
+  function pickEnrichmentUrls(company, maxSlots = CI_MAX_ENRICHMENT_TABS_PER_COMPANY, profile = "oasis_first") {
+    return pickEnrichmentSlots(company, maxSlots, profile).map((slot) => slot.url);
+  }
+  function mergeEnrichmentUrlMaps(current, patch) {
+    const merged = { ...current || {} };
+    if (!patch) return merged;
+    for (const [kind, url] of Object.entries(patch)) {
+      if (!url) continue;
+      const classified = classifyEnrichmentUrl(url);
+      if (!classified) continue;
+      const key = classified.kind;
+      if (key === "g2_product" || key === "g2_search" || key === "homepage" || key === "trustradius_product" || key === "capterra_product" || key === "wikipedia_article" || key === "wikipedia_search" || key === "gartner_reviews" || key === "crunchbase_org") {
+        const existing = merged[key];
+        if (!existing) {
+          merged[key] = normalizeEnrichmentUrl(url);
+        }
+      }
+    }
+    return merged;
+  }
+  function enrichmentUrlsFromPoolFields(company) {
+    const map2 = {};
+    const add = (url) => {
+      if (!url) return;
+      const classified = classifyEnrichmentUrl(url);
+      if (!classified) return;
+      const key = classified.kind;
+      if (key === "g2_search") {
+        return;
+      }
+      if (key === "homepage" || key === "g2_product" || key === "trustradius_product" || key === "capterra_product" || key === "wikipedia_article" || key === "wikipedia_search" || key === "gartner_reviews" || key === "crunchbase_org") {
+        map2[key] = normalizeEnrichmentUrl(url);
+      }
+    };
+    add(company.websiteUrl);
+    add(company.g2Url);
+    add(company.trustradiusUrl);
+    add(company.capterraUrl);
+    add(company.wikipediaUrl);
+    add(company.gartnerUrl);
+    return Object.keys(map2).length > 0 ? map2 : void 0;
+  }
+  function hostKeyForUrl(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "unknown";
+    }
+  }
+  function hostOpenPriority(url) {
+    const classified = classifyEnrichmentUrl(url);
+    if (!classified) return 99;
+    switch (classified.kind) {
+      case "homepage":
+        return 0;
+      case "g2_product":
+      case "g2_search":
+        return 1;
+      case "trustradius_product":
+      case "capterra_product":
+        return 2;
+      case "wikipedia_article":
+      case "wikipedia_search":
+        return 3;
+      case "gartner_reviews":
+      case "crunchbase_org":
+        return 4;
+      default:
+        return 4;
+    }
+  }
+
+  // src/utils/competitiveIntelCompanyUrls.ts
+  function isUsableEnrichmentUrl(url) {
+    const normalized = normalizeEnrichmentUrl(url);
+    if (!normalized) {
+      return false;
+    }
+    return !isBlockedEnrichmentHost(normalized);
+  }
+  function pickBestWebsiteUrl(current, candidate) {
+    const next = normalizeEnrichmentUrl(candidate || "");
+    if (!next || !isUsableEnrichmentUrl(next)) {
+      return current;
+    }
+    const classified = classifyEnrichmentUrl(next);
+    if (!classified || classified.kind !== "homepage") {
+      return current;
+    }
+    return current || next;
+  }
+  function mergeCompanyEnrichmentFields(existing, incoming) {
+    const enrichmentUrls = mergeEnrichmentUrlMaps(
+      existing.enrichmentUrls,
+      incoming.enrichmentUrls
+    );
+    const websiteUrl = pickBestWebsiteUrl(
+      existing.websiteUrl || enrichmentUrls?.homepage,
+      incoming.websiteUrl || incoming.enrichmentUrls?.homepage
+    );
+    const mergedUrls = mergeEnrichmentUrlMaps(enrichmentUrls, {
+      ...websiteUrl ? { homepage: websiteUrl } : {},
+      ...incoming.enrichmentUrls
+    });
+    return {
+      ...existing,
+      ...incoming,
+      websiteUrl,
+      enrichmentUrls: mergedUrls
+    };
+  }
+  function buildEnrichmentUrlsForCompany(company, profile = "oasis_first") {
+    return pickEnrichmentUrls(company, void 0, profile);
+  }
+
+  // src/utils/competitiveIntelUrlHarvest.ts
+  var URL_IN_TEXT_RE = /https?:\/\/[^\s<>"\]]+/gi;
+  var KNOWN_HOST_RE = /(?:g2\.com\/products\/|trustradius\.com\/products\/|capterra\.com\/(?:software|p)\/|wikipedia\.org\/wiki\/|gartner\.com\/reviews\/(?:product|market)\/|crunchbase\.com\/organization\/)/i;
+  function normalizeCompanyNeedle(name) {
+    return String(name || "").toLowerCase().replace(/\b(inc|llc|ltd|corp|co)\b\.?/gi, "").replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function trimTrailingUrlPunctuation(url) {
+    let result = url.replace(/[.,;:!?]+$/g, "");
+    while (result.endsWith(")")) {
+      const open = (result.match(/\(/g) || []).length;
+      const close = (result.match(/\)/g) || []).length;
+      if (close > open) {
+        result = result.slice(0, -1);
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+  function extractUrlsFromText(text2) {
+    const matches = text2.match(URL_IN_TEXT_RE) || [];
+    const cleaned = matches.map((raw) => trimTrailingUrlPunctuation(raw.trim()));
+    const seen = /* @__PURE__ */ new Set();
+    return cleaned.filter((url) => {
+      const normalized = normalizeEnrichmentUrl(url);
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+  }
+  function isKnownEnrichmentHost(url) {
+    return KNOWN_HOST_RE.test(url) || Boolean(classifyEnrichmentUrl(url));
+  }
+  function proximityScore(text2, companyName, urlIndex) {
+    const needle = normalizeCompanyNeedle(companyName);
+    if (!needle) return 0;
+    const tokens = needle.split(/\s+/).filter(Boolean);
+    const windowStart = Math.max(0, urlIndex - 180);
+    const windowEnd = Math.min(text2.length, urlIndex + 220);
+    const window2 = text2.slice(windowStart, windowEnd).toLowerCase();
+    let score = 0;
+    for (const token of tokens) {
+      if (token.length < 3) continue;
+      if (window2.includes(token)) {
+        score += token.length;
+      }
+    }
+    if (window2.includes(needle)) {
+      score += needle.length * 2;
+    }
+    return score;
+  }
+  function harvestUrlsForCompanyFromDigests(companyName, digests) {
+    const candidates = [];
+    for (const digest of digests) {
+      const text2 = `${digest.title || ""}
+${digest.content || ""}`;
+      const urls = extractUrlsFromText(text2);
+      for (const url of urls) {
+        if (!isKnownEnrichmentHost(url)) {
+          continue;
+        }
+        const index2 = text2.indexOf(url);
+        const score = proximityScore(text2, companyName, index2 >= 0 ? index2 : 0);
+        if (score <= 0) {
+          continue;
+        }
+        candidates.push({ url, score });
+      }
+    }
+    candidates.sort((a2, b3) => b3.score - a2.score);
+    let merged;
+    for (const candidate of candidates) {
+      const classified = classifyEnrichmentUrl(candidate.url);
+      if (!classified || classified.kind === "g2_search") {
+        continue;
+      }
+      const key = classified.kind;
+      if (key === "homepage" || key === "g2_product" || key === "trustradius_product" || key === "capterra_product" || key === "wikipedia_article" || key === "gartner_reviews" || key === "crunchbase_org") {
+        merged = mergeEnrichmentUrlMaps(merged, { [key]: candidate.url });
+      }
+    }
+    return merged;
+  }
+  function applyHarvestedUrlsToCompanies(companies, digests) {
+    return companies.map((company) => {
+      const harvested = harvestUrlsForCompanyFromDigests(company.name, digests);
+      const enrichmentUrls = mergeEnrichmentUrlMaps(
+        company.enrichmentUrls,
+        harvested
+      );
+      return {
+        ...company,
+        enrichmentUrls,
+        websiteUrl: enrichmentUrls?.homepage || company.websiteUrl
+      };
+    });
+  }
+
+  // src/prompts/competitiveIntelPoolPrompt.ts
+  init_untrustedContent();
+  var POOL_EXTRACTION_SYSTEM_PROMPT = [
+    "You extract competitor company names from AI chat discovery results.",
+    "Return only valid JSON matching the schema.",
+    "Use only companies explicitly mentioned in the provided digests.",
+    UNTRUSTED_CONTENT_SYSTEM_RULES
+  ].join("\n");
+  var POOL_EXTRACTION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        companies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+              suggestedTier: {
+                type: "string",
+                enum: ["high", "medium", "low", "adjacent"]
+              },
+              websiteUrl: { type: "string" },
+              g2Url: { type: "string" },
+              trustradiusUrl: { type: "string" },
+              capterraUrl: { type: "string" },
+              wikipediaUrl: { type: "string" },
+              gartnerUrl: { type: "string" },
+              sourceUrls: { type: "array", items: { type: "string" } },
+              mentionCount: { type: "number" }
+            },
+            required: ["name", "description", "mentionCount"]
+          }
+        }
+      },
+      required: ["companies"]
+    }
+  };
+  function buildPoolExtractionUserMessage(params) {
+    const focusLine = params.focus?.trim() ? `User focus: ${params.focus.trim()}` : "";
+    return [
+      `Industry: ${params.industry}`,
+      focusLine,
+      "Extract distinct competitor companies mentioned across these discovery tabs.",
+      "For each company, extract direct URLs only when explicitly cited: websiteUrl (homepage), g2Url (g2.com/products/...), capterraUrl, wikipediaUrl (en.wikipedia.org/wiki/...), gartnerUrl (gartner.com/reviews/...). Skip LinkedIn. Do not guess URLs.",
+      "Set mentionCount to how many tabs mention each company.",
+      "Map market leaders to high, challengers to medium, niche to low, adjacent entrants to adjacent.",
+      wrapUntrustedJsonBlock(
+        "discovery_digests",
+        params.digests.map((digest) => ({
+          title: digest.title,
+          url: digest.url,
+          content: digest.content.slice(0, 6e3)
+        }))
+      )
+    ].filter(Boolean).join("\n\n");
+  }
+  function parsePoolExtractionResult(response) {
+    let content = response;
+    if (typeof response === "object" && response && "content" in response) {
+      content = response.content;
+    }
+    if (typeof content === "object" && content && Array.isArray(content.companies)) {
+      return normalizePoolCompanies(
+        content.companies
+      );
+    }
+    const text2 = typeof content === "string" ? content : "";
+    if (!text2.trim()) return null;
+    try {
+      const parsed = JSON.parse(text2);
+      if (!Array.isArray(parsed.companies)) return null;
+      return normalizePoolCompanies(parsed.companies);
+    } catch {
+      return null;
+    }
+  }
+  function normalizePoolCompanies(companies) {
+    return {
+      companies: companies.map((item) => ({
+        name: String(item.name || "").trim(),
+        description: String(item.description || "").trim(),
+        suggestedTier: item.suggestedTier,
+        websiteUrl: String(item.websiteUrl || "").trim() || void 0,
+        g2Url: String(item.g2Url || "").trim() || void 0,
+        trustradiusUrl: String(item.trustradiusUrl || "").trim() || void 0,
+        capterraUrl: String(item.capterraUrl || "").trim() || void 0,
+        wikipediaUrl: String(item.wikipediaUrl || "").trim() || void 0,
+        gartnerUrl: String(item.gartnerUrl || "").trim() || void 0,
+        sourceUrls: Array.isArray(item.sourceUrls) ? item.sourceUrls.map((url) => String(url)) : [],
+        mentionCount: typeof item.mentionCount === "number" ? item.mentionCount : 1
+      })).filter((item) => item.name)
+    };
+  }
+
+  // src/prompts/competitiveIntelPoolGenerationPrompt.ts
+  init_untrustedContent();
+  var POOL_GENERATION_SYSTEM_PROMPT = [
+    "You are a competitive intelligence analyst.",
+    "Generate a competitor pool for the given industry using your knowledge.",
+    "Return only valid JSON matching the schema.",
+    "Use well-known company names. Include official website URLs only when confident.",
+    "Include Wikipedia article URLs only when a clear en.wikipedia.org/wiki article exists.",
+    "Do not invent G2, Capterra, Gartner, or LinkedIn URLs.",
+    "Map market leaders to high, challengers to medium, niche to low, adjacent entrants to adjacent."
+  ].join("\n");
+  var POOL_GENERATION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        companies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+              suggestedTier: {
+                type: "string",
+                enum: ["high", "medium", "low", "adjacent"]
+              },
+              websiteUrl: { type: "string" },
+              wikipediaUrl: { type: "string" }
+            },
+            required: ["name", "description", "suggestedTier"]
+          }
+        }
+      },
+      required: ["companies"]
+    }
+  };
+  function buildPoolGenerationUserMessage(params) {
+    return [
+      buildTrustedUserIntentBlock({
+        industry: params.industry,
+        focus: params.focus || "",
+        maxCompetitors: params.maxCompetitors
+      }),
+      `List up to ${params.maxCompetitors} key players and secondary/adjacent companies.`,
+      "Group into market leaders (high), strong challengers (medium), niche players (low), and adjacent entrants (adjacent).",
+      "For each: company name, one-line description, suggestedTier, websiteUrl (homepage), wikipediaUrl (if known)."
+    ].join("\n\n");
+  }
+  function parsePoolGenerationResult(response) {
+    let content = response;
+    if (typeof response === "object" && response && "content" in response) {
+      content = response.content;
+    }
+    if (typeof content === "object" && content && Array.isArray(content.companies)) {
+      return normalizeGeneratedCompanies(
+        content.companies
+      );
+    }
+    const text2 = typeof content === "string" ? content : "";
+    if (!text2.trim()) return null;
+    try {
+      const parsed = JSON.parse(text2);
+      if (!Array.isArray(parsed.companies)) return null;
+      return normalizeGeneratedCompanies(parsed.companies);
+    } catch {
+      return null;
+    }
+  }
+  function normalizeGeneratedCompanies(companies) {
+    return {
+      companies: companies.map((item) => ({
+        name: String(item.name || "").trim(),
+        description: String(item.description || "").trim(),
+        suggestedTier: item.suggestedTier,
+        websiteUrl: String(item.websiteUrl || "").trim() || void 0,
+        wikipediaUrl: String(item.wikipediaUrl || "").trim() || void 0
+      })).filter((item) => item.name)
+    };
+  }
+
+  // src/services/competitiveIntelPool.ts
+  function levenshtein2(a2, b3) {
+    const left = a2.toLowerCase();
+    const right = b3.toLowerCase();
+    if (left === right) return 0;
+    const matrix = Array.from(
+      { length: left.length + 1 },
+      (_2, i2) => Array.from(
+        { length: right.length + 1 },
+        (_3, j3) => i2 === 0 ? j3 : j3 === 0 ? i2 : 0
+      )
+    );
+    for (let i2 = 1; i2 <= left.length; i2 += 1) {
+      for (let j3 = 1; j3 <= right.length; j3 += 1) {
+        const cost = left[i2 - 1] === right[j3 - 1] ? 0 : 1;
+        matrix[i2][j3] = Math.min(
+          matrix[i2 - 1][j3] + 1,
+          matrix[i2][j3 - 1] + 1,
+          matrix[i2 - 1][j3 - 1] + cost
+        );
+      }
+    }
+    return matrix[left.length][right.length];
+  }
+  function normalizeCompanyName(name) {
+    return normalizeName(name).replace(/\b(inc|llc|ltd|corp|co)\b\.?/gi, "").replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function mergeCompanies(companies, maxCompetitors) {
+    const merged = [];
+    for (const company of companies) {
+      const normalized = normalizeCompanyName(company.name);
+      if (!normalized) continue;
+      const existing = merged.find(
+        (item) => normalizeCompanyName(item.name) === normalized || levenshtein2(normalizeCompanyName(item.name), normalized) <= 2
+      );
+      if (existing) {
+        existing.mentionCount += company.mentionCount || 1;
+        existing.sourceUrls = [
+          .../* @__PURE__ */ new Set([...existing.sourceUrls, ...company.sourceUrls])
+        ];
+        if (!existing.description && company.description) {
+          existing.description = company.description;
+        }
+        if (company.suggestedTier && !existing.suggestedTier) {
+          existing.suggestedTier = company.suggestedTier;
+        }
+        const merged2 = mergeCompanyEnrichmentFields(existing, company);
+        Object.assign(existing, merged2);
+        continue;
+      }
+      merged.push({
+        ...company,
+        normalizedName: normalized,
+        mentionCount: company.mentionCount || 1
+      });
+    }
+    return merged.sort((a2, b3) => b3.mentionCount - a2.mentionCount).slice(0, maxCompetitors);
+  }
+  function poolCompanyFromFields(company, mentionCount = 1) {
+    const enrichmentUrls = enrichmentUrlsFromPoolFields({
+      websiteUrl: company.websiteUrl,
+      wikipediaUrl: "wikipediaUrl" in company ? company.wikipediaUrl : void 0,
+      g2Url: "g2Url" in company ? company.g2Url : void 0,
+      capterraUrl: "capterraUrl" in company ? company.capterraUrl : void 0,
+      gartnerUrl: "gartnerUrl" in company ? company.gartnerUrl : void 0,
+      trustradiusUrl: "trustradiusUrl" in company ? company.trustradiusUrl : void 0
+    });
+    return {
+      name: company.name,
+      normalizedName: normalizeCompanyName(company.name),
+      description: company.description || "",
+      tier: defaultTierFromMentions(mentionCount, company.suggestedTier),
+      suggestedTier: company.suggestedTier,
+      websiteUrl: company.websiteUrl,
+      enrichmentUrls,
+      sourceUrls: "sourceUrls" in company && company.sourceUrls ? company.sourceUrls : [],
+      mentionCount
+    };
+  }
+  async function generateCompetitorPoolViaAssist(params) {
+    const response = await assistRemote(
+      POOL_GENERATION_SYSTEM_PROMPT,
+      [
+        {
+          role: "user",
+          content: buildPoolGenerationUserMessage({
+            industry: params.industry,
+            focus: params.focus,
+            maxCompetitors: params.maxCompetitors
+          })
+        }
+      ],
+      ["chat"],
+      [],
+      POOL_GENERATION_CONFIG,
+      void 0,
+      params.signal
+    );
+    syncSubscriptionFromAssistResponse(response);
+    const content = response.content;
+    const parsed = parsePoolGenerationResult(content);
+    if (!parsed?.companies?.length) {
+      return {
+        ok: false,
+        message: "I could not generate a competitor pool for this industry. Try a more specific industry phrase and continue."
+      };
+    }
+    const companies = mergeCompanies(
+      parsed.companies.map((company) => poolCompanyFromFields(company, 1)),
+      params.maxCompetitors
+    );
+    return { ok: true, companies };
+  }
+  async function mergeDiscoveryIntoPool(params) {
+    const pool = await extractCompetitorPool({
+      industry: params.industry,
+      focus: params.focus,
+      discoveryTabIds: params.discoveryTabIds,
+      maxCompetitors: params.maxCompetitors,
+      signal: params.signal
+    });
+    if (!pool.ok) {
+      return pool;
+    }
+    const merged = mergeCompanies(
+      [...params.existingCompanies, ...pool.companies],
+      params.maxCompetitors
+    );
+    return { ok: true, companies: merged };
+  }
+  function defaultTierFromMentions(mentionCount, suggested) {
+    if (suggested && DEFAULT_COMPETITIVE_TIERS.includes(suggested)) {
+      return suggested;
+    }
+    if (mentionCount >= 3) return "high";
+    if (mentionCount >= 2) return "medium";
+    if (mentionCount >= 1) return "low";
+    return "adjacent";
+  }
+  function resolveDiscoveryTabs(discoveryTabIds = []) {
+    const { gBrowser } = getChromeContext();
+    const tabs = getTabs(gBrowser);
+    if (discoveryTabIds.length > 0) {
+      const idSet = new Set(discoveryTabIds);
+      return tabs.filter((_2, index2) => idSet.has(index2 + 1));
+    }
+    return tabs.filter((tab) => isDiscoveryToolUrl(tabUrl(tab)));
+  }
+  async function extractCompetitorPool(params) {
+    const tabs = resolveDiscoveryTabs(params.discoveryTabIds);
+    if (tabs.length === 0) {
+      return {
+        ok: false,
+        message: "I could not find discovery tabs. Open ChatGPT, Perplexity, Claude, Gemini, or Grok and run the discovery query, then continue."
+      };
+    }
+    const digests = await extractTabDigests(tabs, { signal: params.signal });
+    const readable = digests.filter(
+      (digest) => digest.status === "ok" && digest.content.trim().length > 50
+    );
+    if (readable.length === 0) {
+      return {
+        ok: false,
+        message: "Discovery tabs did not have readable content yet. Run the discovery query in the AI tools, wait for answers, then continue."
+      };
+    }
+    const response = await assistRemote(
+      POOL_EXTRACTION_SYSTEM_PROMPT,
+      [
+        {
+          role: "user",
+          content: buildPoolExtractionUserMessage({
+            industry: params.industry,
+            focus: params.focus,
+            digests: readable
+          })
+        }
+      ],
+      ["chat"],
+      [],
+      POOL_EXTRACTION_CONFIG
+    );
+    syncSubscriptionFromAssistResponse(response);
+    const content = response.content;
+    const parsed = parsePoolExtractionResult(content);
+    if (!parsed?.companies?.length) {
+      return {
+        ok: false,
+        message: "I could not extract a competitor list from the discovery tabs. Try rerunning the query in more AI tools, then continue."
+      };
+    }
+    const companies = mergeCompanies(
+      parsed.companies.map(
+        (company) => poolCompanyFromFields(company, company.mentionCount || 1)
+      ),
+      params.maxCompetitors
+    );
+    const harvestedCompanies = applyHarvestedUrlsToCompanies(companies, readable);
+    return { ok: true, companies: harvestedCompanies, digests };
+  }
+  function buildTierPreviewMarkdown(companies) {
+    const lines = ["## Proposed competitor tiers", ""];
+    for (const tier of DEFAULT_COMPETITIVE_TIERS) {
+      const label = tier.charAt(0).toUpperCase() + tier.slice(1);
+      const group = companies.filter((company) => company.tier === tier);
+      lines.push(`### ${label} (${group.length})`);
+      if (group.length === 0) {
+        lines.push("- _(none)_");
+      } else {
+        for (const company of group) {
+          lines.push(
+            `- **${company.name}** \u2014 ${company.description || "No description"} (${company.mentionCount} mention${company.mentionCount === 1 ? "" : "s"})`
+          );
+        }
+      }
+      lines.push("");
+    }
+    lines.push(
+      "Click **Open enrichment tabs** (or **Accept tiers & open enrichment tabs** in the workflow panel) to continue. To edit tiers: `move Soda to Low`. To fix URLs: `set Monte Carlo website to https://...`, `set Monte Carlo wikipedia to https://en.wikipedia.org/wiki/...`."
+    );
+    return lines.join("\n");
+  }
+
+  // src/services/competitiveIntelEnrichment.ts
+  init_firefoxFacade();
+
+  // src/services/competitiveIntelTabHealth.ts
+  init_firefoxFacade();
+  var UNHEALTHY_TITLE_PATTERNS = [
+    /page not found/i,
+    /not found/i,
+    /404/i,
+    /verification required/i,
+    /\bretry\b/i,
+    /automated bot activity/i,
+    /access denied/i,
+    /we couldn't find/i
+  ];
+  var UNHEALTHY_URL_PATTERNS = [/g2\.com\/search/i];
+  function assessTabHealth(url, title) {
+    const lowerTitle = String(title || "").trim().toLowerCase();
+    const lowerUrl = String(url || "").trim().toLowerCase();
+    if (!lowerUrl || lowerUrl === "about:blank") {
+      return { healthy: false, reason: "Blank or missing URL" };
+    }
+    for (const pattern of UNHEALTHY_URL_PATTERNS) {
+      if (pattern.test(lowerUrl) && /g2\.com/.test(lowerUrl)) {
+        return { healthy: false, reason: "G2 search page (skipped)" };
+      }
+    }
+    for (const pattern of UNHEALTHY_TITLE_PATTERNS) {
+      if (pattern.test(lowerTitle)) {
+        return { healthy: false, reason: `Unhealthy page title: ${title}` };
+      }
+    }
+    return { healthy: true };
+  }
+  function findUnhealthyOpenedTabs(openedUrls) {
+    const { gBrowser } = getChromeContext();
+    const tabs = getTabs(gBrowser);
+    const unhealthy = [];
+    const openedSet = new Set(openedUrls);
+    for (const tab of tabs) {
+      const url = tabUrl(tab);
+      if (!openedSet.has(url) && !openedUrls.some((opened) => url.startsWith(opened))) {
+        continue;
+      }
+      const title = String(tab?.label || tab?.linkedBrowser?.contentTitle || "");
+      const health = assessTabHealth(url, title);
+      if (!health.healthy) {
+        unhealthy.push({
+          url,
+          title,
+          reason: health.reason || "Unhealthy tab"
+        });
+      }
+    }
+    return unhealthy;
+  }
+
+  // src/services/competitiveIntelEnrichment.ts
+  function buildEnrichmentUrls(company, profile = DEFAULT_ENRICHMENT_PROFILE) {
+    return buildEnrichmentUrlsForCompany(company, profile);
+  }
+  function buildEnrichmentPlan(companies, profile = DEFAULT_ENRICHMENT_PROFILE) {
+    return companies.map((company) => ({
+      companyName: company.name,
+      tier: company.tier,
+      urls: buildEnrichmentUrls(company, profile),
+      tabIds: []
+    }));
+  }
+  function tabMatchesEnrichmentUrl(tabUrl2, expectedUrl) {
+    if (!tabUrl2 || !expectedUrl) {
+      return false;
+    }
+    if (tabUrl2 === expectedUrl) {
+      return true;
+    }
+    try {
+      const tab = new URL(tabUrl2);
+      const expected = new URL(expectedUrl);
+      if (tab.hostname === expected.hostname && tab.pathname === expected.pathname) {
+        return true;
+      }
+      if (expected.hostname.includes("g2.com") && tab.hostname.includes("g2.com")) {
+        return true;
+      }
+      if (expected.hostname.includes("wikipedia.org") && tab.hostname.includes("wikipedia.org")) {
+        return true;
+      }
+      if (expected.hostname.includes("gartner.com") && tab.hostname.includes("gartner.com")) {
+        return true;
+      }
+      if (expected.hostname.includes("trustradius.com") && tab.hostname.includes("trustradius.com")) {
+        return true;
+      }
+      if (expected.hostname.includes("capterra.com") && tab.hostname.includes("capterra.com")) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+  function buildHostAwareEnrichmentBatches(plan, batchSize = CI_ENRICHMENT_BATCH_SIZE, profile = DEFAULT_ENRICHMENT_PROFILE) {
+    const urls = [
+      ...new Set(plan.flatMap((entry) => entry.urls).filter(Boolean))
+    ].sort((a2, b3) => hostOpenPriority(a2) - hostOpenPriority(b3));
+    const effectiveBatchSize = profile === "review_deepen" ? Math.min(batchSize, 2) : batchSize;
+    const batches = [];
+    let remaining = urls;
+    while (remaining.length > 0) {
+      const batch = [];
+      const usedHosts = /* @__PURE__ */ new Set();
+      const deferred = [];
+      for (const url of remaining) {
+        const host = hostKeyForUrl(url);
+        const isG2 = host.includes("g2.com");
+        const hostLimit = profile === "review_deepen" && isG2 ? usedHosts.has(host) : usedHosts.has(host);
+        if (batch.length < effectiveBatchSize && !hostLimit) {
+          batch.push(url);
+          usedHosts.add(host);
+        } else {
+          deferred.push(url);
+        }
+      }
+      if (batch.length === 0 && deferred.length > 0) {
+        batch.push(deferred.shift());
+      }
+      batches.push(batch);
+      remaining = deferred;
+    }
+    return batches;
+  }
+  function resolveEnrichmentBatchSize(totalUrls) {
+    return totalUrls > CI_ENRICHMENT_LARGE_TAB_THRESHOLD ? CI_ENRICHMENT_BATCH_SIZE : Math.min(CI_ENRICHMENT_BATCH_SIZE, 4);
+  }
+  function getEnrichmentBatch(plan, batchIndex, batchSize = CI_ENRICHMENT_BATCH_SIZE) {
+    const batches = buildHostAwareEnrichmentBatches(plan, batchSize);
+    const urls = batches[batchIndex] || [];
+    return {
+      entries: plan,
+      urls,
+      done: batchIndex + 1 >= batches.length
+    };
+  }
+  function openEnrichmentBatch(urls) {
+    const { topWin } = getChromeContext();
+    return openTrustedLinksInBackground(topWin, urls, urls.length);
+  }
+  function assignEnrichmentTabsToPlan(plan, openedUrls) {
+    const { gBrowser } = getChromeContext();
+    const tabs = gBrowser?.tabs || [];
+    return plan.map((entry) => {
+      const tabIds = [];
+      for (let index2 = 0; index2 < tabs.length; index2 += 1) {
+        const tab = tabs[index2];
+        const url = String(
+          tab?.linkedBrowser?.currentURI?.spec || tab?.linkedBrowser?.documentURI?.spec || ""
+        );
+        if (!url) continue;
+        if (openedUrls.includes(url) || entry.urls.some((expected) => tabMatchesEnrichmentUrl(url, expected))) {
+          tabIds.push(index2 + 1);
+        }
+      }
+      return {
+        ...entry,
+        tabIds: [.../* @__PURE__ */ new Set([...entry.tabIds || [], ...tabIds])]
+      };
+    });
+  }
+  function tierGroupLabel(tier) {
+    return `${CI_TAB_GROUP_PREFIX}${tierIdToLabel(tier)}`;
+  }
+  function batchDelayForUrl(url, profile) {
+    if (profile === "review_deepen" && /g2\.com/i.test(url)) {
+      return CI_ENRICHMENT_G2_BATCH_DELAY_MS;
+    }
+    return CI_ENRICHMENT_BATCH_DELAY_MS;
+  }
+  async function openAllEnrichmentBatches(plan, profile = DEFAULT_ENRICHMENT_PROFILE) {
+    const totalUrls = plan.reduce((count3, entry) => count3 + entry.urls.length, 0);
+    const batchSize = resolveEnrichmentBatchSize(totalUrls);
+    const batches = buildHostAwareEnrichmentBatches(plan, batchSize, profile);
+    let currentPlan = plan;
+    let openedCount = 0;
+    let unhealthyCount = 0;
+    for (const batch of batches) {
+      if (batch.length === 0) {
+        continue;
+      }
+      const opened = openEnrichmentBatch(batch);
+      openedCount += opened.length;
+      currentPlan = assignEnrichmentTabsToPlan(currentPlan, opened);
+      const unhealthy = findUnhealthyOpenedTabs(opened);
+      unhealthyCount += unhealthy.length;
+      const delay = Math.max(
+        ...batch.map((url) => batchDelayForUrl(url, profile)),
+        CI_ENRICHMENT_BATCH_DELAY_MS
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    return {
+      plan: currentPlan,
+      openedCount,
+      batchCount: batches.length,
+      unhealthyCount
+    };
+  }
+  function formatCompanyEnrichmentLine(company, profile) {
+    const slots = pickEnrichmentSlots(company, void 0, profile);
+    if (slots.length === 0) {
+      return `- ${company.name} \xB7 _(no direct URLs yet \u2014 Wikipedia search may apply)_`;
+    }
+    return `- ${company.name} \xB7 ${slots.map((slot) => slot.label).join(" \xB7 ")}`;
+  }
+  function buildEnrichmentProgressMarkdown(companies, openedCount, batchCount, profile = DEFAULT_ENRICHMENT_PROFILE, unhealthyCount = 0) {
+    const withWebsite = companies.filter(
+      (company) => company.websiteUrl || company.enrichmentUrls?.homepage
+    ).length;
+    const withWikipedia = companies.filter(
+      (company) => company.enrichmentUrls?.wikipedia_article || company.enrichmentUrls?.wikipedia_search
+    ).length;
+    const profileLine = profile === "oasis_first" ? "Phase 1 enrichment opens **homepage + Wikipedia** only (no G2/Capterra auto-open)." : "Review enrichment opens cited G2/Capterra pages with slower G2 batching.";
+    const lines = [
+      "## Opening enrichment tabs",
+      "",
+      `Opened **${openedCount}** tabs across **${batchCount}** host-aware batch${batchCount === 1 ? "" : "es"}.`,
+      "",
+      profileLine,
+      "",
+      `Coverage: **${withWebsite}** homepages, **${withWikipedia}** Wikipedia (of **${companies.length}** companies).`,
+      ""
+    ];
+    if (unhealthyCount > 0) {
+      lines.push(
+        `**${unhealthyCount}** tab(s) looked unhealthy (404, verification, or bot-check) and will be skipped during synthesis.`,
+        ""
+      );
+    }
+    lines.push(
+      "Login-walled or bot-check pages are marked **skipped** during synthesis; confidence is downgraded accordingly.",
+      ""
+    );
+    for (const tier of ["high", "medium", "low", "adjacent"]) {
+      const group = companies.filter((company) => company.tier === tier);
+      if (group.length === 0) {
+        continue;
+      }
+      const label = tier.charAt(0).toUpperCase() + tier.slice(1);
+      lines.push(`### ${label}`);
+      for (const company of group) {
+        lines.push(formatCompanyEnrichmentLine(company, profile));
+      }
+      lines.push("");
+    }
+    if (openedCount === 0) {
+      lines.push(
+        "I could not open enrichment tabs in this browser window. Try `open https://www.g2.com` in Oasis to verify tab opening works, then say **continue** to retry."
+      );
+    } else {
+      lines.push(
+        "Review the enrichment tabs when ready, then click **Group tabs & generate report** below."
+      );
+    }
+    return lines.join("\n");
+  }
+
+  // src/services/competitiveIntelGrouping.ts
+  init_firefoxFacade();
+  function createCompetitiveIntelTabGroups(plan) {
+    const { gBrowser } = getChromeContext();
+    if (!gBrowser?.addTabGroup) {
+      return {
+        ok: false,
+        message: "Tab groups are not available in this window."
+      };
+    }
+    const tabs = getTabs(gBrowser);
+    const tierBuckets = /* @__PURE__ */ new Map();
+    for (const entry of plan) {
+      const tier = String(entry.tier || "medium");
+      const bucket = tierBuckets.get(tier) || [];
+      bucket.push(entry);
+      tierBuckets.set(tier, bucket);
+    }
+    const groups = [];
+    for (const [tier, entries2] of tierBuckets.entries()) {
+      const tabSet = /* @__PURE__ */ new Set();
+      for (const entry of entries2) {
+        for (const tabId of entry.tabIds || []) {
+          tabSet.add(tabId);
+        }
+        const companyNeedle = entry.companyName.toLowerCase();
+        tabs.forEach((tab, index2) => {
+          const hay = `${tabUrl(tab)}`.toLowerCase();
+          if (hay.includes(companyNeedle.replace(/\s+/g, "")) || hay.includes(companyNeedle)) {
+            tabSet.add(index2 + 1);
+          }
+        });
+      }
+      const groupTabs = [...tabSet].map((id) => tabs[id - 1]).filter(Boolean);
+      if (groupTabs.length === 0) {
+        continue;
+      }
+      const label = tierGroupLabel(tier);
+      gBrowser.addTabGroup(groupTabs, { label });
+      groups.push({
+        tier,
+        groupLabel: label,
+        tabCount: groupTabs.length,
+        companies: entries2.map((entry) => entry.companyName)
+      });
+    }
+    if (groups.length === 0) {
+      return {
+        ok: false,
+        message: "I could not match enrichment tabs to competitors for grouping. Open a few company pages, then say continue."
+      };
+    }
+    return { ok: true, groups };
+  }
+  function buildGroupPreviewMarkdown(groups) {
+    const lines = ["## Tab groups created", ""];
+    for (const group of groups) {
+      lines.push(
+        `- **${group.groupLabel}** \u2014 ${group.tabCount} tab(s): ${group.companies.join(", ")}`
+      );
+    }
+    lines.push(
+      "",
+      "Click **Create tab groups** below when you are ready to organize enrichment tabs and generate your report."
+    );
+    return lines.join("\n");
+  }
+
+  // src/services/competitiveIntel.ts
+  init_awsSignedFetch();
+  init_assistOutputRetry();
+  init_outputValidators();
+
+  // src/utils/competitiveIntelFormat.ts
+  function confidenceBadge(level) {
+    return level.toUpperCase();
+  }
+  function parseCompetitiveIntelFromAssistContent(content) {
+    if (!content || typeof content !== "object") {
+      if (typeof content === "string") {
+        try {
+          return parseCompetitiveIntelFromAssistContent(JSON.parse(content));
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+    const record = content;
+    if (typeof record.industry !== "string" || typeof record.executiveSummary !== "string") {
+      return null;
+    }
+    return record;
+  }
+  function competitiveIntelToMarkdown(report) {
+    const lines = [
+      `# Competitive intelligence: ${report.industry}`,
+      "",
+      `**Overall confidence:** ${confidenceBadge(report.overallConfidence)}`,
+      "",
+      report.confidenceRationale,
+      "",
+      "## Executive summary",
+      "",
+      report.executiveSummary,
+      "",
+      "## Tier rationale",
+      ""
+    ];
+    for (const tier of report.tierRationale || []) {
+      lines.push(`### ${tier.tabGroupLabel}`, tier.whyRelevant, "");
+    }
+    lines.push("## Competitors", "");
+    for (const competitor of report.competitors || []) {
+      lines.push(
+        `### ${competitor.name} (${competitor.tier}) \u2014 ${confidenceBadge(competitor.confidence)}`,
+        "",
+        `**Size signal:** ${competitor.sizeSignal}`,
+        "",
+        "**Differentiators:**",
+        ...competitor.differentiators.map((item) => `- ${item}`),
+        "",
+        "**Customer feedback themes:**",
+        ...competitor.customerFeedback.length ? competitor.customerFeedback.map((item) => `- ${item}`) : ["- _(limited public feedback in sources)_"],
+        "",
+        "**Vertical focus:**",
+        ...competitor.verticalFocus.map((item) => `- ${item}`),
+        ""
+      );
+    }
+    const matrix = report.comparisonMatrix;
+    if (matrix?.dimensions?.length && matrix.cells?.length) {
+      lines.push("## Comparison matrix", "");
+      lines.push(
+        `| Competitor | ${matrix.dimensions.join(" | ")} |`,
+        `| --- | ${matrix.dimensions.map(() => "---").join(" | ")} |`
+      );
+      const competitors = [...new Set(matrix.cells.map((cell) => cell.competitor))];
+      for (const competitor of competitors) {
+        const assessments = matrix.dimensions.map((dimension) => {
+          const cell = matrix.cells.find(
+            (item) => item.competitor === competitor && item.dimension === dimension
+          );
+          return cell ? `${cell.assessment} (${confidenceBadge(cell.confidence)})` : "\u2014";
+        });
+        lines.push(`| ${competitor} | ${assessments.join(" | ")} |`);
+      }
+      lines.push("");
+    }
+    if (report.gapsAndContradictions?.length) {
+      lines.push("## Gaps and contradictions", "");
+      for (const gap of report.gapsAndContradictions) {
+        lines.push(`- ${gap}`);
+      }
+      lines.push("");
+    }
+    if (report.sources?.length) {
+      lines.push("## Sources", "");
+      for (const source of report.sources) {
+        lines.push(
+          `- [${source.title}](${source.url}) \u2014 ${source.status}${source.keyClaims?.length ? `: ${source.keyClaims[0]}` : ""}`
+        );
+      }
+    }
+    return lines.join("\n");
+  }
+
+  // src/prompts/competitiveIntelPrompt.ts
+  init_untrustedContent();
+  var COMPETITIVE_INTEL_SYSTEM_PROMPT = [
+    "You are a competitive intelligence analyst.",
+    "Produce a grounded competitive intelligence report from extracted browser tab content.",
+    "Compare companies across tiers and highlight meaningful distinctions (vertical focus, footprint, pricing, differentiation, customer feedback themes).",
+    "Assign confidence honestly: downgrade when sources are thin, login-walled, or single-source.",
+    "Do not invent facts, quotes, or URLs not supported by digests.",
+    "Use exact competitor names from the trusted competitor list.",
+    "For every sourceUrls entry and sources[].url, copy the exact url string from tab_digests.",
+    "Omit quotes unless the exact wording appears in tab_digests content.",
+    "Return only valid JSON matching the schema.",
+    UNTRUSTED_CONTENT_SYSTEM_RULES
+  ].join("\n");
+  var COMPETITIVE_INTEL_COMPACT_ADDENDUM = [
+    "COMPACT REPORT MODE:",
+    "Keep the executive summary to 150 words maximum.",
+    "Use at most 3 comparison matrix dimensions.",
+    "List at most 2 differentiators per competitor.",
+    "Skip quotes unless essential for a key claim."
+  ].join("\n");
+  var COMPETITIVE_INTEL_GENERATION_CONFIG = {
+    responseMimeType: "application/json",
+    responseJsonSchema: {
+      type: "object",
+      properties: {
+        industry: { type: "string" },
+        generatedAt: { type: "string" },
+        executiveSummary: { type: "string" },
+        overallConfidence: { type: "string", enum: ["high", "medium", "low"] },
+        confidenceRationale: { type: "string" },
+        confidenceRefinementEligible: { type: "boolean" },
+        competitors: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              tier: { type: "string" },
+              sizeSignal: { type: "string" },
+              differentiators: { type: "array", items: { type: "string" } },
+              customerFeedback: { type: "array", items: { type: "string" } },
+              verticalFocus: { type: "array", items: { type: "string" } },
+              confidence: { type: "string", enum: ["high", "medium", "low"] },
+              sourceUrls: { type: "array", items: { type: "string" } },
+              quotes: { type: "array", items: { type: "string" } }
+            },
+            required: [
+              "name",
+              "tier",
+              "sizeSignal",
+              "differentiators",
+              "customerFeedback",
+              "verticalFocus",
+              "confidence",
+              "sourceUrls"
+            ]
+          }
+        },
+        comparisonMatrix: {
+          type: "object",
+          properties: {
+            dimensions: { type: "array", items: { type: "string" } },
+            cells: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  competitor: { type: "string" },
+                  dimension: { type: "string" },
+                  assessment: { type: "string" },
+                  confidence: { type: "string", enum: ["high", "medium", "low"] },
+                  sourceUrls: { type: "array", items: { type: "string" } }
+                },
+                required: [
+                  "competitor",
+                  "dimension",
+                  "assessment",
+                  "confidence",
+                  "sourceUrls"
+                ]
+              }
+            }
+          },
+          required: ["dimensions", "cells"]
+        },
+        tierRationale: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              tier: { type: "string" },
+              whyRelevant: { type: "string" },
+              tabGroupLabel: { type: "string" }
+            },
+            required: ["tier", "whyRelevant", "tabGroupLabel"]
+          }
+        },
+        sources: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              url: { type: "string" },
+              status: { type: "string", enum: ["ok", "skipped", "failed"] },
+              failureReason: { type: "string" },
+              keyClaims: { type: "array", items: { type: "string" } },
+              quotes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    text: { type: "string" },
+                    context: { type: "string" }
+                  },
+                  required: ["text"]
+                }
+              }
+            },
+            required: ["title", "url", "status", "keyClaims", "quotes"]
+          }
+        },
+        gapsAndContradictions: { type: "array", items: { type: "string" } }
+      },
+      required: [
+        "industry",
+        "generatedAt",
+        "executiveSummary",
+        "overallConfidence",
+        "confidenceRationale",
+        "confidenceRefinementEligible",
+        "competitors",
+        "comparisonMatrix",
+        "tierRationale",
+        "sources",
+        "gapsAndContradictions"
+      ]
+    }
+  };
+  function buildCompetitiveIntelUserMessage(params) {
+    return [
+      buildTrustedUserIntentBlock({
+        industry: params.industry,
+        focus: params.focus || "",
+        competitors: params.companies.map((company) => company.name),
+        tiers: params.groupLabels
+      }),
+      params.compact ? COMPETITIVE_INTEL_COMPACT_ADDENDUM : void 0,
+      "Build a competitive intelligence battle-card style report.",
+      "Explain why each tab group tier matters and compare companies across dimensions.",
+      wrapUntrustedJsonBlock(
+        "tab_digests",
+        params.digests.map((digest) => ({
+          title: digest.title,
+          url: digest.url,
+          tierLabel: digest.tierLabel,
+          companyName: digest.companyName,
+          status: digest.status,
+          content: digest.content.slice(0, 8e3)
+        }))
+      )
+    ].filter(Boolean).join("\n\n");
+  }
+
+  // src/services/competitiveIntel.ts
+  init_assistantLogger();
+  init_subscription();
+  init_quotaUserMessage();
+  init_researchBriefFormat();
+  init_researchBrief();
+
+  // src/services/competitiveIntelResolve.ts
+  init_firefoxFacade();
+  function resolveCompetitiveIntelTabs(plan) {
+    const { gBrowser } = getChromeContext();
+    const tabs = getTabs(gBrowser);
+    const tabSet = /* @__PURE__ */ new Set();
+    for (const entry of plan) {
+      for (const tabId of entry.tabIds || []) {
+        const tab = tabs[tabId - 1];
+        if (tab) tabSet.add(tab);
+      }
+      const needle = entry.companyName.toLowerCase();
+      for (const tab of tabs) {
+        const url = tabUrl(tab).toLowerCase();
+        if (url.includes(needle.replace(/\s+/g, "")) || url.includes(needle)) {
+          tabSet.add(tab);
+        }
+      }
+    }
+    const resolved = [...tabSet];
+    return {
+      tabs: resolved,
+      scopeLabel: `competitive intelligence (${resolved.length} enrichment tabs)`
+    };
+  }
+  function resolveCompetitiveIntelTabGroups(tiers) {
+    const { gBrowser } = getChromeContext();
+    const tabs = [];
+    const labels = [];
+    for (const tier of tiers) {
+      const label = tierGroupLabel(tier);
+      const match = findGroupByNameFuzzy(gBrowser, label);
+      if (match.group?.tabs?.length) {
+        labels.push(label);
+        tabs.push(...match.group.tabs);
+      }
+    }
+    const unique = [...new Set(tabs)];
+    return {
+      tabs: unique,
+      scopeLabel: labels.length > 0 ? labels.join(", ") : "competitive intelligence tab groups",
+      groupLabels: labels
+    };
+  }
+  function resolveCompetitiveIntelTabGroupByName(groupName) {
+    const { gBrowser } = getChromeContext();
+    const match = findGroupByNameFuzzy(gBrowser, groupName);
+    if (!match.group?.tabs?.length) {
+      return { tabs: [], scopeLabel: groupName, groupLabels: [] };
+    }
+    const label = String(match.group.label || groupName).trim();
+    const tabs = [...match.group.tabs];
+    return {
+      tabs,
+      scopeLabel: label,
+      groupLabels: [label]
+    };
+  }
+  function resolveCiReportTabs(params) {
+    const tiers = params.tierLabels?.length ? params.tierLabels : [...DEFAULT_COMPETITIVE_TIERS];
+    if (params.groupName?.trim()) {
+      const single = resolveCompetitiveIntelTabGroupByName(
+        params.groupName.trim()
+      );
+      if (single.tabs.length > 0) {
+        return {
+          tabs: single.tabs,
+          scopeLabel: single.scopeLabel,
+          source: "tab_groups",
+          groupLabels: single.groupLabels
+        };
+      }
+    }
+    const fromGroups = resolveCompetitiveIntelTabGroups(tiers);
+    if (fromGroups.tabs.length > 0) {
+      return {
+        tabs: fromGroups.tabs,
+        scopeLabel: fromGroups.scopeLabel,
+        source: "tab_groups",
+        groupLabels: fromGroups.groupLabels
+      };
+    }
+    const fallback = resolveCompetitiveIntelTabs(params.enrichmentPlan);
+    return {
+      tabs: fallback.tabs,
+      scopeLabel: fallback.scopeLabel,
+      source: "enrichment_plan",
+      groupLabels: []
+    };
+  }
+  function findCiGroupForTab(tab) {
+    const { gBrowser } = getChromeContext();
+    for (const group of getTabGroups(gBrowser)) {
+      const label = String(group.label || "").trim();
+      if (!label.startsWith(CI_TAB_GROUP_PREFIX)) {
+        continue;
+      }
+      const tabs = Array.from(group.tabs || []);
+      if (!tabs.includes(tab)) {
+        continue;
+      }
+      return { tierLabel: label, groupLabel: label };
+    }
+    return null;
+  }
+  function matchCompanyForDigest(digest, companies) {
+    const url = digest.url.toLowerCase();
+    const title = digest.title.toLowerCase();
+    return companies.find((company) => {
+      const needle = company.name.toLowerCase();
+      const compact = needle.replace(/\s+/g, "");
+      return url.includes(compact) || url.includes(needle) || title.includes(needle) || title.includes(compact);
+    });
+  }
+  function tagDigestsWithCiTabGroups(digests, companies, tabs) {
+    const tabByUrl = /* @__PURE__ */ new Map();
+    for (const tab of tabs) {
+      tabByUrl.set(tabUrl(tab).toLowerCase(), tab);
+    }
+    return digests.map((digest) => {
+      const tab = tabByUrl.get(digest.url.toLowerCase()) || tabs.find((candidate) => tabUrl(candidate) === digest.url);
+      const group = tab ? findCiGroupForTab(tab) : null;
+      const company = matchCompanyForDigest(digest, companies);
+      return {
+        ...digest,
+        tierLabel: group?.tierLabel || (company ? tierGroupLabel(company.tier) : void 0),
+        companyName: company?.name
+      };
+    });
+  }
+  function tagDigestsWithCompanies(digests, plan) {
+    return digests.map((digest) => {
+      const url = digest.url.toLowerCase();
+      const match = plan.find((entry) => {
+        const needle = entry.companyName.toLowerCase();
+        return url.includes(needle.replace(/\s+/g, "")) || url.includes(needle) || digest.title.toLowerCase().includes(needle);
+      });
+      return {
+        ...digest,
+        tierLabel: match ? tierGroupLabel(match.tier) : void 0,
+        companyName: match?.companyName
+      };
+    });
+  }
+  function inferCompaniesFromCiGroups(companies, tabs) {
+    if (companies.length > 0) {
+      return companies;
+    }
+    const names = /* @__PURE__ */ new Set();
+    for (const tab of tabs) {
+      const title = tabTitle(tab).trim();
+      if (title && title.length > 2) {
+        names.add(title);
+      }
+    }
+    return [...names].slice(0, 24).map((name) => ({
+      name,
+      normalizedName: name.toLowerCase(),
+      description: "",
+      tier: "medium",
+      sourceUrls: [
+        tabUrl(tabs.find((t2) => tabTitle(t2) === name) || tabs[0])
+      ].filter(Boolean),
+      mentionCount: 1
+    }));
+  }
+
+  // src/services/competitiveIntelDigest.ts
+  function looksLoginWalled(url, content) {
+    const lowerUrl = url.toLowerCase();
+    const lowerContent = content.toLowerCase();
+    const combined = `${lowerUrl} ${lowerContent}`;
+    if (/gartner\.com/.test(lowerUrl) && (/sign in|log in|create an account|join now|authwall|peer insights/i.test(
+      lowerContent
+    ) || content.trim().length < 200)) {
+      return "Login-walled (Gartner)";
+    }
+    if (/cf-challenge|challenge-platform|attention required|verify you are human|checking your browser|cloudflare/i.test(
+      combined
+    )) {
+      return "Blocked by bot check (Cloudflare or similar)";
+    }
+    if (/google\.com\/sorry|duckduckgo\.com/.test(lowerUrl) && (/recaptcha|unusual traffic|not a robot|captcha|bots use duckduckgo|complete the following challenge|select all squares/i.test(
+      lowerContent
+    ) || /google\.com\/sorry/.test(lowerUrl))) {
+      return "Blocked by CAPTCHA or rate limit";
+    }
+    if (/g2\.com/.test(lowerUrl) && (/access denied|rate limit|too many requests|captcha|verify you are human|verification required|automated bot activity|rapid taps|\bretry\b/i.test(
+      combined
+    ) || content.trim().length < 120)) {
+      return "Blocked by rate limit or bot check";
+    }
+    if (/page not found|404|we couldn't find|not found/i.test(lowerContent) && content.trim().length < 400) {
+      return "Page not found";
+    }
+    if (/trustradius\.com|capterra\.com/.test(lowerUrl) && (/sign in|log in|create an account|join now|authwall/i.test(lowerContent) || content.trim().length < 200)) {
+      return "Login-walled (review site)";
+    }
+    return null;
+  }
+  function applyEnrichmentDigestHints(digests) {
+    return digests.map((digest) => {
+      if (digest.status !== "ok") {
+        return digest;
+      }
+      const reason = looksLoginWalled(digest.url, digest.content);
+      if (!reason) {
+        return digest;
+      }
+      return {
+        ...digest,
+        content: "",
+        status: "skipped",
+        failureReason: reason
+      };
+    });
+  }
+
+  // src/services/competitiveIntel.ts
+  init_competitiveIntelReportAlign();
+  init_researchBriefProgress();
+  init_ciTokenBudget();
+  init_tabDigestPipeline();
+  async function buildCompetitiveIntelReport(params) {
+    const quotaMode = params.quotaMode || "default";
+    const buildStartedAt = Date.now();
+    assistantLogger.debug("competitiveIntel", "ci_build_start", {
+      companies: params.companies.length,
+      enrichmentEntries: params.enrichmentPlan.length,
+      quotaMode
+    });
+    const report = params.signal ? createResearchBriefProgressReporter(params.signal) : void 0;
+    try {
+      const display = subscriptionService.getDailyTokenUsageForDisplay();
+      if (display.remaining <= 0) {
+        return {
+          ok: false,
+          message: formatQuotaExceededMessage("daily_limit_exceeded")
+        };
+      }
+      report?.({
+        phase: "resolving",
+        context: "competitive_intel",
+        label: "Reading CI tier tab groups\u2026"
+      });
+      throwIfResearchBriefAborted(params.signal);
+      const resolved = resolveCiReportTabs({
+        tierLabels: params.tierLabels,
+        enrichmentPlan: params.enrichmentPlan,
+        groupName: params.groupName
+      });
+      if (resolved.tabs.length === 0) {
+        return {
+          ok: false,
+          message: "No tabs found in your CI tier tab groups. Open enrichment pages, create CI \u2014 High / Medium / Low / Adjacent groups, then try again."
+        };
+      }
+      const resolveLabel = resolved.source === "tab_groups" ? `Matched ${resolved.tabs.length} tab${resolved.tabs.length === 1 ? "" : "s"} from ${resolved.scopeLabel}\u2026` : `Matched ${resolved.tabs.length} enrichment tab${resolved.tabs.length === 1 ? "" : "s"} by URL (CI groups not found)\u2026`;
+      report?.({
+        phase: "resolving",
+        context: "competitive_intel",
+        label: resolveLabel
+      });
+      const cappedTabs = resolved.tabs.slice(0, DEFAULT_MAX_TABS + 5);
+      const digests = await extractTabDigests(cappedTabs, {
+        signal: params.signal,
+        onProgress: (current, total) => report?.({
+          phase: "extracting",
+          current,
+          total,
+          context: "competitive_intel",
+          label: resolved.source === "tab_groups" ? `Reading tab group content (${current} of ${total})\u2026` : `Reading tab content (${current} of ${total})\u2026`
+        })
+      });
+      const hinted = applyEnrichmentDigestHints(digests);
+      const tagged = resolved.source === "tab_groups" ? tagDigestsWithCiTabGroups(hinted, params.companies, cappedTabs) : tagDigestsWithCompanies(hinted, params.enrichmentPlan);
+      const readable = tagged.filter(
+        (digest) => digest.status === "ok" && digest.content.trim().length > 20
+      );
+      if (readable.length === 0) {
+        return {
+          ok: false,
+          message: formatUnreadableDigestsMessage(digests, resolved.scopeLabel)
+        };
+      }
+      const budget = applyQuotaBudget({
+        digests: tagged,
+        readable,
+        quotaMode,
+        profile: "competitive_intel",
+        maxTotalChars: TAB_DIGEST_MAX_TOTAL_CHARS,
+        remaining: display.remaining
+      });
+      if (budget.overQuota) {
+        return {
+          ok: false,
+          code: "over_quota",
+          message: formatCiQuotaStillOverMessage(
+            budget.overQuota.estimate,
+            budget.overQuota.remaining
+          ),
+          estimate: budget.overQuota.estimate,
+          remaining: budget.overQuota.remaining,
+          suggestedTabCount: budget.overQuota.suggestedTabCount
+        };
+      }
+      const synthesisDigests = budget.digests;
+      const contentTruncated = budget.truncated;
+      const estimate = budget.estimate;
+      const usage = subscriptionService.getDailyTokenUsageForDisplay();
+      if (quotaMode !== "default" && estimate > usage.remaining) {
+        return {
+          ok: false,
+          message: formatCiQuotaStillOverMessage(estimate, usage.remaining)
+        };
+      }
+      const reportMode = quotaMode === "default" && !contentTruncated && resolved.source === "tab_groups" ? "full" : "compact";
+      let budgetNote = buildCiBudgetNote({
+        reportMode,
+        tabCountUsed: synthesisDigests.length,
+        totalTabCount: readable.length,
+        truncated: contentTruncated
+      });
+      if (resolved.source === "enrichment_plan") {
+        const fallbackNote = "Tabs were matched by URL because CI tier tab groups were not found.";
+        budgetNote = budgetNote ? `${budgetNote} ${fallbackNote}` : fallbackNote;
+      }
+      report?.({
+        phase: "synthesizing",
+        context: "competitive_intel",
+        label: `Writing report from ${synthesisDigests.length} readable tab${synthesisDigests.length === 1 ? "" : "s"}\u2026`
+      });
+      const groupLabels = resolved.groupLabels.length > 0 ? resolved.groupLabels : [
+        ...new Set(
+          params.companies.map((company) => tierGroupLabel(company.tier))
+        )
+      ];
+      let reportData;
+      let lastValidationReason = "";
+      const compact = quotaMode === "compact" || reportMode === "compact";
+      try {
+        reportData = await assistWithOutputValidationRetry({
+          systemPrompt: COMPETITIVE_INTEL_SYSTEM_PROMPT,
+          userMessage: buildCompetitiveIntelUserMessage({
+            industry: params.industry,
+            focus: params.focus,
+            companies: params.companies,
+            groupLabels,
+            digests: synthesisDigests,
+            compact
+          }),
+          generationConfig: COMPETITIVE_INTEL_GENERATION_CONFIG,
+          signal: params.signal,
+          maxAttempts: compact ? 2 : 4,
+          onAttempt: (attempt, maxAttempts) => {
+            report?.({
+              phase: attempt <= 1 ? "synthesizing" : "validating",
+              context: "competitive_intel",
+              attempt,
+              maxAttempts,
+              label: attempt <= 1 ? compact ? "Writing compact competitive intelligence report\u2026" : "Writing competitive intelligence report\u2026" : `Validating report grounding (attempt ${attempt} of ${maxAttempts})\u2026`
+            });
+          },
+          parse: parseCompetitiveIntelFromAssistContent,
+          validate: (parsed) => {
+            const aligned = alignCompetitiveIntelReport(
+              parsed,
+              synthesisDigests,
+              params.companies.map((company) => company.name)
+            );
+            const validation = validateCompetitiveIntelOutput(aligned, {
+              digests: synthesisDigests,
+              allowedCompanies: params.companies.map((company) => company.name)
+            });
+            if (!validation.ok) {
+              lastValidationReason = validation.reason;
+              assistantLogger.warn(
+                "competitiveIntel",
+                "Report validation failed",
+                validation.reason
+              );
+            }
+            if (validation.ok) {
+              Object.assign(parsed, aligned);
+            }
+            return validation;
+          },
+          validationErrorMessage: "I couldn't produce a grounded competitive intelligence report. Please try again."
+        });
+      } catch (error) {
+        const suffix = lastValidationReason ? ` (${lastValidationReason})` : "";
+        return {
+          ok: false,
+          message: (error instanceof Error ? error.message : "I couldn't produce a grounded competitive intelligence report.") + suffix + " Reply **continue** to retry report synthesis \u2014 your enrichment tabs are still open."
+        };
+      }
+      reportData.generatedAt = reportData.generatedAt || (/* @__PURE__ */ new Date()).toISOString();
+      reportData.industry = reportData.industry || params.industry;
+      if (reportData.confidenceRefinementEligible === void 0) {
+        reportData.confidenceRefinementEligible = true;
+      }
+      let markdown = competitiveIntelToMarkdown(reportData);
+      if (budgetNote) {
+        markdown = `${markdown}
+
+---
+
+*${budgetNote}*`;
+      }
+      const reportId = `ci_${Date.now()}`;
+      assistantLogger.debug("competitiveIntel", "ci_build_done", {
+        ms: Date.now() - buildStartedAt,
+        readableTabs: readable.length,
+        synthesisTabs: synthesisDigests.length,
+        reportMode,
+        tabSource: resolved.source,
+        payloadBytes: markdown.length
+      });
+      return {
+        ok: true,
+        markdown,
+        reportId,
+        report: reportData,
+        reportMode,
+        budgetNote
+      };
+    } catch (error) {
+      assistantLogger.warn("competitiveIntel", "Build failed", error);
+      if (error instanceof QuotaExceededError || error.isQuotaError) {
+        return {
+          ok: false,
+          message: formatQuotaExceededMessage(
+            error instanceof Error ? error.message : "Quota exceeded"
+          )
+        };
+      }
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "I couldn't build the competitive intelligence report."
+      };
+    }
+  }
+
+  // src/services/competitiveIntelReportCache.ts
+  var CI_REPORT_CACHE_PREFIX = "oasis.ci.report.";
+  var MEMORY_CACHE_KEY = "__oasisCiReportMemoryCache";
+  var nodeMemoryCache = null;
+  function getMemoryCache() {
+    if (typeof window !== "undefined") {
+      const host = window;
+      if (!host[MEMORY_CACHE_KEY]) {
+        host[MEMORY_CACHE_KEY] = /* @__PURE__ */ new Map();
+      }
+      return host[MEMORY_CACHE_KEY];
+    }
+    if (!nodeMemoryCache) {
+      nodeMemoryCache = /* @__PURE__ */ new Map();
+    }
+    return nodeMemoryCache;
+  }
+  function cacheKey(reportId) {
+    return `${CI_REPORT_CACHE_PREFIX}${reportId}`;
+  }
+  function storeCompetitiveIntelReportCache(reportId, payload) {
+    const id = String(reportId || "").trim();
+    if (!id) {
+      return;
+    }
+    getMemoryCache().set(cacheKey(id), payload);
+    try {
+      sessionStorage.setItem(cacheKey(id), JSON.stringify(payload));
+    } catch {
+    }
+  }
+
+  // src/utils/competitiveIntelRequest.ts
+  var COMPETITIVE_INTEL_MARKER = "__COMPETITIVE_INTEL__";
+  function buildCompetitiveIntelToolMessage(payload) {
+    return `${COMPETITIVE_INTEL_MARKER}
+${JSON.stringify(payload)}`;
+  }
+  function hasCompetitiveIntelMarker(text2) {
+    return String(text2 || "").includes(COMPETITIVE_INTEL_MARKER);
+  }
+
+  // src/utils/competitiveIntelWorkflowRequest.ts
+  var CI_WORKFLOW_MARKER = "__CI_WORKFLOW__";
+  function buildCompetitiveIntelWorkflowMessage(payload) {
+    return `${CI_WORKFLOW_MARKER}
+${JSON.stringify(payload)}`;
+  }
+  function hasCompetitiveIntelWorkflowMarker(text2) {
+    return String(text2 || "").includes(CI_WORKFLOW_MARKER);
+  }
+
+  // src/utils/competitiveIntelResume.ts
+  var CI_WORKFLOW_CONTINUE_SENTINEL = "__CI_WORKFLOW_CONTINUE__";
+  var CI_WORKFLOW_CANCEL_SENTINEL = "__CI_WORKFLOW_CANCEL__";
+  var CI_POOL_CONFIRM_SENTINEL = "__CI_POOL_CONFIRM__";
+  var CI_TIERS_CONFIRM_SENTINEL = "__CI_TIERS_CONFIRM__";
+  var CI_REPORT_COMPACT_SENTINEL = "__CI_REPORT_COMPACT__";
+  var EXPAND_EXTERNAL_AI_RE = /^expand(?:\s+with)?\s+external\s+ai(?:\s+research)?$/i;
+  var REVIEW_DEEPEN_RE = /^add\s+review\s+enrichment$/i;
+  var REGENERATE_REPORT_RE = /^regenerate\s+report$/i;
+  function isCompetitiveIntelExpandExternalAiText(text2) {
+    return EXPAND_EXTERNAL_AI_RE.test(String(text2 || "").trim());
+  }
+  function isCompetitiveIntelReviewDeepenText(text2) {
+    return REVIEW_DEEPEN_RE.test(String(text2 || "").trim());
+  }
+  function isCompetitiveIntelRegenerateReportText(text2) {
+    return REGENERATE_REPORT_RE.test(String(text2 || "").trim());
+  }
+  var CONTINUE_RE = /^(?:continue|yes|go\s+ahead|proceed|next|i(?:'ve| have)\s+run\s+the\s+queries?)$/i;
+  var CANCEL_RE2 = /^(?:cancel(?:\s+competitive\s+intel)?|stop|nevermind|abort)$/i;
+  function isCompetitiveIntelContinueText(text2) {
+    return CONTINUE_RE.test(String(text2 || "").trim());
+  }
+  function isCompetitiveIntelCancelText(text2) {
+    return CANCEL_RE2.test(String(text2 || "").trim());
+  }
+  function parseCompetitiveIntelWorkflowSentinel(text2) {
+    const raw = String(text2 || "").trim();
+    if (raw === CI_WORKFLOW_CONTINUE_SENTINEL || raw === CI_POOL_CONFIRM_SENTINEL || raw === CI_TIERS_CONFIRM_SENTINEL || raw === CI_REPORT_COMPACT_SENTINEL) {
+      return raw;
+    }
+    if (raw === CI_WORKFLOW_CANCEL_SENTINEL) {
+      return raw;
+    }
+    return null;
+  }
+  var SENTINEL_DISPLAY_LABELS = {
+    [CI_WORKFLOW_CONTINUE_SENTINEL]: "Continue",
+    [CI_POOL_CONFIRM_SENTINEL]: "Continue",
+    [CI_TIERS_CONFIRM_SENTINEL]: "Accept tiers & open enrichment tabs",
+    [CI_REPORT_COMPACT_SENTINEL]: "Generate compact report",
+    [CI_WORKFLOW_CANCEL_SENTINEL]: "Cancel competitive intel"
+  };
+
+  // src/services/competitiveIntelOrchestrator.ts
+  init_researchBriefProgress();
+
+  // src/utils/competitiveIntelUrlOverrides.ts
+  var KIND_ALIASES = {
+    website: "homepage",
+    homepage: "homepage",
+    g2: "g2_product",
+    g2product: "g2_product",
+    trustradius: "trustradius_product",
+    capterra: "capterra_product",
+    wikipedia: "wikipedia_article",
+    gartner: "gartner_reviews",
+    crunchbase: "crunchbase_org"
+  };
+  function resolveKindAlias(raw) {
+    const key = String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return KIND_ALIASES[key] || null;
+  }
+  function findCompany(companies, needle) {
+    const lower = needle.trim().toLowerCase();
+    return companies.find(
+      (company) => company.name.toLowerCase() === lower || company.name.toLowerCase().includes(lower) || lower.includes(company.name.toLowerCase())
+    );
+  }
+  function parseUrlOverrideFromText(text2) {
+    const input = String(text2 || "").trim();
+    const setMatch = input.match(
+      /\bset\s+(.+?)\s+(website|homepage|g2|g2product|trustradius|capterra|wikipedia|gartner|crunchbase)\s+to\s+(https?:\/\/\S+)/i
+    );
+    if (setMatch?.[1] && setMatch?.[2] && setMatch?.[3]) {
+      const kind = resolveKindAlias(setMatch[2]);
+      const url = normalizeEnrichmentUrl(setMatch[3]);
+      if (!kind || !url) return null;
+      return { companyName: setMatch[1].trim(), kind, url };
+    }
+    const addMatch = input.match(
+      /\badd\s+(website|homepage|g2|g2product|trustradius|capterra|wikipedia|gartner|crunchbase)\s+for\s+(.+?):\s*(https?:\/\/\S+)/i
+    );
+    if (addMatch?.[1] && addMatch?.[2] && addMatch?.[3]) {
+      const kind = resolveKindAlias(addMatch[1]);
+      const url = normalizeEnrichmentUrl(addMatch[3]);
+      if (!kind || !url) return null;
+      return { companyName: addMatch[2].trim(), kind, url };
+    }
+    return null;
+  }
+  function applyUrlOverrideToCompanies(companies, command) {
+    const company = findCompany(companies, command.companyName);
+    if (!company) {
+      return companies;
+    }
+    const classified = classifyEnrichmentUrl(command.url);
+    const kind = classified?.kind === command.kind ? command.kind : command.kind;
+    if (kind !== "homepage" && kind !== "g2_product" && kind !== "trustradius_product" && kind !== "capterra_product" && kind !== "wikipedia_article" && kind !== "wikipedia_search" && kind !== "gartner_reviews" && kind !== "crunchbase_org") {
+      return companies;
+    }
+    return companies.map((item) => {
+      if (item.name !== company.name) {
+        return item;
+      }
+      const enrichmentUrls = mergeEnrichmentUrlMaps(item.enrichmentUrls, {
+        [kind]: command.url
+      });
+      return {
+        ...item,
+        enrichmentUrls,
+        websiteUrl: kind === "homepage" ? command.url : item.websiteUrl || enrichmentUrls?.homepage
+      };
+    });
+  }
+  function looksLikeUrlOverrideText(text2) {
+    return Boolean(parseUrlOverrideFromText(text2));
+  }
+
+  // src/services/competitiveIntelOrchestrator.ts
+  init_contracts();
+  init_subscription();
+  init_ciTokenBudget();
+  init_ciQuotaResume();
+  function buildReportTokenEstimateSection(workflow) {
+    const display = subscriptionService.getDailyTokenUsageForDisplay();
+    if (display.remaining <= 0) {
+      return "\n\n**Token note:** Your daily allowance is used up. The report cannot be generated until it resets.";
+    }
+    return `
+
+${buildCiReportTokenEstimateBlock({
+      enrichmentPlan: workflow.enrichmentPlan,
+      remaining: display.remaining
+    })}`;
+  }
+  function stringArg(args, key) {
+    const value = args[key];
+    return typeof value === "string" ? value : void 0;
+  }
+  function boolArg(args, key) {
+    return args[key] === true;
+  }
+  function buildIntroMarkdown(industry, focus) {
+    const focusLine = focus?.trim() ? `
+**Focus:** ${focus.trim()}` : "";
+    return [
+      `# Competitive intelligence workflow`,
+      "",
+      `**Industry:** ${industry}${focusLine}`,
+      "",
+      "I'll guide you through:",
+      "",
+      "1. Build a competitor pool with Oasis AI",
+      "2. Assign competitors to tiers (High / Medium / Low / Adjacent)",
+      "3. Open enrichment tabs (company homepage + Wikipedia)",
+      "4. Group tabs into tier tab groups",
+      "5. Generate a grounded competitive intelligence report",
+      "",
+      "After the report, you can optionally expand with external AI tools (ChatGPT, Perplexity, etc.) or add review-site enrichment (G2/Capterra).",
+      "",
+      "Reply **continue** when you're ready to start."
+    ].join("\n");
+  }
+  function buildPoolProgressMarkdown() {
+    return [
+      "## Building competitor pool",
+      "",
+      "Oasis is generating a competitor list for your industry. Reply **continue** when ready to review tiers."
+    ].join("\n");
+  }
+  function buildExpandIntroMarkdown(discoveryQuery, toolNames) {
+    return [
+      "## Expand with external AI research",
+      "",
+      "Optional Phase 2: deepen the report using external AI tools.",
+      "",
+      "I opened these AI tools in new tabs:",
+      "",
+      ...toolNames.map((name) => `- ${name}`),
+      "",
+      "**Copy this query and run it in each tool:**",
+      "",
+      "```",
+      discoveryQuery,
+      "```",
+      "",
+      "When every tool has answered, reply **continue** (or click **I've run the queries** in the workflow panel)."
+    ].join("\n");
+  }
+  function emitCiWorkflowUpdate(status) {
+    const workflow = getCompetitiveIntelWorkflow();
+    if (!workflow) {
+      return;
+    }
+    try {
+      window.dispatchEvent(
+        new CustomEvent(OASIS_EVENT_CI_WORKFLOW_UPDATE, {
+          detail: {
+            step: workflow.step,
+            industry: workflow.industry,
+            discoveryQuery: workflow.discoveryQuery,
+            openedUrls: workflow.discoveryToolUrls,
+            status
+          }
+        })
+      );
+    } catch {
+    }
+  }
+  function workflowMessage(markdown, status) {
+    const workflow = getCompetitiveIntelWorkflow();
+    if (!workflow) {
+      return markdown;
+    }
+    emitCiWorkflowUpdate(status);
+    return buildCompetitiveIntelWorkflowMessage({
+      markdown,
+      workflow,
+      discoveryQuery: workflow.discoveryQuery,
+      discoveryTools: DISCOVERY_TOOLS.map((tool) => tool.name),
+      status
+    });
+  }
+  function applyTierEditFromText(companies, text2) {
+    const match = String(text2 || "").match(
+      /\bmove\s+(.+?)\s+to\s+(high|medium|low|adjacent)\b/i
+    );
+    if (!match?.[1] || !match?.[2]) {
+      return companies;
+    }
+    const nameNeedle = match[1].trim().toLowerCase();
+    const tier = match[2].toLowerCase();
+    return companies.map(
+      (company) => company.name.toLowerCase().includes(nameNeedle) || nameNeedle.includes(company.name.toLowerCase()) ? { ...company, tier } : company
+    );
+  }
+  function applyWorkflowEditsFromText(companies, text2) {
+    let updated = applyTierEditFromText(companies, text2);
+    const override = parseUrlOverrideFromText(text2);
+    if (override) {
+      updated = applyUrlOverrideToCompanies(updated, override);
+    }
+    return updated;
+  }
+  async function synthesizeCompetitiveIntelReport(workflow, groupPreview, options) {
+    const quotaMode = options?.quotaMode || workflow.quotaMode || "default";
+    const signal = beginResearchBriefRun();
+    try {
+      emitResearchBriefProgress({
+        phase: "resolving",
+        context: "competitive_intel",
+        label: "Starting competitive intelligence report\u2026"
+      });
+      const built = await buildCompetitiveIntelReport({
+        industry: workflow.industry,
+        focus: workflow.focus,
+        companies: workflow.companies,
+        enrichmentPlan: workflow.enrichmentPlan,
+        tierLabels: DEFAULT_COMPETITIVE_TIERS,
+        quotaMode,
+        signal
+      });
+      if (!built.ok) {
+        if (built.code === "over_quota" && built.estimate != null && built.remaining != null && built.suggestedTabCount != null) {
+          const stashArgs = {
+            industry: workflow.industry,
+            workflow_confirmed: true,
+            suggested_max_tabs: built.suggestedTabCount
+          };
+          if (workflow.focus) {
+            stashArgs.focus = workflow.focus;
+          }
+          const { options: clarifyOptions, message } = buildCiOverQuotaClarification({
+            estimate: built.estimate,
+            remaining: built.remaining,
+            suggestedTabCount: built.suggestedTabCount
+          });
+          setCiQuotaResume({
+            args: stashArgs,
+            command: "run_competitive_intel"
+          });
+          setPendingClarification({
+            originalMessage: `competitive intelligence report for ${workflow.industry}`,
+            options: clarifyOptions
+          });
+          return {
+            ok: false,
+            message: workflowMessage(
+              [groupPreview || "## Report synthesis", "", message].join("\n"),
+              "awaiting_continue"
+            )
+          };
+        }
+        return {
+          ok: false,
+          message: workflowMessage(
+            [groupPreview || "## Report synthesis", "", built.message].join("\n"),
+            "awaiting_continue"
+          )
+        };
+      }
+      updateCompetitiveIntelWorkflow({
+        step: "done",
+        reportId: built.reportId,
+        quotaMode
+      });
+      const reportBody = buildCompetitiveIntelToolMessage({
+        markdown: built.markdown,
+        report: built.report,
+        reportId: built.reportId,
+        reportMode: built.reportMode,
+        budgetNote: built.budgetNote
+      });
+      storeCompetitiveIntelReportCache(built.reportId, {
+        markdown: built.markdown,
+        report: built.report,
+        reportId: built.reportId,
+        reportMode: built.reportMode,
+        budgetNote: built.budgetNote
+      });
+      const expandCta = [
+        "",
+        "---",
+        "",
+        "**Optional next steps:**",
+        "- Say **expand with external AI** to open ChatGPT, Perplexity, and other tools for deeper research",
+        "- Say **add review enrichment** to open G2/Capterra tabs (slower; G2 may block bots)",
+        "- Say **regenerate report** after expanding or adding review tabs"
+      ].join("\n");
+      return {
+        ok: true,
+        message: groupPreview ? `${groupPreview}
+
+${reportBody}${expandCta}` : `${reportBody}${expandCta}`
+      };
+    } finally {
+      finishResearchBriefRunFinalizing("competitive_intel");
+    }
+  }
+  async function executeCompetitiveIntelWorkflow(args) {
+    const workflowAction = stringArg(args, "workflow_action");
+    if (workflowAction === CI_WORKFLOW_CANCEL_SENTINEL) {
+      clearCompetitiveIntelWorkflow();
+      return { message: "Cancelled the competitive intelligence workflow." };
+    }
+    let workflow = getCompetitiveIntelWorkflow();
+    if (!workflow) {
+      workflow = restoreCompetitiveIntelWorkflowFromStorage();
+    }
+    const industry = stringArg(args, "industry");
+    const focus = stringArg(args, "focus");
+    const workflowConfirmed = boolArg(args, "workflow_confirmed");
+    if (!workflow && industry) {
+      workflow = initCompetitiveIntelWorkflow({
+        industry,
+        focus,
+        market: stringArg(args, "market"),
+        maxCompetitors: typeof args.max_competitors === "number" ? args.max_competitors : void 0
+      });
+    }
+    if (!workflow) {
+      return {
+        message: "Tell me the industry, for example: `I want a competitive intelligence report on enterprise CRM`."
+      };
+    }
+    if (workflow.step === "intro") {
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(
+            buildIntroMarkdown(workflow.industry, workflow.focus),
+            "awaiting_continue"
+          ),
+          requiresConfirmation: false
+        };
+      }
+      advanceCompetitiveIntelStep("pool");
+      workflow = getCompetitiveIntelWorkflow();
+      if (!workflow) {
+        return {
+          message: "Workflow state was lost. Start again with your industry."
+        };
+      }
+    }
+    if (workflow.step === "pool") {
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(buildPoolProgressMarkdown(), "in_progress")
+        };
+      }
+      const signal = beginResearchBriefRun();
+      try {
+        const pool = await generateCompetitorPoolViaAssist({
+          industry: workflow.industry,
+          focus: workflow.focus,
+          maxCompetitors: workflow.maxCompetitors,
+          signal
+        });
+        if (!pool.ok) {
+          advanceCompetitiveIntelStep("intro");
+          return { message: pool.message };
+        }
+        updateCompetitiveIntelWorkflow({
+          step: "tiers",
+          companies: pool.companies
+        });
+        const preview = buildTierPreviewMarkdown(pool.companies);
+        return {
+          message: workflowMessage(preview, "awaiting_continue"),
+          requiresConfirmation: true
+        };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+    if (workflow.step === "expand") {
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(
+            buildExpandIntroMarkdown(
+              workflow.discoveryQuery,
+              DISCOVERY_TOOLS.map((t2) => t2.name)
+            ),
+            "awaiting_user"
+          )
+        };
+      }
+      const signal = beginResearchBriefRun();
+      try {
+        const merged = await mergeDiscoveryIntoPool({
+          industry: workflow.industry,
+          focus: workflow.focus,
+          discoveryTabIds: workflow.discoveryTabIds,
+          existingCompanies: workflow.companies,
+          maxCompetitors: workflow.maxCompetitors,
+          signal
+        });
+        if (!merged.ok) {
+          return { message: merged.message };
+        }
+        updateCompetitiveIntelWorkflow({
+          companies: merged.companies,
+          step: "done"
+        });
+        return {
+          message: workflowMessage(
+            [
+              "## External AI research merged",
+              "",
+              `Updated competitor pool with **${merged.companies.length}** companies.`,
+              "Say **regenerate report** to rebuild the report with expanded sources, or **add review enrichment** for G2/Capterra tabs."
+            ].join("\n"),
+            "complete"
+          )
+        };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+    if (workflow.step === "discovery") {
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(
+            buildExpandIntroMarkdown(
+              workflow.discoveryQuery,
+              DISCOVERY_TOOLS.map((t2) => t2.name)
+            ),
+            "awaiting_user"
+          )
+        };
+      }
+      advanceCompetitiveIntelStep("pool");
+      const signal = beginResearchBriefRun();
+      try {
+        const pool = await extractCompetitorPool({
+          industry: workflow.industry,
+          focus: workflow.focus,
+          discoveryTabIds: workflow.discoveryTabIds,
+          maxCompetitors: workflow.maxCompetitors,
+          signal
+        });
+        if (!pool.ok) {
+          advanceCompetitiveIntelStep("discovery");
+          return { message: pool.message };
+        }
+        updateCompetitiveIntelWorkflow({
+          step: "tiers",
+          companies: pool.companies
+        });
+        const preview = buildTierPreviewMarkdown(pool.companies);
+        return {
+          message: workflowMessage(preview, "awaiting_continue"),
+          requiresConfirmation: true
+        };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+    if (workflow.step === "tiers") {
+      let companies = workflow.companies;
+      const editText = stringArg(args, "tier_edit");
+      if (editText) {
+        companies = applyWorkflowEditsFromText(companies, editText);
+        updateCompetitiveIntelWorkflow({ companies });
+      }
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(
+            buildTierPreviewMarkdown(companies),
+            "awaiting_continue"
+          ),
+          requiresConfirmation: true
+        };
+      }
+      const enrichmentPlan = buildEnrichmentPlan(
+        companies,
+        workflow.enrichmentProfile
+      );
+      const openedAll = await openAllEnrichmentBatches(
+        enrichmentPlan,
+        workflow.enrichmentProfile
+      );
+      updateCompetitiveIntelWorkflow({
+        step: "enrich",
+        companies,
+        enrichmentPlan: openedAll.plan,
+        enrichmentBatchIndex: openedAll.batchCount
+      });
+      const progress = buildEnrichmentProgressMarkdown(
+        companies,
+        openedAll.openedCount,
+        openedAll.batchCount,
+        workflow.enrichmentProfile,
+        openedAll.unhealthyCount
+      );
+      if (openedAll.openedCount === 0) {
+        return {
+          message: workflowMessage(progress, "awaiting_continue")
+        };
+      }
+      return {
+        message: workflowMessage(progress, "awaiting_continue")
+      };
+    }
+    if (workflow.step === "enrich") {
+      if (!workflowConfirmed) {
+        const progress = buildEnrichmentProgressMarkdown(
+          workflow.companies,
+          workflow.enrichmentPlan.reduce(
+            (count3, entry) => count3 + (entry.tabIds?.length || 0),
+            0
+          ),
+          workflow.enrichmentBatchIndex,
+          workflow.enrichmentProfile
+        );
+        return {
+          message: workflowMessage(progress, "awaiting_continue")
+        };
+      }
+      const batch = getEnrichmentBatch(
+        workflow.enrichmentPlan,
+        workflow.enrichmentBatchIndex
+      );
+      if (!batch.done && batch.urls.length > 0) {
+        const opened = openEnrichmentBatch(batch.urls);
+        const updatedPlan = assignEnrichmentTabsToPlan(
+          workflow.enrichmentPlan,
+          opened
+        );
+        updateCompetitiveIntelWorkflow({
+          enrichmentPlan: updatedPlan,
+          enrichmentBatchIndex: workflow.enrichmentBatchIndex + 1
+        });
+        const progress = buildEnrichmentProgressMarkdown(
+          workflow.companies,
+          updatedPlan.reduce(
+            (count3, entry) => count3 + (entry.tabIds?.length || 0),
+            0
+          ),
+          workflow.enrichmentBatchIndex + 1,
+          workflow.enrichmentProfile
+        );
+        return {
+          message: workflowMessage(progress, "awaiting_continue")
+        };
+      }
+      advanceCompetitiveIntelStep("groups");
+    }
+    workflow = getCompetitiveIntelWorkflow();
+    if (!workflow) {
+      return {
+        message: "Workflow state was lost. Start again with your industry."
+      };
+    }
+    if (workflow.step === "groups") {
+      const grouped = createCompetitiveIntelTabGroups(workflow.enrichmentPlan);
+      if (!grouped.ok) {
+        return { message: grouped.message };
+      }
+      const preview = buildGroupPreviewMarkdown(grouped.groups);
+      updateCompetitiveIntelWorkflow({ step: "report" });
+      return {
+        message: workflowMessage(preview, "awaiting_continue")
+      };
+    }
+    if (workflow.step === "report") {
+      if (!workflowConfirmed) {
+        return {
+          message: workflowMessage(
+            [
+              "## Ready to generate your report",
+              "",
+              "Competitor tiers, enrichment tabs, and tab groups are set.",
+              "",
+              "This report reads your **CI \u2014 High / Medium / Low / Adjacent** tab groups (same pipeline as research brief).",
+              "",
+              "Click **Generate report** below to build your grounded competitive intelligence report.",
+              buildReportTokenEstimateSection(workflow)
+            ].join("\n"),
+            "awaiting_continue"
+          )
+        };
+      }
+      const quotaFromArgs = normalizeCiQuotaMode(stringArg(args, "quota_mode"));
+      const workflowAction2 = stringArg(args, "workflow_action");
+      const quotaMode = quotaFromArgs !== "default" ? quotaFromArgs : workflowAction2 === CI_REPORT_COMPACT_SENTINEL ? "compact" : workflow.quotaMode || "default";
+      updateCompetitiveIntelWorkflow({ quotaMode });
+      const built = await synthesizeCompetitiveIntelReport(workflow, void 0, {
+        quotaMode
+      });
+      if (!built.ok) {
+        return { message: built.message };
+      }
+      return { message: built.message };
+    }
+    if (workflow.step === "done") {
+      const expandAction = stringArg(args, "workflow_action");
+      if (expandAction === "expand_external_ai" && workflowConfirmed) {
+        const { openedUrls, toolNames } = openDiscoveryToolTabs();
+        const discoveryTabIds = collectDiscoveryTabIds([], openedUrls);
+        updateCompetitiveIntelWorkflow({
+          step: "expand",
+          discoveryToolUrls: openedUrls,
+          discoveryTabIds
+        });
+        return {
+          message: workflowMessage(
+            buildExpandIntroMarkdown(workflow.discoveryQuery, toolNames),
+            "awaiting_user"
+          )
+        };
+      }
+      if (expandAction === "review_deepen" && workflowConfirmed) {
+        updateCompetitiveIntelWorkflow({ enrichmentProfile: "review_deepen" });
+        const enrichmentPlan = buildEnrichmentPlan(
+          workflow.companies,
+          "review_deepen"
+        );
+        const openedAll = await openAllEnrichmentBatches(
+          enrichmentPlan,
+          "review_deepen"
+        );
+        updateCompetitiveIntelWorkflow({
+          step: "enrich",
+          enrichmentPlan: openedAll.plan,
+          enrichmentBatchIndex: openedAll.batchCount
+        });
+        const progress = buildEnrichmentProgressMarkdown(
+          workflow.companies,
+          openedAll.openedCount,
+          openedAll.batchCount,
+          "review_deepen"
+        );
+        return {
+          message: workflowMessage(
+            [
+              "## Review site enrichment",
+              "",
+              "Opening G2/Capterra tabs with slower batching. G2 may show verification prompts \u2014 those tabs will be skipped during synthesis.",
+              "",
+              progress
+            ].join("\n"),
+            "in_progress"
+          )
+        };
+      }
+      if (expandAction === "regenerate_report" && workflowConfirmed) {
+        updateCompetitiveIntelWorkflow({ step: "report" });
+        const refreshed = getCompetitiveIntelWorkflow();
+        if (!refreshed) {
+          return {
+            message: "Workflow state was lost. Start again with your industry."
+          };
+        }
+        const built = await synthesizeCompetitiveIntelReport(
+          refreshed,
+          void 0,
+          {
+            quotaMode: refreshed.quotaMode || "default"
+          }
+        );
+        if (!built.ok) {
+          return { message: built.message };
+        }
+        return { message: built.message };
+      }
+      return {
+        message: "The competitive intelligence workflow is complete. Say **expand with external AI** to deepen research, **add review enrichment** for G2/Capterra, or start a new report anytime."
+      };
+    }
+    return {
+      message: workflowMessage(
+        "Something went wrong in the workflow. Reply **continue** to retry the current step, or start a new report.",
+        "awaiting_continue"
+      )
+    };
+  }
+
+  // src/services/competitiveIntelBrief.ts
+  init_firefoxFacade();
+  function previewCiBriefScope(params) {
+    const scope = params.scope === "ci_tab_group" ? "ci_tab_group" : "ci_tab_groups";
+    const resolved = resolveCiReportTabs({
+      tierLabels: DEFAULT_COMPETITIVE_TIERS,
+      enrichmentPlan: params.enrichmentPlan || [],
+      groupName: scope === "ci_tab_group" ? params.groupName : void 0
+    });
+    if (resolved.tabs.length === 0) {
+      return {
+        ok: false,
+        message: "No tabs found in CI tier tab groups. Create **CI \u2014 High / Medium / Low / Adjacent** groups or run the competitive intelligence workflow first."
+      };
+    }
+    const workflow = getCompetitiveIntelWorkflow();
+    const companies = workflow?.companies?.length ? workflow.companies : inferCompaniesFromCiGroups([], resolved.tabs);
+    return {
+      ok: true,
+      scopeLabel: resolved.scopeLabel,
+      tabCount: resolved.tabs.length,
+      groupLabels: resolved.groupLabels,
+      companies
+    };
+  }
+  function buildCiBriefScopePreviewDescription(preview) {
+    const companyLines = preview.companies.slice(0, 12).map((company) => `- ${company.name}`).join("\n");
+    const groups = preview.groupLabels.length > 0 ? preview.groupLabels.join(", ") : preview.scopeLabel;
+    return [
+      "## Competitive intelligence brief scope",
+      "",
+      `**Tab groups:** ${groups}`,
+      `**Tabs:** ${preview.tabCount}`,
+      `**Competitors tracked:** ${preview.companies.length}`,
+      companyLines ? `
+${companyLines}` : "",
+      "",
+      "Proceed to build a grounded competitive intelligence battle card from these tab groups?"
+    ].filter(Boolean).join("\n");
+  }
+
+  // src/commands.ts
+  init_ciTokenBudget();
+  init_ciTokenBudget();
+  init_ciQuotaResume();
 
   // src/services/outreachEmail.ts
   init_awsSignedFetch();
@@ -60874,12 +64510,12 @@ ${JSON.stringify(payload)}`;
 
   // src/utils/organizeTabsResume.ts
   var ORGANIZE_TABS_RESUME_SENTINEL = "__ORGANIZE_TABS_RESUME__";
-  var resumeContext2 = null;
+  var resumeContext3 = null;
   function setOrganizeTabsResume(context) {
-    resumeContext2 = context;
+    resumeContext3 = context;
   }
   function clearOrganizeTabsResume() {
-    resumeContext2 = null;
+    resumeContext3 = null;
   }
   function buildOrganizeTabsResumePrompt(optionId) {
     return `${ORGANIZE_TABS_RESUME_SENTINEL}|${optionId}`;
@@ -60893,7 +64529,7 @@ ${JSON.stringify(payload)}`;
     return parts[1]?.trim() || null;
   }
   function consumeOrganizeTabsResume(optionId) {
-    const ctx = resumeContext2;
+    const ctx = resumeContext3;
     if (!ctx) {
       return null;
     }
@@ -60936,7 +64572,7 @@ ${JSON.stringify(payload)}`;
     const { topWin, gBrowser, Services, PlacesUtils } = getChromeContext();
     return { topWin, gBrowser, Services, PlacesUtils };
   }
-  function stringArg(args, key) {
+  function stringArg2(args, key) {
     const value = args[key];
     return typeof value === "string" ? value : void 0;
   }
@@ -60964,7 +64600,7 @@ ${JSON.stringify(payload)}`;
     return value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
   }
   function ambiguityTargetArg(args) {
-    const value = stringArg(args, "target");
+    const value = stringArg2(args, "target");
     if (!value) {
       return void 0;
     }
@@ -61038,8 +64674,8 @@ ${JSON.stringify(payload)}`;
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const scope = normalizeName(stringArg(args, "scope") || "");
-      const name = normalizeListTargetName(stringArg(args, "name") || "");
+      const scope = normalizeName(stringArg2(args, "scope") || "");
+      const name = normalizeListTargetName(stringArg2(args, "name") || "");
       const listWindowTabs = () => {
         const tabs = getTabs(gBrowser).slice(0, 50).map((tab, i2) => ({
           index: i2 + 1,
@@ -61197,7 +64833,7 @@ ${JSON.stringify(payload)}`;
       const { topWin } = getChrome2();
       if (!topWin?.openTrustedLinkIn)
         return { message: "Browser UI not available." };
-      const url = stringArg(args, "url");
+      const url = stringArg2(args, "url");
       if (!url) return { message: "Missing 'url' argument." };
       topWin.openTrustedLinkIn(url, "tab");
       return { message: `I've opened that URL for you: ${url}` };
@@ -61208,7 +64844,7 @@ ${JSON.stringify(payload)}`;
     description = "Open a URL in a new browser tab. Arguments: { url: string }.";
     async execute(args) {
       const { topWin, Services } = getChrome2();
-      const rawUrl = stringArg(args, "url");
+      const rawUrl = stringArg2(args, "url");
       if (!rawUrl) {
         return { message: "Missing 'url' argument." };
       }
@@ -61234,7 +64870,7 @@ ${JSON.stringify(payload)}`;
     description = "Search the web in a new tab. Arguments: { query: string }.";
     async execute(args) {
       const { topWin } = getChrome2();
-      const query = stringArg(args, "query");
+      const query = stringArg2(args, "query");
       if (!query) {
         return { message: "Missing 'query' argument." };
       }
@@ -61282,7 +64918,7 @@ ${JSON.stringify(payload)}`;
     description = "Search YouTube and play the top video result in a new tab. Arguments: { query: string }.";
     async execute(args) {
       const { topWin } = getChrome2();
-      const query = stringArg(args, "query");
+      const query = stringArg2(args, "query");
       if (!query) {
         return { message: "Missing 'query' argument." };
       }
@@ -61308,8 +64944,8 @@ ${JSON.stringify(payload)}`;
     commandName = "open_tab";
     description = "Legacy alias that opens a URL or web query in a new tab. Prefer open_url({url}) or web_search({query}).";
     async execute(args) {
-      const url = stringArg(args, "url");
-      const query = stringArg(args, "query");
+      const url = stringArg2(args, "url");
+      const query = stringArg2(args, "query");
       if (query?.trim()) {
         return await new WebSearchCommand().execute({ query });
       }
@@ -61329,7 +64965,7 @@ ${JSON.stringify(payload)}`;
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
       const gb = asTabOps(gBrowser);
-      const query = normalizeQuery(stringArg(args, "query"));
+      const query = normalizeQuery(stringArg2(args, "query"));
       if (query) {
         const tabs = findTabsByIntentQuery(gBrowser, query);
         if (tabs.length === 0) {
@@ -61389,7 +65025,7 @@ ${JSON.stringify(payload)}`;
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const query = normalizeQuery(stringArg(args, "query"));
+      const query = normalizeQuery(stringArg2(args, "query"));
       if (!query) {
         return { message: "Which tab should I switch to?" };
       }
@@ -61835,8 +65471,8 @@ ${text2}`
     commandName = "create_bookmark_folder";
     description = "Create a managed bookmark folder. Accepts arguments: { name: string, include?: 'none'|'current'|'all' }.";
     async execute(args) {
-      const name = stringArg(args, "name") || "";
-      const includeRaw = stringArg(args, "include");
+      const name = stringArg2(args, "name") || "";
+      const includeRaw = stringArg2(args, "include");
       const include = includeRaw === "current" || includeRaw === "all" || includeRaw === "none" ? includeRaw : "none";
       const res = await bookmarkFolders.create(name, { include });
       applyRoutingStateMutation({
@@ -61853,7 +65489,7 @@ ${text2}`
     commandName = "delete_bookmark_folder";
     description = "Delete a managed bookmark folder by name. Accepts arguments: { name: string, closeTabs?: boolean, confirmed?: boolean }.";
     async execute(args) {
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name) return { message: "Which folder should I delete?" };
       if (booleanArg(args, "confirmed") !== true) {
         const closeTabs2 = booleanArg(args, "closeTabs") === true;
@@ -61900,8 +65536,8 @@ ${text2}`
     commandName = "rename_bookmark_folder";
     description = "Rename a managed bookmark folder. Accepts arguments: { from: string, to: string }.";
     async execute(args) {
-      const from = stringArg(args, "from");
-      const to = stringArg(args, "to");
+      const from = stringArg2(args, "from");
+      const to = stringArg2(args, "to");
       if (!from || !to)
         return {
           message: "Please tell me the current name and the new name for the folder."
@@ -61924,11 +65560,11 @@ ${text2}`
     commandName = "add_tab_to_bookmark_folder";
     description = "Add tabs to a managed bookmark folder. Accepts arguments: { name: string, query?: string, all?: boolean } (query matches title/URL). all=true adds all tabs. If no query/all, adds current tab.";
     async execute(args) {
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name) return { message: "Which folder should I add the tabs to?" };
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI not available." };
-      const query = normalizeQuery(stringArg(args, "query"));
+      const query = normalizeQuery(stringArg2(args, "query"));
       const all = booleanArg(args, "all") === true;
       let tabsToAdd = [];
       if (all) {
@@ -61937,7 +65573,7 @@ ${text2}`
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
           return {
-            message: `I couldn't find any tabs matching "${stringArg(args, "query") || ""}".`
+            message: `I couldn't find any tabs matching "${stringArg2(args, "query") || ""}".`
           };
         }
       } else {
@@ -61966,9 +65602,9 @@ ${text2}`
     commandName = "remove_tab_from_bookmark_folder";
     description = "Remove a tab from a managed bookmark folder. Accepts arguments: { name: string, url?: string } (defaults to current tab URL).";
     async execute(args) {
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name) return { message: "Which folder should I look in?" };
-      let url = stringArg(args, "url");
+      let url = stringArg2(args, "url");
       if (!url) {
         const { gBrowser } = getChrome2();
         if (gBrowser) {
@@ -61986,9 +65622,9 @@ ${text2}`
     commandName = "open_bookmark_folder";
     description = "Open all bookmarks from a managed folder. Accepts arguments: { name: string, where?: 'tabs'|'window'|'tabgroup' }. 'tabgroup' creates a new visual group.";
     async execute(args) {
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name) return { message: "Which folder would you like me to open?" };
-      const whereRaw = stringArg(args, "where");
+      const whereRaw = stringArg2(args, "where");
       const where = whereRaw === "window" || whereRaw === "tabgroup" ? whereRaw : "tabs";
       const r2 = await bookmarkFolders.openFolder(name, where);
       return {
@@ -62027,7 +65663,7 @@ ${text2}`
       } else {
         tab1 = gBrowser.selectedTab || null;
         const withIndex = numberArg3(args, "withIndex");
-        const withQuery = normalizeQuery(stringArg(args, "withQuery"));
+        const withQuery = normalizeQuery(stringArg2(args, "withQuery"));
         if (withIndex != null) {
           const i2 = Math.max(1, Math.floor(withIndex));
           tab2 = tabByIndex(gBrowser, i2);
@@ -62036,7 +65672,7 @@ ${text2}`
           tab2 = findTabsByQuery(gBrowser, withQuery)[0] || null;
           if (!tab2) {
             return {
-              message: `I couldn't find a tab matching "${stringArg(args, "withQuery") || ""}".`
+              message: `I couldn't find a tab matching "${stringArg2(args, "withQuery") || ""}".`
             };
           }
         } else {
@@ -62163,7 +65799,7 @@ ${text2}`
       if (idx != null && !tab) return { message: `I couldn't find tab ${idx}.` };
       const browser = tab?.linkedBrowser;
       if (!browser) return { message: "I couldn't find an active tab." };
-      const userQuery = (stringArg(args, "query") || "").trim();
+      const userQuery = (stringArg2(args, "query") || "").trim();
       try {
         const extracted = await extractPageContentFromTab(tab);
         if (extracted.status === "skipped") {
@@ -62266,18 +65902,18 @@ ${text2}`
     return OUTREACH_EMAIL_PURPOSES.has(purpose) ? purpose : "custom";
   }
   function buildOutreachEmailOptionsFromArgs(args, gBrowser) {
-    const quotaRaw = stringArg(args, "quota_mode");
+    const quotaRaw = stringArg2(args, "quota_mode");
     const quotaMode = quotaRaw === "truncate" || quotaRaw === "fewer_tabs" ? quotaRaw : "default";
-    const toneRaw = stringArg(args, "tone");
+    const toneRaw = stringArg2(args, "tone");
     const tone = toneRaw === "warm" || toneRaw === "professional" || toneRaw === "concise" || toneRaw === "friendly" ? toneRaw : void 0;
     return {
       gBrowser,
-      scope: normalizeResearchScope(stringArg(args, "scope")),
-      name: stringArg(args, "name"),
-      purpose: normalizeOutreachPurpose(stringArg(args, "purpose")),
-      purposeNotes: stringArg(args, "purpose_notes"),
-      recipientName: stringArg(args, "recipient_name"),
-      recipientRole: stringArg(args, "recipient_role"),
+      scope: normalizeResearchScope(stringArg2(args, "scope")),
+      name: stringArg2(args, "name"),
+      purpose: normalizeOutreachPurpose(stringArg2(args, "purpose")),
+      purposeNotes: stringArg2(args, "purpose_notes"),
+      recipientName: stringArg2(args, "recipient_name"),
+      recipientRole: stringArg2(args, "recipient_role"),
       tone,
       tabQueries: stringArrayArg(args, "tab_queries"),
       tabIndices: numberArrayArg(args, "tab_indices"),
@@ -62290,17 +65926,17 @@ ${text2}`
     };
   }
   function buildResearchBriefOptionsFromArgs(args, gBrowser) {
-    const quotaRaw = stringArg(args, "quota_mode");
+    const quotaRaw = stringArg2(args, "quota_mode");
     const quotaMode = quotaRaw === "truncate" || quotaRaw === "fewer_tabs" ? quotaRaw : "default";
     return {
       gBrowser,
-      scope: normalizeResearchScope(stringArg(args, "scope")),
-      name: stringArg(args, "name"),
-      topic: stringArg(args, "topic")?.trim(),
+      scope: normalizeResearchScope(stringArg2(args, "scope")),
+      name: stringArg2(args, "name"),
+      topic: stringArg2(args, "topic")?.trim(),
       inferTopicFromContent: booleanArg(args, "infer_topic_from_content") === true,
       tabQueries: stringArrayArg(args, "tab_queries"),
       tabIndices: numberArrayArg(args, "tab_indices"),
-      outlineHint: stringArg(args, "outline_hint"),
+      outlineHint: stringArg2(args, "outline_hint"),
       maxTabs: numberArg3(args, "max_tabs"),
       excludeIndices: numberArrayArg(args, "exclude_indices"),
       excludeQueries: stringArrayArg(args, "exclude_queries"),
@@ -62488,6 +66124,106 @@ ${text2}`
       }
     }
   };
+  var RunCompetitiveIntelCommand = class {
+    commandName = "run_competitive_intel";
+    description = "Run a guided competitive intelligence workflow for an industry: discovery in AI tools, competitor pool, tiering, enrichment tabs, tab groups, and a grounded report with comparisons and confidence. Arguments: { industry: string, market?: string, focus?: string, max_competitors?: number, workflow_step?: string, workflow_confirmed?: boolean, workflow_action?: string, tier_edit?: string, quota_mode?: 'default'|'compact'|'fewer_tabs'|'truncate' }.";
+    async execute(args) {
+      return executeCompetitiveIntelWorkflow(args);
+    }
+  };
+  function ciBriefClarificationFromBuildFailure(result, args, resumeLabel) {
+    if (result.code === "over_quota" && result.estimate != null && result.remaining != null && result.suggestedTabCount != null) {
+      const stashArgs = {
+        ...args,
+        scope_confirmed: true,
+        suggested_max_tabs: result.suggestedTabCount
+      };
+      const { options, message } = buildCiOverQuotaClarification({
+        estimate: result.estimate,
+        remaining: result.remaining,
+        suggestedTabCount: result.suggestedTabCount
+      });
+      setCiQuotaResume({
+        args: stashArgs,
+        command: "build_competitive_intel_brief"
+      });
+      setPendingClarification({
+        originalMessage: resumeLabel || String(args.industry || "competitive intelligence brief"),
+        options
+      });
+      return { message };
+    }
+    return null;
+  }
+  var BuildCompetitiveIntelBriefCommand = class {
+    commandName = "build_competitive_intel_brief";
+    description = "Build a competitive intelligence battle card from existing CI tier tab groups (CI \u2014 High / Medium / Low / Adjacent). Arguments: { industry: string, focus?: string, scope?: 'ci_tab_groups'|'ci_tab_group', name?: string, scope_confirmed?: boolean, quota_mode?: 'default'|'compact'|'fewer_tabs'|'truncate' }. Use after grouping enrichment tabs, without running the full guided workflow.";
+    async execute(args) {
+      const industry = stringArg2(args, "industry")?.trim();
+      if (!industry) {
+        return {
+          message: "What industry or market should this competitive intelligence brief cover?"
+        };
+      }
+      const workflow = getCompetitiveIntelWorkflow();
+      const preview = previewCiBriefScope({
+        scope: stringArg2(args, "scope"),
+        groupName: stringArg2(args, "name"),
+        enrichmentPlan: workflow?.enrichmentPlan
+      });
+      if (!preview.ok) {
+        return { message: preview.message };
+      }
+      if (!booleanArg(args, "scope_confirmed")) {
+        setPendingConfirmation({
+          command: this.commandName,
+          args: { ...args, scope_confirmed: true },
+          description: buildCiBriefScopePreviewDescription(preview)
+        });
+        return {
+          message: buildCiBriefScopePreviewDescription(preview),
+          requiresConfirmation: true
+        };
+      }
+      const quotaMode = normalizeCiQuotaMode(stringArg2(args, "quota_mode"));
+      const signal = beginResearchBriefRun();
+      const onProgress = createResearchBriefProgressReporter(signal);
+      try {
+        const built = await buildCompetitiveIntelReport({
+          industry,
+          focus: stringArg2(args, "focus"),
+          companies: preview.companies,
+          enrichmentPlan: workflow?.enrichmentPlan || [],
+          tierLabels: DEFAULT_COMPETITIVE_TIERS,
+          groupName: stringArg2(args, "scope") === "ci_tab_group" ? stringArg2(args, "name") : void 0,
+          quotaMode,
+          signal
+        });
+        if (!built.ok) {
+          const quotaClarify = ciBriefClarificationFromBuildFailure(
+            built,
+            args,
+            `competitive intelligence brief for ${industry}`
+          );
+          if (quotaClarify) {
+            return quotaClarify;
+          }
+          return { message: built.message };
+        }
+        return {
+          message: buildCompetitiveIntelToolMessage({
+            markdown: built.markdown,
+            report: built.report,
+            reportId: built.reportId,
+            reportMode: built.reportMode,
+            budgetNote: built.budgetNote
+          })
+        };
+      } finally {
+        endResearchBriefRun();
+      }
+    }
+  };
   var DraftOutreachEmailCommand = class {
     commandName = "draft_outreach_email";
     description = "Draft a personalized outreach email from open tabs (networking, follow-up, thank-you, cold outreach). Arguments: { purpose?: 'networking'|'cold'|'follow_up'|'thank_you'|'custom', purpose_notes?: string, recipient_name?: string, recipient_role?: string, tone?: 'warm'|'professional'|'concise'|'friendly', scope?: 'tab-group'|'window'|'tabs'|'relevant', name?: string, use_active_tab_group?: boolean, tab_queries?: string[], tab_indices?: number[], max_tabs?: number, exclude_indices?: number[], exclude_queries?: string[], scope_confirmed?: boolean, quota_mode?: 'truncate'|'fewer_tabs' }. scope=relevant ranks tabs by recipient and purpose. Oasis does not send email \u2014 user copies into their mail client.";
@@ -62568,8 +66304,8 @@ ${text2}`
     commandName = "regenerate_research_brief_section";
     description = 'Regenerate one section of a stored research brief. Arguments: { brief_id?: string, section: "executiveSummary"|"outline"|"themes"|"sources"|"gapsAndContradictions" }.';
     async execute(args) {
-      const section = stringArg(args, "section");
-      const briefId = stringArg(args, "brief_id");
+      const section = stringArg2(args, "section");
+      const briefId = stringArg2(args, "brief_id");
       const cached2 = getCachedResearchBriefRun(briefId);
       if (!cached2) {
         return {
@@ -62636,9 +66372,9 @@ ${text2}`
     commandName = "search_memory";
     description = `Search across multiple local sources: browsing history, bookmarks (including managed bookmark folders), open tabs, tab groups, and stored memory. Arguments: { query: string, folder?: string, source?: 'bookmark-folder' }. 'folder' filters to a specific managed bookmark folder; 'source' can scope to bookmark-folder results. Returns JSON with: { summary: string, resultsBySource: { [source]: [{ title, url, snippet }] }, results: [{ index, source, title, url, context, snippet }] }. Sources are: "history", "bookmark", "bookmark-folder", "tab", "tab-group", "memory".`;
     async execute(args) {
-      const query = stringArg(args, "query");
-      const folder = stringArg(args, "folder");
-      const source = stringArg(args, "source");
+      const query = stringArg2(args, "query");
+      const folder = stringArg2(args, "folder");
+      const source = stringArg2(args, "source");
       const sourceScope = source === "bookmark-folder" ? "bookmark-folder" : void 0;
       if (!query)
         return { message: "Please tell me what you'd like to search for." };
@@ -62791,10 +66527,10 @@ ${text2}`
     commandName = "open_search_result";
     description = "Open a search result. Accepts arguments: { url?: string, index?: number, type?: string, bookmarkGuid?: string }. If index is provided (or omitted), resolves from recent search results. If type is 'tab', switches to it if found.";
     async execute(args) {
-      let url = stringArg(args, "url");
+      let url = stringArg2(args, "url");
       const index2 = numberArg3(args, "index");
-      let type = stringArg(args, "type");
-      let bookmarkGuid = stringArg(args, "bookmarkGuid");
+      let type = stringArg2(args, "type");
+      let bookmarkGuid = stringArg2(args, "bookmarkGuid");
       if (!url) {
         const recent = getRecentSearchResults();
         if (recent.length === 0) {
@@ -62885,11 +66621,11 @@ ${text2}`
     async execute(args) {
       const { gBrowser, Services } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const name = stringArg(args, "name") || "New Group";
+      const name = stringArg2(args, "name") || "New Group";
       const indices = numberArrayArg(args, "indices");
       let tabsToGroup = [];
       let createdNewTab = false;
-      const openUrl = stringArg(args, "openUrl");
+      const openUrl = stringArg2(args, "openUrl");
       if (indices.length > 0) {
         for (const idx of indices) {
           const i2 = Math.max(1, Math.floor(idx));
@@ -62982,7 +66718,7 @@ ${text2}`
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name)
         return { message: "Which tab group would you like me to delete?" };
       const group = findGroupByName(gBrowser, name);
@@ -63035,7 +66771,7 @@ ${text2}`
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const name = stringArg(args, "name");
+      const name = stringArg2(args, "name");
       if (!name) return { message: "Which tab group should I add the tab to?" };
       const group = findGroupByName(gBrowser, name);
       if (!group) {
@@ -63044,7 +66780,7 @@ ${text2}`
         };
       }
       let tabsToAdd = [];
-      const query = normalizeQuery(stringArg(args, "query"));
+      const query = normalizeQuery(stringArg2(args, "query"));
       const idx = numberArg3(args, "index");
       const all = booleanArg(args, "all");
       if (all === true) {
@@ -63053,7 +66789,7 @@ ${text2}`
         tabsToAdd = findTabsByQuery(gBrowser, query);
         if (tabsToAdd.length === 0) {
           return {
-            message: `No tabs found matching "${stringArg(args, "query") || ""}".`
+            message: `No tabs found matching "${stringArg2(args, "query") || ""}".`
           };
         }
       } else if (idx != null) {
@@ -63150,8 +66886,8 @@ ${text2}`
     async execute(args) {
       const { gBrowser } = getChrome2();
       if (!gBrowser) return { message: "Browser UI (gBrowser) not available." };
-      const from = stringArg(args, "from");
-      const to = stringArg(args, "to");
+      const from = stringArg2(args, "from");
+      const to = stringArg2(args, "to");
       if (!from || !to)
         return { message: "Please provide old and new group names." };
       const groups = getTabGroups(gBrowser);
@@ -63289,6 +67025,7 @@ ${text2}`
         clearContinuationQueue();
         return { message: "Cannot confirm confirm_action recursively." };
       }
+      clearPendingConfirmation();
       return await cmd.execute(pending.args);
     }
   };
@@ -63481,6 +67218,8 @@ ${text2}`
     summarize_page: `{"index?":"number","query?":"string (the user's page-grounded question or task)"}`,
     build_research_brief: `{"topic?":"string","infer_topic_from_content?":"boolean","scope?":"tab-group|window|tabs|relevant","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","outline_hint?":"string","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
     draft_outreach_email: `{"purpose?":"networking|cold|follow_up|thank_you|custom","purpose_notes?":"string","recipient_name?":"string","recipient_role?":"string","tone?":"warm|professional|concise|friendly","scope?":"tab-group|window|tabs|relevant","name?":"string","use_active_tab_group?":"boolean","tab_queries?":"string[]","tab_indices?":"number[]","max_tabs?":"number","exclude_indices?":"number[]","exclude_queries?":"string[]","scope_confirmed?":"boolean","quota_mode?":"truncate|fewer_tabs"}`,
+    run_competitive_intel: `{"industry":"string","market?":"string","focus?":"string","max_competitors?":"number","tiers?":"string[]","workflow_step?":"string","workflow_confirmed?":"boolean","workflow_action?":"string","tier_edit?":"string","quota_mode?":"default|compact|fewer_tabs|truncate"}`,
+    build_competitive_intel_brief: `{"industry":"string","focus?":"string","scope?":"ci_tab_groups|ci_tab_group","name?":"string","scope_confirmed?":"boolean","quota_mode?":"default|compact|fewer_tabs|truncate"}`,
     regenerate_research_brief_section: `{"brief_id?":"string","section":"executiveSummary|outline|themes|sources|gapsAndContradictions"}`,
     show_subscription: `{}`,
     search_history: `{"query?":"string","mode?":"keyword|semantic|recent|auto","domain?":"string","since?":"string","extra?":"string","refined?":"boolean","skipRefinement?":"boolean"}`
@@ -63549,6 +67288,8 @@ ${text2}`
       new SummarizePageCommand(),
       new BuildResearchBriefCommand(),
       new DraftOutreachEmailCommand(),
+      new RunCompetitiveIntelCommand(),
+      new BuildCompetitiveIntelBriefCommand(),
       new RegenerateResearchBriefSectionCommand(),
       new ShowSubscriptionCommand(),
       // Semantic history search (local embeddings + vector DB)
@@ -63911,6 +67652,16 @@ Do not mention hidden payloads, extracted content, or this instruction. Respond 
       "- Oasis does not send email \u2014 it drafts copy for the user to paste into Gmail or another client.",
       "- Examples: 'draft a networking email to Alex from these tabs', 'write a thank-you email from my research tabs', 'compose outreach email from tab group Job Research'.",
       "- Do NOT use draft_outreach_email for opening Gmail (use focus_tab) or single-page summaries (use summarize_page).",
+      "COMPETITIVE INTELLIGENCE:",
+      "- Use run_competitive_intel when the user wants a guided competitive intelligence report on an industry or market.",
+      "- Args: industry, market?, focus?, max_competitors?, workflow_step?, workflow_confirmed?, workflow_action?, tier_edit?, quota_mode?.",
+      "- This is a multi-step workflow: open AI discovery tools, build a competitor pool, tier competitors, open enrichment tabs, create CI tab groups, and synthesize a grounded report with comparisons and confidence.",
+      "- Examples: 'competitive intelligence report on enterprise CRM', 'who are the key players in data observability', 'battle card for project management software'.",
+      "- Use build_competitive_intel_brief when CI tier tab groups already exist and the user wants synthesis only (battle card from CI \u2014 High / Medium / Low / Adjacent groups).",
+      "- Args: industry, focus?, scope (ci_tab_groups|ci_tab_group), name (single group e.g. CI \u2014 High), scope_confirmed?, quota_mode?.",
+      "- Examples: 'competitive intelligence brief from my CI tab groups', 'battle card from CI \u2014 High for enterprise CRM'.",
+      "- Do NOT use build_competitive_intel_brief for generic multi-tab research without competitive framing (use build_research_brief).",
+      "- Do NOT use run_competitive_intel for single-page summaries (summarize_page) or generic tab-group research briefs without competitive framing (build_research_brief).",
       "ORGANIZE TABS:",
       "- Use organize_tabs when the user wants to group, sort, cluster, or organize open tabs by topic \u2014 not for research briefs, summaries, or manual create_tab_group.",
       "- Args: mode (single_focus | multi_topic | research_vs_other), focus (topic), name (group label), scope (window | tab-group | tabs | ungrouped_only), use_active_tab_group, tab_queries, tab_indices, exclude_indices, exclude_queries.",
@@ -64087,6 +67838,42 @@ What would you like to try first?`;
     return OASIS_CAPABILITIES_REPLY;
   }
 
+  // src/utils/ciReportDelivery.ts
+  init_messageUtils();
+  var SELF_CONTAINED_TOOL_COMMANDS = /* @__PURE__ */ new Set([
+    "run_competitive_intel",
+    "build_competitive_intel_brief",
+    "build_research_brief",
+    "draft_outreach_email"
+  ]);
+  function isSelfContainedToolResultMessage(message) {
+    if (!message) {
+      return false;
+    }
+    const toolPayload = getToolResultPayload(message);
+    const toolCommandName = toolPayload?.commandName || (typeof message.name === "string" ? message.name : "");
+    const rawToolMessage = String(
+      toolPayload?.message || msgText(message) || ""
+    ).trim();
+    if (!rawToolMessage) {
+      return false;
+    }
+    if (SELF_CONTAINED_TOOL_COMMANDS.has(toolCommandName) || toolCommandName === "build_research_brief") {
+      return true;
+    }
+    return hasCompetitiveIntelWorkflowMarker(rawToolMessage) || hasCompetitiveIntelMarker(rawToolMessage);
+  }
+  function selfContainedToolResultBytes(message) {
+    if (!message) {
+      return 0;
+    }
+    const toolPayload = getToolResultPayload(message);
+    const rawToolMessage = String(
+      toolPayload?.message || msgText(message) || ""
+    ).trim();
+    return rawToolMessage.length;
+  }
+
   // src/assistant/extractLatestActionableText.ts
   init_messageUtils();
   var ACTIONABLE_ENTITY_PATTERN = /(tab\s*group|group|tabs?|bookmark|folder|window|search|memory)/i;
@@ -64163,9 +67950,136 @@ What would you like to try first?`;
 
   // src/assistant/supervisorGates.ts
   var CONFIRM_RE = /^(?:yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i;
-  var CANCEL_RE2 = /^(?:no|cancel|nevermind|don'?t|stop)$/i;
+  var CI_TIER_CONFIRM_RE = /^(?:continue|yes|confirm|do\s+it|go\s+ahead|approve|ok|okay)$/i;
+  var CANCEL_RE3 = /^(?:no|cancel|nevermind|don'?t|stop)$/i;
   var CLARIFY_OPTION_RE = /^(?:clarify:opt_(\d+)|^(\d+)$)/i;
   var CLARIFY_NONE_RE = /^(?:none|cancel|nevermind|other|skip)$/i;
+  function resolveCompetitiveIntelWorkflowGate(params) {
+    const {
+      commandText,
+      confirmationText,
+      pendingConfirmation,
+      hasQueuedCommands,
+      justRanTool = false
+    } = params;
+    if (pendingConfirmation?.command === "run_competitive_intel") {
+      const acceptText = String(confirmationText || commandText || "").trim();
+      if (CI_TIER_CONFIRM_RE.test(acceptText)) {
+        return {
+          kind: "route",
+          args: { ...pendingConfirmation.args },
+          clearPendingConfirmation: true
+        };
+      }
+      if (isCompetitiveIntelCancelText(acceptText)) {
+        return {
+          kind: "route",
+          args: {
+            industry: typeof pendingConfirmation.args.industry === "string" ? pendingConfirmation.args.industry : getCompetitiveIntelWorkflow()?.industry,
+            workflow_action: CI_WORKFLOW_CANCEL_SENTINEL
+          },
+          clearPendingConfirmation: true
+        };
+      }
+      return { kind: "none" };
+    }
+    if (hasQueuedCommands || justRanTool) {
+      return { kind: "none" };
+    }
+    restoreCompetitiveIntelWorkflowFromStorage();
+    const workflow = getCompetitiveIntelWorkflow();
+    if (!workflow) {
+      return { kind: "none" };
+    }
+    if (workflow.step === "done" && isCompetitiveIntelExpandExternalAiText(commandText)) {
+      const args = {
+        industry: workflow.industry,
+        workflow_confirmed: true,
+        workflow_action: "expand_external_ai"
+      };
+      if (workflow.focus) args.focus = workflow.focus;
+      return { kind: "route", args };
+    }
+    if (workflow.step === "done" && isCompetitiveIntelReviewDeepenText(commandText)) {
+      const args = {
+        industry: workflow.industry,
+        workflow_confirmed: true,
+        workflow_action: "review_deepen"
+      };
+      if (workflow.focus) args.focus = workflow.focus;
+      return { kind: "route", args };
+    }
+    if (workflow.step === "done" && isCompetitiveIntelRegenerateReportText(commandText)) {
+      const args = {
+        industry: workflow.industry,
+        workflow_confirmed: true,
+        workflow_action: "regenerate_report"
+      };
+      if (workflow.focus) args.focus = workflow.focus;
+      return { kind: "route", args };
+    }
+    if (!isCompetitiveIntelWorkflowActive()) {
+      return { kind: "none" };
+    }
+    const sentinel = parseCompetitiveIntelWorkflowSentinel(commandText) || parseCompetitiveIntelWorkflowSentinel(confirmationText);
+    if (sentinel === CI_WORKFLOW_CANCEL_SENTINEL || isCompetitiveIntelCancelText(commandText) || isCompetitiveIntelCancelText(confirmationText)) {
+      return {
+        kind: "route",
+        args: {
+          industry: workflow.industry,
+          workflow_action: CI_WORKFLOW_CANCEL_SENTINEL
+        }
+      };
+    }
+    if (sentinel || isCompetitiveIntelContinueText(commandText) || isCompetitiveIntelContinueText(confirmationText)) {
+      const args = {
+        industry: workflow.industry,
+        workflow_confirmed: true
+      };
+      if (workflow.focus) {
+        args.focus = workflow.focus;
+      }
+      if (sentinel === CI_TIERS_CONFIRM_SENTINEL) {
+        args.workflow_action = CI_TIERS_CONFIRM_SENTINEL;
+      } else if (sentinel === CI_REPORT_COMPACT_SENTINEL) {
+        args.workflow_action = CI_REPORT_COMPACT_SENTINEL;
+        args.quota_mode = "compact";
+      } else if (sentinel) {
+        args.workflow_action = sentinel;
+      }
+      return { kind: "route", args };
+    }
+    const tierEditMatch = commandText.match(
+      /\bmove\s+(.+?)\s+to\s+(high|medium|low|adjacent)\b/i
+    );
+    if (tierEditMatch && workflow.step === "tiers") {
+      const args = {
+        industry: workflow.industry,
+        tier_edit: commandText
+      };
+      if (workflow.focus) {
+        args.focus = workflow.focus;
+      }
+      return { kind: "route", args };
+    }
+    if (looksLikeUrlOverrideText(commandText) && workflow.step === "tiers") {
+      const args = {
+        industry: workflow.industry,
+        tier_edit: commandText
+      };
+      if (workflow.focus) {
+        args.focus = workflow.focus;
+      }
+      return { kind: "route", args };
+    }
+    if (!pendingConfirmation && looksLikeNewActionCommand(commandText)) {
+      return {
+        kind: "block",
+        message: "A competitive intelligence workflow is in progress. Reply **continue** to advance, or say **cancel competitive intel** to stop."
+      };
+    }
+    return { kind: "none" };
+  }
   function resolvePendingProposedActionGate(params) {
     const {
       confirmationText,
@@ -64179,7 +68093,7 @@ What would you like to try first?`;
     if (!pendingProposedAction || pendingConfirmation) {
       return { kind: "none" };
     }
-    if (CANCEL_RE2.test(confirmationText)) {
+    if (CANCEL_RE3.test(confirmationText)) {
       return { kind: "cancel" };
     }
     if (isAffirmativeFollowUp(confirmationText)) {
@@ -64193,8 +68107,8 @@ What would you like to try first?`;
   }
   function resolvePendingConfirmationGate(params) {
     const { confirmationText, pendingConfirmation, justRanConfirm } = params;
-    const confirmMatch = CONFIRM_RE.test(confirmationText);
-    const cancelMatch = CANCEL_RE2.test(confirmationText);
+    const confirmMatch = CONFIRM_RE.test(confirmationText) || pendingConfirmation?.command === "run_competitive_intel" && CI_TIER_CONFIRM_RE.test(confirmationText);
+    const cancelMatch = CANCEL_RE3.test(confirmationText);
     if ((confirmMatch || cancelMatch) && pendingConfirmation && !justRanConfirm) {
       return {
         kind: "route",
@@ -64644,6 +68558,7 @@ What would you like to try first?`;
 
   // src/assistant/graph.ts
   init_researchBriefResume();
+  init_ciQuotaResume();
 
   // src/utils/preferDeterministicRoute.ts
   init_historyQueryExtract();
@@ -65254,6 +69169,18 @@ What would you like to try first?`;
       required: ["response", "command_type", "user_intent"]
     }
   };
+  function tryConsumeCiQuotaResumeFromGate(resolvedPrompt) {
+    const optionId = parseCiQuotaResumePrompt(resolvedPrompt);
+    if (!optionId) {
+      return null;
+    }
+    const command = peekCiQuotaResumeCommand();
+    const args = consumeCiQuotaResume(optionId);
+    if (!args) {
+      return null;
+    }
+    return { command, args };
+  }
   function tryConsumeResearchBriefResumeFromGate(resolvedPrompt) {
     const optionId = parseResearchBriefResumePrompt(resolvedPrompt);
     if (!optionId) {
@@ -65311,7 +69238,11 @@ What would you like to try first?`;
       const lastMsg = state.messages[state.messages.length - 1];
       const lastMsgText = msgText(lastMsg);
       const toolPayload = getToolResultPayload(lastMsg);
-      const hasToolOutput = Boolean(toolPayload);
+      const toolCommandName = toolPayload?.commandName || (typeof lastMsg.name === "string" ? String(lastMsg.name) : "");
+      const rawToolMessage = String(
+        toolPayload?.message || lastMsgText || ""
+      ).trim();
+      const hasToolOutput = Boolean(rawToolMessage);
       const includesPageContextRequest = hasPageContextRequest(lastMsgText);
       const capabilitiesReply = getOasisCapabilitiesReply(lastMsgText);
       if (capabilitiesReply) {
@@ -65321,12 +69252,24 @@ What would you like to try first?`;
           commandQueue: []
         };
       }
-      if (toolPayload?.commandName === "build_research_brief") {
-        const markdown = displayMarkdownFromResearchBriefToolMessage(
-          toolPayload.message
-        );
+      if (toolCommandName === "build_research_brief") {
+        const markdown = displayMarkdownFromResearchBriefToolMessage(rawToolMessage);
         return {
           messages: [new AIMessage(markdown || "Research brief is ready.")],
+          lastWorker: "chat",
+          commandQueue: []
+        };
+      }
+      if (hasCompetitiveIntelWorkflowMarker(rawToolMessage) || hasCompetitiveIntelMarker(rawToolMessage)) {
+        return {
+          messages: [new AIMessage(rawToolMessage)],
+          lastWorker: "chat",
+          commandQueue: []
+        };
+      }
+      if (SELF_CONTAINED_TOOL_COMMANDS.has(toolCommandName) && rawToolMessage) {
+        return {
+          messages: [new AIMessage(rawToolMessage)],
           lastWorker: "chat",
           commandQueue: []
         };
@@ -65453,6 +69396,30 @@ What would you like to try first?`;
           commandQueue: []
         };
       }
+      const competitiveIntelGate = resolveCompetitiveIntelWorkflowGate({
+        commandText,
+        confirmationText,
+        pendingConfirmation,
+        hasQueuedCommands: state.commandQueue.length > 0 || pendingContinuationBeforeResume.length > 0,
+        justRanTool
+      });
+      if (competitiveIntelGate.kind === "route") {
+        if (competitiveIntelGate.clearPendingConfirmation) {
+          clearPendingConfirmation();
+        }
+        return {
+          next: "run_competitive_intel",
+          args: competitiveIntelGate.args,
+          commandQueue: []
+        };
+      }
+      if (competitiveIntelGate.kind === "block") {
+        return {
+          next: "chat",
+          args: { routerMessage: competitiveIntelGate.message },
+          commandQueue: []
+        };
+      }
       const confirmationGate = resolvePendingConfirmationGate({
         confirmationText,
         pendingConfirmation,
@@ -65484,6 +69451,31 @@ What would you like to try first?`;
         commandText
       });
       if (clarificationGate.kind === "resolved") {
+        const ciCancelId = parseCiQuotaResumePrompt(
+          clarificationGate.resolvedPrompt
+        );
+        if (ciCancelId === "ci_quota_cancel") {
+          clearPendingClarification();
+          clearCiQuotaResume();
+          return {
+            next: "chat",
+            args: {
+              routerMessage: "Cancelled report generation. You can try again with a compact report or fewer tabs open."
+            },
+            commandQueue: []
+          };
+        }
+        const ciResume = tryConsumeCiQuotaResumeFromGate(
+          clarificationGate.resolvedPrompt
+        );
+        clearPendingClarification();
+        if (ciResume) {
+          return {
+            next: ciResume.command,
+            args: ciResume.args,
+            commandQueue: []
+          };
+        }
         const resume = tryConsumeResearchBriefResumeFromGate(
           clarificationGate.resolvedPrompt
         );
@@ -65550,6 +69542,16 @@ What would you like to try first?`;
       }
       const hasChainRemaining = pendingContinuationQueue.length > 0 || state.commandQueue.length > 1;
       if (justRanTool && !hasChainRemaining) {
+        const lastMsg = state.messages[state.messages.length - 1];
+        if (isSelfContainedToolResultMessage(lastMsg)) {
+          const toolPayload = getToolResultPayload(lastMsg);
+          const toolCommandName = toolPayload?.commandName || (typeof lastMsg.name === "string" ? lastMsg.name : "");
+          assistantLogger.debug("competitiveIntel", "ci_passthrough_end", {
+            commandName: toolCommandName,
+            bytes: selfContainedToolResultBytes(lastMsg)
+          });
+          return { next: AGENT_END, args: {}, commandQueue: [] };
+        }
         return { next: "chat", args: {}, commandQueue: [] };
       }
       const continuationQueue = shouldResumeContinuation ? takeContinuationQueue() : [];
@@ -65804,11 +69806,7 @@ ${message}` : message;
           return {
             next: first.next,
             args: applyNoticeToArgs(
-              mergeTrustedArgsOntoAssist(
-                first.next,
-                first.args,
-                activeCommand
-              )
+              mergeTrustedArgsOntoAssist(first.next, first.args, activeCommand)
             ),
             commandQueue: encodedQueue
           };
@@ -73831,6 +77829,19 @@ ${a2}`.slice(0, 12e4);
   // src/assistant/stream.ts
   init_assistantLogger();
   init_messageUtils();
+  var LARGE_UI_CHUNK_CHARS = 24e3;
+  function emitStreamChunk(onChunk, text2) {
+    const deferred = text2.length >= LARGE_UI_CHUNK_CHARS;
+    assistantLogger.debug("stream", "ci_chunk_emit", {
+      bytes: text2.length,
+      deferred
+    });
+    if (deferred) {
+      queueMicrotask(() => onChunk(text2));
+      return;
+    }
+    onChunk(text2);
+  }
   function extractMessageText(msg) {
     if (typeof msg?.content === "string") {
       return msg.content;
@@ -73990,7 +78001,7 @@ ${a2}`.slice(0, 12e4);
         }
         const newContent = `${sanitizedText}
 `;
-        onChunk(newContent);
+        emitStreamChunk(onChunk, newContent);
         combinedSessionString += newContent;
         emittedChars += newContent.length;
         hasEmittedUserMessage = true;
@@ -74004,7 +78015,7 @@ ${a2}`.slice(0, 12e4);
       if (sanitizedFallback) {
         const friendlyMessage = sanitizedFallback.endsWith("\n") ? sanitizedFallback : `${sanitizedFallback}
 `;
-        onChunk(friendlyMessage);
+        emitStreamChunk(onChunk, friendlyMessage);
         combinedSessionString = friendlyMessage;
         hasEmittedUserMessage = true;
         emittedChars += friendlyMessage.length;
@@ -75572,6 +79583,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   init_telemetryConsent();
   init_contracts();
   init_researchBriefProgress();
+  init_assistantLogger();
   init_researchBriefDigestCache();
   var supabaseAuth4 = SupabaseAuth.getInstance();
   var assistantWindow = window;
@@ -75704,49 +79716,62 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
       },
       { recursionLimit: ASSISTANT_RECURSION_LIMIT }
     );
-    const combined = await consumeAssistantGraphStream({
-      stream,
-      prompt,
-      onChunk,
-      inputType,
-      toolCommandNames,
-      pushCurrentTurn: sessionController.pushCurrentTurn,
-      trackUsage: (nextInputType, meta, content) => {
-        if (isAuthenticated) {
-          if (messageId) {
-            storeInteractionId(messageId, interactionId);
-          }
-          let payload = interactionPayload;
-          if (ENV.RICH_TELEMETRY_ENABLED && payload && content) {
-            payload = {
-              ...payload,
-              prompt: {
-                ...payload.prompt,
-                input_tokens: meta?.input_tokens ?? null
+    let combined = "";
+    try {
+      combined = await consumeAssistantGraphStream({
+        stream,
+        prompt,
+        onChunk,
+        inputType,
+        toolCommandNames,
+        pushCurrentTurn: sessionController.pushCurrentTurn,
+        trackUsage: (nextInputType, meta, content) => {
+          if (isAuthenticated) {
+            if (messageId) {
+              storeInteractionId(messageId, interactionId);
+            }
+            let payload = interactionPayload;
+            if (ENV.RICH_TELEMETRY_ENABLED && payload && content) {
+              payload = {
+                ...payload,
+                prompt: {
+                  ...payload.prompt,
+                  input_tokens: meta?.input_tokens ?? null
+                },
+                response: {
+                  text: content.responseText,
+                  output_tokens: meta?.output_tokens ?? null,
+                  latency_ms: Date.now() - startTime
+                },
+                tool_trace: content.toolTrace.length > 0 ? content.toolTrace : void 0
+              };
+            }
+            const enrichedMeta = {
+              ...meta ?? {
+                command_type: "other",
+                user_intent: "other",
+                input_tokens: null,
+                output_tokens: null
               },
-              response: {
-                text: content.responseText,
-                output_tokens: meta?.output_tokens ?? null,
-                latency_ms: Date.now() - startTime
-              },
-              tool_trace: content.toolTrace.length > 0 ? content.toolTrace : void 0
+              interaction_id: interactionId,
+              telemetry_identified: dataCollectionIdentified,
+              ...ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}
             };
+            subscriptionService.trackUsage(
+              nextInputType,
+              void 0,
+              enrichedMeta
+            );
           }
-          const enrichedMeta = {
-            ...meta ?? {
-              command_type: "other",
-              user_intent: "other",
-              input_tokens: null,
-              output_tokens: null
-            },
-            interaction_id: interactionId,
-            telemetry_identified: dataCollectionIdentified,
-            ...ENV.RICH_TELEMETRY_ENABLED && payload ? { interaction_payload: payload } : {}
-          };
-          subscriptionService.trackUsage(nextInputType, void 0, enrichedMeta);
         }
-      }
-    });
+      });
+    } finally {
+      endResearchBriefRun();
+      assistantLogger.debug("competitiveIntel", "ci_stream_done", {
+        ms: Date.now() - startTime,
+        chars: combined.length
+      });
+    }
     void recordRailroadTurn(assistantWindow, prompt, combined);
     maybeRunRailroadStructuredExtraction(assistantWindow, prompt, combined);
     return combined;
@@ -75754,6 +79779,7 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
   assistantWindow.runAssistantStream = runAssistantStream;
   assistantWindow.oasisAbortResearchBrief = () => {
     abortResearchBriefRun();
+    endResearchBriefRun();
   };
   assistantWindow.oasisStoreResearchBriefRun = storeResearchBriefRun;
   voiceAgent_default.setRunAssistant(runAssistantStream);

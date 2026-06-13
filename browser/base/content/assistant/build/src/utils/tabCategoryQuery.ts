@@ -7,7 +7,9 @@ import {
   type GBrowserLike,
 } from "../services/firefoxFacade.js";
 
-export const TAB_CATEGORY_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
+export const TAB_CATEGORY_KEYWORDS: Readonly<
+  Record<string, readonly string[]>
+> = {
   gmail: ["gmail", "mail.google", "google.com/mail"],
   outlook: ["outlook", "outlook.live", "office.com/mail"],
   yahoo: ["yahoo.com/mail", "mail.yahoo"],

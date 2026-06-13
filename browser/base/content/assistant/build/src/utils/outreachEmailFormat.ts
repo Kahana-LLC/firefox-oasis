@@ -141,7 +141,10 @@ export function normalizeOutreachEmailBody(
     formatted.push(...paragraphizeProse(block));
   }
 
-  let core = formatted.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+  let core = formatted
+    .join("\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (signOff) {
     core = `${core}\n\n${signOff}`.trim();
   }
@@ -192,9 +195,7 @@ export function outreachEmailToMarkdown(draft: OutreachEmailDraft): string {
         source.failureReason
       );
       const status =
-        source.status === "ok"
-          ? ""
-          : ` (${statusLabel || source.status})`;
+        source.status === "ok" ? "" : ` (${statusLabel || source.status})`;
       lines.push(`- [${source.title}](${source.url})${status}`);
     }
   }
@@ -249,7 +250,9 @@ export function parseOutreachEmailFromAssistContent(
         .filter(Boolean)
     : [];
   const suggestedEdits = Array.isArray(content.suggestedEdits)
-    ? content.suggestedEdits.map(item => String(item || "").trim()).filter(Boolean)
+    ? content.suggestedEdits
+        .map(item => String(item || "").trim())
+        .filter(Boolean)
     : undefined;
   const sources: OutreachEmailSource[] = [];
   if (Array.isArray(content.sources)) {

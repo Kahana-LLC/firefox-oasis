@@ -123,6 +123,16 @@ export function buildCapabilitiesOverviewMarkdown(
     "- Example: `Summarize this page`",
   ].join("\n");
 
+  const competitiveIntel = [
+    "### Competitive intelligence",
+    "",
+    "Run a guided Oasis-first workflow for an industry or market: Oasis builds the competitor pool, you review tiers, it opens homepage and Wikipedia enrichment tabs, groups them, and produces a grounded report with comparisons and confidence. After the report, you can optionally expand with external AI tools or add G2/Capterra review enrichment.",
+    "",
+    "- Example: `I want a competitive intelligence report on enterprise CRM`",
+    "- Example: `Who are the key players in data observability?`",
+    "- Say **continue** between steps, or **cancel competitive intel** to stop.",
+  ].join("\n");
+
   const navigation = [
     "### Navigation",
     "",
@@ -167,6 +177,7 @@ export function buildCapabilitiesOverviewMarkdown(
     webSearch,
     generalQuestions,
     summarize,
+    competitiveIntel,
     navigation,
     organization,
     memory,
