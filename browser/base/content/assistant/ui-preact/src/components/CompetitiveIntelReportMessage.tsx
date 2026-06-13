@@ -20,6 +20,7 @@ type CompetitiveIntelReportMessageProps = {
   copyAllFailed: boolean;
   onCopiedAll: (messageId: string) => void;
   onCopyAllFailed: (messageId: string) => void;
+  onParsed?: (reportId: string) => void;
 };
 
 export function CompetitiveIntelReportMessage({
@@ -29,6 +30,7 @@ export function CompetitiveIntelReportMessage({
   copyAllFailed,
   onCopiedAll,
   onCopyAllFailed,
+  onParsed,
 }: CompetitiveIntelReportMessageProps) {
   const [parsed, setParsed] = useState<ParsedCiReport | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
@@ -36,19 +38,40 @@ export function CompetitiveIntelReportMessage({
   );
 
   useEffect(() => {
-    const payload = parseCompetitiveIntelToolMessage(content);
-    if (payload) {
-      setParsed({
-        payload,
-        displayContent: textForClipboard(content),
-      });
-      setLoadState('ready');
-      return;
+    let cancelled = false;
+    const parse = () => {
+      if (cancelled) {
+        return;
+      }
+      const payload = parseCompetitiveIntelToolMessage(content);
+      if (payload) {
+        setParsed({
+          payload,
+          displayContent: textForClipboard(content),
+        });
+        setLoadState('ready');
+        if (payload.reportId) {
+          onParsed?.(payload.reportId);
+        }
+        return;
+      }
+      if (hasCompetitiveIntelMarker(content)) {
+        setLoadState('error');
+      }
+    };
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(parse, { timeout: 300 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+      };
     }
-    if (hasCompetitiveIntelMarker(content)) {
-      setLoadState('error');
-    }
-  }, [content]);
+    const timeoutId = window.setTimeout(parse, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [content, onParsed]);
 
   if (loadState === 'error' && !parsed) {
     return (

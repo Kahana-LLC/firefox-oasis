@@ -41,6 +41,19 @@ export function isSelfContainedToolResultMessage(
   );
 }
 
+export function isCiReportResultMessage(
+  message: MessageLike | null | undefined
+): boolean {
+  if (!isSelfContainedToolResultMessage(message)) {
+    return false;
+  }
+  const toolPayload = getToolResultPayload(message);
+  const rawToolMessage = String(
+    toolPayload?.message || msgText(message) || ""
+  ).trim();
+  return hasCompetitiveIntelMarker(rawToolMessage);
+}
+
 export function selfContainedToolResultBytes(
   message: MessageLike | null | undefined
 ): number {

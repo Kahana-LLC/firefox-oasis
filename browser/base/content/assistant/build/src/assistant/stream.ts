@@ -58,6 +58,10 @@ function emitStreamChunk(onChunk: (text: string) => void, text: string): void {
     deferred,
   });
   if (deferred) {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => onChunk(text));
+      return;
+    }
     queueMicrotask(() => onChunk(text));
     return;
   }

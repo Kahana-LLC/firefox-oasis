@@ -59,6 +59,10 @@ import {
   abortResearchBriefRun,
   endResearchBriefRun,
 } from "./utils/researchBriefProgress.js";
+import {
+  emitOasisUsageUpdate,
+  maybeFinalizeCiReportFromText,
+} from "./utils/ciReportUnlock.js";
 import { assistantLogger } from "./utils/assistantLogger.js";
 import { storeResearchBriefRun } from "./services/researchBriefDigestCache.js";
 
@@ -294,7 +298,10 @@ export async function runAssistantStream(
       },
     });
   } finally {
-    endResearchBriefRun();
+    if (!maybeFinalizeCiReportFromText(combined)) {
+      endResearchBriefRun();
+    }
+    emitOasisUsageUpdate(true);
     assistantLogger.debug("competitiveIntel", "ci_stream_done", {
       ms: Date.now() - startTime,
       chars: combined.length,

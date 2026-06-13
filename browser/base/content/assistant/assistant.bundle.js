@@ -6127,12 +6127,13 @@ Content: ${entry.description || ""}`;
   });
 
   // ../shared/contracts.ts
-  var OASIS_EVENT_CLARIFICATION_UPDATE, OASIS_EVENT_BRIEF_PROGRESS, OASIS_EVENT_CI_WORKFLOW_UPDATE, OASIS_EVENT_HISTORY_UPDATE, OASIS_EVENT_CONFIRMATION_UPDATE, OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
+  var OASIS_EVENT_CLARIFICATION_UPDATE, OASIS_EVENT_BRIEF_PROGRESS, OASIS_EVENT_CI_WORKFLOW_UPDATE, OASIS_EVENT_CI_REPORT_READY, OASIS_EVENT_HISTORY_UPDATE, OASIS_EVENT_CONFIRMATION_UPDATE, OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED;
   var init_contracts = __esm({
     "../shared/contracts.ts"() {
       OASIS_EVENT_CLARIFICATION_UPDATE = "oasis-clarification-update";
       OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress";
       OASIS_EVENT_CI_WORKFLOW_UPDATE = "oasis-ci-workflow-update";
+      OASIS_EVENT_CI_REPORT_READY = "oasis-ci-report-ready";
       OASIS_EVENT_HISTORY_UPDATE = "oasis-history-update";
       OASIS_EVENT_CONFIRMATION_UPDATE = "oasis-confirmation-update";
       OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED = "oasis-bookmark-folders-changed";
@@ -63336,6 +63337,7 @@ ${buildCiReportTokenEstimateBlock({
         };
       }
       clearPendingClarification();
+      clearPendingConfirmation();
       updateCompetitiveIntelWorkflow({
         step: "done",
         reportId: built.reportId,
@@ -67853,6 +67855,16 @@ What would you like to try first?`;
     }
     return hasCompetitiveIntelWorkflowMarker(rawToolMessage) || hasCompetitiveIntelMarker(rawToolMessage);
   }
+  function isCiReportResultMessage(message) {
+    if (!isSelfContainedToolResultMessage(message)) {
+      return false;
+    }
+    const toolPayload = getToolResultPayload(message);
+    const rawToolMessage = String(
+      toolPayload?.message || msgText(message) || ""
+    ).trim();
+    return hasCompetitiveIntelMarker(rawToolMessage);
+  }
   function selfContainedToolResultBytes(message) {
     if (!message) {
       return 0;
@@ -67862,6 +67874,40 @@ What would you like to try first?`;
       toolPayload?.message || msgText(message) || ""
     ).trim();
     return rawToolMessage.length;
+  }
+
+  // src/utils/ciReportUnlock.ts
+  init_contracts();
+  init_researchBriefProgress();
+  function emitCiReportReady() {
+    try {
+      window.dispatchEvent(new CustomEvent(OASIS_EVENT_CI_REPORT_READY));
+    } catch {
+    }
+  }
+  function emitOasisUsageUpdate(immediate = false) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("oasis-usage-update", {
+          detail: immediate ? { immediate: true } : void 0
+        })
+      );
+    } catch {
+    }
+  }
+  function finalizeCiReportInteractionUnlock() {
+    endResearchBriefRun();
+    clearPendingClarification();
+    clearPendingConfirmation();
+    emitCiReportReady();
+  }
+  function maybeFinalizeCiReportFromText(text2) {
+    if (!hasCompetitiveIntelMarker(text2)) {
+      return false;
+    }
+    finalizeCiReportInteractionUnlock();
+    emitOasisUsageUpdate(true);
+    return true;
   }
 
   // src/assistant/extractLatestActionableText.ts
@@ -69400,6 +69446,7 @@ What would you like to try first?`;
         const workflowAction = competitiveIntelGate.args.workflow_action;
         if (workflowAction === CI_REPORT_COMPACT_SENTINEL || workflowAction === "regenerate_report") {
           clearPendingClarification();
+          clearPendingConfirmation();
         }
         return {
           next: "run_competitive_intel",
@@ -69544,6 +69591,9 @@ What would you like to try first?`;
             commandName: toolCommandName,
             bytes: selfContainedToolResultBytes(lastMsg)
           });
+          if (isCiReportResultMessage(lastMsg)) {
+            finalizeCiReportInteractionUnlock();
+          }
           return { next: AGENT_END, args: {}, commandQueue: [] };
         }
         return { next: "chat", args: {}, commandQueue: [] };
@@ -77831,6 +77881,10 @@ ${a2}`.slice(0, 12e4);
       deferred
     });
     if (deferred) {
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => onChunk(text2));
+        return;
+      }
       queueMicrotask(() => onChunk(text2));
       return;
     }
@@ -79760,7 +79814,10 @@ You are replying in the chat sidebar as text (nothing will be read aloud). The u
         }
       });
     } finally {
-      endResearchBriefRun();
+      if (!maybeFinalizeCiReportFromText(combined)) {
+        endResearchBriefRun();
+      }
+      emitOasisUsageUpdate(true);
       assistantLogger.debug("competitiveIntel", "ci_stream_done", {
         ms: Date.now() - startTime,
         chars: combined.length

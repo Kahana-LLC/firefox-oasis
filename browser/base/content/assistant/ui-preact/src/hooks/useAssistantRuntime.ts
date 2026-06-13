@@ -21,6 +21,7 @@ import {
 } from "../chatStore/index";
 import { messagesToPlainSessionTurns } from "../chatStore/sessionTurns";
 import { HOW_OASIS_WORKS_CHIP_LABEL } from "../utils/exampleCommands";
+import { buildSlimCompetitiveIntelToolMessage } from "../../../build/src/utils/competitiveIntelRequest.js";
 import {
   CAPABILITIES_OVERVIEW_FIRST_LINE,
   OASIS_CAPABILITIES_FEATURES_URL,
@@ -70,9 +71,13 @@ function uuid() {
   });
 }
 
-function dispatchOasisUsageUpdate() {
+function dispatchOasisUsageUpdate(immediate = false) {
   try {
-    window.dispatchEvent(new CustomEvent("oasis-usage-update"));
+    window.dispatchEvent(
+      new CustomEvent("oasis-usage-update", {
+        detail: immediate ? { immediate: true } : undefined,
+      })
+    );
   } catch {
     void 0;
   }
@@ -995,6 +1000,26 @@ export function useAssistantRuntime(params: {
     []
   );
 
+  const slimCompetitiveIntelMessage = useCallback(
+    (messageId: string, reportId: string) => {
+      const slim = buildSlimCompetitiveIntelToolMessage(reportId);
+      setMessages(previous => {
+        const index = previous.findIndex(message => message.id === messageId);
+        if (index === -1) {
+          return previous;
+        }
+        const current = previous[index];
+        if (current.content === slim) {
+          return previous;
+        }
+        const updated = [...previous];
+        updated[index] = { ...current, content: slim };
+        return updated;
+      });
+    },
+    []
+  );
+
   const forceIdle = useCallback(() => {
     bumpStreamGeneration();
     setBusy(false);
@@ -1039,5 +1064,6 @@ export function useAssistantRuntime(params: {
     voiceStreamChunkForChat,
     voiceSpokenTurnMirrorForChat,
     forceIdle,
+    slimCompetitiveIntelMessage,
   };
 }

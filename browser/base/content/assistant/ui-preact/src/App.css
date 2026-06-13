@@ -4830,6 +4830,35 @@ button.input-field.input-field-signin-prompt:disabled {
   color: var(--text-primary, inherit);
 }
 
+.assistant-stuck-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: color-mix(in srgb, #d97706 8%, transparent);
+  border: 1px solid color-mix(in srgb, #d97706 25%, transparent);
+  color: var(--text-primary, inherit);
+}
+
+.assistant-stuck-recovery button {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--text-primary, #111) 20%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.assistant-stuck-recovery button:hover {
+  background: color-mix(in srgb, var(--text-primary, #111) 6%, transparent);
+}
+
 .ci-confirmation-modal .markdown-body h2,
 .ci-confirmation-modal .markdown-body h3 {
   margin-top: 0.75em;

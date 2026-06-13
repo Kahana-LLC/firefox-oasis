@@ -103,6 +103,7 @@ export function ChatTimeline({
   pinnedBriefId,
   briefPinned,
   onToggleBriefPin,
+  onSlimCiMessage,
 }: {
   messages: AssistantMessage[];
   isAuthenticated: boolean;
@@ -119,6 +120,7 @@ export function ChatTimeline({
   pinnedBriefId?: string | null;
   briefPinned?: boolean;
   onToggleBriefPin?: (content: string) => void;
+  onSlimCiMessage?: (messageId: string, reportId: string) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
   const lastAiRef = useRef<HTMLDivElement | null>(null);
@@ -402,6 +404,9 @@ export function ChatTimeline({
                       messageId={message.id}
                       copiedAll={ciCopiedMsgId === message.id}
                       copyAllFailed={ciCopyFailedMsgId === message.id}
+                      onParsed={reportId => {
+                        onSlimCiMessage?.(message.id, reportId);
+                      }}
                       onCopiedAll={id => {
                         setCiCopyFailedMsgId(null);
                         setCiCopiedMsgId(id);
@@ -580,7 +585,9 @@ export function ChatTimeline({
                     <Feedback
                       messageId={message.id}
                       userPrompt={userPromptBefore(messages, index)}
-                      assistantReply={message.content}
+                      assistantReply={
+                        isCiReport ? displayContent : message.content
+                      }
                       interactionId={message.interactionId}
                       onTrainingSubmitted={onTrainingSubmitted}
                       inlineAutofocusTick={
@@ -599,8 +606,8 @@ export function ChatTimeline({
         return null;
       })}
 
-      {(busy || activeToolLabel) && (
-        <ActiveToolIndicator label={activeToolLabel || 'Thinking...'} />
+      {busy && activeToolLabel && (
+        <ActiveToolIndicator label={activeToolLabel} />
       )}
     </div>
   );

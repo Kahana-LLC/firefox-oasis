@@ -57,6 +57,7 @@ import { OASIS_EVENT_CI_WORKFLOW_UPDATE } from "../../../shared/contracts.js";
 import { subscriptionService } from "./subscription.js";
 import {
   clearPendingClarification,
+  clearPendingConfirmation,
   setPendingClarification,
 } from "./interactionState.js";
 import {
@@ -282,6 +283,7 @@ async function synthesizeCompetitiveIntelReport(
       };
     }
     clearPendingClarification();
+    clearPendingConfirmation();
     updateCompetitiveIntelWorkflow({
       step: "done",
       reportId: built.reportId,

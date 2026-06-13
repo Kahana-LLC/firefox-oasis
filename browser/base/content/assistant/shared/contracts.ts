@@ -83,6 +83,11 @@ export const OASIS_EVENT_BRIEF_PROGRESS = "oasis-brief-progress" as const;
 export const OASIS_EVENT_CI_WORKFLOW_UPDATE =
   "oasis-ci-workflow-update" as const;
 export const OASIS_EVENT_ASSISTANT_SUBMIT = "oasis-assistant-submit" as const;
+export const OASIS_EVENT_CI_REPORT_READY = "oasis-ci-report-ready" as const;
+
+export type OasisUsageUpdateDetail = {
+  immediate?: boolean;
+};
 
 export type OasisRecordToolActionStart = (
   commandName: string,
@@ -129,7 +134,8 @@ export type OasisEventName =
   | typeof OASIS_EVENT_BOOKMARK_FOLDERS_CHANGED
   | typeof OASIS_EVENT_BRIEF_PROGRESS
   | typeof OASIS_EVENT_CI_WORKFLOW_UPDATE
-  | typeof OASIS_EVENT_ASSISTANT_SUBMIT;
+  | typeof OASIS_EVENT_ASSISTANT_SUBMIT
+  | typeof OASIS_EVENT_CI_REPORT_READY;
 
 export type BookmarkFoldersChangedDetail = {
   folderNames?: string[];
@@ -144,4 +150,5 @@ export type OasisEventDetailMap = {
   [OASIS_EVENT_BRIEF_PROGRESS]: ResearchBriefProgressDetail | null;
   [OASIS_EVENT_CI_WORKFLOW_UPDATE]: CompetitiveIntelWorkflowUpdateDetail | null;
   [OASIS_EVENT_ASSISTANT_SUBMIT]: OasisAssistantSubmitDetail;
+  [OASIS_EVENT_CI_REPORT_READY]: undefined;
 };

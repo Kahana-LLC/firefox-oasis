@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { OASIS_EVENT_CI_REPORT_READY } from "../../shared/contracts.js";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 
 import {
@@ -233,4 +234,8 @@ test("large CI payload parse stays within budget", () => {
 
   assert.ok(parsed);
   assert.ok(elapsed < 500, `parse took ${elapsed}ms`);
+});
+
+test("OASIS_EVENT_CI_REPORT_READY contract is defined", () => {
+  assert.equal(OASIS_EVENT_CI_REPORT_READY, "oasis-ci-report-ready");
 });

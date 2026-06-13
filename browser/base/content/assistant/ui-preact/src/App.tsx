@@ -14,7 +14,7 @@ import { postOasisOverlayChromeMessage, isOasisAssistantOverlayLayout } from './
 import { useAuthSync } from './hooks/useAuthSync';
 import { useAssistantBridge } from './hooks/useAssistantBridge';
 import { useResearchBriefProgress } from './hooks/useResearchBriefProgress';
-import { OASIS_EVENT_ASSISTANT_SUBMIT, type OasisAssistantSubmitDetail } from '../../shared/contracts.js';
+import { OASIS_EVENT_ASSISTANT_SUBMIT, OASIS_EVENT_CI_REPORT_READY, type OasisAssistantSubmitDetail } from '../../shared/contracts.js';
 import { hasCompetitiveIntelMarker } from '../../build/src/utils/competitiveIntelRequest.js';
 import { COMPOSER_INLINE_SUGGESTIONS } from './utils/exampleCommands';
 import type {
@@ -452,6 +452,7 @@ export function App() {
   const [trainLatestComposerHint, setTrainLatestComposerHint] = useState(false);
   const [starterChipsHighlight, setStarterChipsHighlight] = useState(false);
   const [onboardingCollapseTick, setOnboardingCollapseTick] = useState(0);
+  const [showStuckRecovery, setShowStuckRecovery] = useState(false);
   const [restoreOffer, setRestoreOffer] = useState<PinnedResearchBrief | null>(
     null
   );
@@ -474,38 +475,6 @@ export function App() {
     useResearchBriefProgress();
   const activeToolLabel =
     briefProgressLabel || runtime.activeToolAction?.label || null;
-
-  useEffect(() => {
-    if (!runtime.busy || briefProgressLabel !== 'Finalizing report…') {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      runtime.forceIdle();
-      oasisWindow.oasisAbortResearchBrief?.();
-    }, 45000);
-    return () => window.clearTimeout(timer);
-  }, [runtime.busy, briefProgressLabel, runtime]);
-
-  useEffect(() => {
-    if (runtime.busy || !briefProgressLabel) {
-      return;
-    }
-    oasisWindow.oasisAbortResearchBrief?.();
-  }, [runtime.busy, briefProgressLabel]);
-
-  useEffect(() => {
-    if (runtime.busy) {
-      return;
-    }
-    const lastAi = [...runtime.messages]
-      .reverse()
-      .find(message => message.role === 'ai' && message.content?.trim());
-    if (!lastAi || !hasCompetitiveIntelMarker(lastAi.content)) {
-      return;
-    }
-    oasisWindow.oasisClearPendingClarification?.();
-    setPendingClarification(null);
-  }, [runtime.busy, runtime.messages]);
 
   const chatUid = auth.isAuthenticated ? chatUserKey(auth.user) : null;
 
@@ -706,8 +675,94 @@ export function App() {
     setClarificationDirectInputOpen(false);
     setClarificationDirectInput('');
     setVoiceAgentOpen(false);
+    setShowStuckRecovery(false);
     runtime.forceIdle();
   }, [runtime]);
+
+  useEffect(() => {
+    if (!runtime.busy) {
+      return;
+    }
+    const lastAi = [...runtime.messages]
+      .reverse()
+      .find(message => message.role === 'ai' && message.content?.trim());
+    if (!lastAi || !hasCompetitiveIntelMarker(lastAi.content)) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      clearStuckInteractionState();
+    }, 15000);
+    return () => window.clearTimeout(timer);
+  }, [runtime.busy, runtime.messages, clearStuckInteractionState]);
+
+  useEffect(() => {
+    if (runtime.busy || !activeToolLabel) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      oasisWindow.oasisAbortResearchBrief?.();
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [runtime.busy, activeToolLabel]);
+
+  useEffect(() => {
+    if (runtime.busy) {
+      return;
+    }
+    const lastAi = [...runtime.messages]
+      .reverse()
+      .find(message => message.role === 'ai' && message.content?.trim());
+    if (!lastAi || !hasCompetitiveIntelMarker(lastAi.content)) {
+      return;
+    }
+    oasisWindow.oasisClearPendingClarification?.();
+    oasisWindow.oasisClearPendingConfirmation?.();
+    setPendingClarification(null);
+    setPendingConfirmation(null);
+  }, [runtime.busy, runtime.messages]);
+
+  useEffect(() => {
+    const lastAi = [...runtime.messages]
+      .reverse()
+      .find(message => message.role === 'ai' && message.content?.trim());
+    const ciVisible = Boolean(
+      lastAi && hasCompetitiveIntelMarker(lastAi.content)
+    );
+    if (
+      !ciVisible ||
+      (!runtime.busy && !pendingClarification && !pendingConfirmation)
+    ) {
+      setShowStuckRecovery(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setShowStuckRecovery(true);
+    }, 10000);
+    return () => {
+      window.clearTimeout(timer);
+      setShowStuckRecovery(false);
+    };
+  }, [
+    runtime.busy,
+    runtime.messages,
+    pendingClarification,
+    pendingConfirmation,
+  ]);
+
+  useEffect(() => {
+    const onCiReportReady = () => {
+      clearStuckInteractionState();
+      window.dispatchEvent(
+        new CustomEvent('oasis-usage-update', {
+          detail: { immediate: true },
+        })
+      );
+    };
+    window.addEventListener(OASIS_EVENT_CI_REPORT_READY, onCiReportReady);
+    return () => {
+      window.removeEventListener(OASIS_EVENT_CI_REPORT_READY, onCiReportReady);
+    };
+  }, [clearStuckInteractionState]);
 
   useEffect(() => {
     try {
@@ -1015,9 +1070,7 @@ export function App() {
                 pinnedBriefId={pinnedBriefId}
                 briefPinned={briefPinnedFlag}
                 onToggleBriefPin={handleToggleBriefPin}
-                onSubmitPrompt={prompt => {
-                  void runtime.send(prompt);
-                }}
+                onSlimCiMessage={runtime.slimCompetitiveIntelMessage}
               />
             </div>
           )}
@@ -1036,6 +1089,19 @@ export function App() {
             }}
           />
         )}
+        {view !== 'auth' && showStuckRecovery ? (
+          <div className="assistant-stuck-recovery" role="status">
+            <span>Still finishing…</span>
+            <button
+              type="button"
+              onClick={() => {
+                clearStuckInteractionState();
+              }}
+            >
+              Reset assistant
+            </button>
+          </div>
+        ) : null}
         {view !== 'auth' && (
           <Composer
             input={runtime.input}

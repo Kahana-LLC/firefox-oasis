@@ -62,8 +62,10 @@ import { getOasisCapabilitiesReply } from "../utils/oasisCapabilitiesFaq.js";
 import {
   isSelfContainedToolResultMessage,
   selfContainedToolResultBytes,
+  isCiReportResultMessage,
   SELF_CONTAINED_TOOL_COMMANDS,
 } from "../utils/ciReportDelivery.js";
+import { finalizeCiReportInteractionUnlock } from "../utils/ciReportUnlock.js";
 
 const CHAT_GENERATION_CONFIG = {
   responseMimeType: "application/json",
@@ -485,6 +487,7 @@ export function buildAssistantGraph(
         workflowAction === "regenerate_report"
       ) {
         clearPendingClarification();
+        clearPendingConfirmation();
       }
       return {
         next: "run_competitive_intel",
@@ -646,6 +649,9 @@ export function buildAssistantGraph(
           commandName: toolCommandName,
           bytes: selfContainedToolResultBytes(lastMsg),
         });
+        if (isCiReportResultMessage(lastMsg)) {
+          finalizeCiReportInteractionUnlock();
+        }
         return { next: AGENT_END, args: {}, commandQueue: [] };
       }
       return { next: "chat", args: {}, commandQueue: [] };
